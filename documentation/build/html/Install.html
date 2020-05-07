@@ -1,0 +1,167 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Installation &#8212; FEDOO  documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quick Start" href="Quick_Start.html" />
+    <link rel="prev" title="Overview" href="Overview.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Quick_Start.html" title="Quick Start"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="Overview.html" title="Overview"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/fedOOLogos.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Installation</a><ul>
+<li><a class="reference internal" href="#installation-on-linux-ubuntu-debian-or-mint">Installation on Linux (Ubuntu, Debian or Mint)</a></li>
+<li><a class="reference internal" href="#installation-on-windows">Installation on Windows</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="Overview.html"
+                        title="previous chapter">Overview</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="Quick_Start.html"
+                        title="next chapter">Quick Start</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/Install.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<p>Fedoo can be installed on any plateform as soon as you can install a python 3
+distribution with numpy and scipy and a subversion (SVN) manager.</p>
+<div class="section" id="installation-on-linux-ubuntu-debian-or-mint">
+<h2>Installation on Linux (Ubuntu, Debian or Mint)<a class="headerlink" href="#installation-on-linux-ubuntu-debian-or-mint" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Install python 3 if not already installed:</p></li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ sudo apt-get install python3
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Install numpy and scipy if not already installed</p></li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ sudo apt-get update
+$ sudo apt-install python3-pip
+$ pip3 install numpy
+$ pip3 install scipy
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p>Install the subversion manager</p></li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ sudo apt-get install subversion
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p>Download the FEDOO library from <a class="reference external" href="https://ff-m2p.cnrs.fr/projects/fedoo/">https://ff-m2p.cnrs.fr/projects/fedoo/</a></p></li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ cd where_you_whant_to_download_fedoo
+$ svn checkout https://scm.ff-m2p.cnrs.fr/anonscm/svn/fedoo/
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p>Optional: if you want to be able to access fedoo from anywhere you can copy
+the fedoo directory to “&lt;pythondir&gt;/Lib/site-packages” or add the fedoo
+directory to the PYTHOPATH variable</p></li>
+</ol>
+</div>
+<div class="section" id="installation-on-windows">
+<h2>Installation on Windows<a class="headerlink" href="#installation-on-windows" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Install python, numpy and scipy. The easiest way is to install
+the ANADONDA distribution (<a class="reference external" href="https://www.anaconda.com/">https://www.anaconda.com/</a>) which include by
+default numpy and and scipy with many other usefull libraries (recommanded).</p></li>
+<li><p>Download the FEDOO library from <a class="reference external" href="https://scm.ff-m2p.cnrs.fr/anonscm/svn/fedoo/">https://scm.ff-m2p.cnrs.fr/anonscm/svn/fedoo/</a>
+using any SVN utility (recomanded: <a class="reference external" href="https://tortoisesvn.net/">https://tortoisesvn.net/</a>)</p></li>
+<li><p>Optional: if you want to be able to access fedoo from anywhere you can copy
+the fedoo directory to “&lt;pythondir&gt;/Lib/site-packages” or add the fedoo
+directory to the PYTHOPATH environment variable.</p></li>
+</ol>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Quick_Start.html" title="Quick Start"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="Overview.html" title="Overview"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019, Etienne Prulière.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.2.1.
+    </div>
+  </body>
+</html>

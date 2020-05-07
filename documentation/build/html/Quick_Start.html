@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quick Start &#8212; FEDOO  documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Geometry and Mesh" href="Mesh.html" />
+    <link rel="prev" title="Installation" href="Install.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Mesh.html" title="Geometry and Mesh"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="Install.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/fedOOLogos.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Quick Start</a><ul>
+<li><a class="reference internal" href="#steps-to-define-and-solve-a-problem">Steps to define and solve a Problem</a></li>
+<li><a class="reference internal" href="#import-library">Import library</a></li>
+<li><a class="reference internal" href="#define-the-space-dimension">Define the space dimension</a></li>
+<li><a class="reference internal" href="#create-and-or-import-the-geometry-mesh">Create and/or import the geometry (mesh)</a></li>
+<li><a class="reference internal" href="#create-weak-formulations">Create weak formulations</a></li>
+<li><a class="reference internal" href="#create-global-matrix-assembies">Create global matrix assembies</a></li>
+<li><a class="reference internal" href="#set-the-problem-and-the-solver">Set the Problem and the solver</a></li>
+<li><a class="reference internal" href="#boundary-conditions">Boundary conditions</a></li>
+<li><a class="reference internal" href="#solve-the-problem">Solve the Problem</a></li>
+<li><a class="reference internal" href="#analyse-and-export-results">Analyse and export results</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="Install.html"
+                        title="previous chapter">Installation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="Mesh.html"
+                        title="next chapter">Geometry and Mesh</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/Quick_Start.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="quick-start">
+<h1>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="steps-to-define-and-solve-a-problem">
+<h2>Steps to define and solve a Problem<a class="headerlink" href="#steps-to-define-and-solve-a-problem" title="Permalink to this headline">¶</a></h2>
+<p>The main steps to define a problem are:</p>
+<ol class="arabic simple">
+<li><p>Import the fedoo library</p></li>
+<li><p>Define the space dimension</p></li>
+<li><p>Create and/or import the geometry (mesh)</p></li>
+<li><p>Define one or many weak formulations (including constitutive equations)</p></li>
+<li><p>Create the Assembly associated to the weak formulations and the mesh</p></li>
+<li><p>Define the type of Problem (Static, Dynamic, …) and the solver</p></li>
+<li><p>Solve the Problem</p></li>
+<li><p>Analyse and export results (vizualisation with Paraview recommanded)</p></li>
+</ol>
+</div>
+<div class="section" id="import-library">
+<h2>Import library<a class="headerlink" href="#import-library" title="Permalink to this headline">¶</a></h2>
+<p>The first step is to import the fedoo library.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fedoo import * #Import all the fedoo library
+import numpy as np #Numpy is often usefull
+</pre></div>
+</div>
+</div>
+<div class="section" id="define-the-space-dimension">
+<h2>Define the space dimension<a class="headerlink" href="#define-the-space-dimension" title="Permalink to this headline">¶</a></h2>
+<p>The dimension of the problem should be ‘3D’ or ‘2Dplane’ (for planar problem)
+The dimension of the problem may also be set to ‘2Dstress’ to set
+plane stress assumption by default</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Util.ProblemDimension(&quot;3D&quot;)
+</pre></div>
+</div>
+</div>
+<div class="section" id="create-and-or-import-the-geometry-mesh">
+<h2>Create and/or import the geometry (mesh)<a class="headerlink" href="#create-and-or-import-the-geometry-mesh" title="Permalink to this headline">¶</a></h2>
+<p>The module <a class="reference internal" href="Mesh.html"><span class="doc">Mesh</span></a> contains several functions to build up simple meshes.
+For instance to build the mesh of a box, we can use:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Mesh.BoxMesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = &#39;hex8&#39;, ID = &#39;Domain&#39;)
+</pre></div>
+</div>
+<p>You can also import a Mesh from the VTK or GMSH format with the function:
+Mesh.ImportFromFile (see <a class="reference internal" href="Mesh.html#fedoo.libMesh.MeshImport.ImportFromFile" title="fedoo.libMesh.MeshImport.ImportFromFile"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.libMesh.MeshImport.ImportFromFile</span></code></a>)</p>
+</div>
+<div class="section" id="create-weak-formulations">
+<h2>Create weak formulations<a class="headerlink" href="#create-weak-formulations" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="create-global-matrix-assembies">
+<h2>Create global matrix assembies<a class="headerlink" href="#create-global-matrix-assembies" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="set-the-problem-and-the-solver">
+<h2>Set the Problem and the solver<a class="headerlink" href="#set-the-problem-and-the-solver" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="boundary-conditions">
+<h2>Boundary conditions<a class="headerlink" href="#boundary-conditions" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="solve-the-problem">
+<h2>Solve the Problem<a class="headerlink" href="#solve-the-problem" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="analyse-and-export-results">
+<h2>Analyse and export results<a class="headerlink" href="#analyse-and-export-results" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Mesh.html" title="Geometry and Mesh"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="Install.html" title="Installation"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019, Etienne Prulière.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.2.1.
+    </div>
+  </body>
+</html>

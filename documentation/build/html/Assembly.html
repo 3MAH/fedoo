@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Class Assembly &#8212; FEDOO  documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Geometry and Mesh" href="Mesh.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Mesh.html" title="Geometry and Mesh"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/fedOOLogos.png" alt="Logo"/>
+            </a></p>
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="Mesh.html"
+                        title="previous chapter">Geometry and Mesh</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/Assembly.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="class-assembly">
+<h1>Class Assembly<a class="headerlink" href="#class-assembly" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="fedoo.libAssembly.Assembly">
+<em class="property">class </em><code class="sig-prename descclassname">fedoo.libAssembly.</code><code class="sig-name descname">Assembly</code><span class="sig-paren">(</span><em class="sig-param">weakForm</em>, <em class="sig-param">mesh=''</em>, <em class="sig-param">elementType=''</em>, <em class="sig-param">ID=''</em>, <em class="sig-param">**kargs</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="fedoo.libAssembly.Assembly.ComputeGlobalMatrix">
+<code class="sig-name descname">ComputeGlobalMatrix</code><span class="sig-paren">(</span><em class="sig-param">compute='all'</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.ComputeGlobalMatrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the global matrix and global vector related to the assembly
+if compute = ‘all’, compute the global matrix and vector
+if compute = ‘matrix’, compute only the matrix
+if compute = ‘vector’, compute only the vector</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetElementResult">
+<code class="sig-name descname">GetElementResult</code><span class="sig-paren">(</span><em class="sig-param">operator</em>, <em class="sig-param">U</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetElementResult" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a Static Method.</p>
+<p>Return some element results based on the finite element discretization of
+a differential operator on a mesh being given the dof results and the type of elements.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mesh</strong> (<em>string</em><em> or </em><a class="reference internal" href="Mesh.html#fedoo.libMesh.Mesh" title="fedoo.libMesh.Mesh"><em>Mesh</em></a>) – If mesh is a string, it should be a meshID.
+Define the mesh to get the results from</p></li>
+<li><p><strong>operator</strong> (<em>OpDiff</em>) – Differential operator defining the required results</p></li>
+<li><p><strong>U</strong> (<em>numpy.ndarray</em>) – Vector containing all the DoF solution</p></li>
+<li><p><strong>Return</strong> (<em>numpy.ndarray</em>) – A Vector containing the values on each element.
+It is computed using an arithmetic mean of the values from gauss points
+The vector lenght is the number of element in the mesh</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetExternalForces">
+<code class="sig-name descname">GetExternalForces</code><span class="sig-paren">(</span><em class="sig-param">U</em>, <em class="sig-param">Nvar=None</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetExternalForces" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a static method.
+Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U
+The resulting forces are the sum of :
+- External forces (associated to Neumann boundary conditions)
+- Nodal reaction (associated to Dirichelet boundary conditions)
+- Inertia forces</p>
+<p>Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.</p>
+<p>example :
+S = SpecificAssembly.GetNodalForces(Problem.Problem.GetDoFSolution(‘all’))</p>
+<p>an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetGaussPointResult">
+<code class="sig-name descname">GetGaussPointResult</code><span class="sig-paren">(</span><em class="sig-param">operator</em>, <em class="sig-param">U</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetGaussPointResult" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return some results at element Gauss points based on the finite element discretization of
+a differential operator on a mesh being given the dof results and the type of elements.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>operator</strong> (<em>OpDiff</em>) – Differential operator defining the required results</p></li>
+<li><p><strong>U</strong> (<em>numpy.ndarray</em>) – Vector containing all the DoF solution</p></li>
+<li><p><strong>Return</strong> (<em>numpy.ndarray</em>) – A Vector containing the values on each point of gauss for each element.
+The vector lenght is the number of element time the number of Gauss points per element</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetGradTensor">
+<code class="sig-name descname">GetGradTensor</code><span class="sig-paren">(</span><em class="sig-param">U</em>, <em class="sig-param">Type='Nodal'</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetGradTensor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a static method.
+Return the Gradient Tensor of a vector (generally displacement given by Problem.GetDofSolution(‘all’)
+as a list of list of numpy array
+The total displacement field U has to be given (under a flatten numpy array)
+see GetNodeResults and GetElementResults</p>
+<p>Options :
+- Type :”Nodal”, “Element” or “GaussPoint” integration (default : “Nodal”)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetInternalForces">
+<code class="sig-name descname">GetInternalForces</code><span class="sig-paren">(</span><em class="sig-param">U</em>, <em class="sig-param">CoordinateSystem='global'</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetInternalForces" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a static method.
+Only available for 2 nodes beam element
+Return the element internal Forces and moments related to a specific assembly considering the DOF solution given in U.
+Return array whose columns are Fx, Fy, Fz, Mx, My and Mz.</p>
+<dl class="simple">
+<dt>Parameter: if CoordinateSystem == ‘local’ the result is given in the local coordinate system</dt><dd><p>if CoordinateSystem == ‘global’ the result is given in the global coordinate system (default)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetNodeResult">
+<code class="sig-name descname">GetNodeResult</code><span class="sig-paren">(</span><em class="sig-param">operator</em>, <em class="sig-param">U</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetNodeResult" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a Static Method.</p>
+<p>Return some node results based on the finite element discretization of
+a differential operator on a mesh being given the dof results and the type of elements.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>operator</strong> (<em>OpDiff</em>) – Differential operator defining the required results</p></li>
+<li><p><strong>U</strong> (<em>numpy.ndarray</em>) – Vector containing all the DoF solution</p></li>
+<li><p><strong>Return</strong> (<em>numpy.ndarray</em>) – A Vector containing the values on each node.
+An interpolation is used to get the node values from the gauss point values on each element.
+After that, an arithmetic mean is used to compute a single node value from all adjacent elements.
+The vector lenght is the number of nodes in the mesh</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetStrainTensor">
+<code class="sig-name descname">GetStrainTensor</code><span class="sig-paren">(</span><em class="sig-param">U</em>, <em class="sig-param">Type='Nodal'</em>, <em class="sig-param">Linear=False</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetStrainTensor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a static method.
+Return the Strain Tensor of an assembly using the Voigt notation as a python list.
+The total displacement field has to be given.
+see GetNodeResults and GetElementResults</p>
+<p>Options :
+- Type :”Nodal”, “Element” or “GaussPoint” integration (default : “Nodal”)
+- Linear = True or False wether the Strain Tensor is assumed linear or not (default : False)</p>
+<p>example :
+S = SpecificAssembly.GetStrainTensor(Problem.Problem.GetDoFSolution(‘all’))</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.GetStressTensor">
+<code class="sig-name descname">GetStressTensor</code><span class="sig-paren">(</span><em class="sig-param">U</em>, <em class="sig-param">constitutiveLaw</em>, <em class="sig-param">Type='Nodal'</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.GetStressTensor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not a static method.
+Return the Stress Tensor of an assembly using the Voigt notation as a python list.
+The total displacement field and a ConstitutiveLaw have to be given.</p>
+<p>Can only be used for linear constitutive law.
+For non linear ones, use the GetStress method of the ConstitutiveLaw object.</p>
+<p>Options :
+- Type :”Nodal”, “Element” or “GaussPoint” integration (default : “Nodal”)</p>
+<p>See GetNodeResult, GetElementResult and GetGaussPointResult.</p>
+<p>example :
+S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution(‘all’), SpecificConstitutiveLaw)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.NewTimeIncrement">
+<code class="sig-name descname">NewTimeIncrement</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.NewTimeIncrement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply the modification to the constitutive equation required at each change of time increment.
+Generally used to increase non reversible internal variable
+Doesn’t assemble the new global matrix. Use the Update method for that purpose.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.ResetTimeIncrement">
+<code class="sig-name descname">ResetTimeIncrement</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.ResetTimeIncrement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset the current time increment (internal variable in the constitutive equation)
+Doesn’t assemble the new global matrix. Use the Update method for that purpose.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="fedoo.libAssembly.Assembly.Update">
+<code class="sig-name descname">Update</code><span class="sig-paren">(</span><em class="sig-param">pb</em>, <em class="sig-param">time=None</em>, <em class="sig-param">compute='all'</em><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.libAssembly.Assembly.Update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the associated weak form and assemble the global matrix
+:param - pb: a Problem object containing the Dof values
+:param - time: the current time</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="Mesh.html" title="Geometry and Mesh"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">FEDOO  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019, Etienne Prulière.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.2.1.
+    </div>
+  </body>
+</html>
