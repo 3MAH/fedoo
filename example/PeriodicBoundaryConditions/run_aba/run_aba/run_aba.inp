@@ -1,0 +1,9 @@
+*Heading
+**
+*INCLUDE, INPUT= nodes.inp
+*INCLUDE, INPUT= elements.inp
+*INCLUDE, INPUT= sets.inp
+*INCLUDE, INPUT= mat_sec.inp
+*INCLUDE, INPUT= PBC_file.inp
+*INCLUDE, INPUT= CDN_file.inp
+*INCLUDE, INPUT= steps_file.inp

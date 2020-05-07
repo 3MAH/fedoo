@@ -1,0 +1,109 @@
+*******************
+*** CREATE STEP ***
+*******************
+*Step, Name=Isothermal linear perturbation step, perturbation
+Elastic material property computation
+*Static
+0.01 ,1
+******************
+*** LOAD CASES ***
+******************
+**
+**
+*Load Case, name=Load_E11
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD11, 1, 1, 1
+CD11, 1, 1, 0
+CD11, 1, 1, 1
+CD11, 1, 1, 1
+CD11, 1, 1, 1
+CD11, 1, 1, 1
+*End Load Case
+**
+*Load Case, name=Load_E22
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD22, 1, 1, 1
+CD22, 1, 1, 1
+CD22, 1, 1, 1
+CD22, 1, 1, 1
+CD22, 1, 1, 1
+CD22, 1, 1, 1
+*End Load Case
+**
+*Load Case, name=Load_E33
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD33, 1, 1, 1
+CD33, 1, 1, 1
+CD33, 1, 1, 1
+CD33, 1, 1, 1
+CD33, 1, 1, 1
+CD33, 1, 1, 1
+*End Load Case
+**
+*Load Case, name=Load_E12
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD12, 1, 1, 1
+CD12, 1, 1, 1
+CD12, 1, 1, 1
+CD12, 1, 1, 1
+CD12, 1, 1, 1
+CD12, 1, 1, 1
+*End Load Case
+**
+*Load Case, name=Load_E13
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD13, 1, 1, 1
+CD13, 1, 1, 1
+CD13, 1, 1, 1
+CD13, 1, 1, 1
+CD13, 1, 1, 1
+CD13, 1, 1, 1
+*End Load Case
+**
+*Load Case, name=Load_E23
+*Boundary, op=NEW
+CentreNode, 1, 1
+CentreNode, 2, 2
+CentreNode, 3, 3
+**
+CD23, 1, 1, 1
+CD23, 1, 1, 1
+CD23, 1, 1, 1
+CD23, 1, 1, 1
+CD23, 1, 1, 1
+CD23, 1, 1, 1
+*End Load Case
+**
+***********************
+*** OUTPUT REQUESTS ***
+***********************
+*Output, field
+*Element Output, directions=YES
+S, E, EVOL, IVOL
+*Node Output, nset=AllNodes
+U,
+*Node Output, nset=CD_nodes
+RF, CF, U, NT
+*Node print, nset=CD_nodes, summary=no
+RF1, CF1, U1,
+*End Step
