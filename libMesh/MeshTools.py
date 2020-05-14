@@ -2,7 +2,8 @@ from fedoo.libMesh.Mesh import Mesh
 from fedoo.libUtil.Dimension import ProblemDimension
 import itertools
 
-import scipy as sp
+# import scipy as sp
+import numpy as np
 
 # utility fuctions
 # Only Functions are declared here !!
@@ -42,15 +43,15 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
         
     if ElementShape == 'quad9' or ElementShape == 'tri6': 
         Nx=int(Nx//2*2+1) ; Ny=int(Ny//2*2+1) #pour nombre impair de noeuds 
-    X,Y = sp.meshgrid(sp.linspace(x_min,x_max,Nx),sp.linspace(y_min,y_max,Ny))    
-    crd = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1))]
+    X,Y = np.meshgrid(np.linspace(x_min,x_max,Nx),np.linspace(y_min,y_max,Ny))    
+    crd = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1))]
     if ElementShape == 'quad8':
         dx = (x_max-x_min)/(Nx-1.) ; dy = (y_max-y_min)/(Ny-1.)
-        X,Y = sp.meshgrid(sp.linspace(x_min+dx/2.,x_max+dx/2.,Nx-1),sp.linspace(y_min,y_max,Ny))    
-        crd2 = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1))]
-        X,Y = sp.meshgrid(sp.linspace(x_min,x_max,Nx),sp.linspace(y_min+dy/2,y_max+dy/2,Ny-1))    
-        crd3 = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1))]
-        crd = sp.vstack((crd,crd2,crd3))
+        X,Y = np.meshgrid(np.linspace(x_min+dx/2.,x_max-dx/2.,Nx-1),np.linspace(y_min,y_max,Ny))    
+        crd2 = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1))]
+        X,Y = np.meshgrid(np.linspace(x_min,x_max,Nx),np.linspace(y_min+dy/2,y_max-dy/2,Ny-1))    
+        crd3 = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1))]
+        crd = np.vstack((crd,crd2,crd3))
         elm = [[Nx*j+i,Nx*j+i+1,Nx*(j+1)+i+1,Nx*(j+1)+i, Nx*Ny+(Nx-1)*j+i, Nx*Ny+(Nx-1)*Ny+Nx*j+i+1 , Nx*Ny+(Nx-1)*(j+1)+i, Nx*Ny+(Nx-1)*Ny+Nx*j+i] for j in range(0,Ny-1) for i in range(0,Nx-1)]
     elif ElementShape == 'quad4':
         elm = [[Nx*j+i,Nx*j+i+1,Nx*(j+1)+i+1,Nx*(j+1)+i] for j in range(Ny-1) for i in range(Nx-1)]            
@@ -67,7 +68,7 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
             elm += [[Nx*j+i,Nx*j+i+2,Nx*(j+2)+i, Nx*j+i+1,Nx*(j+1)+i+1,Nx*(j+1)+i] for i in range(0,Nx-2,2)]
             elm += [[Nx*j+i+2,Nx*(j+2)+i+2,Nx*(j+2)+i, Nx*(j+1)+i+2,Nx*(j+2)+i+1,Nx*(j+1)+i+1] for i in range(0,Nx-2,2)]
             
-    elm = sp.array(elm)
+    elm = np.array(elm)
 
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, ID)
     if ElementShape != 'quad8':
@@ -121,7 +122,7 @@ def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max
 
     r = m.GetNodeCoordinates()[:,0]
     theta = m.GetNodeCoordinates()[:,1]
-    crd = sp.c_[r*sp.cos(theta) , r*sp.sin(theta)] 
+    crd = np.c_[r*np.cos(theta) , r*np.sin(theta)] 
     ReturnedMesh = Mesh(crd, m.GetElementTable(), ElementShape, m.GetLocalFrame(), ID)
 
     if theta_min<theta_max: 
@@ -168,16 +169,16 @@ def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     LineMeshCylindric : Line mesh in cylindrical coordinate
     """
     if ElementShape == 'lin2': #1D element with 2 nodes
-        crd = sp.c_[sp.linspace(x_min,x_max,N)] #Nodes coordinates 
-        elm = sp.c_[range(N-1), sp.arange(1,N)] #Elements
+        crd = np.c_[np.linspace(x_min,x_max,N)] #Nodes coordinates 
+        elm = np.c_[range(N-1), np.arange(1,N)] #Elements
     elif ElementShape == 'lin3': #1D element with 3 nodes
         N = N//2*2+1 #In case N is not initially odd
-        crd = sp.c_[sp.linspace(x_min,x_max,N)] #Nodes coordinates 
-        elm = sp.c_[sp.arange(0,N-2,2), sp.arange(1,N-1,2), sp.arange(2,N,2)] #Elements
+        crd = np.c_[np.linspace(x_min,x_max,N)] #Nodes coordinates 
+        elm = np.c_[np.arange(0,N-2,2), np.arange(1,N-1,2), np.arange(2,N,2)] #Elements
     elif ElementShape == 'lin4':
         N = N//3*3+1 
-        crd = sp.c_[sp.linspace(x_min,x_max,N)] #Nodes coordinates
-        elm = sp.c_[sp.arange(0,N-3,3), sp.arange(1,N-2,3), sp.arange(2,N-1,3), sp.arange(3,N,3)] #Elements 
+        crd = np.c_[np.linspace(x_min,x_max,N)] #Nodes coordinates
+        elm = np.c_[np.arange(0,N-3,3), np.arange(1,N-2,3), np.arange(2,N-1,3), np.arange(3,N,3)] #Elements 
 
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, ID)
     ReturnedMesh.AddSetOfNodes([0], "left")
@@ -193,8 +194,8 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     ----------
     N : int
         Numbers of nodes (default = 11).
-    x_min, x_max : int,float
-        The boundary of the line (default : 0, 1).
+    x_min, x_max : int,float,list
+        The boundary of the line as scalar (1D) or list (default : 0, 1).
     ElementShape : {'lin2', 'lin3', 'lin4'}
         The shape of the elements (default='lin2')
         * 'lin2' -- 2 node line
@@ -213,15 +214,24 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
     LineMeshCylindric : Line mesh in cylindrical coordinate
     """
-    m = LineMesh1D(N,x_min,x_max,ElementShape,ID)    
-    if ProblemDimension.Get() in ['2Dplane', '2Dstress'] : dim = 2
-    else: dim = 3
-    crd = sp.c_[m.GetNodeCoordinates(), sp.zeros((N,dim-1))]
-    elm = m.GetElementTable()
-    ReturnedMesh = Mesh(crd,elm,ElementShape, None, ID)
-    ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
-    ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
-
+    if np.isscalar(x_min):
+        m = LineMesh1D(N,x_min,x_max,ElementShape,ID)    
+        if ProblemDimension.Get() in ['2Dplane', '2Dstress'] : dim = 2
+        else: dim = 3
+        crd = np.c_[m.GetNodeCoordinates(), np.zeros((N,dim-1))]
+        elm = m.GetElementTable()
+        ReturnedMesh = Mesh(crd,elm,ElementShape, None, ID)
+        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
+        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
+    else: 
+        m = LineMesh1D(N,0.,1.,ElementShape,ID)    
+        crd = m.GetNodeCoordinates()
+        crd = (np.array(x_max)-np.array(x_min))*crd+np.array(x_min)
+        elm = m.GetElementTable()
+        ReturnedMesh = Mesh(crd,elm,ElementShape, None, ID)
+        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
+        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
+        
     return ReturnedMesh
     
 def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape = 'lin2', init_rep_loc = 0, ID = ""):
@@ -260,9 +270,9 @@ def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape 
     theta = m.GetNodeCoordinates()[:,0]
     elm = m.GetElementTable()
 
-    LocalFrame = sp.array( [ [[sp.sin(t),-sp.cos(t)],[sp.cos(t),sp.sin(t)]] for t in theta ] )
+    LocalFrame = np.array( [ [[np.sin(t),-np.cos(t)],[np.cos(t),np.sin(t)]] for t in theta ] )
 
-    crd = sp.c_[r*sp.cos(theta), r*sp.sin(theta)]
+    crd = np.c_[r*np.cos(theta), r*np.sin(theta)]
         
     ReturnedMesh = Mesh(crd,elm,ElementShape, LocalFrame, ID)
     ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
@@ -298,19 +308,19 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
     LineMeshCylindric : Line mesh in cylindrical coord
     """
             
-    Y,Z,X = sp.meshgrid(sp.linspace(y_min,y_max,Ny),sp.linspace(z_min,z_max,Nz),sp.linspace(x_min,x_max,Nx))    
-    crd = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1)),sp.reshape(Z,(-1,1))]
+    Y,Z,X = np.meshgrid(np.linspace(y_min,y_max,Ny),np.linspace(z_min,z_max,Nz),np.linspace(x_min,x_max,Nx))    
+    crd = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1)),np.reshape(Z,(-1,1))]
     
     if ElementShape == 'hex20':
         dx = (x_max-x_min)/(Nx-1.) ; dy = (y_max-y_min)/(Ny-1.) ; dz = (z_max-z_min)/(Nz-1.)
-        Y,Z,X = sp.meshgrid(sp.linspace(y_min,y_max,Ny),sp.linspace(z_min,z_max,Nz),sp.linspace(x_min+dx/2.,x_max+dx/2.,Nx-1, endpoint=False))    
-        crd2 = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1)),sp.reshape(Z,(-1,1))]           
-        Y,Z,X = sp.meshgrid(sp.linspace(y_min,y_max,Ny),sp.linspace(z_min+dz/2.,z_max+dz/2.,Nz-1, endpoint=False),sp.linspace(x_min,x_max,Nx))    
-        crd3 = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1)),sp.reshape(Z,(-1,1))]        
-        Y,Z,X = sp.meshgrid(sp.linspace(y_min+dy/2.,y_max+dy/2.,Ny-1, endpoint=False),sp.linspace(z_min,z_max,Nz),sp.linspace(x_min,x_max,Nx))    
-        crd4 = sp.c_[sp.reshape(X,(-1,1)),sp.reshape(Y,(-1,1)),sp.reshape(Z,(-1,1))]
+        Y,Z,X = np.meshgrid(np.linspace(y_min,y_max,Ny),np.linspace(z_min,z_max,Nz),np.linspace(x_min+dx/2.,x_max+dx/2.,Nx-1, endpoint=False))    
+        crd2 = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1)),np.reshape(Z,(-1,1))]           
+        Y,Z,X = np.meshgrid(np.linspace(y_min,y_max,Ny),np.linspace(z_min+dz/2.,z_max+dz/2.,Nz-1, endpoint=False),np.linspace(x_min,x_max,Nx))    
+        crd3 = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1)),np.reshape(Z,(-1,1))]        
+        Y,Z,X = np.meshgrid(np.linspace(y_min+dy/2.,y_max+dy/2.,Ny-1, endpoint=False),np.linspace(z_min,z_max,Nz),np.linspace(x_min,x_max,Nx))    
+        crd4 = np.c_[np.reshape(X,(-1,1)),np.reshape(Y,(-1,1)),np.reshape(Z,(-1,1))]
      
-        crd = sp.vstack((crd,crd2,crd3,crd4))
+        crd = np.vstack((crd,crd2,crd3,crd4))
         
         elm = [[Nx*j+i+(k*Nx*Ny), Nx*j+i+1+(k*Nx*Ny), Nx*(j+1)+i+1+(k*Nx*Ny), Nx*(j+1)+i+(k*Nx*Ny), \
                 Nx*j+i+(k*Nx*Ny)+Nx*Ny, Nx*j+i+1+(k*Nx*Ny)+Nx*Ny, Nx*(j+1)+i+1+(k*Nx*Ny)+Nx*Ny, Nx*(j+1)+i+(k*Nx*Ny)+Nx*Ny, \
@@ -338,8 +348,8 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
     else:
         raise NameError('Element not implemented. Only support hex8 and hex20 elements')
         
-    N = sp.shape(crd)[0]
-    elm = sp.array(elm)
+    N = np.shape(crd)[0]
+    elm = np.array(elm)
     
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, ID)  
     for i, ndSet in enumerate([right, left, top, bottom, front, back]):
@@ -348,6 +358,87 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
                  
     return ReturnedMesh
 
+
+
+
+def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4', ID =""):
+#     #Edge1 and Edge3 should have the same lenght 
+#     #Edge2 and Edge4 should have the same lenght
+#     #last node of Edge1 should be the first of Edge2 and so on...
+#     if no ID is defined, the ID is the same as crd
+    
+    if hasattr(data,'GetElementTable'): #data is a mesh        
+        if data.GetElementTable() is None: elm = []
+        else: 
+            elm = list(data.GetElementTable())
+            ElementShape = data.GetElementShape()
+        crd = data.GetNodeCoordinates()
+        if ID == "": ID = data.GetID()
+    else: 
+        elm = []
+        crd = data
+        
+    x1 = crd[Edge1,0] ; x2 = crd[Edge2,0] ; x3 = crd[Edge3,0][::-1] ; x4 = crd[Edge4,0][::-1]
+    y1 = crd[Edge1,1] ; y2 = crd[Edge2,1] ; y3 = crd[Edge3,1][::-1] ; y4 = crd[Edge4,1][::-1] 
+    new_crd = list(crd.copy())
+    grid = np.empty((len(x1), len(x2)))
+    grid[0,:] = Edge4[::-1] ; grid[-1,:] = Edge2
+    grid[:,0] =  Edge1 ; grid[:,-1] = Edge3[::-1]
+    
+    N = len(new_crd)
+    for i in range(1,len(x1)-1):                    
+        px= ( (x1[i]*y3[i]-y1[i]*x3[i])*(x2-x4)-(x1[i]-x3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )         
+        py= ( (x1[i]*y3[i]-y1[i]*x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )
+        new_crd += list(np.c_[px[1:-1],py[1:-1]])
+        grid[i,1:-1] = np.arange(N,len(new_crd),1)
+        N = len(new_crd)        
+
+    Nx = grid.shape[0] ; Ny = grid.shape[1]
+    
+    if ElementShape == 'quad4':
+        elm += [[grid[i,j], grid[i+1,j],grid[i+1,j+1], grid[i,j+1]] for j in range(Ny-1) for i in range(Nx-1)]            
+    elif ElementShape == 'quad9':                
+        elm += [[grid[i,j],grid[i+2,j],grid[i+2,j+2],grid[i,j+2],grid[i+1,j],grid[i+2,j+1],grid[i+1,j+2],grid[i,j+1],grid[i+1,j+1]] for j in range(0,Ny-2,2) for i in range(0,Nx-2,2)]
+    elif ElementShape == 'tri3':    
+        for j in range(Ny-1):
+            elm += [[grid[i,j],grid[i+1,j],grid[i,j+1]] for i in range(Nx-1)]
+            elm += [[grid[i+1,j],grid[i+1,j+1],grid[i,j+1]] for i in range(Nx-1)]
+    elif ElementShape == 'tri6':
+        for j in range(0,Ny-2,2):
+            elm += [[grid[i,j],grid[i+2,j],grid[i,j+2], grid[i+1,j],grid[i+1,j+1],grid[i,j+1]] for i in range(0,Nx-2,2)]
+            elm += [[grid[i+2,j],grid[i+2,j+2],grid[i,j+2], grid[i+2,j+1],grid[i+1,j+2],grid[i+1,j+1]] for i in range(0,Nx-2,2)]
+    elif ElementShape == 'quad8':
+        raise NameError("'quad8' elements are not implemented")
+    
+    elm = np.array(elm, dtype=int)
+    return Mesh(np.array(new_crd), elm, ElementShape, None, ID)
+
+
+
+# def EmptyMesh(ElementShape = 'quad4', ID=""):
+#     return Mesh(np.array([]), np.array([], dtype=int), ElementShape, None, ID)
+
+def GenerateNodes(mesh, N, data, typeGen = 'straight'):
+    #if typeGen == 'straight' -> data = (node1, node2)
+    #if typeGen == 'circular' -> data = (node1, node2, (center_x, center_y))
+    crd = mesh.GetNodeCoordinates()    
+    if typeGen == 'straight':
+        node1 = data[0] ; node2 = data[1]
+        listNodes = mesh.AddNodes(LineMesh(N, crd[node1], crd[node2]).GetNodeCoordinates()[1:-1])
+        return np.array([node1]+list(listNodes)+[node2])
+    if typeGen == 'circular':
+        nd1 = data[0] ; nd2 = data[1] ; c = data[2]
+        c = np.array(c)
+        R = np.linalg.norm(crd[nd1]-c)
+        assert np.abs(R-np.linalg.norm(crd[nd2]-c))<R*1e-4, "Final nodes is not on the circle"
+        (crd[nd1]-c)
+        theta_min = np.arctan2(crd[nd1,1]-c[1],crd[nd1,0]-c[0])
+        theta_max = np.arctan2(crd[nd2,1]-c[1],crd[nd2,0]-c[0])
+        m = LineMeshCylindric(N, R, theta_min, theta_max) #circular mesh
+        listNodes = mesh.AddNodes(m.GetNodeCoordinates()[1:-1]+c)
+        return np.array([nd1]+list(listNodes)+[nd2])
+
+                      
 if __name__=="__main__":
     import math
     a = LineMeshCylindric(11, 1, 0, math.pi, 'lin2', init_rep_loc = 0)

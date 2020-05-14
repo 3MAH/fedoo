@@ -10,7 +10,7 @@ def Create(NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ID = ""
     return Mesh(NodeCoordinates, ElementTable, ElementShape, LocalFrame, ID)
 
 class Mesh(MeshBase):
-    def __init__(self, NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ID = ""):
+    def __init__(self, NodeCoordinates, ElementTable=None, ElementShape=None, LocalFrame=None, ID = ""):
         MeshBase.__init__(self, ID)
         self.__NodeCoordinates = NodeCoordinates #node coordinates            
         self.__ElementTable = ElementTable #element

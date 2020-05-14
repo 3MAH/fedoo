@@ -620,7 +620,7 @@ class Assembly(AssemblyBase):
             assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
         
         
-    def GetStrainTensor(self, U, Type="Nodal", nlgeom = True):
+    def GetStrainTensor(self, U, Type="Nodal", nlgeom = None):
         """
         Not a static method.
         Return the Green Lagrange Strain Tensor of an assembly using the Voigt notation as a python list. 
@@ -636,6 +636,10 @@ class Assembly(AssemblyBase):
         S = SpecificAssembly.GetStrainTensor(Problem.Problem.GetDoFSolution('all'))
         """        
 
+        if nlgeom is None: 
+            if hasattr(self.__weakForm, 'nlgeom'): nlgeom = self.__weakForm.nlgeom
+            else: nlgeom = False
+            
         GradValues = self.GetGradTensor(U, Type)
         
         if nlgeom == False:
