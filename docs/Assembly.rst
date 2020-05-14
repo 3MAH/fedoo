@@ -1,7 +1,7 @@
 Class Assembly
 =================================
 
-.. autoclass:: fedoo.libAssembly.Assembly
+.. autoclass:: libAssembly.Assembly
     :members:
 
 

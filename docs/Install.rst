@@ -25,20 +25,9 @@ ________________________________________________
    $ pip3 install scipy
 
 
-3. Install the subversion manager
-
-.. code-block:: none
-
-   $ sudo apt-get install subversion
-
-4. Download the FEDOO library from https://ff-m2p.cnrs.fr/projects/fedoo/ 
-
-.. code-block:: none
-
-   $ cd where_you_whant_to_download_fedoo
-   $ svn checkout https://scm.ff-m2p.cnrs.fr/anonscm/svn/fedoo/
+3. Download the FEDOO library from https://github.com/3MAH/fedoo
   
-5. Optional: if you want to be able to access fedoo from anywhere you can copy 
+4. Optional: if you want to be able to access fedoo from anywhere you can copy 
    the fedoo directory to "<pythondir>/Lib/site-packages" or add the fedoo 
    directory to the PYTHOPATH variable
    
@@ -51,10 +40,10 @@ ________________________
    the ANADONDA distribution (https://www.anaconda.com/) which include by 
    default numpy and and scipy with many other usefull libraries (recommanded).
    
-2. Download the FEDOO library from https://scm.ff-m2p.cnrs.fr/anonscm/svn/fedoo/
-   using any SVN utility (recomanded: https://tortoisesvn.net/)
+2. Download the FEDOO library from https://github.com/3MAH/fedoo
    
 3. Optional: if you want to be able to access fedoo from anywhere you can copy 
    the fedoo directory to "<pythondir>/Lib/site-packages" or add the fedoo 
    directory to the PYTHOPATH environment variable.
    
+4. Enjoy
