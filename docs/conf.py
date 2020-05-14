@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'FEDOO'
 copyright = '2019, Etienne Prulière'
 author = 'Etienne Prulière'
-
+master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
 
