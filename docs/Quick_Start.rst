@@ -56,6 +56,22 @@ Mesh.ImportFromFile (see :mod:`fedoo.libMesh.MeshImport.ImportFromFile`)
 Create weak formulations 
 ___________________________
 
+We need to define one or several equations to solve. 
+In a finite element analyses, the equations are written using a weak formulation. 
+The type of weak formulation may be related to a specific type of elements. 
+
+For instance, a beam weak formulation should be associated to beam elements.
+The module :doc:`WeakForm <WeakForm>` list the available type of weak formulation. 
+Most of weak formulations needs the definition of a material constitutive law.
+The module :doc:`ConstitutiveLaw <ConstitutiveLaw>` list the available ConstitutiveLaw.
+
+For instance a simple weak formulation may be defined by:
+
+.. code-block:: none
+    
+    ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
+    WeakForm.InternalForce("ElasticLaw", ID="MyWeakForm")
+
 
 Create global matrix assembies
 __________________________________

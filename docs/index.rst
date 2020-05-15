@@ -10,8 +10,9 @@ Welcome to FEDOO's documentation!
    Install
    Quick_Start  
    Mesh
-   Assembly
+   ConstitutiveLaw
    WeakForm
+   Assembly      
 
 Indices and tables
 ==================
