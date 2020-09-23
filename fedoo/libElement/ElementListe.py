@@ -1,7 +1,6 @@
 import numpy as np
 from numpy import linalg
 
-#lin2, lin3, lin2C1, lin2Bubble, lin3Bubble
 
 
 def GetNodePositionInElementCoordinates(element, nNd_elm=None):
@@ -48,7 +47,7 @@ def GetDefaultNbPG(element, mesh=None, raiseError=True):
         return 2
     elif element in ['lin3', 'lin3Bubble','tri3','tri3Bubble']:
         return 3
-    elif element in ['lin2C1', 'lin4', 'beam', 'quad4','tri6','cohesive3D','tet4']:
+    elif element in ['beam', 'beamFCQ', 'bernoulliBeam', 'lin4', 'quad4','tri6','cohesive3D','tet4']:
         return 4
     elif element in ['hex8']:
         return 8

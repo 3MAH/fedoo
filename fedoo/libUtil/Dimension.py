@@ -12,6 +12,8 @@ class ProblemDimension:
 
         Coordinate('X') 
         Coordinate('Y')
+        
+        if value == "2D": value = "2Dplane"
                 
         if value == "3D":
             ProblemDimension.__DoF = 3

@@ -5,7 +5,7 @@ class element:
     #Lines of xi should contains the coordinates of each point to consider
     def ShapeFunction(self,xi): pass #à définir dans les classes héritées
     #return an array whose lines are the values of the form functions (one line per point defined in xi)
-    def ShapeFunctionDerivative(self,xi): pass #à définir dans les classes héritées    
+    # def ShapeFunctionDerivative(self,xi): pass #à définir dans les classes héritées si nécessaire
     
     def ComputeDetJacobian(self,vec_x, vec_xi):
         """
@@ -90,7 +90,9 @@ class element1D(element):
             assert 0, "Number of gauss points "+str(nb_pg)+" unavailable for 1D element"                                                     
                           
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        
+        if hasattr(self, "ShapeFunctionDerivative"):
+            self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
         
     def ComputeDetJacobian(self,vec_x, vec_xi):
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)
@@ -114,20 +116,19 @@ class element1D(element):
         lastAxis = len(listX[0].shape)-1
         if listX[0].shape[lastAxis]==3: #espace 3D
             listY = [] ; listZ =[]        
-            if elementLocalFrame == None: 
+            if elementLocalFrame is None: 
                 for X in listX:                    
                     Z = sp.c_[-X[...,2],0*X[...,0],X[...,0]] #  équivalent à : Z = sp.cross(X,sp.array([0,1,0]))
                     Y = sp.zeros((len(X),3))
                     
-                    normZ = linalg.norm(Z,axis=lastAxis)
-                    list_nnz_normZ = sp.nonzero(normZ)[0] #list of line of Z where norm Z is not zero
-                                        
+                    list_nnz_normZ = sp.nonzero(linalg.norm(Z,axis=lastAxis))[0] #list of line of Z where norm Z is not zero
+
                     # filling the Z and Y values if normZ is not 0
                     if len(list_nnz_normZ) > 0:
                         Z[list_nnz_normZ] /= linalg.norm(Z[list_nnz_normZ], axis=lastAxis).reshape(-1,1)
                         Y[list_nnz_normZ] = sp.cross(Z[list_nnz_normZ],X[list_nnz_normZ]) # équivalent à : Y = y-X[1]*X ; Y/=norm(Y)
                     
-                    list_zero_normZ = sp.nonzero(Y==0)[0] #list of line of Z where norm Z is zero                     
+                    list_zero_normZ = sp.nonzero(linalg.norm(Y, axis = lastAxis) == 0)[0] #list of line of Z where norm Z is zero                     
                     
                     # filling the Z and Y values if normZ is 0
                     if len(list_zero_normZ) > 0:

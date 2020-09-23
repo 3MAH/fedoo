@@ -1,6 +1,6 @@
 from . import libUtil as Util
 from . import libMesh as Mesh
-from . import libElement
+from . import libElement as Element
 from . import libConstitutiveLaw as ConstitutiveLaw
 from . import libWeakForm as WeakForm
 from . import libAssembly as Assembly

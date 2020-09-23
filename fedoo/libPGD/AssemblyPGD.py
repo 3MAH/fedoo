@@ -32,7 +32,13 @@ class AssemblyPGD(AssemblyFEM):
         self.__listElementType = [m.GetElementShape() for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.__Mesh
         self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
 
-    def ComputeGlobalMatrix(self):
+    def ComputeGlobalMatrix(self, compute = 'all'):
+        """
+        Compute the global matrix and global vector using a separated representation
+        if compute = 'all', compute the global matrix and vector
+        if compute = 'matrix', compute only the matrix
+        if compute = 'vector', compute only the vector
+        """
         mesh = self.__Mesh
         dim = mesh.GetDimension()
 
@@ -43,6 +49,8 @@ class AssemblyPGD(AssemblyFEM):
         BB = 0
         
         for ii in range(len(wf.op)):     
+            if compute == 'matrix' and wf.op[ii] is 1: continue
+            if compute == 'vector' and wf.op[ii] is not 1: continue
 
             if wf.op[ii] == 1: #only virtual operator -> compute a separated array
                 BBadd = []
@@ -58,13 +66,25 @@ class AssemblyPGD(AssemblyFEM):
                 nb_pg = self.__listNumberOfGaussPoints[dd]                
                 MatGaussianQuadrature = AssemblyPGD._Assembly__GetGaussianQuadratureMatrix(subMesh, elmType, nb_pg)   
                 MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh)                             
+                associatedVariables = AssemblyPGD._Assembly__GetAssociatedVariables(elmType)
                 
                 coef_vir = [1]                
                 var_vir = [mesh._GetSpecificVariableRank (dd, wf.op_vir[ii].u)] #list in case there is an angular variable
-                if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                        
-                    if not(Variable.GetDerivative(wf.op_vir[ii].u) is None): 
-                        var_vir.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op_vir[ii].u)[0]) )
-                        coef_vir.append(Variable.GetDerivative(wf.op_vir[ii].u)[1])
+                
+                
+                
+                
+                # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                        
+                if wf.op_vir[ii].u in associatedVariables:                       
+                    var_vir.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op_vir[ii].u][0]])                        
+                    coef_vir.extend(associatedVariables[wf.op_vir[ii].u][1])                  
+                # if not(Variable.GetDerivative(wf.op_vir[ii].u) is None): 
+                #     var_vir.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op_vir[ii].u)[0]) )
+                #     coef_vir.append(Variable.GetDerivative(wf.op_vir[ii].u)[1])
+
+
+                    
+                    
                 Matvir = (RowBlocMatrix(AssemblyPGD._Assembly__GetElementaryOp(subMesh, wf.op_vir[ii], elmType, nb_pg), nvar[dd], var_vir, coef_vir ) * MatrixChangeOfBasis).T               
 
                 if wf.op[ii] == 1: #only virtual operator -> compute a separated array                                         
@@ -78,10 +98,20 @@ class AssemblyPGD(AssemblyFEM):
                 else: #virtual and real operators -> compute a separated operator 
                     coef = [1]
                     var = [mesh._GetSpecificVariableRank (dd, wf.op[ii].u)] #list in case there is an angular variable                
-                    if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)
-                        if not(Variable.GetDerivative(wf.op[ii].u) is None):     
-                            var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op[ii].u)[0]) )
-                            coef.append(Variable.GetDerivative(wf.op[ii].u)[1])                                                                             
+                    
+                    
+                    
+                    # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                    
+                    if wf.op[ii].u in associatedVariables:                       
+                        var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op[ii].u][0]])                        
+                        coef.extend(associatedVariables[wf.op[ii].u][1])
+                    # if not(Variable.GetDerivative(wf.op[ii].u) is None):     
+                    #     var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op[ii].u)[0]) )
+                    #     coef.append(Variable.GetDerivative(wf.op[ii].u)[1])                                                                             
+                    
+                    
+                    
+                    
                     Mat    =  RowBlocMatrix(AssemblyPGD._Assembly__GetElementaryOp(subMesh, wf.op[ii], elmType, nb_pg), nvar[dd], var, coef)         * MatrixChangeOfBasis 
 
                                                                                                              
@@ -99,10 +129,12 @@ class AssemblyPGD(AssemblyFEM):
             if wf.op[ii] == 1:
                 BB = BB - SeparatedArray(BBadd)
         
-        if AA == []: self.SetMatrix(0)
-        else: self.SetMatrix(SeparatedOperator(AA)) 
-        self.SetVector(BB) 
-
+        if compute != 'vector': 
+            if AA == []: self.SetMatrix(0)
+            else: self.SetMatrix(SeparatedOperator(AA))        
+        if compute != 'matrix': 
+            self.SetVector(BB)             
+               
     def SetMesh(self, mesh):
         self.__Mesh = mesh
 
@@ -177,10 +209,21 @@ class AssemblyPGD(AssemblyFEM):
             for dd, subMesh in enumerate(mesh.GetListMesh()):                                
                 var = [mesh._GetSpecificVariableRank (dd, operator.op[ii].u)]
                 coef = [1]
-                if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates
-                    if not(Variable.GetDerivative(operator.op[ii].u) is None): 
-                        var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(operator.op[ii].u)[0]) )
-                        coef.append(Variable.GetDerivative(operator.op[ii].u)[1])
+                
+                
+                                
+                # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates                
+                associatedVariables = AssemblyPGD._Assembly__GetAssociatedVariables(list_elementType[dd])
+
+                if operator.op[ii].u in associatedVariables:                       
+                    var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[operator.op[ii].u][0]])                        
+                    coef.extend(associatedVariables[operator.op[ii].u][1])                
+                # if not(Variable.GetDerivative(operator.op[ii].u) is None): 
+                #     var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(operator.op[ii].u)[0]) )
+                #     coef.append(Variable.GetDerivative(operator.op[ii].u)[1])
+                        
+                        
+                        
                 assert operator.op_vir[ii]==1, "Operator virtual are only required to build FE operators, but not to get element results"
                 
                 if isinstance(coef_PG, list):

@@ -81,7 +81,7 @@ class OpDiff:
                     else: raise NameError('Impossible operation')
             return res
         else:  #isinstance(A, (Number, SeparatedArray)):        
-            if A is 0: return 0
+            if  isinstance(A, Number) and A == 0: return 0
             return OpDiff(self.op, self.op_vir, [A*cc for cc in self.coef])
 #        else: 
 #            return NotImplemented

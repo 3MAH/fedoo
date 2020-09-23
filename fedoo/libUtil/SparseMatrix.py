@@ -32,7 +32,7 @@ class _BlocSparse():
 #            bloc.data = bloc.data + Mat.data
 
     def addToBloc(self, A, B, coef, rowBloc, colBloc):
-        #A and B should a scipy matrix using the csr format and with the same number of column per row for each row
+        #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
         
         NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
         NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B
@@ -45,7 +45,6 @@ class _BlocSparse():
                 self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
             else:
                 self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each PG we build a nbNode x nbNode matrix
-
         
         else:
             if self.nbpg is None:

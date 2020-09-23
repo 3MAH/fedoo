@@ -105,6 +105,9 @@ class Mesh(MeshBase):
 
         return np.arange(NbNd_old,self.GetNumberOfNodes())
 
+    def AddInternalNodes(self, numberOfInternalNodes):
+        newNodes = self.AddNodes(NumberOfNewNodes=self.GetNumberOfElements()*numberOfInternalNodes)
+        self.__ElementTable = np.c_[self.__ElementTable, newNodes]
         
     def GetElementTable(self):
         return self.__ElementTable
