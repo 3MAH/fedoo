@@ -165,9 +165,9 @@ if SetId is None:
 else:
     Mesh.GetAll()[meshID].ExtractSetOfElements(SetId, ID="output")
     ElSet = Mesh.GetAll()[meshID].GetSetOfElements(SetId) #keep only some elements    
+    OUT = Util.ExportData("output")
 
 #Write the vtk file                            
-OUT = Util.ExportData("output")
 OUT.addNodeData(U,'Displacement')
 OUT.addNodeData(TensorStressNd.vtkFormat(),'Stress')
 OUT.addElmData(TensorStressEl.vtkFormat()[ElSet],'Stress')
