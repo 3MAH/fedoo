@@ -8,15 +8,14 @@ Util.ProblemDimension("3D")
 
 # DataINP = Util.ReadINP('Job-1.inp')
 
-INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh
-INP.toMesh(meshID = "Domain")
+# INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh -> dont work quite well
+# INP.toMesh(meshID = "Domain")
 
 # data = Util.ExportData(Mesh.GetAll()['cell_taffetas'])
 # data.toVTK()
 
 #alternative mesh below (uncomment the line)
-# Mesh.RectangleMesh(Nx=51, Ny=51, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = 'quad4', ID ="Domain")
-# Mesh.BoxMesh(Nx=11, Ny=11, Nz=11, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
+Mesh.BoxMesh(Nx=11, Ny=11, Nz=11, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
     
 type_el = Mesh.GetAll()['Domain'].GetElementShape()
 
@@ -99,58 +98,60 @@ print(MeanStrain)
 print('Stress tensor ([Sxx, Syy, Szz, Syz, Sxz, Sxy]): ' )
 print(MeanStress)
 
-print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
+# print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
 
 
 #------------------------------------------------------------------------------
 #Optional: Compute and write data in a vtk file (for visualization with paraview for instance)
 #------------------------------------------------------------------------------
-#Get the stress tensor (nodal values converted from PG values)
-TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
-TensorStressNd = Assembly.ConvertData(TensorStress, meshID, convertTo = "Node")
-
-#Get the stress tensor (element values)
-TensorStrainEl = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Element")       
-TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
-
-# #Get the stress tensor (nodal values)
-# TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
-# TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
-
-# #Get the stress tensor (element values)
-# TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
-# TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
-
-# Get the principal directions (vectors on nodes)
-PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
-
-#Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-N = Mesh.GetAll()[meshID].GetNumberOfNodes()
-# U = np.c_[U,np.zeros(N)]
-
-
-SetId = 'all_fibers' #or None
-if SetId is None:
-    OUT = Util.ExportData(meshID)
-    ElSet = slice(None) #we keep all elements
-else:
-    Mesh.GetAll()[meshID].ExtractSetOfElements(SetId, ID="output")
-    ElSet = Mesh.GetAll()[meshID].GetSetOfElements(SetId) #keep only some elements    
-    OUT = Util.ExportData("output")
-
-#Write the vtk file                            
-OUT.addNodeData(U,'Displacement')
-OUT.addNodeData(TensorStressNd.vtkFormat(),'Stress')
-OUT.addElmData(TensorStressEl.vtkFormat()[ElSet],'Stress')
-OUT.addNodeData(TensorStrainNd.vtkFormat(),'Strain')
-OUT.addElmData(TensorStrainEl.vtkFormat()[ElSet],'Strain')
-OUT.addNodeData(TensorStressNd.vonMises(),'VMStress')
-OUT.addElmData(TensorStressEl.vonMises()[ElSet],'VMStress')
-OUT.addNodeData(PrincipalStress,'PrincipalStress')
-OUT.addNodeData(PrincipalDirection[0],'DirPrincipal1')
-OUT.addNodeData(PrincipalDirection[1],'DirPrincipal2')
-
-OUT.toVTK("3D_Periodic_BC.vtk")
-print('Result file "3D_Periodic_BC.vtk" written in the active directory')
-
+output_VTK = 0
+if output_VTK == 1:
+    #Get the stress tensor (nodal values converted from PG values)
+    TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
+    TensorStressNd = Assembly.ConvertData(TensorStress, meshID, convertTo = "Node")
+    
+    #Get the stress tensor (element values)
+    TensorStrainEl = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Element")       
+    TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
+    
+    # #Get the stress tensor (nodal values)
+    # TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
+    # TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+    
+    # #Get the stress tensor (element values)
+    # TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
+    # TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
+    
+    # Get the principal directions (vectors on nodes)
+    PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
+    
+    #Get the displacement vector on nodes for export to vtk
+    U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
+    N = Mesh.GetAll()[meshID].GetNumberOfNodes()
+    # U = np.c_[U,np.zeros(N)]
+    
+    
+    SetId = 'all_fibers' #or None
+    if SetId is None:
+        OUT = Util.ExportData(meshID)
+        ElSet = slice(None) #we keep all elements
+    else:
+        Mesh.GetAll()[meshID].ExtractSetOfElements(SetId, ID="output")
+        ElSet = Mesh.GetAll()[meshID].GetSetOfElements(SetId) #keep only some elements    
+        OUT = Util.ExportData("output")
+    
+    #Write the vtk file                            
+    OUT.addNodeData(U,'Displacement')
+    OUT.addNodeData(TensorStressNd.vtkFormat(),'Stress')
+    OUT.addElmData(TensorStressEl.vtkFormat()[ElSet],'Stress')
+    OUT.addNodeData(TensorStrainNd.vtkFormat(),'Strain')
+    OUT.addElmData(TensorStrainEl.vtkFormat()[ElSet],'Strain')
+    OUT.addNodeData(TensorStressNd.vonMises(),'VMStress')
+    OUT.addElmData(TensorStressEl.vonMises()[ElSet],'VMStress')
+    OUT.addNodeData(PrincipalStress,'PrincipalStress')
+    OUT.addNodeData(PrincipalDirection[0],'DirPrincipal1')
+    OUT.addNodeData(PrincipalDirection[1],'DirPrincipal2')
+    
+    OUT.toVTK("3D_Periodic_BC.vtk")
+    print('Result file "3D_Periodic_BC.vtk" written in the active directory')
+    
