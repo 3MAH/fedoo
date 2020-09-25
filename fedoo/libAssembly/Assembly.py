@@ -473,35 +473,22 @@ class Assembly(AssemblyBase):
         return res
 
     @staticmethod
-    def __ConvertToGaussPoints(mesh, values, elementType, nb_pg=None):         
+    def __ConvertToGaussPoints(mesh, data, elementType, nb_pg=None):         
         """
         Convert an array of values related to a specific mesh (Nodal values, Element Values or Points of Gauss values) to the gauss points
         mesh: the considered Mesh object
-        values: array containing the values (nodal or element value)
+        data: array containing the values (nodal or element value)
         The shape of the array is tested.
-        """       
-        NumberOfGaussPointValues = Assembly.__saveMatGaussianQuadrature[(mesh.GetID(),nb_pg)].shape[0]
-        test = 0
-        if len(values) == mesh.GetNumberOfNodes(): 
-            typeOfValues = 'Node' #fonction définie aux noeuds   
-            test+=1               
-        if len(values) == mesh.GetNumberOfElements(): 
-            typeOfValues = 'Element' #fonction définie aux éléments
-            test += 1
-        if len(values) == NumberOfGaussPointValues:
-            typeOfValues = 'PG'
-            test += 1
-        assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
-        if test>1: "Warning: kind of data is confusing. " + typeOfValues +" values choosen."
+        """               
+        if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)             
+        dataType = DetermineDataType(data, mesh, nb_pg)       
 
-        if typeOfValues == 'Node': 
-            return Assembly.__GetNodeToGaussianPointMatrix(mesh, elementType, nb_pg) * values
-        if typeOfValues == 'Element':
-            NumberOfGaussPoints = NumberOfGaussPointValues//len(values)
-            if len(np.shape(values)) == 1: return np.tile(values.copy(),NumberOfGaussPoints)
-            else: return np.tile(values.copy(),[NumberOfGaussPoints,1])
-            
-        return values
+        if dataType == 'Node': 
+            return Assembly.__GetNodeToGaussianPointMatrix(mesh, elementType, nb_pg) * data
+        if dataType == 'Element':
+            if len(np.shape(data)) == 1: return np.tile(data.copy(),nb_pg)
+            else: return np.tile(data.copy(),[nb_pg,1])            
+        return data #in case data contains already PG values
                 
     def GetElementResult(self, operator, U):
         """
@@ -576,27 +563,14 @@ class Assembly(AssemblyBase):
         GaussianPointToNodeMatrix = Assembly.__GetGaussianPointToNodeMatrix(self.__Mesh, self.__elmType, self.__nb_pg)
         res = Assembly.__GetResultGaussPoints(self.__Mesh, operator, U, self.__elmType, self.__nb_pg)
         return GaussianPointToNodeMatrix * res        
-
+        
     def ConvertData(self, data, convertFrom, convertTo):
-        assert (convertFrom in ['Node','GaussPoint','Element']) and (convertTo in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
-        if convertFrom == convertTo: return data       
-        if convertFrom == 'Node': 
-            data = Assembly.__GetNodeToGaussianPointMatrix(self.__Mesh, self.__elmType, self.__nb_pg) * data
-            convertFrom = 'GaussPoint'
-        elif convertFrom == 'Element':             
-            NumberOfGaussPoints = self.__nb_pg # Assembly.__saveMatGaussianQuadrature[(self.__Mesh.GetID(),self.__nb_pg)].shape[0]//len(data)
-            if len(np.shape(data)) == 1: data = np.tile(data.copy(),NumberOfGaussPoints)
-            else: data = np.tile(data.copy(),[NumberOfGaussPoints,1])
-            convertFrom = 'GaussPoint'            
-        # from here convertFrom should be 'PG'
-        if convertTo == 'Node': 
-            return Assembly.__GetGaussianPointToNodeMatrix(self.__Mesh, self.__elmType, self.__nb_pg) * data 
-        elif convertTo == 'Element': 
-            NumberOfGaussPoint = self.__nb_pg #data.shape[0]//self.__Mesh.GetNumberOfElements()
-            return np.reshape(data, (NumberOfGaussPoint,-1)).sum(0) / NumberOfGaussPoint
-        else: return data 
+        return ConvertData(data, self.__Mesh, convertFrom, convertTo, self.__elmType, self.__nb_pg)
             
-            
+    def IntegrateField(self, Field, TypeField = 'GaussPoint'):
+        assert TypeField in ['Node','GaussPoint','Element'], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"
+        Field = self.ConvertData(Field, TypeField, 'GaussPoint')
+        return sum(Assembly.__GetGaussianQuadratureMatrix(self.__Mesh, self.__elmType, self.__nb_pg)@Field)
 
     def GetStressTensor(self, U, constitutiveLaw, Type="Nodal"):
         """
@@ -758,10 +732,6 @@ class Assembly(AssemblyBase):
 #            C = np.reshape( MatrixChangeOfBasisElement.T * np.reshape(res[:,3:6].T, -1)  ,  (3,-1) ).T
 #            return np.hstack((F,C))            
 
-
-
-
-
     def GetInternalForces(self, U, CoordinateSystem = 'global'): 
         """
         Not a static method.
@@ -833,10 +803,51 @@ class Assembly(AssemblyBase):
 
 
 
-#def GetDefaultNumberOfPG(elmType, mesh):
-#    nb_pg = GetDefaultNbPG(elmType)   
-#    if nb_pg is None: 
-#        nb_pg = GetDefaultNbPG(mesh.GetElementShape())
-#    if nb_pg is None:
-#        raise NameError('Element unknown: no default number of integration points')
-#    return nb_pg
+def ConvertData(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, nb_pg =None):    
+    if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+    if elmType is None: elmType = mesh.GetElementShape()
+    if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
+    
+    if isinstance(data, (listStrainTensor, listStressTensor)):        
+        try:
+            return type(data)(ConvertData(data.asarray().T, mesh, convertFrom, convertTo, elmType, nb_pg).T)
+        except:
+            NotImplemented
+    
+    if convertFrom is None: convertFrom = DetermineDataType(data, mesh, nb_pg)
+        
+    assert (convertFrom in ['Node','GaussPoint','Element']) and (convertTo in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
+    
+    if convertFrom == convertTo: return data       
+    if convertFrom == 'Node': 
+        data = Assembly._Assembly__GetNodeToGaussianPointMatrix(mesh, elmType, nb_pg) * data
+        convertFrom = 'GaussPoint'
+    elif convertFrom == 'Element':             
+        if len(np.shape(data)) == 1: data = np.tile(data.copy(),nb_pg)
+        else: data = np.tile(data.copy(),[nb_pg,1])
+        convertFrom = 'GaussPoint'
+        
+    # from here convertFrom should be 'PG'
+    if convertTo == 'Node': 
+        return Assembly._Assembly__GetGaussianPointToNodeMatrix(mesh, elmType, nb_pg) * data 
+    elif convertTo == 'Element': 
+        return np.sum(np.split(data, nb_pg),axis=0) / nb_pg
+    else: return data 
+
+def DetermineDataType(data, mesh, nb_pg):               
+        if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+        if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
+ 
+        test = 0
+        if len(data) == mesh.GetNumberOfNodes(): 
+            dataType = 'Node' #fonction définie aux noeuds   
+            test+=1               
+        if len(data) == mesh.GetNumberOfElements(): 
+            dataType = 'Element' #fonction définie aux éléments
+            test += 1
+        if len(data) == nb_pg*mesh.GetNumberOfElements():
+            dataType = 'GaussPoint'
+            test += 1
+        assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
+        if test>1: "Warning: kind of data is confusing. " + dataType +" values choosen."
+        return dataType        

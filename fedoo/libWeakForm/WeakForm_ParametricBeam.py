@@ -3,7 +3,7 @@ from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.Variable import Variable
 from fedoo.libUtil.Dimension import ProblemDimension
 from fedoo.libUtil.Coordinate import Coordinate
-from fedoo.libUtil.BernoulliBeamStrainOperator import GetBernoulliBeamStrainOperator
+from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
 from fedoo.libPGD.MeshPGD import MeshPGD
 from fedoo.libPGD.SeparatedArray import SeparatedOnes
 
@@ -67,10 +67,9 @@ class ParametricBeam(WeakForm):
         G_Jx = SeparatedOnes(NN) #G = E/(1+nu)/2
         E_Iyy = SeparatedOnes(NN)
         E_Izz = SeparatedOnes(NN)  
-        
         if self.__parameters['k'] != 0: kG_S = self.__parameters['k']*SeparatedOnes(NN) #G = E/(1+nu)/2        
-        else: kG_S = 0
-                       
+        else: kG_S = 0                
+        
         for param in ['E', 'nu', 'R', 'S', 'Jx', 'Iyy', 'Izz']:     
             if mesh.FindCoordinateID(param) is not None:
                 Coordinate(param)
@@ -128,14 +127,14 @@ class ParametricBeam(WeakForm):
             mesh = MeshPGD.GetAll()[mesh]
 
         Ke = self.__GetKe(mesh)            
-        eps, eps_vir = GetBernoulliBeamStrainOperator()    
+        eps, eps_vir = GetBeamStrainOperator()    
         
         return sum([eps_vir[i] * eps[i] * Ke[i] for i in range(6)])       
             
     def GetGeneralizedStress(self, mesh):
         
         Ke = self.__GetKe(mesh)
-        eps, eps_vir = GetBernoulliBeamStrainOperator()
+        eps, eps_vir = GetBeamStrainOperator()
         
         temp = [eps[i] * Ke[i] for i in range(6)]
 

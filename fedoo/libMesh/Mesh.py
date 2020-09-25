@@ -215,7 +215,7 @@ class Mesh(MeshBase):
         """
         self.__NodeCoordinates = self.__NodeCoordinates + Vector        
     
-    def ExtractSetOfElements(self,SetOfElementKey):
+    def ExtractSetOfElements(self,SetOfElementKey, ID=""):
         """
         Return a new mesh from the set of elements defined by SetOfElementKey
         """
@@ -224,7 +224,7 @@ class Mesh(MeshBase):
         for key in self.__SetOfElements:
             new_SetOfElements[key] = np.array([el for el in self.__SetOfElements[key] if el in ListElm])       
         
-        subMesh = Mesh(self.__NodeCoordinates, self.__ElementTable[ListElm], self.__ElementShape, self.__LocalFrame)                
+        subMesh = Mesh(self.__NodeCoordinates, self.__ElementTable[ListElm], self.__ElementShape, self.__LocalFrame, ID=ID)                
         return subMesh    
        
     #

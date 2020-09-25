@@ -128,7 +128,7 @@ class ReadINP:
                 # Equation[nTerms].append(np.hstack([inp[line].split() for line in range(nline+2,keyword[k+1][0])]).astype(float))
 
                             
-        self.Equation = Equation #for debug
+        # self.Equation = Equation #for debug
         self.__Equation = Equation
         self.__Element = Element
         self.__NodeSet = NodeSet
@@ -154,16 +154,17 @@ class ReadINP:
             elm = self.__ConvertNode(dict_elm['ElementTable'])
             Mesh(self.__NodeCoordinate, elm, dict_elm['ElementType'], ID = importedMeshName) 
             #add set of nodes
-            for SetOfId,NodeIndexes in enumerate(self.__NodeSet):
+            for SetOfId in self.__NodeSet:
+                NodeIndexes = self.__NodeSet[SetOfId]
                 Mesh.GetAll()[importedMeshName].AddSetOfNodes(self.__ConvertNode(NodeIndexes),SetOfId)
             
             ElementNumber = dict_elm['ElementNumber']
             ConvertElementDict = dict(zip(ElementNumber, list(range(0,len(ElementNumber)))))        
-            ConvertElement = np.vectorize(ConvertElementDict.get) #function
-            for SetOfId,ElementIndexes in enumerate(self.__ElementSet):
+            ConvertElement = np.vectorize(ConvertElementDict.get) #function            
+            for SetOfId in self.__ElementSet:
+                ElementIndexes = self.__ElementSet[SetOfId]
                 Temp = ConvertElement(ElementIndexes)                
-                Mesh.GetAll()[importedMeshName].AddSetOfElements(Temp[Temp != None].astype(int),SetOfId)
-            
+                Mesh.GetAll()[importedMeshName].AddSetOfElements(Temp[Temp != None].astype(int),SetOfId)                    
 
     def applyBoundaryCondition(self, ProblemID = "MainProblem"):
         for listVar in self.__Equation:
