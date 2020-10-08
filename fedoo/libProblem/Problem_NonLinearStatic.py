@@ -95,13 +95,11 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
             Update the problem with the new assembled global matrix and global vector
             """
             if updateWeakForm == True:
-                outValues = self.__Assembly.Update(self, time, compute)
+                self.__Assembly.Update(self, time, compute)
             else: 
-                outValues = None
                 self.__Assembly.ComputeGlobalMatrix(compute)
             self.SetA(self.__Assembly.GetMatrix())
             self.SetD(self.__Assembly.GetVector())
-            return outValues 
 
         def Reset(self):
             self.__Assembly.Reset()

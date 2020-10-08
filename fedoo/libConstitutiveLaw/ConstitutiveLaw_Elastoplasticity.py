@@ -29,6 +29,7 @@ class ElastoPlasticity(ConstitutiveLaw):
         self.__PlasticStrainTensor = None         
         self.__currentPlasticStrainTensor = None 
         self.__currentSigma = None #lissStressTensor object describing the last computed stress (GetStress method)
+        self.__currentGradDisp = None
         
         self.__tol = 1e-6 #tolerance of Newton Raphson used to get the updated plasticity state (constutive law alogorithm)    
 
@@ -119,6 +120,9 @@ class ElastoPlasticity(ConstitutiveLaw):
     
     def GetCurrentStress(self):
         return self.__currentSigma
+    
+    def GetCurrentGradDisp(self):
+        return self.__currentGradDisp
         
     def GetH(self):        
         Helas = self.GetHelas() #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
@@ -195,7 +199,33 @@ class ElastoPlasticity(ConstitutiveLaw):
         self.__currentPlasticStrainTensor = None 
         self.__currentSigma = None #lissStressTensor object describing the last computed stress (GetStress method)
 
-    
+   
+    def Update(self,assembly, pb, time, nlgeom):
+        displacement = pb.GetDisp()
+        
+        if displacement is 0: 
+            self.__currentGradDisp = 0
+            self.__currentSigma = 0                        
+        else:
+            self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
+            GradValues = self.__currentGradDisp
+            if nlgeom == False:
+                Strain  = [GradValues[i][i] for i in range(3)] 
+                Strain += [GradValues[1][2] + GradValues[2][1], GradValues[0][2] + GradValues[2][0], GradValues[0][1] + GradValues[1][0]]
+            else:            
+                Strain  = [GradValues[i][i] + 0.5*sum([GradValues[k][i]**2 for k in range(3)]) for i in range(3)] 
+                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
+                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
+                Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
+        
+            TotalStrain = listStrainTensor(Strain)
+            self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
+        
+        if nlgeom:
+            if displacement is 0: self.__InitialGradDispTensor = 0
+            else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
+        
+            
     def GetStress(self, StrainTensor, time = None): 
         # time not used here because this law require no time effect
         # initilialize values plasticity variables if required

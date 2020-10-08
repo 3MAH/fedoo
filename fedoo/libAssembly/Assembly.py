@@ -92,7 +92,6 @@ class Assembly(AssemblyBase):
                           
 #                Matvir = (RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
                 #check how it appens with change of variable and rotation dof
-                #add coef_vir somewhere
                 Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)
 
                 if isinstance(wf.coef[ii], Number): 

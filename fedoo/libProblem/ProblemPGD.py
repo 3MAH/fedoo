@@ -13,9 +13,6 @@ from fedoo.libProblem import ProblemBase, BoundaryCondition
 #===============================================================================
 
 class ProblemPGD(ProblemBase): 
-
-
-
     
     def __init__(self, A, B, D, Mesh, ID = "MainProblem"):  
         

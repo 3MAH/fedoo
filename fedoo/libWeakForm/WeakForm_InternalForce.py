@@ -48,19 +48,35 @@ class InternalForce(WeakForm):
         
 
     def Update(self, assembly, pb, time):
-        displacement = pb.GetDisp()
-        if displacement is 0: TotalStress = TotalStrain = 0
-        else:
-            TotalStrain = assembly.GetStrainTensor(displacement, "GaussPoint", nlgeom=self.__nlgeom)
-            TotalStress = self.__ConstitutiveLaw.GetStress(TotalStrain, time)     
-
-        self.UpdateInitialStress(TotalStress)
+        
+        
+        self.__ConstitutiveLaw.Update(assembly, pb, time, self.__nlgeom)                           
+        self.UpdateInitialStress(self.__ConstitutiveLaw.GetCurrentStress())
         
         if self.__nlgeom:
-            if displacement is 0: self.__InitialGradDispTensor = 0
-            else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
+            if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
+                raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
+            self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
+                
+        #     if displacement is 0: self.__InitialGradDispTensor = 0
+        #     else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
         
-        return TotalStrain, TotalStress
+        # return TotalStrain, TotalStress        
+
+        # displacement = pb.GetDisp()
+        # if displacement is 0: TotalStress = TotalStrain = 0
+        # else:
+        #     TotalStrain = assembly.GetStrainTensor(displacement, "GaussPoint", nlgeom=self.__nlgeom)
+        #     TotalStress = self.__ConstitutiveLaw.GetStress(TotalStrain, time)     
+
+        # self.UpdateInitialStress(TotalStress)
+        
+        # if self.__nlgeom:
+        #     if displacement is 0: self.__InitialGradDispTensor = 0
+        #     else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
+        
+        # return TotalStrain, TotalStress
+
 
     def Reset(self):
         self.__ConstitutiveLaw.Reset()

@@ -111,10 +111,9 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
                 - Change in constitutive law (internal variable)
             Update the problem with the new assembled global matrix and global vector
             """
-            outValues = self.__StiffnessAssembly.Update(self, time, compute)  
+            self.__StiffnessAssembly.Update(self, time, compute)  
             self.__UpdateA()
             self.__UpdateD()
-            return outValues 
             
         def NewTimeIncrement(self,time): #modifier la gestion du temps pour les CL
             LoadFactor = (time-self.t0)/(self.tmax-self.t0) #linear ramp
