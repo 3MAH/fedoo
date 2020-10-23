@@ -1,4 +1,5 @@
 #derive de ConstitutiveLaw
+#compatible with the simcoon strain and stress notation
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import *
@@ -32,7 +33,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp    
     
-    def __ChangeBasisH(self, H):
+    def __ChangeBasisH(self, H):       
         #Change of basis capability for laws on the form : StressTensor = H * StrainTensor
         #StressTensor and StrainTensor are column vectors based on the voigt notation 
         if self._ConstitutiveLaw__localFrame is not None:
@@ -42,10 +43,10 @@ class ElasticAnisotropic(ConstitutiveLaw):
 #            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]]) 
             R_epsilon = np.empty((len(localFrame), 6,6))
             R_epsilon[:,  :3,  :3] = localFrame**2 
-            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[1,2,0]]*localFrame[:,:,[2,0,1]]
-            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[1,2,0]]*localFrame[:,[2,0,1]] 
-            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[1],[2],[0]], [1,2,0]]*localFrame[:,[[2],[0],[1]],[2,0,1]] + localFrame[:,[[2],[0],[1]],[1,2,0]]*localFrame[:,[[1],[2],[0]],[2,0,1]] 
-            R_sigma_inv = np.transpose(R_epsilon,[0,2,1])        
+            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[0,2,1]]*localFrame[:,:,[1,0,2]]
+            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[0,2,1]]*localFrame[:,[1,0,2]] 
+            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[0],[2],[1]], [0,2,1]]*localFrame[:,[[1],[0],[2]],[1,0,2]] + localFrame[:,[[1],[0],[2]],[0,2,1]]*localFrame[:,[[0],[2],[1]],[1,0,2]] 
+            R_sigma_inv = R_epsilon.transpose(0,2,1)    # np.transpose(R_epsilon,[0,2,1])        
             
             if len(H.shape) == 3: H = np.rollaxis(H,2,0)
             H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
@@ -72,14 +73,14 @@ class ElasticAnisotropic(ConstitutiveLaw):
             GradValues = self.__currentGradDisp
             if nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 
-                Strain += [GradValues[1][2] + GradValues[2][1], GradValues[0][2] + GradValues[2][0], GradValues[0][1] + GradValues[1][0]]
+                Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
             else:            
                 Strain  = [GradValues[i][i] + 0.5*sum([GradValues[k][i]**2 for k in range(3)]) for i in range(3)] 
-                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
-                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
                 Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
-        
-            TotalStrain = listStrainTensor(Strain)
+                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
+                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
+                TotalStrain = listStrainTensor(Strain)
+                
             self.__currentSigma = self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
         
         if nlgeom:

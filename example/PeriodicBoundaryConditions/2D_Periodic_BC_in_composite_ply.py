@@ -133,8 +133,8 @@ MeanStress = [1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStre
 MeanStrain = [1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
 # print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
 
-print('Strain tensor ([Exx, Eyy, Ezz, Eyz, Exz, Exy]): ', MeanStrain)
-print('Stress tensor ([Sxx, Syy, Szz, Syz, Sxz, Sxy]): ', MeanStress)
+print('Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ', MeanStrain)
+print('Stress tensor ([Sxx, Syy, Szz, Sxy, Sxz, Syz]): ', MeanStress)
 
 print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
 

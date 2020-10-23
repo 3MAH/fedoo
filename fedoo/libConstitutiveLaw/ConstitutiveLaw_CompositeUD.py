@@ -1,4 +1,5 @@
 #derive de ConstitutiveLaw
+#compatible simcoon
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
@@ -99,19 +100,20 @@ class CompositeUD(ElasticAnisotropic):
         H[1,1] = H[2,2] = ET*(1-nuLT*nuTL)/k
         H[0,1] = H[1,0] = H[0,2] = H[2,0] = EL*(nuTT*nuTL+nuTL)/k
         H[1,2] = H[2,1] = ET*(nuLT*nuTL+nuTT)/k
-        H[3,3] = GTT ; H[4,4] = H[5,5] = GLT
+        H[5,5] = GTT ; H[4,4] = H[3,3] = GLT
 
         if self.__parameters['angle'] is not 0:
             # angle in degree
             angle_pli = self.__parameters['angle']/180.*np.pi
             s = np.sin(angle_pli) ; c = np.cos(angle_pli)
             zero = 0*s ; one = zero+1           
-            R_epsilon = np.array([[c**2  , s**2 , zero, zero, zero, s*c      ], \
-                                  [s**2  , c**2 , zero, zero, zero, -s*c     ], \
-                                  [zero  , zero , one , zero, zero, zero     ], \
-                                  [zero  , zero , zero, c   , -s  , zero     ], \
-                                  [zero  , zero , zero, s   , c   , zero     ], \
-                                  [-2*s*c, 2*s*c, zero, zero, zero, c**2-s**2]])
+            
+            R_epsilon = np.array([[c**2  , s**2 , zero, s*c      , zero, zero], \
+                                  [s**2  , c**2 , zero, -s*c     , zero, zero], \
+                                  [zero  , zero , one , zero     , zero, zero], \
+                                  [-2*s*c, 2*s*c, zero, c**2-s**2, zero, zero], \
+                                  [zero  , zero , zero, zero     , c   , s   ], \
+                                  [zero  , zero , zero, zero     , -s  , c   ]])
 
             if len(R_epsilon.shape) == 3: 
                 R_epsilon = np.transpose(R_epsilon,[2,0,1])

@@ -2,7 +2,7 @@ import numpy as np
 
 def PutInPrincipalBase(TensorVoigt):
     """
-    S must be a list of 6 terms within the Voigt notation.
+    S must be a list of 6 terms within the Voigt notation (Sxx, Syy, Szz, Sxy, Sxz, Syz).
 
     - returns the three terms of the diagonal tensor
     """ 
@@ -27,4 +27,4 @@ def FromVoigtTomatrix(S):
     - returns a list of 3x3
     """
     
-    return [ [[xx,xy,xz],[xy,yy,yz],[xz,yz,zz]] for (xx,yy,zz,yz,xz,xy) in zip(S[0],S[1],S[2],S[3],S[4],S[5]) ]
+    return [ [[xx,xy,xz],[xy,yy,yz],[xz,yz,zz]] for (xx,yy,zz,xy,xz,yz) in zip(S[0],S[1],S[2],S[3],S[4],S[5]) ]

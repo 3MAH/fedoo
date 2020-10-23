@@ -57,7 +57,7 @@ class ElastoPlasticity(ConstitutiveLaw):
         if ProblemDimension.Get() == "2Dstress":
             H[0,0]=H[1,1]= E/(1-nu**2)
             H[0,1]= nu*E/(1-nu**2)
-            H[5,5] = 0.5*E/(1+nu)    
+            H[3,3] = 0.5*E/(1+nu)    
             H[1,0]=H[0,1]  #symétrie            
                       
         else:
@@ -143,8 +143,8 @@ class ElastoPlasticity(ConstitutiveLaw):
         TangeantModuli = [[Helas[i][j] - (CL[i]*Peps[j] * test) for j in range(6)] for i in range(6)]                
         return TangeantModuli
         ##### end Compute new tangeant moduli                        
-    
-    def __ChangeBasisH(self, H):
+
+    def __ChangeBasisH(self, H):       
         #Change of basis capability for laws on the form : StressTensor = H * StrainTensor
         #StressTensor and StrainTensor are column vectors based on the voigt notation 
         if self._ConstitutiveLaw__localFrame is not None:
@@ -154,15 +154,15 @@ class ElastoPlasticity(ConstitutiveLaw):
 #            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]]) 
             R_epsilon = np.empty((len(localFrame), 6,6))
             R_epsilon[:,  :3,  :3] = localFrame**2 
-            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[1,2,0]]*localFrame[:,:,[2,0,1]]
-            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[1,2,0]]*localFrame[:,[2,0,1]] 
-            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[1],[2],[0]], [1,2,0]]*localFrame[:,[[2],[0],[1]],[2,0,1]] + localFrame[:,[[2],[0],[1]],[1,2,0]]*localFrame[:,[[1],[2],[0]],[2,0,1]] 
-            R_sigma_inv = np.transpose(R_epsilon,[0,2,1])
+            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[0,2,1]]*localFrame[:,:,[1,0,2]]
+            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[0,2,1]]*localFrame[:,[1,0,2]] 
+            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[0],[2],[1]], [0,2,1]]*localFrame[:,[[1],[0],[2]],[1,0,2]] + localFrame[:,[[1],[0],[2]],[0,2,1]]*localFrame[:,[[0],[2],[1]],[1,0,2]] 
+            R_sigma_inv = R_epsilon.transpose(0,2,1)    # np.transpose(R_epsilon,[0,2,1])        
             
             if len(H.shape) == 3: H = np.rollaxis(H,2,0)
             H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
             if len(H.shape) == 3: H = np.rollaxis(H,0,3)  
-
+            
         return H
     
     def GetStressOperator(self, localFrame=None): 
@@ -223,7 +223,7 @@ class ElastoPlasticity(ConstitutiveLaw):
         
         if nlgeom:
             if displacement is 0: self.__InitialGradDispTensor = 0
-            else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
+            else: self.__InitialGradDispTensor = self.GetCurrentGradDisp() #assembly.GetGradTensor(displacement, "GaussPoint")
         
             
     def GetStress(self, StrainTensor, time = None): 

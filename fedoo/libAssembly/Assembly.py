@@ -1,3 +1,5 @@
+#simcoon compatible
+
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
 from fedoo.libUtil.Variable import *
 from fedoo.libUtil.Dimension import ProblemDimension
@@ -629,12 +631,12 @@ class Assembly(AssemblyBase):
         
         if nlgeom == False:
             Strain  = [GradValues[i][i] for i in range(3)] 
-            Strain += [GradValues[1][2] + GradValues[2][1], GradValues[0][2] + GradValues[2][0], GradValues[0][1] + GradValues[1][0]]
+            Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
         else:            
             Strain  = [GradValues[i][i] + 0.5*sum([GradValues[k][i]**2 for k in range(3)]) for i in range(3)] 
-            Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
+            Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])]             
             Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
-            Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
+            Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
         
         return listStrainTensor(Strain)
     

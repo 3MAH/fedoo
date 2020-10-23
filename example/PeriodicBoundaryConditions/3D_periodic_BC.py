@@ -43,17 +43,17 @@ Problem.Static("Assembling")
 
 
 #Boundary conditions
-E = [0,0,0,0,1,0] #[EXX, EYY, EZZ, EYZ, EXZ, EXY]
+E = [0,0,0,0,0,1] #[EXX, EYY, EZZ, EXY, EXZ, EYZ]
 #StrainNode[0] - 'DispX' is a virtual dof for EXX
 #StrainNode[0] - 'DispY' is a virtual dof for EYY
 #StrainNode[0] - 'DispZ' is a virtual dof for EZZ        
-#StrainNode[1] - 'DispX' is a virtual dof for EYZ        
+#StrainNode[1] - 'DispX' is a virtual dof for EXY        
 #StrainNode[1] - 'DispY' is a virtual dof for EXZ
-#StrainNode[1] - 'DispZ' is a virtual dof for EXY
+#StrainNode[1] - 'DispZ' is a virtual dof for EYZ
 
 Util.DefinePeriodicBoundaryCondition("Domain", 
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]], 
-        ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ'], dim='3D')
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
 
 Problem.BoundaryCondition('Dirichlet','DispX', 0, center)
 Problem.BoundaryCondition('Dirichlet','DispY', 0, center)
@@ -62,9 +62,9 @@ Problem.BoundaryCondition('Dirichlet','DispZ', 0, center)
 Problem.BoundaryCondition('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
 Problem.BoundaryCondition('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
 Problem.BoundaryCondition('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsZZ
-Problem.BoundaryCondition('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsYZ
+Problem.BoundaryCondition('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
 Problem.BoundaryCondition('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
-Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsXY
+Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
 Problem.ApplyBoundaryCondition()
 
@@ -93,9 +93,9 @@ MeanStrain = [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-2], Proble
 # Void = Volume-Volume_mesh 
 # MeanStrain = [1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
 
-print('Strain tensor ([Exx, Eyy, Ezz, Eyz, Exz, Exy]): ' )
+print('Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ' )
 print(MeanStrain)
-print('Stress tensor ([Sxx, Syy, Szz, Syz, Sxz, Sxy]): ' )
+print('Stress tensor ([Sxx, Syy, Szz, Sxy, Sxz, Syz]): ' )
 print(MeanStress)
 
 # print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
@@ -131,7 +131,8 @@ if output_VTK == 1:
     # U = np.c_[U,np.zeros(N)]
     
     
-    SetId = 'all_fibers' #or None
+    SetId = None
+    # SetId = 'all_fibers' #to extract only mesh and data related to fibers    
     if SetId is None:
         OUT = Util.ExportData(meshID)
         ElSet = slice(None) #we keep all elements

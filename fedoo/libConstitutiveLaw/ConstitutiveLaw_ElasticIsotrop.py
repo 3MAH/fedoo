@@ -1,4 +1,5 @@
 #derive de ConstitutiveLaw
+#simcoon compatible
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
@@ -29,7 +30,7 @@ class ElasticIsotrop(ElasticAnisotropic):
         if ProblemDimension.Get() == "2Dstress":
             H[0,0]=H[1,1]= E/(1-nu**2)
             H[0,1]= nu*E/(1-nu**2)
-            H[5,5] = 0.5*E/(1+nu)    
+            H[3,3] = 0.5*E/(1+nu)    
             H[1,0]=H[0,1]  #symétrie            
                       
         else:

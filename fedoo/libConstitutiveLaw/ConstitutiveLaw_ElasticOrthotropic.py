@@ -1,4 +1,5 @@
 #derive de ConstitutiveLaw
+#simcoon compatible
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
@@ -25,6 +26,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         return self.__parameters
     
     def GetH (self):
+        #need to be checked
         if ProblemDimension.Get() == "2Dstress":
             print('ElasticOrthotropic law for 2Dstress is not implemented')
             return NotImplemented
@@ -32,9 +34,9 @@ class ElasticOrthotropic(ElasticAnisotropic):
 #        S = sp.array([[1/EX    , -nuXY/EX, -nuXZ/EX, 0    , 0    , 0    ], \
 #                      [-nuXY/EX, 1/EY    , -nuYZ/EY, 0    , 0    , 0    ], \
 #                      [-nuXZ/EX, -nuYZ/EY, 1/EZ    , 0    , 0    , 0    ], \
-#                      [0       , 0       , 0       , 1/GYZ, 0    , 0    ], \
+#                      [0       , 0       , 0       , 1/GXY, 0    , 0    ], \
 #                      [0       , 0       , 0       , 0    , 1/GXZ, 0    ], \
-#                      [0       , 0       , 0       , 0    , 0    , 1/GXY]])                  
+#                      [0       , 0       , 0       , 0    , 0    , 1/GYZ]])                  
 #        H = linalg.inv(S) #H  = sp.zeros((6,6), dtype='object')
 
         for key in self.__parameters: 
@@ -44,13 +46,14 @@ class ElasticOrthotropic(ElasticAnisotropic):
         if isinstance(EX, float): H = sp.empty((6,6))
         elif isinstance(EX,(sp.ndarray,list)): H = sp.zeros((6,6,len(EX)))
         else: H = sp.zeros((6,6), dtype='object')
-            
+        
         nuYX = nuXY*EY/EX ; nuZX = nuXZ*EZ/EX ; nuZY = nuYZ*EZ/EY
         k = 1-nuYZ*nuZY - nuXY*nuYX - nuXZ*nuZX - nuXY*nuYZ*nuZX - nuYX*nuZY*nuXZ
-        H[1,1] = EX*(1-nuYZ*nuZY)/k ; H[2,2] = EY*(1-nuXZ*nuZX)/k ; H[3,3] = EZ*(1-nuXY*nuYX)/k
-        H[1,2] = H[2,1] = EX*(nuYZ*nuZX+nuYX)/k
-        H[1,3] = H[3,1] = EX*(nuYX*nuZY+nuZX)/k
-        H[2,3] = H[3,2] = EY*(nuXY*nuZX+nuZY)/k
+        H[0,0] = EX*(1-nuYZ*nuZY)/k ; H[1,1] = EY*(1-nuXZ*nuZX)/k ; H[2,2] = EZ*(1-nuXY*nuYX)/k
+        H[0,1] = H[1,0] = EX*(nuYZ*nuZX+nuYX)/k
+        H[0,2] = H[2,0] = EX*(nuYX*nuZY+nuZX)/k
+        H[1,2] = H[2,1] = EY*(nuXY*nuZX+nuZY)/k
+        H[3,3] = GXY ; H[4,4] = GXZ ; H[5,5] = GYZ
         
         return H
     

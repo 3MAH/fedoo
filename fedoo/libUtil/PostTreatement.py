@@ -2,6 +2,38 @@
 import numpy as np
 
 
+#simcoon compatible
+class arrayStressTensor(np.ndarray):
+
+    def __new__(cls, input_array):
+        # Input array is an already formed ndarray instance
+        # We first cast to be our class type
+        if len(input_array) != 6: raise NameError('lenght for arrayStressTensor object must be 6')
+        obj = np.asarray(input_array).view(cls)
+        
+        # # add the new attribute to the created instance
+        # obj.info = info
+        # Finally, we must return the newly created object:
+        return obj
+
+    def vtkFormat(self):
+        """
+        Return a array adapted to export symetric tensor data in a vtk file
+        See the Util.ExportData class for more details
+        """
+        # return np.vstack([self[i] for i in [0,1,2,3,5,4]]).astype(float).T 
+        return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float).T 
+    
+    def GetFullTensor(self): 
+        return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
+
+
+    # def __array_finalize__(self, obj):
+    #     # see InfoArray.__array_finalize__ for comments
+    #     if obj is None: return
+    #     self.info = getattr(obj, 'info', None)
+
+#simcoon compatible
 class listStressTensor(list):
     
     def __init__(self, l):
@@ -13,10 +45,10 @@ class listStressTensor(list):
         Return a array adapted to export symetric tensor data in a vtk file
         See the Util.ExportData class for more details
         """
-        return np.vstack([self[i] for i in [0,1,2,5,3,4]]).astype(float).T 
+        return np.vstack([self[i] for i in [0,1,2,3,5,4]]).astype(float).T 
 
     def GetFullTensor(self): 
-        return np.array([[self[0],self[5],self[4]], [self[5], self[1], self[3]], [self[4], self[3], self[2]]])  
+        return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
 
     def asarray(self):
         return np.array(self)
@@ -29,7 +61,7 @@ class listStressTensor(list):
         DetGradX = np.linalg.det(GradX)
     
         CauchyStress =  (1/DetGradX).reshape(-1,1,1)*np.matmul(GradX,np.matmul(PiolaKStress,GradX.transpose(0,2,1)))
-        return listStressTensor([CauchyStress[:,0,0],CauchyStress[:,1,1],CauchyStress[:,2,2],CauchyStress[:,1,2],CauchyStress[:,0,2],CauchyStress[:,0,1]])
+        return listStressTensor([CauchyStress[:,0,0],CauchyStress[:,1,1],CauchyStress[:,2,2],CauchyStress[:,0,1],CauchyStress[:,0,2],CauchyStress[:,1,2]])
 
     def vonMises(self):
         """
@@ -70,7 +102,8 @@ class listStressTensor(list):
         
     def toStress(self):
         return self
-    
+
+#simcoon compatible    
 class listStrainTensor(list):
     
     def __init__(self, l):
@@ -82,13 +115,13 @@ class listStrainTensor(list):
         Return a array adapted to export symetric tensor data in a vtk file
         See the Util.ExportData class for more details
         """
-        return np.vstack(self[:3] + [self[i]/2 for i in [5,3,4]]).astype(float).T
+        return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
 
     def asarray(self):
         return np.array(self)
 
     def GetFullTensor(self):
-        return np.array([[self[0],self[5]/2,self[4]/2], [self[5]/2, self[1], self[3]/2], [self[4]/2, self[3]/2, self[2]]])
+        return np.array([[self[0],self[3]/2,self[4]/2], [self[3]/2, self[1], self[5]/2], [self[4]/2, self[5]/2, self[2]]])
         
     def GetPrincipalStrain(self): 
         """

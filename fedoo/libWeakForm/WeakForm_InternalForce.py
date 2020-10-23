@@ -30,18 +30,17 @@ class InternalForce(WeakForm):
                 GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
                 #NonLinearStrainOperatorVirtual = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
                 NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(3)]) for i in range(3)] 
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][1].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][1] for k in range(3)])]
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][0] for k in range(3)])]
                 NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][1] + GradOperator[k][1].virtual()*GradOperator[k][0] for k in range(3)])]  
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][0] for k in range(3)])]
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][1].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][1] for k in range(3)])]
             else:
                 GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y']] for IDvar in ['DispX','DispY']]
-                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(2)]) for i in range(2)] + [0,0,0]            
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][1] + GradOperator[k][1].virtual()*GradOperator[k][0] for k in range(2)])]  
+                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(2)]) for i in range(2)] + [0]            
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][1] + GradOperator[k][1].virtual()*GradOperator[k][0] for k in range(2)])] + [0,0]
             
             self.__NonLinearStrainOperatorVirtual = NonLinearStrainOperatorVirtual
-        
-        else: self.__NonLinearStrainOperatorVirtual = 0
-                     
+            
+        else: self.__NonLinearStrainOperatorVirtual = 0                     
         
     def UpdateInitialStress(self,InitialStressTensor):                                                
         self.__InitialStressTensor = InitialStressTensor
@@ -95,8 +94,7 @@ class InternalForce(WeakForm):
 #        try:
 #            sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame)            
 #        except:
-#            assert 0, "Warning, you put a non mechanical consitutive law in the InternalForce"      
-        
+#            assert 0, "Warning, you put a non mechanical consitutive law in the InternalForce"              
         eps, eps_vir = GetStrainOperator(self.__InitialGradDispTensor)
         
         DiffOp = sum([eps_vir[i] * sigma[i] for i in range(6)])
@@ -105,7 +103,6 @@ class InternalForce(WeakForm):
             if self.__NonLinearStrainOperatorVirtual is not 0 :     
                 DiffOp = DiffOp + sum([0 if self.__NonLinearStrainOperatorVirtual[i] is 0 else \
                                    self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
-            
             DiffOp = DiffOp + sum([0 if eps_vir[i] is 0 else \
                                    eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
 

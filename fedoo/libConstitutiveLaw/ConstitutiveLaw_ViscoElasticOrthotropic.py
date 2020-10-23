@@ -56,9 +56,9 @@ class ViscoElasticComposites(ConstitutiveLaw):
         H[2,2] = ((1-d3)*ET*(1 + CT*StrainRateEffect[2]))*(1-nuLT*nuTL)/k
         H[0,1] = H[1,0] = H[0,2] = H[2,0] = ((1-d1)*EL*(1 + CL*StrainRateEffect[0]))*(nuTT*nuTL+nuTL)/k
         H[1,2] = H[2,1] = ((1-d2)*ET*(1 + CT*StrainRateEffect[1]))*(nuLT*nuTL+nuTT)/k
-        H[3,3] = (1-d4)*GTT*(1+CLT*StrainRateEffect[3]) 
+        H[3,3] = (1-d4)*GLT*(1+CLT*StrainRateEffect[3]) 
         H[4,4] = (1-d5)*GLT*(1+CLT*StrainRateEffect[4])
-        H[5,5] = (1-d6)*GLT*(1+CLT*StrainRateEffect[5])
+        H[5,5] = (1-d6)*GTT*(1+CLT*StrainRateEffect[5])
 
         H = self._ConsitutiveLaw__ChangeBasisH(H)
                       
