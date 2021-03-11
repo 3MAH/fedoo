@@ -16,12 +16,13 @@ class Problem(ProblemBase):
 
         # the problem is AX = B + D
         
-        self.__ProblemDimension = A.shape[0]
+        #self.__ProblemDimension = A.shape[0]
+        self.__ProblemDimension = Mesh.GetNumberOfNodes() * Variable.GetNumberOfVariable()
 
         self.__A = A
 
         if B is 0:
-            self.__B = self._InitializeVector(A)
+            self.__B = self._InitializeVector()
         else:
             self.__B = B
         
@@ -38,8 +39,8 @@ class Problem(ProblemBase):
         ProblemBase.__init__(self, ID)
         
 
-    def _InitializeVector(self, A): #initialize a vector (force vector for instance) being giving the stiffness matrix
-        return np.zeros(A.shape[0])     
+    def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
+        return np.zeros(self.__ProblemDimension)     
 
     def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
         assert isinstance(name,str), 'argument error'
@@ -114,7 +115,13 @@ class Problem(ProblemBase):
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
         self.__Xbc, self.__B, self.__DofBlocked, self.__DofFree, self.__MatCB = BoundaryCondition.Apply(self.__Mesh.GetNumberOfNodes(), timeFactor, timeFactorOld, self.GetID())
 
-    def GetDoFSolution(self,name):
+    def SetInitialBCToCurrent(self):
+        BoundaryCondition.setInitialToCurrent(self)
+
+    def GetX(self):
+        return self.__X
+    
+    def GetDoFSolution(self,name='all'):
         return self._GetVectorComponent(self.__X, name) 
 
     def SetDoFSolution(self,name,value):

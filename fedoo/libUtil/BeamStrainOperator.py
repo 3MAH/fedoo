@@ -8,11 +8,10 @@ def GetBeamStrainOperator():
 
     epsX = OpDiff('DispX',  'X', 1) # dérivée en repère locale
     xsiZ = OpDiff('RotZ',  'X', 1) # flexion autour de Z
-    gammaY = OpDiff('DispY', 'X', 1) - OpDiff('RotZ')
-    gammaZ = OpDiff('DispZ', 'X', 1) + OpDiff('RotY')
-
+    gammaY = OpDiff('DispY', 'X', 1) - OpDiff('RotZ') #shear/Y
+    
     if n == "2Dplane":
-        eps = [epsX, 0, 0, 0, 0, xsiZ]
+        eps = [epsX, gammaY, 0, 0, 0, xsiZ]
 
     elif n == "2Dstress":
         assert 0, "no 2Dstress for a beam kinematic"
@@ -20,7 +19,8 @@ def GetBeamStrainOperator():
     elif n == "3D":
         xsiX = OpDiff('RotX', 'X', 1) # torsion autour de X
         xsiY = OpDiff('RotY',  'X', 1) # flexion autour de Y
-        
+        gammaZ = OpDiff('DispZ', 'X', 1) + OpDiff('RotY') #shear/Z
+    
         eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
         
     eps_vir = [e.virtual() if e != 0 else 0 for e in eps ]

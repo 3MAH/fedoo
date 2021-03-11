@@ -1,5 +1,8 @@
 import numpy as np
 from fedoo.libMesh.Mesh import *
+from fedoo.libAssembly.AssemblyBase import AssemblyBase
+from fedoo.libUtil import ProblemDimension
+
 
 class ExportData:
     def __init__(self, mesh, multiMesh = False):
@@ -62,7 +65,7 @@ class ExportData:
                       }.get(type_elm)
         if cell_type == None: raise NotImplementedError('{} is not available in vtk'.format(type_elm))
             
-        ret = ['# vtk DataFile Version 2.0',
+        ret = ['# vtk DataFile Version 3.0',
                    self.header,
                    self.format.upper()             
                    ]
@@ -242,6 +245,113 @@ class ExportData:
         Popen('"C:\\Program Files\\ParaView 5.2.0-RC2-Qt4-OpenGL2-Windows-64bit\\bin\\paraview" test.vtk', stdin=None, stdout=None, stderr=None)
     
 
+
+
+
+
+class _ProblemOutput:
+    def __init__(self):
+        self.__list_output = [] #a list containint dictionnary with defined output
+        self.__available_output = ['pkii',   'pk2',   'kirchoff',   'kirchhoff',   'cauchy',
+                                   'pkii_vm','pk2_vm','krichoff_vm','kirchhoff_vm','cauchy_vm',
+                                   'disp', 'strain']
+        
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+        if output_type.lower() == 'node': output_type = 'Node'
+        elif output_type.lower() == 'element': output_type = 'Element'
+        elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
+        else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
+                
+        for i,res in enumerate(output_list):
+            output_list[i] = res = res.lower()
+            if res not in self.__available_output:
+                print("WARNING: '", res, "' doens't match to any available output")
+                print("List of available output: ", self.__available_output)
+        
+        new_output = {'filename': filename, 'assembly': assemblyID, 'type': output_type, 'list': output_list, 'file_format': file_format.lower()}
+        self.__list_output.append(new_output)
+
+    def SaveResults(self, pb, comp_output):
+        
+        list_filename = []
+        list_ExportData = []     
+        for output in self.__list_output:
+            filename = output['filename']
+            file_format = output['file_format'].lower()
+            output_type = output['type'] #'Node', 'Element' or 'GaussPoint'
+            
+            assemb = AssemblyBase.GetAll()[output['assembly']]               
+            material = assemb.GetWeakForm().GetConstitutiveLaw()
+            
+            if file_format == 'vtk':
+                filename = filename + '_' + str(comp_output) + '.vtk'                    
+                
+                if not(filename in list_filename): 
+                    #if file name don't exist in the list we create it
+                    list_filename.append(filename)
+                    OUT = ExportData(assemb.GetMesh().GetID())
+                    list_ExportData.append(OUT)                        
+                else: 
+                    #else, the same file is used       
+                    OUT = list_ExportData[list_filename.index(filename)]                                                   
+            
+            for res in output['list']:
+                res = res.lower()
+                if res in ['pkii', 'pk2', 'kirchoff', 'kirchhoff', 'cauchy','strain']:
+                    if res in ['pkii','pk2']:
+                        data = material.GetPKII()
+                        label_data = 'PKII'
+                    elif res in ['kirchoff','kirchhoff']:
+                        data = material.GetKirchhoff()
+                        label_data = 'Kirchhoff'
+                    elif res == 'cauchy':
+                        data = material.GetCauchy()
+                        label_data = 'Cauchy'
+                    else:
+                        data = material.GetStrain()                            
+                        label_data = 'Strain'
+                    #treat 2D case ?
+                    data = data.Convert(assemb, None, output_type)                        
+                    # data = assemb.ConvertData(data, None, output_type)
+                    
+                    if file_format == 'vtk': data = data.vtkFormat()
+                                            
+                elif res == 'disp':
+                    if output_type == 'Node':                             
+                        data = pb.GetDisp().reshape(ProblemDimension.GetDoF(),-1).T
+                        label_data = 'Displacement'
+                    else: 
+                        raise NameError("Displacement is only a Node data and is incompatible with the output format specified")                    
+
+                elif res in ['pkii_vm', 'pk2_vm', 'kirchoff_vm', 'kirchhoff_vm', 'cauchy_vm']:
+                    
+                    if res in ['pkii_vm','pk2_vm']:
+                        data = material.GetPKII().vonMises()
+                        label_data = 'PKII_Mises'
+                    elif res in ['kirchoff_vm','kirchhoff_vm']:
+                        data = material.GetKirchhoff().vonMises()
+                        label_data = 'Kirchhoff_Mises'
+                    elif res == 'cauchy_vm':
+                        data = material.GetCauchy().vonMises()
+                        label_data = 'Cauchy_Mises'
+
+                    data = assemb.ConvertData(data, None, output_type)
+                    # data = data.Convert(assemb, None, output_type)                        
+                    # data = assemb.ConvertData(data, None, output_type):                                 
+                                
+                if output_type == 'Node':
+                    OUT.addNodeData(data,label_data)  
+                elif output_type == 'Element':
+                    OUT.addElmData(data,label_data)   
+                else: 
+                    raise NameError("The specified " + str(output_type) + " can't be exported as vtk data")
+
+        for i, OUT in enumerate(list_ExportData):
+            OUT.toVTK(list_filename[i])
+
+    @property
+    def available_output(self):
+        return self.__available_output
 
 #def ImportMSH(filename):
 #    mesh = None

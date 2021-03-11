@@ -46,11 +46,18 @@ class InternalForce(WeakForm):
         self.__InitialStressTensor = InitialStressTensor
         
 
-    def Update(self, assembly, pb, time):
+
+    def Initialize(self, assembly, pb, initialTime = 0.):
+        self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)
+        
+
+    def Update(self, assembly, pb, dtime):
         
         
-        self.__ConstitutiveLaw.Update(assembly, pb, time, self.__nlgeom)                           
-        self.UpdateInitialStress(self.__ConstitutiveLaw.GetCurrentStress())
+        self.__ConstitutiveLaw.Update(assembly, pb, dtime, self.__nlgeom)                           
+        
+        #Doit être adapté à chaque fois ? -> je pense que oui !
+        self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
         
         if self.__nlgeom:
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
@@ -107,7 +114,12 @@ class InternalForce(WeakForm):
                                    eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
 
         return DiffOp
+
+    def GetConstitutiveLaw(self):
+        return self.__ConstitutiveLaw
     
     @property
-    def  nlgeom(self):
-        return self.__nlgeom        
+    def nlgeom(self):
+        return self.__nlgeom
+    
+    

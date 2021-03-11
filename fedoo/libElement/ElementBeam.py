@@ -155,7 +155,7 @@ beamFCQ = {'DispX':['beamFCQ_lin2'],
 #see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
 # --------------------------------------
 class beam_rotZ(element1D): #2 nodes with derivatative dof
-    _L2phi = 0
+    _L2phi = 0 #default value = no shear effect. Use SetProperties_Beam to include shear effect
         
     def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         elmGeom = kargs.get('elmGeom', None)

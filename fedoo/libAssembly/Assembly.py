@@ -11,6 +11,7 @@ from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.GradOperator import GetGradOperator
 from fedoo.libUtil.SparseMatrix import _BlocSparse as BlocSparse
+# from fedoo.libUtil.SparseMatrix import _BlocSparseOld as BlocSparseOld
 from fedoo.libUtil.SparseMatrix import RowBlocMatrix
 
 from scipy import sparse
@@ -22,7 +23,7 @@ def Create(weakForm, mesh="", elementType="", ID="", **kargs):
     return Assembly(weakForm, mesh, elementType, ID, **kargs)
                
 class Assembly(AssemblyBase):
-    __saveOperator = {}       
+    __saveOperator = {}
     __saveMatrixChangeOfBasis = {}   
     __saveMatGaussianQuadrature = {} 
     __saveNodeToPGMatrix = {}
@@ -43,12 +44,12 @@ class Assembly(AssemblyBase):
         self.__MeshChange = kargs.pop('MeshChange', False)        
         self.__Mesh = mesh   
         self.__weakForm = weakForm
-        self.__elmType= elementType #.lower()        
+        self.__elmType= elementType #.lower()
         self.__nb_pg = kargs.pop('nb_pg', None)
         if self.__nb_pg is None: self.__nb_pg = GetDefaultNbPG(elementType, mesh)
                     
         #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
-        self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' only used for debug purpose
+        self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' only used for debug purpose        
 
     def ComputeGlobalMatrix(self, compute = 'all'):
         """
@@ -56,25 +57,130 @@ class Assembly(AssemblyBase):
         if compute = 'all', compute the global matrix and vector
         if compute = 'matrix', compute only the matrix
         if compute = 'vector', compute only the vector
-        """
+        """                
         computeMatrixMethod = self.computeMatrixMethod
         
         nb_pg = self.__nb_pg
         mesh = self.__Mesh
         
-        if self.__MeshChange == True: 
-            if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]
+        # if isinstance(eval(elementType), dict):
+        #     elementDict = eval(elementType)
+        #     elementType = elementDict.get(Variable.GetName(deriv.u))[0]
+        #     if elementType is None: elementType = elementDict.get('default')
+        
+        if self.__MeshChange == True:             
+            if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]            
             Assembly.PreComputeElementaryOperators(mesh, self.__elmType, nb_pg=nb_pg)
                  
         nvar = Variable.GetNumberOfVariable()
-        wf = self.__weakForm.GetDifferentialOperator(mesh)                
+        wf = self.__weakForm.GetDifferentialOperator(mesh)      
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType, nb_pg=nb_pg)
         MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh)        
-        associatedVariables = Assembly.__GetAssociatedVariables(self.__elmType)
+        associatedVariables = Assembly.__GetAssociatedVariables(self.__elmType) #for element requiring many variable such as beam with disp and rot dof        
         
-        if computeMatrixMethod == 'new':
-            MM = BlocSparse(nvar, nvar, self.__nb_pg)
+        if computeMatrixMethod == 'new':             
+
+            intRef = wf.sort() #intRef = list of integer for compareason (same int = same operator with different coef)            
+            
+            if (mesh.GetID(), self.__elmType, nb_pg) not in Assembly.__saveOperator:
+                Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)] = {}
+            saveOperator = Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)]
+            
+            if 'blocShape' not in saveOperator:
+                saveOperator['blocShape'] = saveOperator['colBlocSparse'] = saveOperator['rowBlocSparse'] = None
+            
+            #MM not used if only compute vector
+            MM = BlocSparse(nvar, nvar)
+            MM.col = saveOperator['colBlocSparse'] #col indices for bloc to build coo matrix with BlocSparse
+            MM.row = saveOperator['rowBlocSparse'] #row indices for bloc to build coo matrix with BlocSparse
+            MM.blocShape = saveOperator['blocShape'] #shape of one bloc in BlocSparse
+            
+            #sl contains list of slice object that contains the dimension for each variable
+            #size of VV and sl must be redefined for case with change of basis
+            VV = 0
+            nbNodes = self.__Mesh.GetNumberOfNodes()            
+            sl = [slice(i*nbNodes, (i+1)*nbNodes) for i in range(nvar)] 
+            
+            for ii in range(len(wf.op)):                   
+                if compute == 'matrix' and wf.op[ii] is 1: continue
+                if compute == 'vector' and wf.op[ii] is not 1: continue
+            
+                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii]==1): 
+                    coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
+                else:
+                    coef_PG = Assembly.__ConvertToGaussPoints(mesh, wf.coef[ii][:], self.__elmType, nb_pg=nb_pg)                                                 
+                
+                if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
+                    coef_PG_sum += coef_PG
+                else: coef_PG_sum = coef_PG   
+                
+                if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
+                    continue
+                
+                coef_PG = coef_PG_sum * MatGaussianQuadrature.data 
+                            
+                coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable
+                               
+                if var_vir[0] in associatedVariables:
+                    var_vir.extend(associatedVariables[var_vir[0]][0])
+                    coef_vir.extend(associatedVariables[var_vir[0]][1])         
+                                                 
+                if wf.op[ii] == 1: #only virtual operator -> compute a vector 
+                                            
+                    Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)         
+                    if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                    for i in range(len(Matvir)):
+                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
+                        
+                else: #virtual and real operators -> compute a matrix
+                    coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
+                    if var[0] in associatedVariables:
+                        var.extend(associatedVariables[var[0]][0])
+                        coef.extend(associatedVariables[var[0]][1])                                                                                     
+                    
+                    tupleID = (wf.op_vir[ii].x, wf.op_vir[ii].ordre, wf.op[ii].x, wf.op[ii].ordre) #tuple to identify operator
+                    if tupleID in saveOperator:
+                        MatvirT_Mat = saveOperator[tupleID] #MatvirT_Mat is an array that contains usefull data to build the matrix MatvirT*Matcoef*Mat where Matcoef is a diag coefficient matrix. MatvirT_Mat is build with BlocSparse class
+                    else: 
+                        MatvirT_Mat = None
+                        saveOperator[tupleID] = [[None for i in range(len(var))] for j in range(len(var_vir))]
+                        Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)         
+                        Mat = Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg)                                               
+
+                    for i in range(len(var)):
+                        for j in range(len(var_vir)):
+                            if MatvirT_Mat is not None:           
+                                MM.addToBloc(MatvirT_Mat[j][i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])                                     
+                            else:  
+                                saveOperator[tupleID][j][i] = MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+                                if saveOperator['colBlocSparse'] is None: 
+                                    saveOperator['colBlocSparse'] = MM.col
+                                    saveOperator['rowBlocSparse'] = MM.row
+                                    saveOperator['blocShape'] = MM.blocShape
+                               
+            if compute != 'vector': 
+                if MatrixChangeOfBasis is 1: 
+                    self.SetMatrix(MM.toCSR()) #format csr         
+                else: 
+                    self.SetMatrix(MatrixChangeOfBasis.T * MM.toCSR() * MatrixChangeOfBasis) #format csr         
+            if compute != 'matrix': 
+                if VV is 0: self.SetVector(0)
+                elif MatrixChangeOfBasis is 1: self.SetVector(VV) #numpy array
+                else: self.SetVector(MatrixChangeOfBasis.T * VV)            
+        
+        
+        
+        
+        elif computeMatrixMethod == 'old':             
+            
+            if not(hasattr(self, '__blocShape')):
+                self.__colBlocSparse = self.__rowBlocSparse = self.__blocShape = None
+                        
+            MM = BlocSparse(nvar, nvar) #Alternative: MM = BlocSparseOld(nvar, nvar, self.__nb_pg)
+            MM.col = self.__colBlocSparse
+            MM.row = self.__rowBlocSparse
+            MM.blocShape = self.__blocShape
             
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
@@ -96,14 +202,15 @@ class Assembly(AssemblyBase):
                 #check how it appens with change of variable and rotation dof
                 Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)
 
-                if isinstance(wf.coef[ii], Number): 
+                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii]==1): 
                     coef_PG = wf.coef[ii]*MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
                 else:
                     coef_PG = Assembly.__ConvertToGaussPoints(mesh, wf.coef[ii][:], self.__elmType, nb_pg=nb_pg)*MatGaussianQuadrature.data                                                 
     
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                     if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
-                    VV[sl[var_vir[0]]] = VV[sl[var_vir[0]]] - coef_vir[0] * Matvir[0].T * (coef_PG) #this line may be optimized
+                    for i in range(len(Matvir)):
+                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
                         
                 else: #virtual and real operators -> compute a matrix
                     coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
@@ -118,8 +225,13 @@ class Assembly(AssemblyBase):
                     #the structure should be the same for derivative dof, so the blocs could be computed altogether
                     for i in range(len(Mat)):
                         for j in range(len(Matvir)):
-                            MM.addToBloc(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
-            
+                            MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+
+            if self.__colBlocSparse is None: 
+                self.__colBlocSparse = MM.col
+                self.__rowBlocSparse = MM.row
+                self.__blocShape = MM.blocShape
+                
             if compute != 'vector': 
                 if MatrixChangeOfBasis is 1: 
                     self.SetMatrix(MM.toCSR()) #format csr         
@@ -129,8 +241,10 @@ class Assembly(AssemblyBase):
                 if VV is 0: self.SetVector(0)
                 elif MatrixChangeOfBasis is 1: self.SetVector(VV) #numpy array
                 else: self.SetVector(MatrixChangeOfBasis.T * VV)                     
+        
+
             
-        elif computeMatrixMethod == 'old':
+        elif computeMatrixMethod == 'very_old':
             MM = 0
             VV = 0
             
@@ -178,17 +292,33 @@ class Assembly(AssemblyBase):
     def GetMesh(self):
         return self.__Mesh
     
+    def GetWeakForm(self):
+        return self.__weakForm
+           
+    def GetNumberOfGaussPoints(self):
+        return self.__nb_pg
+    
     def GetMatrixChangeOfBasis(self):
         return Assembly.__GetChangeOfBasisMatrix(self.__Mesh)
+    
 
-    def Update(self, pb, time=None, compute = 'all'):
+    def Initialize(self, pb, initialTime=0.):
+        """
+        Initialize the associated weak form and assemble the global matrix with the elastic matrix
+        Parameters: 
+            - initialTime: the initial time        
+        """
+        self.__weakForm.Initialize(self, pb, initialTime)
+        self.ComputeGlobalMatrix()
+
+    def Update(self, pb, dtime=None, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
         Parameters: 
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        outValues = self.__weakForm.Update(self, pb, time)
+        outValues = self.__weakForm.Update(self, pb, dtime)
         self.ComputeGlobalMatrix(compute)
         return outValues
 
@@ -205,7 +335,8 @@ class Assembly(AssemblyBase):
         Generally used to increase non reversible internal variable
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        self.__weakForm.NewTimeIncrement()        
+        self.__weakForm.NewTimeIncrement() #should update GetH() method to return elastic rigidity matrix for prediction        
+        self.ComputeGlobalMatrix(compute='matrix')
  
     def Reset(self):
         """
@@ -288,7 +419,7 @@ class Assembly(AssemblyBase):
         row = np.reshape(row,-1) ; col = np.reshape(col,-1)  
 
         #-------------------------------------------------------------------
-        # Assemble the matrix that compute the node values from pg        
+        # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)    
         #-------------------------------------------------------------------                                
         PGtoNode = np.linalg.pinv(elmRefGeom.ShapeFunctionPG) #pseudo-inverse of NodeToPG
         dataPGtoNode = PGtoNode.T.reshape((1,NumberOfGaussPoint,nNd_elm_geom))/nb_elm_nd[elm_geom].reshape((Nel,1,nNd_elm_geom)) #shape = (Nel, NumberOfGaussPoint, nNd_elm)   
@@ -326,7 +457,7 @@ class Assembly(AssemblyBase):
             data = [[np.empty((Nel, NumberOfGaussPoint, nNd_elm)) for j in range(NbDoFperNode)] for i in range(nop)] 
     
             for j in range(0,NbDoFperNode):
-                data[0][j][:] = elmRef.ShapeFunctionPG[...,j*nNd_elm:(j+1)*nNd_elm].reshape((-1,NumberOfGaussPoint,nNd_elm))
+                data[0][j][:] = elmRef.ShapeFunctionPG[...,j*nNd_elm:(j+1)*nNd_elm].reshape((-1,NumberOfGaussPoint,nNd_elm)) #same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
                     data[dir_deriv+1][j][:] = derivativePG[...,dir_deriv, j*nNd_elm:(j+1)*nNd_elm]
                         
@@ -339,7 +470,10 @@ class Assembly(AssemblyBase):
             Assembly.__saveOperator[(mesh.GetID(),elementType,NumberOfGaussPoint)] = data   
     
     @staticmethod
-    def __GetElementaryOp(mesh, deriv, elementType, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
+    def __GetElementaryOp(mesh, deriv, elementType, nb_pg=None): 
+        #Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
+        #The list contains several element if the elementType include several variable (dof variable in beam element). In other case, the list contains only one matrix
+        #The variables are not considered. For a global use, the resulting matrix should be assembled in a block matrix with the nodes values for all variables
         if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)
 
         if isinstance(eval(elementType), dict):
@@ -362,7 +496,46 @@ class Assembly(AssemblyBase):
                          
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
-        else: assert 0, "Operator unavailable"            
+        else: assert 0, "Operator unavailable"      
+        
+    # @staticmethod
+    # def __GetElementaryOp2(mesh, deriv_vir, deriv, elementType, nb_pg=None): 
+    #     #Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
+    #     #The list contains several element if the elementType include several variable (dof variable in beam element). In other case, the list contains only one matrix
+    #     #The variables are not considered. For a global use, the resulting matrix should be assembled in a block matrix with the nodes values for all variables
+    #     if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)
+
+    #     if isinstance(eval(elementType), dict):
+    #         elementDict = eval(elementType)
+    #         elementType = elementDict.get(Variable.GetName(deriv.u))[0]
+    #         if elementType is None: elementType = elementDict.get('default')
+            
+    #         elementType_vir = elementDict.get(Variable.GetName(deriv_vir.u))[0]
+    #         if elementType_vir is None: elementType = elementDict.get('default')                
+
+    #     else: elementType_vir = elementType
+
+
+    #     if not((mesh.GetID(),elementType,elementType_vir, nb_pg) in Assembly.__saveOperator):        
+    #         if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
+    #             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
+                    
+    #         if (elementType != elementType_vir) and ((mesh.GetID(),elementType,nb_pg) not in Assembly.__saveOperator):
+    #             Assembly.PreComputeElementaryOperators(mesh, elementType_vir, nb_pg)
+            
+    #         data = Assembly.__saveOperator[(mesh.GetID(),elementType,nb_pg)]
+    
+    #         if deriv.ordre == 0 and 0 in data:
+    #             return data[0]
+            
+    #         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
+    #         ListMeshCoordinateIDRank = [Coordinate.GetRank(crdID) for crdID in mesh.GetCoordinateID()]
+    #         if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
+    #         else: return data[0] #if the coordinate doesnt exist, return operator without derivation
+                             
+    #         if (deriv.ordre, xx) in data:
+    #             return data[deriv.ordre, xx]
+    #         else: assert 0, "Operator unavailable"        
 
     @staticmethod
     def __GetGaussianQuadratureMatrix(mesh, elementType, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
@@ -379,6 +552,7 @@ class Assembly(AssemblyBase):
                 Assembly.__associatedVariables[elementType] = {Variable.GetRank(key): 
                                        [[Variable.GetRank(v) for v in val[1][1::2]],
                                         val[1][0::2]] for key,val in objElement.items() if len(val)>1}
+                    # val[1][0::2]] for key,val in objElement.items() if key in Variable.List() and len(val)>1}
             else: Assembly.__associatedVariables[elementType] = {}
         return Assembly.__associatedVariables[elementType] 
     
@@ -565,7 +739,7 @@ class Assembly(AssemblyBase):
         res = Assembly.__GetResultGaussPoints(self.__Mesh, operator, U, self.__elmType, self.__nb_pg)
         return GaussianPointToNodeMatrix * res        
         
-    def ConvertData(self, data, convertFrom, convertTo):
+    def ConvertData(self, data, convertFrom=None, convertTo='GaussPoint'):
         return ConvertData(data, self.__Mesh, convertFrom, convertTo, self.__elmType, self.__nb_pg)
             
     def IntegrateField(self, Field, TypeField = 'GaussPoint'):

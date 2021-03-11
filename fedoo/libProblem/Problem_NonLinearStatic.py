@@ -2,6 +2,7 @@
 from fedoo.libAssembly.Assembly import Assembly
 from fedoo.libProblem.Problem   import *
 from fedoo.libProblem.ProblemPGD   import ProblemPGD
+from fedoo.libUtil.ExportData import _ProblemOutput
 
 #dynamical inheritance. The class is generated inside a function
 def NonLinearStatic(Assembling, ID = "MainProblem"):
@@ -13,79 +14,98 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
     
     class __NonLinearStatic(libBase):
         
-        def __init__(self, Assembling, ID):                                    
-            A = Assembling.GetMatrix() #tangent stiffness matrix
+        def __init__(self, Assembling, ID):                                  
+            #A = Assembling.GetMatrix() #tangent stiffness matrix
+            A = 0 #tangent stiffness matrix - will be initialized only when required
             B = 0             
-            D = Assembling.GetVector() #initial stress vector
+            #D = Assembling.GetVector() #initial stress vector
+            D = 0 #initial stress vector #will be initialized later
             self.__TotalDisplacement = 0
             self.__TotalDisplacementOld = 0
-            self.__LoadFactor = 0    
-            self.__LoadFactorIni = 0
             self.__Err0 = None #initial error for NR error estimation
             self.__ErrCriterion = 'Work' #Error criterion type   
             self.__Assembly = Assembling
             libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID)        
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
+            self.__compteurOutput = 0
+            self.__outputIter = 1 #save results every self.__outputIter iter or time step if self.__saveOutputAtExactTime = True
+            self.__saveOutputAtExactTime = False
+            self.err_num= 2e-16 #numerical error
+            
+            self.__ProblemOutput = _ProblemOutput()
         
-        def GetDisp(self,name='all'):
+        def GetDisp(self,name='all'):            
             return self._GetVectorComponent(self.__TotalDisplacement, name)
         
-        # def ResetLoadFactor(self):
-        #     self.__LoadFactor = 0    
-        #     self.__LoadFactorIni = 0            
+        #same as GetDisp but in future for thermomechanical problem, GetDisp will only return the displacement part
+        def GetDoFSolution(self,name='all'):
+            return self._GetVectorComponent(self.__TotalDisplacement, name)
         
-        def NewTimeIncrement(self,time,timeOld):
-            self.__TotalDisplacementIni = self.__TotalDisplacement
-
-            # LoadFactor = (time-self.t0)/(self.tmax-self.t0)
+        def GetExternalForce(self, name = 'all'):
+            return self._GetVectorComponent(-self.GetD(), name)        
+        
+        def Initialize(self, initialTime=0.):   
+            """
+            """
+            self.__Assembly.Initialize(self,initialTime)
+            self.SetA(self.__Assembly.GetMatrix())
+            self.SetD(self.__Assembly.GetVector())
+        
+        def ElasticPrediction(self, timeOld, dt):
+            #update the boundary conditions with the time variation
+            time = timeOld + dt
             timeFactor    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
             timeFactorOld = (timeOld-self.t0)/(self.tmax-self.t0)
 
             self.ApplyBoundaryCondition(timeFactor, timeFactorOld)
-            # try:
-            #     self._Problem__Xbc *= (LoadFactor-self.__LoadFactor)
-            #     self._Problem__B *= LoadFactor
-            # except:
-            #     self._ProblemPGD__Xbc = self._ProblemPGD__Xbc*(LoadFactor-self.__LoadFactor)
-            #     self._ProblemPGD__B *= LoadFactor             
-                               
-            # self.__LoadFactorIni = self.__LoadFactor
-            # self.__LoadFactor = LoadFactor
+            
+            #solve the linearized system with elastic rigidty matrix
+            self.Solve()        
 
-            self.__Assembly.NewTimeIncrement()            
-            #udpate the problem (no need to update the week form and vector because no change of state should have occur since the update prior to error estimation)
-            self.Update(compute = 'matrix', updateWeakForm = False)
-            # self.__Assembly.ComputeGlobalMatrix(compute = 'matrix')
-            # self.SetA(self.__Assembly.GetMatrix())
-
-            self.Solve()
-                        
-            #update total displacement            
-            self.__TotalDisplacementOld = self.__TotalDisplacement
-            self.__TotalDisplacement += self.GetDoFSolution('all')   
-            self.__Err0 = None
-            # self.NewtonRaphsonError() 
-            # print(self.__Err0)
-
-        def ResetTimeIncrement(self, time = None, update = True):                              
-            self.__TotalDisplacement = self.__TotalDisplacementIni
-            # self.__LoadFactor = self.__LoadFactorIni
-            self.__Assembly.ResetTimeIncrement()
-            if update: self.Update(time)
-      
-        def NewtonRaphsonIncr(self):                   
+            #the the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
             try:
                 self._Problem__Xbc *= 0 
             except:
                 self._ProblemPGD__Xbc = 0
-                    
+
+            #set the reference error to None to for a new estimation of err0            
+            self.__Err0 = None
+
+            #update total displacement            
+            self.__TotalDisplacementOld = self.__TotalDisplacement
+            self.__TotalDisplacement += self.GetX()   
+        
+        def NewTimeIncrement(self):
+            self.__TotalDisplacementIni = self.__TotalDisplacement
+
+            # if timeOld == 0.:
+            #     #First iteration ->initialize the A and D matrix. 
+            #     self.Update(0.)
+            # else: #check if this is usefull 
+            #     #udpate the problem (no need to update the week form and vector because  no change of state should have occur since the update prior to error estimation)
+            #     self.Update(compute = 'matrix', updateWeakForm = False) 
+
+            self.__Assembly.NewTimeIncrement()     
+            self.SetA(self.__Assembly.GetMatrix()) #should be the elastic rigidity matrix
+            self.SetD(self.__Assembly.GetVector()) #not modified in principle
+            
+            
+
+        def ResetTimeIncrement(self, dtime, update = True):                              
+            self.__TotalDisplacement = self.__TotalDisplacementIni
+            self.__Assembly.ResetTimeIncrement()
+            
+            #need to be corrected to return to the old sigma
+            if update: self.Update(dtime)
+      
+        def NewtonRaphsonIncrement(self):                                      
             #update total displacement
             self.Solve()
             self.__TotalDisplacementOld = self.__TotalDisplacement
-            self.__TotalDisplacement += self.GetDoFSolution('all')   
+            self.__TotalDisplacement += self.GetX()           
         
-        def Update(self, time=None, compute = 'all', updateWeakForm = True):   
+        def Update(self, dtime=None, compute = 'all', updateWeakForm = True):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -95,7 +115,7 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
             Update the problem with the new assembled global matrix and global vector
             """
             if updateWeakForm == True:
-                self.__Assembly.Update(self, time, compute)
+                self.__Assembly.Update(self, dtime, compute)
             else: 
                 self.__Assembly.ComputeGlobalMatrix(compute)
             self.SetA(self.__Assembly.GetMatrix())
@@ -104,17 +124,19 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
         def Reset(self):
             self.__Assembly.Reset()
             
-            self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
-            self.SetD(self.__Assembly.GetVector())            
+            self.SetA(0) #tangent stiffness 
+            self.SetD(0)                 
+            # self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
+            # self.SetD(self.__Assembly.GetVector())            
 
             B = 0
             self.__TotalDisplacement = 0
             self.__TotalDisplacementOld = 0
-            # self.__LoadFactor = 0    
-            # self.__LoadFactorIni = 0
-            self.__Err0 = None #initial error for NR error estimation            
+                        
+            self.__Err0 = None #initial error for NR error estimation   
+            self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
-            self.ApplyBoundaryCondition()
+            self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
         def ChangeAssembly(self,Assembling, update = True):
             """
@@ -142,13 +164,13 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
                 return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.GetDoFSolution('all')))/self.__Err0  #Displacement criterion
+                    return np.max(np.abs(self.GetX()))/self.__Err0  #Displacement criterion
                 elif self.__ErrCriterion == 'Force': #Force criterion              
                     if self.GetD() is 0: return np.max(np.abs(self.GetB()[DofFree]))/self.__Err0 
                     else: return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0                     
                 else: #self.__ErrCriterion == 'Work': #work criterion
-                    if self.GetD() is 0: return np.max(np.abs(self.GetDoFSolution('all')[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__Err0 
-                    else: return np.max(np.abs(self.GetDoFSolution('all')[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 
+                    if self.GetD() is 0: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__Err0 
+                    else: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 
        
         def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion):
             if ErrorCriterion in ['Displacement', 'Force','Work']:
@@ -156,32 +178,34 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
             else: 
                 raise NameError('ErrCriterion must be set to "Displacement", "Force" or "Work"')
         
-        def GetElasticEnergy(self): #only work for classical FEM
-            """
-            returns : sum (0.5 * U.transposed * K * U)
-            """
+        # def GetElasticEnergy(self): #only work for classical FEM
+        #     """
+        #     returns : sum (0.5 * U.transposed * K * U)
+        #     """
     
-            return sum( 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all') )
+        #     return sum( 0.5*self.GetX().transpose() * self.GetA() * self.GetX() )
 
-        def GetNodalElasticEnergy(self):
-            """
-            returns : 0.5 * K * U . U
-            """
+        # def GetNodalElasticEnergy(self):
+        #     """
+        #     returns : 0.5 * K * U . U
+        #     """
     
-            E = 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all')
+        #     E = 0.5*self.GetX().transpose() * self.GetA() * self.GetX()
 
-            E = np.reshape(E,(3,-1)).T
+        #     E = np.reshape(E,(3,-1)).T
 
-            return E                   
+        #     return E                   
         
-        def SolveTimeIncrement(self, time, timeOld, max_subiter = 5, ToleranceNR = 5e-3):            
+        def SolveTimeIncrement(self, timeOld, dt, max_subiter = 5, ToleranceNR = 5e-3):            
             
-            self.NewTimeIncrement(time, timeOld)
+            # self.NewTimeIncrement(timeOld, dt)
             # self.__Err0 = 1
+            
+            self.ElasticPrediction(timeOld, dt)
             
             for subiter in range(max_subiter): #newton-raphson iterations                
                 #update Stress and initial displacement and Update stiffness matrix
-                self.Update(time, compute = 'vector')   
+                self.Update(dt, compute = 'vector') #update the out of balance force vector
 #                TotalStrain, TotalPKStress = self.Update()   
 
                 #Check convergence     
@@ -193,9 +217,9 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
                 #--------------- Solve --------------------------------------------------------        
                 # self.__Assembly.ComputeGlobalMatrix(compute = 'matrix')
                 # self.SetA(self.__Assembly.GetMatrix())
-                self.Update(compute = 'matrix', updateWeakForm = False)
-                self.NewtonRaphsonIncr()
-            
+                self.Update(compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
+                self.NewtonRaphsonIncrement()
+                
             return 0, subiter, normRes
 
 
@@ -207,37 +231,126 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
             self.tmax = kargs.get('tmax',self.tmax)
             dt = kargs.get('dt',0.1)
             update_dt = kargs.get('update_dt',True)
-            output = kargs.get('output', None)
+            outputFile = kargs.get('outputFile', None)
+            fraction_dt = 1 #used only when the time step is updated
+            current_dt = fraction_dt * dt            
             
-            err_num= 2e-16 #numerical error
-            time = self.t0    
+            self.SetInitialBCToCurrent()            
+                        
+            time = self.t0                            
+            
+            if self.__TotalDisplacement == 0:#Initialize only if 1st step
+                self.Initialize(self.t0)
+                            
+            while time < self.tmax - self.err_num:
+                timeOld = time
+                time = time+current_dt
+                if time > self.tmax - self.err_num: 
+                    time = self.tmax
+                    current_dt = time-timeOld
+                
+                #self.SolveTimeIncrement = Newton Raphson loop
+                convergence, nbNRiter, normRes = self.SolveTimeIncrement(timeOld, current_dt, max_subiter, ToleranceNR)
 
-            while time < self.tmax - err_num:
-                time = time+dt
-                if time > self.tmax - err_num: time = self.tmax          
-                  
-                convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, time-dt, max_subiter, ToleranceNR)
-
-                if not(convergence) :
+                if (convergence) :
+                    self.NewTimeIncrement()
+                else:
                     if update_dt:
-                        time = time - dt
-                        dt *= 0.25
-                        print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, dt))
+                        time = timeOld
+                        fraction_dt *= 0.25 ; current_dt = fraction_dt * dt                                     
+                        print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, current_dt ))
                         #reset internal variables, update Stress, initial displacement and assemble global matrix at previous time              
-                        self.ResetTimeIncrement(time)  
+                        
+                        #### need to be corrected. dt should not appear here
+                        self.ResetTimeIncrement(dt)  
                         continue                    
                     else: 
                         raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
                     
                 print('Iter {} - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, nbNRiter, normRes))
-                if output is not None: output(self, self.__iter, time, nbNRiter, normRes)                  
+                if outputFile is not None: outputFile(self, self.__iter, time, nbNRiter, normRes)                            
+                self.__postTreatment(self.__iter, time)
 
-                self.__iter += 1   
+                self.__iter += 1
 
                 if update_dt and nbNRiter < 2: 
-                    dt *= 1.25
-                    print('Increase the time increment to {:.5f}'.format(dt))               
-                                                         
+                    if self.__saveOutputAtExactTime == False:
+                        fraction_dt *= 1.25 ; current_dt = fraction_dt * dt  
+                        print('Increase the time increment to {:.5f}'.format(dt))               
+                    else:
+                        if abs(time/dt - round(time/dt)) < self.err_num:
+                            fraction_dt = round(1/(fraction_dt*1.25))
+                            
+                        
+                                                                     
+        def __postTreatment(self, it, time): 
+            if self.__saveOutputAtExactTime == True:
+                if abs(time/(self.__outputIter*dt) - round(time/self.__outputIter*dt)) < self.err_num:
+                    self.__ProblemOutput.SaveResults(self, self.__compteurOutput)                                
+                    self.__compteurOutput += 1 
+            else:        
+                if it%self.__outputIter == 0: #save output ?  
+                    self.__ProblemOutput.SaveResults(self, self.__compteurOutput)                                
+                    self.__compteurOutput += 1
+
+        def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+            self.__ProblemOutput.AddOutput(filename, assemblyID, output_list, output_type, file_format)
         
+             
+             
+             
+        #     #### SAVE results#####
+        #     # TotalPKStress = Material.GetCurrentStress()
+        #     # VM = Util.listStressTensor(TotalPKStress).vonMises()
+        #     # VMEl = Assembly.GetAll()['Assembling'].ConvertData(VM, "GaussPoint", "Element")
+        #     # VM1 = Assembly.GetAll()['Assembling'].ConvertData(VM, "GaussPoint", "Node")
+        #     # VM2 = Assembly.GetAll()['Assembling'].ConvertData(VMEl, "Element", "Node")
+            
+        #     # TotalPKStressEl = Util.listStressTensor([Assembly.GetAll()['Assembling'].ConvertData(S, "GaussPoint", "Element") for S in TotalPKStress])
+        #     # TotalPKStress = Util.listStressTensor([Assembly.GetAll()['Assembling'].ConvertData(S, "GaussPoint", "Node") for S in TotalPKStress])
+        #     StressPG = Material.GetCurrentStress()
+        #     Stress = Util.listStressTensor([Assembly.GetAll()['Assembling'].ConvertData(S, "GaussPoint", "Node") for S in StressPG])
+        #     StrainPG = Material.GetCurrentStrain()
+        #     Strain = Util.listStrainTensor([Assembly.GetAll()['Assembling'].ConvertData(S, "GaussPoint", "Node") for S in StrainPG])
+            
+        #     #Write the vtk file                            
+        #     OUT = Util.ExportData(meshID)      
+        #     OUT.addNodeData(Problem.GetDisp().reshape(3,-1).T,'Displacement')
+        # #            OUT.addNodeData(Strain.vtkFormat(),'Strain')
+             
+        # #     outputPlasticity = 0
+        # #     if outputPlasticity:
+        # #         P = Assembly.GetAll()['Assembling'].ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticity(),"GaussPoint", "Node")
+        # #         P_El = Assembly.GetAll()['Assembling'].ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticity(),"GaussPoint", "Element")
+        # #         P2 = Assembly.GetAll()['Assembling'].ConvertData(P_El,"Element", "Node")
+            
+        # #         PlasticStrainTensor = ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticStrainTensor()
+        # #         PlasticStrainTensor = Util.listStrainTensor([Assembly.GetAll()['Assembling'].ConvertData(E, "GaussPoint", "Element") for E in PlasticStrainTensor])
+        # # #            PlasticStrainTensor = Util.listStrainTensor([Assembly.GetAll()['Assembling'].ConvertData(E, "Element", "Node") for E in PlasticStrainTensor])
+        
+        # #         OUT.addNodeData(P,'Plasticity')
+        # #         OUT.addNodeData(P2,'Plasticity2')
+        # #         OUT.addElmData(P_El,'Plasticity')
+        # #         OUT.addElmData(PlasticStrainTensor.vtkFormat(),'PlasticStrainTensor')
+            
+        #     OUT.addNodeData(Stress.vtkFormat(),'Stress')
+        #     OUT.addNodeData(Strain.vtkFormat(),'Strain')
+        #     OUT.addNodeData(Stress.vonMises(),'VonMises')
+            
+        #     freq = 1 #save results every freq
+        #     if iter%freq == 0:
+        #         if mat == 3: 
+        #             OUT.toVTK("results/pliage2D/shear_simple_"+str(iter//freq)+".vtk")
+        #         else:
+        #             OUT.toVTK("results/pliage2D/shear_"+str(Material.corate)+"_"+str(iter//freq)+".vtk")
+        #     # print(Material.GetStrain()[0])
+        
+                
+        #     # print('[S: ', Material.GetCurrentStress()[0,0], ', Ep: ', Material.GetStatev()[0,1], ']')
+        #     # print(Material.GetCurrentStress[0,0], np.array(ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticStrainTensor())[0,0])
+        #     # print('yo: ',Material.GetStatev()[0])
+        #     # print('yo')
+        #     # print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticity()[0])
+        #     # print(np.array(ConstitutiveLaw.GetAll()['ElasticLaw'].GetPlasticStrainTensor())[:,0])
 
     return __NonLinearStatic(Assembling, ID)

@@ -147,7 +147,7 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
                         
             #update total displacement            
             # self.__DisplacementOld = self.__Displacement
-            self.__Displacement += self.GetDoFSolution('all')   
+            self.__Displacement += self.GetX()   
             self.__Err0 = None             
             
         def EndTimeIncrement(self): 
@@ -171,7 +171,7 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
             #update total displacement
             self.Solve()
             self.__DisplacementOld = self.__Displacement
-            self.__Displacement += self.GetDoFSolution('all')   
+            self.__Displacement += self.GetX()   
 
         def GetDisp(self,name='all'):
             return self._GetVectorComponent(self.__Displacement, name)
@@ -259,15 +259,15 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
                 elif self.__ErrCriterion == 'Force': 
                     self.__Err0 = np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree])) #Force criterion
                 else: #self.__ErrCriterion == 'Work':
-                    self.__Err0 = np.max(np.abs(self.GetDoFSolution('all')[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree])) #work criterion
+                    self.__Err0 = np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree])) #work criterion
                 return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.GetDoFSolution('all')))/self.__Err0  #Displacement criterion
+                    return np.max(np.abs(self.GetX()))/self.__Err0  #Displacement criterion
                 elif self.__ErrCriterion == 'Force':                     
                     return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 #Force criterion
                 else: #self.__ErrCriterion == 'Work':
-                    return np.max(np.abs(self.GetDoFSolution('all')[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 #work criterion
+                    return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 #work criterion
 
        
         def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion):
@@ -338,14 +338,14 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
         #     returns : sum(0.5 * U.transposed * K * U)
         #     """
     
-        #     return 0.5*np.dot(self.GetDoFSolution('all') , self.__StiffMatrix*self.GetDoFSolution('all') )
+        #     return 0.5*np.dot(self.GetX() , self.__StiffMatrix*self.GetX() )
                             
         # def GetNodalElasticEnergy(self):
         #     """
         #     returns : 0.5 * K * U . U
         #     """
     
-        #     E = 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all')
+        #     E = 0.5*self.GetX().transpose() * self.GetA() * self.GetX()
 
         #     E = np.reshape(E,(3,-1)).T
             

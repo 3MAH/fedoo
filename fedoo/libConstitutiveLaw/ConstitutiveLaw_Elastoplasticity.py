@@ -87,7 +87,7 @@ class ElastoPlasticity(ConstitutiveLaw):
             def HardeningFunction(p): 
                 return H*p**beta
             
-            def HardeningFunctionDerivative(p):        
+            def HardeningFunctionDerivative(p):
                 return beta*H*p**(beta-1)
             
         elif FunctionType.lower() == 'user':
@@ -199,7 +199,9 @@ class ElastoPlasticity(ConstitutiveLaw):
         self.__currentPlasticStrainTensor = None 
         self.__currentSigma = None #lissStressTensor object describing the last computed stress (GetStress method)
 
-   
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+        self.NewTimeIncrement()
+    
     def Update(self,assembly, pb, time, nlgeom):
         displacement = pb.GetDisp()
         
@@ -220,11 +222,8 @@ class ElastoPlasticity(ConstitutiveLaw):
         
             TotalStrain = listStrainTensor(Strain)
             self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
-        
-        if nlgeom:
-            if displacement is 0: self.__InitialGradDispTensor = 0
-            else: self.__InitialGradDispTensor = self.GetCurrentGradDisp() #assembly.GetGradTensor(displacement, "GaussPoint")
-        
+            
+            # print(self.__currentP)
             
     def GetStress(self, StrainTensor, time = None): 
         # time not used here because this law require no time effect
@@ -266,7 +265,7 @@ class ElastoPlasticity(ConstitutiveLaw):
                 
         self.__currentPlasticStrainTensor = listStrainTensor(Ep.T)
         self.__currentSigma = listStressTensor(sigmaFull.T) # list of 6 objets 
-               
+        
         return self.__currentSigma 
     
     

@@ -81,7 +81,13 @@ class ProblemBase:
     
     def GetNodalElasticEnergy(self):
         raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
+        
+    def GetExternalForce(self):
+        raise NameError("The method 'GetExternalForce' is not defined for this kind of problem")    
 
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+        raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
+        
     #defined in the ProblemPGD classes
     def GetX(self): raise NameError("Method only defined for PGD Problems") 
     def GetXbc(self): raise NameError("Method only defined for PGD Problems") 
@@ -112,8 +118,11 @@ def ResetLoadFactor(): ProblemBase.GetAll()['MainProblem'].ResetLoadFactor()
 def NLSolve(**kargs): return ProblemBase.GetAll()['MainProblem'].NLSolve(**kargs)  
 def GetElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetElasticEnergy()
 def GetNodalElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
+def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+    return ProblemBase.GetAll()['MainProblem'].AddOutput(filename, assemblyID, output_list, output_type, file_format)
 
-#functions that should be define in the Problem or in the ProblemPGD classes
+
+#functions that should be define in the Problem and in the ProblemPGD classes
 def SetA(A): ProblemBase.GetAll()["MainProblem"].SetA(A)
 def GetA(): return ProblemBase.GetAll()["MainProblem"].GetA()
 def GetB(): return ProblemBase.GetAll()["MainProblem"].GetB()
@@ -122,9 +131,11 @@ def GetMesh(): return ProblemBase.GetAll()["MainProblem"].GetMesh()
 def SetD(D): ProblemBase.GetAll()["MainProblem"].SetD(D)
 def SetB(B): ProblemBase.GetAll()["MainProblem"].SetB(B)
 def Solve(): ProblemBase.GetAll()["MainProblem"].Solve()
+def GetX(): return ProblemBase.GetAll()["MainProblem"].GetX()
 def ApplyBoundaryCondition(): ProblemBase.GetAll()["MainProblem"].ApplyBoundaryCondition()
-def GetDoFSolution(name): return ProblemBase.GetAll()["MainProblem"].GetDoFSolution(name)
+def GetDoFSolution(name='all'): return ProblemBase.GetAll()["MainProblem"].GetDoFSolution(name)
 def SetDoFSolution(name,value): ProblemBase.GetAll()["MainProblem"].SetDoFSolution(name,value)
+def SetInitialBCToCurrent(): ProblemBase.GetAll()["MainProblem"].SetInitialBCToCurrent()
 
 #functions only defined for Newmark problem
 def GetX():
@@ -194,6 +205,10 @@ def GetNodalElasticEnergy():
     """
     return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
 
+def GetExternalForce():
+    return ProblemBase.GetAll()['MainProblem'].GetExternalForce()
+
+
 def GetKineticEnergy():
     """
     returns : 0.5 * Udot.transposed * M * Udot
@@ -215,7 +230,6 @@ def UpdateStiffness(StiffnessAssembling):
 
 
 #functions only used define in the ProblemPGD subclasses
-def GetX(): return ProblemBase.GetAll()["MainProblem"].GetX() 
 def GetXbc(): return ProblemBase.GetAll()["MainProblem"].GetXbc() 
 def ComputeResidualNorm(err_0=None): return ProblemBase.GetAll()["MainProblem"].ComputeResidualNorm(err_0)
 def GetResidual(): return ProblemBase.GetAll()["MainProblem"].GetResidual()

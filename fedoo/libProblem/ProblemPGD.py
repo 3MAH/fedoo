@@ -16,19 +16,22 @@ class ProblemPGD(ProblemBase):
     
     def __init__(self, A, B, D, Mesh, ID = "MainProblem"):  
         
-        # the problem is AX = B + D
-        self.__A = A 
-        self.__A.tocsr() #just in case A is in another format as csr
-        
-        if B is 0: self.__B = self._InitializeVector(A)
-        else: self.__B = B        
-            
-        self.__D = D
-
+        # the problem is AX = B + D        
         self.__Mesh = Mesh
         self.__NumberOfSubspace = Mesh.GetDimension()
         
-        self.__ProblemDimension = self.__A.GetShape() #return a list of number of DoF for each subspace
+        listNumberOfNodes = Mesh.GetNumberOfNodes()  #list of number of nodes for all submesh
+        #self.__ProblemDimension is a list of number of DoF for each subspace
+        self.__ProblemDimension = [Mesh._GetSpecificNumberOfVariables(idmesh)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
+        #self.__ProblemDimension = self.__A.GetShape()
+
+        self.__A = A 
+        #if self.__A != 0: self.__A.tocsr() #just in case A is in another format as csr
+        
+        if B is 0: self.__B = self._InitializeVector()
+        else: self.__B = B        
+            
+        self.__D = D
         
         self.__DofBlocked = None
         self.__DofFree = None
@@ -42,8 +45,8 @@ class ProblemPGD(ProblemBase):
     #===============================================================================
     # Internal Functions
     #===============================================================================
-    def _InitializeVector(self,A): #initialize a vector (force vector for instance) being giving the stiffness matrix
-        return SeparatedZeros(A.GetShape())  
+    def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
+        return SeparatedZeros(self.__ProblemDimension)  
     
     def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
 
@@ -175,6 +178,8 @@ class ProblemPGD(ProblemBase):
 #            self.__X[i*n : (i+1)*n] = value        
 
 
+    def SetInitialBCToCurrent(self):
+        pass #do nothing. Only applyed for FEM problem
 
                            
 #===============================================================================
@@ -353,11 +358,10 @@ class ProblemPGD(ProblemBase):
 #
 #
 
-def GetX(): return ProblemPGD.GetAll()["MainProblem"].GetX() 
-def GetXbc(): return ProblemPGD.GetAll()["MainProblem"].GetXbc() 
-def ComputeResidualNorm(err_0=None): return ProblemPGD.GetAll()["MainProblem"].ComputeResidualNorm(err_0)
-def GetResidual(): return ProblemPGD.GetAll()["MainProblem"].GetResidual()
-def UpdatePGD(termToChange, ddcalc='all'): return ProblemPGD.GetAll()["MainProblem"].UpdatePGD(termToChange, ddcalc)
-def UpdateAlpha(): return ProblemPGD.GetAll()["MainProblem"].UpdateAlpha()
-def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemPGD.GetAll()["MainProblem"].AddNewTerm(numberOfTerm, value, variable)
+# def GetXbc(): return ProblemPGD.GetAll()["MainProblem"].GetXbc() 
+# def ComputeResidualNorm(err_0=None): return ProblemPGD.GetAll()["MainProblem"].ComputeResidualNorm(err_0)
+# def GetResidual(): return ProblemPGD.GetAll()["MainProblem"].GetResidual()
+# def UpdatePGD(termToChange, ddcalc='all'): return ProblemPGD.GetAll()["MainProblem"].UpdatePGD(termToChange, ddcalc)
+# def UpdateAlpha(): return ProblemPGD.GetAll()["MainProblem"].UpdateAlpha()
+# def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemPGD.GetAll()["MainProblem"].AddNewTerm(numberOfTerm, value, variable)
 

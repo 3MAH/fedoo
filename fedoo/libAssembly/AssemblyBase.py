@@ -58,7 +58,6 @@ class AssemblyBase:
         """
         AssemblyBase.GetAll()[ID].ComputeGlobalMatrix()
 
-
 class AssemblySum(AssemblyBase):
    
     def __init__(self, ListAssembly, ID="", **kargs):        
@@ -98,7 +97,7 @@ class AssemblySum(AssemblyBase):
         if not(compute == 'matrix'):
             self.SetVector(sum([assembly.GetVector() for assembly in self.__ListAssembly]))
     
-    def Update(self, pb, time=None, compute = 'all'):
+    def Update(self, pb, dtime=None, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
         Parameters: 
@@ -107,15 +106,23 @@ class AssemblySum(AssemblyBase):
         """
         if self.__reload == 'all' or compute == 'vector': #if compute == 'vector' the reload arg is ignored
             for assembly in self.__ListAssembly:
-                assembly.Update(pb,time,compute)           
+                assembly.Update(pb,dtime,compute)           
         else:
             for numAssembly in self.__reload:
-                self.__ListAssembly[numAssembly].Update(pb,time,compute)
+                self.__ListAssembly[numAssembly].Update(pb,dtime,compute)
                     
         if not(compute == 'vector'):         
             self.SetMatrix( sum([assembly.GetMatrix() for assembly in self.__ListAssembly]) )
         if not(compute == 'matrix'):
             self.SetVector( sum([assembly.GetVector() for assembly in self.__ListAssembly]) )
+
+    def Initialize(self, pb, initialTime=0.):
+        """
+        Reset the current time increment (internal variable in the constitutive equation)
+        Doesn't assemble the new global matrix. Use the Update method for that purpose.
+        """
+        for assembly in self.__ListAssembly:
+            assembly.Initialize(pb, initialTime=0.)   
 
     def ResetTimeIncrement(self):
         """

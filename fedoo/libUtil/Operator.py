@@ -4,6 +4,7 @@
 #from fedoo.libPGD.SeparatedArray import *
 from fedoo.libUtil.Variable  import Variable
 from fedoo.libUtil.Coordinate  import Coordinate
+import numpy as np
 
 from numbers import Number #classe de base qui permet de tester si un type est numérique
 
@@ -81,8 +82,12 @@ class OpDiff:
                     else: raise NameError('Impossible operation')
             return res
         else:  #isinstance(A, (Number, SeparatedArray)):        
-            if  isinstance(A, Number) and A == 0: return 0
+            if  np.isscalar(A):
+                if A == 0: return 0
+                if A == 1: return self
+            
             return OpDiff(self.op, self.op_vir, [A*cc for cc in self.coef])
+            # return OpDiff(self.op, self.op_vir, [A if (np.isscalar(cc) and cc == 1) else A*cc for cc in self.coef]) #should improve time but doesn't work. I don't know why
 #        else: 
 #            return NotImplemented
                     
@@ -94,6 +99,27 @@ class OpDiff:
 
     def __div__(self, A):         
         return self*(1/A)
+            
+    def sort(self):
+        nn = 50
+        intForSort = []
+        for ii in range(len(self.op)):
+            if self.op[ii] != 1 and self.op_vir != 1:
+                intForSort.append(self.op[ii].u + nn* self.op[ii].x + nn**2 * self.op[ii].ordre + nn**3 * self.op_vir[ii].u + nn**4 * self.op_vir[ii].x + nn**5 * self.op_vir[ii].x)
+            elif self.op[ii] == 1:
+                if self.op_vir == 1: intForSort.append(-1)
+                else:
+                    intForSort.append(nn**6 + nn**6 *self.op_vir[ii].u + nn**7 * self.op_vir[ii].x + nn**8 * self.op_vir[ii].x) 
+            else: #self.op_vir[ii] = 1
+                intForSort.append(nn**9 + nn**9 *self.op[ii].u + nn**10 * self.op[ii].x + nn**11 * self.op[ii].x) 
+        
+        sortedIndices = np.array(intForSort).argsort()
+        self.coef = [self.coef[i] for i in sortedIndices]
+        self.op = [self.op[i] for i in sortedIndices]
+        self.op_vir = [self.op_vir[i] for i in sortedIndices]
+        
+        return [intForSort[i] for i in sortedIndices]
+        
 
     def nvar(self):
         return max([op.u for op in self.op])+1

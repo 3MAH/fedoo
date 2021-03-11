@@ -34,7 +34,7 @@ nodes_right = [Nb_elm]
 #computeShear = 0: no shear strain are considered. Bernoulli element is used ("i.e "bernoulliBeam" element)
 #computeShear = 1: shear strain using the "beam" element (shape functions depend on the beam parameter) ->  Friedman, Z. and Kosmatka, J. B. (1993).  An improved two-node Timoshenkobeam finite element.Computers & Structures, 47(3):473–481
 #computeShear = 2: shear strain using the "beamFCQ" element (using internal variables) -> Caillerie, D., Kotronis, P., and Cybulski, R. (2015). A new Timoshenko finite element beamwith internal degrees of freedom.International Journal of Numerical and Analytical Methods in Geomechanics
-computeShear = 2
+computeShear = 1
 
 if computeShear == 0:
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, ID = "WFbeam") #by default k=0 i.e. no shear effect
@@ -47,6 +47,8 @@ else:  #computeShear = 2
     Mesh.GetAll()['beam'].AddInternalNodes(1) #adding one internal nodes per element (this node has no geometrical sense)
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, ID = "WFbeam")
     Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam")
+    
+Assembly.GetAll()['beam'].computeMatrixMethod = 'new'
 
 Problem.Static("beam")
 

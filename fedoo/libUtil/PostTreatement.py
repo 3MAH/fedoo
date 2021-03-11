@@ -103,6 +103,9 @@ class listStressTensor(list):
     def toStress(self):
         return self
 
+    def Convert(self,assemb, ConvertFrom, ConvertTo):
+        return listStressTensor([assemb.ConvertData(S, ConvertFrom, ConvertTo) for S in self])
+
 #simcoon compatible    
 class listStrainTensor(list):
     
@@ -140,3 +143,6 @@ class listStrainTensor(list):
         
     def toStrain(self):
         return self
+
+    def Convert(self,assemb, ConvertFrom, ConvertTo):
+        return listStrainTensor([assemb.ConvertData(S, ConvertFrom, ConvertTo) for S in self])

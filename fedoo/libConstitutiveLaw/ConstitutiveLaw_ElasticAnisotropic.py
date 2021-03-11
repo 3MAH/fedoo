@@ -27,8 +27,14 @@ class ElasticAnisotropic(ConstitutiveLaw):
     def GetH(self):
         return self.__H
         
-    def GetCurrentStress(self):
+    # def GetCurrentStress(self):
+    #     return self.__currentSigma
+
+    def GetPKII(self):
         return self.__currentSigma
+
+    def GetStrain(self):
+        return self.__currentStrain
     
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp    
@@ -62,6 +68,10 @@ class ElasticAnisotropic(ConstitutiveLaw):
 
         return sigma # list de 6 objets de type OpDiff
        
+    
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+        pass
+    
     def Update(self,assembly, pb, time, nlgeom):
         displacement = pb.GetDisp()
         
@@ -81,11 +91,8 @@ class ElasticAnisotropic(ConstitutiveLaw):
                 Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
                 TotalStrain = listStrainTensor(Strain)
                 
+            self.__currentStrain = TotalStrain                
             self.__currentSigma = self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
-        
-        if nlgeom:
-            if displacement is 0: self.__InitialGradDispTensor = 0
-            else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint") 
        
     def GetStress(self, StrainTensor, time = None):         
         H = self.__ChangeBasisH(self.GetH())

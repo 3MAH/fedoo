@@ -15,9 +15,10 @@ class BoundaryCondition :
     def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ProblemID = "MainProblem"):
         ### Var: variable name (str) or (for MPC only) list of variable name or variable rank 
         ### Value: Variable final value (Dirichlet) or force Value (Neumann) or factor list (MPC)
-        ### Index : Nodes Index of SetOf Nodes ID           
+        ### Index : Nodes Index or SetOf Nodes ID or (for MPC only) list of Index         
         ### Constant: for MPC only, constant value on the equation
         ### timeEvolution : function 
+        ### initialValue can be a float or an array or None (default)
         ###
         ### To define many MPC in one operation, use array where each line define a single MPC
         assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
@@ -25,7 +26,8 @@ class BoundaryCondition :
         if timeEvolution is None: 
             def timeEvolution(timeFactor): return timeFactor            
         self.__timeEvolution = timeEvolution
-        self.__initialValue = initialValue # can be a float or an array or None !
+        
+        self.__DefautInitialValue = self.__initialValue = initialValue # can be a float or an array or None ! if DefautInitialValue is None, initialValue can be modified by the Problem
         
         self.__BoundaryType = BoundaryType
         if isinstance(Var, str): 
@@ -92,6 +94,24 @@ class BoundaryCondition :
         # X[self.__GlobalIndex] = self.__GetFactor(timeFactor, timeFactorOld) * (self.__Value - self.__InitialValue) + self.__InitialValue
         return X
 
+    @staticmethod
+    def setInitialToCurrent(problem):
+        ### only for FEM for now
+        ### is used only for incremental problems
+        U = problem.GetDoFSolution()
+        F = problem.GetExternalForce()
+        Nnodes = problem.GetMesh().GetNumberOfNodes()
+        for e in BoundaryCondition.__lbc[problem.GetID()]:            
+            if e.__DefautInitialValue is None:
+                if e.__BoundaryType == 'Dirichlet':
+                    if U is not 0:
+                        e.__initialValue = U[e.__Var*Nnodes + e.__Index]
+                elif e.__BoundaryType == 'Neumann':
+                    if F is not 0:
+                        e.__initialValue = F[e.__Var*Nnodes + e.__Index]
+                        print(F[e.__Var*Nnodes + e.__Index])
+            
+                
     @staticmethod
     def Apply(n, timeFactor = 1, timeFactorOld = None, ProblemID = "MainProblem"):
         
