@@ -115,10 +115,10 @@ class ElastoPlasticity(ConstitutiveLaw):
     def GetPlasticity(self):
         return self.__currentP
     
-    def GetPlasticStrainTensor(self):
+    def GetStrain(self):
         return self.__currentPlasticStrainTensor
     
-    def GetCurrentStress(self):
+    def GetPKII(self):
         return self.__currentSigma
     
     def GetCurrentGradDisp(self):

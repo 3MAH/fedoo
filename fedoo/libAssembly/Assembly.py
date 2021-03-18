@@ -11,7 +11,6 @@ from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.GradOperator import GetGradOperator
 from fedoo.libUtil.SparseMatrix import _BlocSparse as BlocSparse
-# from fedoo.libUtil.SparseMatrix import _BlocSparseOld as BlocSparseOld
 from fedoo.libUtil.SparseMatrix import RowBlocMatrix
 
 from scipy import sparse
@@ -63,11 +62,6 @@ class Assembly(AssemblyBase):
         nb_pg = self.__nb_pg
         mesh = self.__Mesh
         
-        # if isinstance(eval(elementType), dict):
-        #     elementDict = eval(elementType)
-        #     elementType = elementDict.get(Variable.GetName(deriv.u))[0]
-        #     if elementType is None: elementType = elementDict.get('default')
-        
         if self.__MeshChange == True:             
             if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]            
             Assembly.PreComputeElementaryOperators(mesh, self.__elmType, nb_pg=nb_pg)
@@ -86,6 +80,14 @@ class Assembly(AssemblyBase):
             if (mesh.GetID(), self.__elmType, nb_pg) not in Assembly.__saveOperator:
                 Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)] = {}
             saveOperator = Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)]
+            
+            #list_elementType contains the id of the element associated with every variable
+            #list_elementType could be stored to avoid reevaluation 
+            if isinstance(eval(self.__elmType), dict):
+                elementDict = eval(self.__elmType)
+                list_elementType = [elementDict.get(Variable.GetName(i))[0] for i in range(nvar)]
+                list_elementType = [elementDict.get('default') if elmtype is None else elmtype for elmtype in list_elementType]
+            else: list_elementType = [self.__elmType for i in range(nvar)]
             
             if 'blocShape' not in saveOperator:
                 saveOperator['blocShape'] = saveOperator['colBlocSparse'] = saveOperator['rowBlocSparse'] = None
@@ -139,7 +141,7 @@ class Assembly(AssemblyBase):
                         var.extend(associatedVariables[var[0]][0])
                         coef.extend(associatedVariables[var[0]][1])                                                                                     
                     
-                    tupleID = (wf.op_vir[ii].x, wf.op_vir[ii].ordre, wf.op[ii].x, wf.op[ii].ordre) #tuple to identify operator
+                    tupleID = (list_elementType[wf.op_vir[ii].u], wf.op_vir[ii].x, wf.op_vir[ii].ordre, list_elementType[wf.op[ii].u], wf.op[ii].x, wf.op[ii].ordre) #tuple to identify operator
                     if tupleID in saveOperator:
                         MatvirT_Mat = saveOperator[tupleID] #MatvirT_Mat is an array that contains usefull data to build the matrix MatvirT*Matcoef*Mat where Matcoef is a diag coefficient matrix. MatvirT_Mat is build with BlocSparse class
                     else: 
@@ -318,16 +320,16 @@ class Assembly(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        outValues = self.__weakForm.Update(self, pb, dtime)
+        self.__weakForm.Update(self, pb, dtime)
         self.ComputeGlobalMatrix(compute)
-        return outValues
 
     def ResetTimeIncrement(self):
         """
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        self.__weakForm.ResetTimeIncrement()        
+        self.__weakForm.ResetTimeIncrement()
+        self.ComputeGlobalMatrix(compute='all')
 
     def NewTimeIncrement(self):
         """

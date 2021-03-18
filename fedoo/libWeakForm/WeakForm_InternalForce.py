@@ -45,8 +45,6 @@ class InternalForce(WeakForm):
     def UpdateInitialStress(self,InitialStressTensor):                                                
         self.__InitialStressTensor = InitialStressTensor
         
-
-
     def Initialize(self, assembly, pb, initialTime = 0.):
         self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)
         
@@ -91,12 +89,18 @@ class InternalForce(WeakForm):
 
     def ResetTimeIncrement(self):
         self.__ConstitutiveLaw.ResetTimeIncrement()
-
+        
+        self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
+        if self.__nlgeom:
+            if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
+                raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
+            self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
+        
     def NewTimeIncrement(self):
         self.__ConstitutiveLaw.NewTimeIncrement()
+        #no need to update Initial Stress because the last computed stress remained unchanged
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
-        
         sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame=localFrame)   
 #        try:
 #            sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame)            

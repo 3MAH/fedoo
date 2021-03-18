@@ -82,7 +82,7 @@ class ProblemBase:
     def GetNodalElasticEnergy(self):
         raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
         
-    def GetExternalForce(self):
+    def GetExternalForce(self, name):
         raise NameError("The method 'GetExternalForce' is not defined for this kind of problem")    
 
     def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
@@ -120,7 +120,6 @@ def GetElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetElasticEne
 def GetNodalElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
 def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
     return ProblemBase.GetAll()['MainProblem'].AddOutput(filename, assemblyID, output_list, output_type, file_format)
-
 
 #functions that should be define in the Problem and in the ProblemPGD classes
 def SetA(A): ProblemBase.GetAll()["MainProblem"].SetA(A)
@@ -205,8 +204,8 @@ def GetNodalElasticEnergy():
     """
     return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
 
-def GetExternalForce():
-    return ProblemBase.GetAll()['MainProblem'].GetExternalForce()
+def GetExternalForce(name='all'):
+    return ProblemBase.GetAll()['MainProblem'].GetExternalForce(name)
 
 
 def GetKineticEnergy():

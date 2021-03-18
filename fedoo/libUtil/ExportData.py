@@ -244,28 +244,32 @@ class ExportData:
         self.toVTK()
         Popen('"C:\\Program Files\\ParaView 5.2.0-RC2-Qt4-OpenGL2-Windows-64bit\\bin\\paraview" test.vtk', stdin=None, stdout=None, stderr=None)
     
-
-
-
-
-
+    
 class _ProblemOutput:
     def __init__(self):
         self.__list_output = [] #a list containint dictionnary with defined output
         self.__available_output = ['pkii',   'pk2',   'kirchoff',   'kirchhoff',   'cauchy',
                                    'pkii_vm','pk2_vm','krichoff_vm','kirchhoff_vm','cauchy_vm',
-                                   'disp', 'strain']
+                                   'disp', 'strain', 'statev']
+        self.__available_format = ['vtk', 'msh', 'txt', 'npy', 'npz', 'npz_compressed']
         
     def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
         if output_type.lower() == 'node': output_type = 'Node'
         elif output_type.lower() == 'element': output_type = 'Element'
         elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
         else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
-                
+        
+        file_format = file_format.lower()
+        if file_format not in self.__available_format:
+            print("WARNING: '", file_format, "' doens't match to any available file format")
+            print("Specified output ignored")
+            print("List of available file format: ", self.__available_format)
+        
         for i,res in enumerate(output_list):
             output_list[i] = res = res.lower()
             if res not in self.__available_output:
                 print("WARNING: '", res, "' doens't match to any available output")
+                print("Specified output ignored")
                 print("List of available output: ", self.__available_output)
         
         new_output = {'filename': filename, 'assembly': assemblyID, 'type': output_type, 'list': output_list, 'file_format': file_format.lower()}
@@ -283,18 +287,19 @@ class _ProblemOutput:
             assemb = AssemblyBase.GetAll()[output['assembly']]               
             material = assemb.GetWeakForm().GetConstitutiveLaw()
             
-            if file_format == 'vtk':
-                filename = filename + '_' + str(comp_output) + '.vtk'                    
+            if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:
+                filename = filename + '_' + str(comp_output) + '.' + file_format[0:3]
                 
                 if not(filename in list_filename): 
                     #if file name don't exist in the list we create it
                     list_filename.append(filename)
-                    OUT = ExportData(assemb.GetMesh().GetID())
+                    if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.GetMesh().GetID())
+                    else: OUT = {} #empty dictionnary cotaining variable                        
                     list_ExportData.append(OUT)                        
                 else: 
                     #else, the same file is used       
-                    OUT = list_ExportData[list_filename.index(filename)]                                                   
-            
+                    OUT = list_ExportData[list_filename.index(filename)]                                                                             
+                        
             for res in output['list']:
                 res = res.lower()
                 if res in ['pkii', 'pk2', 'kirchoff', 'kirchhoff', 'cauchy','strain']:
@@ -315,6 +320,7 @@ class _ProblemOutput:
                     # data = assemb.ConvertData(data, None, output_type)
                     
                     if file_format == 'vtk': data = data.vtkFormat()
+                    elif file_format in ['msh', 'txt', 'npy', 'npz']: data = np.array(data).T
                                             
                 elif res == 'disp':
                     if output_type == 'Node':                             
@@ -338,16 +344,43 @@ class _ProblemOutput:
                     data = assemb.ConvertData(data, None, output_type)
                     # data = data.Convert(assemb, None, output_type)                        
                     # data = assemb.ConvertData(data, None, output_type):                                 
-                                
-                if output_type == 'Node':
-                    OUT.addNodeData(data,label_data)  
-                elif output_type == 'Element':
-                    OUT.addElmData(data,label_data)   
-                else: 
-                    raise NameError("The specified " + str(output_type) + " can't be exported as vtk data")
+                
+                elif res in ['statev']:
+                    data = material.GetStatev().T                    
+                    data = assemb.ConvertData(data, None, output_type)
+                    label_data = 'State_Variables'
+                
+                
+                if file_format in ['vtk', 'msh']:
+                    if output_type == 'Node':
+                        OUT.addNodeData(data,label_data)  
+                    elif output_type == 'Element':
+                        OUT.addElmData(data,label_data)   
+                    else: 
+                        raise NameError("The specified " + str(output_type) + " can't be exported as vtk data")
+                        
+                elif file_format == 'txt':
+                    #save array in txt file using numpy.savetxt
+                    fname = filename + '_' + label_data + '_' + output_type + '_' + str(comp_output) + '.txt'
+                    np.savetxt(fname, data)
 
-        for i, OUT in enumerate(list_ExportData):
-            OUT.toVTK(list_filename[i])
+                elif file_format == 'npy':
+                    #save array in npy file (binary file generated by numpy) using numpy.save
+                    fname = filename + '_' + label_data + '_' + output_type + '_' + str(comp_output) + '.npy'
+                    np.save(fname, data)
+
+                elif file_format in ['npz', 'npz_compressed']:
+                    #save all arrays for one iteration in a npz file (binary file generated by numpy) using numpy.savez
+                    var_name = label_data + '_' + output_type                    
+                    OUT[var_name] = data
+        
+        if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:    
+            for i, OUT in enumerate(list_ExportData):                
+                if file_format == 'vtk': OUT.toVTK(list_filename[i])
+                elif file_format == 'msh': OUT.toMSH(list_filename[i])
+                elif file_format == 'npz': np.savez(list_filename[i], **OUT)
+                elif file_format == 'npz_compressed': np.savez_compressed(list_filename[i], **OUT)
+            
 
     @property
     def available_output(self):
