@@ -5,8 +5,6 @@ import os
 import pylab as plt
 from numpy import linalg
 
-from simcoon import simmit as sim
-
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
