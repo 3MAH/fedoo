@@ -15,8 +15,12 @@ class WeakForm:
 
     def GetNumberOfVariables(self):
         return self.GetDifferentialOperator().nvar()
-        
-    def Update(self, assembly, pb, time):
+    
+    def Initialize(self, assembly, pb, initialTime=0.):
+        #function called at the begining of the resolution
+        pass
+    
+    def Update(self, assembly, pb, dtime):
         #function called when the problem is updated (NR loop or time increment)
         #- New initial Stress
         #- New initial Displacement

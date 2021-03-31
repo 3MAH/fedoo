@@ -144,7 +144,11 @@ try:
             self.Run(0.) #Launch the UMAT to compute the elastic matrix    
     
         def Update(self,assembly, pb, dtime, nlgeom=True):            
+            # displacement = pb.GetCurrentDisp()
             displacement = pb.GetDisp()
+            
+            
+            
             # GradDispOld = self.__currentGradDisp
             # print(self.__currentGradDisp.shape)        
             # print(self.__currentGradDisp.strides)

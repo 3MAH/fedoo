@@ -1,89 +1,62 @@
 import numpy as np
 from fedoo.libAssembly.Assembly import *
 from fedoo.libProblem.Problem   import *
+from fedoo.libProblem.Problem_NonLinearStatic import _GenerateClass_NonLinearStatic
 
 #dynamical inheritance. The class is generated inside a function
-def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1, DampingAssembly = 0, ID = "MainProblem"):
-    """
-    Define a Newmark problem
-    The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
-    """
-        
-    if isinstance(StiffnessAssembly,str):
-        StiffnessAssembly = Assembly.GetAll()[StiffnessAssembly]
-                
-    if isinstance(MassAssembly,str):
-        MassAssembly = Assembly.GetAll()[MassAssembly]
-        
-    if isinstance(DampingAssembly,str):
-        DampingAssembly = Assembly.GetAll()[DampingAssembly]
-
-    if hasattr(StiffnessAssembly.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
-    else: libBase = Problem
+def _GenerateClass_NonLinearNewmark(libBase):
     
-    class __Newmark(libBase):    
+    NLStaticClass = _GenerateClass_NonLinearStatic(libBase)
+    class __Newmark(NLStaticClass):    
             
-        def __init__(self, StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep, DampingAssembly, ID):
-                    
-            if DampingAssembly is 0:
-                A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() #tangent matrix
-            else:
-                A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() + Gamma/(Beta*TimeStep)*DampingAssembly.GetMatrix()
+        def __init__(self, StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, ID):
+            NLStaticClass.__init__(self, StiffnessAssembly, ID)  
+            
+            # if DampingAssembly is 0:
+            #     A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() #tangent matrix
+            # else:
+            #     A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() + Gamma/(Beta*TimeStep)*DampingAssembly.GetMatrix()
                 
-            B = 0 ; D = 0
+            # B = 0 ; D = 0
                        
             self.__Beta       = Beta
             self.__Gamma      = Gamma
-            
-            # self.__MassMatrix  = MassAssembling.GetMatrix()            
-            # self.__StiffMatrix = StiffnessAssembling.GetMatrix()
-            # if DampingAssembly == 0: self.__DampMatrix = 0
-            # else: self.__DampMatrix = DampingAssembly.GetMatrix()
-
 
             self.__MassAssembly  = MassAssembly
-            self.__StiffnessAssembly = StiffnessAssembly
+            self.__StiffnessAssembly = StiffnessAssembly #alias of self._NLStaticClass__Assembly 
             self.__DampingAssembly = DampingAssembly
             self.__RayleighDamping = None
 
-           
-            self.__Displacement = self._InitializeVector(A)
-            self.__DisplacementIni = self._InitializeVector(A) #displacement at the previous time iteration
-            self.__Velocity = self._InitializeVector(A)
-            self.__Acceleration = self._InitializeVector(A)            
-            
-            libBase.__init__(self,A,B,D,StiffnessAssembly.GetMesh(),ID)        
-            
-            
-#            D = Assembling.GetVector() #initial stress vector
-            self.__LoadFactor = 0    
-            self.__LoadFactorIni = 0
-         
-            #NLSolve parameters
-            self.t0 = 0 ; self.tmax = 1
-            self.__TimeStep = TimeStep #initial time step
-            self.dt = TimeStep #current time step
-            self.__Err0 = None #initial error for NR error estimation
-            self.__ErrCriterion = 'Work' #Error criterion type   
+            # self.__Displacement = self._InitializeVector(A)
+            # self.__DisplacementStart = self._InitializeVector(A) #displacement at the previous time iteration
+            self.__Velocity = 0
+            self.__Acceleration = 0        
                         
-            self.__iter = 0
-            
-            
-        def __UpdateA(self): #internal function to be used when modifying M, K or C
+        def UpdateA(self, dt): #internal function to be used when modifying M, K or C
             if self.__DampingAssembly is 0:
-                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(self.dt**2))*self.__MassAssembly.GetMatrix())
+                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix())
             else:
                 if self.__RayleighDamping is not None:
                     #In this case, self.__RayleighDamping = [alpha, beta]
                     DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.GetMatrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.GetMatrix() 
                 else: DampMatrix = self.__DampingAssembly.GetMatrix()
 
-                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(self.dt**2))*self.__MassAssembly.GetMatrix() + self.__Gamma/(self.__Beta*self.dt)*DampMatrix)   
+                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
         
-        def __UpdateD(self): 
+        def UpdateD(self, dt, start=False):
+            #start = True if begining of a new time increment (ie  DispOld-DispStart = 0)
+            if start:
+                DeltaDisp = 0 #DeltaDisp = Disp-DispStart = 0 for the 1st increment              
+                if self.__Velocity is 0 and self.__Acceleration is 0: 
+                    self.SetD(0)
+                    return
+            else: 
+                # DeltaDisp = self._NonLinearStatic__TotalDisplacementOld - self._NonLinearStatic__TotalDisplacementStart
+                DeltaDisp = self._NonLinearStatic__DU
+            
             D = self.__MassAssembly.GetMatrix() * ( \
-                    (1/(self.__Beta*self.dt**2))*(self.__DisplacementIni - self.__DisplacementOld) +   \
-                    (1/(self.__Beta*self.dt))   *self.__Velocity +   \
+                    (1/(self.__Beta*dt**2))*DeltaDisp +   \
+                    (1/(self.__Beta*dt))   *self.__Velocity +   \
                     (0.5/self.__Beta - 1)               *self.__Acceleration) \
                     + self.__StiffnessAssembly.GetVector()
             if self.__DampingAssembly is not 0:
@@ -95,14 +68,45 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
                 else: DampMatrix = self.__DampingAssembly.GetMatrix()
                 
                 D += DampMatrix * ( \
-                    (self.__Gamma/(self.__Beta*self.dt))*self.__DisplacementIni +   \
+                    (self.__Gamma/(self.__Beta*dt))*DisplacementStart +   \
                     (self.__Gamma/self.__Beta - 1)                 *self.__Velocity +   \
-                    (0.5*self.dt * (self.__Gamma/self.__Beta - 2)) *self.__Acceleration) 
-
+                    (0.5*dt * (self.__Gamma/self.__Beta - 2)) *self.__Acceleration) 
+                
             self.SetD(D)       
-            
         
-        def Update(self, time=None, compute = 'all'):   
+        
+        def Initialize(self, initialTime):   
+            """
+            """
+            self.__MassAssembly.Initialize(self,initialTime)
+            self.__StiffnessAssembly.Initialize(self,initialTime)
+            if self.__DampingAssembly is not 0:
+                self.__DampingAssembly.Initialize(self,initialTime)       
+        
+        def NewTimeIncrement(self, dt):                       
+            self.__MassAssembly.NewTimeIncrement()
+            self.__StiffnessAssembly.NewTimeIncrement()
+            if self.__DampingAssembly is not 0:
+                self.__DampingAssembly.NewTimeIncrement()
+            
+            #update velocity and acceleration
+            NewAcceleration = (1/self.__Beta/(dt**2)) * (self._NonLinearStatic__DU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
+            self.__Velocity += dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
+            self.__Acceleration = NewAcceleration
+            
+            self._NonLinearStatic__Utot += self._NonLinearStatic__DU
+            self._NonLinearStatic__DU = 0
+
+            
+        def ResetTimeIncrement(self):     
+            self._NonLinearStatic__DU = 0
+            
+            self.__MassAssembly.ResetTimeIncrement()
+            self.__StiffnessAssembly.ResetTimeIncrement()
+            if self.__DampingAssembly is not 0:
+                self.__DampingAssembly.ResetTimeIncrement()                                
+        
+        def Update(self, dtime=None, compute = 'all', updateWeakForm = True):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -111,70 +115,97 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
                 - Change in constitutive law (internal variable)
             Update the problem with the new assembled global matrix and global vector
             """
-            self.__StiffnessAssembly.Update(self, time, compute)  
-            self.__UpdateA()
-            self.__UpdateD()
-            
-        def NewTimeIncrement(self,time): #modifier la gestion du temps pour les CL
-            LoadFactor = (time-self.t0)/(self.tmax-self.t0) #linear ramp
-            # LoadFactor = 1
+            if updateWeakForm == True:
+                self.__StiffnessAssembly.Update(self, dtime, compute)  
+            else: 
+                self.__StiffnessAssembly.ComputeGlobalMatrix(compute)
 
-           # def Update(self):
-           #old update function to integrate in NewTimeIncrement
-            
-            self.__DisplacementIni = self.__Displacement.copy()            
-            self.__DisplacementOld = self.__Displacement.copy()
-            self.__UpdateD()
+        def Reset(self):
+            self.__MassAssembly.Reset()
+            self.__StiffnessAssembly.Reset()
+            if self.__DampingAssembly is not 0:
+                self.__DampingAssembly.Reset()            
+            self.SetA(0) #tangent stiffness 
+            self.SetD(0)                 
+            # self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
+            # self.SetD(self.__Assembly.GetVector())            
 
-            self.ApplyBoundaryCondition()
-            try:
-                self._Problem__Xbc[self._Problem__DofBlocked] *= (LoadFactor-self.__LoadFactor)
-                self._Problem__B *= LoadFactor
-            except:
-                self._ProblemPGD__Xbc = self._ProblemPGD__Xbc*(LoadFactor-self.__LoadFactor)
-                self._ProblemPGD__B *= LoadFactor             
+            B = 0
+            self._NonLinearStatic__Utot = 0
+            self._NonLinearStatic__DU = 0
+            self.__Velocity = 0
+            self.__Acceleration = 0                    
             
-            self.__LoadFactorIni = self.__LoadFactor
-            self.__LoadFactor = LoadFactor
-
-            self.__StiffnessAssembly.NewTimeIncrement()            
             
-            #udpate the problem
-            self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
-            self.__UpdateA()
-
-            self.Solve()
-                        
-            #update total displacement            
-            # self.__DisplacementOld = self.__Displacement
-            self.__Displacement += self.GetX()   
-            self.__Err0 = None             
-            
-        def EndTimeIncrement(self): 
-            
-            NewAcceleration = (1/self.__Beta/(self.dt**2)) * (self.__Displacement - self.__DisplacementIni - self.dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
-            self.__Velocity += self.dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
-            self.__Acceleration = NewAcceleration
+            self.__Err0 = None #initial error for NR error estimation   
+            self.t0 = 0 ; self.tmax = 1
+            self.__iter = 0  
+            self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
-        def ResetTimeIncrement(self, update = True):                              
-            self.__Displacement = self.__DisplacementIni
-            self.__LoadFactor = self.__LoadFactorIni
-            self.__StiffnessAssembly.ResetTimeIncrement()
-            if update: self.Update()
-      
-        def NewtonRaphsonIncr(self):          
-            try:
-                self._Problem__Xbc[self._Problem__DofBlocked] *= 0 
-            except:
-                self._ProblemPGD__Xbc = 0
-                    
-            #update total displacement
-            self.Solve()
-            self.__DisplacementOld = self.__Displacement
-            self.__Displacement += self.GetX()   
+    
+            
+            
+            
+        # def NewTimeIncrement(self,time): #modifier la gestion du temps pour les CL
+        #     LoadFactor = (time-self.t0)/(self.tmax-self.t0) #linear ramp
+        #     # LoadFactor = 1
 
-        def GetDisp(self,name='all'):
-            return self._GetVectorComponent(self.__Displacement, name)
+        #    # def Update(self):
+        #    #old update function to integrate in NewTimeIncrement
+            
+        #     self.__DisplacementStart = self.__Displacement.copy()            
+        #     self.__DisplacementOld = self.__Displacement.copy()
+        #     self.__UpdateD()
+
+        #     self.ApplyBoundaryCondition()
+        #     try:
+        #         self._Problem__Xbc[self._Problem__DofBlocked] *= (LoadFactor-self.__LoadFactor)
+        #         self._Problem__B *= LoadFactor
+        #     except:
+        #         self._ProblemPGD__Xbc = self._ProblemPGD__Xbc*(LoadFactor-self.__LoadFactor)
+        #         self._ProblemPGD__B *= LoadFactor             
+            
+        #     self.__LoadFactorIni = self.__LoadFactor
+        #     self.__LoadFactor = LoadFactor
+
+        #     self.__StiffnessAssembly.NewTimeIncrement()            
+            
+        #     #udpate the problem
+        #     self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
+        #     self.__UpdateA()
+
+        #     self.Solve()
+                        
+        #     #update total displacement            
+        #     # self.__DisplacementOld = self.__Displacement
+        #     self.__Displacement += self.GetX()   
+        #     self.__Err0 = None             
+            
+        # def EndTimeIncrement(self): 
+            
+        #     NewAcceleration = (1/self.__Beta/(self.dt**2)) * (self.__Displacement - self.__DisplacementStart - self.dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
+        #     self.__Velocity += self.dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
+        #     self.__Acceleration = NewAcceleration
+        
+        # def ResetTimeIncrement(self, update = True):                              
+        #     self.__Displacement = self.__DisplacementStart
+        #     self.__LoadFactor = self.__LoadFactorIni
+        #     self.__StiffnessAssembly.ResetTimeIncrement()
+        #     if update: self.Update()
+      
+        # def NewtonRaphsonIncr(self):          
+        #     try:
+        #         self._Problem__Xbc[self._Problem__DofBlocked] *= 0 
+        #     except:
+        #         self._ProblemPGD__Xbc = 0
+                    
+        #     #update total displacement
+        #     self.Solve()
+        #     self.__DisplacementOld = self.__Displacement
+        #     self.__Displacement += self.GetX()   
+
+        # def GetDisp(self,name='all'):
+        #     # return self._GetVectorComponent(self.__Displacement, name)
                
         def GetVelocity(self):
             return self.__Velocity
@@ -217,113 +248,35 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
             """
             
             self.__RayleighDamping = [alpha, beta]
-            self.__DampingAssembly = 'Rayleigh'
-            self.__UpdateA()
+            self.__DampingAssembly = 'Rayleigh'    
+
+#         def SolveTimeIncrement(self,time, max_subiter = 5, ToleranceNR = 5e-3):            
+            
+#             self.NewTimeIncrement(time)
+        
+#             for subiter in range(max_subiter): #newton-raphson iterations                
+#                 #update Stress and initial displacement and Update stiffness matrix
+#                 self.Update(time, compute = 'vector')   
+# #                TotalStrain, TotalPKStress = self.Update()   
+                        
+#                 #Check convergence     
+#                 normRes = self.NewtonRaphsonError()       
+
+#                 if normRes < ToleranceNR:                                                  
+#                     return 1, subiter, normRes
+                
+#                 #--------------- Solve --------------------------------------------------------        
+#                 self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
+#                 # self.SetA(self.__StiffnessAssembly.GetMatrix())
+#                 self.__UpdateA()
+#                 self.NewtonRaphsonIncr()
+            
+#             return 0, subiter, normRes
+
+
+
     
 
-        def SolveTimeIncrement(self,time, max_subiter = 5, ToleranceNR = 5e-3):            
-            
-            self.NewTimeIncrement(time)
-        
-            for subiter in range(max_subiter): #newton-raphson iterations                
-                #update Stress and initial displacement and Update stiffness matrix
-                self.Update(time, compute = 'vector')   
-#                TotalStrain, TotalPKStress = self.Update()   
-                        
-                #Check convergence     
-                normRes = self.NewtonRaphsonError()       
-
-                if normRes < ToleranceNR:                                                  
-                    return 1, subiter, normRes
-                
-                #--------------- Solve --------------------------------------------------------        
-                self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
-                # self.SetA(self.__StiffnessAssembly.GetMatrix())
-                self.__UpdateA()
-                self.NewtonRaphsonIncr()
-            
-            return 0, subiter, normRes
-
-
-
-        def NewtonRaphsonError(self):
-            """
-            Compute the error of the Newton-Raphson algorithm
-            For Force and Work error criterion, the problem must be updated
-            (Update method).
-            """
-            DofFree = self._Problem__DofFree
-            if self.__Err0 is None:
-                if self.__ErrCriterion == 'Displacement': 
-                    self.__Err0 = np.max(np.abs(self.GetDisp())) #Displacement criterion
-                elif self.__ErrCriterion == 'Force': 
-                    self.__Err0 = np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree])) #Force criterion
-                else: #self.__ErrCriterion == 'Work':
-                    self.__Err0 = np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree])) #work criterion
-                return 1                
-            else: 
-                if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.GetX()))/self.__Err0  #Displacement criterion
-                elif self.__ErrCriterion == 'Force':                     
-                    return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 #Force criterion
-                else: #self.__ErrCriterion == 'Work':
-                    return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 #work criterion
-
-       
-        def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion):
-            if ErrorCriterion in ['Displacement', 'Force','Work']:
-                self.__ErrCriterion = ErrorCriterion            
-            else: 
-                raise NameError('ErrCriterion must be set to "Displacement", "Force" or "Work"')
-
-
-
-
-
-        def NLSolve(self, **kargs):              
-            #parameters
-            max_subiter = kargs.get('max_subiter',6)
-            ToleranceNR = kargs.get('ToleranceNR',5e-3)
-            self.t0 = kargs.get('t0',self.t0)
-            self.tmax = kargs.get('tmax',self.tmax)
-            self.dt = kargs.get('dt',self.__TimeStep)
-
-            update_dt = kargs.get('update_dt',True)
-            output = kargs.get('output', None)
-            
-            err_num= 2e-16 #numerical error
-            time = self.t0    
-
-            while time < self.tmax - err_num:
-                time = time+self.dt
-                if time > self.tmax - err_num: 
-                    self.dt = self.tmax - (time-self.dt)
-                    time = self.tmax          
-                    
-                  
-                convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, max_subiter, ToleranceNR)
-
-                if not(convergence):
-                    if update_dt:
-                        time = time - self.dt
-                        self.dt *= 0.25
-                        print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, self.dt))
-                        self.ResetTimeIncrement()   
-                        #update Stress, initial displacement and assemble global matrix
-                        self.Update(time)                                 
-                        continue                    
-                    else: 
-                        raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
-                
-                self.EndTimeIncrement()
-                print('Iter {} - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, nbNRiter, normRes))
-                if output is not None: output(self, self.__iter, time, nbNRiter, normRes)                  
-
-                self.__iter += 1   
-
-                if update_dt and nbNRiter < 2: 
-                    self.dt *= 1.25
-                    print('Increase the time increment to {:.5f}'.format(dt))               
                                                          
                     
                     
@@ -384,9 +337,27 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep=0.1
         #     self.__StiffMatrix = StiffnessAssembling.GetMatrix()
         #     self.__UpdateA()
     
-    return __Newmark(StiffnessAssembly, MassAssembly , Beta, Gamma, TimeStep, DampingAssembly, ID)
+    return __Newmark
 
+def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly = 0, ID = "MainProblem"):
+    """
+    Define a Newmark problem
+    The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
+    """
+        
+    if isinstance(StiffnessAssembly,str):
+        StiffnessAssembly = Assembly.GetAll()[StiffnessAssembly]
+                
+    if isinstance(MassAssembly,str):
+        MassAssembly = Assembly.GetAll()[MassAssembly]
+        
+    if isinstance(DampingAssembly,str):
+        DampingAssembly = Assembly.GetAll()[DampingAssembly]
 
+    if hasattr(StiffnessAssembly.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
+    else: libBase = Problem
 
+    __Newmark = _GenerateClass_NonLinearNewmark(libBase)
+    return __Newmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, ID)
 
 

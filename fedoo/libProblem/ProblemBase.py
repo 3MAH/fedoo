@@ -2,6 +2,11 @@
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 import numpy as np
+try: 
+    from pypardiso import spsolve
+    USE_PYPARADISO = True
+except: 
+    USE_PYPARADISO = False
 
 class ProblemBase:
 
@@ -31,9 +36,11 @@ class ProblemBase:
         
     def __Solve(self, A, B):
         if self.__solver[0] == 'direct':
-            return sparse.linalg.spsolve(A,B)
+            if USE_PYPARADISO == True:
+                return spsolve(A,B)
+            else:
+                return sparse.linalg.spsolve(A,B)            
         elif self.__solver[0] == 'cg':
-#            print(np.where(A.diagonal()==0))
             if self.__solver[2] == True: Mprecond = sparse.diags(1/A.diagonal(), 0)
             else: Mprecond = None
             res, info = sparse.linalg.cg(A,B, tol=self.__solver[1], M=Mprecond) 
