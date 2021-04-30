@@ -7,6 +7,7 @@ from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 from fedoo.libProblem.ProblemBase import ProblemBase
 from fedoo.libUtil.Variable  import *
 from fedoo.libAssembly.Assembly  import *
+from fedoo.libUtil.ExportData import _ProblemOutput
 
 import time 
 
@@ -36,6 +37,9 @@ class Problem(ProblemBase):
         self.__DofBlocked = np.array([])
         self.__DofFree    = np.array([])
         
+        #prepering output demand to export results
+        self.__ProblemOutput = _ProblemOutput()
+
         ProblemBase.__init__(self, ID)
         
 
@@ -52,17 +56,31 @@ class Problem(ProblemBase):
             n = self.GetMesh().GetNumberOfNodes()
             vector[i*n : (i+1)*n] = value      
 
-    def _GetVectorComponent(self, vector, name): #initialize a vector (force vector for instance) being giving the stiffness matrix
+    def _GetVectorComponent(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
         assert isinstance(name,str), 'argument error'
         
-        if name.lower() == 'all': 
+        if name.lower() == 'all':                             
             return vector
 
-        i = Variable.GetRank(name)
-
         n = self.__Mesh.GetNumberOfNodes()
+        
+        if name in Variable.ListVector():
+            vec = Variable.GetVector(name)
+            i = vec[0] #rank of the 1rst variable of the vector
+            dim = len(vec)
+            return vector.reshape(-1,n)[i:i+dim]
+            # return vector[i*n : (i+dim)*n].reshape(-1,n) 
+        else:             
+            #vector component are assumed defined as an increment sequence (i, i+1, i+2)
+            i = Variable.GetRank(name)
+        
+            return vector[i*n : (i+1)*n]   
 
-        return vector[i*n : (i+1)*n]   
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+        self.__ProblemOutput.AddOutput(filename, assemblyID, output_list, output_type, file_format)            
+
+    def SaveResults(self, iterOutput=None):
+        self.__ProblemOutput.SaveResults(self, iterOutput)                                
 
     def SetA(self,A):
         self.__A = A     

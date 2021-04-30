@@ -67,8 +67,6 @@ def Static(Assembling, ID = "MainProblem"):
             self.SetD(Assembling.GetVector())
             return outValues 
 
-
-
         def ChangeAssembly(self,Assembling, update = True):
             """
             Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)
@@ -77,9 +75,14 @@ def Static(Assembling, ID = "MainProblem"):
                 Assembling = Assembly.GetAll()[Assembling]
                 
             self.__Assembly = Assembling
-            if update: self.Update()
+            if update: self.Update()        
         
-        def GetDisp(self, name = 'all'):
+        def GetDisp(self,name='all'):    
+            if name == 'all': name = 'Disp'
+            return self.GetDoFSolution(name)
+        
+        def GetRot(self,name='all'):    
+            if name == 'all': name = 'Rot'
             return self.GetDoFSolution(name)
         
     return __Static(Assembling, ID)

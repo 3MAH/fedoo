@@ -160,7 +160,8 @@ class element1D(element):
             
             return sp.array([[listX[k],listY[k],listZ[k]] for k in range(len(listX))])
         else: #espace 2D
-            listY = [sp.array([-X[:,1],X[:,0]]) for X in listX]
+            # listY = [sp.array([-X[:,1],X[:,0]]) for X in listX]  
+            listY = [sp.c_[-X[:,1],X[:,0]] for X in listX]  
             return sp.array([[listX[k],listY[k]] for k in range(len(listX))])  #shape = (len(listX), dim:listvec, Nel, dim:coordinates)                         
             
     def GetLocalFrame(self,vec_x, vec_xi, localFrame=None): #linear local frame

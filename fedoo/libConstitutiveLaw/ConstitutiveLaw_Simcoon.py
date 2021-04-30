@@ -144,19 +144,7 @@ try:
             self.Run(0.) #Launch the UMAT to compute the elastic matrix    
     
         def Update(self,assembly, pb, dtime, nlgeom=True):            
-            # displacement = pb.GetCurrentDisp()
-            displacement = pb.GetDisp()
-            
-            
-            
-            # GradDispOld = self.__currentGradDisp
-            # print(self.__currentGradDisp.shape)        
-            # print(self.__currentGradDisp.strides)
-            
-            # #if self.__F0 doesn't exit, we create it
-            # if self.__F0 is None: #initialize F0 to previous value of currentGradDisp
-            #     if self.__currentGradDisp is 0: self.__F0 = np.eye(3).T.reshape(1,3,3) #column order for compatibility with armadillo
-            #     else: self.__F0 = np.add( np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)
+            displacement = pb.GetDoFSolution()
                 
             #tranpose for comatibility with simcoon
             if displacement is 0: 

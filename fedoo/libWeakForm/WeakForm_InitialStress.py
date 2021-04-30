@@ -15,7 +15,11 @@ class InitialStress(WeakForm):
         
         Variable("DispX") 
         Variable("DispY")                
-        if ProblemDimension.Get() == "3D": Variable("DispZ")
+        if ProblemDimension.Get() == "3D": 
+            Variable("DispZ")
+            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        else: #2D assumed
+            Variable.SetVector('Disp' , ('DispX', 'DispY'))
         
         if ProblemDimension.Get() == "3D":        
             GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]

@@ -27,7 +27,8 @@ class Beam(WeakForm):
             Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ') , 'global')            
         elif ProblemDimension.Get() == '2Dplane':
             Variable("RotZ")
-            Variable.SetVector('Disp' , ('DispX', 'DispY') )            
+            Variable.SetVector('Disp' , ['DispX', 'DispY'], 'global' )            
+            Variable.SetVector('Rot' , ['RotZ'] ) 
         elif ProblemDimension.Get() == '2Dstress':
             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                           

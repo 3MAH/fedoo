@@ -95,6 +95,9 @@ class ProblemBase:
     def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
         raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
         
+    def SaveResults(self, iterOutput=None):        
+        raise NameError("The method 'SaveResults' is not defined for this kind of problem")
+    
     #defined in the ProblemPGD classes
     def GetX(self): raise NameError("Method only defined for PGD Problems") 
     def GetXbc(self): raise NameError("Method only defined for PGD Problems") 
@@ -127,6 +130,9 @@ def GetElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetElasticEne
 def GetNodalElasticEnergy(): return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
 def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
     return ProblemBase.GetAll()['MainProblem'].AddOutput(filename, assemblyID, output_list, output_type, file_format)
+def SaveResults(iterOutput=None):        
+    return ProblemBase.GetAll()['MainProblem'].SaveResults(iterOutput)
+
 
 #functions that should be define in the Problem and in the ProblemPGD classes
 def SetA(A): ProblemBase.GetAll()["MainProblem"].SetA(A)

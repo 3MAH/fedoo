@@ -15,6 +15,11 @@ class WeakForm:
 
     def GetNumberOfVariables(self):
         return self.GetDifferentialOperator().nvar()
+
+    def GetConstitutiveLaw(self):
+        #no constitutive law by default
+        pass
+    
     
     def Initialize(self, assembly, pb, initialTime=0.):
         #function called at the begining of the resolution

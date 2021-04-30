@@ -553,7 +553,7 @@ class Assembly(AssemblyBase):
             if isinstance(objElement, dict):            
                 Assembly.__associatedVariables[elementType] = {Variable.GetRank(key): 
                                        [[Variable.GetRank(v) for v in val[1][1::2]],
-                                        val[1][0::2]] for key,val in objElement.items() if len(val)>1}
+                                        val[1][0::2]] for key,val in objElement.items() if len(val)>1 and key in Variable.List()} 
                     # val[1][0::2]] for key,val in objElement.items() if key in Variable.List() and len(val)>1}
             else: Assembly.__associatedVariables[elementType] = {}
         return Assembly.__associatedVariables[elementType] 
@@ -610,16 +610,29 @@ class Assembly(AssemblyBase):
                     dataMCB = np.empty((len(listGlobalVector)*Nel, nNd_elm, dim,dim))
                     LocalFrameEl = elmRefGeom.GetLocalFrame(crd[elm], xi_nd, localFrame) #array of shape (Nel, nb_nd, nb of vectors in basis = dim, dim)
                     for ivec, vec in enumerate(listGlobalVector):
-                        dataMCB[ivec*Nel:(ivec+1)*Nel] = LocalFrameEl                    
+                        # dataMCB[ivec*Nel:(ivec+1)*Nel] = LocalFrameEl[:,:,:dim,:dim]                  
+                        dataMCB[ivec*Nel:(ivec+1)*Nel] = LocalFrameEl                  
                         rowMCB[ivec*Nel:(ivec+1)*Nel] = np.arange(Nel).reshape(-1,1,1,1) + range_nNd_elm.reshape(1,-1,1,1)*Nel + np.array(vec).reshape(1,1,-1,1)*(Nel*nNd_elm)
                         colMCB[ivec*Nel:(ivec+1)*Nel] = elm.reshape(Nel,nNd_elm,1,1) + np.array(vec).reshape(1,1,1,-1)*Nnd        
     
-            if computeMatrixChangeOfBasis:
-                MatrixChangeOfBasis = sparse.coo_matrix((sp.reshape(dataMCB,-1),(sp.reshape(rowMCB,-1),sp.reshape(colMCB,-1))), shape=(Nel*nNd_elm*Nvar, Nnd*Nvar))
-                for var in listLocalVariable:  
-                    MatrixChangeOfBasis = MatrixChangeOfBasis.tolil()
-                    MatrixChangeOfBasis[ range(var*Nel*nNd_elm , (var+1)*Nel*nNd_elm)  ,  range(var*Nel*nNd_elm , (var+1)*Nel*nNd_elm) ] = 1                    
-                MatrixChangeOfBasis = MatrixChangeOfBasis.tocsr()
+                    if len(listLocalVariable) > 0:
+                        #add the component from local variables (ie variable not requiring a change of basis)
+                        dataMCB = sp.hstack( (dataMCB.reshape(-1), sp.ones(len(listLocalVariable)*Nel*nNd_elm) )) #no change of variable so only one value adding in dataMCB
+
+                        rowMCB_loc = np.empty((len(listLocalVariable)*Nel, nNd_elm))
+                        colMCB_loc = np.empty((len(listLocalVariable)*Nel, nNd_elm))
+                        for ivar, var in enumerate(listLocalVariable):
+                            rowMCB_loc[ivar*Nel:(ivar+1)*Nel] = np.arange(Nel).reshape(-1,1) + range_nNd_elm.reshape(1,-1)*Nel + var*(Nel*nNd_elm)
+                            colMCB_loc[ivar*Nel:(ivar+1)*Nel] = elm + var*Nnd        
+                        
+                        rowMCB = sp.hstack( (rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
+                        colMCB = sp.hstack( (colMCB.reshape(-1), colMCB_loc.reshape(-1)))
+                        
+                        MatrixChangeOfBasis = sparse.coo_matrix((dataMCB,(rowMCB,colMCB)), shape=(Nel*nNd_elm*Nvar, Nnd*Nvar))                   
+                    else:
+                        MatrixChangeOfBasis = sparse.coo_matrix((dataMCB.reshape(-1),(rowMCB.reshape(-1),colMCB.reshape(-1))), shape=(Nel*nNd_elm*Nvar, Nnd*Nvar))
+                    
+                    MatrixChangeOfBasis = MatrixChangeOfBasis.tocsr()                     
             
             Assembly.__saveMatrixChangeOfBasis[mesh.GetID()] = MatrixChangeOfBasis   
             return MatrixChangeOfBasis

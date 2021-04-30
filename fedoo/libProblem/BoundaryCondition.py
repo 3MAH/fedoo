@@ -76,7 +76,7 @@ class BoundaryCondition :
             if self.__BoundaryType == 'Neumann': #for Neumann, the true value of force is applied 
                 return Factor * (self.__Value - self.__initialValue) + self.__initialValue
             else: #return the incremental value
-                return Factor * (self.__Value - self.__initialValue)                               
+                return Factor * (self.__Value - self.__initialValue)                                   
 
     def __ApplyTo(self, X, Nnodes, timeFactor=1, timeFactorOld = None): 
         """
@@ -165,7 +165,7 @@ class BoundaryCondition :
             data = M.data
             row = M.row
             col = M.col
-            BoundaryCondition.M = M #test : used to compute the reaction - to delete later
+            # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
 
             #modification col numbering from DofL to np.arange(len(DofL))
             changeInd = np.full(DoF*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
@@ -297,7 +297,7 @@ class BoundaryCondition :
     def Remove(self, ProblemID = "MainProblem"):
         BoundaryCondition.__lbc[ProblemID].remove(self)
         del self
-
+        
     @staticmethod
     def RemoveAll(ProblemID = "MainProblem"):
         del BoundaryCondition.__lbc[ProblemID]

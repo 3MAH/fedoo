@@ -73,7 +73,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
         pass
     
     def Update(self,assembly, pb, time, nlgeom):
-        displacement = pb.GetDisp()
+        displacement = pb.GetDoFSolution()
         
         if displacement is 0: 
             self.__currentGradDisp = 0

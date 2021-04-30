@@ -14,7 +14,10 @@ class Inertia(WeakForm):
 
         Variable("DispX") 
         Variable("DispY")                
-        if ProblemDimension.Get() == "3D": Variable("DispZ")        
+        if ProblemDimension.Get() == "3D": 
+            Variable("DispZ")  
+            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        else: Variable.SetVector('Disp' , ('DispX', 'DispY'))
         
         self.__Density = Density        
 

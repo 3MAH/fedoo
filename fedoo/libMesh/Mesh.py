@@ -157,6 +157,20 @@ class Mesh(MeshBase):
         Mesh3.__SetOfNodes = new_ndSets
         Mesh3.__SetOfElements = new_elSets
         return Mesh3
+
+    def FindCoincidentNodes(self,tol=1e-8):
+        """ 
+        Merge some nodes 
+        The total number and the id of nodes are modified
+        """
+        Nnd = self.GetNumberOfNodes()
+        decimal_round = int(-np.log10(tol)-1)
+        crd = self.__NodeCoordinates.round(decimal_round) #round coordinates to match tolerance
+        ind_sorted   = np.lexsort((crd[:  ,2], crd[:  ,1], crd[:  ,0]))
+
+        ind_coincident = np.where(np.linalg.norm(crd[ind_sorted[:-1]]-crd[ind_sorted[1:]], axis = 1) == 0)[0] #indices of the first coincident nodes
+        return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident+1]]).T
+ 
     
     def MergeNodes(self,IndexCouples):
         """ 
@@ -165,11 +179,19 @@ class Mesh(MeshBase):
         """
         Nnd = self.GetNumberOfNodes()
         nds_del = IndexCouples[:,1] #list des noeuds a supprimer
-        ordre = np.argsort(nds_del)
+        nds_kept = IndexCouples[:,0] #list des noeuds a conserver
+         
+        unique_nodes, ordre = np.unique(nds_del, return_index=True)
+        assert len(unique_nodes) == len(nds_del), "A node can't be deleted 2 times"
+        # ordre = np.argsort(nds_del)
         j=0 
         new_num = np.zeros(Nnd,dtype = 'int')
-        for nd in range(Nnd):            
-            if j<len(nds_del) and nd==nds_del[ordre[j]]: j+=1                
+        for nd in range(Nnd):    
+            if j<len(nds_del) and nd==nds_del[ordre[j]]: 
+                #test if some nodes are equal to deleted node among the kept nodes. If required update the kept nodes values
+                indDelNodes = np.where(nds_kept == nds_del[ordre[j]])[0] #index of nodes to kept that are deleted and need to be updated to their new values
+                nds_kept[indDelNodes] = nds_kept[ordre[j]]
+                j+=1
             else: new_num[nd] = nd-j           
         new_num[nds_del] = new_num[IndexCouples[:,0]]        
         list_nd_new = [nd for nd in range(Nnd) if not(nd in nds_del)]                                     
@@ -207,7 +229,16 @@ class Mesh(MeshBase):
             
         return new_num
     
-        
+    def RemoveNonUsedNodes(self):  
+        """ 
+        Test if some nodes are not associated with any element.
+        If it is the case, remove the non used nodes.
+        Return the number of removed nodes. 
+        The total number and the id of nodes are modified
+        """
+        index_non_used_nodes = np.setdiff1d(np.arange(self.GetNumberOfNodes()), np.unique(self.__ElementTable.flatten()))
+        self.RemoveNodes(index_non_used_nodes)
+        return len(index_non_used_nodes)
         
     def Translate(self,Vector):
         """

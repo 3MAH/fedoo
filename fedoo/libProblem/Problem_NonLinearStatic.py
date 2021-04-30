@@ -2,7 +2,6 @@
 from fedoo.libAssembly.Assembly import Assembly
 from fedoo.libProblem.Problem   import *
 from fedoo.libProblem.ProblemPGD   import ProblemPGD
-from fedoo.libUtil.ExportData import _ProblemOutput
 
 #dynamical inheritance. The class is generated inside a function
 def _GenerateClass_NonLinearStatic(libBase):
@@ -27,19 +26,21 @@ def _GenerateClass_NonLinearStatic(libBase):
 
             self.__saveOutputAtExactTime = True
             self.err_num= 1e-8 #numerical error
-            
-            self.__ProblemOutput = _ProblemOutput()
         
-        def GetDisp(self,name='all'):    
+        #Return the displacement components
+        def GetDisp(self,name='Disp'):    
             if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
-            return self._GetVectorComponent(self.__Utot + self.__DU, name)
+            return self._GetVectorComponent(self.__Utot + self.__DU, name)    
         
-        def GetCurrentDisp(self,name='all'):            
-            return self._GetVectorComponent(self.__Utot + self.__DU , name)
+        #Return the rotation components
+        def GetRot(self,name='Rot'):    
+            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
+            return self._GetVectorComponent(self.__Utot + self.__DU, name)    
         
-        #same as GetDisp but in future for thermomechanical problem, GetDisp will only return the displacement part
+        #Return all the dof for every variable under a vector form
         def GetDoFSolution(self,name='all'):
-            return self._GetVectorComponent(self.__Utot, name)
+            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
+            return self._GetVectorComponent(self.__Utot + self.__DU, name)        
         
         def GetExternalForce(self, name = 'all'):
             return self._GetVectorComponent(-self.GetD(), name)        
@@ -275,7 +276,8 @@ def _GenerateClass_NonLinearStatic(libBase):
                     #Output results
                     if outputFile is not None: outputFile(self, self.__iter, time, nbNRiter, normRes)                       
                     if (time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%self.intervalOutput == 0):
-                        self.__ProblemOutput.SaveResults(self, self.__compteurOutput)                                
+                        # self.__ProblemOutput.SaveResults(self, self.__compteurOutput)  
+                        self.SaveResults(self.__compteurOutput)                              
                         self.__compteurOutput += 1     
                     
                     self.__iter += 1                    
@@ -299,12 +301,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                         continue                    
                     else: 
                         raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
-                    
-                                                                    
-
-        def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
-            self.__ProblemOutput.AddOutput(filename, assemblyID, output_list, output_type, file_format)            
-
+                                                                                        
     return __NonLinearStatic
 
 def NonLinearStatic(Assembling, ID = "MainProblem"):
