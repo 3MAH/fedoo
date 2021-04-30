@@ -6,16 +6,16 @@ import time
 
 Util.ProblemDimension("3D")
 
-# DataINP = Util.ReadINP('Job-1.inp')
+DataINP = Util.ReadINP('Job-1.inp')
 
-# INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh -> dont work quite well
-# INP.toMesh(meshID = "Domain")
+INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh -> dont work quite well
+INP.toMesh(meshID = "Domain")
 
-# data = Util.ExportData(Mesh.GetAll()['cell_taffetas'])
+# data = Util.ExportData(Mesh.GetAll()['Domain'])
 # data.toVTK()
 
 #alternative mesh below (uncomment the line)
-Mesh.BoxMesh(Nx=11, Ny=11, Nz=11, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
+# Mesh.BoxMesh(Nx=11, Ny=11, Nz=11, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
     
 type_el = Mesh.GetAll()['Domain'].GetElementShape()
 
@@ -32,7 +32,7 @@ center = [np.linalg.norm(crd,axis=1).argmin()]
 StrainNodes = Mesh.GetAll()[meshID].AddNodes(np.zeros(crd.shape[1]),2) #add virtual nodes for macro strain
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
+material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
 #Assembly
@@ -79,7 +79,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "GaussPoint")       
+TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
 TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
@@ -104,7 +104,7 @@ print(MeanStress)
 #------------------------------------------------------------------------------
 #Optional: Compute and write data in a vtk file (for visualization with paraview for instance)
 #------------------------------------------------------------------------------
-output_VTK = 0
+output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
     TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
@@ -131,8 +131,8 @@ if output_VTK == 1:
     # U = np.c_[U,np.zeros(N)]
     
     
-    SetId = None
-    # SetId = 'all_fibers' #to extract only mesh and data related to fibers    
+    # SetId = None
+    SetId = 'all_fibers' #to extract only mesh and data related to fibers    
     if SetId is None:
         OUT = Util.ExportData(meshID)
         ElSet = slice(None) #we keep all elements
