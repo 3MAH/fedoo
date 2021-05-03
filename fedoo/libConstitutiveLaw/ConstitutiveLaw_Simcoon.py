@@ -19,7 +19,7 @@ try:
         
             
             self.__InitialStatev = statev #statev may be an int or an array        
-            self.__useElasticModulus = True
+            # self.__useElasticModulus = True ??
             
             self.__currentGradDisp = self.__initialGradDisp = 0        
     

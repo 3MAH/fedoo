@@ -4,9 +4,9 @@ import scipy.sparse as sparse
 import numpy as np
 try: 
     from pypardiso import spsolve
-    USE_PYPARADISO = True
+    USE_PYPARDISO = True
 except: 
-    USE_PYPARADISO = False
+    USE_PYPARDISO = False
 
 class ProblemBase:
 
@@ -36,7 +36,7 @@ class ProblemBase:
         
     def __Solve(self, A, B):
         if self.__solver[0] == 'direct':
-            if USE_PYPARADISO == True:
+            if USE_PYPARDISO == True:
                 return spsolve(A,B)
             else:
                 return sparse.linalg.spsolve(A,B)            
