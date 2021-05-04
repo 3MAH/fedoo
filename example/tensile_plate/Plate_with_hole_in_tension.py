@@ -46,39 +46,51 @@ Problem.Solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
+method_output = 1
 
-#Get the stress tensor (nodal values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+if method_output == 1: 
+    #Method 1: use the automatic result output
+    
+    Problem.AddOutput('rplate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
+    Problem.AddOutput('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
+    Problem.Update() #compute strain and stress
+    Problem.SaveResults()
 
-#Get the stress tensor (element values)
-TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
-TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
+else:
 
-# Get the principal directions (vectors on nodes)
-PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
-
-#Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDoFSolution('all'),(2,-1)).T
-N = Mesh.GetAll()[meshID].GetNumberOfNodes()
-U = np.c_[U,np.zeros(N)]
-
-#Write the vtk file                            
-OUT = Util.ExportData(meshID)
-
-OUT.addNodeData(U,'Displacement')
-OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
-OUT.addElmData(TensorStressEl.vtkFormat(),'Stress')
-OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
-OUT.addElmData(TensorStrainEl.vtkFormat(),'Strain')
-OUT.addNodeData(TensorStress.vonMises(),'VMStress')
-OUT.addElmData(TensorStressEl.vonMises(),'VMStress')
-OUT.addNodeData(PrincipalStress,'PrincipalStress')
-OUT.addNodeData(PrincipalDirection[0],'DirPrincipal1')
-OUT.addNodeData(PrincipalDirection[1],'DirPrincipal2')
-
-OUT.toVTK("plate_with_hole_in_tension.vtk")
-print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
-
-print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
+    #Method 2: write the vtk output file by hand
+    #Get the stress tensor (nodal values)
+    TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal")       
+    TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+    
+    #Get the stress tensor (element values)
+    TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Element")       
+    TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
+    
+    # Get the principal directions (vectors on nodes)
+    PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
+    
+    #Get the displacement vector on nodes for export to vtk
+    U = np.reshape(Problem.GetDoFSolution('all'),(2,-1)).T
+    N = Mesh.GetAll()[meshID].GetNumberOfNodes()
+    U = np.c_[U,np.zeros(N)]
+    
+    #Write the vtk file                            
+    OUT = Util.ExportData(meshID)
+    
+    OUT.addNodeData(U,'Displacement')
+    OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
+    OUT.addElmData(TensorStressEl.vtkFormat(),'Stress')
+    OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
+    OUT.addElmData(TensorStrainEl.vtkFormat(),'Strain')
+    OUT.addNodeData(TensorStress.vonMises(),'VMStress')
+    OUT.addElmData(TensorStressEl.vonMises(),'VMStress')
+    OUT.addNodeData(PrincipalStress,'PrincipalStress')
+    OUT.addNodeData(PrincipalDirection[0],'DirPrincipal1')
+    OUT.addNodeData(PrincipalDirection[1],'DirPrincipal2')
+    
+    OUT.toVTK("plate_with_hole_in_tension.vtk")
+    print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
+    
+    print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
 

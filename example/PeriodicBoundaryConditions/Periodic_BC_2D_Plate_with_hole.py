@@ -102,7 +102,7 @@ Util.fieldPlot2d("Domain", "ElasticLaw", disp = Problem.GetDoFSolution(), dataID
 print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispY')[-2]])
 #Compute the mean stress 
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "GaussPoint")       
+TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
 TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
 
 # Surf = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #surface of domain without the void (hole)

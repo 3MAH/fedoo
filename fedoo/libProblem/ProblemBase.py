@@ -55,6 +55,9 @@ class ProblemBase:
     ### Functions that may be defined depending on the type of problem
     def GetDisp(self,name='all'):
          raise NameError("The method 'GetDisp' is not defined for this kind of problem")
+
+    def GetRot(self,name='all'):
+         raise NameError("The method 'GetRot' is not defined for this kind of problem")
     
     def Update(self,):
         raise NameError("The method 'Update' is not defined for this kind of problem")    
@@ -116,6 +119,7 @@ def SetSolver(solver, tol=1e-5, precond=True):
 
 ### Functions that may be defined depending on the type of problem
 def GetDisp(name='all'): return ProblemBase.GetAll()['MainProblem'].GetDisp(name)
+def GetRot(name='all'): return ProblemBase.GetAll()['MainProblem'].GetRot(name)
 def Update(): return ProblemBase.GetAll()['MainProblem'].Update() 
 def ChangeAssembly(Assembling): ProblemBase.GetAll()['MainProblem'].ChangeAssembly(Assembling)
 def SetNewtonRaphsonErrorCriterion(ErrorCriterion): ProblemBase.GetAll()['MainProblem'].SetNewtonRaphsonErrorCriterion(ErrorCriterion)

@@ -250,7 +250,7 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.__available_output = ['pkii',   'pk2',   'kirchoff',   'kirchhoff',   'cauchy',
                                    'pkii_vm','pk2_vm','krichoff_vm','kirchhoff_vm','cauchy_vm',
-                                   'disp', 'rot', 'strain', 'statev']
+                                   'disp', 'rot', 'strain', 'statev', 'stress', 'stress_vm', 'external_force', 'internal_force', 'internal_force_global']
         self.__available_format = ['vtk', 'msh', 'txt', 'npy', 'npz', 'npz_compressed']
         
     def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
@@ -307,19 +307,24 @@ class _ProblemOutput:
                         
             for res in output['list']:
                 res = res.lower()
-                if res in ['pkii', 'pk2', 'kirchoff', 'kirchhoff', 'cauchy','strain']:
+                if res in ['pkii', 'pk2', 'kirchoff', 'kirchhoff', 'cauchy','strain', 'stress']:
                     if res in ['pkii','pk2']:
                         data = material.GetPKII()
                         label_data = 'PKII'
+                    elif res in ['stress']:
+                        #stress for small displacement
+                        data = material.GetCurrentStress()
+                        label_data = 'Stress'
                     elif res in ['kirchoff','kirchhoff']:
                         data = material.GetKirchhoff()
                         label_data = 'Kirchhoff'
                     elif res == 'cauchy':
                         data = material.GetCauchy()
                         label_data = 'Cauchy'
-                    else:
+                    elif res == 'strain':
                         data = material.GetStrain()                            
-                        label_data = 'Strain'
+                        label_data = 'Strain'  
+                        
                     #treat 2D case ?
                     data = data.Convert(assemb, None, output_type)                        
                     # data = assemb.ConvertData(data, None, output_type)
@@ -341,13 +346,22 @@ class _ProblemOutput:
                         label_data = 'Rotation'
                     else: 
                         raise NameError("Displacement is only a Node data and is incompatible with the output format specified")                    
+                
+                elif res == 'external_force':
+                    if output_type == 'Node':                             
+                        data = assemb.GetExternalForces(pb.GetDoFSolution())
+                        label_data = 'External_Load'                        
+                    else: 
+                        raise NameError("External_Force is only Node data and is incompatible with the specified output format")    
 
-
-                elif res in ['pkii_vm', 'pk2_vm', 'kirchoff_vm', 'kirchhoff_vm', 'cauchy_vm']:
+                elif res in ['pkii_vm', 'pk2_vm', 'kirchoff_vm', 'kirchhoff_vm', 'cauchy_vm', 'stress_vm']:
                     
                     if res in ['pkii_vm','pk2_vm']:
                         data = material.GetPKII().vonMises()
                         label_data = 'PKII_Mises'
+                    elif res in ['stress_vm','stress_vm']:
+                        data = material.GetCurrentStress().vonMises()
+                        label_data = 'Stress_Mises'
                     elif res in ['kirchoff_vm','kirchhoff_vm']:
                         data = material.GetKirchhoff().vonMises()
                         label_data = 'Kirchhoff_Mises'
@@ -364,6 +378,15 @@ class _ProblemOutput:
                     data = assemb.ConvertData(data, None, output_type)
                     label_data = 'State_Variables'
                 
+                elif res == 'internal_force':
+                    data = assemb.GetInternalForces(pb.GetDoFSolution(), 'local')
+                    data = assemb.ConvertData(data, None, output_type)
+                    label_data = 'Internal_Load_localCoord'   
+                    
+                elif res == 'internal_force_global':
+                    data = assemb.GetInternalForces(pb.GetDoFSolution(), 'global')
+                    data = assemb.ConvertData(data, None, output_type)
+                    label_data = 'Internal_Load_globalCoord' 
                 
                 if file_format in ['vtk', 'msh']:
                     if output_type == 'Node':

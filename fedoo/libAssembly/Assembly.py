@@ -936,6 +936,7 @@ class Assembly(AssemblyBase):
         operator = self.__weakForm.GetDifferentialOperator(self.__Mesh)
         mesh = self.__Mesh
         nvar = Variable.GetNumberOfVariable()
+        dim = ProblemDimension.GetDoF()
         MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh)
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType)
@@ -963,19 +964,24 @@ class Assembly(AssemblyBase):
             else:
                 return NotImplemented                      
         
-        res = np.reshape(res,(6,-1)).T
+        res = np.reshape(res,(nvar,-1)).T
         
         Nel = mesh.GetNumberOfElements()
         res = (res[Nel:2*Nel,:]-res[0:Nel:,:])/2
-        res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('DispZ'), \
-                              Variable.GetRank('RotX'), Variable.GetRank('RotY'), Variable.GetRank('RotZ')]]         
+        
+        # if dim == 3:
+        #     res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('DispZ'), \
+        #                   Variable.GetRank('RotX'), Variable.GetRank('RotY'), Variable.GetRank('RotZ')]]   
+        # else: 
+        #     res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('RotZ')]]   
         
         if CoordinateSystem == 'local': return res
         elif CoordinateSystem == 'global': 
             #require a transformation between local and global coordinates on element
             #classical MatrixChangeOfBasis transform only toward nodal values
-            elmRef = eval(self.__Mesh.GetElementShape())(1, mesh=mesh)#one pg  with the geometrical element
-            vec = [0,1,2] ; dim = 3
+            elmRef = eval(self.__Mesh.GetElementShape())(1, mesh=mesh)#one pg  with the geometrical element            
+            if dim == 3: vec = [0,1,2] 
+            else: vec = [0,1]
        
             #Data to build MatrixChangeOfBasisElement with coo sparse format
             crd = mesh.GetNodeCoordinates() ; elm = mesh.GetElementTable()
@@ -987,9 +993,12 @@ class Assembly(AssemblyBase):
 
             MatrixChangeOfBasisElement = sparse.coo_matrix((sp.reshape(dataMCB,-1),(sp.reshape(rowMCB,-1),sp.reshape(colMCB,-1))), shape=(dim*Nel, dim*Nel)).tocsr()
             
-            F = np.reshape( MatrixChangeOfBasisElement.T * np.reshape(res[:,0:3].T, -1)  ,  (3,-1) ).T
-            C = np.reshape( MatrixChangeOfBasisElement.T * np.reshape(res[:,3:6].T, -1)  ,  (3,-1) ).T
-            return np.hstack((F,C))            
+            F = np.reshape( MatrixChangeOfBasisElement.T * np.reshape(res[:,0:dim].T, -1)  ,  (dim,-1) ).T
+            if dim == 3: 
+                C = np.reshape( MatrixChangeOfBasisElement.T * np.reshape(res[:,3:6].T, -1)  ,  (3,-1) ).T
+            else: C = res[:,2]
+            
+            return np.c_[F,C] #np.hstack((F,C))            
 
 
 

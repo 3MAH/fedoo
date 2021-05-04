@@ -26,15 +26,24 @@ class ElasticAnisotropic(ConstitutiveLaw):
     
     def GetH(self):
         return self.__H
-        
-    # def GetCurrentStress(self):
-    #     return self.__currentSigma
 
     def GetPKII(self):
         return self.__currentSigma
-
+    
+    def GetCurrentStress(self):
+        #alias of GetPKII mainly use for small strain displacement problems
+        return (self.__currentSigma)
+    
     def GetStrain(self):
         return self.__currentStrain
+    
+    # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
+    #     displacement = pb.GetDoFSolution()                
+    #     if displacement is 0: 
+    #         return 0 #if displacement = 0, Strain = 0
+    #     else:
+    #         return assembly.GetStrainTensor(displacement, type_output)  
+    
     
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp    
@@ -72,7 +81,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
         pass
     
-    def Update(self,assembly, pb, time, nlgeom):
+    def Update(self,assembly, pb, dtime, nlgeom):
         displacement = pb.GetDoFSolution()
         
         if displacement is 0: 
@@ -89,13 +98,17 @@ class ElasticAnisotropic(ConstitutiveLaw):
                 Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
                 Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
                 Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
-                TotalStrain = listStrainTensor(Strain)
+            TotalStrain = listStrainTensor(Strain)
                 
             self.__currentStrain = TotalStrain                
-            self.__currentSigma = self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
+            self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma
        
-    def GetStress(self, StrainTensor, time = None):         
+    def GetStress(self, StrainTensor):     
         H = self.__ChangeBasisH(self.GetH())
         sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
 
         return sigma # list of 6 objets 
+    
+     
+                        
+        
