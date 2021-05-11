@@ -411,12 +411,12 @@ class _ProblemOutput:
                     var_name = label_data + '_' + output_type                    
                     OUT[var_name] = data
         
-        if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:    
-            for i, OUT in enumerate(list_ExportData):                
-                if file_format == 'vtk': OUT.toVTK(list_filename[i])
-                elif file_format == 'msh': OUT.toMSH(list_filename[i])
-                elif file_format == 'npz': np.savez(list_filename[i], **OUT)
-                elif file_format == 'npz_compressed': np.savez_compressed(list_filename[i], **OUT)
+            if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:    
+                for i, OUT in enumerate(list_ExportData):                
+                    if file_format == 'vtk': OUT.toVTK(list_filename[i])
+                    elif file_format == 'msh': OUT.toMSH(list_filename[i])
+                    elif file_format == 'npz': np.savez(list_filename[i], **OUT)
+                    elif file_format == 'npz_compressed': np.savez_compressed(list_filename[i], **OUT)
             
 
     @property
