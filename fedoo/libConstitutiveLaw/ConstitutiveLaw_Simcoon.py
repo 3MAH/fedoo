@@ -2,6 +2,14 @@
 #This law should be used with an InternalForce WeakForm
 
 try:
+    from simcoon import simmit as sim
+    USE_SIMCOON = True
+except:
+    USE_SIMCOON = False
+    print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')   
+    
+
+if USE_SIMCOON:    
     from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
     from fedoo.libUtil.StrainOperator import *
     from fedoo.libUtil.Variable       import *
@@ -9,7 +17,6 @@ try:
     from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
     
     import numpy as np
-    from simcoon import simmit as sim
     
     class Simcoon(ConstitutiveLaw, sim.Umat_fedoo):
         def __init__(self,umat_name, props, statev, corate=0, ID=""):
@@ -174,8 +181,5 @@ try:
         #     # initilialize values plasticity variables if required
     
         #     self.__currentStress = listStressTensor(sigmaFull.T) # list of 6 objets
-    
-        
-except:
-    print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')   
+            
 
