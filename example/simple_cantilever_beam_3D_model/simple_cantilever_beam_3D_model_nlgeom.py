@@ -58,18 +58,7 @@ TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp()
 TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
-
-# Get the principal directions (vectors on nodes)
-#temp = np.array([np.linalg.eig([[TensorStress[0][nd], TensorStress[5][nd]],[TensorStress[5][nd], TensorStress[1][nd]]])[1] for nd in range(len(TensorStress[0]))])
-#PrincipalDirection1 = np.c_[temp[:,:,0], np.zeros(len(TensorStress[0]))]
-#PrincipalDirection2 = np.c_[temp[:,:,1], np.zeros(len(TensorStress[0]))]
-
-#modification of TensorStress and TensorStressEl for compatibility with the export to vtk 
-#TensorStress = np.vstack([TensorStress[i] for i in [0,1,2,5,3,4]]).T                         
-#TensorStressEl = np.vstack([TensorStressEl[i] for i in [0,1,2,5,3,4]]).T 
-#TensorStrain = np.vstack([TensorStrain[i] for i in [0,1,2,5,3,4]]).T                         
-#TensorStrainEl = np.vstack([TensorStrainEl[i] for i in [0,1,2,5,3,4]]).T 
-                                                    
+                                                   
 
 #Write the vtk file                            
 OUT = Util.ExportData(meshID)
@@ -82,7 +71,7 @@ OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
 #OUT.addNodeData(PrincipalDirection[0], '1stPrincipalDirection')
 
 OUT.toVTK("simple_cantilever_3D_model.vtk")
-print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
+# print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
 
 print('Result file "simple_cantilever_3D_model.vtk" written in the active directory')
 

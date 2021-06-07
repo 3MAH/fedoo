@@ -43,7 +43,7 @@ Problem.ApplyBoundaryCondition()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-Problem.SetSolver('cg')
+# Problem.SetSolver('cg') #uncomment for conjugate gradient solver
 print('Solving...')
 Problem.Solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
@@ -53,7 +53,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
+TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal")       
 TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()

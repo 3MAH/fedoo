@@ -1,13 +1,15 @@
 #derive de ConstitutiveLaw
 #This law should be used with an InternalForce WeakForm
 
-try:
-    from simcoon import simmit as sim
-    USE_SIMCOON = True
-except:
-    USE_SIMCOON = False
-    print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')   
-    
+USE_SIMCOON = True
+
+if USE_SIMCOON: 
+    try:
+        from simcoon import simmit as sim
+        USE_SIMCOON = True
+    except:
+        USE_SIMCOON = False
+        print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
     from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw

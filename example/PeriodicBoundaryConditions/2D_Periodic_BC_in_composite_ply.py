@@ -120,7 +120,7 @@ Problem.Solve()
 
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "GaussPoint")       
+TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
 TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
