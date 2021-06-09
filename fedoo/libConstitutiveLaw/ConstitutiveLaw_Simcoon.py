@@ -146,12 +146,12 @@ if USE_SIMCOON:
             #if the number of material points is not defined (=0) we need to initialize statev
             nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
             if np.isscalar(self.__InitialStatev): 
-                statev = np.zeros((nb_points, int(self.__InitialStatev)))
+                statev = np.zeros((nb_points, int(self.__InitialStatev))).T
             else: 
-                statev = np.atleast_2d(self.__InitialStatev).astype(float)
-                if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1])
-                else: statev = assembly.ConvertData(statev)    
-    
+                statev = np.atleast_2d(self.__InitialStatev).T.astype(float)
+                if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1]).T
+                else: statev = assembly.ConvertData(statev).T
+            
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
             self.Run(0.) #Launch the UMAT to compute the elastic matrix    
     
