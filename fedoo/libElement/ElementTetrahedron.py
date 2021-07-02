@@ -60,7 +60,7 @@ class tet10(elementTetrahedron):
         xi = vec_xi[:,0] ; eta = vec_xi[:,1]; zeta = vec_xi[:,2]
         return sp.c_[eta*(2*eta-1), zeta*(2*zeta-1), (1-xi-eta-zeta)*(1-2*xi-2*eta-2*zeta), xi*(2*xi-1), 4*eta*zeta, 4*zeta*(1-xi-eta-zeta), 4*eta*(1-xi-eta-zeta), 4*xi*eta, 4*xi*zeta, 4*xi*(1-xi-eta-zeta)]    
     def ShapeFunctionDerivative(self, vec_xi):
-        m = 1-xi[0]-xi[1]-xi[2]    
+        vec_m = [1-xi[0]-xi[1]-xi[2] for xi in vec_xi]
         return [ sp.array([ [ 0., 0., 1-4*m, -1+4*xi[0], 0., -4*xi[2], -4*xi[1], 4*xi[1], 4*xi[2], 4*(m-xi[0]) ] , \
-                         [ -1+4*xi[1], 0., 1-4*m, 0., 4*xi[2],-4*xi[2], 4*(m-xi[1]), 4*xi[0], 0., -4*xi[0]  ] , \
-                         [ 0., -1+4*xi[2], 1-4*m, 0., 4*xi[1], 4*(m-xi[2]), 4*xi[1], 0. , 4*xi[0], -4*xi[0] ] ]) for xi in vec_xi]   
+                          [ -1+4*xi[1], 0., 1-4*m, 0., 4*xi[2],-4*xi[2], 4*(m-xi[1]), 4*xi[0], 0., -4*xi[0]  ] , \
+                          [ 0., -1+4*xi[2], 1-4*m, 0., 4*xi[1], 4*(m-xi[2]), 4*xi[1], 0. , 4*xi[0], -4*xi[0] ] ]) for m,xi in zip(vec_m, vec_xi)]   

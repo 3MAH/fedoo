@@ -78,7 +78,7 @@ class ProblemPGD(ProblemBase):
         prod_aux_3 = sp.ones((R.nbTerm(), self.__C.nbTerm()))
         for d2 in list(range(d1))+list(range(d1+1,len(self.__C))):  
             prod_aux_3 = prod_aux_3 * (sp.dot(R.data[d2].T,self.__C.data[d2])) 
-        return sp.reshape(sp.dot(prod_aux_3, self.__C.data[d1].T) , (-1,1))
+        return sp.reshape(sp.dot(prod_aux_3, self.__C.data[d1].T) @ self.__MatCB[d1] , (-1,1))
 
     def calcMat_RS(self,R, d1): #détermine la matrice équivalente sur la dimension d1 connaissant R
         N_d1 = self.__A.GetShape()[d1]        
@@ -90,22 +90,40 @@ class ProblemPGD(ProblemBase):
         # 1 - utiliser un tableau de sparse matrix pour vectorisé les opérations
         # 2 - faire un assemblage de toutes les matrices creuses dans une grande matrice creuse par bloc pour vectoriser les opérations
         
-        if R.nbTerm() == 1: #sinon erreur
+        
+        # MatCB = self.__MatCB[ddcalc]
+        # self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(MatCB[ddcalc].T @ M @ MatCB[ddcalc], self.__MatCB.T @ V ) , (len(termToChange), -1)).T
+        
+        MatCB = self.__MatCB[d1]
+        
+        if R.nbTerm() == 1: 
             Mat_K  = sparse.csr_matrix((N_d1 , N_d1))
             for kk in range(self.__A.NumberOfOperators()):
                 prod_aux = 1
                 for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
                     prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])
                 Mat_K = Mat_K + self.__A.data[kk][d1] * float(prod_aux)
-            return Mat_K      
+            return MatCB.T @ Mat_K @ MatCB      
         else: 
-            Mat_K  = sparse.csr_matrix((R.nbTerm()*N_d1 , R.nbTerm()*N_d1))
+            nbTerm = R.nbTerm()
+            Mat_K  = [[sparse.csr_matrix((N_d1 , N_d1)) for j in range(nbTerm)] for i in range(nbTerm)]
             for kk in range(self.__A.NumberOfOperators()):
                 prod_aux = 1
                 for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
                     prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])                   
-                Mat_K = Mat_K + sparse.bmat([[self.__A.data[kk][d1] * prod_aux[i,j] for j in range(R.nbTerm())] for i in range(R.nbTerm())])
-            return Mat_K  
+                Mat_K = [[Mat_K[i][j] + self.__A.data[kk][d1] * prod_aux[i,j] for j in range(nbTerm)] for i in range(nbTerm)]
+            
+            Mat_K = [[MatCB.T @ Mat_K[i][j] @ MatCB for j in range(nbTerm)] for i in range(nbTerm)] 
+            Mat_K = sparse.bmat(Mat_K, format='csr')
+            return Mat_K
+            
+            # Mat_K  = sparse.csr_matrix((R.nbTerm()*N_d1 , R.nbTerm()*N_d1))
+            # for kk in range(self.__A.NumberOfOperators()):
+            #     prod_aux = 1
+            #     for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
+            #         prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])                   
+            #     Mat_K = Mat_K + sparse.bmat([[self.__A.data[kk][d1] * prod_aux[i,j] for j in range(R.nbTerm())] for i in range(R.nbTerm())])
+            # return Mat_K  
     
 #    def copy(self):
 #        return self.__class__(self)
@@ -152,7 +170,7 @@ class ProblemPGD(ProblemBase):
         return self.__Xbc 
     
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):                
-        self.__X, self.__Xbc, F, self.__DofBlocked, self.__DofFree = BoundaryCondition.ApplyToPGD(self.__Mesh, self.__X, self.__ProblemDimension, timeFactor, timeFactorOld, self.GetID())
+        self.__X, self.__Xbc, F, self.__DofBlocked, self.__DofFree, self.__MatCB = BoundaryCondition.ApplyToPGD(self.__Mesh, self.__X, self.__ProblemDimension, timeFactor, timeFactorOld, self.GetID())
         self.__B = F 
 
     def GetDoFSolution(self,name):
@@ -232,18 +250,10 @@ class ProblemPGD(ProblemBase):
         NbDoF = self.__C.shape[ddcalc]
         DofFree = np.hstack([self.__DofFree[ddcalc] + i*NbDoF for i in range(len(termToChange))])
         
-#        self.__X.data[ddcalc][:,termToChange] = sp.reshape(sparse.linalg.spsolve(M, V) , (len(termToChange),-1)).T
-#        self.__X.data[ddcalc][DofFree,termToChange]  = sparse.linalg.spsolve(M[np.c_[DofFree],DofFree], V[DofFree] )
-
-        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(M[DofFree.reshape(-1,1),DofFree], V[DofFree] ) , (len(termToChange), -1)).T
-#        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(sparse.linalg.spsolve(M[DofFree.reshape(-1,1),DofFree], V[DofFree] ) , (len(termToChange), -1)).T
-#        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(sparse.linalg.cg(M[DofFree.reshape(-1,1),DofFree], V[DofFree] )[0] , (len(termToChange), -1)).T
-
-#        from numpy import linalg
-#        print(np.shape(DofFree))
-#        print(M[DofFree.reshape(-1,1),DofFree].todense())
-#        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(linalg.solve(M[DofFree.reshape(-1,1),DofFree].todense(), V[DofFree] ) , (len(termToChange), -1)).T
-
+        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(M, V) , (len(termToChange), -1)).T
+        # self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(M[DofFree.reshape(-1,1),DofFree], V[DofFree] ) , (len(termToChange), -1)).T
+                
+    
 
     def UpdateAlpha(self):
         BB = SeparatedArray(self.__B + self.__D - self.__A*self.__Xbc)

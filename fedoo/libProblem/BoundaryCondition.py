@@ -8,23 +8,58 @@ from scipy import sparse
 class BoundaryCondition :
     """
     Classe de condition limite
+    
+    Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
     __lbc = {"MainProblem":[]} # variable statique : liste des BC crees
 
     def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ProblemID = "MainProblem"):
-        ### Var: variable name (str) or (for MPC only) list of variable name or variable rank 
-        ### Value: Variable final value (Dirichlet) or force Value (Neumann) or factor list (MPC)
-        ### Index : Nodes Index or SetOf Nodes ID or (for MPC only) list of Index         
-        ### Constant: for MPC only, constant value on the equation
-        ### timeEvolution : function 
-        ### initialValue can be a float or an array or None (default)
-        ###
-        ### To define many MPC in one operation, use array where each line define a single MPC
+        """
+        Define some boundary conditions        
+
+        Parameters
+        ----------
+        BoundaryType : str
+            Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
+        Var : str, list of str, or list of int
+            variable name (str) or, for MPC only, list of variable name or list of variable rank 
+        Value : scalar or list of scalars
+            Variable final value (Dirichlet) or force Value (Neumann) or list of factor (MPC)
+        Index : list of int, str, list of list of int, list of str
+            For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
+            For FEM Problem with MPC: list Node Indexes (list of list of int) 
+            For PGD Problem with Neumann/Dirichlet BC: SetOfID (type str) defining a set of Nodes of the reference mesh
+            For PGD Problem with MPC: list of SetOfID (str)
+        Constant : scalar, optional
+            For MPC only, constant value on the equation
+        timeEvolution : function
+            Function that gives the temporal evolution of the BC Value (applyed as a factor to the specified BC). The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
+        initialValue : float, array or None
+            if None, the initialValue is keep to the current state.
+            if scalar value: The initialValue is the same for all dof defined in BC
+            if array: the len of the array should be = to the number of dof defined in the BC
+
+            Default: None
+        ProblemID : TYPE, optional
+            DESCRIPTION. The default is "MainProblem".
+
+        Returns
+        -------
+        None.
+
+        Remark  
+        -------
+        To define many MPC in one operation, use array where each line define a single MPC        
+
+
+        """
+        
         assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
         
         if timeEvolution is None: 
-            def timeEvolution(timeFactor): return timeFactor            
+            def timeEvolution(timeFactor): return timeFactor
+                
         self.__timeEvolution = timeEvolution
         
         self.__DefautInitialValue = self.__initialValue = initialValue # can be a float or an array or None ! if DefautInitialValue is None, initialValue can be modified by the Problem
@@ -47,12 +82,19 @@ class BoundaryCondition :
   
         elif BoundaryType == 'MPC':  #only for FEM for now
             
-            Factor =  Value #for MPC, Value is a list containing the factor   
-            self.__Index = np.array(Index[0], dtype = int) #Node index for slave DOF (eliminated DOF) #use SetOf for PGD
-            self.__IndexMaster = np.array(Index[1:], dtype = int) #Node index for master DOF (not eliminated DOF in MPC)
-            if Constant is not None: 
-                self.__Value = -Constant/Factor[0] # should be a numeric value or a 1D array for multiple MPC       
-            else: self.__Value = 0
+            Factor =  Value #for MPC, Value is a list containing the factor 
+            if type(Index[0]) == str: #PGD problem
+                self.__SetOfID = Index[0] #SetOfID decribing node indexes for slave DOF (eliminated DOF) #use SetOf for PGD
+                self.__SetOfIDMaster = Index[1:]
+                if Constant is not None:   
+                    raise NameError("MPC boundary condition with PGD problem isn't compatible with a non zero constant value")
+                else: self.__Value = 0
+            else: #FEM Problem
+                self.__IndexMaster = np.array(Index[1:], dtype = int) #Node index for master DOF (not eliminated DOF in MPC)
+                self.__Index = np.array(Index[0], dtype = int) #Node index for slave DOF (eliminated DOF) #use SetOf for PGD
+                if Constant is not None:                 
+                    self.__Value = -Constant/Factor[0] # should be a numeric value or a 1D array for multiple MPC       
+                else: self.__Value = 0
             
             self.__Fact = -np.array(Factor[1:])/Factor[0] #does not include the master node coef = 1
             
@@ -199,6 +241,14 @@ class BoundaryCondition :
         DofB = [np.array([]) for i in range(meshPGD.GetDimension())] 
         dimBC = None #dimension requiring a modification of Xbc - dimBC = None if Xbc is never modified, dimBC = dd if only the dimension dd is modified, dimBC = 'many' if there is more than one dimension
         
+        MPC = False
+        data = [[] for i in range(meshPGD.GetDimension())] 
+        row = [[] for i in range(meshPGD.GetDimension())] 
+        col = [[] for i in range(meshPGD.GetDimension())] 
+        
+        Nnd  = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
+        Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
+        
         for e in BoundaryCondition.__lbc[ProblemID]:
             SetOfNodesForBC = meshPGD.GetSetOfNodes(e.__SetOfID)            
             if isinstance(e.__Value, list): e.__Value = np.array(e.__Value)
@@ -209,10 +259,9 @@ class BoundaryCondition :
 #                dd = SetOfNodesForBC[0][0]
 #                index = SetOfNodesForBC[1][0]
                 var = [meshPGD._GetSpecificVariableRank (d, e.__Var) for d in range(meshPGD.GetDimension())] #specific variable rank related to the submesh dd
-                Nnd = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())]                       
                 
-                item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.GetDimension())]
-                
+                #item = the index of nodes in each subspace (slice if all nodes are included)
+                item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.GetDimension())]                
                 for i, d in enumerate(SetOfNodesForBC[0]):
                     index = np.array(SetOfNodesForBC[1][i], dtype = int)
                     item[d] = var[d]*Nnd[d] + index
@@ -242,10 +291,9 @@ class BoundaryCondition :
             elif e.__BoundaryType == 'Dirichlet':  
                 if len(SetOfNodesForBC[1]) == 1 and isinstance(Value, (int,float,np.floating,np.ndarray)): #The BC can be applied on only 1 subspace 
                     dd = SetOfNodesForBC[0][0]
-                    index = SetOfNodesForBC[1][0]
+                    index = np.array(SetOfNodesForBC[1][0], dtype=int)
                     var = meshPGD._GetSpecificVariableRank (dd, e.__Var) #specific variable rank related to the submesh dd
-                    Nnd = meshPGD.GetListMesh()[dd].GetNumberOfNodes()
-                    GlobalIndex = (var*Nnd + np.array(index)).astype(int)
+                    GlobalIndex = (var*Nnd[dd] + index).astype(int)
                     
                     if isinstance(Value, np.ndarray): Value = Value.reshape(-1,1)                                
                     
@@ -266,9 +314,65 @@ class BoundaryCondition :
                         Xbc_add.data[dd][GlobalIndex] = Value
                         Xbc = Xbc+Xbc_add - Xbc_old                                                   
                 
-                else: #a penatly method is required
+                else: #a penatly method is required                    
                     return NotImplemented    
-    
+            
+            elif e.__BoundaryType == 'MPC':
+                SetOfNodesForBC_Master = [meshPGD.GetSetOfNodes(setofid) for setofid in e.__SetOfIDMaster] 
+                
+                #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
+                if len(SetOfNodesForBC[1]) == 1 \
+                and all(len(setof[1]) == 1 for setof in SetOfNodesForBC_Master) \
+                and all(setof[0][0] == SetOfNodesForBC[0][0] for setof in SetOfNodesForBC_Master):
+                    #isinstance(Value, (int,float,np.floating,np.ndarray)): 
+                    
+                    dd = SetOfNodesForBC[0][0] #the subspace involved
+                    Index = np.array(SetOfNodesForBC[1][0], dtype=int)
+                    IndexMaster = np.array([setof[1][0] for setof in SetOfNodesForBC_Master], dtype = int)
+                    
+                    #global index for the slave nodes (eliminated nodes)
+                    var = meshPGD._GetSpecificVariableRank (dd, e.__Var) #specific variable rank related to the submesh dd
+                    GlobalIndex = (var*Nnd[dd] + np.array(Index)).astype(int)
+                    
+                    #add the eliminated node to the list of eliminated nodes
+                    DofB[dd] = np.hstack((DofB[dd],GlobalIndex))                     
+
+                    MPC = True #need to compute a MPC change of base matrix
+                    
+
+                    #Value treatment
+                    if isinstance(Value, np.ndarray): Value = Value.reshape(-1,1)  
+                    
+                    if dimBC is None: #initialization of Xbc           
+                        if Value is not 0: # modification of the second term Xbc
+                            dimBC = dd
+                            Xbc = SeparatedArray([np.ones((shapeX[d],1)) if d!=dd else np.zeros((shapeX[d],1)) for d in range(len(shapeX))])
+                            Xbc.data[dd][GlobalIndex] = Value
+                    elif dd == dimBC: #in this case, the definition of Xbc is trivial
+                        Xbc.data[dd][GlobalIndex] = Value
+                    else: #many dimension required the modification of BC                                          
+                        dimBC = 'many'                                                    
+                        Xbc_old = Xbc.copy()
+                        Xbc_old.data[dd] = 0*Xbc_add.data[dd]
+                        Xbc_old.data[dd][GlobalIndex] = Xbc.data[dd][GlobalIndex]
+                        Xbc_add = SeparatedArray([np.ones((shapeX[d],1)) if d!=dd else np.zeros((shapeX[d],1)) for d in range(len(shapeX))])
+                        Xbc_add.data[dd][GlobalIndex] = Value
+                        Xbc = Xbc+Xbc_add - Xbc_old           
+                                                            
+                    nbFact = len(e.__Fact)
+                
+                    #shape self.__Fact should be nbFact*nbMPC 
+                    #shape self.__Index should be nbMPC
+                    #shape self.__IndexMaster should be nbFact*nbMPC
+                    data[dd].append(np.array(e.__Fact.T).ravel())
+                    row[dd].append((GlobalIndex.reshape(-1,1)*np.ones(nbFact)).ravel())
+                    col[dd].append((IndexMaster + np.c_[e.__VarMaster]*Nnd[dd]).T.ravel())
+                                        
+                                                            
+                
+                else: #a penatly method is required                    
+                    return NotImplemented    
+                                    
             else: assert 0, "Boundary type non recognized"
         
             
@@ -276,12 +380,52 @@ class BoundaryCondition :
             
         DofB = [np.unique(dofb).astype(int) for dofb in DofB] #bloqued DoF for all the submeshes
         DofL = [np.setdiff1d(range(shapeX[d]),DofB[d]).astype(int) for d in range(meshPGD.GetDimension())] #free dof for all the submeshes
-
+    
         if X!=0: 
             for d in range(meshPGD.GetDimension()): 
                 X.data[dd][DofB[d]] = 0
 
-        return X, Xbc, F, DofB, DofL
+         #build matrix MPC
+        if MPC:    
+            #Treating the case where MPC includes some blocked nodes as master nodes
+            #M is a matrix such as Ublocked = M@U + Uimp
+            #Compute M + M@M
+                        
+            listM = [sparse.coo_matrix( 
+                (np.hstack(data[d]), (np.hstack(row[d]),np.hstack(col[d]))), 
+                shape=(Nvar[d]*Nnd[d],Nvar[d]*Nnd[d])) if len(data[d])>0 else 
+                sparse.coo_matrix( (Nvar[d]*Nnd[d],Nvar[d]*Nnd[d]))
+                for d in range(meshPGD.GetDimension())]
+
+            Xbc = SeparatedArray([Xbc.data[d] + listM[d]@Xbc.data[d] for d in range(meshPGD.GetDimension())])                                           
+            listM = [(M+M@M).tocoo() for M in listM]
+            
+                                    
+            data = [M.data for M in listM]
+            row  = [M.row  for M in listM]
+            col  = [M.col  for M in listM]
+
+            #modification col numbering from DofL to np.arange(len(DofL))
+            for d in range(meshPGD.GetDimension()):
+                if len(DofB[d])>0: #no change if there is no blocked dof
+                    changeInd = np.full(Nvar[d]*Nnd[d],np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
+                    changeInd[DofL[d]] = np.arange(len(DofL[d]))
+                    col[d] = changeInd[np.hstack(col[d])] #need hstack here ? Not sure because it should have already been done
+                    mask = np.logical_not(np.isnan(col[d])) #mask to delete nan value 
+                
+                    col[d] = col[d][mask] ; row[d] = row[d][mask] ; data[d] = data[d][mask]
+
+
+        # #adding identity for free nodes
+        col  = [np.hstack((col[d],np.arange(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
+        row  = [np.hstack((row[d],DofL[d])) for d in range(meshPGD.GetDimension())]
+            
+        data = [np.hstack((data[d], np.ones(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
+        
+        MatCB = [sparse.coo_matrix( (data[d],(row[d],col[d])), shape=(Nvar[d]*Nnd[d],len(DofL[d]))).tocsr() for d in range(meshPGD.GetDimension())]
+
+
+        return X, Xbc, F, DofB, DofL, MatCB
         
     def ChangeIndices(self,newIndices):
         self.__Index = np.array(newIndices).astype(int) # must be a np.array

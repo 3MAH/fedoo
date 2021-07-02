@@ -99,8 +99,9 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             listSubMesh = [i for i in range(len(self.__ListMesh)) if not(listNodeIndexes[i] is 'all' or listNodeIndexes[i] is 'ALL')]
             listNodeIndexes = [NodeIndexes for NodeIndexes in listNodeIndexes if not(NodeIndexes is 'all' or NodeIndexes is 'ALL')]
         else:
-            listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
-                
+            # listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
+            listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
+            
         self.__SetOfNodes[ID] = [listSubMesh, listNodeIndexes]
         
     def AddSetOfElements(self, listElementIndexes, listSubMesh = None, ID=None):
@@ -118,9 +119,9 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             if len(listElementIndexes) != len(self.__ListMesh):
                 assert 0, "The lenght of the Node Indexes List must be equal to the number of submeshes"
             listSubMesh = [self.__ListMesh[i] for i in range(len(self.__ListMesh)) if listElementIndexes[i] not in ['all','ALL']]
-            listElementIndexes = [ElmIndexes for ElmIndexes in ListElementIndexes if ElmIndexes not in ['all','ALL']]
+            listElementIndexes = [ElmIndexes for ElmIndexes in listElementIndexes if ElmIndexes not in ['all','ALL']]
         else:
-            listSubMesh = [Mesh.GetAll()[m] if isinstance(m,str) else m for m in listSubMesh]
+            listSubMesh = [MeshBase.GetAll()[m] if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
         
         self.__SetOfElements[ID] = [listSubMesh, listElementIndexes]
 

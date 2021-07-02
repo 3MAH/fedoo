@@ -3,6 +3,7 @@ from fedoo.libAssembly.Assembly import Assembly as AssemblyFEM
 from fedoo.libAssembly.Assembly import RowBlocMatrix
 from fedoo.libUtil.Variable import Variable
 from fedoo.libUtil.StrainOperator import GetStrainOperator
+from fedoo.libUtil.PostTreatement import listStrainTensor
 from fedoo.libMesh.Mesh import Mesh as MeshFEM
 from fedoo.libElement import *
 from fedoo.libWeakForm.WeakForm import WeakForm
@@ -229,7 +230,7 @@ class AssemblyPGD(AssemblyFEM):
                 if isinstance(coef_PG, list):
                     coef_PG.append(AssemblyPGD._Assembly__ConvertToGaussPoints(subMesh, operator.coef[ii].data[dd], list_elementType[dd], list_nb_pg[dd]))
                 
-                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh, list_elementType[dd], list_nb_pg[dd])                                                           
+                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh)                                                           
                 res_add.append(RowBlocMatrix(AssemblyPGD._Assembly__GetElementaryOp(subMesh, operator.op[ii], list_elementType[dd], list_nb_pg[dd]) , nvar[dd], var, coef) * MatrixChangeOfBasis * U.data[dd])
             
             if isinstance(coef_PG, list): coef_PG = SeparatedArray(Coef_PG)
@@ -354,10 +355,10 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfNodes()) for e in GetStrainOperator()[0]]
+            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfNodes()) for e in GetStrainOperator()[0]])
         
         elif IntegrationType == "Element":
-            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfElements()) for e in GetStrainOperator()[0]]
+            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfElements()) for e in GetStrainOperator()[0]])
         
         else:
             assert 0, "Wrong argument for IntegrationType"
