@@ -24,8 +24,12 @@ class ElasticAnisotropic(ConstitutiveLaw):
         self.__currentGradDisp = None
     
     
-    def GetH(self):
-        return self.__H
+    def GetH(self,**kargs):
+        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        if pbdim == "2Dstress":
+            return NotImplemented
+        else: 
+            return self.__H
 
     def GetPKII(self):
         return self.__currentSigma
@@ -70,7 +74,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
         return H
     
     def GetStressOperator(self, **kargs): 
-        H = self.__ChangeBasisH(self.GetH())
+        H = self.__ChangeBasisH(self.GetH(**kargs ))
                       
         eps, eps_vir = GetStrainOperator()            
         sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -100,14 +104,21 @@ class ElasticAnisotropic(ConstitutiveLaw):
                 Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
             TotalStrain = listStrainTensor(Strain)
                 
-            self.__currentStrain = TotalStrain                
-            self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma
+            self.__currentStrain = TotalStrain                            
        
-    def GetStress(self, StrainTensor):     
-        H = self.__ChangeBasisH(self.GetH())
-        sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
+            H = self.__ChangeBasisH(self.GetH())
+        
+            self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.ConvertData(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+            # self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma
+       
+        
+       
+    # def GetStress(self, StrainTensor):     
+    #     H = self.__ChangeBasisH(self.GetH())
+        
+    #     sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
 
-        return sigma # list of 6 objets 
+    #     return sigma # list of 6 objets 
     
      
                         

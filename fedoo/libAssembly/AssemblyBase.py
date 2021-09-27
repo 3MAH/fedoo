@@ -104,7 +104,7 @@ class AssemblySum(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        if self.__reload == 'all' or compute == 'vector': #if compute == 'vector' the reload arg is ignored
+        if self.__reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
             for assembly in self.__ListAssembly:
                 assembly.Update(pb,dtime,compute)           
         else:

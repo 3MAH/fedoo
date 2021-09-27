@@ -43,7 +43,16 @@ class Assembly(AssemblyBase):
         self.__MeshChange = kargs.pop('MeshChange', False)        
         self.__Mesh = mesh   
         self.__weakForm = weakForm
+        if elementType == "": elementType = mesh.GetElementShape()
         self.__elmType= elementType #.lower()
+
+        #determine the type of coordinate system used for vector of variables (displacement for instance). This type may be specified in element (under dict form only)        
+        #TypeOfCoordinateSystem may be 'local' or 'global'. If 'local' variables are used, a change of variable is required
+        #If TypeOfCoordinateSystemis not specified in the element, 'global' value (no change of basis) is considered by default
+        if isinstance(eval(elementType), dict):
+            self.__TypeOfCoordinateSystem = eval(elementType).get('__TypeOfCoordinateSystem', 'global')                
+        else: self.__TypeOfCoordinateSystem = 'global'
+
         self.__nb_pg = kargs.pop('nb_pg', None)
         if self.__nb_pg is None: self.__nb_pg = GetDefaultNbPG(elementType, mesh)
                     
@@ -56,11 +65,15 @@ class Assembly(AssemblyBase):
         if compute = 'all', compute the global matrix and vector
         if compute = 'matrix', compute only the matrix
         if compute = 'vector', compute only the vector
-        """                
+        if compute = 'none', compute nothing
+        """                        
+        if compute == 'none': return
+        
         computeMatrixMethod = self.computeMatrixMethod
         
         nb_pg = self.__nb_pg
         mesh = self.__Mesh
+        
         
         if self.__MeshChange == True:             
             if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]            
@@ -70,7 +83,7 @@ class Assembly(AssemblyBase):
         wf = self.__weakForm.GetDifferentialOperator(mesh)      
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType, nb_pg=nb_pg)
-        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh)        
+        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh, self.__TypeOfCoordinateSystem)        
         associatedVariables = Assembly.__GetAssociatedVariables(self.__elmType) #for element requiring many variable such as beam with disp and rot dof        
         
         if computeMatrixMethod == 'new':             
@@ -86,7 +99,7 @@ class Assembly(AssemblyBase):
             if isinstance(eval(self.__elmType), dict):
                 elementDict = eval(self.__elmType)
                 list_elementType = [elementDict.get(Variable.GetName(i))[0] for i in range(nvar)]
-                list_elementType = [elementDict.get('default') if elmtype is None else elmtype for elmtype in list_elementType]
+                list_elementType = [elementDict.get('__default') if elmtype is None else elmtype for elmtype in list_elementType]
             else: list_elementType = [self.__elmType for i in range(nvar)]
             
             if 'blocShape' not in saveOperator:
@@ -108,7 +121,7 @@ class Assembly(AssemblyBase):
                 if compute == 'matrix' and wf.op[ii] is 1: continue
                 if compute == 'vector' and wf.op[ii] is not 1: continue
             
-                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii]==1): 
+                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
                     coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
                 else:
                     coef_PG = Assembly.__ConvertToGaussPoints(mesh, wf.coef[ii][:], self.__elmType, nb_pg=nb_pg)                                                 
@@ -301,7 +314,7 @@ class Assembly(AssemblyBase):
         return self.__nb_pg
     
     def GetMatrixChangeOfBasis(self):
-        return Assembly.__GetChangeOfBasisMatrix(self.__Mesh)
+        return Assembly.__GetChangeOfBasisMatrix(self.__Mesh, self.__TypeOfCoordinateSystem)
     
 
     def Initialize(self, pb, initialTime=0.):
@@ -363,7 +376,12 @@ class Assembly(AssemblyBase):
         nNd_elm = np.shape(elm)[1]
         crd = mesh.GetNodeCoordinates()
         dim = ProblemDimension.GetDoF()
-                
+        
+        if isinstance(eval(elementType), dict):
+            TypeOfCoordinateSystem = eval(elementType).get('__TypeOfCoordinateSystem', 'global')                
+        else: TypeOfCoordinateSystem = 'global'
+
+        
         #-------------------------------------------------------------------
         #Case of finite difference mesh    
         #-------------------------------------------------------------------        
@@ -374,7 +392,7 @@ class Assembly(AssemblyBase):
             Assembly.__saveMatGaussianQuadrature[(mesh.GetID(),NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
             Assembly.__savePGtoNodeMatrix[(mesh.GetID(), NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
             Assembly.__saveNodeToPGMatrix[(mesh.GetID(), NumberOfGaussPoint)] = 1                                    
-            Assembly.__saveMatrixChangeOfBasis[mesh.GetID()] = 1 # No change of basis:  MatrixChangeOfBasis = 1 
+            Assembly.__saveMatrixChangeOfBasis[mesh.GetID()] = 1 # No change of basis:  MatrixChangeOfBasis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
             Assembly.__saveOperator[(mesh.GetID(),elementType,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
             return                                
 
@@ -401,7 +419,7 @@ class Assembly(AssemblyBase):
         # Compute the array containing row and col indices used to assemble the sparse matrices
         #-------------------------------------------------------------------          
         range_nbPG = np.arange(NumberOfGaussPoint)                 
-        if Assembly.__GetChangeOfBasisMatrix(mesh) is 1: ChangeOfBasis = False
+        if Assembly.__GetChangeOfBasisMatrix(mesh, TypeOfCoordinateSystem) is 1: ChangeOfBasis = False
         else: 
             ChangeOfBasis = True
             range_nNd_elm = np.arange(nNd_elm)
@@ -439,7 +457,7 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------        
         objElement = eval(elementType)
         if isinstance(objElement, dict):
-            listElementType = set([v[0] for v in objElement.values()])               
+            listElementType = set([objElement[key][0] for key in objElement.keys() if key[:2]!='__' or key == '__default'])               
         else: 
             listElementType =  [elementType]
         
@@ -481,7 +499,7 @@ class Assembly(AssemblyBase):
         if isinstance(eval(elementType), dict):
             elementDict = eval(elementType)
             elementType = elementDict.get(Variable.GetName(deriv.u))[0]
-            if elementType is None: elementType = elementDict.get('default')
+            if elementType is None: elementType = elementDict.get('__default')
                 
         if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
@@ -510,10 +528,10 @@ class Assembly(AssemblyBase):
     #     if isinstance(eval(elementType), dict):
     #         elementDict = eval(elementType)
     #         elementType = elementDict.get(Variable.GetName(deriv.u))[0]
-    #         if elementType is None: elementType = elementDict.get('default')
+    #         if elementType is None: elementType = elementDict.get('__default')
             
     #         elementType_vir = elementDict.get(Variable.GetName(deriv_vir.u))[0]
-    #         if elementType_vir is None: elementType = elementDict.get('default')                
+    #         if elementType_vir is None: elementType = elementDict.get('__default')                
 
     #     else: elementType_vir = elementType
 
@@ -575,9 +593,12 @@ class Assembly(AssemblyBase):
     
 
     @staticmethod
-    def __GetChangeOfBasisMatrix(mesh): # change of basis matrix for beam or plate elements
-        if not(mesh.GetID()) in Assembly.__saveMatrixChangeOfBasis:        
+    def __GetChangeOfBasisMatrix(mesh, TypeOfCoordinateSystem): # change of basis matrix for beam or plate elements
+        
+        if TypeOfCoordinateSystem == 'global': return 1
+        if mesh.GetID() not in Assembly.__saveMatrixChangeOfBasis:        
             ### change of basis treatment for beam or plate elements
+            ### Compute the change of basis matrix for vector defined in Variable.ListVector()
             MatrixChangeOfBasis = 1
             computeMatrixChangeOfBasis = False
 
@@ -592,17 +613,16 @@ class Assembly(AssemblyBase):
     #        xi_nd = elmRefGeom.xi_nd
             xi_nd = GetNodePositionInElementCoordinates(mesh.GetElementShape(), nNd_elm) #function to define
 
-            if 'X' in mesh.GetCoordinateID() and 'Y' in mesh.GetCoordinateID(): #if not in physical space, no change of variable
+            if 'X' in mesh.GetCoordinateID() and 'Y' in mesh.GetCoordinateID(): #if not in physical space, no change of variable                
                 for nameVector in Variable.ListVector():
-                    if Variable.GetVectorCoordinateSystem(nameVector) == 'global':
-                        if computeMatrixChangeOfBasis == False:
-                            range_nNd_elm = np.arange(nNd_elm) 
-                            computeMatrixChangeOfBasis = True
-                            Nvar = Variable.GetNumberOfVariable()
-                            listGlobalVector = []  ; listLocalVariable = list(range(Nvar))
-    #                        MatrixChangeOfBasis = sparse.lil_matrix((Nvar*Nel*nNd_elm, Nvar*Nnd)) #lil is very slow because it change the sparcity of the structure
-                        listGlobalVector.append(Variable.GetVector(nameVector))                
-                        listLocalVariable = [i for i in listLocalVariable if not(i in listGlobalVector[-1])]
+                    if computeMatrixChangeOfBasis == False:
+                        range_nNd_elm = np.arange(nNd_elm) 
+                        computeMatrixChangeOfBasis = True
+                        Nvar = Variable.GetNumberOfVariable()
+                        listGlobalVector = []  ; listScalarVariable = list(range(Nvar))
+#                        MatrixChangeOfBasis = sparse.lil_matrix((Nvar*Nel*nNd_elm, Nvar*Nnd)) #lil is very slow because it change the sparcity of the structure
+                    listGlobalVector.append(Variable.GetVector(nameVector)) #vector that need to be change in local coordinate            
+                    listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
                 #Data to build MatrixChangeOfBasis with coo sparse format
                 if computeMatrixChangeOfBasis:
                     rowMCB = np.empty((len(listGlobalVector)*Nel, nNd_elm, dim,dim))
@@ -615,13 +635,13 @@ class Assembly(AssemblyBase):
                         rowMCB[ivec*Nel:(ivec+1)*Nel] = np.arange(Nel).reshape(-1,1,1,1) + range_nNd_elm.reshape(1,-1,1,1)*Nel + np.array(vec).reshape(1,1,-1,1)*(Nel*nNd_elm)
                         colMCB[ivec*Nel:(ivec+1)*Nel] = elm.reshape(Nel,nNd_elm,1,1) + np.array(vec).reshape(1,1,1,-1)*Nnd        
     
-                    if len(listLocalVariable) > 0:
-                        #add the component from local variables (ie variable not requiring a change of basis)
-                        dataMCB = sp.hstack( (dataMCB.reshape(-1), sp.ones(len(listLocalVariable)*Nel*nNd_elm) )) #no change of variable so only one value adding in dataMCB
+                    if len(listScalarVariable) > 0:
+                        #add the component from scalar variables (ie variable not requiring a change of basis)
+                        dataMCB = sp.hstack( (dataMCB.reshape(-1), sp.ones(len(listScalarVariable)*Nel*nNd_elm) )) #no change of variable so only one value adding in dataMCB
 
-                        rowMCB_loc = np.empty((len(listLocalVariable)*Nel, nNd_elm))
-                        colMCB_loc = np.empty((len(listLocalVariable)*Nel, nNd_elm))
-                        for ivar, var in enumerate(listLocalVariable):
+                        rowMCB_loc = np.empty((len(listScalarVariable)*Nel, nNd_elm))
+                        colMCB_loc = np.empty((len(listScalarVariable)*Nel, nNd_elm))
+                        for ivar, var in enumerate(listScalarVariable):
                             rowMCB_loc[ivar*Nel:(ivar+1)*Nel] = np.arange(Nel).reshape(-1,1) + range_nNd_elm.reshape(1,-1)*Nel + var*(Nel*nNd_elm)
                             colMCB_loc[ivar*Nel:(ivar+1)*Nel] = elm + var*Nnd        
                         
@@ -643,8 +663,12 @@ class Assembly(AssemblyBase):
     def __GetResultGaussPoints(mesh, operator, U, elementType, nb_pg=None):  #return the results at GaussPoints      
         res = 0
         nvar = Variable.GetNumberOfVariable()
+        
+        if isinstance(eval(elementType), dict):
+            TypeOfCoordinateSystem = eval(elementType).get('__TypeOfCoordinateSystem', 'global')                
+        else: TypeOfCoordinateSystem = 'global'
 
-        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh)
+        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh, TypeOfCoordinateSystem)
         associatedVariables = Assembly.__GetAssociatedVariables(elementType)
         
         for ii in range(len(operator.op)):
@@ -937,7 +961,7 @@ class Assembly(AssemblyBase):
         mesh = self.__Mesh
         nvar = Variable.GetNumberOfVariable()
         dim = ProblemDimension.GetDoF()
-        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh)
+        MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh, self.__TypeOfCoordinateSystem)
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType)
         associatedVariables = Assembly.__GetAssociatedVariables(self.__elmType)
@@ -1002,7 +1026,9 @@ class Assembly(AssemblyBase):
 
 
 
-def ConvertData(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, nb_pg =None):    
+def ConvertData(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, nb_pg =None):        
+    if isinstance(data, Number): return data
+    
     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
     if elmType is None: elmType = mesh.GetElementShape()
     if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)

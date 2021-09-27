@@ -67,7 +67,7 @@ class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
 
 bernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['bernoulliBeam_disp', (-1, 'RotY')], 
         'RotX':['lin2'], 'RotY':['bernoulliBeam_rot', (-1, 'DispZ')], 'RotZ':['bernoulliBeam_rot', (1, 'DispY')],
-        'default':['lin2']}  
+        '__default':['lin2'], '__TypeOfCoordinateSystem':'local'}  
 
 # --------------------------------------
 #Timoshenko FCQ beam 
@@ -146,7 +146,8 @@ beamFCQ = {'DispX':['beamFCQ_lin2'],
             'RotX':['beamFCQ_lin2'], 
             'RotY':['beamFCQ_rot'], 
             'RotZ':['beamFCQ_rot'], 
-            'default':['beamFCQ_lin2']}      
+            '__default':['beamFCQ_lin2'],
+            '__TypeOfCoordinateSystem':'local'}      
 
 
 # --------------------------------------
@@ -244,7 +245,8 @@ beam = {'DispX':['lin2'],
         'RotX':['lin2'], 
         'RotY':['beam_rotY', (-1, 'DispZ')], 
         'RotZ':['beam_rotZ', (1, 'DispY')], 
-        'default':['lin2']}         
+        'default':['lin2'],
+        '__TypeOfCoordinateSystem': 'local'}         
 
 def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
     if np.isscalar(k) and k==0: 

@@ -34,8 +34,8 @@ class CohesiveLaw(Spring):
         
         Variable("DispX")
         Variable("DispY")        
-        
-        if ProblemDimension.Get() == "3D": # or ProblemDimension.Get() == "2Dstress" :
+
+        if ProblemDimension.GetDoF() == 3: 
             Variable("DispZ")                           
     
     def GetK(self):
@@ -158,14 +158,36 @@ class CohesiveLaw(Spring):
         self.UpdateIrreversibleDamage()
         
     def ResetTimeIncrement(self):
-        #Damage variable will be recomputed
+        #Damage variable will be recompute. NPOthing to be done here (to be checked)
         pass    
-        # self.__DamageVariable = self.__DamageVariableIrreversible.copy()        
+        # self.__DamageVariable = self.__DamageVariableIrreversible.copy()       
+        
+        
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+       pass
 
-    def GetInterfaceStress(self, Delta, time = None): 
-        #Delta is the relative displacement vector
-        self.__UpdateDamageVariable(Delta)
-        return Spring.GetInterfaceStress(self, Delta, time)
+    def Update(self,assembly, pb, dtime, nlgeom=True):            
+        #nlgeom not implemented
+        #dtime not used for this law
+
+        displacement = pb.GetDoFSolution()
+        
+        if displacement is 0: self.__InterfaceStress = Self.__Delta = 0
+        else:
+            OpDelta  = self.GetOperartorDelta() #Delta is the relative displacement
+            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in OpDelta]
+        
+            self.__UpdateDamageVariable(self.__Delta)
+
+            self.ComputeInterfaceStress(self.__Delta)        
+
+            # K = self.__ChangeBasisK(self.GetK())
+            # self.__InterfaceStress = [sum([self.__Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects in 3D  
+
+    # def GetInterfaceStress(self, Delta, time = None): 
+    #     #Delta is the relative displacement vector
+    #     self.__UpdateDamageVariable(Delta)
+    #     return Spring.GetInterfaceStress(self, Delta, time)
     
 
 
@@ -261,30 +283,30 @@ class CohesiveLaw(Spring):
 
 
 
-if __name__=="__main__":
-    ProblemDimension("3D")
-    GIc = 0.3 ; SImax = 60
-    # delta_I_max = 2*GIc/SImax
-    delta_I_max = 0.04
-    nb_iter = 100
-    sig = []
-    delta_plot = []
-    law = CohesiveLaw(GIc=GIc, SImax = SImax, KI = 1e4, GIIc = 1, SIImax=60, KII=1e4, axis = 0)
-    for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
-        delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
-        sig.append(law.GetInterfaceStress(delta)[2])
-        law.UpdateIrreversibleDamage()
-        delta_plot.append(delta_z)
-        # print(law.GetDamageVariable())
+# if __name__=="__main__":
+#     ProblemDimension("3D")
+#     GIc = 0.3 ; SImax = 60
+#     # delta_I_max = 2*GIc/SImax
+#     delta_I_max = 0.04
+#     nb_iter = 100
+#     sig = []
+#     delta_plot = []
+#     law = CohesiveLaw(GIc=GIc, SImax = SImax, KI = 1e4, GIIc = 1, SIImax=60, KII=1e4, axis = 0)
+#     for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
+#         delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
+#         sig.append(law.GetInterfaceStress(delta)[2])
+#         law.UpdateIrreversibleDamage()
+#         delta_plot.append(delta_z)
+#         # print(law.GetDamageVariable())
     
-    # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
-    #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
-    #     sig.append(law.GetInterfaceStress(delta)[2])
-    #     law.UpdateIrreversibleDamage()
-    #     delta_plot.append(delta_z)
+#     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
+#     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
+#     #     sig.append(law.GetInterfaceStress(delta)[2])
+#     #     law.UpdateIrreversibleDamage()
+#     #     delta_plot.append(delta_z)
     
-    import matplotlib.pyplot as plt
+#     import matplotlib.pyplot as plt
     
-    plt.plot(delta_plot, sig)
+#     plt.plot(delta_plot, sig)
 
 

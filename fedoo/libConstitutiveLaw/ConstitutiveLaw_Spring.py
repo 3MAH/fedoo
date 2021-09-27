@@ -19,8 +19,14 @@ class Spring(ConstitutiveLaw):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": # or ProblemDimension.Get() == "2Dstress" :
+        if ProblemDimension.GetDoF() == 3: 
             Variable("DispZ")                       
+
+    def GetRelativeDisp(self):
+        return self.__Delta
+
+    def GetInterfaceStress(self):
+        return self.__InterfaceStress
 
     def GetK(self):
         return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]        
@@ -49,21 +55,37 @@ class Spring(ConstitutiveLaw):
             
         return K
 
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+       pass
+
+    def Update(self,assembly, pb, dtime, nlgeom=True):            
+        #nlgeom not implemented
+        #dtime not used for this law
+        
+        displacement = pb.GetDoFSolution()
+        if displacement is 0: self.__InterfaceStress = Self.__Delta = 0
+        else:
+            OpDelta  = self.GetOperartorDelta() #Delta is the relative displacement
+            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in OpDelta]
+        
+            self.ComputeInterfaceStress(self.__Delta)        
+
     def GetInterfaceStressOperator(self, **kargs): 
-        #TODO test if it work in 2D and add the 2D case if needed
+        dim = ProblemDimension.GetDoF()
         K = self.__ChangeBasisK(self.GetK())
         
         U, U_vir = GetDispOperator() #relative displacement if used with cohesive element
-        return [sum([U[j]*K[i][j] for j in range(3)]) for i in range(3)]
+        return [sum([U[j]*K[i][j] for j in range(dim)]) for i in range(dim)]
 
     def GetOperartorDelta(self): #operator to get the relative displacement
         U, U_vir = GetDispOperator()  #relative displacement if used with cohesive element
         return U 
         
-    def GetInterfaceStress(self, Delta, time = None): 
+    def ComputeInterfaceStress(self, Delta, dtime = None): 
+        dim = ProblemDimension.GetDoF()
         #Delta is the relative displacement vector
         K = self.__ChangeBasisK(self.GetK())
-        return [sum([Delta[j]*K[i][j] for j in range(3)]) for i in range(3)] #list of 3 objects        
+        self.__InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
     
 
 

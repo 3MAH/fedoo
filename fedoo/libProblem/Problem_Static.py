@@ -1,7 +1,8 @@
 import numpy as np
 from fedoo.libAssembly.Assembly import *
 from fedoo.libProblem.Problem   import *
-from fedoo.libProblem.ProblemPGD   import ProblemPGD
+# from fedoo.libProblem.ProblemPGD   import ProblemPGD
+from fedoo.libProblem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
 def Static(Assembling, ID = "MainProblem"):
@@ -66,6 +67,14 @@ def Static(Assembling, ID = "MainProblem"):
             self.SetA(Assembling.GetMatrix())
             self.SetD(Assembling.GetVector())
             return outValues 
+        
+        def Solve(self, **kargs):
+            #Solve and update weakform (compute stress for instance) without updating global matrix
+            #to avoid update weakform, use updateWF = True
+            updateWF = kargs.pop('updateWF', True)
+            libBase.Solve(self)
+            if updateWF == True:
+                self.Update(compute = 'none')
 
         def ChangeAssembly(self,Assembling, update = True):
             """

@@ -40,7 +40,7 @@ if USE_SIMCOON:
                 ndi = 3 ; nshr = 3
             elif ProblemDimension.Get() in ['2Dstress']:
                 # ndi = 2 ; nshr = 1
-                ndi = 3 ; nshr = 3
+                ndi = 3 ; nshr = 3###shoud be modified?
             elif ProblemDimension.Get() in ['2Dplane']:
                  ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
     
@@ -78,7 +78,11 @@ if USE_SIMCOON:
             if self.__currentGradDisp is 0: return 0
             else: return self.__currentGradDisp
             
-        def GetH(self):
+        def GetH(self, **kargs):
+            #### TODO: try to implement the case pdim=="2Dstress"
+            # pbdim = kargs.get(pbdim, ProblemDimension.Get())
+            
+
             # if self.__Lt is None:
             #     if self.__L is None:                
             #         self.RunUmat(np.eye(3).T.reshape(1,3,3), np.eye(3).T.reshape(1,3,3), time=0., dtime=1.)
@@ -111,10 +115,10 @@ if USE_SIMCOON:
                 
             return H
         
-        def GetStressOperator(self, localFrame=None):
-            H = self.__ChangeBasisH(self.GetH())
+        def GetStressOperator(self, **kargs):
+            H = self.__ChangeBasisH(self.GetH(**kargs))
                           
-            eps, eps_vir = GetStrainOperator()
+            eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
             sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
     
             return sigma # list de 6 objets de type OpDiff
@@ -164,7 +168,7 @@ if USE_SIMCOON:
                 self.__currentStress = None
                 F1 = np.multiply(np.eye(3).reshape(3,3,1) , np.ones((1,1,self.nb_points)), order='F').transpose(2,0,1)
                 # self.__F1 = np.eye(3).T.reshape(1,3,3)
-            else:                    
+            else:   
                 self.__currentGradDisp = np.array(assembly.GetGradTensor(displacement, "GaussPoint"))            
                 #F0.strides and F1.strides should be [n_cols*n_rows*8, 8, n_rows*8] for compatibiliy with the sim.RunUmat_fedoo function
                 F1 = np.add( np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
@@ -172,16 +176,3 @@ if USE_SIMCOON:
             self.compute_Detot(dtime, F1)   
             self.Run(dtime)
             # (DRloc , listDR, Detot, statev) = self.Run(dtime)
-            
-            
-        # def GetStress(self, GradDispTensor, time = None):
-        #     self.__GradDispTenorOld = self.__GradDispTensor
-        #     self.__GradDispTensor = GradDispTensor
-            
-            
-        #     # time not used here because this law require no time effect
-        #     # initilialize values plasticity variables if required
-    
-        #     self.__currentStress = listStressTensor(sigmaFull.T) # list of 6 objets
-            
-

@@ -47,43 +47,46 @@ class InternalForce(WeakForm):
         else: self.__NonLinearStrainOperatorVirtual = 0                     
         
     def UpdateInitialStress(self,InitialStressTensor):                                                
-        self.__InitialStressTensor = InitialStressTensor
+        self.__InitialStressTensor = InitialStressTensor       
         
     def Initialize(self, assembly, pb, initialTime = 0.):
         self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)
         
 
     def Update(self, assembly, pb, dtime):
-        
-        
         self.__ConstitutiveLaw.Update(assembly, pb, dtime, self.__nlgeom)                           
         
         #Doit être adapté à chaque fois ? -> je pense que oui !
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
+        # self.UpdateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
+        
+        
+        # #### DEBUG ONLY
+        # # # print(self.__ConstitutiveLaw.GetPKII())
+        # # # print(self.__ConstitutiveLaw.GetKirchhoff())
+        # # # print(self.__ConstitutiveLaw.etot)
+        # # # print(self.__ConstitutiveLaw.Detot)
+        # # # print('Lt: ', self.__ConstitutiveLaw.Lt[0][1][1])
+        # print('PKII: ', self.__ConstitutiveLaw.GetPKII()[1][0])
+        # print('Kirch: ', self.__ConstitutiveLaw.GetKirchhoff()[1][0])
+        # print('Cauchy ', self.__ConstitutiveLaw.GetCauchy()[1][0])
+        
+        # # print('Eps: ', self.__ConstitutiveLaw.etot[0][1]+self.__ConstitutiveLaw.Detot[0][1], 'PKII: ', self.__ConstitutiveLaw.GetPKII()[1][0])
+        # crd = assembly.GetMesh().GetNodeCoordinates() + pb.GetDisp().T
+        # import numpy as np
+        # S = np.linalg.norm(crd[1]-crd[0]) * np.linalg.norm(crd[4]-crd[0])
+        # F = assembly.GetExternalForces(pb.GetX())
+        # print(np.sum(F[[0,1,4,5]], axis = 0)[1]/S)
+        # # print('Surface: ', S)
+        
+        # # # print('GradU: ', self.__ConstitutiveLaw.GetCurrentGradDisp())
+        ##### FIN DEBUG ONLY
         
         if self.__nlgeom:
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
             self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
-                
-        #     if displacement is 0: self.__InitialGradDispTensor = 0
-        #     else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
-        
-        # return TotalStrain, TotalStress        
-
-        # displacement = pb.GetDisp()
-        # if displacement is 0: TotalStress = TotalStrain = 0
-        # else:
-        #     TotalStrain = assembly.GetStrainTensor(displacement, "GaussPoint", nlgeom=self.__nlgeom)
-        #     TotalStress = self.__ConstitutiveLaw.GetStress(TotalStrain, time)     
-
-        # self.UpdateInitialStress(TotalStress)
-        
-        # if self.__nlgeom:
-        #     if displacement is 0: self.__InitialGradDispTensor = 0
-        #     else: self.__InitialGradDispTensor = assembly.GetGradTensor(displacement, "GaussPoint")
-        
-        # return TotalStrain, TotalStress
+            
 
 
     def Reset(self):
@@ -115,9 +118,10 @@ class InternalForce(WeakForm):
         DiffOp = sum([eps_vir[i] * sigma[i] for i in range(6)])
         
         if self.__InitialStressTensor is not 0:    
-            if self.__NonLinearStrainOperatorVirtual is not 0 :     
+            if self.__NonLinearStrainOperatorVirtual is not 0 :  
                 DiffOp = DiffOp + sum([0 if self.__NonLinearStrainOperatorVirtual[i] is 0 else \
-                                   self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
+                                    self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
+
             DiffOp = DiffOp + sum([0 if eps_vir[i] is 0 else \
                                    eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
 

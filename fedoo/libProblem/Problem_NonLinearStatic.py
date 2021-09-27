@@ -22,8 +22,8 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
             self.__compteurOutput = 0
+            
             self.intervalOutput = None #save results every self.intervalOutput iter or time step if self.__saveOutputAtExactTime = True
-
             self.__saveOutputAtExactTime = True
             self.err_num= 1e-8 #numerical error
         
@@ -86,7 +86,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
             # self.__TotalDisplacement += self.GetX()               
             self.__DU += self.GetX()
-        
+                
         def NewTimeIncrement(self,dt):
             #dt not used for static problem
             self.__Utot += self.__DU
@@ -102,9 +102,8 @@ def _GenerateClass_NonLinearStatic(libBase):
         def NewtonRaphsonIncrement(self):                                      
             #solve and update total displacement. A and D should up to date
             self.Solve()
-            self.__DU += self.GetX()      
-            # self.__TotalDisplacementOld = self.__TotalDisplacement
-            # self.__TotalDisplacement += self.GetX()           
+            self.__DU += self.GetX()
+            # print(self.__DU)
         
         def Update(self, dtime=None, compute = 'all', updateWeakForm = True):   
             """
@@ -231,11 +230,13 @@ def _GenerateClass_NonLinearStatic(libBase):
             #parameters
             max_subiter = kargs.get('max_subiter',6)
             ToleranceNR = kargs.get('ToleranceNR',5e-3)
-            self.t0 = kargs.get('t0',self.t0)
+            self.t0 = kargs.get('t0',self.t0) #time at the start of the time step
             self.tmax = kargs.get('tmax',self.tmax) #time at the end of the time step
-            intervalOutput = kargs.get('intervalOutput',self.intervalOutput)                        
-            dt = kargs.get('dt',0.1)
+            dt = kargs.get('dt',0.1) #initial time step
+            dt_min = kargs.get('dt_min',1e-6) #min time step
             
+            self.__saveOutputAtExactTime = kargs.get('saveOutputAtExactTime',self.__saveOutputAtExactTime)
+            intervalOutput = kargs.get('intervalOutput',self.intervalOutput) # time step for output if saveOutputAtExactTime == 'True' (default) or  number of iter increments between 2 output 
             update_dt = kargs.get('update_dt',True)
             outputFile = kargs.get('outputFile', None)
             
@@ -296,6 +297,9 @@ def _GenerateClass_NonLinearStatic(libBase):
                         dt *= 0.25                                     
                         print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, dt ))
                         
+                        if dt < dt_min: 
+                            raise NameError('Current time step is inferior to the specified minimal time step (dt_min)')   
+                            
                         #reset internal variables, update Stress, initial displacement and assemble global matrix at previous time                                      
                         self.ResetTimeIncrement()  
                         continue                    

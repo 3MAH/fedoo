@@ -52,8 +52,10 @@ class CompositeUD(ElasticAnisotropic):
         
         return {'EX':EL, 'EY':ET, 'EZ':ET, 'GYZ':GTT, 'GXZ':GLT, 'GXY':GLT, 'nuYZ':nuTT, 'nuXZ':nuLT, 'nuXY':nuLT}
 
-    def GetH (self):
-        if ProblemDimension.Get() == "2Dstress":
+    def GetH (self, **kargs):
+        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+
+        if pbdim == "2Dstress":
             print('CompositeUD law for 2Dstress is not implemented')
             return NotImplemented
         
@@ -126,3 +128,8 @@ class CompositeUD(ElasticAnisotropic):
         return H
         
        
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+        pass
+        # for key in self.__parameters:
+        #     self.__parameters['key'] = assemb.ConvertData(data) #convert to gauss point
+            

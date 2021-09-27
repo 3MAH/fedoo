@@ -23,11 +23,11 @@ class Beam(WeakForm):
             Variable("RotX") #torsion rotation 
             Variable("RotY")   
             Variable("RotZ")
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ') , 'global')
-            Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ') , 'global')            
+            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ'))            
         elif ProblemDimension.Get() == '2Dplane':
             Variable("RotZ")
-            Variable.SetVector('Disp' , ['DispX', 'DispY'], 'global' )            
+            Variable.SetVector('Disp' , ['DispX', 'DispY'])            
             Variable.SetVector('Rot' , ['RotZ'] ) 
         elif ProblemDimension.Get() == '2Dstress':
             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."

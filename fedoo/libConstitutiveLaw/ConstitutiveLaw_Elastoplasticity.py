@@ -46,15 +46,17 @@ class ElastoPlasticity(ConstitutiveLaw):
         """
         Set the tolerance of the Newton Raphson algorithm used to get the updated plasticity state (constutive law alogorithm)
         """
-        self.__tol = tol
+        self.__tol = tol        
     
-    def GetHelas (self):        
+    def GetHelas (self, **kargs):
+        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        
         H  = np.zeros((6,6), dtype='object')
         E  = self.__YoungModulus 
         nu = self.__PoissonRatio       
 
         # tester si contrainte plane ou def plane 
-        if ProblemDimension.Get() == "2Dstress":
+        if pbdim == "2Dstress":
             H[0,0]=H[1,1]= E/(1-nu**2)
             H[0,1]= nu*E/(1-nu**2)
             H[3,3] = 0.5*E/(1+nu)    
@@ -124,8 +126,8 @@ class ElastoPlasticity(ConstitutiveLaw):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp
         
-    def GetH(self):        
-        Helas = self.GetHelas() #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
+    def GetH(self,**kargs):        
+        Helas = self.GetHelas(**kargs) #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
 
         if self.__currentSigma is None: return Helas
                         

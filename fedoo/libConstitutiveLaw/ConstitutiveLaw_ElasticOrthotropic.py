@@ -25,9 +25,11 @@ class ElasticOrthotropic(ElasticAnisotropic):
     def GetEngineeringConstants(self):
         return self.__parameters
     
-    def GetH (self):
+    def GetH (self,**kargs):
+        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        
         #need to be checked
-        if ProblemDimension.Get() == "2Dstress":
+        if pbdim == "2Dstress":
             print('ElasticOrthotropic law for 2Dstress is not implemented')
             return NotImplemented
         

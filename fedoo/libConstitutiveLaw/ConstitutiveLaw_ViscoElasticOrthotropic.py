@@ -1,4 +1,5 @@
 #derive de ConstitutiveLaw
+####WARNING: not working constitutive law
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import *

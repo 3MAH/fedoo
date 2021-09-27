@@ -118,7 +118,7 @@ def SetSolver(solver, tol=1e-5, precond=True):
     ProblemBase.GetAll()['MainProblem'].SetSolver(solver,tol,precond)
 
 ### Functions that may be defined depending on the type of problem
-def GetDisp(name='all'): return ProblemBase.GetAll()['MainProblem'].GetDisp(name)
+def GetDisp(name='Disp'): return ProblemBase.GetAll()['MainProblem'].GetDisp(name)
 def GetRot(name='all'): return ProblemBase.GetAll()['MainProblem'].GetRot(name)
 def Update(): return ProblemBase.GetAll()['MainProblem'].Update() 
 def ChangeAssembly(Assembling): ProblemBase.GetAll()['MainProblem'].ChangeAssembly(Assembling)
@@ -146,7 +146,7 @@ def GetD(): return ProblemBase.GetAll()["MainProblem"].GetD()
 def GetMesh(): return ProblemBase.GetAll()["MainProblem"].GetMesh()
 def SetD(D): ProblemBase.GetAll()["MainProblem"].SetD(D)
 def SetB(B): ProblemBase.GetAll()["MainProblem"].SetB(B)
-def Solve(): ProblemBase.GetAll()["MainProblem"].Solve()
+def Solve(**kargs): ProblemBase.GetAll()["MainProblem"].Solve(**kargs)
 def GetX(): return ProblemBase.GetAll()["MainProblem"].GetX()
 def ApplyBoundaryCondition(): ProblemBase.GetAll()["MainProblem"].ApplyBoundaryCondition()
 def GetDoFSolution(name='all'): return ProblemBase.GetAll()["MainProblem"].GetDoFSolution(name)

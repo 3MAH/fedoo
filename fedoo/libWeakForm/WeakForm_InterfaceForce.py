@@ -5,7 +5,7 @@ from fedoo.libUtil.Variable import Variable
 from fedoo.libUtil.Dimension import ProblemDimension
 
 class InterfaceForce(WeakForm):
-    def __init__(self, CurrentConstitutiveLaw, ID = ""):
+    def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
 
@@ -24,25 +24,28 @@ class InterfaceForce(WeakForm):
                
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__InitialStressVector = 0
+        
+        if nlgeom == True:
+            raise NameError('nlgeom non implemented for Interface force')
+        self.__nlgeom = nlgeom
 
     def UpdateInitialStress(self,InitialStressVector):                                                
         self.__InitialStressVector = InitialStressVector
 
-    def Update(self, assembly, pb, time):
+    def Update(self, assembly, pb, dtime):
         #function called when the problem is updated (NR loop or time increment)
         #- No nlgeom effect for now
         #- Change in constitutive law (internal variable)
         
-        displacement = pb.GetDisp()
-        if displacement is 0: InterfaceStress = Delta = 0
-        else:
-            OpDelta = self.__ConstitutiveLaw.GetOperartorDelta() #Delta is the relative displacement
-            Delta = [assembly.GetGaussPointResult(op, displacement) for op in OpDelta]
-            InterfaceStress = self.__ConstitutiveLaw.GetInterfaceStress(Delta, time)     
+        self.__ConstitutiveLaw.Update(assembly, pb, dtime)                           
         
-        self.UpdateInitialStress(InterfaceStress)
+        self.UpdateInitialStress(self.__ConstitutiveLaw.GetInterfaceStress())
         
-        return Delta, InterfaceStress
+        if self.__nlgeom: #need to be modifed for nlgeom
+            if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
+                raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
+            self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
+        
 
     def ResetTimeIncrement(self):
         self.__ConstitutiveLaw.ResetTimeIncrement()
@@ -59,12 +62,14 @@ class InterfaceForce(WeakForm):
         F = self.__ConstitutiveLaw.GetInterfaceStressOperator(localFrame=localFrame)            
         
         U, U_vir = GetDispOperator()
+        
+        dim = ProblemDimension.GetDoF()
 
-        DiffOp = sum([U_vir[i] * F[i] for i in range(3)])    
+        DiffOp = sum([U_vir[i] * F[i] for i in range(dim)])    
         
         if self.__InitialStressVector is not 0:    
             DiffOp = DiffOp + sum([0 if U_vir[i] is 0 else \
-                                   U_vir[i] * self.__InitialStressVector[i] for i in range(3)])
+                                   U_vir[i] * self.__InitialStressVector[i] for i in range(dim)])
 
         return DiffOp
 

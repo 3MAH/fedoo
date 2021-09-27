@@ -40,6 +40,8 @@ class AssemblyPGD(AssemblyFEM):
         if compute = 'matrix', compute only the matrix
         if compute = 'vector', compute only the vector
         """
+        if compute == 'none': return
+        
         mesh = self.__Mesh
         dim = mesh.GetDimension()
 

@@ -7,6 +7,7 @@ class Variable:
 
     def __init__(self,name):
         assert isinstance(name,str) , "The variable must be a string"
+        assert name[:2] != '__', "Names of variable should ne begin by '__'"
 
         if name not in Variable.__variable.keys():
             Variable.__variable[name] = Variable.__rank
@@ -45,21 +46,16 @@ class Variable:
     #     Variable.__variableDerivative[Variable.GetRank(name)] = [Variable.GetRank(name_derivative), sign]
 
     @staticmethod
-    def SetVector( name, listOfVariables, CoordinateSystem = 'local' ):
+    def SetVector( name, listOfVariables):
         """
         Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
         In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
-        If the coordinate system is 'local' or 'global'. If it is set to 'global', a change of basis is applied during the assembly if the mesh is associated to the physical space (i.e mesh.coordinateId incudes 'X', 'Y', and/or 'Z').
         """        
-        Variable.__vector[name] = {'listOfVariables': [Variable.GetRank(var) for var in listOfVariables], 'CoordinateSystem': CoordinateSystem} 
+        Variable.__vector[name] = {'listOfVariables': [Variable.GetRank(var) for var in listOfVariables]} 
 
     @staticmethod
     def GetVector( name ):
         return Variable.__vector[name]['listOfVariables']
-
-    @staticmethod    
-    def GetVectorCoordinateSystem( name ):
-        return Variable.__vector[name]['CoordinateSystem']   
 
     # @staticmethod
     # def GetDerivative(var):

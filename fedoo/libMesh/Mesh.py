@@ -160,8 +160,12 @@ class Mesh(MeshBase):
 
     def FindCoincidentNodes(self,tol=1e-8):
         """ 
-        Merge some nodes 
-        The total number and the id of nodes are modified
+        Find some nodes with the same position considering a tolerance given by the argument tol. 
+        return an array of shape (numberOfCoincidentNodes, 2) where each line is a pair of nodes that are at the same position.
+        These pairs of nodes can be merged using :
+            meshObject.MergeNodes(meshObject.findCoincidentNodes()) 
+            
+        where meshObject is the Mesh object containing merged coincidentNodes.
         """
         Nnd = self.GetNumberOfNodes()
         decimal_round = int(-np.log10(tol)-1)
@@ -228,6 +232,14 @@ class Mesh(MeshBase):
             self.__SetOfNodes[key] = new_num[self.__SetOfNodes[key]]
             
         return new_num
+    
+    def FindNonUsedNodes(self):  
+        """ 
+        Test if some nodes are not associated with any element.
+        Return a 1D array containing the id of the non used nodes.
+        if all elements are used, return an empty array.        
+        """
+        return np.setdiff1d(np.arange(self.GetNumberOfNodes()), np.unique(self.__ElementTable.flatten()))
     
     def RemoveNonUsedNodes(self):  
         """ 

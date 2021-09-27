@@ -103,7 +103,7 @@ class Problem(ProblemBase):
     def SetD(self,D):
         self.__D = D        
 
-    def Solve(self):
+    def Solve(self, **kargs):
         if len(self.__A.shape) == 2: #A is a matrix        
             if len(self.__DofBlocked) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.ApplyBoundaryCondition()" is probably missing')          
              # to delete after a careful validation of the other case
