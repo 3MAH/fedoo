@@ -141,7 +141,7 @@ class BoundaryCondition :
         ### only for FEM for now
         ### is used only for incremental problems
         U = problem.GetDoFSolution()
-        F = problem.GetExternalForce()
+        F = problem.GetExternalForces()
         Nnodes = problem.GetMesh().GetNumberOfNodes()
         for e in BoundaryCondition.__lbc[problem.GetID()]:            
             if e.__DefautInitialValue is None:

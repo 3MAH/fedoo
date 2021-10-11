@@ -92,8 +92,8 @@ class ProblemBase:
     def GetNodalElasticEnergy(self):
         raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
         
-    def GetExternalForce(self, name):
-        raise NameError("The method 'GetExternalForce' is not defined for this kind of problem")    
+    def GetExternalForces(self, name = 'all'):
+        raise NameError("The method 'GetExternalForces' is not defined for this kind of problem")    
 
     def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
         raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
@@ -120,7 +120,7 @@ def SetSolver(solver, tol=1e-5, precond=True):
 ### Functions that may be defined depending on the type of problem
 def GetDisp(name='Disp'): return ProblemBase.GetAll()['MainProblem'].GetDisp(name)
 def GetRot(name='all'): return ProblemBase.GetAll()['MainProblem'].GetRot(name)
-def Update(): return ProblemBase.GetAll()['MainProblem'].Update() 
+def Update(**kargs): return ProblemBase.GetAll()['MainProblem'].Update(**kargs) 
 def ChangeAssembly(Assembling): ProblemBase.GetAll()['MainProblem'].ChangeAssembly(Assembling)
 def SetNewtonRaphsonErrorCriterion(ErrorCriterion): ProblemBase.GetAll()['MainProblem'].SetNewtonRaphsonErrorCriterion(ErrorCriterion)
 def NewtonRaphsonError(): return ProblemBase.GetAll()['MainProblem'].NewtonRaphsonError()
@@ -152,11 +152,9 @@ def ApplyBoundaryCondition(): ProblemBase.GetAll()["MainProblem"].ApplyBoundaryC
 def GetDoFSolution(name='all'): return ProblemBase.GetAll()["MainProblem"].GetDoFSolution(name)
 def SetDoFSolution(name,value): ProblemBase.GetAll()["MainProblem"].SetDoFSolution(name,value)
 def SetInitialBCToCurrent(): ProblemBase.GetAll()["MainProblem"].SetInitialBCToCurrent()
+def GetVectorComponent(vector, name='all'): return ProblemBase.GetAll()["MainProblem"]._GetVectorComponent(vector, name)
 
-#functions only defined for Newmark problem
-def GetX():
-    return ProblemBase.GetAll()['MainProblem'].GetX()
-    
+#functions only defined for Newmark problem 
 def GetXdot():
     return ProblemBase.GetAll()['MainProblem'].GetXdot()
 
@@ -221,8 +219,8 @@ def GetNodalElasticEnergy():
     """
     return ProblemBase.GetAll()['MainProblem'].GetNodalElasticEnergy()
 
-def GetExternalForce(name='all'):
-    return ProblemBase.GetAll()['MainProblem'].GetExternalForce(name)
+def GetExternalForces(name='all'):
+    return ProblemBase.GetAll()['MainProblem'].GetExternalForces(name)
 
 
 def GetKineticEnergy():

@@ -42,7 +42,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
             return self._GetVectorComponent(self.__Utot + self.__DU, name)        
         
-        def GetExternalForce(self, name = 'all'):
+        def GetExternalForces(self, name = 'all'):
             return self._GetVectorComponent(-self.GetD(), name)        
         
         def UpdateA(self, dt = None):

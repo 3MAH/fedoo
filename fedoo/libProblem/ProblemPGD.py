@@ -173,7 +173,7 @@ class ProblemPGD(ProblemBase):
         self.__X, self.__Xbc, F, self.__DofBlocked, self.__DofFree, self.__MatCB = BoundaryCondition.ApplyToPGD(self.__Mesh, self.__X, self.__ProblemDimension, timeFactor, timeFactorOld, self.GetID())
         self.__B = F 
 
-    def GetDoFSolution(self,name):
+    def GetDoFSolution(self,name='all'):
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 
