@@ -3,18 +3,20 @@ import numpy as np
 from fedoo.libUtil.Dimension import *
 from fedoo.libUtil.Variable  import *
 from fedoo.libPGD.SeparatedArray import *
+from fedoo.libProblem.ProblemBase import ProblemBase
+
 from scipy import sparse
 
-class BoundaryCondition :
+class BoundaryCondition() :
     """
     Classe de condition limite
     
     Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
-    __lbc = {"MainProblem":[]} # variable statique : liste des BC crees
+    __lbc = {} # variable statique : liste des BC crees
 
-    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ProblemID = "MainProblem"):
+    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", ProblemID = None):
         """
         Define some boundary conditions        
 
@@ -41,8 +43,10 @@ class BoundaryCondition :
             if array: the len of the array should be = to the number of dof defined in the BC
 
             Default: None
-        ProblemID : TYPE, optional
-            DESCRIPTION. The default is "MainProblem".
+        ID : str, optional
+            Define an ID for the Boundary Conditions. Default is "". The same ID may be used for several BC.
+        ProblemID : str, optional
+            DESCRIPTION. The default is the active Problem.
 
         Returns
         -------
@@ -54,8 +58,11 @@ class BoundaryCondition :
 
 
         """
-        
+        if ProblemID is None: ProblemID = ProblemBase.GetActive().GetID()
+        assert ProblemID in ProblemBase.GetAll(), "The problem " + ProblemID + " doesn't exit. Create the Problem before defining boundary conditions."
         assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
+        
+        self.__ID = ID
         
         if timeEvolution is None: 
             def timeEvolution(timeFactor): return timeFactor
@@ -155,7 +162,7 @@ class BoundaryCondition :
             
                 
     @staticmethod
-    def Apply(n, timeFactor = 1, timeFactorOld = None, ProblemID = "MainProblem"):
+    def Apply(n, timeFactor = 1, timeFactorOld = None, ProblemID = None):        
         
         DoF = Variable.GetNumberOfVariable()     
         Uimp = np.zeros(DoF*n)
@@ -166,7 +173,7 @@ class BoundaryCondition :
         data = []
         row = []
         col = []
-        for e in BoundaryCondition.__lbc[ProblemID]:
+        for e in BoundaryCondition.GetAll(ProblemID):
             if e.__BoundaryType == 'Dirichlet':
                 Uimp = e.__ApplyTo(Uimp, n, timeFactor, timeFactorOld)
                 DofB = np.hstack((DofB,e.__GlobalIndex))
@@ -200,14 +207,16 @@ class BoundaryCondition :
             M = sparse.coo_matrix( 
                 (np.hstack(data), (np.hstack(row),np.hstack(col))), 
                 shape=(DoF*n,DoF*n))
-                       
+            
+            # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
+
+                                   
             Uimp = Uimp	+ M@Uimp 
             
             M = (M+M@M).tocoo()
             data = M.data
             row = M.row
             col = M.col
-            # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
 
             #modification col numbering from DofL to np.arange(len(DofL))
             changeInd = np.full(DoF*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
@@ -234,7 +243,8 @@ class BoundaryCondition :
     # verifier l'utlisation de var dans boundary conditions PGD
     # reprendre les conditions aux limites en incluant les méthodes de pénalités pour des conditions aux limites plus exotiques
     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
-    def ApplyToPGD(meshPGD, X, shapeX, timeFactor = 1, timeFactorOld = None, ProblemID = "MainProblem"): 
+    def ApplyToPGD(meshPGD, X, shapeX, timeFactor = 1, timeFactorOld = None, ProblemID = None):
+
         Xbc = 0 #SeparatedZeros(shapeX)
         F = 0 
 
@@ -249,7 +259,7 @@ class BoundaryCondition :
         Nnd  = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
         
-        for e in BoundaryCondition.__lbc[ProblemID]:
+        for e in BoundaryCondition.GetAll(ProblemID):
             SetOfNodesForBC = meshPGD.GetSetOfNodes(e.__SetOfID)            
             if isinstance(e.__Value, list): e.__Value = np.array(e.__Value)
             
@@ -438,18 +448,42 @@ class BoundaryCondition :
         if timeEvolution is not None: self.__timeEvolution = timeEvolution        
         self.__Value = newValues # can be a float or an array !  
         
-    def Remove(self, ProblemID = "MainProblem"):
-        BoundaryCondition.__lbc[ProblemID].remove(self)
+    def Remove(self, ProblemID = None):
+        BoundaryCondition.GetAll(ProblemID).remove(self)
         del self
         
-    @staticmethod
-    def RemoveAll(ProblemID = "MainProblem"):
-        del BoundaryCondition.__lbc[ProblemID]
-
-    @staticmethod
-    def GetAll(ProblemID = "MainProblem"):        
-        return BoundaryCondition.__lbc[ProblemID]
-
+    def GetID(self):
+        return self.__ID
+    
+    def GetType(self):
+        return self.__BoundaryType
         
+    @staticmethod
+    def RemoveAll(ProblemID = None):
+        if ProblemID is None: ProblemID = ProblemBase.GetActive().GetID()
+        if ProblemID in BoundaryCondition.__lbc:
+            del BoundaryCondition.__lbc[ProblemID]
+
+    @staticmethod
+    def GetAll(ProblemID = None):        
+        if ProblemID is None: return BoundaryCondition.__lbc[ProblemBase.GetActive().GetID()]
+        else: return BoundaryCondition.__lbc[ProblemID]
+
+    @staticmethod
+    def printID(ProblemID = None):        
+        listid = [str(i) + ": " + bc.GetID() if bc.GetID() != "" else "No ID" for i,bc in enumerate(BoundaryCondition.GetAll(ProblemID))]
+        print("\n".join(listid))
+
+    @staticmethod
+    def print(ProblemID = None):        
+        listid = [str(i) + ": " + bc.GetID() + " - " + bc.GetType() for i,bc in enumerate(BoundaryCondition.GetAll(ProblemID))]
+        print("\n".join(listid))
+
+    @staticmethod
+    def RemoveID(ID, ProblemID = None):  
+        if ProblemID is None: ProblemID = ProblemBase.GetActive().GetID()
+        if ProblemID in BoundaryCondition.__lbc:                  
+            BoundaryCondition.__lbc[ProblemID] = [bc for bc in BoundaryCondition.__lbc[ProblemID] if bc.GetID() != ID]
+                
 if __name__ == "__main__":
     pass

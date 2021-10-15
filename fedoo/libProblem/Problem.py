@@ -119,7 +119,7 @@ class Problem(ProblemBase):
                 self.__X[self.__DofFree]  = self._ProblemBase__Solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self.__Xbc)  )   
             else:
                 self.__X[self.__DofFree]  = self._ProblemBase__Solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self.__Xbc)  )                   
-            
+                       
             self.__X = self.__MatCB * self.__X[self.__DofFree]  + self.__Xbc
 
                 

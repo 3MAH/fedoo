@@ -4,6 +4,7 @@ import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
 
+t0 = time.time()
 Util.ProblemDimension("3D")
 
 DataINP = Util.ReadINP('Job-1.inp')
@@ -15,7 +16,7 @@ INP.toMesh(meshID = "Domain")
 # data.toVTK()
 
 #alternative mesh below (uncomment the line)
-# Mesh.BoxMesh(Nx=11, Ny=11, Nz=11, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
+# Mesh.BoxMesh(Nx=51, Ny=51, Nz=51, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
     
 type_el = Mesh.GetAll()['Domain'].GetElementShape()
 
@@ -70,8 +71,8 @@ Problem.ApplyBoundaryCondition()
 
 #--------------- Solve --------------------------------------------------------
 Problem.SetSolver('CG')
-t0 = time.time() 
 print('Solving...')
+print(time.time()-t0)
 Problem.Solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
@@ -79,8 +80,8 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain() 
+TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetCurrentStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
 Volume_mesh = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)

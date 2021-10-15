@@ -68,6 +68,9 @@ if USE_SIMCOON:
         def GetCurrentStress(self): #same as GetPKII (used for small def)
             return listStressTensor(self.PKII.T)
 
+        def GetStress(self): #same as GetPKII (used for small def)
+            return listStressTensor(self.PKII.T)
+        
         # def GetHelas (self):
         #     # if self.__L is None:                
         #     #     self.RunUmat(np.eye(3).T.reshape(1,3,3), np.eye(3).T.reshape(1,3,3), time=0., dtime=1.)

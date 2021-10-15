@@ -122,6 +122,10 @@ class ElastoPlasticity(ConstitutiveLaw):
     
     def GetPKII(self):
         return self.__currentSigma
+
+    def GetStress(self): #same as GetPKII
+        #alias of GetPKII mainly use for small strain displacement problems
+        return self.__currentSigma
     
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp
