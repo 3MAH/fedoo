@@ -119,7 +119,7 @@ class Problem(ProblemBase):
                 self.__X[self.__DofFree]  = self._ProblemBase__Solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self.__Xbc)  )   
             else:
                 self.__X[self.__DofFree]  = self._ProblemBase__Solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self.__Xbc)  )                   
-            
+                       
             self.__X = self.__MatCB * self.__X[self.__DofFree]  + self.__Xbc
 
                 
@@ -136,10 +136,10 @@ class Problem(ProblemBase):
     def SetInitialBCToCurrent(self):
         BoundaryCondition.setInitialToCurrent(self)
 
-    def GetX(self):
+    def GetX(self): #solution of the linear system
         return self.__X
     
-    def GetDoFSolution(self,name='all'):
+    def GetDoFSolution(self,name='all'): #solution of the problem (same as GetX for linear problems if name=='all')
         return self._GetVectorComponent(self.__X, name) 
 
     def SetDoFSolution(self,name,value):

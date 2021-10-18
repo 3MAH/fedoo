@@ -49,7 +49,7 @@ def Static(Assembling, ID = "MainProblem"):
             self.ApplyBoundaryCondition()
 
         
-        def Update(self, time=None, compute = 'all'):   
+        def Update(self, dtime=1, compute = 'all'):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -63,7 +63,7 @@ def Static(Assembling, ID = "MainProblem"):
 #            self.SetA(Assembling.GetMatrix())
 #            self.SetD(Assembling.GetVector())
 #            
-            outValues = self.__Assembly.Update(self, time, compute)  
+            outValues = self.__Assembly.Update(self, dtime, compute)  
             self.SetA(Assembling.GetMatrix())
             self.SetD(Assembling.GetVector())
             return outValues 

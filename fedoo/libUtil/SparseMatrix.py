@@ -12,78 +12,163 @@ from numbers import Number
 
 
 
-# class _BlocSparseOld():
-    
-#     def __init__(self, nbBlocRow, nbBlocCol,nbpg=None):
-#         self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
-#         self.col = None
-#         self.row = None
-#         self.blocShape = None
-#         self.nbBlocRow = nbBlocRow
-#         self.nbBlocCol = nbBlocCol
-#         self.nbpg=nbpg
-        
-# #    def addToBloc(self, Mat, rowBloc, colBloc):
-# #        #Mat should be a scipy matrix using the csr format
-# #        bloc = self.data[rowBloc][colBloc]
-# #        if bloc is 0: 
-# #            self.data[rowBloc][colBloc] = Mat.copy()
-# #            self.data_coo[rowBloc][colBloc] = self.data[row][col].tocoo(copy = False)
-# #            #row are sorted for data_coo
-# #        else: 
-# #            bloc.data = bloc.data + Mat.data
-
-#     def addToBloc(self, A, B, coef, rowBloc, colBloc):
-#         #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
-        
-#         NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
-#         NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B
-#         nb_pg = self.nbpg
-                
-#         if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
-        
-#         if self.data[rowBloc][colBloc] is 0: 
-#             if self.nbpg is None:
-#                 self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
-#             else:
-#                 self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
-        
-#         else:
-#             if self.nbpg is None:
-#                 self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA) @ (B.data.reshape(-1,1,NnzColPerRowB)))           
-#             else:
-#                 self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each PG we build a nbNode x nbNode matrix
-        
-#         if self.col is None:
-#             # column indieces of A defined in A.indices are the row indices in final matrix
-#             # column indieces of B defined in B.indices are the column indices in final matrix
-#             if self.nbpg is None:
-#                 self.row = (A.indices.reshape(-1,NnzColPerRowA,1) @ np.ones((1,NnzColPerRowB), np.int32)).ravel()
-#                 self.col = (np.ones((NnzColPerRowA,1), np.int32) @ B.indices.reshape(-1,1,NnzColPerRowB) ).ravel()
-#                 self.blocShape = (A.shape[1], B.shape[1])
-#             else:
-#                 NelA = A.shape[0]//self.nbpg
-#                 NelB = B.shape[0]//self.nbpg
-#                 self.row = (A.indices[0:NelA*NnzColPerRowA].reshape(NelA,NnzColPerRowA,1) @ np.ones((1,NnzColPerRowB), np.int32)).ravel()
-#                 self.col = (np.ones((NnzColPerRowA,1), np.int32) @ B.indices[0:NelB*NnzColPerRowB].reshape(NelB,1,NnzColPerRowB) ).ravel()
-#                 self.blocShape = (A.shape[1], B.shape[1])                
-               
-#     def toCSR(self):    
-#         ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
-#         ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
-#         ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
-#         Res = sparse.coo_matrix((ResDat, (ResRow,ResCol)), shape=(self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol), copy = False).tocsr()
-# #        Res = Res2.tocsr()
-# #        del Res2 
-#         Res.data.round(10, Res.data)
-#         Res.eliminate_zeros()
-#         return Res
-
-
-
-
-
 class _BlocSparse():
+    
+    def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None):
+        #savedBlocStructure are data from similar structured blocsparse that avoid time consuming operations
+        self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
+        if savedBlocStructure is None: 
+            #array for bloc coo structure
+            self.col = None
+            self.row = None
+            
+            #shape of a single bloc
+            self.blocShape = None
+            
+            #matrix to convert coo data to csr data
+            self.Matrix_convertCOOtoCSR = None
+            
+            #array for csr structure (bloc or whole depending on the choosen model)
+            self.indices_csr = None
+            self.indptr_csr = None
+        else:
+            self.col = savedBlocStructure['col']
+            self.row = savedBlocStructure['row']
+            self.blocShape = savedBlocStructure['blocShape']
+            self.Matrix_convertCOOtoCSR = savedBlocStructure['Matrix_convertCOOtoCSR']
+            self.indices_csr = savedBlocStructure['indices_csr']
+            self.indptr_csr = savedBlocStructure['indptr_csr']
+
+        self.nbBlocRow = nbBlocRow
+        self.nbBlocCol = nbBlocCol
+        self.nbpg=nbpg
+        
+#    def addToBloc(self, Mat, rowBloc, colBloc):
+#        #Mat should be a scipy matrix using the csr format
+#        bloc = self.data[rowBloc][colBloc]
+#        if bloc is 0: 
+#            self.data[rowBloc][colBloc] = Mat.copy()
+#            self.data_coo[rowBloc][colBloc] = self.data[row][col].tocoo(copy = False)
+#            #row are sorted for data_coo
+#        else: 
+#            bloc.data = bloc.data + Mat.data
+
+
+    def addToBlocATB(self, A, B, coef, rowBloc, colBloc):
+        #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
+        
+        NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
+        NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B
+        nb_pg = self.nbpg
+                
+        if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
+        
+        if self.data[rowBloc][colBloc] is 0: 
+            if self.nbpg is None:
+                self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
+            else:
+                self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+        
+        else:
+            if self.nbpg is None:
+                self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA) @ (B.data.reshape(-1,1,NnzColPerRowB)))           
+            else:
+                self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each PG we build a nbNode x nbNode matrix
+        
+        if self.col is None:
+            # column indieces of A defined in A.indices are the row indices in final matrix
+            # column indieces of B defined in B.indices are the column indices in final matrix
+            if self.nbpg is None:
+                self.row = (A.indices.reshape(-1,NnzColPerRowA,1) @ np.ones((1,NnzColPerRowB), np.int32)).ravel()
+                self.col = (np.ones((NnzColPerRowA,1), np.int32) @ B.indices.reshape(-1,1,NnzColPerRowB) ).ravel()
+                self.blocShape = (A.shape[1], B.shape[1])
+            else:
+                NelA = A.shape[0]//self.nbpg
+                NelB = B.shape[0]//self.nbpg
+                self.row = (A.indices[0:NelA*NnzColPerRowA].reshape(NelA,NnzColPerRowA,1) @ np.ones((1,NnzColPerRowB), np.int32)).ravel()
+                self.col = (np.ones((NnzColPerRowA,1), np.int32) @ B.indices[0:NelB*NnzColPerRowB].reshape(NelB,1,NnzColPerRowB) ).ravel()
+                self.blocShape = (A.shape[1], B.shape[1])                
+               
+    def toCSR(self): #should be improved in some way, perhaps by using a cpp script 
+        # import time
+        # start=time.time()
+        method =1
+        if method == 0:
+            ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
+            ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+            ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+    
+            Res = sparse.coo_matrix((ResDat, (ResRow,ResCol)), shape=(self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol), copy = False).tocsr()
+        elif method in [1,2]:
+            if self.Matrix_convertCOOtoCSR is None:
+                #create alias
+                if method == 1: 
+                    #compute intermediate csr matrix for each block
+                    row_coo = self.row   
+                    col_coo = self.col
+                    shape_coo = self.blocShape
+                elif method == 2:                     
+                    row_coo = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+                    col_coo = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+                    shape_coo=[self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol]
+                            
+                #compute convert matrix  that convert coo data to csr data
+                data = np.ones(len(row_coo), dtype = np.int32) 
+                ref = row_coo.astype(np.int64)*shape_coo[1] + col_coo #ref for sorting by row indices then col indices in each row 
+                sorted_ind = ref.argsort()
+                indices = sorted_ind       
+        
+                #compute indptr of the convert matrix in csr format
+                (val,ind_unique, count) = np.unique(ref, return_index=True, return_counts = True) #count the unique values that should be present in the csr data array (the duplicated values will be sumed)        
+                indptr = np.empty(len(val)+1, dtype = np.int32)
+                indptr[0] = 0 
+                np.cumsum(count, out = indptr[1:])
+                
+                self.Matrix_convertCOOtoCSR = sparse.csr_matrix((data, indices, indptr), shape=(len(val), len(col_coo)))        
+        
+                #compute indices and indptr the final block csr matrix
+                self.indices_csr = col_coo[ind_unique]
+                
+                nb_nnz_row = np.bincount(row_coo[ind_unique], minlength=shape_coo[0]) #nb_nnz_row[i] is the number of non zero term in row i. 
+                self.indptr_csr = np.empty(shape_coo[0]+1, dtype = np.int32)
+                self.indptr_csr[0] = 0 
+                np.cumsum(nb_nnz_row, out = self.indptr_csr[1:])
+
+            if method == 1:
+                blocks = [[sparse.csr_matrix( (self.Matrix_convertCOOtoCSR@self.data[i][j].ravel(), self.indices_csr, self.indptr_csr), shape=(self.blocShape[0],self.blocShape[1]), copy = False) if self.data[i][j] is not 0 else None for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow) ]        
+                Res = sparse.bmat(blocks, format ='csr')
+            elif method == 2:
+                data_coo = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
+                Res = sparse.csr_matrix((self.Matrix_convertCOOtoCSR @ data_coo, self.indices_csr, self.indptr_csr), shape =  (self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol))
+        
+        # print(time.time()-start)
+        # Res.eliminate_zeros()
+        return Res    
+        
+        
+        
+
+    def GetBlocStructure(self):
+        #return data that may be reuse with other blocsparse
+        return {'col': self.col, 'row':self.row, 'blocShape':self.blocShape,\
+                'Matrix_convertCOOtoCSR':self.Matrix_convertCOOtoCSR, \
+                'indices_csr':self.indices_csr, 'indptr_csr': self.indptr_csr}
+
+        
+        
+        # ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
+        # ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+        # ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+        # Res = sparse.coo_matrix((ResDat, (ResRow,ResCol)), shape=(self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol), copy = False).tocsr()
+        # # Res.data.round(10, Res.data)
+        # Res.eliminate_zeros()
+        # return Res
+
+
+
+
+
+class _BlocSparseOld():
     
     def __init__(self, nbBlocRow, nbBlocCol):
         self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
@@ -120,7 +205,7 @@ class _BlocSparse():
             self.blocShape = (A.shape[1], B.shape[1])
 
         return temp             
-    
+           
     def addToBloc(self, Arr, coef, rowBloc, colBloc):
         #Arr should be an array of size (totalNbPG = nb_pg*Nel, NndPerEl, NndPerEl)
         #This Arr gives the local assembled matrix associated to each PG 
@@ -139,7 +224,7 @@ class _BlocSparse():
         ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
         ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
         ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
-        
+
         Res = sparse.coo_matrix((ResDat, (ResRow,ResCol)), shape=(self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol), copy = False).tocsr()
         # Res.data.round(10, Res.data)
         Res.eliminate_zeros()

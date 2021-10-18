@@ -22,7 +22,7 @@ class ElasticIsotrop(ElasticAnisotropic):
         return self.__PoissonRatio       
     
     def GetH (self, **kargs):
-        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        pbdim = kargs.get('pbdim', ProblemDimension.Get())
         
         #the returned stiffness matrix is 6x6 even in 2D
         H  = sp.zeros((6,6), dtype='object')

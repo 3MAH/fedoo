@@ -145,7 +145,7 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
 
     #compute tensorstrain and tensorstress
     TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "Nodal", nlgeom = False)       
-    TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStress(TensorStrain)
+    TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
     
     try:
         if dataID.lower() == 'stress':

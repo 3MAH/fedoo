@@ -21,7 +21,7 @@ def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', t
         listVar = tuple(eq[1::3].astype(int))
         BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), ProblemID = ProblemID)
 
-def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
     """
     Parameters
     ----------
@@ -40,13 +40,13 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     tol : float, optional
         Tolerance for the position of nodes. The default is 1e-8.
     ProblemID : ProblemID on which the boundary conditions are applied
-        The default is 'MainProblem'.
+        The default is the active Problem.
 
     Returns
     -------
     None.
 
-    """
+    """    
     #TODO: add set to the mesh and don't compute the set if the set are already present
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3
@@ -330,7 +330,7 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd], ProblemID = ProblemID)
 
 
-def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, ProblemID = None):
     """
     Parameters
     ----------

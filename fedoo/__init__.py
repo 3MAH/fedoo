@@ -5,4 +5,5 @@ from . import libConstitutiveLaw as ConstitutiveLaw
 from . import libWeakForm as WeakForm
 from . import libAssembly as Assembly
 from . import libProblem as Problem
+from . import libHomogen as Homogen
 from . import libPGD as PGD

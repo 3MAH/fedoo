@@ -37,6 +37,10 @@ class ElasticAnisotropic(ConstitutiveLaw):
     def GetCurrentStress(self):
         #alias of GetPKII mainly use for small strain displacement problems
         return (self.__currentSigma)
+
+    def GetStress(self):
+        #Same as GetCurrentStress
+        return (self.__currentSigma)
     
     def GetStrain(self):
         return self.__currentStrain
@@ -113,12 +117,12 @@ class ElasticAnisotropic(ConstitutiveLaw):
        
         
        
-    # def GetStress(self, StrainTensor):     
-    #     H = self.__ChangeBasisH(self.GetH())
+    def GetStressFromStrain(self, StrainTensor):     
+        H = self.__ChangeBasisH(self.GetH())
         
-    #     sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
+        sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
 
-    #     return sigma # list of 6 objets 
+        return sigma # list of 6 objets 
     
      
                         
