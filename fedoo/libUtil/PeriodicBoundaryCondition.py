@@ -9,6 +9,17 @@ from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 import numpy as np
 from fedoo.libMesh.Mesh import MeshBase
 from fedoo.libUtil import Variable
+from simcoon import simmit as sim
+
+def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+
+    coords_nodes = mesh.GetNodeCoordinates()
+    list_nodes = sim.nonperioMPC(coords_nodes)
+    
+    for eq_list in list_nodes:
+        eq = np.array(eq_list)
+        listVar = tuple(eq[1::3].astype(int))
+        BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), ProblemID = ProblemID)
 
 def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
     """
