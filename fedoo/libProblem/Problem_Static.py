@@ -1,8 +1,8 @@
 import numpy as np
 from fedoo.libAssembly.Assembly import *
 from fedoo.libProblem.Problem   import *
-# from fedoo.libProblem.ProblemPGD   import ProblemPGD
-from fedoo.libProblem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
+from fedoo.libProblem.ProblemPGD   import ProblemPGD
+# from fedoo.libProblem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
 def Static(Assembling, ID = "MainProblem"):
