@@ -40,7 +40,7 @@ def GetHomogenizedStiffness(ProblemID = None):
     if "_perturbation" in pb.GetAll():
         pb_post_tt = pb.GetAll()["_perturbation"]
         pb_post_tt.MakeActive()
-        BoundaryCondition.RemoveID("Strain")
+        BoundaryCondition.RemoveID("_Strain")
     else:
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
         pb_post_tt.SetA(pb.GetA())
@@ -61,19 +61,19 @@ def GetHomogenizedStiffness(ProblemID = None):
     typeBC = 'Dirichlet'
     # typeBC = 'Neumann'
     for i in range(6):
-        BoundaryCondition.RemoveID("Strain")
+        BoundaryCondition.RemoveID("_Strain")
         BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = 'Strain')  # EpsXX
+              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
         BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = 'Strain')  # EpsYY
+              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY
         BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = 'Strain')  # EpsZZ
+              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ
         BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = 'Strain')  # EpsXY
+              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
         BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = 'Strain')  # EpsXZ
+              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
         BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = 'Strain')  # EpsYZ
+              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
         
         pb_post_tt.ApplyBoundaryCondition()
     
