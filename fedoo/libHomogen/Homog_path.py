@@ -69,11 +69,10 @@ def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, pa
     for block in blocks:
         for step in block:
             step.generate(time, MeanStrain, MeanStress, T)
-            # print(step.mecas)
             
             #Boundary conditions
             BC_meca = step.BC_meca #stress or strain BC
-            mecas = step.mecas
+            BC_mecas = step.BC_mecas
             
             BCtype = np.array(['Dirichlet' for i in range(6)])
             BCtype[step.cBC_meca.astype(bool)] = 'Neumann'
@@ -84,12 +83,12 @@ def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, pa
                 initValue[step.cBC_meca.astype(bool)] = MeanStress[step.cBC_meca.astype(bool)]
                 
                 BoundaryCondition.RemoveID("Strain")
-                BoundaryCondition(BCtype[0],'DispX', initValue[0] + mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
-                BoundaryCondition(BCtype[1],'DispY', initValue[1] + mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
-                BoundaryCondition(BCtype[2],'DispZ', initValue[2] + mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
-                BoundaryCondition(BCtype[3],'DispX', initValue[3] + mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
-                BoundaryCondition(BCtype[4],'DispY', initValue[4] + mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
-                BoundaryCondition(BCtype[5],'DispZ', initValue[5] + mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
+                BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
+                BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
+                BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
+                BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
+                BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
+                BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
                 
                 #pb.ApplyBoundaryCondition()
                 pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
