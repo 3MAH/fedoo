@@ -1,8 +1,6 @@
 import numpy as np
 from fedoo.libMesh.Mesh import *
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
-from fedoo.libUtil import ProblemDimension
-
 
 class ExportData:
     def __init__(self, mesh, multiMesh = False):

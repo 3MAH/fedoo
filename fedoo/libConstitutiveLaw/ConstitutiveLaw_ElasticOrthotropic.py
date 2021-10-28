@@ -3,8 +3,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 
 import scipy as sp
 
@@ -17,7 +16,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")
 
         self.__parameters = {'EX':EX, 'EY':EY, 'EZ':EZ, 'GYZ':GYZ, 'GXZ':GXZ, 'GXY':GXY, 'nuYZ':nuYZ, 'nuXZ':nuXZ, 'nuXY':nuXY}
@@ -26,7 +25,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         return self.__parameters
     
     def GetH (self,**kargs):
-        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        pbdim = kargs.get(pbdim, GetDimension())
         
         #need to be checked
         if pbdim == "2Dstress":

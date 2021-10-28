@@ -4,8 +4,7 @@
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
 from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace      import Variable,GetDimension
 
 import scipy as sp
 
@@ -22,7 +21,7 @@ class ElasticIsotrop(ElasticAnisotropic):
         return self.__PoissonRatio       
     
     def GetH (self, **kargs):
-        pbdim = kargs.get('pbdim', ProblemDimension.Get())
+        pbdim = kargs.get('pbdim', GetDimension())
         
         #the returned stiffness matrix is 6x6 even in 2D
         H  = sp.zeros((6,6), dtype='object')

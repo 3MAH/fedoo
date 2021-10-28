@@ -3,8 +3,7 @@
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace       import Variable, GetDimension
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -35,7 +34,7 @@ class CohesiveLaw_mod(Spring):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": # or ProblemDimension.Get() == "2Dstress" :
+        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
             Variable("DispZ")                  
         
         self.__currentInterfaceStress = None
@@ -46,7 +45,7 @@ class CohesiveLaw_mod(Spring):
         UmdI = 1 - self.__DamageVariableOpening 
 
         axis = self.__parameters['axis']       
-        if ProblemDimension.Get() == "3D":        # tester si marche avec contrainte plane ou def plane
+        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
             Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
             return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         else:
@@ -102,7 +101,7 @@ class CohesiveLaw_mod(Spring):
 
         
         axis = self.__parameters['axis']       
-        if ProblemDimension.Get() == "3D":        # tester si marche avec contrainte plane ou def plane
+        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
             Kdiag = [KII if i != axis else KI for i in range(3)] 
             return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         else:
@@ -141,13 +140,13 @@ class CohesiveLaw_mod(Spring):
         if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
         
         # delta_n = delta.pop(self.__parameters['axis'])        
-        # if ProblemDimension.Get() == "3D":
+        # if GetDimension() == "3D":
         #     delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
         # else: delta_t = delta[0]
         
         delta_n = delta[self.__parameters['axis']]        
         delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-        if ProblemDimension.Get() == "3D":
+        if GetDimension() == "3D":
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
         else: delta_t = delta_t[0]                
             
@@ -262,7 +261,7 @@ class CohesiveLaw_mod(Spring):
     #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
     #     delta_n = delta[self.__parameters['axis']]        
     #     delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-    #     if ProblemDimension.Get() == "3D":
+    #     if GetDimension() == "3D":
     #         delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
     #     else: delta_t = delta_t[0]
         
@@ -322,30 +321,30 @@ class CohesiveLaw_mod(Spring):
 
 
 
-if __name__=="__main__":
-    ProblemDimension("3D")
-    GIc = 0.3 ; SImax = 60
-    # delta_I_max = 2*GIc/SImax
-    delta_I_max = 0.04
-    nb_iter = 100
-    sig = []
-    delta_plot = []
-    law = CohesiveLaw(GIc=GIc, SImax = SImax, KI = 1e4, GIIc = 1, SIImax=60, KII=1e4, axis = 0)
-    for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
-        delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
-        sig.append(law.GetInterfaceStress(delta)[2])
-        law.UpdateIrreversibleDamage()
-        delta_plot.append(delta_z)
-        # print(law.GetDamageVariable())
+# if __name__=="__main__":
+#     ProblemDimension("3D")
+#     GIc = 0.3 ; SImax = 60
+#     # delta_I_max = 2*GIc/SImax
+#     delta_I_max = 0.04
+#     nb_iter = 100
+#     sig = []
+#     delta_plot = []
+#     law = CohesiveLaw(GIc=GIc, SImax = SImax, KI = 1e4, GIIc = 1, SIImax=60, KII=1e4, axis = 0)
+#     for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
+#         delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
+#         sig.append(law.GetInterfaceStress(delta)[2])
+#         law.UpdateIrreversibleDamage()
+#         delta_plot.append(delta_z)
+#         # print(law.GetDamageVariable())
     
-    # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
-    #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
-    #     sig.append(law.GetInterfaceStress(delta)[2])
-    #     law.UpdateIrreversibleDamage()
-    #     delta_plot.append(delta_z)
+#     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
+#     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
+#     #     sig.append(law.GetInterfaceStress(delta)[2])
+#     #     law.UpdateIrreversibleDamage()
+#     #     delta_plot.append(delta_z)
     
-    import matplotlib.pyplot as plt
+#     import matplotlib.pyplot as plt
     
-    plt.plot(delta_plot, sig)
+#     plt.plot(delta_plot, sig)
 
 

@@ -3,8 +3,7 @@
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace       import Variable, GetDimension
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -35,7 +34,7 @@ class CohesiveLaw(Spring):
         Variable("DispX")
         Variable("DispY")        
 
-        if ProblemDimension.GetDoF() == 3: 
+        if GetDimension() == 3: 
             Variable("DispZ")                           
     
     def GetK(self):
@@ -43,7 +42,7 @@ class CohesiveLaw(Spring):
         UmdI = 1 - self.__DamageVariableOpening 
 
         axis = self.__parameters['axis']       
-        if ProblemDimension.Get() == "3D":        # tester si marche avec contrainte plane ou def plane
+        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
             Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
             return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         else:
@@ -87,13 +86,13 @@ class CohesiveLaw(Spring):
         if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
         
         # delta_n = delta.pop(self.__parameters['axis'])        
-        # if ProblemDimension.Get() == "3D":
+        # if GetDimension() == "3D":
         #     delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
         # else: delta_t = delta[0]
         
         delta_n = delta[self.__parameters['axis']]        
         delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-        if ProblemDimension.Get() == "3D":
+        if GetDimension() == "3D":
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
         else: delta_t = delta_t[0]
         
@@ -223,7 +222,7 @@ class CohesiveLaw(Spring):
     #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
     #     delta_n = delta[self.__parameters['axis']]        
     #     delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-    #     if ProblemDimension.Get() == "3D":
+    #     if GetDimension() == "3D":
     #         delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
     #     else: delta_t = delta_t[0]
         

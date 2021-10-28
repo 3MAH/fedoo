@@ -4,8 +4,7 @@
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
 from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 
 import numpy as np
 
@@ -22,7 +21,7 @@ class CompositeUD(ElasticAnisotropic):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": # or ProblemDimension.Get() == "2Dstress" :
+        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
             Variable("DispZ")
 
         self.__parameters = {'Vf':Vf, 'E_f':E_f, 'E_m':E_m, 'nu_f':nu_f, 'nu_m':nu_m, 'angle':angle}   
@@ -53,7 +52,7 @@ class CompositeUD(ElasticAnisotropic):
         return {'EX':EL, 'EY':ET, 'EZ':ET, 'GYZ':GTT, 'GXZ':GLT, 'GXY':GLT, 'nuYZ':nuTT, 'nuXZ':nuLT, 'nuXY':nuLT}
 
     def GetH (self, **kargs):
-        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        pbdim = kargs.get('pbdim', GetDimension())
 
         if pbdim == "2Dstress":
             print('CompositeUD law for 2Dstress is not implemented')

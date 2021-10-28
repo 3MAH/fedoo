@@ -1,9 +1,7 @@
 #simcoon compatible
 
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
-from fedoo.libUtil.Variable import *
-from fedoo.libUtil.Dimension import ProblemDimension
-from fedoo.libUtil.Coordinate import Coordinate
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.libMesh.Mesh import Mesh
 from fedoo.libElement import *
@@ -59,7 +57,7 @@ class Assembly(AssemblyBase):
 
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
         #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
-        self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' only used for debug purpose        
+        self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
 
     def ComputeGlobalMatrix(self, compute = 'all'):
         """
@@ -74,86 +72,124 @@ class Assembly(AssemblyBase):
         computeMatrixMethod = self.computeMatrixMethod
         
         nb_pg = self.__nb_pg
-        mesh = self.__Mesh
-        
+        mesh = self.__Mesh        
         
         if self.__MeshChange == True:             
             if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]            
             Assembly.PreComputeElementaryOperators(mesh, self.__elmType, nb_pg=nb_pg)
                  
-        nvar = Variable.GetNumberOfVariable()
+        nvar = ModelingSpace.GetNumberOfVariable()
         wf = self.__weakForm.GetDifferentialOperator(mesh)      
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType, nb_pg=nb_pg)
         MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh, self.__TypeOfCoordinateSystem)        
         associatedVariables = Assembly.__GetAssociatedVariables(self.__elmType) #for element requiring many variable such as beam with disp and rot dof        
                              
-        if computeMatrixMethod == 'new':
+        if computeMatrixMethod == 'new': 
             
             intRef = wf.sort()
-                        
-            MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure)
-            intRef = wf.sort()
-            
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
             VV = 0
             nbNodes = self.__Mesh.GetNumberOfNodes()            
             sl = [slice(i*nbNodes, (i+1)*nbNodes) for i in range(nvar)] 
             
-            for ii in range(len(wf.op)):
-                if compute == 'matrix' and wf.op[ii] is 1: continue
-                if compute == 'vector' and wf.op[ii] is not 1: continue
-            
-                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
-                    coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
-                else:
-                    coef_PG = Assembly.__ConvertToGaussPoints(mesh, wf.coef[ii][:], self.__elmType, nb_pg=nb_pg)                                                 
+            if nb_pg == 0: #if finite difference elements, don't use BlocSparse                              
+                blocks = [[None for i in range(nvar)] for j in range(nvar)]
+                self.__saveBlocStructure = 0 #don't save block structure for finite difference mesh
+                    
+                Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[0], self.__elmType, nb_pg=0)[0].T #should be identity matrix restricted to nodes used in the finite difference mesh
                 
-                if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
-                    coef_PG_sum += coef_PG
-                else: coef_PG_sum = coef_PG   
+                for ii in range(len(wf.op)):
+                    if compute == 'matrix' and wf.op[ii] is 1: continue
+                    if compute == 'vector' and wf.op[ii] is not 1: continue
                 
-                if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
-                    continue
-                
-                coef_PG = coef_PG_sum * MatGaussianQuadrature.data 
-            
-                coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable
-                               
-                if var_vir[0] in associatedVariables:
-                    var_vir.extend(associatedVariables[var_vir[0]][0])
-                    coef_vir.extend(associatedVariables[var_vir[0]][1])                   
-                          
-#                Matvir = (RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
-                #check how it appens with change of variable and rotation dof
-                Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)
-                
-                if wf.op[ii] == 1: #only virtual operator -> compute a vector 
-                    if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
-                    for i in range(len(Matvir)):
-                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
+                    if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
+                        coef_PG += wf.coef[ii]
+                    else: coef_PG = wf.coef[ii]   #coef_PG = nodal values (finite diffirences)
+                    
+                    if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
+                        continue
+                                                    
+                    var_vir = wf.op_vir[ii].u
+                    assert wf.op_vir[ii].ordre == 0, "This weak form is not compatible with finite difference mesh"
+                                        
+                    if wf.op[ii] == 1: #only virtual operator -> compute a vector which is the nodal values
+                        if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - (coef_PG) 
+                            
+                    else: #virtual and real operators -> compute a matrix
+                        var = wf.op[ii].u   
+                        if isinstance(coef_PG, Number): coef_PG = coef_PG * np.ones_like(MatGaussianQuadrature.data)
+                        CoefMatrix = sparse.csr_matrix( (coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
+                        Mat    =  Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg)[0]
                         
-                else: #virtual and real operators -> compute a matrix
-                    coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
-                    if var[0] in associatedVariables:
-                        var.extend(associatedVariables[var[0]][0])
-                        coef.extend(associatedVariables[var[0]][1])                                             
-
-#                    Mat    =  RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg), nvar, var, coef)         * MatrixChangeOfBasis             
-                    Mat    =  Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg)
+                        if blocks[var_vir][var] is None: 
+                            blocks[var_vir][var] = Matvir @ CoefMatrix @ Mat
+                        else:                    
+                            blocks[var_vir][var].data += (Matvir @ CoefMatrix @ Mat).data
+                            
+                blocks = [[b if b is not None else sparse.csr_matrix((nbNodes,nbNodes)) \
+                          for b in blocks_row] for blocks_row in blocks ]        
+                MM = sparse.bmat(blocks, format ='csr')
+                
+            else:
+                MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure)
+                
+                for ii in range(len(wf.op)):
+                    if compute == 'matrix' and wf.op[ii] is 1: continue
+                    if compute == 'vector' and wf.op[ii] is not 1: continue
+                
+                    if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
+                        #if nb_pg == 0, coef_PG = nodal values (finite diffirences)
+                        coef_PG = wf.coef[ii] 
+                    else:
+                        coef_PG = Assembly.__ConvertToGaussPoints(mesh, wf.coef[ii][:], self.__elmType, nb_pg=nb_pg)                                                 
+                    
+                    if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
+                        coef_PG_sum += coef_PG
+                    else: coef_PG_sum = coef_PG   
+                    
+                    if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
+                        continue
+                                    
+                    coef_PG = coef_PG_sum * MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
+                
+                    coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable
+                                   
+                    if var_vir[0] in associatedVariables:
+                        var_vir.extend(associatedVariables[var_vir[0]][0])
+                        coef_vir.extend(associatedVariables[var_vir[0]][1])                   
+                              
+    #                Matvir = (RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
+                    #check how it appens with change of variable and rotation dof
+                    Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)
+                    
+                    if wf.op[ii] == 1: #only virtual operator -> compute a vector 
+                        if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                        for i in range(len(Matvir)):
+                            VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
+                            
+                    else: #virtual and real operators -> compute a matrix
+                        coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
+                        if var[0] in associatedVariables:
+                            var.extend(associatedVariables[var[0]][0])
+                            coef.extend(associatedVariables[var[0]][1])                                             
     
-                    #Possibility to increase performance for multivariable case 
-                    #the structure should be the same for derivative dof, so the blocs could be computed altogether
-                    for i in range(len(Mat)):
-                        for j in range(len(Matvir)):
-                            MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+    #                    Mat    =  RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg), nvar, var, coef)         * MatrixChangeOfBasis             
+                        Mat    =  Assembly.__GetElementaryOp(mesh, wf.op[ii], self.__elmType, nb_pg=nb_pg)
+        
+                        #Possibility to increase performance for multivariable case 
+                        #the structure should be the same for derivative dof, so the blocs could be computed altogether
+                        for i in range(len(Mat)):
+                            for j in range(len(Matvir)):
+                                MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
                 
             if compute != 'vector':
                 if MatrixChangeOfBasis is 1: 
-                    self.SetMatrix(MM.toCSR()) #format csr         
+                    self.SetMatrix(MM.tocsr()) #format csr         
                 else: 
-                    self.SetMatrix(MatrixChangeOfBasis.T * MM.toCSR() * MatrixChangeOfBasis) #format csr         
+                    self.SetMatrix(MatrixChangeOfBasis.T * MM.tocsr() * MatrixChangeOfBasis) #format csr         
             if compute != 'matrix': 
                 if VV is 0: self.SetVector(0)
                 elif MatrixChangeOfBasis is 1: self.SetVector(VV) #numpy array
@@ -173,7 +209,7 @@ class Assembly(AssemblyBase):
             #list_elementType could be stored to avoid reevaluation 
             if isinstance(eval(self.__elmType), dict):
                 elementDict = eval(self.__elmType)
-                list_elementType = [elementDict.get(Variable.GetName(i))[0] for i in range(nvar)]
+                list_elementType = [elementDict.get(ModelingSpace.GetVariableName(i))[0] for i in range(nvar)]
                 list_elementType = [elementDict.get('__default') if elmtype is None else elmtype for elmtype in list_elementType]
             else: list_elementType = [self.__elmType for i in range(nvar)]
             
@@ -376,7 +412,7 @@ class Assembly(AssemblyBase):
         elm = mesh.GetElementTable()
         nNd_elm = np.shape(elm)[1]
         crd = mesh.GetNodeCoordinates()
-        dim = ProblemDimension.GetDoF()
+        dim = ModelingSpace.GetDoF()
         
         if isinstance(eval(elementType), dict):
             TypeOfCoordinateSystem = eval(elementType).get('__TypeOfCoordinateSystem', 'global')                
@@ -499,7 +535,7 @@ class Assembly(AssemblyBase):
 
         if isinstance(eval(elementType), dict):
             elementDict = eval(elementType)
-            elementType = elementDict.get(Variable.GetName(deriv.u))[0]
+            elementType = elementDict.get(ModelingSpace.GetVariableName(deriv.u))[0]
             if elementType is None: elementType = elementDict.get('__default')
                 
         if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
@@ -511,7 +547,7 @@ class Assembly(AssemblyBase):
             return data[0]
         
         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-        ListMeshCoordinateIDRank = [Coordinate.GetRank(crdID) for crdID in mesh.GetCoordinateID()]
+        ListMeshCoordinateIDRank = [ModelingSpace.GetCoordinateRank(crdID) for crdID in mesh.GetCoordinateID()]
         if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
         else: return data[0] #if the coordinate doesnt exist, return operator without derivation
                          
@@ -528,10 +564,10 @@ class Assembly(AssemblyBase):
 
     #     if isinstance(eval(elementType), dict):
     #         elementDict = eval(elementType)
-    #         elementType = elementDict.get(Variable.GetName(deriv.u))[0]
+    #         elementType = elementDict.get(ModelingSpace.GetVariableName(deriv.u))[0]
     #         if elementType is None: elementType = elementDict.get('__default')
             
-    #         elementType_vir = elementDict.get(Variable.GetName(deriv_vir.u))[0]
+    #         elementType_vir = elementDict.get(ModelingSpace.GetVariableName(deriv_vir.u))[0]
     #         if elementType_vir is None: elementType = elementDict.get('__default')                
 
     #     else: elementType_vir = elementType
@@ -550,7 +586,7 @@ class Assembly(AssemblyBase):
     #             return data[0]
             
     #         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-    #         ListMeshCoordinateIDRank = [Coordinate.GetRank(crdID) for crdID in mesh.GetCoordinateID()]
+    #         ListMeshCoordinateIDRank = [ModelingSpace.GetCoordinateRank(crdID) for crdID in mesh.GetCoordinateID()]
     #         if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
     #         else: return data[0] #if the coordinate doesnt exist, return operator without derivation
                              
@@ -570,10 +606,10 @@ class Assembly(AssemblyBase):
         if elementType not in Assembly.__associatedVariables:
             objElement = eval(elementType)
             if isinstance(objElement, dict):            
-                Assembly.__associatedVariables[elementType] = {Variable.GetRank(key): 
-                                       [[Variable.GetRank(v) for v in val[1][1::2]],
-                                        val[1][0::2]] for key,val in objElement.items() if len(val)>1 and key in Variable.List()} 
-                    # val[1][0::2]] for key,val in objElement.items() if key in Variable.List() and len(val)>1}
+                Assembly.__associatedVariables[elementType] = {ModelingSpace.GetVariableRank(key): 
+                                       [[ModelingSpace.GetVariableRank(v) for v in val[1][1::2]],
+                                        val[1][0::2]] for key,val in objElement.items() if len(val)>1 and key in ModelingSpace.ListVariable()} 
+                    # val[1][0::2]] for key,val in objElement.items() if key in ModelingSpace.ListVariable() and len(val)>1}
             else: Assembly.__associatedVariables[elementType] = {}
         return Assembly.__associatedVariables[elementType] 
     
@@ -599,7 +635,7 @@ class Assembly(AssemblyBase):
         if TypeOfCoordinateSystem == 'global': return 1
         if mesh.GetID() not in Assembly.__saveMatrixChangeOfBasis:        
             ### change of basis treatment for beam or plate elements
-            ### Compute the change of basis matrix for vector defined in Variable.ListVector()
+            ### Compute the change of basis matrix for vector defined in ModelingSpace.ListVector()
             MatrixChangeOfBasis = 1
             computeMatrixChangeOfBasis = False
 
@@ -608,21 +644,21 @@ class Assembly(AssemblyBase):
             elm = mesh.GetElementTable()
             nNd_elm = np.shape(elm)[1]            
             crd = mesh.GetNodeCoordinates()
-            dim = ProblemDimension.GetDoF()
+            dim = ModelingSpace.GetDoF()
             localFrame = mesh.GetLocalFrame()
             elmRefGeom = eval(mesh.GetElementShape())(mesh=mesh)
     #        xi_nd = elmRefGeom.xi_nd
             xi_nd = GetNodePositionInElementCoordinates(mesh.GetElementShape(), nNd_elm) #function to define
 
             if 'X' in mesh.GetCoordinateID() and 'Y' in mesh.GetCoordinateID(): #if not in physical space, no change of variable                
-                for nameVector in Variable.ListVector():
+                for nameVector in ModelingSpace.ListVector():
                     if computeMatrixChangeOfBasis == False:
                         range_nNd_elm = np.arange(nNd_elm) 
                         computeMatrixChangeOfBasis = True
-                        Nvar = Variable.GetNumberOfVariable()
+                        Nvar = ModelingSpace.GetNumberOfVariable()
                         listGlobalVector = []  ; listScalarVariable = list(range(Nvar))
 #                        MatrixChangeOfBasis = sparse.lil_matrix((Nvar*Nel*nNd_elm, Nvar*Nnd)) #lil is very slow because it change the sparcity of the structure
-                    listGlobalVector.append(Variable.GetVector(nameVector)) #vector that need to be change in local coordinate            
+                    listGlobalVector.append(ModelingSpace.GetVector(nameVector)) #vector that need to be change in local coordinate            
                     listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
                 #Data to build MatrixChangeOfBasis with coo sparse format
                 if computeMatrixChangeOfBasis:
@@ -663,7 +699,7 @@ class Assembly(AssemblyBase):
     @staticmethod
     def __GetResultGaussPoints(mesh, operator, U, elementType, nb_pg=None):  #return the results at GaussPoints      
         res = 0
-        nvar = Variable.GetNumberOfVariable()
+        nvar = ModelingSpace.GetNumberOfVariable()
         
         if isinstance(eval(elementType), dict):
             TypeOfCoordinateSystem = eval(elementType).get('__TypeOfCoordinateSystem', 'global')                
@@ -895,7 +931,7 @@ class Assembly(AssemblyBase):
 
         an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !
         """
-        if Nvar is None: Nvar = Variable.GetNumberOfVariable()
+        if Nvar is None: Nvar = ModelingSpace.GetNumberOfVariable()
         return np.reshape(self.GetMatrix() * U - self.GetVector(), (Nvar,-1)).T                        
 #        return np.reshape(self.GetMatrix() * U, (Nvar,-1)).T                        
 
@@ -923,8 +959,8 @@ class Assembly(AssemblyBase):
 #        res = np.reshape(res,(6,-1)).T
 #        Nel = mesh.GetNumberOfElements()
 #        res = (res[Nel:,:]-res[0:Nel:,:])/2
-#        res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('DispZ'), \
-#                              Variable.GetRank('ThetaX'), Variable.GetRank('ThetaY'), Variable.GetRank('ThetaZ')]]         
+#        res = res[:, [ModelingSpace.GetVariableRank('DispX'), ModelingSpace.GetVariableRank('DispY'), ModelingSpace.GetVariableRank('DispZ'), \
+#                              ModelingSpace.GetVariableRank('ThetaX'), ModelingSpace.GetVariableRank('ThetaY'), ModelingSpace.GetVariableRank('ThetaZ')]]         
 #        
 #        if CoordinateSystem == 'local': return res
 #        elif CoordinateSystem == 'global': 
@@ -960,8 +996,8 @@ class Assembly(AssemblyBase):
         
         operator = self.__weakForm.GetDifferentialOperator(self.__Mesh)
         mesh = self.__Mesh
-        nvar = Variable.GetNumberOfVariable()
-        dim = ProblemDimension.GetDoF()
+        nvar = ModelingSpace.GetNumberOfVariable()
+        dim = ModelingSpace.GetDoF()
         MatrixChangeOfBasis = Assembly.__GetChangeOfBasisMatrix(mesh, self.__TypeOfCoordinateSystem)
 
         MatGaussianQuadrature = Assembly.__GetGaussianQuadratureMatrix(mesh, self.__elmType)
@@ -995,10 +1031,10 @@ class Assembly(AssemblyBase):
         res = (res[Nel:2*Nel,:]-res[0:Nel:,:])/2
         
         # if dim == 3:
-        #     res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('DispZ'), \
-        #                   Variable.GetRank('RotX'), Variable.GetRank('RotY'), Variable.GetRank('RotZ')]]   
+        #     res = res[:, [ModelingSpace.GetVariableRank('DispX'), ModelingSpace.GetVariableRank('DispY'), ModelingSpace.GetVariableRank('DispZ'), \
+        #                   ModelingSpace.GetVariableRank('RotX'), ModelingSpace.GetVariableRank('RotY'), ModelingSpace.GetVariableRank('RotZ')]]   
         # else: 
-        #     res = res[:, [Variable.GetRank('DispX'), Variable.GetRank('DispY'), Variable.GetRank('RotZ')]]   
+        #     res = res[:, [ModelingSpace.GetVariableRank('DispX'), ModelingSpace.GetVariableRank('DispY'), ModelingSpace.GetVariableRank('RotZ')]]   
         
         if CoordinateSystem == 'local': return res
         elif CoordinateSystem == 'global': 

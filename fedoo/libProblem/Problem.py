@@ -5,7 +5,7 @@ import scipy.sparse.linalg
 
 from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 from fedoo.libProblem.ProblemBase import ProblemBase
-from fedoo.libUtil.Variable  import *
+from fedoo.libUtil.ModelingSpace  import ModelingSpace
 from fedoo.libAssembly.Assembly  import *
 from fedoo.libUtil.ExportData import _ProblemOutput
 
@@ -18,7 +18,7 @@ class Problem(ProblemBase):
         # the problem is AX = B + D
         
         #self.__ProblemDimension = A.shape[0]
-        self.__ProblemDimension = Mesh.GetNumberOfNodes() * Variable.GetNumberOfVariable()
+        self.__ProblemDimension = Mesh.GetNumberOfNodes() * ModelingSpace.GetNumberOfVariable()
 
         self.__A = A
 
@@ -52,7 +52,7 @@ class Problem(ProblemBase):
         if name.lower() == 'all': 
             vector[:] = value
         else:
-            i = Variable.GetRank(name)
+            i = ModelingSpace.GetVariableRank(name)
             n = self.GetMesh().GetNumberOfNodes()
             vector[i*n : (i+1)*n] = value      
 
@@ -64,15 +64,15 @@ class Problem(ProblemBase):
 
         n = self.__Mesh.GetNumberOfNodes()
         
-        if name in Variable.ListVector():
-            vec = Variable.GetVector(name)
+        if name in ModelingSpace.ListVector():
+            vec = ModelingSpace.GetVector(name)
             i = vec[0] #rank of the 1rst variable of the vector
             dim = len(vec)
             return vector.reshape(-1,n)[i:i+dim]
             # return vector[i*n : (i+dim)*n].reshape(-1,n) 
         else:             
             #vector component are assumed defined as an increment sequence (i, i+1, i+2)
-            i = Variable.GetRank(name)
+            i = ModelingSpace.GetVariableRank(name)
         
             return vector[i*n : (i+1)*n]   
 

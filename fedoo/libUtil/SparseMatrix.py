@@ -89,7 +89,7 @@ class _BlocSparse():
                 self.col = (np.ones((NnzColPerRowA,1), np.int32) @ B.indices[0:NelB*NnzColPerRowB].reshape(NelB,1,NnzColPerRowB) ).ravel()
                 self.blocShape = (A.shape[1], B.shape[1])                
                
-    def toCSR(self): #should be improved in some way, perhaps by using a cpp script 
+    def tocsr(self): #should be improved in some way, perhaps by using a cpp script 
         # import time
         # start=time.time()
         method =1
@@ -135,11 +135,13 @@ class _BlocSparse():
                 np.cumsum(nb_nnz_row, out = self.indptr_csr[1:])
 
             if method == 1:
-                blocks = [[sparse.csr_matrix( (self.Matrix_convertCOOtoCSR@self.data[i][j].ravel(), self.indices_csr, self.indptr_csr), shape=(self.blocShape[0],self.blocShape[1]), copy = False) if self.data[i][j] is not 0 else None for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow) ]        
+                blocks = [[sparse.csr_matrix( (self.Matrix_convertCOOtoCSR@self.data[i][j].ravel(), self.indices_csr, self.indptr_csr), shape=(self.blocShape[0],self.blocShape[1]), copy = False) \
+                           if self.data[i][j] is not 0 else sparse.csr_matrix((self.blocShape[0],self.blocShape[1])) \
+                           for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow) ]        
                 Res = sparse.bmat(blocks, format ='csr')
             elif method == 2:
                 data_coo = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
-                Res = sparse.csr_matrix((self.Matrix_convertCOOtoCSR @ data_coo, self.indices_csr, self.indptr_csr), shape =  (self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol))
+                Res = sparse.csr_matrix((self.Matrix_convertCOOtoCSR @ data_coo, self.indices_csr, self.indptr_csr), shape =  (self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol)) 
         
         # print(time.time()-start)
         # Res.eliminate_zeros()

@@ -3,8 +3,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
 
 import scipy as sp
 
@@ -17,7 +16,7 @@ class ViscoElasticComposites(ConstitutiveLaw):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": # or ProblemDimension.Get() == "2Dstress" :
+        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
             Variable("DispZ")
 
         self.__parameters = {'EL':EL, 'ET':ET, 'GLT':GLT, 'GTT':GTT, 'nuLT':nuLT, 'nuTT':nuTT, 'CL':CL, 'CT':CT, 'CLT':CLT, 'RefStrainRate': RefStrainRate, \
@@ -35,7 +34,7 @@ class ViscoElasticComposites(ConstitutiveLaw):
     
     def GetStress(self, localFrame=None): # methode virtuel
         # tester si contrainte plane ou def plane
-        if ProblemDimension.Get() == "2Dstress":
+        if GetDimension() == "2Dstress":
             print('ViscoElasticComposites law for 2Dstress is not implemented')
             return NotImplemented
         

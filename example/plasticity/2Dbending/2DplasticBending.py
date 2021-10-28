@@ -85,7 +85,7 @@ Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 ################### step 2 ################################
 bc.Remove()
 #We set initial condition to the applied force to relax the load
-F_app = Problem.GetExternalForce('DispY')[nodes_topCenter]
+F_app = Problem.GetExternalForces('DispY')[nodes_topCenter]
 bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.01)

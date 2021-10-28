@@ -1,8 +1,8 @@
 #import scipy as sp
 import numpy as np
 
-from fedoo.libUtil.Dimension import ProblemDimension
-from fedoo.libUtil.Coordinate import Coordinate
+from fedoo.libUtil.ModelingSpace import ModelingSpace
+# from fedoo.libUtil.Coordinate import Coordinate
 from fedoo.libMesh.MeshBase import *
 from fedoo.libElement import *
 
@@ -19,7 +19,7 @@ class Mesh(MeshBase):
         self.__SetOfElements = {}
         self.__LocalFrame = LocalFrame #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
-        n = ProblemDimension.Get()
+        n = ModelingSpace.GetDimension()
         N = self.__NodeCoordinates.shape[0]
                 
         if self.__NodeCoordinates.shape[1] == 1: self.__CoordinateID = ('X')

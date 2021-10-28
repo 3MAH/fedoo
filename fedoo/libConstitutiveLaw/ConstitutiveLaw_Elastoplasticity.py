@@ -3,8 +3,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -17,7 +16,7 @@ class ElastoPlasticity(ConstitutiveLaw):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")
 
         self.__YoungModulus = YoungModulus
@@ -49,7 +48,7 @@ class ElastoPlasticity(ConstitutiveLaw):
         self.__tol = tol        
     
     def GetHelas (self, **kargs):
-        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        pbdim = kargs.get(pbdim, GetDimension())
         
         H  = np.zeros((6,6), dtype='object')
         E  = self.__YoungModulus 

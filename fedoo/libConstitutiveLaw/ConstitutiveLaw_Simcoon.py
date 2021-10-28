@@ -14,8 +14,7 @@ if USE_SIMCOON:
 if USE_SIMCOON:    
     from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
     from fedoo.libUtil.StrainOperator import *
-    from fedoo.libUtil.Variable       import *
-    from fedoo.libUtil.Dimension      import *
+    from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
     from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
     
     import numpy as np
@@ -35,13 +34,13 @@ if USE_SIMCOON:
             # Variable("DispX")
             # Variable("DispY")
         
-            if ProblemDimension.Get() == "3D":
+            if GetDimension() == "3D":
                 # Variable("DispZ")
                 ndi = 3 ; nshr = 3
-            elif ProblemDimension.Get() in ['2Dstress']:
+            elif GetDimension() in ['2Dstress']:
                 # ndi = 2 ; nshr = 1
                 ndi = 3 ; nshr = 3###shoud be modified?
-            elif ProblemDimension.Get() in ['2Dplane']:
+            elif GetDimension() in ['2Dplane']:
                  ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
     
             #statev = ??? require to get te number of gauss point
@@ -83,7 +82,7 @@ if USE_SIMCOON:
             
         def GetH(self, **kargs):
             #### TODO: try to implement the case pdim=="2Dstress"
-            # pbdim = kargs.get(pbdim, ProblemDimension.Get())
+            # pbdim = kargs.get(pbdim, GetDimension())
             
 
             # if self.__Lt is None:

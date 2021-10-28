@@ -1,5 +1,5 @@
 from fedoo.libMesh.MeshBase import MeshBase
-from fedoo.libUtil.Variable import Variable
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 from fedoo.libMesh.Mesh import Mesh as MeshFEM
 import numpy as np
 
@@ -34,7 +34,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
     
     def _SetSpecificVariableRank(self, idmesh, idvar, specific_rank):
         #idmesh : the id of any submesh
-        #idvar : variable id that is given by Variable.GetRank(name) 
+        #idvar : variable id that is given by ModelingSpace.GetVariableRank(name) 
         #        if idvar == 'default': define the default value for all variables
         #specific_rank : rank considered for the PGD assembly   
         #no specific rank can be defined if there is a change of basis in the pysicial mesh related to coordinates 'X', 'Y' and 'Z'
@@ -62,7 +62,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         assert isinstance(idmesh, int), 'idmesh must an integer, not a ' + str(type(idmesh))
         if idmesh in self.__SpecificVariableRank:
             return max(self.__SpecificVariableRank[idmesh].values())+1
-        else: return Variable.GetNumberOfVariable()
+        else: return ModelingSpace.GetNumberOfVariable()
     
     def GetDimension(self):
         return len(self.__ListMesh)

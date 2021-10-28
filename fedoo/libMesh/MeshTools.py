@@ -1,5 +1,5 @@
 from fedoo.libMesh.Mesh import Mesh
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 import itertools
 
 # import scipy as sp
@@ -216,7 +216,7 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     """
     if np.isscalar(x_min):
         m = LineMesh1D(N,x_min,x_max,ElementShape,ID)    
-        if ProblemDimension.Get() in ['2Dplane', '2Dstress'] : dim = 2
+        if ModelingSpace.GetDimension() in ['2Dplane', '2Dstress'] : dim = 2
         else: dim = 3
         crd = np.c_[m.GetNodeCoordinates(), np.zeros((N,dim-1))]
         elm = m.GetElementTable()

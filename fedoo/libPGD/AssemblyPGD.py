@@ -1,7 +1,8 @@
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
 from fedoo.libAssembly.Assembly import Assembly as AssemblyFEM
 from fedoo.libAssembly.Assembly import RowBlocMatrix
-from fedoo.libUtil.Variable import Variable
+from fedoo.libUtil.ModelingSpace import ModelingSpace
+# from fedoo.libUtil.Variable import Variable
 from fedoo.libUtil.StrainOperator import GetStrainOperator
 from fedoo.libUtil.PostTreatement import listStrainTensor
 from fedoo.libMesh.Mesh import Mesh as MeshFEM
@@ -384,7 +385,7 @@ class AssemblyPGD(AssemblyFEM):
 
         ExtForce = self.GetMatrix() * U
         if NumberOfVariable==None:
-            return [ExtForce.GetVariable(var, self.__Mesh) for var in range(Variable.GetNumberOfVariable())]
+            return [ExtForce.GetVariable(var, self.__Mesh) for var in range(ModelingSpace.GetNumberOfVariable())]
         else:
             return [ExtForce.GetVariable(var, self.__Mesh) for var in range(NumberOfVariable)]    
     
