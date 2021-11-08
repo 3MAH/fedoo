@@ -2,7 +2,7 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.libUtil.Variable import *
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 from fedoo.libPGD.SeparatedArray import *
 from fedoo.libPGD.SeparatedOperator import *
 #from fedoo.libPGD.libProblemPGD.BoundaryConditionPGD import *
@@ -57,7 +57,7 @@ class ProblemPGD(ProblemBase):
         else:
             return NotImplemented
 #
-#            i = Variable.GetRank(name)
+#            i = ModelingSpace.GetVariableRank(name)
 #
 #            n = Problem.__Mesh.GetNumberOfNodes()
 #
@@ -180,9 +180,9 @@ class ProblemPGD(ProblemBase):
             return self.__X + self.__Xbc
         
         if self.__Xbc == 0:
-            return self.__X.GetVariable(Variable.GetRank(name), self.__Mesh)
+            return self.__X.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh)
         else:
-            return self.__X.GetVariable(Variable.GetRank(name), self.__Mesh) + self.__Xbc.GetVariable(Variable.GetRank(name), self.__Mesh)
+            return self.__X.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh) + self.__Xbc.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh)
 
     def SetDoFSolution(self,name,value):
         assert isinstance(name,str), 'argument error'
@@ -191,7 +191,7 @@ class ProblemPGD(ProblemBase):
             self.__X = value
         else:
             return NotImplemented
-#            i = Variable.GetRank(name)
+#            i = ModelingSpace.GetVariableRank(name)
 #
 #            self.__X[i*n : (i+1)*n] = value        
 
@@ -215,7 +215,7 @@ class ProblemPGD(ProblemBase):
         # CL à intégrer???
         for dd in range(self.__Mesh.GetDimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
-        return res.norm(nbvar = Variable.GetNumberOfVariable())/err_0
+        return res.norm(nbvar = ModelingSpace.GetNumberOfVariable())/err_0
 
 
     def GetResidual(self):

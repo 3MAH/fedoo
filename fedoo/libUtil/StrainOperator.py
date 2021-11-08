@@ -1,7 +1,7 @@
 #simcoon compatible
 
 from fedoo.libUtil.Operator  import OpDiff
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import GetDimension
 
 
 class StrainOperator:
@@ -13,7 +13,7 @@ class StrainOperator:
 
     @staticmethod
     def Get(InitialGradDisp = None):
-        n = ProblemDimension.Get()
+        n = GetDimension()
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 
         if (InitialGradDisp is None) or (InitialGradDisp is 0):
@@ -64,7 +64,7 @@ def GetStrainOperator(InitialGradDisp = None):
     #InitialGradDisp is used for initial displacement effect in incremental approach
     return StrainOperator.Get(InitialGradDisp)
 
-if __name__=="__main__":
-    ProblemDimension("3D")
-    A,B = GetStrainOperator()
+# if __name__=="__main__":
+    # ProblemDimension("3D")
+    # A,B = GetStrainOperator()
 

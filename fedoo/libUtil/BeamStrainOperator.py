@@ -1,10 +1,10 @@
 from fedoo.libUtil.Operator  import OpDiff
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 
 
 from fedoo.libUtil.Operator  import OpDiff
 def GetBeamStrainOperator():
-    n = ProblemDimension.Get()
+    n = ModelingSpace.GetDimension()
 
     epsX = OpDiff('DispX',  'X', 1) # dérivée en repère locale
     xsiZ = OpDiff('RotZ',  'X', 1) # flexion autour de Z
@@ -28,7 +28,7 @@ def GetBeamStrainOperator():
     return eps, eps_vir 
 
 def GetBernoulliBeamStrainOperator():
-    n = ProblemDimension.Get()
+    n = ModelingSpace.GetDimension()
 
     epsX = OpDiff('DispX',  'X', 1) # dérivée en repère locale
     xsiZ = OpDiff('RotZ',  'X', 1) # flexion autour de Z
@@ -48,7 +48,4 @@ def GetBernoulliBeamStrainOperator():
         
     return eps, eps_vir 
 
-if __name__=="__main__":
-    Dimension("3D")
-    A,B = GetBernoulliBeamStrainOperator()
 

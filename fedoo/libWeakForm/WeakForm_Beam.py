@@ -1,8 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
-from fedoo.libUtil.Variable import Variable
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 
 class Beam(WeakForm):
     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = ""):
@@ -18,18 +17,18 @@ class Beam(WeakForm):
 
         Variable("DispX") 
         Variable("DispY")            
-        if ProblemDimension.Get() == '3D':
+        if GetDimension() == '3D':
             Variable("DispZ")   
             Variable("RotX") #torsion rotation 
             Variable("RotY")   
             Variable("RotZ")
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
-            Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ'))            
-        elif ProblemDimension.Get() == '2Dplane':
+            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            Vector('Rot' , ('RotX', 'RotY', 'RotZ'))            
+        elif GetDimension() == '2Dplane':
             Variable("RotZ")
-            Variable.SetVector('Disp' , ['DispX', 'DispY'])            
-            Variable.SetVector('Rot' , ['RotZ'] ) 
-        elif ProblemDimension.Get() == '2Dstress':
+            Vector('Disp' , ['DispX', 'DispY'])            
+            Vector('Rot' , ['RotZ'] ) 
+        elif GetDimension() == '2Dstress':
             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                           
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
@@ -77,18 +76,18 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
 #         Variable("DispX") 
 #         Variable("DispY")     
         
-#         if ProblemDimension.Get() == '3D':
+#         if GetDimension() == '3D':
 #             Variable("DispZ")   
 #             Variable("RotX") #torsion rotation   
 #             Variable("RotY") #flexion   
 #             Variable("RotZ") #flexion   
 #             Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ') , 'global')
 #             Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ') , 'global')
-#         elif ProblemDimension.Get() == '2Dplane':
+#         elif GetDimension() == '2Dplane':
 #             Variable("RotZ")
 #             # Variable.SetDerivative('DispY', 'RotZ') #only valid with Bernoulli model       
 #             Variable.SetVector('Disp' , ('DispX', 'DispY') )            
-#         elif ProblemDimension.Get() == '2Dstress':
+#         elif GetDimension() == '2Dstress':
 #             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                   
 #         self.__ConstitutiveLaw = CurrentConstitutiveLaw

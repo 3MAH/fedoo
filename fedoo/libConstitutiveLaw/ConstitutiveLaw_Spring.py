@@ -2,8 +2,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace       import Variable, GetNumberOfDimensions
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -19,7 +18,7 @@ class Spring(ConstitutiveLaw):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.GetDoF() == 3: 
+        if GetNumberOfDimensions() == 3: 
             Variable("DispZ")                       
 
     def GetRelativeDisp(self):
@@ -71,7 +70,7 @@ class Spring(ConstitutiveLaw):
             self.ComputeInterfaceStress(self.__Delta)        
 
     def GetInterfaceStressOperator(self, **kargs): 
-        dim = ProblemDimension.GetDoF()
+        dim = GetNumberOfDimensions()
         K = self.__ChangeBasisK(self.GetK())
         
         U, U_vir = GetDispOperator() #relative displacement if used with cohesive element
@@ -82,7 +81,7 @@ class Spring(ConstitutiveLaw):
         return U 
         
     def ComputeInterfaceStress(self, Delta, dtime = None): 
-        dim = ProblemDimension.GetDoF()
+        dim = GetNumberOfDimensions()
         #Delta is the relative displacement vector
         K = self.__ChangeBasisK(self.GetK())
         self.__InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
@@ -94,7 +93,7 @@ class Spring(ConstitutiveLaw):
 #        U, U_vir = GetDispOperator()
 #        
 #        if self._ConstitutiveLaw__localFrame is None:
-#            if ProblemDimension.Get() == "3D":        # tester si contrainte plane ou def plane              
+#            if GetNumberOfDimensions() == "3D":        # tester si contrainte plane ou def plane              
 #                return [U[0] * self.__parameters['Kx'], U[1] * self.__parameters['Ky'], U[2] * self.__parameters['Kz']]
 #            else:
 #                return [U[0] * self.__parameters['Kx'], U[1] * self.__parameters['Ky'], 0]

@@ -1,7 +1,6 @@
 import numpy as np
 
-from fedoo.libUtil.Dimension import *
-from fedoo.libUtil.Variable  import *
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 from fedoo.libPGD.SeparatedArray import *
 from fedoo.libProblem.ProblemBase import ProblemBase
 
@@ -73,11 +72,11 @@ class BoundaryCondition() :
         
         self.__BoundaryType = BoundaryType
         if isinstance(Var, str): 
-            self.__Var = Variable.GetRank(Var)
+            self.__Var = ModelingSpace.GetVariableRank(Var)
             if BoundaryType == 'MPC': self.__VarMaster = self.__Var
         else: #Var should be a list or a numpy array
             assert BoundaryType == 'MPC', "Var should be a string for % Boundary Type".format(BoundaryType)
-            if isinstance(Var[0], str): Var = [Variable.GetRank(v) for v in Var]
+            if isinstance(Var[0], str): Var = [ModelingSpace.GetVariableRank(v) for v in Var]
             self.__Var = Var[0] #Var for slave DOF (eliminated DOF)
             self.__VarMaster = Var[1:] #Var for master DOF (not eliminated DOF in MPC)
         self.__GlobalIndex = None
@@ -164,7 +163,7 @@ class BoundaryCondition() :
     @staticmethod
     def Apply(n, timeFactor = 1, timeFactorOld = None, ProblemID = None):        
         
-        DoF = Variable.GetNumberOfVariable()     
+        DoF = ModelingSpace.GetNumberOfVariable()     
         Uimp = np.zeros(DoF*n)
         F = np.zeros(DoF*n)
 

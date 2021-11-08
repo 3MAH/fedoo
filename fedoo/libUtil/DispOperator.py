@@ -1,8 +1,8 @@
 from fedoo.libUtil.Operator  import *
-from fedoo.libUtil.Dimension import *
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 
 def GetDispOperator():
-    n = ProblemDimension.Get()
+    n = ModelingSpace.GetDimension()
 
     U=[]
     U.append(OpDiff('DispX'))

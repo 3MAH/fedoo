@@ -1,8 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator import GetDispOperator
-from fedoo.libUtil.Variable import Variable
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import Variable, GetDimension
 
 class Inertia(WeakForm):
     def __init__(self, Density, ID = ""):
@@ -14,10 +13,10 @@ class Inertia(WeakForm):
 
         Variable("DispX") 
         Variable("DispY")                
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")  
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
-        else: Variable.SetVector('Disp' , ('DispX', 'DispY'))
+            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        else: Vector('Disp' , ('DispX', 'DispY'))
         
         self.__Density = Density        
 

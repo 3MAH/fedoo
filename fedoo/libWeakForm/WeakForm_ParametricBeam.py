@@ -1,8 +1,6 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.Variable import Variable
-from fedoo.libUtil.Dimension import ProblemDimension
-from fedoo.libUtil.Coordinate import Coordinate
+from fedoo.libUtil.ModelingSpace import Variable, Vector, Coordinate, GetDimension
 from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
 from fedoo.libPGD.MeshPGD import MeshPGD
 from fedoo.libPGD.SeparatedArray import SeparatedOnes
@@ -38,20 +36,20 @@ class ParametricBeam(WeakForm):
 
         Variable("DispX") 
         Variable("DispY")     
-        if ProblemDimension.Get() == '3D':
+        if GetDimension() == '3D':
             Variable("DispZ")   
             Variable("RotX") #torsion rotation    
             Variable('RotY')
             Variable('RotZ')
             # Variable.SetDerivative('DispZ', 'RotY', sign = -1) #only valid with Bernoulli model
             # Variable.SetDerivative('DispY', 'RotZ') #only valid with Bernoulli model       
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
-            Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ'))
-        elif ProblemDimension.Get() == '2Dplane':
+            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            Vector('Rot' , ('RotX', 'RotY', 'RotZ'))
+        elif GetDimension() == '2Dplane':
             Variable('RotZ')
-            Variable.SetVector('Disp' , ('DispX', 'DispY'))
-            Variable.SetVector('Rot' , ('RotZ'))
-        elif ProblemDimension.Get() == '2Dstress':
+            Vector('Disp' , ('DispX', 'DispY'))
+            Vector('Rot' , ('RotZ'))
+        elif GetDimension() == '2Dstress':
             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
         
         if R is not None:

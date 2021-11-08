@@ -1,8 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator import GetDispOperator
-from fedoo.libUtil.Variable import Variable
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension, GetNumberOfDimensions
 
 class InterfaceForce(WeakForm):
     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
@@ -16,11 +15,11 @@ class InterfaceForce(WeakForm):
         
         Variable("DispX") 
         Variable("DispY")                
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
         else: #2D assumed
-            Variable.SetVector('Disp' , ('DispX', 'DispY'))
+            Vector('Disp' , ('DispX', 'DispY'))
                
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__InitialStressVector = 0
@@ -63,7 +62,7 @@ class InterfaceForce(WeakForm):
         
         U, U_vir = GetDispOperator()
         
-        dim = ProblemDimension.GetDoF()
+        dim = GetNumberOfDimensions()
 
         DiffOp = sum([U_vir[i] * F[i] for i in range(dim)])    
         

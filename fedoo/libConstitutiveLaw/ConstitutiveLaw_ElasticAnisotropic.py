@@ -3,8 +3,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.Variable       import *
-from fedoo.libUtil.Dimension      import *
+from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -16,7 +15,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
         Variable("DispX")
         Variable("DispY")        
         
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")
 
         self.__H = H
@@ -25,7 +24,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
     
     
     def GetH(self,**kargs):
-        pbdim = kargs.get(pbdim, ProblemDimension.Get())
+        pbdim = kargs.get('pbdim', GetDimension())
         if pbdim == "2Dstress":
             return NotImplemented
         else: 

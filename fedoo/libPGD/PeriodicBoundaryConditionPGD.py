@@ -8,7 +8,7 @@ Created on Thu Jan 23 15:27:43 2020
 from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 import numpy as np
 from fedoo.libMesh.Mesh import MeshBase
-from fedoo.libUtil import Variable
+from fedoo.libUtil.ModelingSpace import ModelingSpace
 
 # def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
 #     """
@@ -80,19 +80,19 @@ from fedoo.libUtil import Variable
 #         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[1][0]), np.full_like(corner_rt,NodeCD[1][1])], ProblemID = ProblemID)                
                                        
 #         #if rot DOF are used, apply continuity of the rotational dof on each oposite faces and corner
-#         if 'RotZ' in Variable.List():
+#         if 'RotZ' in ModelingSpace.ListVariable():
 #             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
-#         if 'RotY' in Variable.List():
+#         if 'RotY' in ModelingSpace.ListVariable():
 #             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
-#         if 'RotX' in Variable.List():
+#         if 'RotX' in ModelingSpace.ListVariable():
 #             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
 #             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
@@ -286,9 +286,9 @@ from fedoo.libUtil import Variable
 
 #         #if rot DOF are used, apply continuity of the rotational dof
 #         list_rot_var = []
-#         if 'RotX' in Variable.List(): list_rot_var.append('RotX')
-#         if 'RotY' in Variable.List(): list_rot_var.append('RotY')
-#         if 'RotZ' in Variable.List(): list_rot_var.append('RotZ')
+#         if 'RotX' in ModelingSpace.ListVariable(): list_rot_var.append('RotX')
+#         if 'RotY' in ModelingSpace.ListVariable(): list_rot_var.append('RotY')
+#         if 'RotZ' in ModelingSpace.ListVariable(): list_rot_var.append('RotZ')
         
 #         for var in list_rot_var: 
 #             #### FACES ####
@@ -416,19 +416,19 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
                                        
                       
         #if rot DOF are used, apply continuity of the rotational dof
-        if 'RotZ' in Variable.List():
+        if 'RotZ' in ModelingSpace.ListVariable():
             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
-        if 'RotY' in Variable.List():
+        if 'RotY' in ModelingSpace.ListVariable():
             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
-        if 'RotX' in Variable.List():
+        if 'RotX' in ModelingSpace.ListVariable():
             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
@@ -697,9 +697,9 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
 
         #if rot DOF are used, apply continuity of the rotational dof
         list_rot_var = []
-        if 'RotX' in Variable.List(): list_rot_var.append('RotX')
-        if 'RotY' in Variable.List(): list_rot_var.append('RotY')
-        if 'RotZ' in Variable.List(): list_rot_var.append('RotZ')
+        if 'RotX' in ModelingSpace.ListVariable(): list_rot_var.append('RotX')
+        if 'RotY' in ModelingSpace.ListVariable(): list_rot_var.append('RotY')
+        if 'RotZ' in ModelingSpace.ListVariable(): list_rot_var.append('RotZ')
         
         for var in list_rot_var: 
             #### FACES ####

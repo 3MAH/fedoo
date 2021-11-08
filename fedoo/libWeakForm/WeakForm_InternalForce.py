@@ -1,8 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.StrainOperator import GetStrainOperator, StrainOperator
-from fedoo.libUtil.Variable import Variable
-from fedoo.libUtil.Dimension import ProblemDimension
+from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 from fedoo.libUtil.Operator  import OpDiff
 
 class InternalForce(WeakForm):
@@ -17,11 +16,11 @@ class InternalForce(WeakForm):
         
         Variable("DispX") 
         Variable("DispY")                
-        if ProblemDimension.Get() == "3D": 
+        if GetDimension() == "3D": 
             Variable("DispZ")
-            Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
         else: #2D assumed
-            Variable.SetVector('Disp' , ('DispX', 'DispY'))
+            Vector('Disp' , ('DispX', 'DispY'))
         
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__InitialStressTensor = 0
@@ -30,7 +29,7 @@ class InternalForce(WeakForm):
         self.__nlgeom = nlgeom #geometric non linearities
                 
         if nlgeom:
-            if ProblemDimension.Get() == "3D":        
+            if GetDimension() == "3D":        
                 GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
                 #NonLinearStrainOperatorVirtual = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
                 NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(3)]) for i in range(3)] 
