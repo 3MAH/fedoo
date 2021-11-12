@@ -21,7 +21,6 @@ class arrayStressTensor(np.ndarray):
         Return a array adapted to export symetric tensor data in a vtk file
         See the Util.ExportData class for more details
         """
-        # return np.vstack([self[i] for i in [0,1,2,3,5,4]]).astype(float).T 
         return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float).T 
     
     def GetFullTensor(self): 
@@ -45,8 +44,12 @@ class listStressTensor(list):
         Return a array adapted to export symetric tensor data in a vtk file
         See the Util.ExportData class for more details
         """
-        return np.vstack([self[i] for i in [0,1,2,3,5,4]]).astype(float).T 
-
+        try: 
+            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float).T 
+        except:
+            self.fill_zeros()
+            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float).T 
+        
     def GetFullTensor(self): 
         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
 
@@ -102,6 +105,16 @@ class listStressTensor(list):
         
     def toStress(self):
         return self
+    
+    def fill_zeros(self):
+        for i in range(6):
+            if np.isscalar(self[i]) != True:
+                N = len(self[i]) #number of stress values
+                break
+        for i in range(6):
+            if self[i] is 0:
+                self[i] = np.zeros(N)
+            
 
     def Convert(self,assemb, ConvertFrom, ConvertTo):
         return listStressTensor([assemb.ConvertData(S, ConvertFrom, ConvertTo) for S in self])
@@ -118,10 +131,19 @@ class listStrainTensor(list):
         Return a array adapted to export symetric tensor data in a vtk file
         See the Util.ExportData class for more details
         """
-        return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
 
+        try: 
+            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
+        except:
+            self.fill_zeros()
+            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
+        
     def asarray(self):
-        return np.array(self)
+        try:
+            return np.array(self)
+        except:
+            self.fill_zeros()
+            return np.array(self)
 
     def GetFullTensor(self):
         return np.array([[self[0],self[3]/2,self[4]/2], [self[3]/2, self[1], self[5]/2], [self[4]/2, self[5]/2, self[2]]])
@@ -143,6 +165,15 @@ class listStrainTensor(list):
         
     def toStrain(self):
         return self
+
+    def fill_zeros(self):
+        for i in range(6):
+            if np.isscalar(self[i]) != True:
+                N = len(self[i]) #number of stress values
+                break
+        for i in range(6):
+            if self[i] is 0:
+                self[i] = np.zeros(N)
 
     def Convert(self,assemb, ConvertFrom, ConvertTo):
         return listStrainTensor([assemb.ConvertData(S, ConvertFrom, ConvertTo) for S in self])

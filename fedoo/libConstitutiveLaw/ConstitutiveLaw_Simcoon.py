@@ -12,18 +12,18 @@ if USE_SIMCOON:
         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
-    from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+    from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
     from fedoo.libUtil.StrainOperator import *
     from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
     from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
     
     import numpy as np
     
-    class Simcoon(ConstitutiveLaw, sim.Umat_fedoo):
+    class Simcoon(Mechanical3D, sim.Umat_fedoo):
         def __init__(self,umat_name, props, statev, corate=0, ID=""):
             #props is a nparray containing all the material variables
             #nstatev is a nparray containing all the material variables
-            ConstitutiveLaw.__init__(self, ID) # heritage
+            Mechanical3D.__init__(self, ID) # heritage
         
             
             self.__InitialStatev = statev #statev may be an int or an array        
@@ -42,9 +42,7 @@ if USE_SIMCOON:
                 ndi = 3 ; nshr = 3###shoud be modified?
             elif GetDimension() in ['2Dplane']:
                  ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
-    
-            #statev = ??? require to get te number of gauss point
-            
+               
             ### initialization of the simcoon UMAT
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
             # sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), statev, corate, ndi, nshr, 0.)
@@ -58,16 +56,17 @@ if USE_SIMCOON:
         def GetCauchy(self):
             return listStressTensor(self.Cauchy.T)        
         
-        def GetStrain(self):
+        def GetStrain(self, **kargs):
             return listStrainTensor(self.etot.T)
                
         def GetStatev(self):
             return self.statev.T
         
         def GetCurrentStress(self): #same as GetPKII (used for small def)
+            print('Warning : GetCurrentStress will be removed in future versions. Use GetStress instead')
             return listStressTensor(self.PKII.T)
 
-        def GetStress(self): #same as GetPKII (used for small def)
+        def GetStress(self, **kargs): #same as GetPKII (used for small def)
             return listStressTensor(self.PKII.T)
         
         # def GetHelas (self):
@@ -80,7 +79,7 @@ if USE_SIMCOON:
             if self.__currentGradDisp is 0: return 0
             else: return self.__currentGradDisp
             
-        def GetH(self, **kargs):
+        def GetTangentMatrix(self, **kargs):
             #### TODO: try to implement the case pdim=="2Dstress"
             # pbdim = kargs.get(pbdim, GetDimension())
             
@@ -95,30 +94,9 @@ if USE_SIMCOON:
             # else: 
             #     return np.squeeze(self.__Lt.transpose(1,2,0))          
             return np.squeeze(self.Lt.transpose(1,2,0))
-                        
-        def __ChangeBasisH(self, H):       
-            #Change of basis capability for laws on the form : StressTensor = H * StrainTensor
-            #StressTensor and StrainTensor are column vectors based on the voigt notation 
-            if self._ConstitutiveLaw__localFrame is not None:
-                localFrame = self._ConstitutiveLaw__localFrame
-                #building the matrix to change the basis of the stress and the strain
-    #            theta = np.pi/8
-    #            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]]) 
-                R_epsilon = np.empty((len(localFrame), 6,6))
-                R_epsilon[:,  :3,  :3] = localFrame**2 
-                R_epsilon[:,  :3, 3:6] = localFrame[:,:,[0,2,1]]*localFrame[:,:,[1,0,2]]
-                R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[0,2,1]]*localFrame[:,[1,0,2]] 
-                R_epsilon[:, 3:6, 3:6] = localFrame[:,[[0],[2],[1]], [0,2,1]]*localFrame[:,[[1],[0],[2]],[1,0,2]] + localFrame[:,[[1],[0],[2]],[0,2,1]]*localFrame[:,[[0],[2],[1]],[1,0,2]] 
-                R_sigma_inv = R_epsilon.transpose(0,2,1)    # np.transpose(R_epsilon,[0,2,1])        
-                
-                if len(H.shape) == 3: H = np.rollaxis(H,2,0)
-                H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
-                if len(H.shape) == 3: H = np.rollaxis(H,0,3)  
-                
-            return H
         
         def GetStressOperator(self, **kargs):
-            H = self.__ChangeBasisH(self.GetH(**kargs))
+            H = self.GetH(**kargs)
                           
             eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
             sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -164,7 +142,7 @@ if USE_SIMCOON:
         def Update(self,assembly, pb, dtime, nlgeom=True):            
             displacement = pb.GetDoFSolution()
                 
-            #tranpose for comatibility with simcoon
+            #tranpose for compatibility with simcoon
             if displacement is 0: 
                 self.__currentGradDisp = 0
                 self.__currentStress = None

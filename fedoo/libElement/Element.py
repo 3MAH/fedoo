@@ -232,33 +232,61 @@ class element2D(element):
         self.inverseJacobian = linalg.inv(self.JacobianMatrix) 
         
 
-    def repLocFromJac(self,rep_loc=None, vec_xi=None): #to do: vectorization
-        listZ=[sp.cross(J[0],J[1]) for J in self.JacobianMatrix] 
-        listX = [] ; listY = []            
-        if rep_loc is None:               
-            listZ=[Z/linalg.norm(Z) for Z in listZ]  #direction perpendiculaire au plan tangeant   
-            x = sp.array([1,0,0]) ; y=sp.array([0,1,0])  
-            for Z in listZ:
-                X=x-Z[0]*Z ; normX = linalg.norm(X)
-                if normX != 0:
-                    listX.append(X/normX)
-                    listY.append(sp.cross(Z,listX[-1]))
-                else: 
-                    listY.append(y-Z[1]*Z) ; listY[-1] /= linalg.norm(listY[-1])
-                    listX.append(sp.cross(listY[-1],Z))  
+    def repLocFromJac(self,rep_loc=None, vec_xi=None): 
+        # listZ=[[sp.cross(J[0],J[1]) for J in Jel] for Jel in self.JacobianMatrix] 
+        listZ = sp.cross(self.JacobianMatrix[:,:,0],self.JacobianMatrix[:,:,1])
+        listZ = listZ/linalg.norm(listZ, axis=2)[..., sp.newaxis] #direction perpendiculaire au plan tangeant   
+        listY = sp.empty_like(listZ) #initialize listY
+
+        if rep_loc is None:                           
+            x = sp.array([1,0,0]) ; y = sp.array([0,1,0]) 
+            listX = x-listZ[...,0, sp.newaxis]*listZ                                                
         else: 
             rep_pg = self.interpolateLocalFrame(rep_loc, vec_xi) #interpolation du repère local aux points de gauss                  
-            for k,Z in enumerate(listZ):
-                x = rep_pg[k][0] ; y = rep_pg[k][1]
-                X=x-sp.dot(x,Z)*Z ; normX = linalg.norm(X)
-                if normX != 0:
-                    listX.append(X/normX)
-                    listY.append(sp.cross(Z,listX[-1]))
-                else: 
-                    listY.append(y-sp.dot(y,Z)*Z) ; listY[-1] /= linalg.norm(listY[-1])
-                    listX.append(sp.cross(listY[k],Z))
+            x = rep_pg[...,0] ; y = rep_pg[...,1] #to check
+            listX = x-sp.dot(listZ,x)[...,sp.newaxis]*listZ     
+            
+        normX = linalg.norm(listX, axis=-1)
+        mask = (normX > 1e-6) #mask = True if normX != 0. In this case the X vector are valid and need to be normalized
+        listX[mask] = listX[mask]/normX[mask, sp.newaxis] 
+        listY[mask] = sp.cross(listZ[mask],listX[mask])
 
-        return sp.array([[listX[k],listY[k],listZ[k]] for k in range(len(listZ))])
+        #treat the particular X vector is perpendicular to the plane
+        mask = sp.logical_not(mask) #mask = True if normX == 0
+        
+        if rep_loc is None:                           
+            listY[mask] = y-listZ[mask,1, sp.newaxis]*listZ[mask] #projection to the plane                                              
+        else:
+            listY[mask] = y-sp.dot(listZ[mask],y)[...,sp.newaxis]*listZ[mask]     
+
+        listY[mask] = listY[mask]/ linalg.norm(listY[mask], axis=-1)[..., sp.newaxis]         
+        listX[mask] = sp.cross(listY[mask],listZ[mask])
+        
+        return sp.array([listX,listY, listZ]).transpose([1,2,0,3])
+
+            # for Z in listZ:
+            #     X=x-Z[0]*Z ; normX = linalg.norm(X)
+            #     if normX != 0:
+            #         listX.append(X/normX)
+            #         listY.append(sp.cross(Z,listX[-1]))
+            #     else: 
+            #         listY.append(y-Z[1]*Z) ; listY[-1] /= linalg.norm(listY[-1])
+            #         listX.append(sp.cross(listY[-1],Z))  
+                    
+                   
+            
+            
+            # for k,Z in enumerate(listZ):
+            #     x = rep_pg[k][0] ; y = rep_pg[k][1]
+            #     X=x-sp.dot(x,Z)*Z ; normX = linalg.norm(X)
+            #     if normX != 0:
+            #         listX.append(X/normX)
+            #         listY.append(sp.cross(Z,listX[-1]))
+            #     else: 
+            #         listY.append(y-sp.dot(y,Z)*Z) ; listY[-1] /= linalg.norm(listY[-1])
+            #         listX.append(sp.cross(listY[k],Z))
+
+        # return sp.array([[listX[k],listY[k],listZ[k]] for k in range(len(listZ))])
 
 
 

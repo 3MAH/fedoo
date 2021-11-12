@@ -25,7 +25,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         return self.__parameters
     
     def GetH (self,**kargs):
-        pbdim = kargs.get(pbdim, GetDimension())
+        pbdim = kargs.get('pbdim', GetDimension())
         
         #need to be checked
         if pbdim == "2Dstress":

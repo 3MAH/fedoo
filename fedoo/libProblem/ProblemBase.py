@@ -110,7 +110,7 @@ class ProblemBase:
     def GetExternalForces(self, name = 'all'):
         raise NameError("The method 'GetExternalForces' is not defined for this kind of problem")    
 
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
         raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
         
     def SaveResults(self, iterOutput=None):        
@@ -151,8 +151,8 @@ def ResetLoadFactor(): ProblemBase.GetActive().ResetLoadFactor()
 def NLSolve(**kargs): return ProblemBase.GetActive().NLSolve(**kargs)  
 def GetElasticEnergy(): return ProblemBase.GetActive().GetElasticEnergy()
 def GetNodalElasticEnergy(): return ProblemBase.GetActive().GetNodalElasticEnergy()
-def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
-    return ProblemBase.GetActive().AddOutput(filename, assemblyID, output_list, output_type, file_format)
+def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    return ProblemBase.GetActive().AddOutput(filename, assemblyID, output_list, output_type, file_format, position)
 def SaveResults(iterOutput=None):        
     return ProblemBase.GetActive().SaveResults(iterOutput)
 

@@ -47,6 +47,9 @@ class InternalForce(WeakForm):
         
     def UpdateInitialStress(self,InitialStressTensor):                                                
         self.__InitialStressTensor = InitialStressTensor       
+
+    def GetInitialStress(self):                                                
+        return self.__InitialStressTensor 
         
     def Initialize(self, assembly, pb, initialTime = 0.):
         self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)

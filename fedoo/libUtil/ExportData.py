@@ -255,7 +255,7 @@ class _ProblemOutput:
                                    'disp', 'rot', 'strain', 'statev', 'stress', 'stress_vm', 'external_force', 'internal_force', 'internal_force_global']
         self.__available_format = ['vtk', 'msh', 'txt', 'npy', 'npz', 'npz_compressed']
         
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk'):
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
         if output_type.lower() == 'node': output_type = 'Node'
         elif output_type.lower() == 'element': output_type = 'Element'
         elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
@@ -274,7 +274,7 @@ class _ProblemOutput:
                 print("Specified output ignored")
                 print("List of available output: ", self.__available_output)
         
-        new_output = {'filename': filename, 'assembly': assemblyID, 'type': output_type, 'list': output_list, 'file_format': file_format.lower()}
+        new_output = {'filename': filename, 'assembly': assemblyID, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)
 
     def SaveResults(self, pb, comp_output=None):
@@ -292,6 +292,7 @@ class _ProblemOutput:
             filename = output['filename']
             file_format = output['file_format'].lower()
             output_type = output['type'] #'Node', 'Element' or 'GaussPoint'
+            position = output['position']
             
             assemb = AssemblyBase.GetAll()[output['assembly']]               
             material = assemb.GetWeakForm().GetConstitutiveLaw()
@@ -325,13 +326,13 @@ class _ProblemOutput:
                             data = material.GetPKII()
                         elif res in ['stress']:
                             #stress for small displacement
-                            data = material.GetCurrentStress()
+                            data = material.GetStress(position = position)
                         elif res in ['kirchoff','kirchhoff']:
                             data = material.GetKirchhoff()
                         elif res == 'cauchy':
                             data = material.GetCauchy()
                         elif res == 'strain':
-                            data = material.GetStrain()                                                
+                            data = material.GetStrain(position = position)                                                
                         
                         data = data.Convert(assemb, None, output_type)                        
                         
@@ -371,7 +372,7 @@ class _ProblemOutput:
                         if res in ['pkii_vm','pk2_vm']:
                             data = material.GetPKII()
                         elif res in ['stress_vm']:
-                            data = material.GetCurrentStress()
+                            data = material.GetStress(position = position)
                         elif res in ['kirchoff_vm','kirchhoff_vm']:
                             data = material.GetKirchhoff()
                         elif res == 'cauchy_vm':
@@ -403,7 +404,7 @@ class _ProblemOutput:
                         if measure_type in ['pkii','pk2']:
                             data = material.GetPKII()
                         elif measure_type in ['stress']:
-                            data = material.GetCurrentStress()
+                            data = material.GetStress(position = position)
                         elif measure_type in ['kirchoff','kirchhoff']:
                             data = material.GetKirchhoff()
                         elif measure_type == 'cauchy':

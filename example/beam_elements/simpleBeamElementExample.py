@@ -46,9 +46,7 @@ elif computeShear == 1:
 else:  #computeShear = 2
     Mesh.GetAll()['beam'].AddInternalNodes(1) #adding one internal nodes per element (this node has no geometrical sense)
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, ID = "WFbeam")
-    Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam")
-    
-Assembly.GetAll()['beam'].computeMatrixMethod = 'new'
+    Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam")    
 
 Problem.Static("beam")
 

@@ -535,9 +535,10 @@ class Assembly(AssemblyBase):
 
         if isinstance(eval(elementType), dict):
             elementDict = eval(elementType)
-            elementType = elementDict.get(ModelingSpace.GetVariableName(deriv.u))[0]
+            elementType = elementDict.get(ModelingSpace.GetVariableName(deriv.u))
             if elementType is None: elementType = elementDict.get('__default')
-                
+            elementType = elementType[0]
+            
         if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
         
@@ -698,6 +699,11 @@ class Assembly(AssemblyBase):
 
     @staticmethod
     def __GetResultGaussPoints(mesh, operator, U, elementType, nb_pg=None):  #return the results at GaussPoints      
+        #TODO : can be accelerated by avoiding RowBlocMatrix (need to be checked) -> For each elementary 
+        # 1 - at the very begining, compute Uloc = MatrixChangeOfBasis * U 
+        # 2 - reshape Uloc to separate each var Uloc = Uloc.reshape(var, -1)
+        # 3 - in the loop : res += coef_PG * (Assembly.__GetElementaryOp(mesh, operator.op[ii], elementType, nb_pg) , nvar, var, coef) * Uloc[var]
+        
         res = 0
         nvar = ModelingSpace.GetNumberOfVariable()
         

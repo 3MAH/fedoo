@@ -245,7 +245,7 @@ beam = {'DispX':['lin2'],
         'RotX':['lin2'], 
         'RotY':['beam_rotY', (-1, 'DispZ')], 
         'RotZ':['beam_rotZ', (1, 'DispY')], 
-        'default':['lin2'],
+        '__default':['lin2'],
         '__TypeOfCoordinateSystem': 'local'}         
 
 def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):

@@ -93,7 +93,7 @@ class ModelingSpace:
         return ModelingSpace.__activeSpace._crd_rank
 
     @staticmethod    
-    def ListCoordinates():
+    def ListCoordinate():
         return ModelingSpace.__activeSpace._coordinate.keys()          
 
     #Methods related to Varibale

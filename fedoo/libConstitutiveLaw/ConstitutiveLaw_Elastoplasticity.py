@@ -1,14 +1,14 @@
 #derive de ConstitutiveLaw
 #The elastoplastic law should be used with an InternalForce WeakForm
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 from fedoo.libUtil.StrainOperator import *
 from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
 
-class ElastoPlasticity(ConstitutiveLaw):
+class ElastoPlasticity(Mechanical3D):
     def __init__(self,YoungModulus, PoissonRatio, YieldStress, ID=""):
         #only scalar values of YoungModulus and PoissonRatio are possible
         ConstitutiveLaw.__init__(self, ID) # heritage
@@ -116,20 +116,20 @@ class ElastoPlasticity(ConstitutiveLaw):
     def GetPlasticity(self):
         return self.__currentP
     
-    def GetStrain(self):
+    def GetStrain(self, **kargs):
         return self.__currentPlasticStrainTensor
     
     def GetPKII(self):
         return self.__currentSigma
 
-    def GetStress(self): #same as GetPKII
+    def GetStress(self, **kargs): #same as GetPKII
         #alias of GetPKII mainly use for small strain displacement problems
         return self.__currentSigma
     
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp
         
-    def GetH(self,**kargs):        
+    def GetTangentMatrix(self,**kargs):        
         Helas = self.GetHelas(**kargs) #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
 
         if self.__currentSigma is None: return Helas
@@ -148,30 +148,9 @@ class ElastoPlasticity(ConstitutiveLaw):
         TangeantModuli = [[Helas[i][j] - (CL[i]*Peps[j] * test) for j in range(6)] for i in range(6)]                
         return TangeantModuli
         ##### end Compute new tangeant moduli                        
-
-    def __ChangeBasisH(self, H):       
-        #Change of basis capability for laws on the form : StressTensor = H * StrainTensor
-        #StressTensor and StrainTensor are column vectors based on the voigt notation 
-        if self._ConstitutiveLaw__localFrame is not None:
-            localFrame = self._ConstitutiveLaw__localFrame
-            #building the matrix to change the basis of the stress and the strain
-#            theta = np.pi/8
-#            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]]) 
-            R_epsilon = np.empty((len(localFrame), 6,6))
-            R_epsilon[:,  :3,  :3] = localFrame**2 
-            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[0,2,1]]*localFrame[:,:,[1,0,2]]
-            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[0,2,1]]*localFrame[:,[1,0,2]] 
-            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[0],[2],[1]], [0,2,1]]*localFrame[:,[[1],[0],[2]],[1,0,2]] + localFrame[:,[[1],[0],[2]],[0,2,1]]*localFrame[:,[[0],[2],[1]],[1,0,2]] 
-            R_sigma_inv = R_epsilon.transpose(0,2,1)    # np.transpose(R_epsilon,[0,2,1])        
-            
-            if len(H.shape) == 3: H = np.rollaxis(H,2,0)
-            H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
-            if len(H.shape) == 3: H = np.rollaxis(H,0,3)  
-            
-        return H
     
     def GetStressOperator(self, localFrame=None): 
-        H = self.__ChangeBasisH(self.GetH())
+        H = self.GetH()
                       
         eps, eps_vir = GetStrainOperator()         
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -226,11 +205,11 @@ class ElastoPlasticity(ConstitutiveLaw):
                 Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
         
             TotalStrain = listStrainTensor(Strain)
-            self.GetStress(TotalStrain, time) #compute the total stress in self.__currentSigma
+            self.ComputeStress(TotalStrain, time) #compute the total stress in self.__currentSigma
             
             # print(self.__currentP)
             
-    def GetStress(self, StrainTensor, time = None): 
+    def ComputeStress(self, StrainTensor, time = None): 
         # time not used here because this law require no time effect
         # initilialize values plasticity variables if required
         if self.__P is None: 

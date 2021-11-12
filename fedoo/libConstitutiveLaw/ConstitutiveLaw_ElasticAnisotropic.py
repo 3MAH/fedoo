@@ -1,16 +1,16 @@
 #derive de ConstitutiveLaw
 #compatible with the simcoon strain and stress notation
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 from fedoo.libUtil.StrainOperator import *
 from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
 
-class ElasticAnisotropic(ConstitutiveLaw):
+class ElasticAnisotropic(Mechanical3D):
     def __init__(self, H, ID=""):
-        ConstitutiveLaw.__init__(self, ID) # heritage
+        Mechanical3D.__init__(self, ID) # heritage
         
         Variable("DispX")
         Variable("DispY")        
@@ -23,7 +23,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
         self.__currentGradDisp = None
     
     
-    def GetH(self,**kargs):
+    def GetTangentMatrix(self,**kargs):
         pbdim = kargs.get('pbdim', GetDimension())
         if pbdim == "2Dstress":
             return NotImplemented
@@ -35,13 +35,14 @@ class ElasticAnisotropic(ConstitutiveLaw):
     
     def GetCurrentStress(self):
         #alias of GetPKII mainly use for small strain displacement problems
+        print('Warning : GetCurrentStress will be removed in future versions. Use GetStress instead')
         return (self.__currentSigma)
 
-    def GetStress(self):
-        #Same as GetCurrentStress
+    def GetStress(self, **kargs):
+        #alias of GetPKII mainly use for small strain displacement problems
         return (self.__currentSigma)
     
-    def GetStrain(self):
+    def GetStrain(self, **kargs):
         return self.__currentStrain
     
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
@@ -55,29 +56,8 @@ class ElasticAnisotropic(ConstitutiveLaw):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp    
     
-    def __ChangeBasisH(self, H):       
-        #Change of basis capability for laws on the form : StressTensor = H * StrainTensor
-        #StressTensor and StrainTensor are column vectors based on the voigt notation 
-        if self._ConstitutiveLaw__localFrame is not None:
-            localFrame = self._ConstitutiveLaw__localFrame
-            #building the matrix to change the basis of the stress and the strain
-#            theta = np.pi/8
-#            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]]) 
-            R_epsilon = np.empty((len(localFrame), 6,6))
-            R_epsilon[:,  :3,  :3] = localFrame**2 
-            R_epsilon[:,  :3, 3:6] = localFrame[:,:,[0,2,1]]*localFrame[:,:,[1,0,2]]
-            R_epsilon[:, 3:6,  :3] = 2*localFrame[:,[0,2,1]]*localFrame[:,[1,0,2]] 
-            R_epsilon[:, 3:6, 3:6] = localFrame[:,[[0],[2],[1]], [0,2,1]]*localFrame[:,[[1],[0],[2]],[1,0,2]] + localFrame[:,[[1],[0],[2]],[0,2,1]]*localFrame[:,[[0],[2],[1]],[1,0,2]] 
-            R_sigma_inv = R_epsilon.transpose(0,2,1)    # np.transpose(R_epsilon,[0,2,1])        
-            
-            if len(H.shape) == 3: H = np.rollaxis(H,2,0)
-            H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
-            if len(H.shape) == 3: H = np.rollaxis(H,0,3)  
-            
-        return H
-    
     def GetStressOperator(self, **kargs): 
-        H = self.__ChangeBasisH(self.GetH(**kargs ))
+        H = self.GetH(**kargs )
                       
         eps, eps_vir = GetStrainOperator()            
         sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -109,7 +89,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
                 
             self.__currentStrain = TotalStrain                            
        
-            H = self.__ChangeBasisH(self.GetH())
+            H = self.GetH()
         
             self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.ConvertData(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
             # self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma
@@ -117,7 +97,7 @@ class ElasticAnisotropic(ConstitutiveLaw):
         
        
     def GetStressFromStrain(self, StrainTensor):     
-        H = self.__ChangeBasisH(self.GetH())
+        H = self.GetH()
         
         sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
 
