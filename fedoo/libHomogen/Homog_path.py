@@ -52,7 +52,8 @@ def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, pa
     ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
 
     readPath = sim.read_path(path_data,path_file)
-    blocks = readPath[1]
+    blocks = readPath[2]
+    cyclesPerBlocks = readPath[1]
 
     MeanStress = np.zeros(6)
     MeanStrain = np.zeros(6)
@@ -66,10 +67,17 @@ def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, pa
     #create a 'result' folder and set the desired ouputs
     if not(os.path.isdir(path_results)): os.mkdir(path_results)
 
-    for block in blocks:
-        for step in block:
+    for blocknumber, block in enumerate(blocks):
+        for stepTotNumber, step in enumerate(block):
             step.generate(time, MeanStrain, MeanStress, T)
             
+            cyclesPerBlock = cyclesPerBlocks[blocknumber]
+            nbStepsPerCycle = len(block)//cyclesPerBlock
+            stepNumber = stepTotNumber%nbStepsPerCycle
+            cycleNumber = stepTotNumber // nbStepsPerCycle
+            
+            print(blocknumber+1, cycleNumber+1, stepNumber+1)
+
             #Boundary conditions
             BC_meca = step.BC_meca #stress or strain BC
             BC_mecas = step.BC_mecas
