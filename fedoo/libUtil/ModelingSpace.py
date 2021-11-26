@@ -4,7 +4,7 @@ class ModelingSpace:
     __dic = {} #dic containing all the modeling spaces
 
     def __init__(self, dimension, ID="Main"):
-        assert ID not in ModelingSpace.__dic, str(ID) + " already exist. Delete it first."
+        # assert ID not in ModelingSpace.__dic, str(ID) + " already exist. Delete it first."
         assert isinstance(dimension,str) , "The dimension value must be a string"
         assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '3D', '2Dplane' or '2Dstress'"        
         

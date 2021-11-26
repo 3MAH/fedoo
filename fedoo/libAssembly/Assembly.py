@@ -28,9 +28,7 @@ class Assembly(AssemblyBase):
     __savePGtoNodeMatrix = {}
     __associatedVariables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
            
-    def __init__(self,weakForm, mesh="", elementType="", ID="", **kargs):        
-#        t0 = time.time()
-        
+    def __init__(self,weakForm, mesh="", elementType="", ID="", **kargs):                      
         if isinstance(weakForm, str):
             weakForm = WeakForm.GetAll()[weakForm]
 
@@ -58,6 +56,8 @@ class Assembly(AssemblyBase):
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
         #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
+        self.__factorizeOp = True #option for debug purpose (should be set to True for performance)
+        self.assumeSymmetric = weakForm.assumeSymmetric
 
     def ComputeGlobalMatrix(self, compute = 'all'):
         """
@@ -69,6 +69,8 @@ class Assembly(AssemblyBase):
         """                        
         if compute == 'none': return
         
+        # t0 = time.time()
+
         computeMatrixMethod = self.computeMatrixMethod
         
         nb_pg = self.__nb_pg
@@ -113,7 +115,7 @@ class Assembly(AssemblyBase):
                                                     
                     var_vir = wf.op_vir[ii].u
                     assert wf.op_vir[ii].ordre == 0, "This weak form is not compatible with finite difference mesh"
-                                        
+                    
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector which is the nodal values
                         if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - (coef_PG) 
@@ -134,11 +136,15 @@ class Assembly(AssemblyBase):
                 MM = sparse.bmat(blocks, format ='csr')
                 
             else:
-                MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure)
-                
+                MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure, assumeSymmetric = self.assumeSymmetric)
+                listMatvir = listCoef_PG = None
+
                 for ii in range(len(wf.op)):
                     if compute == 'matrix' and wf.op[ii] is 1: continue
                     if compute == 'vector' and wf.op[ii] is not 1: continue
+                    
+                    if wf.op[ii] is not 1 and self.assumeSymmetric and wf.op[ii].u < wf.op_vir[ii].u:
+                        continue                
                 
                     if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
                         #if nb_pg == 0, coef_PG = nodal values (finite diffirences)
@@ -154,23 +160,37 @@ class Assembly(AssemblyBase):
                         continue
                                     
                     coef_PG = coef_PG_sum * MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
-                
-                    coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable
-                                   
-                    if var_vir[0] in associatedVariables:
-                        var_vir.extend(associatedVariables[var_vir[0]][0])
-                        coef_vir.extend(associatedVariables[var_vir[0]][1])                   
-                              
+                                              
     #                Matvir = (RowBlocMatrix(Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
                     #check how it appens with change of variable and rotation dof
+                    
                     Matvir = Assembly.__GetElementaryOp(mesh, wf.op_vir[ii], self.__elmType, nb_pg=nb_pg)
+                    
+                    if listMatvir is not None: #factorization of real operator (sum of virtual operators)
+                        listMatvir = [listMatvir[j]+[Matvir[j]] for j in range(len(Matvir))] 
+                        listCoef_PG = listCoef_PG + [coef_PG]  
+                        
+                    if ii < len(wf.op)-1 and wf.op[ii] != 1 and wf.op[ii+1] != 1 and self.__factorizeOp == True:
+                        #if it possible, factorization of op to increase assembly performance (sum of several op_vir)                        
+                        factWithNextOp = [wf.op[ii].u, wf.op[ii].x, wf.op[ii].u, wf.op_vir[ii].u] == [wf.op[ii+1].u, wf.op[ii+1].x, wf.op[ii+1].u, wf.op_vir[ii+1].u] #True if factorization is possible with next op                                            
+                        if factWithNextOp:
+                            if listMatvir is None: 
+                                listMatvir = [Matvir] #initialization of listMatvir and listCoef_PG
+                                listCoef_PG = [coef_PG]
+                            continue #si factorization possible -> go to next op, all the factorizable operators will treat together                        
+                    else: factWithNextOp = False
+
+                    coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable                                                   
+                    if var_vir[0] in associatedVariables:
+                        var_vir.extend(associatedVariables[var_vir[0]][0])
+                        coef_vir.extend(associatedVariables[var_vir[0]][1])   
                     
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                         if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
                         for i in range(len(Matvir)):
                             VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
                             
-                    else: #virtual and real operators -> compute a matrix
+                    else: #virtual and real operators -> compute a matrix                                         
                         coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
                         if var[0] in associatedVariables:
                             var.extend(associatedVariables[var[0]][0])
@@ -181,10 +201,17 @@ class Assembly(AssemblyBase):
         
                         #Possibility to increase performance for multivariable case 
                         #the structure should be the same for derivative dof, so the blocs could be computed altogether
-                        for i in range(len(Mat)):
-                            for j in range(len(Matvir)):
-                                MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
-                
+                        if listMatvir is None:
+                            for i in range(len(Mat)):
+                                for j in range(len(Matvir)):
+                                    MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+                        else:
+                            for i in range(len(Mat)):
+                                for j in range(len(Matvir)):
+                                    MM.addToBlocATB(listMatvir[j], Mat[i], [(coef[i]*coef_vir[j]) * coef_PG for coef_PG in listCoef_PG], var_vir[j], var[i])                        
+                            listMatvir = None
+                            listCoef_PG = None
+                        
             if compute != 'vector':
                 if MatrixChangeOfBasis is 1: 
                     self.SetMatrix(MM.tocsr()) #format csr         
@@ -194,7 +221,7 @@ class Assembly(AssemblyBase):
                 if VV is 0: self.SetVector(0)
                 elif MatrixChangeOfBasis is 1: self.SetVector(VV) #numpy array
                 else: self.SetVector(MatrixChangeOfBasis.T * VV)                     
-
+                        
             if self.__saveBlocStructure is None: self.__saveBlocStructure = MM.GetBlocStructure()        
 
         elif computeMatrixMethod == 'old': #keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases                            
@@ -337,6 +364,8 @@ class Assembly(AssemblyBase):
 #            MM.eliminate_zeros()
             if compute != 'vector': self.SetMatrix(MM) #format csr         
             if compute != 'matrix': self.SetVector(VV) #numpy array
+            
+        # print('temps : ', print(compute), ' - ', time.time()- t0)
     
     def SetMesh(self, mesh):
         self.__Mesh = mesh

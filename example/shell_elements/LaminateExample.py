@@ -14,15 +14,18 @@ nu = 0.3
 L = 100
 h = 20
 thickness = 1
-F = -10
+F = -100
 
 geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = True #if true, use reduce integration for shear 
+reduced_integration = False #if true, use reduce integration for shear 
 saveResults = True
 
-material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
-ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
+mat1 = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Mat1')
+mat2 = ConstitutiveLaw.ElasticIsotrop(E/10, nu, ID = 'Mat2')
+
+# ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
+ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], ID = 'PlateSection')
 
 mesh = Mesh.RectangleMesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate')
 
@@ -66,12 +69,8 @@ Problem.BoundaryCondition('Neumann','DispZ',F,node_right_center)
 Problem.ApplyBoundaryCondition()
 Problem.Solve()
 
-I = h*thickness**3/12
-print('Beam analitical deflection: ', F*L**3/(3*E*I))
-print('Numerical deflection: ', Problem.GetDisp('DispZ')[node_right_center])
-
 if saveResults == True: 
     Problem.SaveResults() #save in vtk
 
-z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(20)
+z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(200)
 plt.plot(StressDistribution[0], z)

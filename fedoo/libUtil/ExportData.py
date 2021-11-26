@@ -255,7 +255,7 @@ class _ProblemOutput:
                                    'disp', 'rot', 'strain', 'statev', 'stress', 'stress_vm', 'external_force', 'internal_force', 'internal_force_global']
         self.__available_format = ['vtk', 'msh', 'txt', 'npy', 'npz', 'npz_compressed']
         
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 1):
         if output_type.lower() == 'node': output_type = 'Node'
         elif output_type.lower() == 'element': output_type = 'Element'
         elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
