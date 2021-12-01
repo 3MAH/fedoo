@@ -23,12 +23,8 @@ class ElasticAnisotropic(Mechanical3D):
         self.__currentGradDisp = None
     
     
-    def GetTangentMatrix(self,**kargs):
-        pbdim = kargs.get('pbdim', GetDimension())
-        if pbdim == "2Dstress":
-            return NotImplemented
-        else: 
-            return self.__H
+    def GetTangentMatrix(self):
+        return self.__H
 
     def GetPKII(self):
         return self.__currentSigma
@@ -59,7 +55,7 @@ class ElasticAnisotropic(Mechanical3D):
     def GetStressOperator(self, **kargs): 
         H = self.GetH(**kargs )
                       
-        eps, eps_vir = GetStrainOperator()            
+        eps, eps_vir = GetStrainOperator(self.__currentGradDisp)            
         sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
         return sigma # list de 6 objets de type OpDiff
@@ -76,6 +72,7 @@ class ElasticAnisotropic(Mechanical3D):
             self.__currentSigma = 0                        
         else:
             self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
+
             GradValues = self.__currentGradDisp
             if nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 
@@ -92,9 +89,7 @@ class ElasticAnisotropic(Mechanical3D):
             H = self.GetH()
         
             self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.ConvertData(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
-            # self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma
-       
-        
+            # self.__currentSigma = self.GetStress(TotalStrain) #compute the total stress in self.__currentSigma            
        
     def GetStressFromStrain(self, StrainTensor):     
         H = self.GetH()

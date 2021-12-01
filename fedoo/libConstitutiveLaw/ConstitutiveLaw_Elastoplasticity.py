@@ -47,25 +47,15 @@ class ElastoPlasticity(Mechanical3D):
         """
         self.__tol = tol        
     
-    def GetHelas (self, **kargs):
-        pbdim = kargs.get(pbdim, GetDimension())
-        
+    def GetHelas (self):        
         H  = np.zeros((6,6), dtype='object')
         E  = self.__YoungModulus 
         nu = self.__PoissonRatio       
 
-        # tester si contrainte plane ou def plane 
-        if pbdim == "2Dstress":
-            H[0,0]=H[1,1]= E/(1-nu**2)
-            H[0,1]= nu*E/(1-nu**2)
-            H[3,3] = 0.5*E/(1+nu)    
-            H[1,0]=H[0,1]  #symétrie            
-                      
-        else:
-            H[0,0]=H[1,1]=H[2,2]= E*(1./(1+nu) + nu/((1.+nu)*(1-2*nu))) #H1 = 2*mu+lamb
-            H[0,1]=H[0,2]=H[1,2]= E*(nu/((1+nu)*(1-2*nu)))  #H2 = lamb
-            H[3,3]=H[4,4]=H[5,5] = 0.5*E/(1+nu) #H3 = mu
-            H[1,0]=H[0,1] ; H[2,0]=H[0,2] ; H[2,1] = H[1,2] #symétrie 
+        H[0,0]=H[1,1]=H[2,2]= E*(1./(1+nu) + nu/((1.+nu)*(1-2*nu))) #H1 = 2*mu+lamb
+        H[0,1]=H[0,2]=H[1,2]= E*(nu/((1+nu)*(1-2*nu)))  #H2 = lamb
+        H[3,3]=H[4,4]=H[5,5] = 0.5*E/(1+nu) #H3 = mu
+        H[1,0]=H[0,1] ; H[2,0]=H[0,2] ; H[2,1] = H[1,2] #symétrie 
             
         return H    
     
@@ -129,8 +119,8 @@ class ElastoPlasticity(Mechanical3D):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp
         
-    def GetTangentMatrix(self,**kargs):        
-        Helas = self.GetHelas(**kargs) #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
+    def GetTangentMatrix(self):        
+        Helas = self.GetHelas() #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
 
         if self.__currentSigma is None: return Helas
                         
@@ -152,7 +142,7 @@ class ElastoPlasticity(Mechanical3D):
     def GetStressOperator(self, localFrame=None): 
         H = self.GetH()
                       
-        eps, eps_vir = GetStrainOperator()         
+        eps, eps_vir = GetStrainOperator(self.__currentGradDisp)         
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
         return sigma # list de 6 objets de type OpDiff

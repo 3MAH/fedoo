@@ -106,7 +106,7 @@ class OpDiff:
         intForSort = []
         for ii in range(len(self.op)):
             if self.op[ii] != 1 and self.op_vir != 1:
-                intForSort.append(self.op[ii].u + nn* self.op[ii].x + nn**2 * self.op[ii].ordre + nn**3 * self.op_vir[ii].u + nn**4 * self.op_vir[ii].x + nn**5 * self.op_vir[ii].x)
+                intForSort.append(self.op_vir[ii].ordre + nn* self.op_vir[ii].x + nn**2 * self.op_vir[ii].u + nn**3 * self.op[ii].ordre + nn**4 * self.op[ii].x + nn**5 * self.op[ii].u)
             elif self.op[ii] == 1:
                 if self.op_vir == 1: intForSort.append(-1)
                 else:

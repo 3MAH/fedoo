@@ -1,5 +1,6 @@
 #baseclass
 import numpy as np
+from fedoo.libUtil.ModelingSpace      import GetDimension
 
 class ConstitutiveLaw:
 
@@ -72,11 +73,23 @@ class Mechanical3D(ConstitutiveLaw):
     def GetCurrentGradDisp(self): #use if nlgeom == True
         return NotImplemented
     
-    def GetTangentMatrix(self): #Tangent Matrix in local coordinate system (no cange of basis)
+    def GetTangentMatrix(self): #Tangent Matrix in local coordinate system (no change of basis)
         return NotImplemented
 
+    def GetTangentMatrix_2Dstress(self): #Tangent Matrix in local coordinate system (no change of basis)
+        return NotImplemented
+    
     def GetH(self, **kargs): #Tangent Matrix in global coordinate system (apply change of basis)        
-        return self.__ApplyChangeOfBasis(self.GetTangentMatrix(**kargs))
+        if kargs.get('pbdim', GetDimension()) == "2Dstress":
+            H = self.GetTangentMatrix_2Dstress()
+            if H is NotImplemented:
+                H = self.__ApplyChangeOfBasis(self.GetTangentMatrix())
+                return [[H[i][j]-H[i][2]*H[j][2]/H[2][2] if j in [0,1,3] else 0 for j in range(6)] \
+                        if i in [0,1,3] else [0,0,0,0,0,0]for i in range(6)] 
+            else: 
+                return self.__ApplyChangeOfBasis(H)
+                    
+        return self.__ApplyChangeOfBasis(self.GetTangentMatrix())
     
     def __ApplyChangeOfBasis(self, H):        
         #Change of basis capability for laws on the form : StressTensor = H * StrainTensor

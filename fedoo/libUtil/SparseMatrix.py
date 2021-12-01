@@ -14,7 +14,7 @@ from numbers import Number
 
 class _BlocSparse():
     
-    def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None):
+    def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None, assumeSymmetric = False):
         #savedBlocStructure are data from similar structured blocsparse that avoid time consuming operations
         self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
         if savedBlocStructure is None: 
@@ -42,6 +42,7 @@ class _BlocSparse():
         self.nbBlocRow = nbBlocRow
         self.nbBlocCol = nbBlocCol
         self.nbpg=nbpg
+        self.__assumeSymmetric = assumeSymmetric
         
 #    def addToBloc(self, Mat, rowBloc, colBloc):
 #        #Mat should be a scipy matrix using the csr format
@@ -56,24 +57,58 @@ class _BlocSparse():
 
     def addToBlocATB(self, A, B, coef, rowBloc, colBloc):
         #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
+        #A and coef may be a list. In this case compute sum([coef[ii]*A[ii] for ii in range(len(A))]).T @ B
         
-        NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
-        NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B
+        if self.__assumeSymmetric and rowBloc > colBloc:
+            #if self.__assumeSymetric, only compute bloc belonging to inf triangular matrix
+            return
+        
         nb_pg = self.nbpg
-                
-        if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
-        
-        if self.data[rowBloc][colBloc] is 0: 
-            if self.nbpg is None:
-                self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
+        NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B        
+
+        if not isinstance(A, list):
+            NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
+            
+            if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
+            
+            if self.data[rowBloc][colBloc] is 0: 
+                if self.nbpg is None:
+                    self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)) @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
+                else:
+                    self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+            
             else:
-                self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+                if self.nbpg is None:
+                    self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
+                else:
+                    self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
         
         else:
-            if self.nbpg is None:
-                self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA) @ (B.data.reshape(-1,1,NnzColPerRowB)))           
+            NnzColPerRowA = A[0].indptr[1] #number of non zero column per line for csr matrix A
+            listCoef = coef #alias
+            listA = A #alias
+            A = listA[0] #to compute col and row
+            
+            # coef_A_data = sum([coef[ii]*listA[ii].data.reshape(-1,NnzColPerRowA,1) if isinstance(coef, Number) else \
+            #                    coef[ii].reshape(-1,1,1)*listA[ii].data.reshape(-1,NnzColPerRowA,1) for ii in range(len(listA))])
+            
+            coef_A_data = 0
+            for ii, A in enumerate(listA):                
+                coef = listCoef[ii]
+                if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
+                coef_A_data += coef * A.data.reshape(-1,NnzColPerRowA,1)
+            
+            if self.data[rowBloc][colBloc] is 0: 
+                if self.nbpg is None:
+                    self.data[rowBloc][colBloc] = coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
+                else:
+                    self.data[rowBloc][colBloc] = coef_A_data.reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+            
             else:
-                self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each PG we build a nbNode x nbNode matrix
+                if self.nbpg is None:
+                    self.data[rowBloc][colBloc] += coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
+                else:
+                    self.data[rowBloc][colBloc] += coef_A_data.reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
         
         if self.col is None:
             # column indieces of A defined in A.indices are the row indices in final matrix
@@ -94,6 +129,7 @@ class _BlocSparse():
         # start=time.time()
         method =1
         if method == 0:
+            assert not(self.__assumeSymmetric), "method = 0 for sparse matrix building can't be used with the assumeSymmetric option. Contact developer" 
             ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
             ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
             ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
@@ -135,11 +171,16 @@ class _BlocSparse():
                 np.cumsum(nb_nnz_row, out = self.indptr_csr[1:])
 
             if method == 1:
+                if self.__assumeSymmetric == True: 
+                    self.data = [[self.data[i][j] if i<=j else self.data[j][i].transpose(0,2,1) for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow)]
+                
                 blocks = [[sparse.csr_matrix( (self.Matrix_convertCOOtoCSR@self.data[i][j].ravel(), self.indices_csr, self.indptr_csr), shape=(self.blocShape[0],self.blocShape[1]), copy = False) \
                            if self.data[i][j] is not 0 else sparse.csr_matrix((self.blocShape[0],self.blocShape[1])) \
                            for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow) ]        
                 Res = sparse.bmat(blocks, format ='csr')
+            
             elif method == 2:
+                assert not(self.__assumeSymmetric), "method = 2 for sparse matrix building can't be used with the assumeSymmetric option. Contact developer" 
                 data_coo = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
                 Res = sparse.csr_matrix((self.Matrix_convertCOOtoCSR @ data_coo, self.indices_csr, self.indptr_csr), shape =  (self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol)) 
         

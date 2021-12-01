@@ -24,14 +24,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
     def GetEngineeringConstants(self):
         return self.__parameters
     
-    def GetH (self,**kargs):
-        pbdim = kargs.get('pbdim', GetDimension())
-        
-        #need to be checked
-        if pbdim == "2Dstress":
-            print('ElasticOrthotropic law for 2Dstress is not implemented')
-            return NotImplemented
-        
+    def GetTangentMatrix(self): 
 #        S = sp.array([[1/EX    , -nuXY/EX, -nuXZ/EX, 0    , 0    , 0    ], \
 #                      [-nuXY/EX, 1/EY    , -nuYZ/EY, 0    , 0    , 0    ], \
 #                      [-nuXZ/EX, -nuYZ/EY, 1/EZ    , 0    , 0    , 0    ], \

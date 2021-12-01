@@ -7,6 +7,7 @@ class WeakForm:
     def __init__(self, ClID = ""):
         assert isinstance(ClID, str) , "An ID must be a string" 
         self.__ID = ClID
+        self.assumeSymmetric = False #use to accelerate assembly if the weak form may be considered as symmetric
 
         WeakForm.__dic[self.__ID] = self
 

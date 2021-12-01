@@ -27,7 +27,8 @@ class InternalForce(WeakForm):
         self.__InitialGradDispTensor = None
         
         self.__nlgeom = nlgeom #geometric non linearities
-                
+        self.assumeSymmetric = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
+        
         if nlgeom:
             if GetDimension() == "3D":        
                 GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
@@ -109,14 +110,13 @@ class InternalForce(WeakForm):
         self.__ConstitutiveLaw.NewTimeIncrement()
         #no need to update Initial Stress because the last computed stress remained unchanged
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):
-        sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame=localFrame)   
-#        try:
-#            sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame)            
-#        except:
-#            assert 0, "Warning, you put a non mechanical consitutive law in the InternalForce"              
+    def GetDifferentialOperator(self, mesh=None, localFrame = None):      
         eps, eps_vir = GetStrainOperator(self.__InitialGradDispTensor)
+        # sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame=localFrame)   
         
+        H = self.__ConstitutiveLaw.GetH()
+        sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+                
         DiffOp = sum([eps_vir[i] * sigma[i] for i in range(6)])
         
         if self.__InitialStressTensor is not 0:    

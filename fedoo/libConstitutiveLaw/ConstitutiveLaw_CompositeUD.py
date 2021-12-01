@@ -51,13 +51,7 @@ class CompositeUD(ElasticAnisotropic):
         
         return {'EX':EL, 'EY':ET, 'EZ':ET, 'GYZ':GTT, 'GXZ':GLT, 'GXY':GLT, 'nuYZ':nuTT, 'nuXZ':nuLT, 'nuXY':nuLT}
 
-    def GetH (self, **kargs):
-        pbdim = kargs.get('pbdim', GetDimension())
-
-        if pbdim == "2Dstress":
-            print('CompositeUD law for 2Dstress is not implemented')
-            return NotImplemented
-        
+    def GetTangentMatrix(self):        
         Vf = self.__parameters['Vf']
         #carac composites (cf Berthelot)
         #Vf taux de fibres      

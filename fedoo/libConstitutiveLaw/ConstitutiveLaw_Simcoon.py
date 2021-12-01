@@ -16,7 +16,6 @@ if USE_SIMCOON:
     from fedoo.libUtil.StrainOperator import *
     from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
     from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
-    
     import numpy as np
     
     class Simcoon(Mechanical3D, sim.Umat_fedoo):
@@ -42,7 +41,13 @@ if USE_SIMCOON:
                 ndi = 3 ; nshr = 3###shoud be modified?
             elif GetDimension() in ['2Dplane']:
                  ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
-               
+            
+            self.umat_name = umat_name
+            
+            #self.__mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
+            #self.__mask[i] contains the column indice for the line i            
+            self.__mask = [[] for i in range(6)]
+                        
             ### initialization of the simcoon UMAT
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
             # sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), statev, corate, ndi, nshr, 0.)
@@ -79,7 +84,7 @@ if USE_SIMCOON:
             if self.__currentGradDisp is 0: return 0
             else: return self.__currentGradDisp
             
-        def GetTangentMatrix(self, **kargs):
+        def GetTangentMatrix(self):
             #### TODO: try to implement the case pdim=="2Dstress"
             # pbdim = kargs.get(pbdim, GetDimension())
             
@@ -92,8 +97,11 @@ if USE_SIMCOON:
     
             #     return np.squeeze(self.__L.transpose(1,2,0))            
             # else: 
-            #     return np.squeeze(self.__Lt.transpose(1,2,0))          
-            return np.squeeze(self.Lt.transpose(1,2,0))
+            #     return np.squeeze(self.__Lt.transpose(1,2,0)) 
+            
+            H = np.squeeze(self.Lt.transpose(1,2,0))
+            return np.array([[0 if j in self.__mask[i] else H[i,j] for j in range(6)] for i in range(6)])
+            
         
         def GetStressOperator(self, **kargs):
             H = self.GetH(**kargs)
@@ -109,7 +117,26 @@ if USE_SIMCOON:
             #save variable at the begining of the Time increment
             self.__initialGradDisp = self.__currentGradDisp
     
-            
+         
+        def GetMaskH(self):
+            """
+            Return the actual mask applied to the tangent matrix
+            mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
+            mask[i] contains the column indice for the line i            
+
+            """
+            return self.__mask
+        
+        def SetMaskH(self, mask):
+            """
+            Set the mask applied to the tangent matrix
+            mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
+            mask[i] contains the column indice for the line i            
+
+            """
+            self.__mask = mask
+
+        
         def ResetTimeIncrement(self):
             self.to_start()         
             self.__currentGradDisp = self.__initialGradDisp    
@@ -119,14 +146,14 @@ if USE_SIMCOON:
             Reset the constitutive law (time history)
             """
             #a modifier
+            self.__currentGradDisp = self.__initialGradDisp = 0
             # self.__Statev = None
             self.__currentStress = None #lissStressTensor object describing the last computed stress (GetStress method)
             # self.__currentGradDisp = 0
             # self.__F0 = None
     
         
-        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
-    
+        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):            
             #if the number of material points is not defined (=0) we need to initialize statev
             nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
             if np.isscalar(self.__InitialStatev): 
@@ -137,11 +164,17 @@ if USE_SIMCOON:
                 else: statev = assembly.ConvertData(statev).T
             
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
-            self.Run(0.) #Launch the UMAT to compute the elastic matrix    
-    
-        def Update(self,assembly, pb, dtime, nlgeom=True):            
-            displacement = pb.GetDoFSolution()
+            
+            if not(nlgeom):
+                if self.umat_name in ['ELISO', 'EPICP']:        
+                    self.__mask = [[3,4,5] for i in range(3)]
+                    self.__mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
                 
+            self.Run(0.) #Launch the UMAT to compute the elastic matrix               
+    
+        def Update(self,assembly, pb, dtime, nlgeom=True):   
+            displacement = pb.GetDoFSolution()
+
             #tranpose for compatibility with simcoon
             if displacement is 0: 
                 self.__currentGradDisp = 0
@@ -150,9 +183,12 @@ if USE_SIMCOON:
                 # self.__F1 = np.eye(3).T.reshape(1,3,3)
             else:   
                 self.__currentGradDisp = np.array(assembly.GetGradTensor(displacement, "GaussPoint"))            
+
                 #F0.strides and F1.strides should be [n_cols*n_rows*8, 8, n_rows*8] for compatibiliy with the sim.RunUmat_fedoo function
                 F1 = np.add( np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
-    
-            self.compute_Detot(dtime, F1)   
+                
+            self.compute_Detot(dtime, F1)  
+
             self.Run(dtime)
+
             # (DRloc , listDR, Detot, statev) = self.Run(dtime)
