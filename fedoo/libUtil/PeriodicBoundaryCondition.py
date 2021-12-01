@@ -13,13 +13,21 @@ from simcoon import simmit as sim
 
 def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
 
-    coords_nodes = mesh.GetNodeCoordinates()
-    list_nodes = sim.nonperioMPC(coords_nodes)
+    #Definition of the set of nodes for boundary conditions
+    if isinstance(mesh, str):
+        mesh = MeshBase.GetAll()[mesh]
+
+    if isinstance(VarCD, str):
+        VarCD = [ModelingSpace.GetVariableRank(v) for v in VarCD]
     
+    coords_nodes = mesh.GetNodeCoordinates()
+    NodeCD_int32 = [n.item() for n in NodeCD]
+    list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32)
+        
     for eq_list in list_nodes:
         eq = np.array(eq_list)
-        listVar = tuple(eq[1::3].astype(int))
-        BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), ProblemID = ProblemID)
+        listVar = tuple(eq[1::3].astype(int)-1)
+        BoundaryCondition('MPC', listVar, eq[2::3], eq[0::3].astype(int), ProblemID = ProblemID)
 
 def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
     """
