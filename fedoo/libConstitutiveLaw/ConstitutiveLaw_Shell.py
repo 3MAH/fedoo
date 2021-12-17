@@ -71,7 +71,7 @@ class ShellBase(ConstitutiveLaw):
         Return the last computational strain using the Update method
 
         Optional parameters
-        ----------
+        ------------------------
         position : float
             Position in the thickness, given as a fraction of the demi thickness : 
             z = position * total_thickness/2

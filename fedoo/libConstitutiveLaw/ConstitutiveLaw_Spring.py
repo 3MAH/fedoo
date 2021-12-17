@@ -9,6 +9,22 @@ from numpy import linalg
 
 
 class Spring(ConstitutiveLaw): 
+    """
+    Simple directional spring connector between nodes or surfaces
+
+    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InterfaceForce`    
+
+    Parameters
+    ----------
+    Kx: scalar
+        the rigidity along the X direction in material coordinates
+    Ky: scalar
+        the rigidity along the Y direction in material coordinates
+    Kz: scalar
+        the rigidity along the Z direction in material coordinates        
+    ID: str, optional
+        The ID of the constitutive law
+    """
     #Similar to CohesiveLaw but with different rigidity axis and without damage variable
     #Use with WeakForm.InterfaceForce
     def __init__(self, Kx=0, Ky = 0, Kz = 0, ID=""):        

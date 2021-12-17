@@ -8,6 +8,26 @@ from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 import scipy as sp
 
 class ElasticOrthotropic(ElasticAnisotropic):
+    """
+    Linear Orthotropic constitutive law defined from the engineering coefficients in local material coordinates.  
+    
+    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    
+    Parameters
+    ----------
+    EX: scalars or arrays of gauss point values
+        Young modulus along the X direction
+    EY: scalars or arrays of gauss point values
+        Young modulus along the Y direction
+    EZ: scalars or arrays of gauss point values
+        Young modulus along the Z direction
+    GYZ, GXZ, GXY: scalars or arrays of gauss point values
+        Shear modulus 
+    nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
+        Poisson's ratio
+    ID: str, optional
+        The ID of the constitutive law
+    """
     def __init__(self, EX, EY, EZ, GYZ, GXZ, GXY, nuYZ, nuXZ, nuXY, ID=""):
         ConstitutiveLaw.__init__(self, ID) # heritage
 #        self.__YoungModulus = YoungModulus
@@ -22,6 +42,9 @@ class ElasticOrthotropic(ElasticAnisotropic):
         self.__parameters = {'EX':EX, 'EY':EY, 'EZ':EZ, 'GYZ':GYZ, 'GXZ':GXZ, 'GXY':GXY, 'nuYZ':nuYZ, 'nuXZ':nuXZ, 'nuXY':nuXY}
         
     def GetEngineeringConstants(self):
+        """
+        Return a dict containing the engineering constants
+        """
         return self.__parameters
     
     def GetTangentMatrix(self): 

@@ -18,12 +18,12 @@ Here are the main features:
 * Resolution of problems based on a separated decomposition (PGD, POD, 
   Reduced bases)
 * Static and Dynamics poblems
+* Compatible with SIMCOON constitutive laws for finite strain problems
+* Constitutive equation library including elasto-plastic law, composites law, ...
+* Include many type of elements like cohesive elements, 2D, 3D, beam, plate, ...
+* Geometrical non linearities
 * Mesh import/export from msh (GMSH) and vtk format 
 * Export results in vtk file for easy visualisation with Paraview 
   (https://www.paraview.org/)
-* Compatible with SIMCOON constitutive laws for finite strain problems
-* Constitutive equation library including elasto-plastic law, composites law, ...
-* Include many type of elements like cohesive elements, 2D, 3D, beam, ...
-* Geometrical non linearities
 * And many other....
 

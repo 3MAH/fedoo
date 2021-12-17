@@ -15,7 +15,6 @@ The main steps to define a problem are:
 7. Solve the Problem
 8. Analyse and export results (vizualisation with Paraview recommanded)
 
-
 Import library
 ______________
 
@@ -27,12 +26,12 @@ The first step is to import the fedoo library.
    import numpy as np #Numpy is often usefull
    
 
-Define the space dimension
+Create the modeling space
 ___________________________
 
-The dimension of the problem should be '3D' or '2Dplane' (for planar problem)
-The dimension of the problem may also be set to '2Dstress' to set
-plane stress assumption by default 
+In fedoo, most of objects are associated to a modeling space. The modeling space is a space in which the variables and coordinates are created. 
+The most convenient way to create a modeling space is to define the dimension of the problem using the Util.ProblemDimension(dimension) method. 
+The dimension of the problem should be '3D' or '2Dplane' (for planar problem). The dimension of the problem may also be set to '2Dstress' for planar problem based on the plane stress assumption.
 
 .. code-block:: none
 
@@ -76,14 +75,71 @@ For instance a simple weak formulation may be defined by:
 Create global matrix assembies
 __________________________________
 
+Once mesh and weak formulations have been created, we can now proceed to the assembly of the global matrices.
+For each weak formulation associated to a mesh, an Assembly object needs to be created. To combine several assembly, there is a dedicated function Assembly.Sum(ListAssembly).
+
+For instance, a simple assembly for the previously defined weak formulation and mesh is:
+
+.. code-block:: none
+    
+    Assembly.Create("MyWeakForm", 'Domain', ID="MyAssembly") 
 
 
 Set the Problem and the solver
 ________________________________
 
+.. code-block:: none
+    
+    Problem.Static("MyAssembly") 
+
+
+
+.. code-block:: none
+
+    Problem.SetSolver('cg') #for conjugate gradient solver
+
 
 Boundary conditions
 _____________________
+
+To apply the boundary conditions, we need to define some list of nodes indices for boundaries.
+The boundaries are automatically stored as set of nodes ('left', 'right', 'top', 'bottom', ...) when the function Mesh.BoxMesh is used.
+
+.. code-block:: none
+
+    nodes_left = Mesh.GetAll()['Domain'].GetSetOfNodes("left")
+    nodes_right = Mesh.GetAll()['Domain'].GetSetOfNodes("right")
+
+An easy way to get some set of nodes at a given position is to use the numpy function where altogether to a condition on the node coordiantes.
+For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
+
+.. code-block:: none
+    
+    crd = Mesh.GetAll()['Domain'].GetNodeCoordinates() #Get the coordinates of nodes
+    X = crd[:,0] #Get the x position of nodes
+    x_min = X.min() 
+    x_max = X.max()
+    
+    #extract a list of nodes using the numpy np.where function
+    nodes_left = np.where(np.abs(X - xmin) < 1e-10)[0]
+    nodes_right = np.where(np.abs(X - xmax) < 1e-10)[0]
+    
+Once the list of nodes have been defined, the boundary conditions can be applied with the
+Problem.BoundaryCondition function. 
+
+.. code-block:: none
+
+    Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
+    Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
+    Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
+    
+    Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
+
+To apply the boundary conditions to the active problem use the command: 
+
+.. code-block:: none
+
+    Problem.ApplyBoundaryCondition()
 
 
 

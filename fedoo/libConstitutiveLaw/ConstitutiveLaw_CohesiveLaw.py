@@ -10,6 +10,31 @@ from numpy import linalg
 
 
 class CohesiveLaw(Spring):
+    """
+    Bilinear cohesive Law based on the Crisfield model
+
+    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InterfaceForce`    
+
+    Parameters
+    ----------
+    GIc: scalar
+        Toughness in Mode-I 
+    SImax: scalar
+        Maximal failure stress in Mode-I 
+    KI: scalar
+        Initial interface rigidity before damage
+    GIIc: scalar
+        Toughness in Mode-II
+    SIImax: scalar
+        Maximal failure stress in Mode-II
+    KII: scalar
+        Initial interface rigidity before damage
+    axis: int
+        axis should be eiter 0,1 or 2 (default). It define the normal direction to the failure plane the is used for mode identification. The axis is defined in local coordinate system.
+    ID: str, optional
+        The ID of the constitutive law
+    """
+    
     #Use with WeakForm.InterfaceForce
     def __init__(self, GIc=0.3, SImax = 60, KI = 1e4, GIIc = 1.6, SIImax=None, KII=5e4, axis = 2, ID=""):
         # GIc la ténacité (l'énergie à la rupture = l'aire sous la courbe du modèle en N/mm)

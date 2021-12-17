@@ -9,15 +9,37 @@ from fedoo.libUtil.ModelingSpace      import Variable,GetDimension
 import scipy as sp
 
 class ElasticIsotrop(ElasticAnisotropic):
+    """
+    A simple linear elastic isotropic constitutive law defined from a Yound Modulus and a Poisson Ratio.
+     
+    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    
+    Parameters
+    ----------
+    YoungModulus : scalars or arrays of gauss point values.
+        The Young Modulus of the elastic isotropic material
+    PoissonRatio : scalars or arrays of gauss point values.
+        The PoissonRatio of the elastic isotropic material
+    ID : str, optional
+        The ID of the constitutive law
+    """
+    
     def __init__(self, YoungModulus, PoissonRatio, ID=""):
+
         ConstitutiveLaw.__init__(self, ID) # heritage
         self.__YoungModulus = YoungModulus
         self.__PoissonRatio = PoissonRatio    
 
     def GetYoungModulus(self):
+        """
+        Return the Young Modulus 
+        """
         return self.__YoungModulus
 
     def GetPoissonRatio(self):
+        """
+        Return the Poisson Ratio
+        """
         return self.__PoissonRatio       
     
     def GetTangentMatrix(self):     

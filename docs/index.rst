@@ -12,7 +12,8 @@ Welcome to FEDOO's documentation!
    Mesh
    ConstitutiveLaw
    WeakForm
-   Assembly      
+   Assembly   
+   Problem   
 
 Indices and tables
 ==================

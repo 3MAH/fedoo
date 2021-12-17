@@ -229,10 +229,10 @@ def ImportFromVTK(filename, meshID = None):
                 print(np.shape(ElmData))
                 ElmDataName.append(name)                                
                 del vtk[0:Nb_el]
-            else: Print('Warning: Data ignored')
+            else: print('Warning: Data ignored')
             
         if l[0].lower() == 'tensors': 
-            Print('Warning: tensor data not implemented. Data ignored')
+            print('Warning: tensor data not implemented. Data ignored')
             if point_data == True:
                 del vtk[0:Nb_nodes]
             elif cell_data == True:

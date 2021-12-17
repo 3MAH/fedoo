@@ -12,6 +12,28 @@ import numpy as np
 
 
 class CompositeUD(ElasticAnisotropic):
+    """
+    Linear Orthotropic constitutive law defined from composites phase parameters, assuming uniform unidirectional fibers.
+    The fiber are assumed in the X direction. Use Change of basis to rotate the material.        
+    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    
+    Parameters
+    ----------
+    Vf: scalar or arrays of gauss point values.
+        Fiber volume fraction
+    E_f: scalar or arrays of gauss point values.
+        Fiber Young modulus
+    E_m: scalar or arrays of gauss point values.
+        Matrix Young modulus
+    nu_f: scalar or arrays of gauss point values.
+        Fiber Poisson Ratio
+    nu_m: scalar or arrays of gauss point values.
+        Matrix Poisson Ratio
+    angle: scalar or arrays of gauss point values (*default=0*)
+        The angle of the fibers relative to the X direction normal to the Z direction (if defined, the local material coordinates are used)
+    ID: str, optional
+        The ID of the constitutive law
+    """
     
     def __init__(self, Vf=0.6, E_f=250000, E_m = 3500, nu_f = 0.33, nu_m = 0.3, angle=0, ID=""):
         ConstitutiveLaw.__init__(self, ID) # heritage
@@ -27,6 +49,9 @@ class CompositeUD(ElasticAnisotropic):
         self.__parameters = {'Vf':Vf, 'E_f':E_f, 'E_m':E_m, 'nu_f':nu_f, 'nu_m':nu_m, 'angle':angle}   
         
     def GetEngineeringConstants(self):
+        """
+        return a dict containing the engineering constants
+        """
         Vf = self.__parameters['Vf']
         #carac composites (cf Berthelot)
         #Vf taux de fibres      

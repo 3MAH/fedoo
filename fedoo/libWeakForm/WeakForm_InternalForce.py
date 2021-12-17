@@ -5,6 +5,24 @@ from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 from fedoo.libUtil.Operator  import OpDiff
 
 class InternalForce(WeakForm):
+    """
+    Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
+    
+    * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
+    * May include initial stress depending on the ConstitutiveLaw.
+    * This weak form accepts geometrical non linearities (with nlgeom = True). In this case the initial displacement is also considered. 
+    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.libConstitutiveLaw.Simcoon` Constitutive Law
+    
+    Parameters
+    ----------
+    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+        Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+    ID: str
+        ID of the WeakForm     
+    nlgeom: bool (default = False)
+        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
+        such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
+    """
     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]

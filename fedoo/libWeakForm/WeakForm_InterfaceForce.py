@@ -4,6 +4,22 @@ from fedoo.libUtil.DispOperator import GetDispOperator
 from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension, GetNumberOfDimensions
 
 class InterfaceForce(WeakForm):
+    """
+    Weak formulation of the interface equilibrium equation.
+    
+    * Require an interface constitutive law such as :mod:`fedoo.libConstitutiveLaw.CohesiveLaw` or :mod:`fedoo.libConstitutiveLaw.Spring`
+    * Geometrical non linearities not implemented
+    
+    Parameters
+    ----------
+    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+        Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+    ID: str
+        ID of the WeakForm     
+    nlgeom: bool (default = False)
+        For future development
+        If True, return a NotImplemented Error
+    """
     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]

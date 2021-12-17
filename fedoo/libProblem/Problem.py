@@ -7,7 +7,7 @@ from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 from fedoo.libProblem.ProblemBase import ProblemBase
 from fedoo.libUtil.ModelingSpace  import ModelingSpace
 from fedoo.libAssembly.Assembly  import *
-from fedoo.libUtil.ExportData import _ProblemOutput
+from fedoo.libProblem.Output import _ProblemOutput, _GetResults
 
 import time 
 
@@ -81,6 +81,9 @@ class Problem(ProblemBase):
 
     def SaveResults(self, iterOutput=None):
         self.__ProblemOutput.SaveResults(self, iterOutput)                                
+
+    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
+        return _GetResults(self, assemb, output_list, output_type, position, res_format)        
 
     def SetA(self,A):
         self.__A = A     

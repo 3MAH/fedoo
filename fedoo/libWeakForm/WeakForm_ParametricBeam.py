@@ -8,6 +8,11 @@ from fedoo.libPGD.SeparatedArray import SeparatedOnes
 import numpy as np
 
 class ParametricBeam(WeakForm):
+    """
+    ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, ID = "").
+    * Same has BernoulliBeam but with the possibility to set each parameter as a coordinate of the problem.
+    * Mainly usefull for parametric problem with the Proper Generalized Decomposition
+    """
     def __init__(self, E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, k=0, ID = ""):
         """
         Weak formulation dedicated to treat parametric problems using Bernoulli beams for isotropic materials

@@ -4,6 +4,17 @@ from fedoo.libUtil.DispOperator import GetDispOperator
 from fedoo.libUtil.ModelingSpace import Variable, GetDimension
 
 class Inertia(WeakForm):
+    """
+    Weak formulation related to the inertia effect into dynamical simulation.
+    Should be used in :mod:`fedoo.libProblem.Newmark`,  :mod:`fedoo.libProblem.NonLinearNewmark` or :mod:`fedoo.libProblem.ExplicitDynamic`
+            
+    Parameters
+    ----------
+    Density: scalar or arrays of gauss point values.
+        Material density
+    ID: str
+        ID of the WeakForm 
+    """
     def __init__(self, Density, ID = ""):
            
         if ID == "":

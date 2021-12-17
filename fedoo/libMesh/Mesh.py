@@ -3,7 +3,7 @@ import numpy as np
 
 from fedoo.libUtil.ModelingSpace import ModelingSpace
 # from fedoo.libUtil.Coordinate import Coordinate
-from fedoo.libMesh.MeshBase import *
+from fedoo.libMesh.MeshBase import MeshBase
 from fedoo.libElement import *
 
 def Create(NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ID = ""):        
@@ -36,39 +36,137 @@ class Mesh(MeshBase):
                 self.__LocalFrame = LocalFrameTemp
    
     def AddSetOfNodes(self,NodeIndexes,SetOfId):
+        """        
+        Add a set of nodes to the Mesh
+        
+        Parameters
+        ----------
+        NodeIndexes : list or 1D numpy.array
+            A list of node indexes
+        SetOfId : str
+            ID of the set of nodes            
+        """
         self.__SetOfNodes[SetOfId] = NodeIndexes
         
     def AddSetOfElements(self,ElementIndexes,SetOfId):
+        """        
+        Add a set of elements to the Mesh
+        
+        Parameters
+        ----------
+        ElementIndexes : list or 1D numpy.array
+            A list of node indexes
+        SetOfId : str
+            ID of the set of nodes            
+        """
         self.__SetOfElements[SetOfId] = ElementIndexes
 
     def GetSetOfNodes(self,SetOfId):
+        """
+        Return the set of nodes whose ID is SetOfId
+        
+        Parameters
+        ----------
+        SetOfId : str
+            ID of the set of nodes
+
+        Returns
+        -------
+        list or 1D numpy array containing node indexes
+        """
         return self.__SetOfNodes[SetOfId]
         
     def GetSetOfElements(self,SetOfId):
+        """
+        Return the set of elements whose ID is SetOfId
+        
+        Parameters
+        ----------
+        SetOfId : str
+            ID of the set of elements
+
+        Returns
+        -------
+        list or 1D numpy array containing element indexes
+        """
         return self.__SetOfElements[SetOfId]
 
     def RemoveSetOfNodes(self,SetOfId):
+        """
+        Remove the set of nodes whose ID is SetOfId from the Mesh
+        
+        Parameters
+        ----------
+        SetOfId : str
+            ID of the set of nodes
+        """
         del self.__SetOfNodes[SetOfId]
         
     def RemoveSetOfElements(self,SetOfId):
+        """
+        Remove the set of elements whose ID is SetOfId from the Mesh
+        
+        Parameters
+        ----------
+        SetOfId : str
+            ID of the set of elements
+        """
         del self.__SetOfElements[SetOfId]
 
     def ListSetOfNodes(self):
+        """
+        Return a list containing the ID (str) of all set of nodes defined in the Mesh.
+        """
         return [key for key in self.__SetOfNodes]
 
     def ListSetOfElements(self):    
+        """
+        Return a list containing the ID (str) of all set of elements defined in the Mesh.
+        """
         return [key for key in self.__SetOfElements]
                             
     def GetNumberOfNodes(self):
+        """
+        Return the total number of nodes in the Mesh        
+        """
         return len(self.__NodeCoordinates)
     
     def GetNumberOfElements(self):
+        """
+        Return the total number of elements in the Mesh        
+        """
         return len(self.__ElementTable)
     
     def GetElementShape(self):
+        """
+        Return the element shape (ie, type of element) of the Mesh. 
+        
+        Parameters
+        ----------
+        SetOfId : str
+            ID of the set of nodes
+            
+        The element shape if defined as a str according the the list of available element shape.
+        For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
+        
+        Remark
+        ----------
+        The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
+        """
         return self.__ElementShape
     
     def SetElementShape(self, value):
+        """
+        Change the element shape (ie, type of element) of the Mesh.
+        
+        
+        The element shape if defined as a str according the the list of available element shape.
+        For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
+        
+        Remark
+        ----------
+        The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
+        """
         self.__ElementShape = value
     
     def GetNodeCoordinates(self):
@@ -79,8 +177,9 @@ class Mesh(MeshBase):
         
     def AddNodes(self, Coordinates = None, NumberOfNewNodes = None):
         """
-        Add some nodes to the node list 
-        The new nodes are not liked to any element
+        Add some nodes to the node list.
+        
+        The new nodes are not liked to any element.
 
         Parameters
         ----------
@@ -125,7 +224,13 @@ class Mesh(MeshBase):
     @staticmethod
     def Stack(Mesh1,Mesh2, ID = ""):
         """
-        TODO make the spatial stack of two mesh objects which have the same element shape
+        *Static method* - Make the spatial stack of two mesh objects which have the same element shape.        
+        
+        Same as the function Stack in the Mesh module.
+        
+        Return 
+        ---------
+        Mesh object with is the spacial stack of Mesh1 and Mesh2
         """
         if isinstance(Mesh1, str): Mesh1 = Mesh.GetAll()[Mesh1]
         if isinstance(Mesh2, str): Mesh2 = Mesh.GetAll()[Mesh2]
@@ -207,8 +312,9 @@ class Mesh(MeshBase):
 
     def RemoveNodes(self, index_nodes):    
         """ 
-        Remove some nodes and associated element
-        The total number and the id of nodes are modified
+        Remove some nodes and associated element.
+        
+        The total number and the id of nodes are modified.
         """
         nds_del = np.unique(index_nodes)
         Nnd = self.GetNumberOfNodes()
@@ -235,18 +341,23 @@ class Mesh(MeshBase):
     
     def FindNonUsedNodes(self):  
         """ 
-        Test if some nodes are not associated with any element.
-        Return a 1D array containing the id of the non used nodes.
-        if all elements are used, return an empty array.        
+        Return the nodes that are not associated with any element. 
+
+        Return
+        -------------        
+        1D array containing the indexes of the non used nodes.
+        If all elements are used, return an empty array.        
         """
         return np.setdiff1d(np.arange(self.GetNumberOfNodes()), np.unique(self.__ElementTable.flatten()))
     
     def RemoveNonUsedNodes(self):  
         """ 
-        Test if some nodes are not associated with any element.
-        If it is the case, remove the non used nodes.
-        Return the number of removed nodes. 
+        Remove the nodes that are not associated with any element. 
+        
         The total number and the id of nodes are modified
+        
+        Return : NumberOfRemovedNodes int 
+            the number of removed nodes (int).         
         """
         index_non_used_nodes = np.setdiff1d(np.arange(self.GetNumberOfNodes()), np.unique(self.__ElementTable.flatten()))
         self.RemoveNodes(index_non_used_nodes)
@@ -305,6 +416,19 @@ class Mesh(MeshBase):
 
 def GetAll():
     return Mesh.GetAll()
+
+def Stack(Mesh1,Mesh2, ID = ""):
+        """
+        Make the spatial stack of two mesh objects which have the same element shape.        
+        This function doesn't merge coindicent Nodes. 
+        For that purpose, use the Mesh methods 'FindCoincidentNodes' and 'MergeNodes'
+        on the resulting Mesh. 
+        
+        Return 
+        ---------
+        Mesh object with the spacial stack of Mesh1 and Mesh2
+        """
+        return Mesh.Stack(Mesh1,Mesh2,ID)
 
 if __name__=="__main__":
     import scipy as sp

@@ -5,6 +5,19 @@ from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 from fedoo.libUtil.Operator  import OpDiff
 
 class Plate(WeakForm):
+    """
+    Weak formulation of the mechanical equilibrium equation for plate models.
+    This weak form has to be used in combination with a Shell Constitutive Law
+    like :mod:`fedoo.libConstitutiveLaw.ShellHomogeneous` or `fedoo.libConstitutiveLaw.ShellLaminate`.
+    Geometrical non linearities not implemented for now.
+    
+    Parameters
+    ----------
+    PlateConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+        Shell Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+    ID: str
+        ID of the WeakForm     
+    """
     def __init__(self, PlateConstitutiveLaw, ID = ""):
         #k: shear shape factor
         

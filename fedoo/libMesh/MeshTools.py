@@ -10,7 +10,7 @@ import numpy as np
 
 def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape = 'quad4', ID =""):
     """
-    Define the mesh of a rectangle.
+    Create a rectangular Mesh
 
     Parameters
     ----------
@@ -85,7 +85,7 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
 
 def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max=1, ElementShape = 'quad4', init_rep_loc = 0, ID = ""):  
     """
-    Define the mesh as a grid in cylindrical coordinate
+    Create a mesh as a regular grid in cylindrical coordinate
 
     Parameters
     ----------
@@ -140,7 +140,7 @@ def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max
     
 def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):            
     """
-    Define the mesh of a line with corrdinates in 1D. 
+    Create the Mesh of a straight line with corrdinates in 1D. 
 
     Parameters
     ----------
@@ -188,7 +188,7 @@ def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
 
 def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):    
     """
-    Define the mesh of a line  
+    Create the Mesh of a straight line
 
     Parameters
     ----------
@@ -236,7 +236,7 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     
 def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape = 'lin2', init_rep_loc = 0, ID = ""):
     """
-    Define the mesh of a line in cylindrical coordinates  
+    Create the mesh of a curved line based on cylindrical coordinates  
 
     Parameters
     ----------
@@ -282,7 +282,7 @@ def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape 
 
 def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = ""):      
     """
-    Define the mesh of a box  
+    Create the mesh of a box  
 
     Parameters
     ----------

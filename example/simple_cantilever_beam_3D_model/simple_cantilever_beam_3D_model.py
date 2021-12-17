@@ -54,7 +54,7 @@ U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
 TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal")       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
 

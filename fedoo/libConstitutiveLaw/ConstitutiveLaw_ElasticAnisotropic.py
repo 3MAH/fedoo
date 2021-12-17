@@ -9,6 +9,19 @@ from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 import numpy as np
 
 class ElasticAnisotropic(Mechanical3D):
+    """
+    Linear full Anistropic constitutive law defined from the rigidity matrix H.
+
+    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    
+    Parameters
+    ----------
+    H : list of list or an array (shape=(6,6)) of scalars or arrays of gauss point values.
+        The rigidity matrix. 
+        If H is a list of gauss point values, the shape shoud be H.shape = (6,6,NumberOfGaussPoints)
+    ID : str, optional
+        The ID of the constitutive law
+    """
     def __init__(self, H, ID=""):
         Mechanical3D.__init__(self, ID) # heritage
         

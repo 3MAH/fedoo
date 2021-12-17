@@ -4,6 +4,29 @@ from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
 from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 
 class Beam(WeakForm):
+    """
+    Weak formulation of the mechanical equilibrium equation for beam models.
+    Geometrical non linearities not implemented for now
+    
+    Parameters
+    ----------
+    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+        Material Constitutive Law used to get the young modulus and poisson ratio
+        The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
+        (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
+    Section: scalar or arrays of gauss point values
+        Beam section area
+    Jx: scalar or arrays of gauss point values
+        Torsion constant
+    Iyy: scalar or arrays of gauss point values
+        Second moment of area with respect to y (beam local coordinate system)
+    Izz:
+        Second moment of area with respect to z (beam local coordinate system)
+    k=0: scalar or arrays of gauss point values
+        Shear coefficient. If k=0 (*default*) the beam use the bernoulli hypothesis
+    ID: str
+        ID of the WeakForm     
+    """
     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = ""):
         #k: shear shape factor
         
@@ -60,6 +83,27 @@ class Beam(WeakForm):
 
 
 def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
+    """
+    Weak formulation of the mechanical equilibrium equation for beam model base on the Bernoulli hypothesis (no shear strain)   
+    This weak formulation is an alias for :mod:`fedoo.libWeakForm.Beam` with k=0
+    
+    Parameters
+    ----------
+    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+        Material Constitutive Law used to get the young modulus and poisson ratio
+        The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
+        (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
+    Section: scalar or arrays of gauss point values
+        Beam section area
+    Jx: scalar or arrays of gauss point values
+        Torsion constant
+    Iyy: scalar or arrays of gauss point values
+        Second moment of area with respect to y (beam local coordinate system)
+    Izz:
+        Second moment of area with respect to z (beam local coordinate system)
+    ID: str
+        ID of the WeakForm     
+    """
     #same as beam with k=0 (no shear effect)
     return Beam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = ID)
 

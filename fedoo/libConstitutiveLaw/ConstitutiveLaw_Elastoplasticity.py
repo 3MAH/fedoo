@@ -9,6 +9,24 @@ from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 import numpy as np
 
 class ElastoPlasticity(Mechanical3D):
+    """
+    Elasto-Plastic constitutive law. 
+    This law is based on the assumption of isotropic hardening with the Von-Mises plasticity criterion. 
+    After creating an ElastoPlasticity object, the hardening function must be set with the Method 'SetHardeningFunction'
+    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    
+    Parameters
+    ----------
+    YoungModulus: scalars or arrays of gauss point values
+        Young modulus
+    PoissonRatio: scalars or arrays of gauss point values
+        Poisson's Ratio
+    YieldStress: scalars or arrays of gauss point values
+        Yield Stress Value    
+    ID: str, optional
+        The ID of the constitutive law
+    """
+    
     def __init__(self,YoungModulus, PoissonRatio, YieldStress, ID=""):
         #only scalar values of YoungModulus and PoissonRatio are possible
         ConstitutiveLaw.__init__(self, ID) # heritage
@@ -66,6 +84,26 @@ class ElastoPlasticity(Mechanical3D):
         raise NameError('Hardening function not defined. Use the method SetHardeningFunction')
     
     def SetHardeningFunction(self, FunctionType, **kargs):
+        """
+        Define the hardening function of the ElastoPlasticity law.
+        FunctionType is the type of hardening function. 
+        
+        For now, the only defined hardening function is a power law. 
+        * F = H*p^{beta} were p is the cumuled plasticity
+        
+        Other type of hardening function may be added in future versions.
+                       
+        Parameters
+        ----------
+        FunctionType: str
+            Type of hardening function. 
+            For now, the only possible value is 'power' for power law.            
+        H (keyword argument): scalar        
+        beta(keyword argument): scalar
+        ID: str, optional
+            The ID of the constitutive law
+        
+        """
         if FunctionType.lower() == 'power':
             H = None ; beta = None
             for item in kargs:

@@ -116,6 +116,9 @@ class ProblemBase:
     def SaveResults(self, iterOutput=None):        
         raise NameError("The method 'SaveResults' is not defined for this kind of problem")
     
+    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
+        raise NameError("The method 'GetResults' is not defined for this kind of problem")        
+
     #defined in the ProblemPGD classes
     def GetX(self): raise NameError("Method only defined for PGD Problems") 
     def GetXbc(self): raise NameError("Method only defined for PGD Problems") 
@@ -155,6 +158,9 @@ def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format
     return ProblemBase.GetActive().AddOutput(filename, assemblyID, output_list, output_type, file_format, position)
 def SaveResults(iterOutput=None):        
     return ProblemBase.GetActive().SaveResults(iterOutput)
+def GetResults(assemb, output_list, output_type='Node', position = 1, res_format = None):
+    return ProblemBase.GetActive().GetResults(assemb, output_list, output_type, position, res_format)
+
 
 
 #functions that should be define in the Problem and in the ProblemPGD classes
