@@ -9,25 +9,35 @@ from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 import numpy as np
 from fedoo.libMesh.Mesh import MeshBase
 from fedoo.libUtil.ModelingSpace import ModelingSpace
-from simcoon import simmit as sim
 
-def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+USE_SIMCOON = True
 
-    #Definition of the set of nodes for boundary conditions
-    if isinstance(mesh, str):
-        mesh = MeshBase.GetAll()[mesh]
+if USE_SIMCOON: 
+    try:
+        from simcoon import simmit as sim
+        USE_SIMCOON = True
+    except:
+        USE_SIMCOON = False
+        print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
-    if isinstance(VarCD, str):
-        VarCD = [ModelingSpace.GetVariableRank(v) for v in VarCD]
+if USE_SIMCOON:    
+    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
     
-    coords_nodes = mesh.GetNodeCoordinates()
-    NodeCD_int32 = [n.item() for n in NodeCD]
-    list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32)
+        #Definition of the set of nodes for boundary conditions
+        if isinstance(mesh, str):
+            mesh = MeshBase.GetAll()[mesh]
+    
+        if isinstance(VarCD, str):
+            VarCD = [ModelingSpace.GetVariableRank(v) for v in VarCD]
         
-    for eq_list in list_nodes:
-        eq = np.array(eq_list)
-        listVar = tuple(eq[1::3].astype(int)-1)
-        BoundaryCondition('MPC', listVar, eq[2::3], eq[0::3].astype(int), ProblemID = ProblemID)
+        coords_nodes = mesh.GetNodeCoordinates()
+        NodeCD_int32 = [n.item() for n in NodeCD]
+        list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32)
+            
+        for eq_list in list_nodes:
+            eq = np.array(eq_list)
+            listVar = tuple(eq[1::3].astype(int)-1)
+            BoundaryCondition('MPC', listVar, eq[2::3], eq[0::3].astype(int), ProblemID = ProblemID)
 
 def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
     """

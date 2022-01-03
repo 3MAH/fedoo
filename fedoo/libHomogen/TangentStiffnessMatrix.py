@@ -1,10 +1,8 @@
 #derive de ConstitutiveLaw
 #This law should be used with an InternalForce WeakForm
 
-from simcoon import simmit as sim
-from fedoo.libConstitutiveLaw import Simcoon, ElasticIsotrop
 from fedoo.libMesh import MeshBase as Mesh
-# from fedoo.libConstitutiveLaw import ElasticIsotrop
+from fedoo.libConstitutiveLaw import ElasticIsotrop
 from fedoo.libWeakForm import InternalForce
 from fedoo.libAssembly import Assembly
 from fedoo.libProblem import Problem, Static, BoundaryCondition
