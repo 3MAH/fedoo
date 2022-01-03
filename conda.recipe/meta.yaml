@@ -6,7 +6,7 @@ source:
   git_url: https://github.com/3MAH/fedoo.git
 
 build:
-  noarch: python
+  number: 0
 
 requirements:
   host:
