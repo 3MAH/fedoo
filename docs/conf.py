@@ -43,7 +43,7 @@ exclude_patterns = []
 
 autosummary_generate = True
 add_module_names = False
-# autodoc_mock_imports = ["simcoon", "Simcoon", "simmit"]
+autodoc_mock_imports = ["simcoon"]
 autosummary_mock_imports = ["simcoon"]
 
 # -- Options for HTML output -------------------------------------------------
