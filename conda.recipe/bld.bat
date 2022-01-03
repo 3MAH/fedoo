@@ -1,2 +1,3 @@
-"%PYTHON%" setup.py install
-if errorlevel 1 exit 1
+xcopy /s /i $SRC_DIR $SP_DIR
+
+:: set PYTHONPATH:%PYTHONPATH%;%SRC_DIR%

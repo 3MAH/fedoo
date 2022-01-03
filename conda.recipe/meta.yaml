@@ -11,13 +11,21 @@ build:
 requirements:
   host:
     - python=3.9
-    - setuptools
-    - pip
-    - scipy
-    - numpy=1.21.4
+    - setuptools>=58
+    - pip=21
+    - scipy=1.7.3
+    - numpy=1.22.0
+    - matplotlib=3.5.1
+    - pandas=1.3
     - simcoon=1.0.0
+    - pardiso4py
   run:
     - python=3.9
+    - numpy=1.22.0
+    - scipy=1.7.3
+    - pandas=1.3
+    - simcoon=1.0.0
+    - matplotlib=3.5.1
 
 test:
   imports:
