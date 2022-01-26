@@ -11,15 +11,13 @@ build:
 requirements:
   host:
     - python
-    - setuptools
-    - pip
-    - scipy
-    - matplotlib
-    - pandas
-    - simcoon
-    - pardiso4py
   run:
     - python
+    - pandas
+    - matplotlib
+    - scipy
+    - simcoon
+    - pardiso4py
 
 test:
   imports:
