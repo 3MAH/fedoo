@@ -14,18 +14,12 @@ requirements:
     - setuptools
     - pip
     - scipy
-    - numpy=1.22
     - matplotlib
     - pandas
     - simcoon
     - pardiso4py
   run:
     - python
-    - numpy=1.22
-    - scipy
-    - pandas
-    - simcoon
-    - matplotlib
 
 test:
   imports:
