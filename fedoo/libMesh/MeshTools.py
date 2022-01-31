@@ -413,8 +413,6 @@ def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4
     elm = np.array(elm, dtype=int)
     return Mesh(np.array(new_crd), elm, ElementShape, None, ID)
 
-
-
 # def EmptyMesh(ElementShape = 'quad4', ID=""):
 #     return Mesh(np.array([]), np.array([], dtype=int), ElementShape, None, ID)
 
@@ -438,7 +436,69 @@ def GenerateNodes(mesh, N, data, typeGen = 'straight'):
         listNodes = mesh.AddNodes(m.GetNodeCoordinates()[1:-1]+c)
         return np.array([nd1]+list(listNodes)+[nd2])
 
-                      
+def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', Sym= True, ID =""):
+    """
+    Create a mesh of a 2D plate with a hole  
+
+    Parameters
+    ----------
+    Nx, Ny : int
+        Numbers of nodes in the x and y axes (default = 11).
+    Lx, Ly : int,float
+        The lenght of the plate in the x and y axes (default : 100).
+    R : int,float
+        The radius of the hole (default : 20).
+
+    ElementShape : {'quad4', 'quad9', 'tri3', 'tri6'}
+        The type of the element generated (default='quad4')
+    Sym : bool 
+        Sym = True, if only the returned mesh assume symetric condition and 
+        only the quarter of the plate is returned (default=True)
+    Returns
+    -------
+    Mesh
+        The generated geometry in Mesh format. See the Mesh class for more details.        
+    
+    See Also
+    --------
+    LineMesh : 1D mesh of a line    
+    RectangleMesh : Surface mesh of a rectangle
+    """   
+
+    
+    if Sym == True:
+        L = Lx/2
+        h = Ly/2
+        m = Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
+        Edge1 = GenerateNodes(m,Nx,(0,1))
+        Edge2 = GenerateNodes(m,Ny,(1,2))
+        Edge3 = GenerateNodes(m,Nx,(2,5))
+        Edge4 = GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
+        
+        Edge5 = GenerateNodes(m,Nx,(4,3))
+        Edge6 = GenerateNodes(m,Ny,(3,2))
+        Edge7 = GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
+        
+        m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
+        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ID="Domain")
+        return m
+    else: 
+        return NotImplemented
+        # m = Mesh.Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
+        # Edge1 = Mesh.GenerateNodes(m,Nx,(0,1))
+        # Edge2 = Mesh.GenerateNodes(m,Ny,(1,2))
+        # Edge3 = Mesh.GenerateNodes(m,Nx,(2,5))
+        # Edge4 = Mesh.GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
+        
+        # Edge5 = Mesh.GenerateNodes(m,Nx,(4,3))
+        # Edge6 = Mesh.GenerateNodes(m,Ny,(3,2))
+        # Edge7 = Mesh.GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
+        
+        # m = Mesh.GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
+        # m = Mesh.GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ID="Domain")
+    
+
+                
 if __name__=="__main__":
     import math
     a = LineMeshCylindric(11, 1, 0, math.pi, 'lin2', init_rep_loc = 0)

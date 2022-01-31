@@ -6,7 +6,7 @@ from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticA
 from fedoo.libUtil.StrainOperator import *
 from fedoo.libUtil.ModelingSpace      import Variable,GetDimension
 
-import scipy as sp
+import numpy as np
 
 class ElasticIsotrop(ElasticAnisotropic):
     """
@@ -44,7 +44,7 @@ class ElasticIsotrop(ElasticAnisotropic):
     
     def GetTangentMatrix(self):     
         #the returned stiffness matrix is 6x6 even in 2D
-        H  = sp.zeros((6,6), dtype='object')
+        H  = np.zeros((6,6), dtype='object')
         E  = self.__YoungModulus 
         nu = self.__PoissonRatio       
 
@@ -58,7 +58,7 @@ class ElasticIsotrop(ElasticAnisotropic):
     def GetTangentMatrix_2Dstress(self):
         #for 2D stress problems       
         #the returned stiffness matrix is 6x6 even in 2D
-        H  = sp.zeros((6,6), dtype='object')
+        H  = np.zeros((6,6), dtype='object')
         E  = self.__YoungModulus 
         nu = self.__PoissonRatio       
 

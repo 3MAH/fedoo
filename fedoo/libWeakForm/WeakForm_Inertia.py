@@ -1,7 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.DispOperator import GetDispOperator
-from fedoo.libUtil.ModelingSpace import Variable, GetDimension
+from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 
 class Inertia(WeakForm):
     """

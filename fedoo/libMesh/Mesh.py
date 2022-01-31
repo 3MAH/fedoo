@@ -413,7 +413,76 @@ class Mesh(MeshBase):
         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.__LocalFrame) #array of shape (Nel, nb_pg, nb of vectors in basis = dim, dim)
 
 
+    def GetBoundingBox(self, return_center = False):
+        """
+        Return the cordinate of the left/bottom/behind (Xmin) and the right/top/front (Xmax) corners
 
+        Parameters
+        ----------
+        return_center : bool, optional (default = False)
+            if return_center = True, also return the coordinate of the center of the bounding box
+
+        Returns
+        -------
+        - Xmin: numpy array of float containing the coordinates of the left/bottom/behind corner
+        - Xmax: numpy array of float containing the coordinates of the right/top/front corner
+        - Xcenter (if return_center = True): numpy array of float containing the coordinates of the center
+        """
+        Xmin = self.__NodeCoordinates.min(axis=0)
+        Xmax = self.__NodeCoordinates.max(axis=0)
+        if return_center == False: 
+            return Xmin, Xmax
+        else: 
+            return Xmin, Xmax, (Xmin+Xmax)/2
+ 
+    
+    def GetNearestNode(self, X):
+        """
+        Return the index of the nearst node from the given position X
+        
+        Parameters
+        ----------
+        X : 1D np.ndarray
+            Coordinates of a point. len(X) should be 3 in 3D or 2 in 3D.
+            
+        Returns
+        -------
+        The index of the nearest node to X 
+        """
+        return np.linalg.norm(self.GetNodeCoordinates()-X, axis=1).argmin()
+        
+    def GetNodesFromPosition(self, selection_criterion, value=0, tol=1e-6):
+        """
+        Return a list of nodes from a given selection criterion
+
+        Parameters
+        ----------
+        selection_criterion : str
+            selection criterion used to select the returned nodes
+            possibilities are: 
+            - 'X': x coordinate value
+            - 'Y': y coordinate value
+            - 'Z': z coordinate value
+            - 'Point': Distance to a point            
+
+        Returns
+        -------
+        List of node index
+        """
+        assert np.isscalar(tol), "tol should be a scalar"
+        if selection_creterion in ['X','Y','Z']:
+            assert np.isscalar(value), "value should be a scalar for selection_criterion = " + selection_criterion
+            if selection_creterion == 'X':
+                return np.where(np.abs(self.GetNodeCoordinates()[:,0]-value) < tol)[0]
+            elif selection_creterion == 'Y':
+                return np.where(np.abs(self.GetNodeCoordinates()[:,1]-value) < tol)[0]
+            elif selection_creterion == 'Z':
+                return np.where(np.abs(self.GetNodeCoordinates()[:,0]-value) < tol)[0]
+        elif selection_creterion.lower() == 'point':
+            return np.where(np.linalg.norm(self.GetNodeCoordinates()-value, axis=1) < tol)[0]
+        else:
+            raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
+            
 def GetAll():
     return Mesh.GetAll()
 

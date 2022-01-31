@@ -16,7 +16,7 @@ from fedoo.libConstitutiveLaw import ConstitutiveLaw
 
 
 
-def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6):
+def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, cm = 'hsv'):
     """
     Simple function for ploting 2D mesh with node data and node displacement
     
@@ -41,8 +41,11 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
 
     """
     # Create triangulation.
-    color = plt.cm.hsv
-
+    if cm == 'binary': 
+        color = plt.cm.binary
+    else: 
+        color = plt.cm.hsv
+    
     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
 
     crd = mesh.GetNodeCoordinates()
@@ -107,7 +110,7 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     # plt.ion()
     
     
-def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real"):
+def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
 
@@ -124,7 +127,6 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
         plt.gca().set_title(dataID+'_'+str(component))
         return
     
-    if isinstance(mesh,str): mesh = Mesh.GetAll()[mesh]
     crd = mesh.GetNodeCoordinates()
     elm = mesh.GetElementTable()
     type_el = mesh.GetElementShape()
@@ -138,14 +140,22 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
         elm2 = np.arange(elm.shape[0]*elm.shape[1]).reshape(-1,elm.shape[1])
         mesh2 = Mesh(crd2, elm2, type_el, ID='visu')         
         U = ((disp.reshape(2,-1).T[elm.ravel()]).T).ravel()
+    else: 
+        raise NameError("type_plot should be either 'real' or 'smooth'")
     
     #reload the assembly with the new mesh
-    Assembly(None, 'visu', type_el, ID="visu", MeshChange = True) 
+    assemb = Assembly(None, 'visu', type_el, ID="visu", MeshChange = True) 
     Assembly.GetAll()['visu'].PreComputeElementaryOperators(mesh2, type_el)
 
     #compute tensorstrain and tensorstress
-    TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "Nodal", nlgeom = False)       
+    # TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "Nodal", nlgeom = False)       
+    # TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
+
+    TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "GaussPoint", nlgeom = False)       
     TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
+    TensorStrain = TensorStrain.Convert(assemb, ConvertTo = "Node")
+    TensorStress = TensorStress.Convert(assemb, ConvertTo = "Node")
+
     
     try:
         if dataID.lower() == 'stress':
@@ -158,7 +168,7 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
     except: 
         raise NameError('DataID: '+ str(dataID)+ ' and component: '+ str(component)+" doesn't exist")
     
-    meshPlot2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level)
+    meshPlot2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
     
     # # Create triangulation.
     # color = plt.cm.hsv

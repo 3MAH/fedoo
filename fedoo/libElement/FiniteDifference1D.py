@@ -1,4 +1,4 @@
-import scipy as sp
+import numpy as np
 from scipy import sparse
 from fedoo.libElement.Element import *
 
@@ -17,7 +17,7 @@ class parameter(FiniteDifference1D):
         FiniteDifference1D.__init__(self, nb_pg)        
     
     def computeOperator(self, crd,elm):
-        Nnd = sp.shape(crd)[0]        
+        Nnd = np.shape(crd)[0]        
         return {0: [sparse.identity(Nnd, 'd', 'csr')]} #dictionnary     
 
 class node(FiniteDifference1D):
@@ -29,9 +29,9 @@ class node(FiniteDifference1D):
     def computeOperator(self, crd,elm):
         #elm is a column vector (ie elm.shape = (Nel,1)) that contain the node numbers   
         Nnd = crd.shape[0] ; Nel = elm.shape[0]
-        row = sp.arange(Nel) ; col = elm[:,0] ; data = sp.ones(Nel)        
+        row = np.arange(Nel) ; col = elm[:,0] ; data = np.ones(Nel)        
         return {0: [sparse.coo_matrix((data,(row,col)), shape=(Nel , Nnd) ).tocsr()]} #dictionnary     
-#        diag = sp.zeros(sp.shape(crd)[0])
+#        diag = np.zeros(np.shape(crd)[0])
 #        diag[elm] = 1
 #        Nnd = crd.shape[0]
 #        return {0: [sparse.spdiags([diag], [0], Nnd, Nnd, 'csr' )]} #dictionnary     

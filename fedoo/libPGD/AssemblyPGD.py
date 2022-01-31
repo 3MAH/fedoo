@@ -69,7 +69,8 @@ class AssemblyPGD(AssemblyFEM):
                 elmType= self.__listElementType[dd] 
                 nb_pg = self.__listNumberOfGaussPoints[dd]                
                 MatGaussianQuadrature = AssemblyPGD._Assembly__GetGaussianQuadratureMatrix(subMesh, elmType, nb_pg)   
-                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh)                             
+                TypeOfCoordinateSystem = AssemblyPGD._Assembly__GetTypeOfCoordinateSystem(elmType)
+                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh, TypeOfCoordinateSystem)                             
                 associatedVariables = AssemblyPGD._Assembly__GetAssociatedVariables(elmType)
                 
                 coef_vir = [1]                
@@ -233,7 +234,8 @@ class AssemblyPGD(AssemblyFEM):
                 if isinstance(coef_PG, list):
                     coef_PG.append(AssemblyPGD._Assembly__ConvertToGaussPoints(subMesh, operator.coef[ii].data[dd], list_elementType[dd], list_nb_pg[dd]))
                 
-                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh)                                                           
+                TypeOfCoordinateSystem = AssemblyPGD._Assembly__GetTypeOfCoordinateSystem(list_elementType[dd])
+                MatrixChangeOfBasis = AssemblyPGD._Assembly__GetChangeOfBasisMatrix(subMesh, TypeOfCoordinateSystem)                                                           
                 res_add.append(RowBlocMatrix(AssemblyPGD._Assembly__GetElementaryOp(subMesh, operator.op[ii], list_elementType[dd], list_nb_pg[dd]) , nvar[dd], var, coef) * MatrixChangeOfBasis * U.data[dd])
             
             if isinstance(coef_PG, list): coef_PG = SeparatedArray(Coef_PG)

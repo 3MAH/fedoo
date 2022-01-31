@@ -2,6 +2,8 @@
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 import numpy as np
+from fedoo.libProblem.BoundaryCondition import UniqueBoundaryCondition
+from fedoo.libUtil.ModelingSpace  import ModelingSpace
 
 try: 
     from pypardiso import spsolve
@@ -9,6 +11,12 @@ try:
 except: 
     USE_PYPARDISO = False
 
+
+# =============================================================================
+# ============================ Class ProblemBase ==============================
+# =============================================================================
+
+#Base class for all Problem objects
 class ProblemBase:
 
     __dic = {}
@@ -18,6 +26,7 @@ class ProblemBase:
         assert isinstance(ID, str) , "An ID must be a string" 
         self.__ID = ID
         self.__solver = ['direct']
+        self._BoundaryConditions = [] #list containing boundary contidions associated to the problem        
         
         ProblemBase.__dic[self.__ID] = self
         self.MakeActive()
@@ -66,7 +75,95 @@ class ProblemBase:
     def GetAll():
         return ProblemBase.__dic
        
-        
+    ### Functions related to boundary contidions
+    def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID"):
+        """
+        Define some boundary conditions        
+
+        Parameters
+        ----------
+        BoundaryType : str
+            Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
+        Var : str, list of str, or list of int
+            variable name (str) or list of variable name or for MPC only, list of variable rank 
+        Value : scalar or array or list of scalars or list of array
+            Variable final value (Dirichlet) or force Value (Neumann) or list of factor (MPC)
+            For Neumann and Dirichlet, if Var is a list of str, Value may be :
+                (i) scalar if the same Value is applied for all Variable
+                (ii) list of scalars, if the scalar values are different for all Variable (in this case the len of Value should be equal to the lenght of Var)
+                (iii) list of arrays, if the scalar Value is potentially different for all variables and for all indexes. In this case, Value[num_var][i] should give the value of the num_var variable related to the node i.
+        Index : list of int, str, list of list of int, list of str
+            For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
+            For FEM Problem with MPC: list Node Indexes (list of list of int) 
+            For PGD Problem with Neumann/Dirichlet BC: SetOfID (type str) defining a set of Nodes of the reference mesh
+            For PGD Problem with MPC: list of SetOfID (str)
+        Constant : scalar, optional
+            For MPC only, constant value on the equation
+        timeEvolution : function
+            Function that gives the temporal evolution of the BC Value (applyed as a factor to the specified BC). The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
+        initialValue : float, array or None
+            if None, the initialValue is keep to the current state.
+            if scalar value: The initialValue is the same for all dof defined in BC
+            if array: the len of the array should be = to the number of dof defined in the BC
+
+            Default: None
+        ID : str, optional
+            Define an ID for the Boundary Conditions. Default is "No ID". The same ID may be used for several BC.
+
+        Returns
+        -------
+        None.
+
+        Remark  
+        -------
+        To define many MPC in one operation, use array where each line define a single MPC        
+        """
+        if isinstance(Var, str) and Var not in ModelingSpace.ListVariable():
+            #we assume that Var is a Vector
+            try: 
+                Var = [ModelingSpace.GetVariableName(var_rank) for var_rank in ModelingSpace.GetVector(Var)]
+            except:
+                raise NameError('Unknown variable name')
+                
+        if isinstance(Var, list) and BoundaryType != 'MPC':          
+            if np.isscalar(Value):
+                Value = [Value for var in Var] 
+            for i,var in enumerate(Var):
+                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, ID))                
+        else:
+            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID))
+
+
+    def GetBC(self):        
+        """Return the list of Boundary Conditions"""
+        return self._BoundaryConditions
+
+    def RemoveBC(self,ID=None):
+        """
+        Remove all the BC which have the specified ID. 
+        If ID = None (default) remove all boundary conditions
+        """
+        if ID is None: self._BoundaryConditions = []
+        else: self._BoundaryConditions = [bc for bc in self._BoundaryConditions if bc.GetID() != ID]          
+    
+    def PrintBC(self):        
+        """
+        Print all the boundary conditions under the form:
+            ind_bc : ID - BoundaryType
+            ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
+            ID is the str ID of the BC ("No ID") by default
+            BoundaryType is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
+        """
+        listid = [str(i) + ": " + bc.GetID() + " - " + bc.GetType() for i,bc in enumerate(self._BoundaryConditions)]
+        print("\n".join(listid))
+    
+
+    
+
+    
+                                
+
+    
     ### Functions that may be defined depending on the type of problem
     def GetDisp(self,name='all'):
          raise NameError("The method 'GetDisp' is not defined for this kind of problem")
@@ -129,6 +226,12 @@ class ProblemBase:
     def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): raise NameError("Method only defined for PGD Problems") 
 
 
+
+
+# =============================================================================
+# Functions that call methods of ProblemBase for the current active problem
+# =============================================================================
+
 def GetAll():
     return ProblemBase.GetAll()
 def GetActive():
@@ -136,8 +239,23 @@ def GetActive():
 def SetActive(ProblemID):
     ProblemBase.SetActive(ProblemID)
 
+
+
 def SetSolver(solver, tol=1e-5, precond=True):
     ProblemBase.GetActive().SetSolver(solver,tol,precond)
+
+## Functions related to boundary contidions
+def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", ProblemID = None):
+    if ProblemID is None: problem = ProblemBase.GetActive()
+    else: problem = ProblemBase.GetAll()[ProblemID]
+    problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID)
+
+def GetBC(): return ProblemBase.GetActive()._BoundaryConditions    
+def RemoveBC(ID=None): ProblemBase.GetActive().RemoveBC(ID)    
+def PrintBC(): ProblemBase.GetActive().PrintBC()    
+ 
+
+
 
 ### Functions that may be defined depending on the type of problem
 def GetDisp(name='Disp'): return ProblemBase.GetActive().GetDisp(name)

@@ -3,7 +3,6 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.libProblem.BoundaryCondition import BoundaryCondition
 from fedoo.libProblem.ProblemBase import ProblemBase
 from fedoo.libUtil.ModelingSpace  import ModelingSpace
 from fedoo.libAssembly.Assembly  import *
@@ -133,12 +132,6 @@ class Problem(ProblemBase):
             
             self.__X[self.__DofFree]  = (self.__B[self.__DofFree] + self.__D[self.__DofFree]) / self.__A[self.__DofFree]               
 
-    def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
-        self.__Xbc, self.__B, self.__DofBlocked, self.__DofFree, self.__MatCB = BoundaryCondition.Apply(self.__Mesh.GetNumberOfNodes(), timeFactor, timeFactorOld, self.GetID())
-
-    def SetInitialBCToCurrent(self):
-        BoundaryCondition.setInitialToCurrent(self)
-
     def GetX(self): #solution of the linear system
         return self.__X
     
@@ -148,3 +141,99 @@ class Problem(ProblemBase):
     def SetDoFSolution(self,name,value):
         self._SetVectorComponent(self.__X, name, value)          
        
+
+    def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
+                
+        n = self.__Mesh.GetNumberOfNodes()
+        DoF = ModelingSpace.GetNumberOfVariable()     
+        Uimp = np.zeros(DoF*n)
+        F = np.zeros(DoF*n)
+
+        MPC = False
+        DofB = []
+        data = []
+        row = []
+        col = []
+        for e in self._BoundaryConditions:
+            if e.BoundaryType == 'Dirichlet':
+                Uimp, GlobalIndex = e._ApplyTo(Uimp, n, timeFactor, timeFactorOld)
+                DofB.append(GlobalIndex)
+
+            elif e.BoundaryType == 'Neumann':
+                F = e._ApplyTo(F, n, timeFactor)[0]
+            
+            elif e.BoundaryType == 'MPC':
+                Uimp, GlobalIndex = e._ApplyTo(Uimp, n, timeFactor, timeFactorOld) #valid in this case ??? need to be checked
+                DofB.append(GlobalIndex)
+                MPC = True         
+#                if np.isscalar(self.__Index): nbMPC = 1
+#                else: nbMPC = len(self.__Index)
+                nbFact = len(e.Factor)
+                
+                #shape self.__Fact should be nbFact*nbMPC 
+                #shape self.__Index should be nbMPC
+                #shape self.__IndexMaster should be nbFact*nbMPC
+                data.append(np.array(e.Factor.T).ravel())
+                row.append((np.array(GlobalIndex).reshape(-1,1)*np.ones(nbFact)).ravel())
+                col.append((e.IndexMaster + np.c_[e.VariableMaster]*n).T.ravel())
+        
+        
+        DofB = np.unique(np.hstack(DofB)).astype(int)
+        DofL = np.setdiff1d(range(DoF*n),DofB).astype(int)
+        
+        #build matrix MPC
+        if MPC:    
+            #Treating the case where MPC includes some blocked nodes as master nodes
+            #M is a matrix such as Ublocked = M@U + Uimp
+            #Compute M + M@M
+            M = sparse.coo_matrix( 
+                (np.hstack(data), (np.hstack(row),np.hstack(col))), 
+                shape=(DoF*n,DoF*n))
+            
+            # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
+
+                                   
+            Uimp = Uimp	+ M@Uimp 
+            
+            M = (M+M@M).tocoo()
+            data = M.data
+            row = M.row
+            col = M.col
+
+            #modification col numbering from DofL to np.arange(len(DofL))
+            changeInd = np.full(DoF*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
+            changeInd[DofL] = np.arange(len(DofL))
+            col = changeInd[np.hstack(col)]
+            mask = np.logical_not(np.isnan(col)) #mask to delete nan value 
+            
+            col = col[mask] ; row = row[mask] ; data = data[mask]
+
+        # #adding identity for free nodes
+        col = np.hstack((col,np.arange(len(DofL)))) #np.hstack((col,DofL)) #col.append(DofL)  
+        row = np.hstack((row,DofL)) #row.append(DofL)            
+        data = np.hstack((data, np.ones(len(DofL)))) #data.append(np.ones(len(DofL)))
+        
+        self.__MatCB = sparse.coo_matrix( 
+                (data,(row,col)), 
+                shape=(DoF*n,len(DofL))).tocsr()
+        
+        self.__Xbc = Uimp
+        self.__B = F
+        self.__DofBlocked = DofB
+        self.__DofFree = DofL
+
+    def SetInitialBCToCurrent(self):
+        ### is used only for incremental problems
+        U = self.GetDoFSolution() 
+        F = self.GetExternalForces()
+        Nnodes = self.GetMesh().GetNumberOfNodes()
+        for e in self._BoundaryConditions:            
+            if e.DefaultInitialValue is None:
+                if e.BoundaryType == 'Dirichlet':
+                    if U is not 0:
+                        e.ChangeInitialValue(U[e.Variable*Nnodes + e.Index])
+                elif e.BoundaryType == 'Neumann':
+                    if F is not 0:
+                        e.ChangeInitialValue(F[e.Variable*Nnodes + e.Index])
+                
+      

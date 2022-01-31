@@ -5,7 +5,7 @@ Created on Thu Jan 23 15:27:43 2020
 @author: Etienne
 """
 # from fedoo.libProblem.ProblemBase   import ProblemBase 
-from fedoo.libProblem.BoundaryCondition import BoundaryCondition
+from fedoo.libProblem.ProblemBase import BoundaryCondition
 import numpy as np
 from fedoo.libMesh.Mesh import MeshBase
 from fedoo.libUtil.ModelingSpace import ModelingSpace

@@ -123,22 +123,19 @@ def GetTangentStiffness(ProblemID = None):
     # Assembly("none", pb.GetMesh(), pb.GetMesh().GetElementShape(), ID="Assembling_post_tt")
     # pb_post_tt = Static("Assembling_post_tt", ID = "_perturbation")
     
-    if "_perturbation" in pb.GetAll():
-        pb_post_tt = pb.GetAll()["_perturbation"]
-        pb_post_tt.MakeActive()
-        BoundaryCondition.RemoveID("_Strain")
-    else:
+    if "_perturbation" not in pb.GetAll():
+        #initialize perturbation problem 
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
-        pb_post_tt.SetA(pb.GetA())
         DefinePeriodicBoundaryCondition(mesh,
                                         [StrainNodes[0], StrainNodes[0], StrainNodes[0],
                                          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-                                        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
+                                        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
     
-        BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
-        BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
-        BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
     
+    pb_post_tt.SetA(pb.GetA())
     pb_post_tt.ApplyBoundaryCondition()
     
     DofFree = pb_post_tt._Problem__DofFree
@@ -147,7 +144,7 @@ def GetTangentStiffness(ProblemID = None):
     typeBC = 'Dirichlet'
     # typeBC = 'Neumann'
     for i in range(6):
-        BoundaryCondition.RemoveID("_Strain")
+        pb_post_tt.RemoveBC("_Strain")
         BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
         BoundaryCondition(typeBC, 'DispY',
@@ -180,7 +177,6 @@ def GetTangentStiffness(ProblemID = None):
     else:
         C = np.array(DStress).T
         
-    pb.SetActive(ProblemID) #to reactivate the main problem
     return C
 
 

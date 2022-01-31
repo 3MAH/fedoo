@@ -16,7 +16,7 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
             print('Unit lenght assumed')
             self.L = 1
             
-        self.xi_nd = sp.c_[[0., 1.]]               
+        self.xi_nd = np.c_[[0., 1.]]               
         self.nb_pg = nb_pg
         element1D.__init__(self, nb_pg)
             
@@ -25,10 +25,10 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
     def ShapeFunction(self,xi):
         # [(vi,vj,tetai,tetaj)]        
         if self.L is 1: #only for debug purpose
-            return sp.c_[(1-3*xi**2+2*xi**3), (3*xi**2-2*xi**3), (xi-2*xi**2+xi**3), (-xi**2+xi**3)]
+            return np.c_[(1-3*xi**2+2*xi**3), (3*xi**2-2*xi**3), (xi-2*xi**2+xi**3), (-xi**2+xi**3)]
         else:
             L= self.L.reshape(1,-1)
-            return sp.transpose([(1-3*xi**2+2*xi**3) +0*L, (3*xi**2-2*xi**3) +0*L, (xi-2*xi**2+xi**3)*L, (-xi**2+xi**3)*L], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)     
+            return np.transpose([(1-3*xi**2+2*xi**3) +0*L, (3*xi**2-2*xi**3) +0*L, (xi-2*xi**2+xi**3)*L, (-xi**2+xi**3)*L], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)     
         
    
 class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
@@ -43,26 +43,26 @@ class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
             print('Unit lenght assumed')
             self.L = 1
             
-        self.xi_nd = sp.c_[[0., 1.]]               
+        self.xi_nd = np.c_[[0., 1.]]               
         self.nb_pg = nb_pg
         element1D.__init__(self, nb_pg)
 
     def ShapeFunction(self,xi): 
         # [(tetai,tetaj,vi,vj)]
         if self.L is 1: #only for debug purpose
-            return [sp.array([[1-4*x+3*x**2, -2*x+3*x**2, -6*x+6*x**2, 6*x-6*x**2]]) for x in xi[:,0]]
+            return [np.array([[1-4*x+3*x**2, -2*x+3*x**2, -6*x+6*x**2, 6*x-6*x**2]]) for x in xi[:,0]]
         else:
             L= self.L.reshape(1,-1)
-            return sp.transpose([(1-4*xi+3*xi**2)+0*L, (-2*xi+3*xi**2)+0*L, (1/L)*(-6*xi+6*xi**2), (1/L)*(6*xi-6*xi**2)], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)
+            return np.transpose([(1-4*xi+3*xi**2)+0*L, (-2*xi+3*xi**2)+0*L, (1/L)*(-6*xi+6*xi**2), (1/L)*(6*xi-6*xi**2)], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)
     
     def ShapeFunctionDerivative(self,xi):
         # [(tetai,tetaj,vi,vj)]        
         if self.L is 1: #only for debug purpose            
-            return [sp.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]
+            return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]
         else:
             L= self.L.reshape(1,1,-1)
-            return sp.transpose([(-4+6*xi)+0*L, (-2+6*xi)+0*L, (1/L)*(-6+12*xi), (1/L)*(6-12*xi)], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)
-        # return [sp.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
+            return np.transpose([(-4+6*xi)+0*L, (-2+6*xi)+0*L, (1/L)*(-6+12*xi), (1/L)*(6-12*xi)], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)
+        # return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
     
 
 bernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['bernoulliBeam_disp', (-1, 'RotY')], 
@@ -74,15 +74,15 @@ bernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 
 # --------------------------------------
 class beamFCQ_lin2(element1DGeom2,element1D):
     def __init__(self, nb_pg=2, **kargs):
-        self.xi_nd = sp.c_[[0., 1., 0.5]]                     
+        self.xi_nd = np.c_[[0., 1., 0.5]]                     
         self.nb_pg = nb_pg
         element1D.__init__(self, nb_pg)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne      
     def ShapeFunction(self,xi): 
-        return sp.c_[(1-xi), xi, 0*xi]
+        return np.c_[(1-xi), xi, 0*xi]
     def ShapeFunctionDerivative(self,xi):               
-        return [sp.array([[-1., 1., 0]]) for x in xi]
+        return [np.array([[-1., 1., 0]]) for x in xi]
 
 class beamFCQ_rot(element1D): #2 nodes with derivatative dof
         
