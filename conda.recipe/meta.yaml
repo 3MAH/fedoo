@@ -10,14 +10,14 @@ build:
 
 requirements:
   host:
-    - python=3.9
-    - setuptools
-    - pip
-    - scipy
-    - numpy=1.21.4
-    - simcoon=1.0.0
+    - python
   run:
-    - python=3.9
+    - python
+    - pandas
+    - matplotlib
+    - scipy
+    - simcoon
+    - pardiso4py
 
 test:
   imports:

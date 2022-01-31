@@ -1,1 +1,2 @@
-$PYTHON setup.py install
+#!/bin/bash
+cp -r $SRC_DIR/fedoo $SP_DIR
