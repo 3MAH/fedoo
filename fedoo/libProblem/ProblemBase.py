@@ -18,6 +18,11 @@ except:
 
 #Base class for all Problem objects
 class ProblemBase:
+    """
+    Base class for defining Problems.
+    
+    All problem object is derived from the ProblemBase class.
+    """
 
     __dic = {}
     __activeProblem = None #ID of the current active problem
