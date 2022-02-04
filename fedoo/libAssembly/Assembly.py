@@ -75,7 +75,7 @@ class Assembly(AssemblyBase):
         mesh = self.__Mesh        
         
         if self.__MeshChange == True:             
-            if mesh.GetID() in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]            
+            if mesh in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh]            
             Assembly.PreComputeElementaryOperators(mesh, self.__elmType, nb_pg=nb_pg)
                  
         nvar = ModelingSpace.GetNumberOfVariable()
@@ -226,9 +226,9 @@ class Assembly(AssemblyBase):
         
             intRef = wf.sort() #intRef = list of integer for compareason (same int = same operator with different coef)            
             
-            if (mesh.GetID(), self.__elmType, nb_pg) not in Assembly.__saveOperator:
-                Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)] = {}
-            saveOperator = Assembly.__saveOperator[(mesh.GetID(), self.__elmType, nb_pg)]
+            if (mesh, self.__elmType, nb_pg) not in Assembly.__saveOperator:
+                Assembly.__saveOperator[(mesh, self.__elmType, nb_pg)] = {}
+            saveOperator = Assembly.__saveOperator[(mesh, self.__elmType, nb_pg)]
             
             #list_elementType contains the id of the element associated with every variable
             #list_elementType could be stored to avoid reevaluation 
@@ -430,13 +430,13 @@ class Assembly(AssemblyBase):
     def DeleteMemory():
         """
         Static method of the Assembly class. 
-        Erase all the static variable of the Assembly object. 
+        Erase all the static variables of the Assembly object. 
         Stored data, are data that are used to compute the global assembly in an
-        efficient way to make several times the same costly operations. 
-        However, the stored data may cause errors if the mesh is changed 
-        (ie, same mesh ID, but different mesh). In this case, the data should be recomputed, 
+        efficient way. 
+        However, the stored data may cause errors if the mesh is modified. In this case, the data should be recomputed, 
         but it is not done by default. In this case, deleting the memory should 
         resolve the problem. 
+        
         -----------
         Remark : it the MeshChange argument is set to True when creating the Assembly object, the
         memory will be recomputed by default, which may cause a decrease in assembling performances
@@ -447,8 +447,6 @@ class Assembly(AssemblyBase):
         Assembly.__saveNodeToPGMatrix = {}
         Assembly.__savePGtoNodeMatrix = {}
         Assembly.__associatedVariables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
-          
-        
         
         
     @staticmethod         
@@ -475,11 +473,11 @@ class Assembly(AssemblyBase):
             # we compute the operators directly from the element library
             elmRef = eval(elementType)(NumberOfGaussPoint)
             OP = elmRef.computeOperator(crd,elm)
-            Assembly.__saveMatGaussianQuadrature[(mesh.GetID(),NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
-            Assembly.__savePGtoNodeMatrix[(mesh.GetID(), NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
-            Assembly.__saveNodeToPGMatrix[(mesh.GetID(), NumberOfGaussPoint)] = 1                                    
-            Assembly.__saveMatrixChangeOfBasis[mesh.GetID()] = 1 # No change of basis:  MatrixChangeOfBasis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
-            Assembly.__saveOperator[(mesh.GetID(),elementType,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
+            Assembly.__saveMatGaussianQuadrature[(mesh,NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
+            Assembly.__savePGtoNodeMatrix[(mesh, NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
+            Assembly.__saveNodeToPGMatrix[(mesh, NumberOfGaussPoint)] = 1                                    
+            Assembly.__saveMatrixChangeOfBasis[mesh] = 1 # No change of basis:  MatrixChangeOfBasis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
+            Assembly.__saveOperator[(mesh,elementType,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
             return                                
 
         #-------------------------------------------------------------------
@@ -499,7 +497,7 @@ class Assembly(AssemblyBase):
         # Compute the diag matrix used for the gaussian quadrature
         #-------------------------------------------------------------------  
         gaussianQuadrature = (elmRefGeom.detJ * elmRefGeom.w_pg).T.reshape(-1) 
-        Assembly.__saveMatGaussianQuadrature[(mesh.GetID(),NumberOfGaussPoint)] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
+        Assembly.__saveMatGaussianQuadrature[(mesh,NumberOfGaussPoint)] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
 
         #-------------------------------------------------------------------
         # Compute the array containing row and col indices used to assemble the sparse matrices
@@ -529,14 +527,14 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------                                
         PGtoNode = np.linalg.pinv(elmRefGeom.ShapeFunctionPG) #pseudo-inverse of NodeToPG
         dataPGtoNode = PGtoNode.T.reshape((1,NumberOfGaussPoint,nNd_elm_geom))/nb_elm_nd[elm_geom].reshape((Nel,1,nNd_elm_geom)) #shape = (Nel, NumberOfGaussPoint, nNd_elm)   
-        Assembly.__savePGtoNodeMatrix[(mesh.GetID(), NumberOfGaussPoint)] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(Nnd,Nel*NumberOfGaussPoint) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
+        Assembly.__savePGtoNodeMatrix[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(Nnd,Nel*NumberOfGaussPoint) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
 
         #-------------------------------------------------------------------
         # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)    
         #-------------------------------------------------------------------             
         dataNodeToPG = np.empty((Nel, NumberOfGaussPoint, nNd_elm_geom))
         dataNodeToPG[:] = elmRefGeom.ShapeFunctionPG.reshape((1,NumberOfGaussPoint,nNd_elm_geom)) 
-        Assembly.__saveNodeToPGMatrix[(mesh.GetID(), NumberOfGaussPoint)] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(Nel*NumberOfGaussPoint, Nnd) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
+        Assembly.__saveNodeToPGMatrix[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(Nel*NumberOfGaussPoint, Nnd) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
 
         #-------------------------------------------------------------------
         # Build the list of elementType to assemble (some beam element required several elementType in function of the variable)
@@ -573,7 +571,7 @@ class Assembly(AssemblyBase):
             for i in range(nb_dir_deriv): 
                 data[1, i] = op_dd[i+1]
 
-            Assembly.__saveOperator[(mesh.GetID(),elementType,NumberOfGaussPoint)] = data   
+            Assembly.__saveOperator[(mesh,elementType,NumberOfGaussPoint)] = data   
     
     @staticmethod
     def __GetElementaryOp(mesh, deriv, elementType, nb_pg=None): 
@@ -588,10 +586,10 @@ class Assembly(AssemblyBase):
             if elementType is None: elementType = elementDict.get('__default')
             elementType = elementType[0]
             
-        if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
+        if not((mesh,elementType,nb_pg) in Assembly.__saveOperator):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
         
-        data = Assembly.__saveOperator[(mesh.GetID(),elementType,nb_pg)]
+        data = Assembly.__saveOperator[(mesh,elementType,nb_pg)]
 
         if deriv.ordre == 0 and 0 in data:
             return data[0]
@@ -604,52 +602,14 @@ class Assembly(AssemblyBase):
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else: assert 0, "Operator unavailable"      
-        
-    # @staticmethod
-    # def __GetElementaryOp2(mesh, deriv_vir, deriv, elementType, nb_pg=None): 
-    #     #Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
-    #     #The list contains several element if the elementType include several variable (dof variable in beam element). In other case, the list contains only one matrix
-    #     #The variables are not considered. For a global use, the resulting matrix should be assembled in a block matrix with the nodes values for all variables
-    #     if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)
-
-    #     if isinstance(eval(elementType), dict):
-    #         elementDict = eval(elementType)
-    #         elementType = elementDict.get(ModelingSpace.GetVariableName(deriv.u))[0]
-    #         if elementType is None: elementType = elementDict.get('__default')
-            
-    #         elementType_vir = elementDict.get(ModelingSpace.GetVariableName(deriv_vir.u))[0]
-    #         if elementType_vir is None: elementType = elementDict.get('__default')                
-
-    #     else: elementType_vir = elementType
-
-
-    #     if not((mesh.GetID(),elementType,elementType_vir, nb_pg) in Assembly.__saveOperator):        
-    #         if not((mesh.GetID(),elementType,nb_pg) in Assembly.__saveOperator):
-    #             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
-                    
-    #         if (elementType != elementType_vir) and ((mesh.GetID(),elementType,nb_pg) not in Assembly.__saveOperator):
-    #             Assembly.PreComputeElementaryOperators(mesh, elementType_vir, nb_pg)
-            
-    #         data = Assembly.__saveOperator[(mesh.GetID(),elementType,nb_pg)]
-    
-    #         if deriv.ordre == 0 and 0 in data:
-    #             return data[0]
-            
-    #         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-    #         ListMeshCoordinateIDRank = [ModelingSpace.GetCoordinateRank(crdID) for crdID in mesh.GetCoordinateID()]
-    #         if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
-    #         else: return data[0] #if the coordinate doesnt exist, return operator without derivation
-                             
-    #         if (deriv.ordre, xx) in data:
-    #             return data[deriv.ordre, xx]
-    #         else: assert 0, "Operator unavailable"        
+              
 
     @staticmethod
     def __GetGaussianQuadratureMatrix(mesh, elementType, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
         if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)        
-        if not((mesh.GetID(),nb_pg) in Assembly.__saveMatGaussianQuadrature):
+        if not((mesh,nb_pg) in Assembly.__saveMatGaussianQuadrature):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
-        return Assembly.__saveMatGaussianQuadrature[(mesh.GetID(),nb_pg)]
+        return Assembly.__saveMatGaussianQuadrature[(mesh,nb_pg)]
 
     @staticmethod    
     def __GetAssociatedVariables(elementType): #associated variables (rotational dof for C1 elements) of elementType        
@@ -677,24 +637,24 @@ class Assembly(AssemblyBase):
     @staticmethod
     def __GetGaussianPointToNodeMatrix(mesh, elementType, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
         if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)        
-        if not((mesh.GetID(),nb_pg) in Assembly.__savePGtoNodeMatrix):
+        if not((mesh,nb_pg) in Assembly.__savePGtoNodeMatrix):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)        
-        return Assembly.__savePGtoNodeMatrix[(mesh.GetID(),nb_pg)]
+        return Assembly.__savePGtoNodeMatrix[(mesh,nb_pg)]
     
     @staticmethod
     def __GetNodeToGaussianPointMatrix(mesh, elementType, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
         if nb_pg is None: nb_pg = GetDefaultNbPG(elementType, mesh)
-        if not((mesh.GetID(),nb_pg) in Assembly.__saveNodeToPGMatrix):
+        if not((mesh,nb_pg) in Assembly.__saveNodeToPGMatrix):
             Assembly.PreComputeElementaryOperators(mesh, elementType, nb_pg)
         
-        return Assembly.__saveNodeToPGMatrix[(mesh.GetID(),nb_pg)]
+        return Assembly.__saveNodeToPGMatrix[(mesh,nb_pg)]
     
 
     @staticmethod
     def __GetChangeOfBasisMatrix(mesh, TypeOfCoordinateSystem): # change of basis matrix for beam or plate elements
         
         if TypeOfCoordinateSystem == 'global': return 1
-        if mesh.GetID() not in Assembly.__saveMatrixChangeOfBasis:        
+        if mesh not in Assembly.__saveMatrixChangeOfBasis:        
             ### change of basis treatment for beam or plate elements
             ### Compute the change of basis matrix for vector defined in ModelingSpace.ListVector()
             MatrixChangeOfBasis = 1
@@ -752,10 +712,10 @@ class Assembly(AssemblyBase):
                     
                     MatrixChangeOfBasis = MatrixChangeOfBasis.tocsr()                     
             
-            Assembly.__saveMatrixChangeOfBasis[mesh.GetID()] = MatrixChangeOfBasis   
+            Assembly.__saveMatrixChangeOfBasis[mesh] = MatrixChangeOfBasis   
             return MatrixChangeOfBasis
 
-        return Assembly.__saveMatrixChangeOfBasis[mesh.GetID()]
+        return Assembly.__saveMatrixChangeOfBasis[mesh]
 
     @staticmethod
     def __GetResultGaussPoints(mesh, operator, U, elementType, nb_pg=None):  #return the results at GaussPoints      
@@ -913,7 +873,7 @@ class Assembly(AssemblyBase):
             return listStressTensor([self.GetElementResult(e, U) if e!=0 else np.zeros(self.__Mesh.GetNumberOfElements()) for e in constitutiveLaw.GetStressOperator()])
         
         elif Type == "GaussPoint":
-            NumberOfGaussPointValues = self.__Mesh.GetNumberOfElements() * self.__nb_pg #Assembly.__saveOperator[(self.__Mesh.GetID(), self.__elmType, self.__nb_pg)][0].shape[0]
+            NumberOfGaussPointValues = self.__Mesh.GetNumberOfElements() * self.__nb_pg #Assembly.__saveOperator[(self.__Mesh, self.__elmType, self.__nb_pg)][0].shape[0]
             return listStressTensor([self.GetGaussPointResult(e, U) if e!=0 else np.zeros(NumberOfGaussPointValues) for e in constitutiveLaw.GetStressOperator()])
         
         else:
@@ -973,7 +933,7 @@ class Assembly(AssemblyBase):
             return [ [self.GetElementResult(op, U) if op!=0 else np.zeros(self.__Mesh.GetNumberOfElements()) for op in line_op] for line_op in GradOperator]        
         
         elif Type == "GaussPoint":
-            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.GetNumberOfElements() #Assembly.__saveMatGaussianQuadrature[(self.__Mesh.GetID(), self.__nb_pg)].shape[0]
+            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.GetNumberOfElements() #Assembly.__saveMatGaussianQuadrature[(self.__Mesh, self.__nb_pg)].shape[0]
             return [ [self.GetGaussPointResult(op, U) if op!=0 else np.zeros(NumberOfGaussPointValues) for op in line_op] for line_op in GradOperator]        
         else:
             assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"

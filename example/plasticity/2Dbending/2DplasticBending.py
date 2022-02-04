@@ -11,7 +11,7 @@ start = time()
 Util.ProblemDimension("2Dplane")
 
 NLGEOM = True
-typeBending = '4nodes' #or '3nodes'
+typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
 w = 10
@@ -20,7 +20,7 @@ E = 200e3
 nu=0.3
 alpha = 1e-5 #???
 meshID = "Domain"
-uimp = -2
+uimp = -5
 
 Mesh.RectangleMesh(Nx=41, Ny=21, x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
 mesh = Mesh.GetAll()[meshID]
@@ -69,8 +69,8 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['disp', 'kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')    
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+Problem.AddOutput('results/bendingPlastic', 'Assembling', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')    
+Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
@@ -80,7 +80,7 @@ Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
 bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
 
-Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = True, ToleranceNR = 0.005)
+Problem.NLSolve(dt = 0.02, tmax = 1, update_dt = False, ToleranceNR = 0.005)
 
 ################### step 2 ################################
 bc.Remove()
