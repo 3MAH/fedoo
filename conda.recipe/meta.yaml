@@ -4,7 +4,7 @@ package:
 
 source:
   git_url: https://github.com/3MAH/fedoo.git
-
+  
 build:
   noarch: python
 
@@ -22,3 +22,11 @@ requirements:
 test:
   imports:
     - fedoo
+  # source_files:
+  #   - tests
+  # requires:
+  #   - pytest
+  # commands:
+  #   - cd $SRC_DIR/tests
+  #   - $PYTHON run_tests.py
+  
