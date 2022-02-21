@@ -51,9 +51,9 @@ def GetHomogenizedStiffness(mesh, umat_name, props, nstatev):
                                      StrainNodes[1], StrainNodes[1], StrainNodes[1]],
                                     ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
 
-    BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
-    BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
-    BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
 
     pb_post_tt.ApplyBoundaryCondition()
 
@@ -63,18 +63,18 @@ def GetHomogenizedStiffness(mesh, umat_name, props, nstatev):
     typeBC = 'Dirichlet'
     # typeBC = 'Neumann'
     for i in range(6):
-        BoundaryCondition.RemoveID("_Strain")
-        BoundaryCondition(typeBC, 'DispX',
+        pb_post_tt.RemoveBC("_Strain")
+        pb_post_tt.BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
-        BoundaryCondition(typeBC, 'DispY',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispY',
               BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY
-        BoundaryCondition(typeBC, 'DispZ',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ
-        BoundaryCondition(typeBC, 'DispX',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
-        BoundaryCondition(typeBC, 'DispY',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispY',
               BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
-        BoundaryCondition(typeBC, 'DispZ',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
         
         pb_post_tt.ApplyBoundaryCondition()
@@ -145,17 +145,17 @@ def GetTangentStiffness(ProblemID = None):
     # typeBC = 'Neumann'
     for i in range(6):
         pb_post_tt.RemoveBC("_Strain")
-        BoundaryCondition(typeBC, 'DispX',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
-        BoundaryCondition(typeBC, 'DispY',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispY',
               BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY
-        BoundaryCondition(typeBC, 'DispZ',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ
-        BoundaryCondition(typeBC, 'DispX',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
-        BoundaryCondition(typeBC, 'DispY',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispY',
               BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
-        BoundaryCondition(typeBC, 'DispZ',
+        pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
         
         pb_post_tt.ApplyBoundaryCondition()
