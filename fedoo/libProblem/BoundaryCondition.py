@@ -146,7 +146,7 @@ class UniqueBoundaryCondition() :
         if timeEvolution is not None: self.__timeEvolution = timeEvolution        
         self.__Value = newValue # can be a float or an array !  
         
-    def ChangeInitialValue(self, initalValue):
+    def ChangeInitialValue(self, initialValue):
         self.__initialValue = initialValue
 
     def GetID(self):
