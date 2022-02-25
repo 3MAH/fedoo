@@ -18,7 +18,7 @@ if USE_SIMCOON:
     from fedoo.libAssembly import Assembly
     from fedoo.libProblem import NonLinearStatic, BoundaryCondition
     from fedoo.libUtil import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
-    from fedoo.libHomogen.TangentStiffnessMatrix import GetHomogenizedStiffness
+    from fedoo.libHomogen.TangentStiffnessMatrix import GetTangentStiffness
     import numpy as np
     import os
     import re
@@ -53,7 +53,11 @@ if USE_SIMCOON:
     
         Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
     
-        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        if '_StrainNodes' in mesh.ListSetOfNodes():
+            StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        else:
+            StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+            mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
     
         if isinstance(umat_name, str):
             material = Simcoon(umat_name, props, nstatev, ID='ConstitutiveLaw')
@@ -72,11 +76,11 @@ if USE_SIMCOON:
         if meshperio:
             DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = 'MainProblem')
         else:
             DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = 'MainProblem')
             
     
         readPath = sim.read_path(path_data,path_file)
@@ -88,9 +92,9 @@ if USE_SIMCOON:
         T = readPath[0] #temperature
         time = 0.
     
-        BoundaryCondition('Dirichlet','DispX', 0, center)
-        BoundaryCondition('Dirichlet','DispY', 0, center)
-        BoundaryCondition('Dirichlet','DispZ', 0, center)
+        pb.BoundaryCondition('Dirichlet','DispX', 0, center)
+        pb.BoundaryCondition('Dirichlet','DispY', 0, center)
+        pb.BoundaryCondition('Dirichlet','DispZ', 0, center)
     
         #create a 'result' folder and set the desired ouputs
         if not(os.path.isdir(path_results)): os.mkdir(path_results)
@@ -127,7 +131,6 @@ if USE_SIMCOON:
                 BCtype[step.cBC_meca.astype(bool)] = 'Neumann'
     
                 for i, dt in enumerate(step.times):
-                    
                     time+=dt
                     BlocksCyclesSteps.append(np.array([int(blocknumber+1),int(cycleNumber+1),int(stepNumber+1),i+1,"{0:.3f}".format(time)]))
                     
@@ -135,15 +138,16 @@ if USE_SIMCOON:
                     initValue[step.cBC_meca.astype(bool)] = MeanStress[step.cBC_meca.astype(bool)]
                     
                     pb.RemoveBC("Strain")
-                    BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
-                    BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
-                    BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
-                    BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
-                    BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
-                    BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
+                    pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
+                    pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
+                    pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
+                    pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
+                    pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
+                    pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
                     
                     #pb.ApplyBoundaryCondition()
                     pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
+                    print('TIME: ', time)
                     
                     #--------------- Post-Treatment -----------------------------------------------
                     #Compute the mean stress and strain
@@ -166,7 +170,7 @@ if USE_SIMCOON:
     
                     if Tangent_bool:
                     
-                        TangentMatrix = GetHomogenizedStiffness()
+                        TangentMatrix = GetTangentStiffness('MainProblem')
                         TangentMatrix_All.append(TangentMatrix.flatten())
                         
         

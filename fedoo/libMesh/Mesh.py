@@ -457,29 +457,46 @@ class Mesh(MeshBase):
 
         Parameters
         ----------
-        selection_criterion : str
+       : str
             selection criterion used to select the returned nodes
             possibilities are: 
-            - 'X': x coordinate value
-            - 'Y': y coordinate value
-            - 'Z': z coordinate value
+            - 'X': select nodes with a specified x coordinate value
+            - 'Y': select nodes with a specified y coordinate value
+            - 'Z': select nodes with a specified z coordinate value
+            - 'XY' : select nodes with specified x and y coordinates values
+            - 'XZ' : select nodes with specified x and z coordinates values
+            - 'YZ' : select nodes with specified y and z coordinates values
             - 'Point': Distance to a point            
 
+        value : scalar or list of scalar of numpy array
+            - if selection_criterion in ['X', 'Y', 'Z'] value should be a scalar
+            - if selection_criterion in ['XY', 'XZ', 'YZ'] value should be a list (or array) containing 2 scalar which are the coordinates in the given plane
+            - if selection_criterion in ['point'] value should be a list (or array) containing 2 scalars (for 2D problem) or 3 scalars (for 3D problems) which are the coordinates of the point.
+            
+        tol : float
+            Tolerance of the given criterion
+            
         Returns
         -------
         List of node index
         """
         assert np.isscalar(tol), "tol should be a scalar"
-        if selection_creterion in ['X','Y','Z']:
+        if selection_criterion in ['X','Y','Z']:
             assert np.isscalar(value), "value should be a scalar for selection_criterion = " + selection_criterion
-            if selection_creterion == 'X':
-                return np.where(np.abs(self.GetNodeCoordinates()[:,0]-value) < tol)[0]
-            elif selection_creterion == 'Y':
-                return np.where(np.abs(self.GetNodeCoordinates()[:,1]-value) < tol)[0]
-            elif selection_creterion == 'Z':
-                return np.where(np.abs(self.GetNodeCoordinates()[:,0]-value) < tol)[0]
-        elif selection_creterion.lower() == 'point':
-            return np.where(np.linalg.norm(self.GetNodeCoordinates()-value, axis=1) < tol)[0]
+            if selection_criterion == 'X':
+                return np.where(np.abs(self.__NodeCoordinates[:,0]-value) < tol)[0]
+            elif selection_criterion == 'Y':
+                return np.where(np.abs(self.__NodeCoordinates[:,1]-value) < tol)[0]
+            elif selection_criterion == 'Z':
+                return np.where(np.abs(self.__NodeCoordinates[:,0]-value) < tol)[0]
+        elif selection_criterion == 'XY':
+            return np.where(np.linalg.norm(self.__NodeCoordinates[:,:2]-value, axis=1) < tol)[0]
+        elif selection_criterion == 'XZ':
+            return np.where(np.linalg.norm(self.__NodeCoordinates[:,::2]-value, axis=1) < tol)[0]
+        elif selection_criterion == 'YZ':
+            return np.where(np.linalg.norm(self.__NodeCoordinates[:,1:]-value, axis=1) < tol)[0]        
+        elif selection_criterion.lower() == 'point':
+            return np.where(np.linalg.norm(self.__NodeCoordinates-value, axis=1) < tol)[0]
         else:
             raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
             

@@ -126,6 +126,8 @@ def GetTangentStiffness(ProblemID = None):
     if "_perturbation" not in pb.GetAll():
         #initialize perturbation problem 
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
+        pb.MakeActive()
+        
         DefinePeriodicBoundaryCondition(mesh,
                                         [StrainNodes[0], StrainNodes[0], StrainNodes[0],
                                          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
@@ -134,6 +136,8 @@ def GetTangentStiffness(ProblemID = None):
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+    else: 
+        pb_post_tt = Problem.GetAll()["_perturbation"]
     
     pb_post_tt.SetA(pb.GetA())
     pb_post_tt.ApplyBoundaryCondition()

@@ -21,7 +21,7 @@ if USE_SIMCOON:
         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
-    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
     
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
