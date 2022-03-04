@@ -26,6 +26,13 @@ class arrayStressTensor(np.ndarray):
     def GetFullTensor(self): 
         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
 
+    def vonMises(self):
+        """
+        Return the vonMises stress
+        """
+        return np.sqrt( 0.5 * ((self[0]-self[1])**2 + (self[1]-self[2])**2 + (self[0]-self[2])**2 \
+                         + 6 * (self[3]**2 + self[4]**2 + self[5]**2) ) )            
+
 
     # def __array_finalize__(self, obj):
     #     # see InfoArray.__array_finalize__ for comments

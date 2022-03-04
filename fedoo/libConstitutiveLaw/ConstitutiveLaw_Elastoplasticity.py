@@ -29,7 +29,7 @@ class ElastoPlasticity(Mechanical3D):
     
     def __init__(self,YoungModulus, PoissonRatio, YieldStress, ID=""):
         #only scalar values of YoungModulus and PoissonRatio are possible
-        ConstitutiveLaw.__init__(self, ID) # heritage
+        Mechanical3D.__init__(self, ID) # heritage
         
         Variable("DispX")
         Variable("DispY")        

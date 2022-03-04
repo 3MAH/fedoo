@@ -36,7 +36,7 @@ if USE_SIMCOON:
                 
         return content
     
-    def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True):
+    def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True, ProblemID='MainProblem'):
     
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
@@ -48,17 +48,18 @@ if USE_SIMCOON:
         xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
         ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
         zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
-        crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
-        center = [np.linalg.norm(crd-crd_center,axis=1).argmin()]
-    
+
+        crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2           
         Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
     
         if '_StrainNodes' in mesh.ListSetOfNodes():
-            StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+            StrainNodes = mesh.GetSetOfNodes('_StrainNodes')            
         else:
             StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
             mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
-    
+       
+        center = [np.linalg.norm(crd[:-2]-crd_center,axis=1).argmin()] 
+       
         if isinstance(umat_name, str):
             material = Simcoon(umat_name, props, nstatev, ID='ConstitutiveLaw')
             material.corate = corate_type
@@ -70,17 +71,17 @@ if USE_SIMCOON:
         Assembly("wf", mesh, type_el, ID="Assembling")
     
         #Type of problem
-        pb = NonLinearStatic("Assembling")
+        pb = NonLinearStatic("Assembling", ID=ProblemID)
         
         #Shall add other conditions later on
         if meshperio:
             DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = 'MainProblem')
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
         else:
             DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = 'MainProblem')
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
             
     
         readPath = sim.read_path(path_data,path_file)
@@ -147,7 +148,7 @@ if USE_SIMCOON:
                     
                     #pb.ApplyBoundaryCondition()
                     pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
-                    print('TIME: ', time)
+                    # print('TIME: ', time)
                     
                     #--------------- Post-Treatment -----------------------------------------------
                     #Compute the mean stress and strain
@@ -170,18 +171,24 @@ if USE_SIMCOON:
     
                     if Tangent_bool:
                     
-                        TangentMatrix = GetTangentStiffness('MainProblem')
+                        TangentMatrix = GetTangentStiffness(ProblemID)
                         TangentMatrix_All.append(TangentMatrix.flatten())
                         
+                    ###DEBUG ONLY####
+                    # print(TangentMatrix)
+                    # from fedoo.libUtil import arrayStressTensor                     
+                    # print(arrayStressTensor(TensorStress).vonMises().max())                    
+                    # # print(arrayStressTensor(MeanStress).vonMises())                  
+                    ######
         
         if Tangent_bool:
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All,TangentMatrix_All
         else: 
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All
     
-    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file):
+    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = 'MainProblem'):
         
-        Res = SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file)
+        SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = ProblemID)
             
         content = Read_outputfile(path_data,outputdat_file)
         
@@ -208,6 +215,7 @@ if USE_SIMCOON:
             TangentMatrix_df = pd.DataFrame(np.array(Res[4]) , columns = TangentMatrix_columns)
             Results_df = pd.concat([BlocksCyclesSteps_df,MeanStrain_df,MeanStress_df,Wm_df,TangentMatrix_df], axis=1)
         else:
-             Results_df = pd.concat([BlocksCyclesSteps_df,MeanStrain_df,MeanStress_df,Wm_df], axis=1)
+            Results_df = pd.concat([BlocksCyclesSteps_df,MeanStrain_df,MeanStress_df,Wm_df], axis=1)
         
         Results_df.to_csv(path_results + "/" + outputfile, index=None, header=True)
+        

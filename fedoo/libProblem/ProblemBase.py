@@ -159,7 +159,7 @@ class ProblemBase:
             ID is the str ID of the BC ("No ID") by default
             BoundaryType is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
         """
-        listid = [str(i) + ": " + bc.GetID() + " - " + bc.GetType() for i,bc in enumerate(self._BoundaryConditions)]
+        listid = [str(i) + ": " + bc.GetID() + " - " + bc.BoundaryType() for i,bc in enumerate(self._BoundaryConditions)]
         print("\n".join(listid))
     
 

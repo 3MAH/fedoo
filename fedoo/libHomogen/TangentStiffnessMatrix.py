@@ -140,15 +140,16 @@ def GetTangentStiffness(ProblemID = None):
         pb_post_tt = Problem.GetAll()["_perturbation"]
     
     pb_post_tt.SetA(pb.GetA())
+    
+    typeBC = 'Dirichlet'
+    # typeBC = 'Neumann'
+    
     pb_post_tt.ApplyBoundaryCondition()
     
     DofFree = pb_post_tt._Problem__DofFree
     MatCB = pb_post_tt._Problem__MatCB
     
-    typeBC = 'Dirichlet'
-    # typeBC = 'Neumann'
     for i in range(6):
-        pb_post_tt.RemoveBC("_Strain")
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
               BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
         pb_post_tt.BoundaryCondition(typeBC, 'DispY',
@@ -175,6 +176,9 @@ def GetTangentStiffness(ProblemID = None):
         stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
     
         DStress.append(stress)
+        
+        pb_post_tt.RemoveBC("_Strain")
+
     
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)

@@ -46,7 +46,7 @@ if USE_SIMCOON:
             
             #self.__mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
             #self.__mask[i] contains the column indice for the line i            
-            self.__mask = [[] for i in range(6)]
+            self.__mask = None  #No mask defined
                         
             ### initialization of the simcoon UMAT
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
@@ -100,9 +100,12 @@ if USE_SIMCOON:
             #     return np.squeeze(self.__Lt.transpose(1,2,0)) 
             
             H = np.squeeze(self.Lt.transpose(1,2,0))
-            return np.array([[0 if j in self.__mask[i] else H[i,j] for j in range(6)] for i in range(6)])
-            
-        
+            # H = np.squeeze(self.L.transpose(1,2,0))
+            if self.__mask is None:
+                return H
+            else:    
+                return np.array([[0 if j in self.__mask[i] else H[i,j] for j in range(6)] for i in range(6)])
+                    
         def GetStressOperator(self, **kargs):
             H = self.GetH(**kargs)
                           
@@ -166,7 +169,7 @@ if USE_SIMCOON:
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
             
             if not(nlgeom):
-                if self.umat_name in ['ELISO', 'EPICP']:        
+                if self.umat_name in ['ELISO', 'EPICP'] and self.__mask is None:        
                     self.__mask = [[3,4,5] for i in range(3)]
                     self.__mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
                 
