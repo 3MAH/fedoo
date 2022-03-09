@@ -8,8 +8,33 @@ def ImportFromFile(filename, meshID = None):
         return ImportFromVTK(filename, meshID)    
     else: assert 0, "Only .vtk and .msh file can be imported"
 
-def ImportFromMSH(filename, meshID = None):
 
+def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
+    
+    if isinstance(meshType, str): meshType = [meshType]
+    
+    possible_element_type = []
+    if 'curve' in meshType:
+        possible_element_type.extend([('1','lin2'), ('8','lin3')]) 
+    if 'surface' in meshType:
+        possible_element_type.extend([('2','tri3'), ('3','quad4'), ('9','tri6'), ('10','quad9'), ('16','quad8')]) 
+    if 'volume' in meshType:
+        possible_element_type.extend([('4','tet4'), ('5','hex8'), ('11','tet10'), ('17','hex20')]) 
+    possible_element_type = dict(possible_element_type)
+    
+    # possible_element_type = {
+    #             '1':'lin2',
+    #             '2':'tri3',
+    #             '3':'quad4',
+    #             '4':'tet4',
+    #             '5':'hex8',
+    #             '8':'lin3',
+    #             '9':'tri6',
+    #             '10':'quad9',                    
+    #             '11':'tet10',
+    #             '16':'quad8',           
+    #             '17':'hex20'}
+    
     filename = filename.strip()
 
     if meshID == None:
@@ -27,50 +52,185 @@ def ImportFromMSH(filename, meshID = None):
     
     l = msh.pop(0)
     if l.lower()!='$meshformat': raise NameError('Unknown file format')
-    l = msh.pop(0).lower().split() 
-    #versionnumber, file-type, data-size
+    l = msh.pop(0).lower().split() #versionnumber, file-type, data-size
+
+    # Check version
+    version = l[0]
+    assert version in ['4.1', '2.2'], "Only support 2.2 and 4.1 version of gmsh format"
+       
     l = msh.pop(0) #$EndMeshFormat
     
     NodeData = []
     ElmData = []
     NodeDataName = []
     ElmDataName = []    
-                
+    
+    PhysicalNames = None
+    # pointEntities = {}
+    curveEntities = {}
+    surfaceEntities = {}
+    volumeEntities = {}
+    
+    curvePhysicalParts = {}
+    surfacePhysicalParts = {}
+    volumePhysicalParts = {}
+    
+    
     while msh != []:       
         l = msh.pop(0).lower() 
         
-        if l == '$nodes': 
-            Nb_nodes = int(msh.pop(0))
+        if l == '$physicalnames':
+            #create a dict PhysicalNames which contains a str name for every physical tags
+            numPhysicalNames = int(msh.pop(0))
+            PhysicalNames = dict([msh[physical_name].split()[1:3] for physical_name in range(numPhysicalNames)])
+            del msh[0:numPhysicalNames]
             
-            numnode0 = int(msh[0].split()[0]) #0 or 1, in the mesh format the first node is 0
-            #a conversion is required if the msh file begin with another number
-            #The numbering of nodes is assumed to be continuous (p. ex 1,2,3,....)
-            crd = np.array([msh[nd].split()[1:] for nd in range(Nb_nodes)], dtype = float) 
+            msh.pop(0) #$EndPhysicalNames
+                                                                                             
+        elif l == '$entities' and version == '4.1':
+            l = msh.pop(0).split()
+            numPoints = int(l[0]) ; numCurves = int(l[1]) ; 
+            numSurfaces = int(l[2]) ; numVolumes = int(l[3])
             
-            del msh[0:Nb_nodes]
-            msh.pop(0) #$EndNodes
-        
+            # #read point entities
+            # for i in range(numPoints):
+            #     l = msh.pop(0).split()
+            #     pointEntities[l[0]] =  l[5:5+int(l[4])]
+                
+            del msh[0:numPoints] 
+            
+            if 'curve' in meshType:
+                #read line entities
+                for i in range(numCurves):
+                    l = msh.pop(0).split()
+                    curveEntities[l[0]] =  l[8:8+int(l[7])]
+            else:
+                del msh[0:numCurves] 
+                
+            
+            if 'surface' in meshType:                   
+                #read surface entities
+                for i in range(numSurfaces):
+                    l = msh.pop(0).split()                    
+                    surfaceEntities[l[0]] =  l[8:8+int(l[7])]
+            else:
+                del msh[0:numSurfaces] 
+            
+            if 'volume' in meshType:
+                #read volume entitires
+                for i in range(numVolumes):
+                    l = msh.pop(0).split()
+                    volumeEntities[l[0]] =  l[8:8+int(l[7])]
+            else:
+                del msh[0:numVolumes] 
+                                
+            msh.pop(0) #$EndEntities
+            
+        elif l == '$nodes': 
+            if version == '2.2':
+                Nb_nodes = int(msh.pop(0))
+                
+                numnode0 = int(msh[0].split()[0]) #0 or 1, in the mesh format the first node is 0
+                #a conversion is required if the msh file begin with another number
+                #The numbering of nodes is assumed to be continuous (p. ex 1,2,3,....)
+                crd = np.array([msh[nd].split()[1:] for nd in range(Nb_nodes)], dtype = float) 
+            
+                del msh[0:Nb_nodes]
+                msh.pop(0) #$EndNodes
+            elif version == '4.1':
+                l = msh.pop(0).split()
+                NbEntityBlocks = int(l[0])
+                Nb_nodes = int(l[1])
+                numnode0 = int(l[2])
+                assert int(l[3]) == Nb_nodes - numnode0 + 1, 'Only possible to import msh file with continuous node numbering'
+                crd = np.empty((Nb_nodes,3))
+                for i in range(NbEntityBlocks):                   
+                    l = msh.pop(0).split()
+                    # entityDim = l[0] 
+                    # entityTag = l[1] #id of the entity            
+                    
+                    assert int(l[2]) == 0, "Parametric coordinates are not implemented in this msh reader"
+                    numNodesInBlock = int(l[3])                    
+                    if numNodesInBlock != 0:
+                        idnodes = np.array(msh[:numNodesInBlock], dtype = int) - numnode0                    
+                        crd[idnodes] = np.array([nd_crd.split() for nd_crd in msh[numNodesInBlock:2*numNodesInBlock]], dtype = float) 
+                        del msh[0:2*numNodesInBlock]    
+                
+                msh.pop(0) #$EndNodes
+                                        
+                       
         elif l == '$elements': 
-            Nb_el = int(msh.pop(0))
-            cells = [msh[el].split()[1:] for el in range(Nb_el)] 
-            del msh[0:Nb_el]
+            if version == '2.2':
+                Nb_el = int(msh.pop(0))
+                cells = [msh[el].split()[1:] for el in range(Nb_el)] 
+                del msh[0:Nb_el]
+                
+                celltype_all = np.array([cells[el][0] for el in range(Nb_el)], int)
+                Nb_tag = int(cells[0][1]) #assume to be constant
+    #            if np.linalg.norm(cells[:,1] - Nb_tag) != 0:  
+    #                raise NameError('Only uniform number of Tags are readable')
+                            
+                if Nb_tag < 2: raise NameError('A minimum of 2 tags is required')
+                elif Nb_tag > 2: print('Warning: only the second tag is read')
+                
+                msh.pop(0) #$EndElements
+                            
+                #Tags = [cells[el][2:Nb_tag] for el in range(Nb_el)] #not used
+                #PhysicalEntity = np.array([cells[el][2] for el in range(Nb_el)]) #fist tag not used for now
+                            
+                Geom_all = np.array([cells[el][3] for el in range(Nb_el)], int)                  
+                list_geom = list(np.unique(Geom_all))
+                
+            elif version == '4.1':
+                l = msh.pop(0).split()
+                NbEntityBlocks = int(l[0])
+                Nb_el = int(l[1]) 
+                # numel0 = int(l[2]) #usefull ?
+                element_all = {}
+                
+                for i in range(NbEntityBlocks):                   
+                    l = msh.pop(0).split()
+                    entityDim = l[0] #0 for point, 1 for curve, 2 for surface, 3 for volume
+                    entityTag = l[1] #id of the entity            
+                    elementType = l[2]
+                    numElementsInBlock = int(l[3])                    
+
+                    if entityDim == 1: Entities = curveEntities
+                    elif entityDim == 2: Entities = surfaceEntities
+                    elif entityDim == 3: Entities = volumeEntities
+                    else: Entities = {}
+                        
+                    if numElementsInBlock != 0 and elementType in possible_element_type.keys():                                          
+                        if elementType not in element_all: 
+                            element_all[elementType] = [[], {}] # [elementTable, elementSet]
+                        
+                        idel0 = len(element_all[elementType][0])
+                        element_all[elementType][0].extend(
+                            [msh[el].split()[1:] for el in range(numElementsInBlock)])
+                        
+                        list_elm_entity = list(range(idel0, len(element_all[elementType][0])))
+                        
+                        element_all[elementType][1]['Entity'+entityTag] = list_elm_entity
+                        
+                        #add physical parts elset
+                        if entityTag in Entities:
+                            for physicalTag in Entities[entityTag]:
+                                if physicalTag in PhysicalNames: 
+                                    el_name = PhysicalNames['physicalTag']
+                                else: el_name = 'PhysicalPart'+physicalTag
+                                
+                                if el_name not in element_all[elementType][1]:
+                                    element_all[elementType][1][el_name] = list_elm_entity
+                                else:                                 
+                                    element_all[elementType][1][el_name].append(list_elm_entity)
+                        
+                        del msh[0:numElementsInBlock]    
+                    
+                    elif numElementsInBlock != 0: 
+                        del msh[0:numElementsInBlock]    
+                        # print('Warning : Elements type {} is not implemeted!'.format(elementType)) #element ignored
             
-            celltype_all = np.array([cells[el][0] for el in range(Nb_el)], int)
-            Nb_tag = int(cells[0][1]) #assume to be constant
-#            if np.linalg.norm(cells[:,1] - Nb_tag) != 0:  
-#                raise NameError('Only uniform number of Tags are readable')
-                        
-            if Nb_tag < 2: raise NameError('A minimum of 2 tags is required')
-            elif Nb_tag > 2: print('Warning: only the second tag is read')
-            
-            msh.pop(0) #$EndElements
-                        
-            #Tags = [cells[el][2:Nb_tag] for el in range(Nb_el)] #not used
-            #PhysicalEntity = np.array([cells[el][2] for el in range(Nb_el)]) #fist tag not used for now
-                        
-            Geom_all = np.array([cells[el][3] for el in range(Nb_el)], int)                  
-            list_geom = list(np.unique(Geom_all))
-                        
+                                       
         elif l == '$nodedata' or l == '$elementdata':
             nb_str_tag = int(msh.pop(0))
             if l == '$nodedata':
@@ -95,50 +255,57 @@ def ImportFromMSH(filename, meshID = None):
                 elif len(msh[0].split()) > 3:
                     ElmData += [np.array([msh[el].split()[1:] for el in range(Nb_el)], dtype=float)]
                 del msh[0:Nb_el]
-                    
-                                      
+    
     count = 0
-    for celltype in list(np.unique(celltype_all)):     
-        type_elm = None
-        list_el = np.where(celltype_all == celltype)[0]
-        elm =  np.array([cells[el][2+Nb_tag:] for el in list_el], int) - numnode0
-
-        type_elm = {'1':'lin2',
-                    '2':'tri3',
-                    '3':'quad4',
-                    '4':'tet4',
-                    '5':'hex8',
-                    '8':'lin3',
-                    '9':'tri6',
-                    '10':'quad9',                    
-                    '11':'tet10',
-                    '16':'quad8',           
-                    '17':'hex20'
-                    }.get(str(celltype))
-                      #not implemented '6':wed6 - '7':pyr5
-
-        GeometricalEntity = []
-        for geom in list_geom:
-            GeometricalEntity.append([i for i in range(len(list_el)) if Geom_all[list_el[i]]==geom ])
-                   
-        if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
-        else:          
-            if len(list(np.unique(celltype_all))) == 1:
+    if version == '2.2':   
+        for celltype in list(np.unique(celltype_all)):     
+            type_elm = None
+            list_el = np.where(celltype_all == celltype)[0]
+            elm =  np.array([cells[el][2+Nb_tag:] for el in list_el], int) - numnode0
+    
+            type_elm = possible_element_type.get(str(celltype))
+                          #not implemented '6':wed6 - '7':pyr5
+    
+            GeometricalEntity = []
+            for geom in list_geom:
+                GeometricalEntity.append([i for i in range(len(list_el)) if Geom_all[list_el[i]]==geom ])
+                       
+            if type_elm is None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
+            else:          
+                if len(list(np.unique(celltype_all))) == 1:
+                    importedMeshName = meshID
+                else: importedMeshName = meshID+str(count)
+                    
+                print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
+                Mesh(crd, elm, type_elm, ID = importedMeshName)            
+                #Rajouter GeometricalEntity en elSet
+                count+=1
+        
+    elif version == '4.1': 
+        for elementType in element_all:  
+            
+            elm =  np.array(element_all[elementType][0], int) - numnode0
+    
+            type_elm = possible_element_type.get(str(elementType))
+                          #not implemented '6':wed6 - '7':pyr5            
+                        
+            if len(element_all) == 1:
                 importedMeshName = meshID
             else: importedMeshName = meshID+str(count)
                 
-            print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-            Mesh(crd, elm, type_elm, ID = importedMeshName)            
-            #Rajouter GeometricalEntity en elSet
+            # print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
+            m = Mesh(crd, elm, type_elm, ID = importedMeshName)            
+            
+            #add entity set of elements
+            for elset in element_all[elementType][1]:
+                m.AddSetOfElements(element_all[elementType][1][elset], elset)
+                
+            
             count+=1
-
-#    res= MeshData(mesh)
-#    res.NodeData = NodeData
-#    res.NodeDataName = NodeDataName
-#    res.ElmData = ElmData
-#    res.ElmDataName = ElmDataName
-#    res.GeometricalEntity = GeometricalEntity
+            
     return NodeData, NodeDataName, ElmData, ElmDataName       
+    
+    
     
     
     
