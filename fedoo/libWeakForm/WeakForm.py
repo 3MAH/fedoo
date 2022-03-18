@@ -23,7 +23,12 @@ class WeakForm:
     
     
     def Initialize(self, assembly, pb, initialTime=0.):
-        #function called at the begining of the resolution
+        #function called at the very begining of the resolution
+        pass
+
+    def InitTimeIncrement(self, assembly, pb, dtime):
+        #function called at the begining of a new time increment
+        #For now, used only to inform the weak form the the time step for the next increment.
         pass
     
     def Update(self, assembly, pb, dtime):
@@ -35,11 +40,11 @@ class WeakForm:
         pass
     
     def NewTimeIncrement(self):  
-        #function called when the time is increased.
+        #function called at the end of a time increment. Used to update variables to the new time.
         pass
     
     def ResetTimeIncrement(self):
-        #function called if the time step is reinitialized.
+        #function called if the time step is reinitialized. Used to reset variables to the begining of the step
         pass
 
     def Reset(self):

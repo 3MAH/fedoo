@@ -45,8 +45,9 @@ class ElastoPlasticity(Mechanical3D):
         self.__currentP = None #current iteration plasticity (reversible)
         self.__PlasticStrainTensor = None         
         self.__currentPlasticStrainTensor = None 
-        self.__currentSigma = None #lissStressTensor object describing the last computed stress (GetStress method)
+        self.__currentSigma = 0 #lissStressTensor object describing the last computed stress (GetStress method)
         self.__currentGradDisp = None
+        self.__TangeantModuli = None
         
         self.__tol = 1e-6 #tolerance of Newton Raphson used to get the updated plasticity state (constutive law alogorithm)    
 
@@ -116,8 +117,8 @@ class ElastoPlasticity(Mechanical3D):
             def HardeningFunction(p): 
                 return H*p**beta
             
-            def HardeningFunctionDerivative(p):
-                return beta*H*p**(beta-1)
+            def HardeningFunctionDerivative(p):                
+                return np.nan_to_num(beta*H*p**(beta-1), posinf = 1) #replace inf value by 1
             
         elif FunctionType.lower() == 'user':
             HardeningFunction = None ; HardeningFunctionDerivative = None
@@ -157,25 +158,10 @@ class ElastoPlasticity(Mechanical3D):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp
         
-    def GetTangentMatrix(self):        
-        Helas = self.GetHelas() #Elastic Rigidity matrix: no change of basis because only isotropic behavior are considered      
-
-        if self.__currentSigma is None: return Helas
+    def GetTangentMatrix(self):             
+        return self.__TangeantModuli
                         
-        dphi_dp = self.HardeningFunctionDerivative(self.__currentP)
-        dphi_dsigma = self.YieldFunctionDerivativeSigma(self.__currentSigma)
-        Lambda = dphi_dsigma #for isotropic hardening only
-        test = self.YieldFunction(self.__currentSigma, self.__P) > self.__tol                      
-        
-        ##### Compute new tangeant moduli
-        B = sum([sum([dphi_dsigma[j]*Helas[i][j] for j in range(6)]) * Lambda[i] for i in range(6)])        
-        Ap = (B-dphi_dp)
-        CL = [sum([Lambda[j]*Helas[i][j] for j in range(6)]) for i in range(6)] # [C:Lambda]
-        Peps = [sum([dphi_dsigma[i]*Helas[i][j] for i in range(6)])/Ap for j in range(6)]  #Peps 
-#        TangeantModuli = [[Helas[i][j] - CL[i]*Peps[j] for j in range(6)] for i in range(6)]                
-        TangeantModuli = [[Helas[i][j] - (CL[i]*Peps[j] * test) for j in range(6)] for i in range(6)]                
-        return TangeantModuli
-        ##### end Compute new tangeant moduli                        
+                      
     
     def GetStressOperator(self, localFrame=None): 
         H = self.GetH()
@@ -190,7 +176,7 @@ class ElastoPlasticity(Mechanical3D):
         if self.__P is not None:     
             self.__P = self.__currentP.copy()
             self.__PlasticStrainTensor = self.__currentPlasticStrainTensor.copy()        
-        self.__currentSigma = None
+        self.__TangeantModuli = self.GetHelas()
         
     def ResetTimeIncrement(self):
         if self.__P is None: 
@@ -199,7 +185,7 @@ class ElastoPlasticity(Mechanical3D):
         else:
             self.__currentP = self.__P.copy()
             self.__currentPlasticStrainTensor = self.__PlasticStrainTensor.copy()            
-        self.__currentSigma = None       
+        self.__TangeantModuli = self.GetHelas()
     
     def Reset(self): 
         """
@@ -209,10 +195,12 @@ class ElastoPlasticity(Mechanical3D):
         self.__currentP = None #current iteration plasticity (reversible)
         self.__PlasticStrainTensor = None         
         self.__currentPlasticStrainTensor = None 
-        self.__currentSigma = None #lissStressTensor object describing the last computed stress (GetStress method)
+        self.__currentSigma = 0 #lissStressTensor object describing the last computed stress (GetStress method)
+        self.__TangeantModuli = self.GetHelas()
 
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
         self.NewTimeIncrement()
+
     
     def Update(self,assembly, pb, time, nlgeom):
         displacement = pb.GetDoFSolution()
@@ -225,17 +213,33 @@ class ElastoPlasticity(Mechanical3D):
             GradValues = self.__currentGradDisp
             if nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 
-                Strain += [GradValues[1][2] + GradValues[2][1], GradValues[0][2] + GradValues[2][0], GradValues[0][1] + GradValues[1][0]]
+                Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
             else:            
                 Strain  = [GradValues[i][i] + 0.5*sum([GradValues[k][i]**2 for k in range(3)]) for i in range(3)] 
-                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
-                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
                 Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
+                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
+                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
         
             TotalStrain = listStrainTensor(Strain)
             self.ComputeStress(TotalStrain, time) #compute the total stress in self.__currentSigma
             
             # print(self.__currentP)
+            
+            dphi_dp = self.HardeningFunctionDerivative(self.__currentP)
+            dphi_dsigma = self.YieldFunctionDerivativeSigma(self.__currentSigma)
+            Lambda = dphi_dsigma #for isotropic hardening only
+            test = self.YieldFunction(self.__currentSigma, self.__P) > self.__tol                      
+            
+            Helas = self.GetHelas()
+            ##### Compute new tangeant moduli
+            B = sum([sum([dphi_dsigma[j]*Helas[i][j] for j in range(6)]) * Lambda[i] for i in range(6)])        
+            Ap = (B-dphi_dp)
+            CL = [sum([Lambda[j]*Helas[i][j] for j in range(6)]) for i in range(6)] # [C:Lambda]
+            Peps = [sum([dphi_dsigma[i]*Helas[i][j] for i in range(6)])/Ap for j in range(6)]  #Peps 
+    #        TangeantModuli = [[Helas[i][j] - CL[i]*Peps[j] for j in range(6)] for i in range(6)]                
+            self.__TangeantModuli = [[Helas[i][j] - (CL[i]*Peps[j] * test) for j in range(6)] for i in range(6)]                
+            ##### end Compute new tangeant moduli  
+            
             
     def ComputeStress(self, StrainTensor, time = None): 
         # time not used here because this law require no time effect

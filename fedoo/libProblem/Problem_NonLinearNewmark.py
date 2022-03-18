@@ -83,7 +83,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
             if self.__DampingAssembly is not 0 and self.__RayleighDamping is None:
                 self.__DampingAssembly.Initialize(self,initialTime)       
         
-        def NewTimeIncrement(self, dt):                       
+        def NewTimeIncrement(self, dt):         
+            ### dt is the time step of the previous increment            
             self.__MassAssembly.NewTimeIncrement()
             self.__StiffnessAssembly.NewTimeIncrement()
             if self.__DampingAssembly is not 0:

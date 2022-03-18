@@ -36,6 +36,11 @@ def _GenerateClass_NonLinearStatic(libBase):
         def GetRot(self,name='Rot'):    
             if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
             return self._GetVectorComponent(self.__Utot + self.__DU, name)    
+
+        #Return the Temperature
+        def GetTemp(self):    
+            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, 'Temp')
+            return self._GetVectorComponent(self.__Utot + self.__DU, 'Temp')    
         
         #Return all the dof for every variable under a vector form
         def GetDoFSolution(self,name='all'):
@@ -60,11 +65,11 @@ def _GenerateClass_NonLinearStatic(libBase):
             # self.SetA(self.__Assembly.GetMatrix())
             # self.SetD(self.__Assembly.GetVector())
         
-        def ElasticPrediction(self, timeOld, dt):
+        def ElasticPrediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
-            time = timeOld + dt
+            time = timeStart + dt
             timeFactor    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
-            timeFactorOld = (timeOld-self.t0)/(self.tmax-self.t0)
+            timeFactorOld = (timeStart-self.t0)/(self.tmax-self.t0)
 
             self.ApplyBoundaryCondition(timeFactor, timeFactorOld)
             
@@ -72,7 +77,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.UpdateA(dt) #should be the elastic rigidity matrix
             self.UpdateD(dt, start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
             self.Solve()        
-            
+
             #the the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
             try:
                 self._Problem__Xbc *= 0 
@@ -86,9 +91,13 @@ def _GenerateClass_NonLinearStatic(libBase):
             # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
             # self.__TotalDisplacement += self.GetX()               
             self.__DU += self.GetX()
-                
+        
+        def InitTimeIncrement(self,dt):
+            self.__Assembly.InitTimeIncrement(self,dt)
+            
         def NewTimeIncrement(self,dt):
             #dt not used for static problem
+            #dt = dt for the previous increment
             self.__Utot += self.__DU
             self.__DU = 0
             # self.__TotalDisplacementStart = self.__TotalDisplacement.copy()                       
@@ -156,10 +165,10 @@ def _GenerateClass_NonLinearStatic(libBase):
             if self.__Err0 is None:
                 if self.__ErrCriterion == 'Displacement': 
                     self.__Err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
-                    # print(self.__Err0)
+                    # print('Err0:',self.__Err0)
                 else:
                     self.__Err0 = 1
-                    self.__Err0 = self.NewtonRaphsonError() 
+                    self.__Err0 = self.NewtonRaphsonError()                     
                 return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
@@ -195,12 +204,13 @@ def _GenerateClass_NonLinearStatic(libBase):
 
         #     return E                   
         
-        def SolveTimeIncrement(self, timeOld, dt, max_subiter = 5, ToleranceNR = 5e-3):            
+        def SolveTimeIncrement(self, timeStart, dt, max_subiter = 5, ToleranceNR = 5e-3):            
             
-            # self.NewTimeIncrement(timeOld, dt)
+            # self.NewTimeIncrement(timeStart, dt)
             # self.__Err0 = 1
             
-            self.ElasticPrediction(timeOld, dt)
+            self.InitTimeIncrement(dt)
+            self.ElasticPrediction(timeStart, dt)
             
             for subiter in range(max_subiter): #newton-raphson iterations
                 #update Stress and initial displacement and Update stiffness matrix
@@ -210,7 +220,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 #Check convergence     
                 normRes = self.NewtonRaphsonError()    
 
-                # print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeOld+dt, normRes))
+                # print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeStart+dt, normRes))
 
                 if normRes < ToleranceNR:                                                  
                     return 1, subiter, normRes
@@ -245,32 +255,33 @@ def _GenerateClass_NonLinearStatic(libBase):
                 else: intervalOutput = 1
             
             if self.__saveOutputAtExactTime: next_time = self.t0 + intervalOutput
-            else: next_time = self.tmax
+            else: next_time = self.tmax #next_time is the next exact time where the algorithm have to stop for output purpose
             
             self.SetInitialBCToCurrent()            
                         
-            time = self.t0                            
+            time = self.t0  #time at the begining of the iteration                          
             
             if self.__Utot is 0:#Initialize only if 1st step
                 self.Initialize(self.t0)
                             
-            while time < self.tmax - self.err_num:
-                timeOld = time
-                time = time+dt                
+            while time < self.tmax - self.err_num:            
                 current_dt = dt 
                 
-                if time > next_time - self.err_num: 
-                    time = next_time                 
-                    current_dt = time-timeOld
-                
-                # print(self.__Assembly.GetWeakForm().GetConstitutiveLaw().GetPKII()[0][0]) #for debug purpose
-                
+                if time+dt > next_time - self.err_num: #if dt is too high, it is reduced to 
+                    current_dt = next_time-time
+                                
                 #self.SolveTimeIncrement = Newton Raphson loop
-                convergence, nbNRiter, normRes = self.SolveTimeIncrement(timeOld, current_dt, max_subiter, ToleranceNR)
+                convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, current_dt, max_subiter, ToleranceNR)
 
                 if (convergence) :
+                    time = time + current_dt #update time value 
                     print('Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, dt, nbNRiter, normRes))
-                                        
+
+                    #Check if dt can be increased
+                    if update_dt and nbNRiter < 2: 
+                        dt *= 1.25
+                        # print('Increase the time increment to {:.5f}'.format(dt))
+
                     #Initialize the next increment                    
                     self.NewTimeIncrement(current_dt)
                     
@@ -284,24 +295,18 @@ def _GenerateClass_NonLinearStatic(libBase):
                     self.__iter += 1                    
                     if self.__saveOutputAtExactTime and time == next_time:
                         next_time = next_time + intervalOutput
-                        if next_time > self.tmax - self.err_num: next_time = self.tmax
-                    
-                    #Check if dt can be increased
-                    if update_dt and nbNRiter < 2: 
-                        dt *= 1.25
-                        # print('Increase the time increment to {:.5f}'.format(dt))
+                        if next_time > self.tmax - self.err_num: next_time = self.tmax                    
                         
                 else:
                     if update_dt:
-                        time = timeOld
                         dt *= 0.25                                     
                         print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, dt ))
                         
                         if dt < dt_min: 
                             raise NameError('Current time step is inferior to the specified minimal time step (dt_min)')   
-                            
+                        
                         #reset internal variables, update Stress, initial displacement and assemble global matrix at previous time                                      
-                        self.ResetTimeIncrement()  
+                        self.ResetTimeIncrement()              
                         continue                    
                     else: 
                         raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   

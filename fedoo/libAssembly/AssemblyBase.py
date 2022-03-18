@@ -116,6 +116,13 @@ class AssemblySum(AssemblyBase):
         if not(compute == 'matrix'):
             self.SetVector( sum([assembly.GetVector() for assembly in self.__ListAssembly]) )
 
+    def InitTimeIncrement(self, pb, dtime=None):
+        """
+        May be used if required to initialize a new time increment 
+        """
+        for assembly in self.__ListAssembly:
+            assembly.InitTimeIncrement(pb, dtime)   
+
     def Initialize(self, pb, initialTime=0.):
         """
         Reset the current time increment (internal variable in the constitutive equation)

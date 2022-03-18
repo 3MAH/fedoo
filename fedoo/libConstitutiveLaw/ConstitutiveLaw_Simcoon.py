@@ -169,7 +169,7 @@ if USE_SIMCOON:
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
             
             if not(nlgeom):
-                if self.umat_name in ['ELISO', 'EPICP'] and self.__mask is None:        
+                if self.umat_name in ['ELISO'] and self.__mask is None:        
                     self.__mask = [[3,4,5] for i in range(3)]
                     self.__mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
                 
@@ -191,6 +191,11 @@ if USE_SIMCOON:
                 F1 = np.add( np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
                 
             self.compute_Detot(dtime, F1)  
+            
+            
+            # test = np.array(assembly.GetStrainTensor(pb.GetDoFSolution(), "GaussPoint", False)).T #linearized strain tensor
+            # print( (self.etot+self.Detot - test).max() )
+            
 
             self.Run(dtime)
 

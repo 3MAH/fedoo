@@ -8,9 +8,9 @@ from fedoo.libElement import *
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libUtil.GradOperator import GetGradOperator
-from fedoo.libUtil.SparseMatrix import _BlocSparse as BlocSparse
-from fedoo.libUtil.SparseMatrix import _BlocSparseOld as BlocSparseOld #required for 'old' computeMatrixMehtod
-from fedoo.libUtil.SparseMatrix import RowBlocMatrix
+from fedoo.libAssembly.SparseMatrix import _BlocSparse as BlocSparse
+from fedoo.libAssembly.SparseMatrix import _BlocSparseOld as BlocSparseOld #required for 'old' computeMatrixMehtod
+from fedoo.libAssembly.SparseMatrix import RowBlocMatrix
 
 from scipy import sparse
 import numpy as np
@@ -388,7 +388,12 @@ class Assembly(AssemblyBase):
             - initialTime: the initial time        
         """
         self.__weakForm.Initialize(self, pb, initialTime)
-        self.ComputeGlobalMatrix()
+                
+    def InitTimeIncrement(self, pb, dtime):
+        self.__weakForm.InitTimeIncrement(self, pb, dtime)
+        # self.ComputeGlobalMatrix() 
+        #no need to compute vector if the previous iteration has converged and (dtime hasn't changed or dtime isn't used in the weakform)
+        #in those cases, self.ComputeGlobalMatrix(compute = 'matrix') should be more efficient
 
     def Update(self, pb, dtime=None, compute = 'all'):
         """

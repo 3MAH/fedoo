@@ -451,7 +451,7 @@ class Mesh(MeshBase):
         """
         return np.linalg.norm(self.GetNodeCoordinates()-X, axis=1).argmin()
         
-    def GetNodesFromPosition(self, selection_criterion, value=0, tol=1e-6):
+    def FindNodes(self, selection_criterion, value=0, tol=1e-6):
         """
         Return a list of nodes from a given selection criterion
 

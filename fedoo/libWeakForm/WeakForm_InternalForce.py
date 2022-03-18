@@ -76,8 +76,6 @@ class InternalForce(WeakForm):
 
     def Update(self, assembly, pb, dtime):
         self.__ConstitutiveLaw.Update(assembly, pb, dtime, self.__nlgeom)                           
-        
-        #Doit être adapté à chaque fois ? -> je pense que oui !
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
         # self.UpdateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
         
@@ -102,7 +100,7 @@ class InternalForce(WeakForm):
         
         # # # print('GradU: ', self.__ConstitutiveLaw.GetCurrentGradDisp())
         ##### FIN DEBUG ONLY
-        
+        # self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
         if self.__nlgeom:
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
@@ -128,7 +126,7 @@ class InternalForce(WeakForm):
         self.__ConstitutiveLaw.NewTimeIncrement()
         #no need to update Initial Stress because the last computed stress remained unchanged
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):      
+    def GetDifferentialOperator(self, mesh=None, localFrame = None):
         eps, eps_vir = GetStrainOperator(self.__InitialGradDispTensor)
         # sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame=localFrame)   
         
@@ -143,7 +141,7 @@ class InternalForce(WeakForm):
                                     self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
 
             DiffOp = DiffOp + sum([0 if eps_vir[i] is 0 else \
-                                   eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
+                                    eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
 
         return DiffOp
 

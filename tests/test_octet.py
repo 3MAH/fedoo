@@ -1,6 +1,7 @@
 from fedoo import *
 import numpy as np
-
+import time
+ 
 Assembly.DeleteMemory()
 
 #Define the Modeling Space - Here 3D problem 
@@ -72,7 +73,6 @@ res = Problem.GetResults('Assembly', ['Strain','Stress'], 'GaussPoint')
 TensorStrain = res['Strain']
 TensorStress = res['Stress']
 
-assert np.abs(TensorStress[4][222]-86.39839383797343) <1e-15
-assert np.abs(TensorStrain[2][876]-0.026701886585396295) <1e-15
-
+assert np.abs(TensorStress[4][222]-72.37808598199845) <1e-15
+assert np.abs(TensorStrain[2][876]-0.030469198588675583) <1e-15
 

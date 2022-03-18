@@ -1,6 +1,6 @@
 #baseclass
 import numpy as np
-from fedoo.libUtil.ModelingSpace      import GetDimension
+from fedoo.libUtil.ModelingSpace import GetDimension
 
 class ConstitutiveLaw:
 
@@ -113,7 +113,19 @@ class Mechanical3D(ConstitutiveLaw):
         return H
     
 
+class ThermalProperties(ConstitutiveLaw):  
     
+    def __init__(self, thermal_conductivity, specific_heat, density, ID=""):
+        ConstitutiveLaw.__init__(self, ID)
+        if np.isscalar(thermal_conductivity): 
+            self.thermal_conductivity = [[thermal_conductivity,0,0], [0,thermal_conductivity,0], [0,0,thermal_conductivity]]
+        else: 
+            self.thermal_conductivity = thermal_conductivity
+        
+        self.specific_heat = specific_heat
+        self.density = density
+        
+        
 def GetAll():
     return ConstitutiveLaw.GetAll()
 

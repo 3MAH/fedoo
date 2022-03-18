@@ -175,6 +175,9 @@ class ProblemBase:
 
     def GetRot(self,name='all'):
          raise NameError("The method 'GetRot' is not defined for this kind of problem")
+
+    def GetTemp(self):
+         raise NameError("The method 'GetTemp' is not defined for this kind of problem")
     
     def Update(self,):
         raise NameError("The method 'Update' is not defined for this kind of problem")    
@@ -265,6 +268,7 @@ def PrintBC(): ProblemBase.GetActive().PrintBC()
 ### Functions that may be defined depending on the type of problem
 def GetDisp(name='Disp'): return ProblemBase.GetActive().GetDisp(name)
 def GetRot(name='all'): return ProblemBase.GetActive().GetRot(name)
+def GetTemp(): return ProblemBase.GetActive().GetTemp()
 def Update(**kargs): return ProblemBase.GetActive().Update(**kargs) 
 def ChangeAssembly(Assembling): ProblemBase.GetActive().ChangeAssembly(Assembling)
 def SetNewtonRaphsonErrorCriterion(ErrorCriterion): ProblemBase.GetActive().SetNewtonRaphsonErrorCriterion(ErrorCriterion)
@@ -275,8 +279,6 @@ def ResetTimeIncrement(): ProblemBase.GetActive().ResetTimeIncrement()
 def Reset(): ProblemBase.GetActive().Reset()
 def ResetLoadFactor(): ProblemBase.GetActive().ResetLoadFactor()
 def NLSolve(**kargs): return ProblemBase.GetActive().NLSolve(**kargs)  
-def GetElasticEnergy(): return ProblemBase.GetActive().GetElasticEnergy()
-def GetNodalElasticEnergy(): return ProblemBase.GetActive().GetNodalElasticEnergy()
 def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
     return ProblemBase.GetActive().AddOutput(filename, assemblyID, output_list, output_type, file_format, position)
 def SaveResults(iterOutput=None):        
