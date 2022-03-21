@@ -26,5 +26,7 @@ path_data = 'data'
 path_results = 'results'
 path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
+outputdatfile = 'output.dat'
 
-Homogen.SolverUnitCell(meshID, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile)
+Homogen.SolverUnitCell(meshID, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
+        # .SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True, ProblemID='MainProblem'):
