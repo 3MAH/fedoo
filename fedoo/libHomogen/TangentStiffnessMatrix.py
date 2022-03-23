@@ -12,7 +12,7 @@ import numpy as np
 import os
 import time
 
-def GetHomogenizedStiffness(mesh, umat_name, props, nstatev):
+def GetHomogenizedStiffness(mesh, L):
     #################### PERTURBATION METHODE #############################
 
     #Definition of the set of nodes for boundary conditions
@@ -35,7 +35,7 @@ def GetHomogenizedStiffness(mesh, umat_name, props, nstatev):
 
     StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
 
-    ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
+    ElasticAnisotropic(L, ID = 'ElasticLaw')
         
     #Assembly
     InternalForce("ElasticLaw")
