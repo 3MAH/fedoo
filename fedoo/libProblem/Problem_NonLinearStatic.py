@@ -65,7 +65,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             # self.SetA(self.__Assembly.GetMatrix())
             # self.SetD(self.__Assembly.GetVector())
         
-        def ElasticPrediction(self, timeStart, dt):
+        def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
             time = timeStart + dt
             timeFactor    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
@@ -204,14 +204,9 @@ def _GenerateClass_NonLinearStatic(libBase):
 
         #     return E                   
         
-        def SolveTimeIncrement(self, timeStart, dt, max_subiter = 5, ToleranceNR = 5e-3):            
+        def SolveTimeIncrement(self, timeStart, dt, max_subiter = 5, ToleranceNR = 5e-3):                                
             
-            # self.NewTimeIncrement(timeStart, dt)
-            # self.__Err0 = 1
-            
-            self.InitTimeIncrement(dt)
-            self.ElasticPrediction(timeStart, dt)
-            
+            self.elastic_prediction(timeStart, dt)
             for subiter in range(max_subiter): #newton-raphson iterations
                 #update Stress and initial displacement and Update stiffness matrix
                 self.Update(dt, compute = 'vector') #update the out of balance force vector
@@ -230,7 +225,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 # self.SetA(self.__Assembly.GetMatrix())
                 self.Update(dt, compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
                 self.UpdateA(dt)
-                
+
                 self.NewtonRaphsonIncrement()
                 
             return 0, subiter, normRes
@@ -269,7 +264,9 @@ def _GenerateClass_NonLinearStatic(libBase):
                 
                 if time+dt > next_time - self.err_num: #if dt is too high, it is reduced to 
                     current_dt = next_time-time
-                                
+                                                   
+                self.InitTimeIncrement(current_dt)
+                
                 #self.SolveTimeIncrement = Newton Raphson loop
                 convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, current_dt, max_subiter, ToleranceNR)
 
