@@ -2,17 +2,17 @@
 #This law should be used with an InternalForce WeakForm
 
 from fedoo.libMesh import MeshBase as Mesh
-from fedoo.libConstitutiveLaw import ElasticIsotrop
+from fedoo.libConstitutiveLaw import ElasticAnisotropic
 from fedoo.libWeakForm import InternalForce
 from fedoo.libAssembly import Assembly
 from fedoo.libProblem import Problem, Static, BoundaryCondition
 from fedoo.libProblem import ProblemBase
-from fedoo.libUtil import DefinePeriodicBoundaryCondition
+from fedoo.libUtil import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 import numpy as np
 import os
 import time
 
-def GetHomogenizedStiffness(mesh, L):
+def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
     #################### PERTURBATION METHODE #############################
 
     #Definition of the set of nodes for boundary conditions
@@ -33,7 +33,11 @@ def GetHomogenizedStiffness(mesh, L):
     DStrain = []
     DStress = []
 
-    StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+    else:
+        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
 
     ElasticAnisotropic(L, ID = 'ElasticLaw')
         
@@ -46,10 +50,16 @@ def GetHomogenizedStiffness(mesh, L):
 
     pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
     pb_post_tt.SetA(pb.GetA())
-    DefinePeriodicBoundaryCondition(mesh,
-                                    [StrainNodes[0], StrainNodes[0], StrainNodes[0],
-                                     StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-                                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
+    
+    #Shall add other conditions later on
+    if meshperio:
+        DefinePeriodicBoundaryCondition(mesh,
+        [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+    else:
+        DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
+        [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
 
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
@@ -128,11 +138,16 @@ def GetTangentStiffness(ProblemID = None):
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
         pb.MakeActive()
         
-        DefinePeriodicBoundaryCondition(mesh,
-                                        [StrainNodes[0], StrainNodes[0], StrainNodes[0],
-                                         StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-                                        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
-    
+        #Shall add other conditions later on
+        if meshperio:
+            DefinePeriodicBoundaryCondition(mesh,
+            [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+        else:
+            DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
+            [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+            
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
