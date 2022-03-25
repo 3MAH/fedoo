@@ -55,7 +55,7 @@ class _BlocSparse():
 #            bloc.data = bloc.data + Mat.data
 
 
-    def addToBlocATB(self, A, B, coef, rowBloc, colBloc):
+    def addToBlocATB(self, A, B, coef, rowBloc, colBloc, mat_lumping = False):
         #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
         #A and coef may be a list. In this case compute sum([coef[ii]*A[ii] for ii in range(len(A))]).T @ B
         
@@ -65,24 +65,30 @@ class _BlocSparse():
         
         nb_pg = self.nbpg
         NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B        
-
+            
         if not isinstance(A, list):
             NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
             
             if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
             
-            if self.data[rowBloc][colBloc] is 0: 
-                if self.nbpg is None:
-                    self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)) @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
-                else:
-                    self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
-            
+            if self.nbpg is None:
+                new_data = (coef * A.data.reshape(-1,NnzColPerRowA,1)) @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
             else:
-                if self.nbpg is None:
-                    self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1) @ (B.data.reshape(-1,1,NnzColPerRowB))) #at each PG we build a nbNode x nbNode matrix
-                else:
-                    self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
-        
+                new_data = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+            
+            if mat_lumping: 
+                if self.data[rowBloc][colBloc] is 0:    
+                    self.data[rowBloc][colBloc] = np.zeros_like(new_data)                                    
+                
+                list_ind_row = np.arange(new_data.shape[1])
+                self.data[rowBloc][colBloc][:,list_ind_row,list_ind_row] += new_data.sum(axis=2)
+            else:
+                if self.data[rowBloc][colBloc] is 0:                 
+                    self.data[rowBloc][colBloc] = new_data
+                else:                
+                    self.data[rowBloc][colBloc] += new_data          
+
+                
         else:
             NnzColPerRowA = A[0].indptr[1] #number of non zero column per line for csr matrix A
             listCoef = coef #alias
@@ -98,17 +104,22 @@ class _BlocSparse():
                 if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
                 coef_A_data += coef * A.data.reshape(-1,NnzColPerRowA,1)
             
-            if self.data[rowBloc][colBloc] is 0: 
-                if self.nbpg is None:
-                    self.data[rowBloc][colBloc] = coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
-                else:
-                    self.data[rowBloc][colBloc] = coef_A_data.reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
-            
+            if self.nbpg is None:
+                new_data = coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
             else:
-                if self.nbpg is None:
-                    self.data[rowBloc][colBloc] += coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
-                else:
-                    self.data[rowBloc][colBloc] += coef_A_data.reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+                new_data = coef_A_data.reshape(nb_pg,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_pg,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+
+            if mat_lumping: #only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
+                if self.data[rowBloc][colBloc] is 0:    
+                    self.data[rowBloc][colBloc] = np.zeros_like(new_data)                                    
+                
+                list_ind_row = np.arange(new_data.shape[1])
+                self.data[rowBloc][colBloc][:,list_ind_row,list_ind_row] += new_data.sum(axis=2) #set value only to diag terms
+            else:
+                if self.data[rowBloc][colBloc] is 0:                 
+                    self.data[rowBloc][colBloc] = new_data
+                else:                
+                    self.data[rowBloc][colBloc] += new_data      
         
         if self.col is None:
             # column indieces of A defined in A.indices are the row indices in final matrix

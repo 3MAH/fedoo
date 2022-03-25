@@ -25,7 +25,7 @@ if USE_SIMCOON:
             Mechanical3D.__init__(self, ID) # heritage
         
             
-            self.__InitialStatev = statev #statev may be an int or an array        
+            self.__statev_initial = statev #statev may be an int or an array        
             # self.__useElasticModulus = True ??
             
             self.__currentGradDisp = self.__initialGradDisp = 0        
@@ -85,20 +85,24 @@ if USE_SIMCOON:
             else: return self.__currentGradDisp
             
         def GetTangentMatrix(self):
-            #### TODO: try to implement the case pdim=="2Dstress"
-            # pbdim = kargs.get(pbdim, GetDimension())
-            
-
-            # if self.__Lt is None:
-            #     if self.__L is None:                
-            #         self.RunUmat(np.eye(3).T.reshape(1,3,3), np.eye(3).T.reshape(1,3,3), time=0., dtime=1.)
-            #         self.__Statev = None
-            #         self.__currentStress = None
-    
-            #     return np.squeeze(self.__L.transpose(1,2,0))            
-            # else: 
-            #     return np.squeeze(self.__Lt.transpose(1,2,0)) 
-            
+           
+            if len(self.Lt) == 0:
+                #same as Initialize with only one points
+                #if the number of material points is not defined (=0) we need to initialize statev
+                
+                if np.isscalar(self.__statev_initial): 
+                    nb_points = 1
+                    statev = np.zeros((nb_points, int(self.__statev_initial))).T
+                else: 
+                    statev = np.atleast_2d(self.__statev_initial).T.astype(float)
+                    if len(statev) == 1: statev = statev.copy().T
+                    else: statev = assembly.ConvertData(statev).T
+                
+                sim.Umat_fedoo.Initialize(self, 0., statev, False)
+                    
+                self.Run(0.) #Launch the UMAT to compute the elastic matrix  
+                
+                
             H = np.squeeze(self.Lt.transpose(1,2,0))
             # H = np.squeeze(self.L.transpose(1,2,0))
             if self.__mask is None:
@@ -148,21 +152,20 @@ if USE_SIMCOON:
             """
             Reset the constitutive law (time history)
             """
-            #a modifier
+            #a modifier (créer une fonction reset dans l'umat simcoon)
             self.__currentGradDisp = self.__initialGradDisp = 0
             # self.__Statev = None
-            self.__currentStress = None #lissStressTensor object describing the last computed stress (GetStress method)
-            # self.__currentGradDisp = 0
+            # self.__currentStress = None #lissStressTensor object describing the last computed stress (GetStress method)
             # self.__F0 = None
     
         
         def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):            
             #if the number of material points is not defined (=0) we need to initialize statev
             nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
-            if np.isscalar(self.__InitialStatev): 
-                statev = np.zeros((nb_points, int(self.__InitialStatev))).T
+            if np.isscalar(self.__statev_initial): 
+                statev = np.zeros((nb_points, int(self.__statev_initial))).T
             else: 
-                statev = np.atleast_2d(self.__InitialStatev).T.astype(float)
+                statev = np.atleast_2d(self.__statev_initial).T.astype(float)
                 if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1]).T
                 else: statev = assembly.ConvertData(statev).T
             
@@ -181,7 +184,6 @@ if USE_SIMCOON:
             #tranpose for compatibility with simcoon
             if displacement is 0: 
                 self.__currentGradDisp = 0
-                self.__currentStress = None
                 F1 = np.multiply(np.eye(3).reshape(3,3,1) , np.ones((1,1,self.nb_points)), order='F').transpose(2,0,1)
                 # self.__F1 = np.eye(3).T.reshape(1,3,3)
             else:   
@@ -200,3 +202,19 @@ if USE_SIMCOON:
             self.Run(dtime)
 
             # (DRloc , listDR, Detot, statev) = self.Run(dtime)
+        
+        def copy(self, new_id=""):
+            """
+            Return a raw copy of the constitutive law without keeping current internal variables.
+
+            Parameters
+            ----------
+            new_id : TYPE, optional
+                The ID of the created constitutive law. The default is "".
+
+            Returns
+            -------
+            The copy of the constitutive law
+            """
+            return Simcoon(self.umat_name, self.props, self.__statev_initial, self.corate, new_id)
+            

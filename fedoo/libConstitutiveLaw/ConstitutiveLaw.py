@@ -1,6 +1,7 @@
 #baseclass
 import numpy as np
 from fedoo.libUtil.ModelingSpace import GetDimension
+from copy import deepcopy
 
 class ConstitutiveLaw:
 
@@ -41,6 +42,25 @@ class ConstitutiveLaw:
     def Update(self,assembly, pb, dtime, nlgeom):
         #function called to update the state of constitutive law 
         pass
+    
+    def copy(self, new_id = ""):
+        """
+        Return a raw copy of the constitutive law without keeping current internal variables.
+
+        Parameters
+        ----------
+        new_id : TYPE, optional
+            The ID of the created constitutive law. The default is "".
+
+        Returns
+        -------
+        The copy of the constitutive law
+        """
+        new_cl = deepcopy(self)        
+        new_cl._ConstitutiveLaw__ID = new_id
+        self.__dic[new_id] = new_cl
+        new_cl.Reset()
+        return new_cl
    
     @staticmethod
     def GetAll():

@@ -391,7 +391,7 @@ class Assembly(AssemblyBase):
                 
     def InitTimeIncrement(self, pb, dtime):
         self.__weakForm.InitTimeIncrement(self, pb, dtime)
-        # self.ComputeGlobalMatrix() 
+        self.ComputeGlobalMatrix() 
         #no need to compute vector if the previous iteration has converged and (dtime hasn't changed or dtime isn't used in the weakform)
         #in those cases, self.ComputeGlobalMatrix(compute = 'matrix') should be more efficient
 
@@ -411,7 +411,7 @@ class Assembly(AssemblyBase):
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         self.__weakForm.ResetTimeIncrement()
-        self.ComputeGlobalMatrix(compute='all')
+        # self.ComputeGlobalMatrix(compute='all')
 
     def NewTimeIncrement(self):
         """
@@ -420,7 +420,7 @@ class Assembly(AssemblyBase):
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         self.__weakForm.NewTimeIncrement() #should update GetH() method to return elastic rigidity matrix for prediction        
-        self.ComputeGlobalMatrix(compute='matrix')
+        # self.ComputeGlobalMatrix(compute='matrix')
  
     def Reset(self):
         """
