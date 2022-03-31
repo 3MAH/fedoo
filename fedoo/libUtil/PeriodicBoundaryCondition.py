@@ -21,7 +21,7 @@ if USE_SIMCOON:
         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
-    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
+    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None, nNeighbours = 3, powInter = 1.0):
     
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
@@ -32,7 +32,7 @@ if USE_SIMCOON:
         
         coords_nodes = mesh.GetNodeCoordinates()
         NodeCD_int32 = [n.item() for n in NodeCD]
-        list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32)
+        list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32, nNeighbours, powInter)
             
         for eq_list in list_nodes:
             eq = np.array(eq_list)
