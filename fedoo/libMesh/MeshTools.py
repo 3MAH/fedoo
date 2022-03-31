@@ -328,14 +328,14 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
                 Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx*j+i+k*Ny*Nx,Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx*j+i+1+k*Ny*Nx,Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx+Nx*j+i+1+k*Ny*Nx,Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx+Nx*j+i+k*Ny*Nx, \
                 Nx*Ny*Nz+(Nx-1)*Ny+(Nx-1)*j+i+k*(Nx-1)*Ny,Nx*j+i+1+Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)+(k*Nx*(Ny-1)),Nx*Ny*Nz+(Nx-1)*Ny+(Nx-1)*(j+1)+i+k*(Nx-1)*Ny,Nx*j+i+Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)+(k*Nx*(Ny-1))] for k in range(Nz-1) for j in range(Ny-1) for i in range(Nx-1)] 
                 
-        bottom = [nd for nd in range(Ny*Nx)]+range(Nx*Ny*Nz,(Nx-1)*Ny+Nx*Ny*Nz)+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx)
-        top = [nd for nd in range((Nz-1)*Ny*Nx,Nz*Nx*Ny)]+range(Nx*Ny*Nz+(Nx-1)*Ny*(Nz-1),Nx*Ny*Nz+(Nx-1)*Ny*Nz)+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx*(Nz-1), Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx*Nz)
-        left = list(itertools.chain.from_iterable([range(i*Nx*Ny,i*Nx*Ny+Nx*Ny,Nx) for i in range(Nz)]))+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny,Nx)+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)*Nz,Nx)
-        right = list(itertools.chain.from_iterable([range(i*Nx*Ny+Nx-1,i*Nx*Ny+Nx*Ny,Nx) for i in range(Nz)]))+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx-1,Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny,Nx)+range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx-1, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)*Nz,Nx)
+        bottom = [nd for nd in range(Ny*Nx)]+list(range(Nx*Ny*Nz,(Nx-1)*Ny+Nx*Ny*Nz))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx))
+        top = [nd for nd in range((Nz-1)*Ny*Nx,Nz*Nx*Ny)]+list(range(Nx*Ny*Nz+(Nx-1)*Ny*(Nz-1),Nx*Ny*Nz+(Nx-1)*Ny*Nz))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx*(Nz-1), Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+(Ny-1)*Nx*Nz))
+        left = list(itertools.chain.from_iterable([range(i*Nx*Ny,i*Nx*Ny+Nx*Ny,Nx) for i in range(Nz)]))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny,Nx))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)*Nz,Nx))
+        right = list(itertools.chain.from_iterable([range(i*Nx*Ny+Nx-1,i*Nx*Ny+Nx*Ny,Nx) for i in range(Nz)]))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx-1,Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny,Nx))+list(range(Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx-1, Nx*Ny*Nz+(Nx-1)*Ny*Nz+(Nz-1)*Nx*Ny+Nx*(Ny-1)*Nz,Nx))
         front = list(itertools.chain.from_iterable([range(i*Nx*Ny,i*Nx*Ny+Nx) for i in range(Nz)]))+list(itertools.chain.from_iterable([range(i*(Nx-1)*Ny+Nx*Ny*Nz, i*(Nx-1)*Ny+Nx*Ny*Nz+Nx-1) for i in range(Nz)]))+list(itertools.chain.from_iterable([range(i*Nx*Ny+Nx*Ny*Nz+(Nx-1)*Ny*Nz, i*Nx*Ny+Nx*Ny*Nz+(Nx-1)*Ny*Nz+Nx) for i in range(Nz-1)]))
         back = list(itertools.chain.from_iterable([range(i*Nx*Ny+Nx*Ny-Nx,i*Nx*Ny+Nx*Ny) for i in range(Nz)]))+list(itertools.chain.from_iterable([range(i*(Nx-1)*Ny+Nz*Nx*Ny+(Nx-1)*(Ny-1), i*(Nx-1)*Ny+Nz*Nx*Ny+(Nx-1)*(Ny-1)+Nx-1) for i in range(Nz)]))+list(itertools.chain.from_iterable([range(i*Nx*Ny+Nz*Nx*Ny+(Nx-1)*Ny*Nz+(Ny-1)*Nx,i*Nx*Ny+Nz*Nx*Ny+(Nx-1)*Ny*Nz+(Ny-1)*Nx+Nx) for i in range(Nz-1)]))
         
-    if ElementShape == 'hex8':
+    elif ElementShape == 'hex8':
         elm = [[Nx*j+i+(k*Nx*Ny),Nx*j+i+1+(k*Nx*Ny),Nx*(j+1)+i+1+(k*Nx*Ny),Nx*(j+1)+i+(k*Nx*Ny),Nx*j+i+(k*Nx*Ny)+Nx*Ny,Nx*j+i+1+(k*Nx*Ny)+Nx*Ny,Nx*(j+1)+i+1+(k*Nx*Ny)+Nx*Ny,Nx*(j+1)+i+(k*Nx*Ny)+Nx*Ny] for k in range(Nz-1) for j in range(Ny-1) for i in range(Nx-1)]     
 
         front = list(itertools.chain.from_iterable([range(i*Nx*Ny,i*Nx*Ny+Nx) for i in range(Nz)]))      # [item for sublist in bas for item in sublist] #flatten a list

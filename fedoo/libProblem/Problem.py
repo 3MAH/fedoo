@@ -75,7 +75,7 @@ class Problem(ProblemBase):
         
             return vector[i*n : (i+1)*n]   
 
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 1):
         self.__ProblemOutput.AddOutput(filename, assemblyID, output_list, output_type, file_format, position)            
 
     def SaveResults(self, iterOutput=None):

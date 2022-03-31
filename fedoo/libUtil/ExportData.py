@@ -39,13 +39,20 @@ class ExportData:
         
         datatype = 'UNSTRUCTURED_GRID'
         type_elm = self.mesh.GetElementShape()
-        nb_nd_elm =  type_elm[-1] #in case 
+        try: #get the number of nodes per element (in case  there is additional internal nodes)
+            nb_nd_elm =  str(int(type_elm[-2:]))
+        except:
+            nb_nd_elm =  str(int(type_elm[-1]))
+            
 #        nb_nd_elm = str(np.shape(elm)[1]) #Number of nodes per element       
 
         crd = self.mesh.GetNodeCoordinates()
         elm = self.mesh.GetElementTable()[:,:int(nb_nd_elm)]
         Ncrd = self.mesh.GetNumberOfNodes()
         Nel = self.mesh.GetNumberOfElements()
+        
+        if type_elm == 'hex20':
+            elm = elm[:,[0,1,2,3,4,5,6,7,8,9,10,11,16,17,18,19,12,13,14,15]]
         
         cell_type =  {'lin2':'3',
                       'tri3':'5',
@@ -60,8 +67,8 @@ class ExportData:
                       'tet10':'24',
                       'hex20':'25'
                       }.get(type_elm)
-        if cell_type == None: raise NotImplementedError('{} is not available in vtk'.format(type_elm))
-            
+        if cell_type == None: raise NotImplementedError('{} is not available in vtk'.format(type_elm))        
+        
         ret = ['# vtk DataFile Version 3.0',
                    self.header,
                    self.format.upper()             
@@ -139,13 +146,20 @@ class ExportData:
         if self.multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
 
         type_elm = self.mesh.GetElementShape()
-        nb_nd_elm =  type_elm[-1] #in case 
+        try: #get the number of nodes per element (in case  there is additional internal nodes)
+            nb_nd_elm =  int(type_elm[-2:])
+        except:
+            nb_nd_elm =  int(type_elm[-1])
+            
 #        nb_nd_elm = str(np.shape(elm)[1]) #Number of nodes per element      
         
         crd = self.mesh.GetNodeCoordinates()
-        elm = self.mesh.GetElementTable()[:,:int(nb_nd_elm)]
+        elm = self.mesh.GetElementTable()[:,:nb_nd_elm]        
         Ncrd = self.mesh.GetNumberOfNodes()
         Nel = self.mesh.GetNumberOfElements()  
+        
+        if type_elm == 'tet10':
+            elm = elm[:, [1,2,3,4,5,6,7,9,8]]
         
         type_el = {   'lin2':'1',
                       'tri3':'2',
@@ -160,7 +174,7 @@ class ExportData:
                       'tet10':'11',
                       'quad8':'16', 
                       'hex20':'17',                      
-                      }.get(type_elm)
+                      }.get(type_elm)    
         
         GeometricalEntity = []              
 #        if self.mesh.geometricalEntity != []:

@@ -2,7 +2,7 @@
 #This law should be used with an InternalForce WeakForm
 
 from fedoo.libMesh import MeshBase as Mesh
-from fedoo.libConstitutiveLaw import ElasticAnisotropic
+from fedoo.libConstitutiveLaw import ElasticAnisotropic, ConstitutiveLaw
 from fedoo.libWeakForm import InternalForce
 from fedoo.libAssembly import Assembly
 from fedoo.libProblem import Problem, Static, BoundaryCondition
@@ -19,8 +19,13 @@ def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
     if isinstance(mesh, str):
         mesh = Mesh.GetAll()[mesh]
 
-    crd = mesh.GetNodeCoordinates()[:-2]
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        crd = mesh.GetNodeCoordinates()[:-2]
+    else: 
+        crd = mesh.GetNodeCoordinates()
+        
     type_el = mesh.GetElementShape()
+    # type_el = 'hex20'
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
     zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
@@ -49,17 +54,17 @@ def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
     pb = Static("Assembling")
 
     pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
-    pb_post_tt.SetA(pb.GetA())
+    pb_post_tt.SetA(pb.GetA())    
     
     #Shall add other conditions later on
     if meshperio:
         DefinePeriodicBoundaryCondition(mesh,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
     else:
         DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
 
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
@@ -90,6 +95,7 @@ def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
         pb_post_tt.ApplyBoundaryCondition()
 
         pb_post_tt.Solve()
+                
         X = pb_post_tt.GetX()  # alias
         DStrain.append(np.array([pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
                                   pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))
@@ -108,7 +114,57 @@ def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
         
     return C
 
-def GetTangentStiffness(ProblemID = None):
+def GetHomogenizedStiffness_2(mesh, material):
+
+    #Definition of the set of nodes for boundary conditions
+    if isinstance(mesh, str):
+        mesh = Mesh.GetAll()[mesh]
+
+    if isinstance(material, str):
+        material = ConstitutiveLaw.GetAll()[material]
+
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        crd = mesh.GetNodeCoordinates()[:-2]
+        crd = mesh.GetNodeCoordinates()[:-2]
+    else: 
+        crd = mesh.GetNodeCoordinates()
+
+    type_el = mesh.GetElementShape()
+    xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
+    ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
+    zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
+    crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
+    center = [np.linalg.norm(crd-crd_center,axis=1).argmin()]
+        
+    BC_perturb = np.eye(6)
+    # BC_perturb[3:6,3:6] *= 2 #2xEXY
+
+    DStrain = []
+    DStress = []
+
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        remove_strain = False
+    else:
+        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        remove_strain = True
+        
+    #Assembly
+    wf = InternalForce(material)
+    assemb = Assembly(wf, mesh, type_el)
+
+    #Type of problem
+    pb = Static(assemb)
+    
+    C = GetTangentStiffness(pb.GetID())
+    if remove_strain:
+       mesh.RemoveNodes(StrainNodes)
+       
+    del pb.GetAll()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
+
+    return C
+
+def GetTangentStiffness(ProblemID = None, meshperio = True):
     #################### PERTURBATION METHODE #############################
     if ProblemID is None: ProblemID = ProblemBase.GetActive().GetID()
     pb = ProblemBase.GetAll()[ProblemID]

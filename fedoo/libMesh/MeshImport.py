@@ -265,6 +265,9 @@ def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume
     
             type_elm = possible_element_type.get(str(celltype))
                           #not implemented '6':wed6 - '7':pyr5
+            
+            if type_elm == 'tet10': #swap axes to account for different numbering schemes
+                elm[:, [8, 9]] = elm[:, [9, 8]]
     
             GeometricalEntity = []
             for geom in list_geom:
@@ -284,11 +287,14 @@ def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume
     elif version == '4.1': 
         for elementType in element_all:  
             
-            elm =  np.array(element_all[elementType][0], int) - numnode0
+            elm =  np.array(element_all[elementType][0], int) - numnode0            
     
             type_elm = possible_element_type.get(str(elementType))
                           #not implemented '6':wed6 - '7':pyr5            
-                        
+            
+            if type_elm == 'tet10': #swap axes to account for different numbering schemes
+                elm[:, [8, 9]] = elm[:, [9, 8]]
+            
             if len(element_all) == 1:
                 importedMeshName = meshID
             else: importedMeshName = meshID+str(count)
