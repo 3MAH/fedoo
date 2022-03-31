@@ -7,7 +7,7 @@ from fedoo.libWeakForm import InternalForce
 from fedoo.libAssembly import Assembly
 from fedoo.libProblem import Problem, Static, BoundaryCondition
 from fedoo.libProblem import ProblemBase
-from fedoo.libUtil import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
+from fedoo.libHomogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 import numpy as np
 import os
 import time

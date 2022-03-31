@@ -93,7 +93,7 @@ E = [1,0,0] #macroscopic strain tensor [EXX, EYY, EXY]
 #For the node StrainNode[0], 'DispZ' is a virtual dof for EXY
 
 #Apply the periodic boundary conditions 
-Util.DefinePeriodicBoundaryCondition("Domain", 
+Homogen.DefinePeriodicBoundaryCondition("Domain", 
         [StrainNodes[0], StrainNodes[0], StrainNodes[0]], 
         ['DispX', 'DispY', 'DispZ'], dim='2d')
 
@@ -120,8 +120,8 @@ Problem.Solve()
 
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain()
+TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
 Volume_mesh = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)

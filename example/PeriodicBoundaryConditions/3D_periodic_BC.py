@@ -52,7 +52,7 @@ E = [0,0,0,0,0,1] #[EXX, EYY, EZZ, EXY, EXZ, EYZ]
 #StrainNode[1] - 'DispY' is a virtual dof for EXZ
 #StrainNode[1] - 'DispZ' is a virtual dof for EYZ
 
-Util.DefinePeriodicBoundaryCondition("Domain", 
+Homogen.DefinePeriodicBoundaryCondition("Domain", 
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]], 
         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
 

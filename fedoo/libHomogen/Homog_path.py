@@ -17,7 +17,7 @@ if USE_SIMCOON:
     from fedoo.libWeakForm import InternalForce
     from fedoo.libAssembly import Assembly
     from fedoo.libProblem import NonLinearStatic, BoundaryCondition
-    from fedoo.libUtil import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
+    from fedoo.libHomogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
     from fedoo.libHomogen.TangentStiffnessMatrix import GetTangentStiffness
     import numpy as np
     import os

@@ -1,6 +1,5 @@
 from fedoo import *
 import numpy as np
-import time
  
 Assembly.DeleteMemory()
 
@@ -47,7 +46,7 @@ Problem.NonLinearStatic("Assembly")
 # Boundary conditions for the linearized strain tensor
 E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
-Util.DefinePeriodicBoundaryCondition('Domain2',
+Homogen.DefinePeriodicBoundaryCondition('Domain2',
 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')

@@ -70,7 +70,7 @@ Eyy = 0
 Exy = 0.1
 
 #Add some multipoint constraint for periodic conditions associated to the defined strain dof
-Util.DefinePeriodicBoundaryCondition("Domain", [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
+Homogen.DefinePeriodicBoundaryCondition("Domain", [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
 
 #Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
 Problem.BoundaryCondition('Dirichlet','DispX', Exx, [StrainNodes[0]]) #EpsXX
@@ -102,8 +102,8 @@ Util.fieldPlot2d("Domain", "ElasticLaw", disp = Problem.GetDoFSolution(), dataID
 print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispY')[-2]])
 #Compute the mean stress 
 #Get the stress tensor (PG values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain()
+TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
 
 # Surf = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #surface of domain without the void (hole)
 Surf = (xmax-xmin)*(ymax-ymin) #total surface of the domain
