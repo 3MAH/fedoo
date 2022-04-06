@@ -1,0 +1,13 @@
+name: fedoo
+
+channels:
+  - conda-forge
+  - set3mah
+
+dependencies:
+  - simcoon
+  - pardiso4py
+  - scipy
+  - matplotlib
+  - pandas
+  - pytest
