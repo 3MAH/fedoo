@@ -24,7 +24,7 @@ jobs:
         with:
             miniforge-variant: Mambaforge
             miniforge-version: latest
-            activate-environment: microgen
+            activate-environment: fedoo
             use-mamba: true
 
       - name: Get Date
@@ -48,16 +48,11 @@ jobs:
 
       - name: Install
         shell: bash -l {0}
-        run: |
-          conda info
-          conda list
-          pip install .
+        run: pip install .
           
       - name: Test
         shell: bash -l {0}
-        run: | 
-          conda info
-          conda list
+        run: |
           cd tests
           python run_tests.py
 
