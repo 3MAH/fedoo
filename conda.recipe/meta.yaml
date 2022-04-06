@@ -7,6 +7,7 @@ source:
   
 build:
   noarch: python
+  script: pip install .
 
 requirements:
   host:
@@ -22,11 +23,11 @@ requirements:
 test:
   imports:
     - fedoo
-  # source_files:
-  #   - tests
-  # requires:
-  #   - pytest
-  # commands:
-  #   - cd $SRC_DIR/tests
-  #   - $PYTHON run_tests.py
+  source_files:
+    - tests
+  requires:
+    - pytest
+  commands:
+    - cd $SRC_DIR/tests
+    - $PYTHON run_tests.py
   
