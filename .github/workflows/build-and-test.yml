@@ -53,6 +53,8 @@ jobs:
       - name: Test
         shell: bash -l {0}
         run: | 
+          conda info
+          conda list
           cd tests
           python run_tests.py
 
