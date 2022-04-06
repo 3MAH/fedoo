@@ -24,7 +24,7 @@ jobs:
         with:
             miniforge-variant: Mambaforge
             miniforge-version: latest
-            activate-environment: microgen
+            activate-environment: fedoo
             use-mamba: true
 
       - name: Get Date
@@ -52,7 +52,7 @@ jobs:
           
       - name: Test
         shell: bash -l {0}
-        run: | 
+        run: |
           cd tests
           python run_tests.py
 
