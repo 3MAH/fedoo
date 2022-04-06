@@ -48,7 +48,10 @@ jobs:
 
       - name: Install
         shell: bash -l {0}
-        run: pip install .
+        run: |
+          conda info
+          conda list
+          pip install .
           
       - name: Test
         shell: bash -l {0}
