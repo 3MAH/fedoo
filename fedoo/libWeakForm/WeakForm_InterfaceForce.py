@@ -1,7 +1,5 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.DispOperator import GetDispOperator
-from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension, GetNumberOfDimensions
 
 class InterfaceForce(WeakForm):
     """
@@ -29,13 +27,13 @@ class InterfaceForce(WeakForm):
             
         WeakForm.__init__(self,ID)
         
-        Variable("DispX") 
-        Variable("DispY")                
-        if GetDimension() == "3D": 
-            Variable("DispZ")
-            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")                
+        if self.space.ndim == 3: 
+            self.space.new_variable("DispZ")
+            self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
         else: #2D assumed
-            Vector('Disp' , ('DispX', 'DispY'))
+            self.space.new_vector('Disp' , ('DispX', 'DispY'))
                
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__InitialStressVector = 0
@@ -74,13 +72,15 @@ class InterfaceForce(WeakForm):
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
         
-        F = self.__ConstitutiveLaw.GetInterfaceStressOperator(localFrame=localFrame)            
+        ### Operator for Interface Stress Operator ###
+        dim = self.space.ndim
+        K = self.__ConstitutiveLaw.GetK()
         
-        U, U_vir = GetDispOperator()
+        U = self.space.op_disp() #relative displacement if used with cohesive element
+        U_vir = [u.virtual for u in U]
+        F = [sum([U[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #Interface stress operator
         
-        dim = GetNumberOfDimensions()
-
-        DiffOp = sum([U_vir[i] * F[i] for i in range(dim)])    
+        DiffOp = sum([0 if U[i]==0 else U[i].virtual * F[i] for i in range(dim)])    
         
         if self.__InitialStressVector is not 0:    
             DiffOp = DiffOp + sum([0 if U_vir[i] is 0 else \

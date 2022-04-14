@@ -1,10 +1,8 @@
 #derive de ConstitutiveLaw
 #simcoon compatible
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace      import Variable,GetDimension
 
 import numpy as np
 
@@ -21,12 +19,12 @@ class ElasticIsotrop(ElasticAnisotropic):
     PoissonRatio : scalars or arrays of gauss point values.
         The PoissonRatio of the elastic isotropic material
     ID : str, optional
-        The ID of the constitutive law
+        The ID of the constitutive law       
     """
     
     def __init__(self, YoungModulus, PoissonRatio, ID=""):
 
-        ConstitutiveLaw.__init__(self, ID) # heritage
+        Mechanical3D.__init__(self, ID) # heritage
         self.__YoungModulus = YoungModulus
         self.__PoissonRatio = PoissonRatio    
 

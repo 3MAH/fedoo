@@ -2,8 +2,6 @@
 #compatible with the simcoon strain and stress notation
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace      import Variable, GetDimension, Vector
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -11,18 +9,9 @@ import numpy as np
 class ShellBase(ConstitutiveLaw):
     #base model class that should derive any other shell constitutive laws
     def __init__(self, thickness, k=1, ID=""):        
-        assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
-        ConstitutiveLaw.__init__(self, ID) # heritage
-
-        Variable("DispX") 
-        Variable("DispY")            
-        Variable("DispZ")   
-        Variable("RotX") #torsion rotation 
-        Variable("RotY")   
-        Variable("RotZ")
-        Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
-        Vector('Rot' , ('RotX', 'RotY', 'RotZ'))     
+        ConstitutiveLaw.__init__(self, ID) # heritage   
 
         self.__thickness = thickness
         self.__k = k
@@ -101,7 +90,7 @@ class ShellBase(ConstitutiveLaw):
 class ShellHomogeneous(ShellBase):
     
     def __init__(self, MatConstitutiveLaw, thickness, k=1, ID=""):        
-        assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         if isinstance(MatConstitutiveLaw, str):
             MatConstitutiveLaw = ConstitutiveLaw.GetAll()[MatConstitutiveLaw]
@@ -115,7 +104,7 @@ class ShellHomogeneous(ShellBase):
         return self.__material
           
     def GetShellRigidityMatrix(self):
-        Hplane = self.__material.GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+        Hplane = self.__material.GetH(dimension = "2Dstress") #membrane rigidity matrix with plane stress assumption
         Hplane = np.array([[Hplane[i][j] for j in [0,1,3]] for i in[0,1,3]], dtype='object')
         Hshear = self.__material.GetH()
         Hshear = np.array([[Hshear[i][j] for j in [4,5]] for i in[4,5]], dtype='object')
@@ -136,7 +125,7 @@ class ShellHomogeneous(ShellBase):
                
     def GetShellRigidityMatrix_FI(self):
         #membrane and flexural component are given for full integration part
-        Hplane = self.__material.GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+        Hplane = self.__material.GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
         Hplane = np.array([[Hplane[i][j] for j in [0,1,3]] for i in[0,1,3]], dtype='object')        
         
         H = np.zeros((6,6), dtype='object')  
@@ -147,7 +136,7 @@ class ShellHomogeneous(ShellBase):
                      
     def GetStress(self, **kargs):
         Strain = self.GetStrain(**kargs)
-        Hplane = self.__material.GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+        Hplane = self.__material.GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.GetH()                       
         Stress += [sum([0 if Strain[j] is 0 else Strain[j]*Hshear[i][j] for j in [4,5]]) for i in [4,5]] #SXX, SYY, SXY (SZZ should be = 0)
@@ -165,7 +154,7 @@ class ShellHomogeneous(ShellBase):
         Strain[4] = self.GetGeneralizedStrain()[6][pg] * np.ones_like(z) #2epsXZ -> shear
         Strain[5] = self.GetGeneralizedStrain()[6][pg] * np.ones_like(z) #2epsYZ -> shear
         
-        Hplane = self.__material.GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+        Hplane = self.__material.GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.GetH()                       
         Stress += [sum([0 if Strain[j] is 0 else Strain[j]*Hshear[i][j] for j in [4,5]]) for i in [4,5]] #SXX, SYY, SXY (SZZ should be = 0)
@@ -176,7 +165,7 @@ class ShellHomogeneous(ShellBase):
 class ShellLaminate(ShellBase):
     
     def __init__(self, listMat, listThickness, k=1, ID=""):        
-        assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
         
         self.__listMat = [ConstitutiveLaw.GetAll()[mat] if isinstance(mat, str) else mat for mat in listMat]
         thickness = sum(listThickness) #total thickness
@@ -189,7 +178,7 @@ class ShellLaminate(ShellBase):
     def GetShellRigidityMatrix(self):
         H = np.zeros((8,8), dtype='object')  
         for i in range(len(self.__listThickness)):
-            Hplane = self.__listMat[i].GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+            Hplane = self.__listMat[i].GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
             Hplane = np.array([[Hplane[i][j] for j in [0,1,3]] for i in[0,1,3]], dtype='object')
             Hshear = self.__listMat[i].GetH()
             Hshear = np.array([[Hshear[i][j] for j in [4,5]] for i in[4,5]], dtype='object')
@@ -216,7 +205,7 @@ class ShellLaminate(ShellBase):
         #membrane and flexural component are given for full integration part
         H = np.zeros((6,6), dtype='object')  
         for i in range(len(self.__listThickness)):
-            Hplane = self.__listMat[i].GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+            Hplane = self.__listMat[i].GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
             Hplane = np.array([[Hplane[i][j] for j in [0,1,3]] for i in[0,1,3]], dtype='object')
             
             H[0:3,0:3] += self.__listThickness[i]*Hplane #Membrane
@@ -231,7 +220,7 @@ class ShellLaminate(ShellBase):
         position = kargs.get('position', 1)
         layer = self.FindLayer(position)   # find the layer corresponding to the specified position        
 
-        Hplane = self.__listMat[layer].GetH(pbdim="2Dstress") #membrane rigidity matrix with plane stress assumption
+        Hplane = self.__listMat[layer].GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__listMat[layer].GetH()                       
         Stress += [sum([0 if Strain[j] is 0 else Strain[j]*Hshear[i][j] for j in [4,5]]) for i in [4,5]] #SXX, SYY, SXY (SZZ should be = 0)
@@ -252,7 +241,7 @@ class ShellLaminate(ShellBase):
         layer_z = [list((pos - self.__layer) <= 0).index(True)-1 for pos in z]   # find the layer corresponding to all positions in z -> could be improved as z have increasing values
         layer_z[0] = 0 # to avoid -1 value for 1st layer
 
-        Hplane = [mat.GetH(pbdim="2Dstress") for mat in self.__listMat] #membrane rigidity matrix with plane stress assumption
+        Hplane = [mat.GetH(dimension="2Dstress") for mat in self.__listMat] #membrane rigidity matrix with plane stress assumption
         Hshear = [mat.GetH() for mat in self.__listMat]
         Hplane = [ [[0 if Hplane[layer][i][j] is 0 else Hplane[layer][i][j] for layer in layer_z] for j in range(4)] for i in range(4)]
         Hshear = [ [[0 if Hshear[layer][i][j] is 0 else Hshear[layer][i][j] for layer in layer_z] for j in [4,5]] for i in [4,5]]

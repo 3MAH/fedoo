@@ -1,7 +1,5 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.DispOperator import GetDispOperator
-from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 
 class Inertia(WeakForm):
     """
@@ -15,23 +13,24 @@ class Inertia(WeakForm):
     ID: str
         ID of the WeakForm 
     """
-    def __init__(self, Density, ID = ""):
+    def __init__(self, Density, ID = "", space = None):
            
         if ID == "":
             ID = "Inertia"
             
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,ID,space)
 
-        Variable("DispX") 
-        Variable("DispY")                
-        if GetDimension() == "3D": 
-            Variable("DispZ")  
-            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
-        else: Vector('Disp' , ('DispX', 'DispY'))
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")                
+        if self.space.ndim == 3: 
+            self.space.new_variable("DispZ")  
+            self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        else: self.space.new_vector('Disp' , ('DispX', 'DispY'))
         
         self.__Density = Density        
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
         # localFrame is not used for Inertia weak form 
-        U, U_vir = GetDispOperator()
+        U = self.space.op_disp()
+        U_vir = [u.virtual if u != 0 else 0 for u in U]
         return sum([a*b*self.__Density for (a,b) in zip(U_vir,U)])

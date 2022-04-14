@@ -1,6 +1,9 @@
+from fedoo.libUtil.Operator  import OpDiff
+
+
 class ModelingSpace:
     #__ModelingSpace = {"Main"}      
-    __activeSpace = None
+    __active_space = None
     __dic = {} #dic containing all the modeling spaces
 
     def __init__(self, dimension, ID="Main"):
@@ -9,155 +12,230 @@ class ModelingSpace:
         assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '3D', '2Dplane' or '2Dstress'"        
         
         #Static attributs 
-        ModelingSpace.__activeSpace = self
+        ModelingSpace.__active_space = self
         ModelingSpace.__dic[ID] = self
         
         self.__ID = ID
         
         #coordinates
         self._coordinate = {} # dic containing all the coordinate related to the modeling space
-        self._crd_rank = 0
+        self._ncrd = 0
         
         #variables
         self._variable = {} # attribut statique de la classe
-        self._variableDerivative = {} #define the derivative of the Variables
+        self._nvar = 0
         self._vector = {}
-        self._var_rank = 0
         
         #dimension
         if dimension == "2D": dimension = "2Dplane"                
         self._dimension = dimension
         
-        ModelingSpace.Coordinate('X') 
-        ModelingSpace.Coordinate('Y')
+        self.new_coordinate('X') 
+        self.new_coordinate('Y')
         
         if dimension == "3D":
-            self._DoF = 3
-            ModelingSpace.Coordinate('Z')
+            self.__ndim = 3
+            self.new_coordinate('Z')
         if dimension == "2Dplane" or dimension == "2Dstress":
-            self._DoF = 2            
-        
-
+            self.__ndim = 2                    
 
     def GetID(self):
         return self.__ID
     
     def MakeActive(self):
-        ModelingSpace.__activeSpace = self
+        ModelingSpace.__active_space = self
     
     @staticmethod
     def SetActive(ID):
-        ModelingSpace.__activeSpace = ModelingSpace.__dic[ID]
+        ModelingSpace.__active_space = ModelingSpace.__dic[ID]
     
     @staticmethod    
     def GetActive():
-        return ModelingSpace.__activeSpace
+        assert ModelingSpace.__active_space is not None, "You must define a dimension for your problem"
+        return ModelingSpace.__active_space
     
     @staticmethod
     def GetAll():
         return ModelingSpace.__dic
         
-    @staticmethod
-    def GetDimension():
-        assert ModelingSpace.__activeSpace is not None, "You must define a dimension for your problem"
-        return ModelingSpace.__activeSpace._dimension
+    def GetDimension(self):
+        return self._dimension
     
-    @staticmethod
-    def GetDoF():
-        assert ModelingSpace.__activeSpace is not None, "You must define a dimension for your problem"
-        return ModelingSpace.__activeSpace._DoF
+    @property
+    def ndim(self):
+        return self.__ndim
 
 
     #Methods related to Coordinates
-    @staticmethod
-    def Coordinate(name): 
+    def new_coordinate(self,name): 
         """
         Create a new coordinate
         """
         assert isinstance(name,str) , "The coordinte name must be a string"
 
-        self = ModelingSpace.__activeSpace
         if name not in self._coordinate.keys():
-            self._coordinate[name] = self._crd_rank
-            self._crd_rank +=1
+            self._coordinate[name] = self._ncrd
+            self._ncrd +=1
     
-    @staticmethod
-    def GetCoordinateRank(name): 
-        self = ModelingSpace.__activeSpace
+    def coordinate_rank(self,name): 
         if name not in self._coordinate.keys():
-            assert 0, "the coordinate name does not exist" 
+            assert 0, "the coordinate name " + str(name) + " does not exist" 
         return self._coordinate[name]
+    
+    def coordinate_name(self,rank):
+        """
+        Return the name of the variable associated to a given rank
+        """
+        return list(self._coordinate.keys())[list(self._variable.values()).index(rank)]
 
-    @staticmethod    
-    def GetNumberOfCoordinate():
-        return ModelingSpace.__activeSpace._crd_rank
+    def list_coordinate(self):
+        return self._coordinate.keys()  
 
-    @staticmethod    
-    def ListCoordinate():
-        return ModelingSpace.__activeSpace._coordinate.keys()          
+    @property
+    def ncrd(self):
+        return self._ncrd      
 
     #Methods related to Varibale
-    @staticmethod
-    def Variable(name):
+    def new_variable(self, name):
         assert isinstance(name,str) , "The variable must be a string"
         assert name[:2] != '__', "Names of variable should not begin by '__'"
         
-        self = ModelingSpace.__activeSpace
+        self = ModelingSpace.__active_space
         if name not in self._variable.keys():
-            self._variable[name] = self._var_rank
-            self._var_rank +=1
+            self._variable[name] = self._nvar
+            self._nvar +=1
 
-    @staticmethod
-    def GetVariableRank(name):
+    def variable_rank(self,name):
         """
         Return the rank (int) of a variable associated to a given name (str)
         """
-        self = ModelingSpace.__activeSpace
         if name not in self._variable.keys():
             assert 0, "the variable " +str(name)+ " does not exist" 
         return self._variable[name]
 
-    @staticmethod
-    def GetVariableName(rank):
+    def variable_name(self,rank):
         """
         Return the name of the variable associated to a given rank
         """
-        self = ModelingSpace.__activeSpace
         return list(self._variable.keys())[list(self._variable.values()).index(rank)]
 
-    @staticmethod
-    def Vector(name, listOfVariables):
+    def new_vector(self, name, list_variables):
         """
         Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
         In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
         """     
-        ModelingSpace.__activeSpace._vector[name] = [ModelingSpace.GetVariableRank(var) for var in listOfVariables]
+        self._vector[name] = [self.variable_rank(var) for var in list_variables]
 
-    @staticmethod
-    def GetVector(name):
-        return ModelingSpace.__activeSpace._vector[name]            
+    def get_vector(self,name):
+        return self._vector[name]            
 
-    @staticmethod
-    def GetNumberOfVariable():
-        return ModelingSpace.__activeSpace._var_rank
+    @property
+    def nvar(self):
+        return self._nvar
 
-    @staticmethod
-    def ListVariable():
-        return ModelingSpace.__activeSpace._variable.keys()
+    def list_variable(self):
+        return self._variable.keys()
   
-    @staticmethod
-    def ListVector():
-        return ModelingSpace.__activeSpace._vector.keys()
+    def list_vector(self):
+        return self._vector.keys()
+    
+    def opdiff(self, u, x=0, ordre=0, decentrement=0, vir=0):
+        if isinstance(u,str):
+            u = self.variable_rank(u)
+        if isinstance(x,str):
+            x = self.coordinate_rank(x)
+        return OpDiff(u, x, ordre, decentrement, vir)
+    
+    #build usefull list of operators 
+    def op_grad_u(self):
+       if self.ndim == 3:        
+           return [[self.opdiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
+       else:
+           return [[self.opdiff(IDvar, IDcoord,1) for IDcoord in ['X','Y']] + [0] for IDvar in ['DispX','DispY']] + [[0,0,0]]
+       
+                   
+    def op_strain(self, InitialGradDisp = None):
+        # InitialGradDisp = StrainOperator.__InitialGradDisp
 
-# if __name__=="__main__":
-#     ProblemDimension("3D")
-#     print(ProblemDimension.Get())
-#     ProblemDimension("2Dplane")
-#     print(ProblemDimension.Get())
-#     ProblemDimension(3)
-#     ProblemDimension("ee")
+        if (InitialGradDisp is None) or (InitialGradDisp is 0):
+            du_dx = self.opdiff('DispX', 'X', 1)
+            dv_dy = self.opdiff('DispY', 'Y', 1)
+            du_dy = self.opdiff('DispX', 'Y', 1)
+            dv_dx = self.opdiff('DispY', 'X', 1)
+        
+            if self.ndim == 2:
+                eps = [du_dx, dv_dy, 0, du_dy+dv_dx, 0, 0]
+        
+            else: #assume ndim == 3
+                dw_dz = self.opdiff('DispZ', 'Z', 1)
+                du_dz = self.opdiff('DispX', 'Z', 1)
+                dv_dz = self.opdiff('DispY', 'Z', 1)
+                dw_dx = self.opdiff('DispZ', 'X', 1)
+                dw_dy = self.opdiff('DispZ', 'Y', 1)
+                eps = [du_dx, dv_dy, dw_dz, du_dy+dv_dx, du_dz+dw_dx, dv_dz+dw_dy]
+          
+        else:
+            GradOperator = self.op_grad_u()
+            if self.ndim == 2:
+                eps = [GradOperator[i][i] + sum([GradOperator[k][i]*InitialGradDisp[k][i] for k in range(2)]) for i in range(2)] 
+                eps += [0]
+                eps += [GradOperator[0][1] + GradOperator[1][0] + sum([GradOperator[k][0]*InitialGradDisp[k][1] + GradOperator[k][1]*InitialGradDisp[k][0] for k in range(2)])]  
+                eps += [0, 0]
+            
+            else:
+                eps = [GradOperator[i][i] + sum([GradOperator[k][i]*InitialGradDisp[k][i] for k in range(3)]) for i in range(3)] 
+                eps += [GradOperator[0][1] + GradOperator[1][0] + sum([GradOperator[k][0]*InitialGradDisp[k][1] + GradOperator[k][1]*InitialGradDisp[k][0] for k in range(3)])]          
+                eps += [GradOperator[0][2] + GradOperator[2][0] + sum([GradOperator[k][0]*InitialGradDisp[k][2] + GradOperator[k][2]*InitialGradDisp[k][0] for k in range(3)])]
+                eps += [GradOperator[1][2] + GradOperator[2][1] + sum([GradOperator[k][1]*InitialGradDisp[k][2] + GradOperator[k][2]*InitialGradDisp[k][1] for k in range(3)])]
+            
+        return eps
+    
+    def op_beam_strain(self):
+        epsX = self.opdiff('DispX',  'X', 1) # dérivée en repère locale
+        xsiZ = self.opdiff('RotZ',  'X', 1) # flexion autour de Z
+        gammaY = self.opdiff('DispY', 'X', 1) - self.opdiff('RotZ') #shear/Y
+        
+        if self.__ndim == 2:
+            eps = [epsX, gammaY, 0, 0, 0, xsiZ]
+
+        else: #assume ndim == 3
+            xsiX = self.opdiff('RotX', 'X', 1) # torsion autour de X
+            xsiY = self.opdiff('RotY',  'X', 1) # flexion autour de Y
+            gammaZ = self.opdiff('DispZ', 'X', 1) + self.opdiff('RotY') #shear/Z
+        
+            eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
+            
+        # eps_vir = [e.virtual if e != 0 else 0 for e in eps ]
+            
+        return eps
+    
+    def op_disp(self):
+        if self.__ndim == 2:
+            return [self.opdiff('DispX'), self.opdiff('DispY')]
+        else:
+            return [self.opdiff('DispX'), self.opdiff('DispY'), self.opdiff('DispZ')]
+            
+        
+
+    # def op_beam_strain_bernoulli(self):
+    #     epsX = self.opdiff('DispX',  'X', 1) # dérivée en repère locale
+    #     xsiZ = self.opdiff('RotZ',  'X', 1) # flexion autour de Z
+
+    #     if self.__ndim == 2:
+    #         eps = [epsX, 0, 0, 0, 0, xsiZ]
+
+    #     else: #assume ndim == 3
+    #         xsiX = self.opdiff('RotX', 'X', 1) # torsion autour de X
+    #         xsiY = self.opdiff('RotY',  'X', 1) # flexion autour de Y
+    #         eps = [epsX, 0, 0, xsiX, xsiY, xsiZ]
+            
+    #     # eps_vir = [e.virtual if e != 0 else 0 for e in eps ]
+            
+    #     return eps 
 
 
+
+    
 def ProblemDimension(value, modelingSpaceID = "Main"):
     """
     Create a new modeling space with the specified problem dimension
@@ -165,134 +243,31 @@ def ProblemDimension(value, modelingSpaceID = "Main"):
     """
     ModelingSpace(value, modelingSpaceID)
     
-def Coordinate(name):
-    #     """
-    #     Create a new coordinate in the active Modeling Space
-    #     """
-    ModelingSpace.Coordinate(name)    
-
-def Variable(name):
-    #     """
-    #     Create a new variable in the active Modeling Space
-    #     """
-    ModelingSpace.Variable(name)    
-        
-def Vector(name, listOfVariables):
-    """
-    Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
-    In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
-    """      
-    ModelingSpace.Vector(name, listOfVariables)    
-
-def GetNumberOfDimensions():
-    return ModelingSpace.GetDoF()
-
-def GetDimension():
-    return ModelingSpace.GetDimension()
-        
-# class Coordinate:
-#     __coordinate = {} # attribut statique de la classe
-#     __rank = 0
-
-#     def __init__(self,name):
-#         assert isinstance(name,str) , "The coordinte name must be a string"
-
-#         if name not in Coordinate.__coordinate.keys():
-#             Coordinate.__coordinate[name] = Coordinate.__rank
-#             Coordinate.__rank +=1
-
-#     @staticmethod
-#     def GetRank(name):
-#         if name not in Coordinate.__coordinate.keys():
-#             assert 0, "the coordinate name does not exist" 
-#         return Coordinate.__coordinate[name]
-
-#     @staticmethod
-#     def GetNumberOfCoordinate():
-#         return Coordinate.__rank
-
-#     @staticmethod
-#     def ListAll():
-#         return Coordinate.__coordinate.keys()    
-
-# class Variable:
-#     __variable = {} # attribut statique de la classe
-#     __variableDerivative = {} #define the derivative of the Variables
-#     __vector = {}
-
-#     __rank = 0
-
-#     def __init__(self,name):
-#         assert isinstance(name,str) , "The variable must be a string"
-#         assert name[:2] != '__', "Names of variable should ne begin by '__'"
-
-#         if name not in Variable.__variable.keys():
-#             Variable.__variable[name] = Variable.__rank
-#             Variable.__rank +=1
-
-#     @staticmethod
-#     def GetRank(name):
-#         """
-#         Return the rank (int) of a variable associated to a given name (str)
-#         """
-#         if name not in Variable.__variable.keys():
-#             assert 0, "the variable " +str(name)+ " does not exist" 
-#         return Variable.__variable[name]
-
-#     @staticmethod
-#     def GetName(rank):
-#         """
-#         Return the name of the variable associated to a given rank
-#         """
-#         return list(Variable.__variable.keys())[list(Variable.__variable.values()).index(rank)]
-
-#     # @staticmethod
-#     # def SetDerivative(name , name_derivative, crd = 'X', sign = 1):
+# def new_coordinate(name):
 #     #     """
-#     #     Define a variable name_derivative as the derivative of the variable name with respect with the coordinate defined in crd (not used for beam).
-#     #     This method is used in the context of class C1 elements where a variable related to the derivative has to be defined 
-#     #     (for example, angular variables in the bending Bernoulli beam model)
-#     #     name is a str who is an existing variable.
-#     #     name_derivative is a str. If the variable name_derivative doesn't exist, it is created.        
+#     #     Create a new coordinate in the active Modeling Space
 #     #     """
-#     #     #crd is not used for beam, but will be required for plate elements
-#     #     if name not in Variable.__variable.keys():
-#     #         assert 0, "the variable does not exist" 
-#     #     if name_derivative not in Variable.__variable.keys():
-#     #         Variable(name_derivative)
-#     #     Variable.__variableDerivative[Variable.GetRank(name)] = [Variable.GetRank(name_derivative), sign]
+#     ModelingSpace.GetActive().new_coordinate(name)    
 
-#     @staticmethod
-#     def SetVector( name, listOfVariables):
-#         """
-#         Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
-#         In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
-#         """        
-#         Variable.__vector[name] = {'listOfVariables': [Variable.GetRank(var) for var in listOfVariables]} 
+# def new_variable(name):
+#     #     """
+#     #     Create a new variable in the active Modeling Space
+#     #     """
+#     ModelingSpace.GetActive().new_variable(name)    
+        
+# def new_vector(name, listOfVariables):
+#     """
+#     Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
+#     In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
+#     """      
+#     ModelingSpace.GetActive().new_vector(name, listOfVariables)    
 
-#     @staticmethod
-#     def GetVector( name ):
-#         return Variable.__vector[name]['listOfVariables']
+# def GetNumberOfDimensions():
+#     return ModelingSpace.GetDoF()
 
-#     # @staticmethod
-#     # def GetDerivative(var):
-#     #     if isinstance(var, str):
-#     #         var = Variable.GetRank(var)
-#     #     if var in Variable.__variableDerivative:
-#     #         return Variable.__variableDerivative[var]
-#     #     else: return None                
-
-#     @staticmethod
-#     def GetNumberOfVariable():
-#         return Variable.__rank
-
-#     @staticmethod
-#     def List():
-#         return Variable.__variable.keys()
-
-#     @staticmethod    
-#     def ListVector():
-#         return Variable.__vector.keys()
+# def GetDimension():
+#     return ModelingSpace.GetDimension()
+        
 
 # if __name__=="__main__":
 #     ProblemDimension("3D")

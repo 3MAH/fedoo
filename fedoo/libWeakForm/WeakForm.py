@@ -1,14 +1,19 @@
 # base class
+from fedoo.libUtil.ModelingSpace import ModelingSpace
+
 
 class WeakForm:
 
     __dic = {}
 
-    def __init__(self, ClID = ""):
+    def __init__(self, ClID = "", space=None):
         assert isinstance(ClID, str) , "An ID must be a string" 
         self.__ID = ClID
         self.assumeSymmetric = False #use to accelerate assembly if the weak form may be considered as symmetric
-
+        if space is None: 
+            space = ModelingSpace.GetActive()
+        self.__space = space
+        
         WeakForm.__dic[self.__ID] = self
 
     def GetID(self):
@@ -51,10 +56,15 @@ class WeakForm:
         #function called if all the problem history is reseted.
         pass
 
-
+    @property
+    def space(self):
+        return self.__space
+        
     @staticmethod
     def GetAll():
         return WeakForm.__dic
+    
+    
 
 
 def GetAll():

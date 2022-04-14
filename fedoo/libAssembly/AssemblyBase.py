@@ -4,7 +4,7 @@ class AssemblyBase:
 
     __dic = {}
 
-    def __init__(self, ID = ""):
+    def __init__(self, ID = "", space=None):
         assert isinstance(ID, str) , "An ID must be a string" 
         self.__ID = ID
 
@@ -12,7 +12,8 @@ class AssemblyBase:
         self.__GlobalVector = None
         self.__Mesh = None 
         
-        AssemblyBase.__dic[self.__ID] = self
+        if ID != "": AssemblyBase.__dic[self.__ID] = self
+        self.__space = space
 
     def GetID(self):
         return self.__ID
@@ -45,6 +46,10 @@ class AssemblyBase:
         """
         self.__GlobalMatrix = None
         self.__GlobalVector = None
+    
+    @property
+    def space(self):
+        return self.__space
 
     @staticmethod
     def GetAll():

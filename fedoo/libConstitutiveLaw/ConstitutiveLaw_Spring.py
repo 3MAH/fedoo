@@ -1,8 +1,6 @@
 #derive de ConstitutiveLaw
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.ModelingSpace       import Variable, GetNumberOfDimensions
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -29,13 +27,7 @@ class Spring(ConstitutiveLaw):
     #Use with WeakForm.InterfaceForce
     def __init__(self, Kx=0, Ky = 0, Kz = 0, ID=""):        
         ConstitutiveLaw.__init__(self, ID) # heritage        
-        self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}   
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetNumberOfDimensions() == 3: 
-            Variable("DispZ")                       
+        self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}             
 
     def GetRelativeDisp(self):
         return self.__Delta
@@ -43,9 +35,12 @@ class Spring(ConstitutiveLaw):
     def GetInterfaceStress(self):
         return self.__InterfaceStress
 
+    def GetTangentMatrix(self):
+        return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]     
+    
     def GetK(self):
-        return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]        
-
+        return self.__ChangeBasisK(self.GetTangentMatrix())
+    
     def __ChangeBasisK(self, K):
         #Change of basis capability for spring type laws on the form : ForceVector = K * DispVector
         if self._ConstitutiveLaw__localFrame is not None:
@@ -78,28 +73,21 @@ class Spring(ConstitutiveLaw):
         #dtime not used for this law
         
         displacement = pb.GetDoFSolution()
-        if displacement is 0: self.__InterfaceStress = Self.__Delta = 0
+        if displacement is 0: self.__InterfaceStress = self.__Delta = 0
         else:
-            OpDelta  = self.GetOperartorDelta() #Delta is the relative displacement
-            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in OpDelta]
+            op_delta = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
+            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in op_delta]
         
             self.ComputeInterfaceStress(self.__Delta)        
 
-    def GetInterfaceStressOperator(self, **kargs): 
-        dim = GetNumberOfDimensions()
-        K = self.__ChangeBasisK(self.GetK())
-        
-        U, U_vir = GetDispOperator() #relative displacement if used with cohesive element
-        return [sum([U[j]*K[i][j] for j in range(dim)]) for i in range(dim)]
-
-    def GetOperartorDelta(self): #operator to get the relative displacement
-        U, U_vir = GetDispOperator()  #relative displacement if used with cohesive element
-        return U 
+    # def GetOperartorDelta(self): #operator to get the relative displacement
+    #     U, U_vir = GetDispOperator()  
+    #     return U 
         
     def ComputeInterfaceStress(self, Delta, dtime = None): 
-        dim = GetNumberOfDimensions()
         #Delta is the relative displacement vector
-        K = self.__ChangeBasisK(self.GetK())
+        K = self.GetK()
+        dim = len(Delta)
         self.__InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
     
 

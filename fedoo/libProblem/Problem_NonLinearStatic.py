@@ -18,7 +18,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__Err0 = None #initial error for NR error estimation
             self.__ErrCriterion = 'Work' #Error criterion type   
             self.__Assembly = Assembling
-            libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID)        
+            libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID, Assembling.space)        
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
             self.__compteurOutput = 0

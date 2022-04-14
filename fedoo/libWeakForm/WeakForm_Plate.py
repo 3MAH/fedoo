@@ -1,7 +1,7 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.StrainOperator import GetStrainOperator
-from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
+# from fedoo.libUtil.StrainOperator import GetStrainOperator
+# from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 from fedoo.libUtil.Operator  import OpDiff
 
 class Plate(WeakForm):
@@ -18,44 +18,44 @@ class Plate(WeakForm):
     ID: str
         ID of the WeakForm     
     """
-    def __init__(self, PlateConstitutiveLaw, ID = ""):
+    def __init__(self, PlateConstitutiveLaw, ID = "", space=None):
         #k: shear shape factor
         
-        assert GetDimension() == '3D', "No 2D model for a plate kinematic. Choose '3D' problem dimension."
-
         if isinstance(PlateConstitutiveLaw, str):
             PlateConstitutiveLaw = ConstitutiveLaw.GetAll()[PlateConstitutiveLaw]
 
         if ID == "":
             ID = PlateConstitutiveLaw.GetID()
             
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,ID, space)
+        
+        assert self.space.ndim == 3, "No 2D model for a plate kinematic. Choose '3D' problem dimension."
 
-        Variable("DispX") 
-        Variable("DispY")            
-        Variable("DispZ")   
-        Variable("RotX") #torsion rotation 
-        Variable("RotY")   
-        Variable("RotZ")
-        Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
-        Vector('Rot' , ('RotX', 'RotY', 'RotZ'))     
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")            
+        self.space.new_variable("DispZ")   
+        self.space.new_variable("RotX") #torsion rotation 
+        self.space.new_variable("RotY")   
+        self.space.new_variable("RotZ")
+        self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        self.space.new_vector('Rot' , ('RotX', 'RotY', 'RotZ'))     
         
         self.__ShellConstitutiveLaw = PlateConstitutiveLaw
         
     def GetGeneralizedStrainOperator(self):
         #membrane strain
-        EpsX = OpDiff('DispX', 'X', 1)
-        EpsY = OpDiff('DispY', 'Y', 1)
-        GammaXY = OpDiff('DispX', 'Y', 1)+OpDiff('DispY', 'X', 1)
+        EpsX = self.space.opdiff('DispX', 'X', 1)
+        EpsY = self.space.opdiff('DispY', 'Y', 1)
+        GammaXY = self.space.opdiff('DispX', 'Y', 1)+self.space.opdiff('DispY', 'X', 1)
         
         #bending curvature
-        XsiX = -OpDiff('RotY', 'X', 1) # flexion autour de Y -> courbure suivant x
-        XsiY =  OpDiff('RotX',  'Y', 1) # flexion autour de X -> courbure suivant y #ok
-        XsiXY = OpDiff('RotX',  'X', 1) - OpDiff('RotY',  'Y', 1)
+        XsiX = -self.space.opdiff('RotY', 'X', 1) # flexion autour de Y -> courbure suivant x
+        XsiY =  self.space.opdiff('RotX',  'Y', 1) # flexion autour de X -> courbure suivant y #ok
+        XsiXY = self.space.opdiff('RotX',  'X', 1) - self.space.opdiff('RotY',  'Y', 1)
         
         #shear
-        GammaXZ = OpDiff('DispZ', 'X', 1) + OpDiff('RotY')
-        GammaYZ = OpDiff('DispZ', 'Y', 1) - OpDiff('RotX') 
+        GammaXZ = self.space.opdiff('DispZ', 'X', 1) + self.space.opdiff('RotY')
+        GammaYZ = self.space.opdiff('DispZ', 'Y', 1) - self.space.opdiff('RotX') 
         
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
@@ -65,11 +65,11 @@ class Plate(WeakForm):
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(8)]) for i in range(8)]
         
-        DiffOp = sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual()*GeneralizedStress[i] for i in range(8)])
+        DiffOp = sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(8)])
         
         #penalty for RotZ
         penalty = 1e-6
-        DiffOp += OpDiff('RotZ').virtual()*OpDiff('RotZ')*penalty
+        DiffOp += self.space.opdiff('RotZ').virtual*self.space.opdiff('RotZ')*penalty
         
         return DiffOp        
       
@@ -85,13 +85,13 @@ class Plate_RI(Plate):
         #shear
         H = self._Plate__ShellConstitutiveLaw.GetShellRigidityMatrix_RI()
                 
-        GammaXZ = OpDiff('DispZ', 'X', 1) + OpDiff('RotY')
-        GammaYZ = OpDiff('DispZ', 'Y', 1) - OpDiff('RotX') 
+        GammaXZ = self.space.opdiff('DispZ', 'X', 1) + self.space.opdiff('RotY')
+        GammaYZ = self.space.opdiff('DispZ', 'Y', 1) - self.space.opdiff('RotX') 
         
         GeneralizedStrain = [GammaXZ, GammaYZ]
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(2)]) for i in range(2)]
         
-        return sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual()*GeneralizedStress[i] for i in range(2)])        
+        return sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(2)])        
         
 class Plate_FI(Plate):
 
@@ -102,11 +102,11 @@ class Plate_FI(Plate):
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                       
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(6)]) for i in range(6)]
         
-        DiffOp = sum([GeneralizedStrain[i].virtual()*GeneralizedStress[i] for i in range(6)])
+        DiffOp = sum([GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(6)])
         
         #penalty for RotZ
         penalty = 1e-6
-        DiffOp += OpDiff('RotZ').virtual()*OpDiff('RotZ')*penalty
+        DiffOp += self.space.opdiff('RotZ').virtual*self.space.opdiff('RotZ')*penalty
         
         return DiffOp
 

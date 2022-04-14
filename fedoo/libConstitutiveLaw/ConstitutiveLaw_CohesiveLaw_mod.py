@@ -1,9 +1,8 @@
-#derive de ConstitutiveLaw
+#derive de ConstitutiveLaw 
+#Not working law
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.ModelingSpace       import Variable, GetDimension
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -29,28 +28,28 @@ class CohesiveLaw_mod(Spring):
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 
-        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}     
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
-            Variable("DispZ")                  
-        
+        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}             
         self.__currentInterfaceStress = None
     
     
     def GetKelas(self): #Get elastic rigidity in local coordinates
+    
         Umd = 1 - self.__DamageVariable
         UmdI = 1 - self.__DamageVariableOpening 
 
-        axis = self.__parameters['axis']       
-        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
-            Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
-            return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        else:
-            Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
-            return [[Kdiag[0], 0], [0, Kdiag[1]]]                
+        axis = self.__parameters['axis']     
+        
+        Kt = Umd*self.__parameters['KII']
+        Kn = UmdI*self.__parameters['KI']
+        Kdiag = [Kt if i != axis else Kn for i in range(3)] 
+        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]] 
+    
+        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
+        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+        # else:
+        #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
+        #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
     
     
@@ -58,7 +57,7 @@ class CohesiveLaw_mod(Spring):
     
     
     
-    def GetK(self): #Get tangent moduli
+    def GetTangentMatrix(self): #Get tangent moduli
         if self.__currentInterfaceStress is None:
             return self.GetKelas()
 
@@ -100,16 +99,17 @@ class CohesiveLaw_mod(Spring):
         KII = KIIelas*test2 + KIItangent*test
 
         
-        axis = self.__parameters['axis']       
-        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
-            Kdiag = [KII if i != axis else KI for i in range(3)] 
-            return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        else:
-            Kdiag = [KII if i != axis else KI for i in range(2)] 
-            return [[Kdiag[0], 0], [0, Kdiag[1]]]                
-           
-    
-    
+        axis = self.__parameters['axis']      
+        
+        Kdiag = [KII if i != axis else KI for i in range(3)] 
+        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+        
+        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        #     Kdiag = [KII if i != axis else KI for i in range(3)] 
+        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+        # else:
+        #     Kdiag = [KII if i != axis else KI for i in range(2)] 
+        #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
     def SetDamageVariable(self, value):
         self.__DamageVariable = value
@@ -121,8 +121,11 @@ class CohesiveLaw_mod(Spring):
         if self.__DamageVariable is 0: self.__DamageVariableIrreversible = 0
         else: self.__DamageVariableIrreversible = self.__DamageVariable.copy()
 
+    #### Not working, need update
     def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
-        OperatorDelta, U_vir = GetDispOperator()
+        #Delta is the relative displacement 
+        # OperatorDelta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
+        # OperatorDelta, U_vir = GetDispOperator()
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.GetAll()[CohesiveAssembly]
         if typeData == 'Node':
@@ -146,6 +149,12 @@ class CohesiveLaw_mod(Spring):
         
         delta_n = delta[self.__parameters['axis']]        
         delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
+        
+        if len(delta_t) == 1: 
+            delta_t = delta_t[0]            
+        else: 
+            delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
+
         if GetDimension() == "3D":
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
         else: delta_t = delta_t[0]                

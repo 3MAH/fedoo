@@ -96,7 +96,7 @@ Problem.Solve()
 # Post-treatment
 #------------------------------------------------------------------------------
 #plot the deformed mesh with the shear stress (component=5)
-Util.fieldPlot2d("Domain", "ElasticLaw", disp = Problem.GetDoFSolution(), dataID = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
+Util.fieldPlot2d("Assembling", disp = Problem.GetDoFSolution(), dataID = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
 
 # print the macroscopic strain tensor and stress tensor
 print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispY')[-2]])

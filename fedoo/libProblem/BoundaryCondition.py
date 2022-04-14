@@ -11,7 +11,7 @@ class UniqueBoundaryCondition() :
     Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
-    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID"):
+    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", space = None):
         """
         Define some boundary conditions        
 
@@ -67,13 +67,15 @@ class UniqueBoundaryCondition() :
         
         self.__DefaultInitialValue = self.__initialValue = initialValue # can be a float or an array or None ! if DefaultInitialValue is None, initialValue can be modified by the Problem
         
+        if space is None: space = ModelingSpace.GetActive()
+        
         self.__BoundaryType = BoundaryType
         if isinstance(Var, str): 
-            self.__Var = ModelingSpace.GetVariableRank(Var)
+            self.__Var = space.variable_rank(Var)
             if BoundaryType == 'MPC': self.__VarMaster = self.__Var
         else: #Var should be a list or a numpy array
             assert BoundaryType == 'MPC', "Var should be a string for % Boundary Type".format(BoundaryType)
-            if isinstance(Var[0], str): Var = [ModelingSpace.GetVariableRank(v) for v in Var]
+            if isinstance(Var[0], str): Var = [space.variable_rank(v) for v in Var]
             self.__Var = Var[0] #Var for slave DOF (eliminated DOF)
             self.__VarMaster = Var[1:] #Var for master DOF (not eliminated DOF in MPC)
               

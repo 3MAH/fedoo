@@ -1,42 +1,26 @@
 #derive de ConstitutiveLaw
 ####WARNING: not working constitutive law
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
-
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 import scipy as sp
 
-class ViscoElasticComposites(ConstitutiveLaw):
-    def __init__(self, EL, ET, GLT, GTT, nuLT, nuTT, CL=0, CT=0, CTL=0, RefStrainRate=1, SLc_T = None, SLc_C = None, SYc_T =None, SYc_C =None, SZc_T=None, SZc_C=None, SLYc=None, SLZc=None,ID=""):
-        ConstitutiveLaw.__init__(self, ID) # heritage
-#        self.__YoungModulus = YoungModulus
-#        self.__PoissonRatio = PoissonRatio
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
-            Variable("DispZ")
+class ViscoElasticComposites(Mechanical3D):
+    def __init__(self, EL, ET, GLT, GTT, nuLT, nuTT, CL=0, CT=0, CLT=0, RefStrainRate=1, SLc_T = None, SLc_C = None, SYc_T =None, SYc_C =None, SZc_T=None, SZc_C=None, SLYc=None, SLZc=None,ID=""):
+        Mechanical3D.__init__(self, ID) # heritage
 
         self.__parameters = {'EL':EL, 'ET':ET, 'GLT':GLT, 'GTT':GTT, 'nuLT':nuLT, 'nuTT':nuTT, 'CL':CL, 'CT':CT, 'CLT':CLT, 'RefStrainRate': RefStrainRate, \
                              'SLc_T':SLc_T, 'SLc_C':SLc_C, 'SYc_T':SYc_T, 'SYc_C':SYc_C, 'SZc_T':SZc_T, 'SZc_C':SZc_C, 'SLYc':SLYc, 'SLZc':SLZc}
         
         self.__DamageVariable = [0,0,0,0,0,0]
-#    def GetYoungModulus(self):
-#        return self.__YoungModulus
-#
-#    def GetPoissonRatio(self):
-#        return self.__PoissonRatio
     
     def SetStrainRate(self, StrainRate):
         self.__StrainRate = StrainRate
     
     def GetStress(self, localFrame=None): # methode virtuel
         # tester si contrainte plane ou def plane
-        if GetDimension() == "2Dstress":
-            print('ViscoElasticComposites law for 2Dstress is not implemented')
-            return NotImplemented
+        # if GetDimension() == "2Dstress":
+        #     print('ViscoElasticComposites law for 2Dstress is not implemented')
+        #     return NotImplemented
         
         for key in self.__parameters: exec(key + '= self.__parameters["' +key+'"]' )
         StrainRate = self.__StrainRate 
@@ -62,7 +46,7 @@ class ViscoElasticComposites(ConstitutiveLaw):
 
         H = self._ConsitutiveLaw__ChangeBasisH(H)
                       
-        eps, eps_vir = GetStrainOperator()            
+        # eps, eps_vir = GetStrainOperator()            
         sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
         return sigma # list de 6 objets de type OpDiff

@@ -14,7 +14,8 @@ def Static(Assembling, ID = "MainProblem"):
     
     class __Static(libBase):
                 
-        def __init__(self, Assembling, ID):                            
+        def __init__(self, Assembling, ID):   
+            Assembling.Initialize(self,0)                         
             A = Assembling.GetMatrix()
             B = 0             
             D = Assembling.GetVector()     

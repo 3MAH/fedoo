@@ -2,7 +2,7 @@
 # Derivative and Differential operator
 #===============================================================================
 #from fedoo.libPGD.SeparatedArray import *
-from fedoo.libUtil.ModelingSpace  import ModelingSpace
+# from fedoo.libUtil.ModelingSpace  import ModelingSpace
 import numpy as np
 
 from numbers import Number #classe de base qui permet de tester si un type est numérique
@@ -34,12 +34,12 @@ class OpDiff:
        
         self.mesh = None
         
-        mod_space = ModelingSpace.GetActive()
+        # mod_space = ModelingSpace.GetActive()
 
-        if isinstance(u,str):
-            u = mod_space.GetVariableRank(u)
-        if isinstance(x,str):
-            x = mod_space.GetCoordinateRank(x)
+        # if isinstance(u,str):
+        #     u = mod_space.GetVariableRank(u)
+        # if isinstance(x,str):
+        #     x = mod_space.GetCoordinateRank(x)
             
         if isinstance(u,int):
             self.coef = [1]
@@ -129,7 +129,8 @@ class OpDiff:
 #        for gg in self.coef:
 #            if isinstance(gg,SeparatedArray):
 #                gg.reduction(**kwargs)
-          
+
+    @property
     def virtual(self): #retourne l'opérateur virtuel
         return OpDiff(self.op_vir, self.op, self.coef)    
         

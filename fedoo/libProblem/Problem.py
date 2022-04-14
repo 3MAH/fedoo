@@ -4,7 +4,6 @@ import scipy.sparse as sparse
 import scipy.sparse.linalg
 
 from fedoo.libProblem.ProblemBase import ProblemBase
-from fedoo.libUtil.ModelingSpace  import ModelingSpace
 from fedoo.libAssembly.Assembly  import *
 from fedoo.libProblem.Output import _ProblemOutput, _GetResults
 
@@ -12,12 +11,14 @@ import time
 
 class Problem(ProblemBase):
     
-    def __init__(self, A, B, D, Mesh, ID = "MainProblem"):
+    def __init__(self, A, B, D, Mesh, ID = "MainProblem", space = None):
 
         # the problem is AX = B + D
         
+        ProblemBase.__init__(self, ID, space)
+
         #self.__ProblemDimension = A.shape[0]
-        self.__ProblemDimension = Mesh.GetNumberOfNodes() * ModelingSpace.GetNumberOfVariable()
+        self.__ProblemDimension = Mesh.GetNumberOfNodes() * self.space.nvar
 
         self.__A = A
 
@@ -37,10 +38,7 @@ class Problem(ProblemBase):
         self.__DofFree    = np.array([])
         
         #prepering output demand to export results
-        self.__ProblemOutput = _ProblemOutput()
-
-        ProblemBase.__init__(self, ID)
-        
+        self.__ProblemOutput = _ProblemOutput()        
 
     def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
         return np.zeros(self.__ProblemDimension)     
@@ -51,7 +49,7 @@ class Problem(ProblemBase):
         if name.lower() == 'all': 
             vector[:] = value
         else:
-            i = ModelingSpace.GetVariableRank(name)
+            i = self.space.variable_rank(name)
             n = self.GetMesh().GetNumberOfNodes()
             vector[i*n : (i+1)*n] = value      
 
@@ -63,15 +61,15 @@ class Problem(ProblemBase):
 
         n = self.__Mesh.GetNumberOfNodes()
         
-        if name in ModelingSpace.ListVector():
-            vec = ModelingSpace.GetVector(name)
+        if name in self.space.list_vector():
+            vec = self.space.get_vector(name)
             i = vec[0] #rank of the 1rst variable of the vector
             dim = len(vec)
             return vector.reshape(-1,n)[i:i+dim]
             # return vector[i*n : (i+dim)*n].reshape(-1,n) 
         else:             
             #vector component are assumed defined as an increment sequence (i, i+1, i+2)
-            i = ModelingSpace.GetVariableRank(name)
+            i = self.space.variable_rank(name)
         
             return vector[i*n : (i+1)*n]   
 
@@ -145,9 +143,9 @@ class Problem(ProblemBase):
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
                 
         n = self.__Mesh.GetNumberOfNodes()
-        DoF = ModelingSpace.GetNumberOfVariable()     
-        Uimp = np.zeros(DoF*n)
-        F = np.zeros(DoF*n)
+        nvar = self.space.nvar
+        Uimp = np.zeros(nvar*n)
+        F = np.zeros(nvar*n)
 
         MPC = False
         DofB = []
@@ -179,7 +177,7 @@ class Problem(ProblemBase):
         
         
         DofB = np.unique(np.hstack(DofB)).astype(int)
-        DofL = np.setdiff1d(range(DoF*n),DofB).astype(int)
+        DofL = np.setdiff1d(range(nvar*n),DofB).astype(int)
         
         #build matrix MPC
         if MPC:    
@@ -188,7 +186,7 @@ class Problem(ProblemBase):
             #Compute M + M@M
             M = sparse.coo_matrix( 
                 (np.hstack(data), (np.hstack(row),np.hstack(col))), 
-                shape=(DoF*n,DoF*n))
+                shape=(nvar*n,nvar*n))
             
             # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
 
@@ -201,7 +199,7 @@ class Problem(ProblemBase):
             col = M.col
 
             #modification col numbering from DofL to np.arange(len(DofL))
-            changeInd = np.full(DoF*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
+            changeInd = np.full(nvar*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
             changeInd[DofL] = np.arange(len(DofL))
             col = changeInd[np.hstack(col)]
             mask = np.logical_not(np.isnan(col)) #mask to delete nan value 
@@ -215,7 +213,7 @@ class Problem(ProblemBase):
         
         self.__MatCB = sparse.coo_matrix( 
                 (data,(row,col)), 
-                shape=(DoF*n,len(DofL))).tocsr()
+                shape=(nvar*n,len(DofL))).tocsr()
         
         self.__Xbc = Uimp
         self.__B = F

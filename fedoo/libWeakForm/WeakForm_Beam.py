@@ -1,7 +1,5 @@
-from fedoo.libWeakForm.WeakForm   import *
+from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
-from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
 
 class Beam(WeakForm):
     """
@@ -27,7 +25,7 @@ class Beam(WeakForm):
     ID: str
         ID of the WeakForm     
     """
-    def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = ""):
+    def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = "", space = None):
         #k: shear shape factor
         
         if isinstance(CurrentConstitutiveLaw, str):
@@ -36,23 +34,23 @@ class Beam(WeakForm):
         if ID == "":
             ID = CurrentConstitutiveLaw.GetID()
             
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,ID, space)
 
-        Variable("DispX") 
-        Variable("DispY")            
-        if GetDimension() == '3D':
-            Variable("DispZ")   
-            Variable("RotX") #torsion rotation 
-            Variable("RotY")   
-            Variable("RotZ")
-            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
-            Vector('Rot' , ('RotX', 'RotY', 'RotZ'))            
-        elif GetDimension() == '2Dplane':
-            Variable("RotZ")
-            Vector('Disp' , ['DispX', 'DispY'])            
-            Vector('Rot' , ['RotZ'] ) 
-        elif GetDimension() == '2Dstress':
-            assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")            
+        if self.space.ndim == 3:
+            self.space.new_variable("DispZ")   
+            self.space.new_variable("RotX") #torsion rotation 
+            self.space.new_variable("RotY")   
+            self.space.new_variable("RotZ")
+            self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            self.space.new_vector('Rot' , ('RotX', 'RotY', 'RotZ'))            
+        elif self.space.ndim == 2:
+            self.space.new_variable("RotZ")
+            self.space.new_vector('Disp' , ['DispX', 'DispY'])            
+            self.space.new_vector('Rot' , ['RotZ'] ) 
+        # elif GetDimension() == '2Dstress':
+        #     assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                           
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}        
@@ -62,11 +60,11 @@ class Beam(WeakForm):
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
         
-        eps, eps_vir = GetBeamStrainOperator()           
+        eps = self.space.op_beam_strain()           
         beamShearStifness = self.__parameters['k'] * G * self.__parameters['Section']
 
         Ke = [E*self.__parameters['Section'], beamShearStifness, beamShearStifness, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
-        return sum([eps_vir[i] * eps[i] * Ke[i] for i in range(6)])                
+        return sum([eps[i].virtual * eps[i] * Ke[i] if eps[i] != 0 else 0 for i in range(6)])                
 
     
     def GetGeneralizedStress(self):

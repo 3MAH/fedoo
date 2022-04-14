@@ -2,8 +2,6 @@
 #The elastoplastic law should be used with an InternalForce WeakForm
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -24,18 +22,12 @@ class ElastoPlasticity(Mechanical3D):
     YieldStress: scalars or arrays of gauss point values
         Yield Stress Value    
     ID: str, optional
-        The ID of the constitutive law
+        The ID of the constitutive law      
     """
     
     def __init__(self,YoungModulus, PoissonRatio, YieldStress, ID=""):
         #only scalar values of YoungModulus and PoissonRatio are possible
         Mechanical3D.__init__(self, ID) # heritage
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": 
-            Variable("DispZ")
 
         self.__YoungModulus = YoungModulus
         self.__PoissonRatio = PoissonRatio
@@ -163,13 +155,13 @@ class ElastoPlasticity(Mechanical3D):
                         
                       
     
-    def GetStressOperator(self, localFrame=None): 
-        H = self.GetH()
+    # def GetStressOperator(self, localFrame=None): 
+    #     H = self.GetH()
                       
-        eps, eps_vir = GetStrainOperator(self.__currentGradDisp)         
-        sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+    #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)         
+    #     sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
-        return sigma # list de 6 objets de type OpDiff
+    #     return sigma # list de 6 objets de type OpDiff
     
     def NewTimeIncrement(self):
         #Set Irreversible Plasticity
@@ -199,6 +191,8 @@ class ElastoPlasticity(Mechanical3D):
         self.__TangeantModuli = self.GetHelas()
 
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+        if self._dimension is None:
+            self._dimension = assembly.space.GetDimension()     
         self.NewTimeIncrement()
 
     

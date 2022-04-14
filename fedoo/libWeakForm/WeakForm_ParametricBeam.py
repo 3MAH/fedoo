@@ -1,7 +1,5 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.ModelingSpace import Variable, Vector, Coordinate, GetDimension
-from fedoo.libUtil.BeamStrainOperator import GetBeamStrainOperator
 from fedoo.libPGD.MeshPGD import MeshPGD
 from fedoo.libPGD.SeparatedArray import SeparatedOnes
 
@@ -13,7 +11,7 @@ class ParametricBeam(WeakForm):
     * Same has BernoulliBeam but with the possibility to set each parameter as a coordinate of the problem.
     * Mainly usefull for parametric problem with the Proper Generalized Decomposition
     """
-    def __init__(self, E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, k=0, ID = ""):
+    def __init__(self, E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, k=0, ID = "", space = None):
         """
         Weak formulation dedicated to treat parametric problems using Bernoulli beams for isotropic materials
         
@@ -37,25 +35,23 @@ class ParametricBeam(WeakForm):
             Iyy = Izz = pi * R**4/4         
         """
     
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,ID, space)
 
-        Variable("DispX") 
-        Variable("DispY")     
-        if GetDimension() == '3D':
-            Variable("DispZ")   
-            Variable("RotX") #torsion rotation    
-            Variable('RotY')
-            Variable('RotZ')
-            # Variable.SetDerivative('DispZ', 'RotY', sign = -1) #only valid with Bernoulli model
-            # Variable.SetDerivative('DispY', 'RotZ') #only valid with Bernoulli model       
-            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
-            Vector('Rot' , ('RotX', 'RotY', 'RotZ'))
-        elif GetDimension() == '2Dplane':
-            Variable('RotZ')
-            Vector('Disp' , ('DispX', 'DispY'))
-            Vector('Rot' , ('RotZ'))
-        elif GetDimension() == '2Dstress':
-            assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")     
+        if self.space.ndim == 3:
+            self.space.new_variable("DispZ")   
+            self.space.new_variable("RotX") #torsion rotation    
+            self.space.new_variable('RotY')
+            self.space.new_variable('RotZ')  
+            self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+            self.space.new_vector('Rot' , ('RotX', 'RotY', 'RotZ'))
+        else: #if GetDimension() == '2Dplane':
+            self.space.new_variable('RotZ')
+            self.space.new_vector('Disp' , ('DispX', 'DispY'))
+            self.space.new_vector('Rot' , ('RotZ'))
+        # elif GetDimension() == '2Dstress':
+        #     assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
         
         if R is not None:
             S = np.pi * R**2
@@ -75,7 +71,7 @@ class ParametricBeam(WeakForm):
         
         for param in ['E', 'nu', 'R', 'S', 'Jx', 'Iyy', 'Izz']:     
             if mesh.FindCoordinateID(param) is not None:
-                Coordinate(param)
+                self.space.new_coordinate(param)
                 id_mesh = mesh.FindCoordinateID(param)
                 mesh._SetSpecificVariableRank(id_mesh, 'default', 0) #all the variables use the same function for the submeshes related to parametric coordinates                              
                 col = mesh.GetListMesh()[id_mesh].GetCoordinateID().index(param)
@@ -130,18 +126,16 @@ class ParametricBeam(WeakForm):
             mesh = MeshPGD.GetAll()[mesh]
 
         Ke = self.__GetKe(mesh)            
-        eps, eps_vir = GetBeamStrainOperator()    
+        eps = self.space.op_beam_strain()
         
-        return sum([eps_vir[i] * eps[i] * Ke[i] for i in range(6)])       
+        return sum([eps[i].virtual * eps[i] * Ke[i] if eps[i] != 0 else 0 for i in range(6)])       
             
     def GetGeneralizedStress(self, mesh):
         
         Ke = self.__GetKe(mesh)
-        eps, eps_vir = GetBeamStrainOperator()
+        eps = self.space.op_beam_strain()
         
-        temp = [eps[i] * Ke[i] for i in range(6)]
-
-        return temp
+        return [eps[i] * Ke[i] for i in range(6)]
 
     
     

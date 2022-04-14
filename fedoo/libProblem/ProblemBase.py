@@ -27,17 +27,26 @@ class ProblemBase:
     __dic = {}
     __activeProblem = None #ID of the current active problem
 
-    def __init__(self, ID = ""):
+    def __init__(self, ID = "", space = None):
         assert isinstance(ID, str) , "An ID must be a string" 
         self.__ID = ID
         self.__solver = ['direct']
         self._BoundaryConditions = [] #list containing boundary contidions associated to the problem        
         
         ProblemBase.__dic[self.__ID] = self
+        
+        if space is None: 
+            space = ModelingSpace.GetActive()
+        self.__space = space
+        
         self.MakeActive()
 
     def GetID(self):
         return self.__ID
+    
+    @property
+    def space(self):
+        return self.__space
     
     def MakeActive(self):
         ProblemBase.__activeProblem = self
@@ -123,10 +132,10 @@ class ProblemBase:
         -------
         To define many MPC in one operation, use array where each line define a single MPC        
         """
-        if isinstance(Var, str) and Var not in ModelingSpace.ListVariable():
+        if isinstance(Var, str) and Var not in self.space.list_variable():
             #we assume that Var is a Vector
             try: 
-                Var = [ModelingSpace.GetVariableName(var_rank) for var_rank in ModelingSpace.GetVector(Var)]
+                Var = [self.space.variable_name(var_rank) for var_rank in self.space.get_vector(Var)]
             except:
                 raise NameError('Unknown variable name')
                 
@@ -134,9 +143,9 @@ class ProblemBase:
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, ID))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, ID, self.space))                
         else:
-            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID))
+            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID, self.space))
 
 
     def GetBC(self):        

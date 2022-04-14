@@ -1,10 +1,8 @@
 #derive de ConstitutiveLaw
 #compatible simcoon
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 
 import numpy as np
 
@@ -36,15 +34,7 @@ class CompositeUD(ElasticAnisotropic):
     """
     
     def __init__(self, Vf=0.6, E_f=250000, E_m = 3500, nu_f = 0.33, nu_m = 0.3, angle=0, ID=""):
-        ConstitutiveLaw.__init__(self, ID) # heritage
-#        self.__YoungModulus = YoungModulus
-#        self.__PoissonRatio = PoissonRatio
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": # or GetDimension() == "2Dstress" :
-            Variable("DispZ")
+        Mechanical3D.__init__(self, ID) # heritage
 
         self.__parameters = {'Vf':Vf, 'E_f':E_f, 'E_m':E_m, 'nu_f':nu_f, 'nu_m':nu_m, 'angle':angle}   
         

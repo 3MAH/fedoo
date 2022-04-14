@@ -1,8 +1,5 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.StrainOperator import GetStrainOperator, StrainOperator
-from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
-from fedoo.libUtil.Operator  import OpDiff
 
 class InternalForce(WeakForm):
     """
@@ -23,42 +20,40 @@ class InternalForce(WeakForm):
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
     """
-    def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
+    def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False, space = None):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
 
         if ID == "":
             ID = CurrentConstitutiveLaw.GetID()
             
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,ID, space)
         
-        Variable("DispX") 
-        Variable("DispY")                
-        if GetDimension() == "3D": 
-            Variable("DispZ")
-            Vector('Disp' , ('DispX', 'DispY', 'DispZ'))
+        self.space.new_variable("DispX") 
+        self.space.new_variable("DispY")                
+        if self.space.ndim == 3: 
+            self.space.new_variable("DispZ")
+            self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
         else: #2D assumed
-            Vector('Disp' , ('DispX', 'DispY'))
+            self.space.new_vector('Disp' , ('DispX', 'DispY'))
         
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__InitialStressTensor = 0
         self.__InitialGradDispTensor = None
-        
         self.__nlgeom = nlgeom #geometric non linearities
         self.assumeSymmetric = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
         
         if nlgeom:
-            if GetDimension() == "3D":        
-                GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
+            GradOperator = self.space.op_grad_u()
+            if self.space.ndim == "3D":        
                 #NonLinearStrainOperatorVirtual = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
-                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(3)]) for i in range(3)] 
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][1] + GradOperator[k][1].virtual()*GradOperator[k][0] for k in range(3)])]  
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][0] for k in range(3)])]
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][1].virtual()*GradOperator[k][2] + GradOperator[k][2].virtual()*GradOperator[k][1] for k in range(3)])]
+                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual*GradOperator[k][i] for k in range(3)]) for i in range(3)] 
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][1] + GradOperator[k][1].virtual*GradOperator[k][0] for k in range(3)])]  
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][2] + GradOperator[k][2].virtual*GradOperator[k][0] for k in range(3)])]
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][1].virtual*GradOperator[k][2] + GradOperator[k][2].virtual*GradOperator[k][1] for k in range(3)])]
             else:
-                GradOperator = [[OpDiff(IDvar, IDcoord,1) for IDcoord in ['X','Y']] for IDvar in ['DispX','DispY']]
-                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual()*GradOperator[k][i] for k in range(2)]) for i in range(2)] + [0]            
-                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual()*GradOperator[k][1] + GradOperator[k][1].virtual()*GradOperator[k][0] for k in range(2)])] + [0,0]
+                NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual*GradOperator[k][i] for k in range(2)]) for i in range(2)] + [0]            
+                NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][1] + GradOperator[k][1].virtual*GradOperator[k][0] for k in range(2)])] + [0,0]
             
             self.__NonLinearStrainOperatorVirtual = NonLinearStrainOperatorVirtual
             
@@ -127,21 +122,22 @@ class InternalForce(WeakForm):
         #no need to update Initial Stress because the last computed stress remained unchanged
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
-        eps, eps_vir = GetStrainOperator(self.__InitialGradDispTensor)
+        eps = self.space.op_strain(self.__InitialGradDispTensor)
+        # eps, eps_vir = GetStrainOperator(self.__InitialGradDispTensor)
         # sigma = self.__ConstitutiveLaw.GetStressOperator(localFrame=localFrame)   
         
         H = self.__ConstitutiveLaw.GetH()
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
                 
-        DiffOp = sum([eps_vir[i] * sigma[i] for i in range(6)])
+        DiffOp = sum([0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)])
         
         if self.__InitialStressTensor is not 0:    
             if self.__NonLinearStrainOperatorVirtual is not 0 :  
                 DiffOp = DiffOp + sum([0 if self.__NonLinearStrainOperatorVirtual[i] is 0 else \
                                     self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
 
-            DiffOp = DiffOp + sum([0 if eps_vir[i] is 0 else \
-                                    eps_vir[i] * self.__InitialStressTensor[i] for i in range(6)])
+            DiffOp = DiffOp + sum([0 if eps[i] is 0 else \
+                                    eps[i].virtual * self.__InitialStressTensor[i] for i in range(6)])
 
         return DiffOp
 

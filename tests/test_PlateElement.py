@@ -25,7 +25,7 @@ reduced_integration = True #if true, use reduce integration for shear
 material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
 ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(51,11,0,L,-h/2,h/2, geomElementType, ID='plate')
+mesh = Mesh.RectangleMesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, ID='plate')
 
 nodes_left = mesh.GetSetOfNodes('left')
 nodes_right = mesh.GetSetOfNodes('right')

@@ -62,9 +62,7 @@ E = E_fiber*np.ones(Mesh.GetAll()[meshID].GetNumberOfElements())
 nu = nu_fiber*np.ones(Mesh.GetAll()[meshID].GetNumberOfElements())
 E[list_Elm_Matrix] = E_matrix
 nu[list_Elm_Matrix] = nu_matrix
-#convert element value to pg value
-E = Assembly.ConvertData(E, meshID)
-nu = Assembly.ConvertData(nu, meshID)
+
 
 ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'ElasticLaw')
 
@@ -82,7 +80,6 @@ Assembly.Create("ElasticLaw", meshID, type_el, ID="Assembling")
 #Static problem based on the just defined assembly
 #------------------------------------------------------------------------------
 Problem.Static("Assembling")
-
 
 #------------------------------------------------------------------------------
 #Boundary conditions
@@ -143,12 +140,16 @@ print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
 #------------------------------------------------------------------------------
 
 #Get the stress tensor (nodal values converted from PG values)
-TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
-TensorStressNd = Assembly.ConvertData(TensorStress, meshID, convertTo = "Node")
+TensorStrainNd = Assembly.GetAll()['Assembling'].ConvertData(TensorStrain, convertTo = "Node")
+TensorStressNd = Assembly.GetAll()['Assembling'].ConvertData(TensorStress, convertTo = "Node")
+# Or using the GetResults function
+# res = Problem.GetResults("Assembling", ["stress", "strain"], 'node')
+# TensorStrainNd = res['Strain']
+# TensorStressNd = res['Stress']
 
 #Get the stress tensor (element values)
-TensorStrainEl = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Element")       
-TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
+TensorStrainEl = Assembly.GetAll()['Assembling'].ConvertData(TensorStrain, convertTo = "Element")       
+TensorStressEl = Assembly.GetAll()['Assembling'].ConvertData(TensorStress, convertTo = "Element")
 
 # Get the principal directions (vectors on nodes)
 PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()

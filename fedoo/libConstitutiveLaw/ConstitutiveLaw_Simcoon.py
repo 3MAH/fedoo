@@ -13,8 +13,6 @@ if USE_SIMCOON:
 
 if USE_SIMCOON:    
     from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-    from fedoo.libUtil.StrainOperator import *
-    from fedoo.libUtil.ModelingSpace  import Variable, GetDimension
     from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
     import numpy as np
     
@@ -30,18 +28,15 @@ if USE_SIMCOON:
             
             self.__currentGradDisp = self.__initialGradDisp = 0        
     
-            # Variable("DispX")
-            # Variable("DispY")
-        
-            if GetDimension() == "3D":
-                # Variable("DispZ")
-                ndi = 3 ; nshr = 3
-            elif GetDimension() in ['2Dstress']:
-                # ndi = 2 ; nshr = 1
-                ndi = 3 ; nshr = 3###shoud be modified?
-            elif GetDimension() in ['2Dplane']:
-                 ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
+            # if GetDimension() == "3D":
+            #     ndi = 3 ; nshr = 3
+            # elif GetDimension() in ['2Dstress']:
+            #     # ndi = 2 ; nshr = 1
+            #     ndi = 3 ; nshr = 3###shoud be modified?
+            # elif GetDimension() in ['2Dplane']:
+            #      ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
             
+            ndi = nshr = 3 #compute the 3D constitutive law even for 2D law 
             self.umat_name = umat_name
             
             #self.__mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
@@ -96,7 +91,8 @@ if USE_SIMCOON:
                 else: 
                     statev = np.atleast_2d(self.__statev_initial).T.astype(float)
                     if len(statev) == 1: statev = statev.copy().T
-                    else: statev = assembly.ConvertData(statev).T
+                    else: assert 0, "Initialize simcoon constitutive law first"
+                    # else: #statev = assembly.ConvertData(statev).T
                 
                 sim.Umat_fedoo.Initialize(self, 0., statev, False)
                     
@@ -110,13 +106,13 @@ if USE_SIMCOON:
             else:    
                 return np.array([[0 if j in self.__mask[i] else H[i,j] for j in range(6)] for i in range(6)])
                     
-        def GetStressOperator(self, **kargs):
-            H = self.GetH(**kargs)
+        # def GetStressOperator(self, **kargs):
+        #     H = self.GetH(**kargs)
                           
-            eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
-            sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+        #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
+        #     sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
     
-            return sigma # list de 6 objets de type OpDiff
+        #     return sigma # list de 6 objets de type OpDiff
         
         def NewTimeIncrement(self):
             self.set_start() #in set_start -> set tangeant matrix to elastic
@@ -159,7 +155,11 @@ if USE_SIMCOON:
             # self.__F0 = None
     
         
-        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):            
+        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):      
+            
+            if  self._dimension is None:
+                self._dimension = assembly.space.GetDimension()
+                
             #if the number of material points is not defined (=0) we need to initialize statev
             nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
             if np.isscalar(self.__statev_initial): 

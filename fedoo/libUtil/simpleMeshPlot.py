@@ -110,9 +110,13 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     # plt.ion()
     
     
-def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
+# def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
+def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
-    if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+    if isinstance(assemb, str):
+        assemb = Assembly.GetAll()[assemb]
+    mesh = assemb.GetMesh()
+    wf = assemb.GetWeakForm()
 
     #type_plot is "real" or "smooth"
     if dataID is None: # no data, just plot mesh
@@ -130,31 +134,34 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
     crd = mesh.GetNodeCoordinates()
     elm = mesh.GetElementTable()
     type_el = mesh.GetElementShape()
-    
+
     if type_plot.lower() == "smooth":
-        mesh2 = Mesh(crd, elm, type_el, ID='visu')
-        crd2=crd ; elm2=elm
-        U = disp
+        # mesh2 = Mesh(crd, elm, type_el, ID='visu')
+        # crd2=crd ; elm2=elm
+        U = disp.ravel()
+        assemb_visu = assemb
     elif type_plot.lower() == "real":
         crd2 = crd[elm.ravel()]
         elm2 = np.arange(elm.shape[0]*elm.shape[1]).reshape(-1,elm.shape[1])
         mesh2 = Mesh(crd2, elm2, type_el, ID='visu')         
         U = ((disp.reshape(2,-1).T[elm.ravel()]).T).ravel()
+        
+        #reload the assembly with the new mesh
+        assemb_visu = Assembly(wf, 'visu', type_el, ID="visu", MeshChange = True) 
+        assemb_visu.PreComputeElementaryOperators()
     else: 
         raise NameError("type_plot should be either 'real' or 'smooth'")
     
-    #reload the assembly with the new mesh
-    assemb = Assembly(None, 'visu', type_el, ID="visu", MeshChange = True) 
-    Assembly.GetAll()['visu'].PreComputeElementaryOperators(mesh2, type_el)
+
 
     #compute tensorstrain and tensorstress
-    # TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "Nodal", nlgeom = False)       
+    # TensorStrain = assemb_visu.GetStrainTensor(U, "Nodal", nlgeom = False)       
     # TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
 
-    TensorStrain = Assembly.GetAll()['visu'].GetStrainTensor(U, "GaussPoint", nlgeom = False)       
-    TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
-    TensorStrain = TensorStrain.Convert(assemb, ConvertTo = "Node")
-    TensorStress = TensorStress.Convert(assemb, ConvertTo = "Node")
+    TensorStrain = assemb_visu.GetStrainTensor(U, "GaussPoint", nlgeom = False)       
+    TensorStress = wf.GetConstitutiveLaw().GetStressFromStrain(TensorStrain)
+    TensorStrain = TensorStrain.Convert(assemb_visu, ConvertTo = "Node")
+    TensorStress = TensorStress.Convert(assemb_visu, ConvertTo = "Node")
 
     
     try:
@@ -168,7 +175,10 @@ def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_
     except: 
         raise NameError('DataID: '+ str(dataID)+ ' and component: '+ str(component)+" doesn't exist")
     
-    meshPlot2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
+    if type_plot.lower() == "smooth":
+        meshPlot2d(mesh, U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
+    else: #type_plot.lower() == "real":
+        meshPlot2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
     
     # # Create triangulation.
     # color = plt.cm.hsv

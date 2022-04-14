@@ -1,16 +1,15 @@
 #import scipy as sp
 import numpy as np
 
-from fedoo.libUtil.ModelingSpace import ModelingSpace
 # from fedoo.libUtil.Coordinate import Coordinate
 from fedoo.libMesh.MeshBase import MeshBase
 from fedoo.libElement import *
 
-def Create(NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ID = ""):        
-    return Mesh(NodeCoordinates, ElementTable, ElementShape, LocalFrame, ID)
+def Create(NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ndim =None, ID = ""):        
+    return Mesh(NodeCoordinates, ElementTable, ElementShape, LocalFrame, ndim, ID)
 
 class Mesh(MeshBase):
-    def __init__(self, NodeCoordinates, ElementTable=None, ElementShape=None, LocalFrame=None, ID = ""):
+    def __init__(self, NodeCoordinates, ElementTable=None, ElementShape=None, LocalFrame=None, ndim = None, ID = ""):
         MeshBase.__init__(self, ID)
         self.__NodeCoordinates = NodeCoordinates #node coordinates            
         self.__ElementTable = ElementTable #element
@@ -19,21 +18,21 @@ class Mesh(MeshBase):
         self.__SetOfElements = {}
         self.__LocalFrame = LocalFrame #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
-        n = ModelingSpace.GetDimension()
-        N = self.__NodeCoordinates.shape[0]
-                
-        if self.__NodeCoordinates.shape[1] == 1: self.__CoordinateID = ('X')
-        elif self.__NodeCoordinates.shape[1] == 2: self.__CoordinateID = ('X', 'Y')
-        elif n == '2Dplane' or n == '2Dstress': self.__CoordinateID = ('X', 'Y')
-        else: self.__CoordinateID = ('X', 'Y', 'Z')
-        
-        if n == '3D' and self.__NodeCoordinates.shape[1] == 2:
-            self.__NodeCoordinates = np.c_[self.__NodeCoordinates, np.zeros(N)]
-            if LocalFrame != None:
+        N = self.__NodeCoordinates.shape[0]   
+        if ndim is None: ndim = self.__NodeCoordinates.shape[1]
+        elif ndim > self.__NodeCoordinates.shape[1]:
+            dim_add = ndim-self.__NodeCoordinates.shape[1]
+            self.__NodeCoordinates = np.c_[self.__NodeCoordinates, np.zeros((N, dim_add))]
+            if ndim == 3 and LocalFrame is not None:
                 LocalFrameTemp = np.zeros((N,3,3))
                 LocalFrameTemp[:,:2,:2] = self.__LocalFrame
                 LocalFrameTemp[:,2,2]   = 1
                 self.__LocalFrame = LocalFrameTemp
+        
+        if ndim == 1: self.__CoordinateID = ('X')
+        elif self.__NodeCoordinates.shape[1] == 2: self.__CoordinateID = ('X', 'Y')
+        # elif n == '2Dplane' or n == '2Dstress': self.__CoordinateID = ('X', 'Y')
+        else: self.__CoordinateID = ('X', 'Y', 'Z')
    
     def AddSetOfNodes(self,NodeIndexes,SetOfId):
         """        

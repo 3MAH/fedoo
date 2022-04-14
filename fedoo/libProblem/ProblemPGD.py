@@ -2,7 +2,6 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.libUtil.ModelingSpace import ModelingSpace
 from fedoo.libPGD.SeparatedArray import *
 from fedoo.libPGD.SeparatedOperator import *
 #from fedoo.libPGD.libProblemPGD.BoundaryConditionPGD import *
@@ -14,15 +13,18 @@ from fedoo.libProblem import ProblemBase, BoundaryCondition
 
 class ProblemPGD(ProblemBase): 
     
-    def __init__(self, A, B, D, Mesh, ID = "MainProblem"):  
+    def __init__(self, A, B, D, Mesh, ID = "MainProblem", space = None):  
         
         # the problem is AX = B + D        
+        ProblemBase.__init__(self, ID, space)
+        
+        nvar = self.space.nvar
         self.__Mesh = Mesh
         self.__NumberOfSubspace = Mesh.GetDimension()
         
         listNumberOfNodes = Mesh.GetNumberOfNodes()  #list of number of nodes for all submesh
         #self.__ProblemDimension is a list of number of DoF for each subspace
-        self.__ProblemDimension = [Mesh._GetSpecificNumberOfVariables(idmesh)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
+        self.__ProblemDimension = [Mesh._GetSpecificNumberOfVariables(idmesh, nvar)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
         #self.__ProblemDimension = self.__A.GetShape()
 
         self.__A = A 
@@ -39,8 +41,6 @@ class ProblemPGD(ProblemBase):
         self.__X = 0
         self.__Xbc = 0 #for boundary conditions
         
-        ProblemBase.__init__(self,ID)
-
 
     #===============================================================================
     # Internal Functions
@@ -57,7 +57,7 @@ class ProblemPGD(ProblemBase):
         else:
             return NotImplemented
 #
-#            i = ModelingSpace.GetVariableRank(name)
+#            i = self.space.variable_rank(name)
 #
 #            n = Problem.__Mesh.GetNumberOfNodes()
 #
@@ -176,9 +176,9 @@ class ProblemPGD(ProblemBase):
             return self.__X + self.__Xbc
         
         if self.__Xbc == 0:
-            return self.__X.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh)
+            return self.__X.GetVariable(self.space.variable_rank(name), self.__Mesh)
         else:
-            return self.__X.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh) + self.__Xbc.GetVariable(ModelingSpace.GetVariableRank(name), self.__Mesh)
+            return self.__X.GetVariable(self.space.variable_rank(name), self.__Mesh) + self.__Xbc.GetVariable(self.space.variable_rank(name), self.__Mesh)
 
     def SetDoFSolution(self,name,value):
         assert isinstance(name,str), 'argument error'
@@ -187,7 +187,7 @@ class ProblemPGD(ProblemBase):
             self.__X = value
         else:
             return NotImplemented
-#            i = ModelingSpace.GetVariableRank(name)
+#            i = self.space.variable_rank(name)
 #
 #            self.__X[i*n : (i+1)*n] = value        
 
@@ -211,7 +211,7 @@ class ProblemPGD(ProblemBase):
         # CL à intégrer???
         for dd in range(self.__Mesh.GetDimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
-        return res.norm(nbvar = ModelingSpace.GetNumberOfVariable())/err_0
+        return res.norm(nbvar = self.space.nvar)/err_0
 
 
     def GetResidual(self):
@@ -281,17 +281,18 @@ class ProblemPGD(ProblemBase):
         X = self.__X
         Xbc = 0 #SeparatedZeros(shapeX)
         F = 0 
-
+        nvar = self.space.nvar
+        
         DofB = [np.array([]) for i in self.__ProblemDimension] 
         dimBC = None #dimension requiring a modification of Xbc - dimBC = None if Xbc is never modified, dimBC = dd if only the dimension dd is modified, dimBC = 'many' if there is more than one dimension
-        
+                
         MPC = False
         data = [[] for i in self.__ProblemDimension] 
         row = [[] for i in self.__ProblemDimension] 
         col = [[] for i in self.__ProblemDimension] 
         
         Nnd  = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
-        Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
+        Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.GetDimension())]
         
         for e in self._BoundaryConditions:
             SetOfNodesForBC = meshPGD.GetSetOfNodes(e.SetOfID)            

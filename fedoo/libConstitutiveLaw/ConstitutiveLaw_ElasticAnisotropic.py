@@ -2,8 +2,6 @@
 #compatible with the simcoon strain and stress notation
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-from fedoo.libUtil.StrainOperator import *
-from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -20,21 +18,14 @@ class ElasticAnisotropic(Mechanical3D):
         The rigidity matrix. 
         If H is a list of gauss point values, the shape shoud be H.shape = (6,6,NumberOfGaussPoints)
     ID : str, optional
-        The ID of the constitutive law
+        The ID of the constitutive law      
     """
     def __init__(self, H, ID=""):
         Mechanical3D.__init__(self, ID) # heritage
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": 
-            Variable("DispZ")
 
         self.__H = H
         self.__currentSigma = None
-        self.__currentGradDisp = None
-    
+        self.__currentGradDisp = None               
     
     def GetTangentMatrix(self):
         return self.__H
@@ -65,17 +56,18 @@ class ElasticAnisotropic(Mechanical3D):
     def GetCurrentGradDisp(self):
         return self.__currentGradDisp    
     
-    def GetStressOperator(self, **kargs): 
-        H = self.GetH(**kargs )
+    # def GetStressOperator(self, **kargs): 
+    #     H = self.GetH(**kargs )
                       
-        eps, eps_vir = GetStrainOperator(self.__currentGradDisp)            
-        sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+    #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)            
+    #     sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
-        return sigma # list de 6 objets de type OpDiff
+    #     return sigma # list de 6 objets de type OpDiff
        
     
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
-        pass
+        if self._dimension is None:   
+            self._dimension = assembly.space.GetDimension()
     
     def Update(self,assembly, pb, dtime, nlgeom):
         displacement = pb.GetDoFSolution()

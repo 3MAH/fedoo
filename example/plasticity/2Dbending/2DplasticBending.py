@@ -10,7 +10,7 @@ start = time()
 
 Util.ProblemDimension("2Dplane")
 
-NLGEOM = True
+NLGEOM =True
 typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
@@ -31,14 +31,17 @@ mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, ID='ConstitutiveLaw')
-    Material.corate = 0
+    Material.corate = 101
 elif mat == 1:
     Re = 300
     k=1000
     m=0.25
     props = np.array([[E, nu, alpha, Re,k,m]])
     Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
-    Material.corate = 3
+    Material.corate = 0
+    # mask = [[3,4,5] for i in range(3)]
+    # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
+    # Material.SetMaskH(mask)
 else:
     Material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID='ConstitutiveLaw')
 
@@ -80,7 +83,7 @@ Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
 bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
 
-Problem.NLSolve(dt = 0.02, tmax = 1, update_dt = False, ToleranceNR = 0.005)
+Problem.NLSolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.05)
 
 ################### step 2 ################################
 bc.Remove()

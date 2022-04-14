@@ -2,8 +2,6 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libUtil.DispOperator   import GetDispOperator
-from fedoo.libUtil.ModelingSpace       import Variable, GetDimension
 from fedoo.libAssembly import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -54,25 +52,26 @@ class CohesiveLaw(Spring):
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 
-        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}     
-        
-        Variable("DispX")
-        Variable("DispY")        
-
-        if GetDimension() == 3: 
-            Variable("DispZ")                           
+        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}                          
     
-    def GetK(self):
+    def GetTangentMatrix(self):
         Umd = 1 - self.__DamageVariable
         UmdI = 1 - self.__DamageVariableOpening 
 
-        axis = self.__parameters['axis']       
-        if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
-            Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
-            return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        else:
-            Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
-            return [[Kdiag[0], 0], [0, Kdiag[1]]]                
+        axis = self.__parameters['axis']     
+        
+        Kt = Umd*self.__parameters['KII']
+        Kn = UmdI*self.__parameters['KI']
+        Kdiag = [Kt if i != axis else Kn for i in range(3)] 
+        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+                
+        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
+        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+        # else:
+        #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
+        #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
     def SetDamageVariable(self, value, Irreversible = True):
         """
@@ -92,10 +91,11 @@ class CohesiveLaw(Spring):
         if self.__DamageVariable is 0: self.__DamageVariableIrreversible = 0
         else: self.__DamageVariableIrreversible = self.__DamageVariable.copy()
 
-    def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
-        OperatorDelta, U_vir = GetDispOperator()
+    def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'):         
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.GetAll()[CohesiveAssembly]
+        
+        OperatorDelta = CohesiveAssembly.space.op_disp()
         if typeData == 'Node':
             delta = [CohesiveAssembly.GetNodeResult(op, U) for op in OperatorDelta]            
         else: delta = [CohesiveAssembly.GetGaussPointResult(op, U) for op in OperatorDelta]            
@@ -110,16 +110,12 @@ class CohesiveLaw(Spring):
         if self.__DamageVariable is 0: self.__DamageVariable = 0*delta[0]
         if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
         
-        # delta_n = delta.pop(self.__parameters['axis'])        
-        # if GetDimension() == "3D":
-        #     delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
-        # else: delta_t = delta[0]
-        
         delta_n = delta[self.__parameters['axis']]        
         delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-        if GetDimension() == "3D":
+        if len(delta_t) == 1: 
+            delta_t = delta_t[0]            
+        else: 
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
-        else: delta_t = delta_t[0]
         
         # mode I
         delta_0_I = self.__parameters['SImax'] / self.__parameters['KI']   # critical relative displacement (begining of the damage)
@@ -196,10 +192,11 @@ class CohesiveLaw(Spring):
 
         displacement = pb.GetDoFSolution()
         
-        if displacement is 0: self.__InterfaceStress = Self.__Delta = 0
+        if displacement is 0: self.__InterfaceStress = self.__Delta = 0
         else:
-            OpDelta  = self.GetOperartorDelta() #Delta is the relative displacement
-            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in OpDelta]
+            #Delta is the relative displacement 
+            op_delta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
+            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in op_delta]
         
             self.__UpdateDamageVariable(self.__Delta)
 
@@ -247,9 +244,10 @@ class CohesiveLaw(Spring):
     #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
     #     delta_n = delta[self.__parameters['axis']]        
     #     delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-    #     if GetDimension() == "3D":
+    #     if len(delta_t) == 1:
+    #         delta_t = delta_t[0]         
+    #     else: 
     #         delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
-    #     else: delta_t = delta_t[0]
         
     #     # mode I
     #     delta_0_I = self.__parameters['SImax'] / self.__parameters['KI']   # critical relative displacement (begining of the damage)

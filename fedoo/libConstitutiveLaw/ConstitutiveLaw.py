@@ -1,6 +1,5 @@
 #baseclass
 import numpy as np
-from fedoo.libUtil.ModelingSpace import GetDimension
 from copy import deepcopy
 
 class ConstitutiveLaw:
@@ -11,6 +10,7 @@ class ConstitutiveLaw:
         assert isinstance(ClID, str) , "An ID must be a string" 
         self.__ID = ClID
         self.__localFrame = None
+        self._dimension = None #str or None
 
         ConstitutiveLaw.__dic[self.__ID] = self
 
@@ -71,7 +71,10 @@ class ConstitutiveLaw:
 
 class Mechanical3D(ConstitutiveLaw):  
     # model of constitutive law for InternalForce Weakform
-       
+
+    def __init__(self, ClID = ""):
+        ConstitutiveLaw.__init__(self,ClID)
+        
     def GetPKII(self):
         return NotImplemented
         
@@ -100,7 +103,7 @@ class Mechanical3D(ConstitutiveLaw):
         return NotImplemented
     
     def GetH(self, **kargs): #Tangent Matrix in global coordinate system (apply change of basis)        
-        if kargs.get('pbdim', GetDimension()) == "2Dstress":
+        if kargs.get('dimension') == "2Dstress" or self._dimension == "2Dstress":
             H = self.GetTangentMatrix_2Dstress()
             if H is NotImplemented:
                 H = self.__ApplyChangeOfBasis(self.GetTangentMatrix())

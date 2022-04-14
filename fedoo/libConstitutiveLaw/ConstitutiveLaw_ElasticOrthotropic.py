@@ -1,9 +1,8 @@
 #derive de ConstitutiveLaw
 #simcoon compatible
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
-from fedoo.libUtil.ModelingSpace      import Variable, GetDimension
 
 import scipy as sp
 
@@ -24,20 +23,10 @@ class ElasticOrthotropic(ElasticAnisotropic):
     GYZ, GXZ, GXY: scalars or arrays of gauss point values
         Shear modulus 
     nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
-        Poisson's ratio
-    ID: str, optional
-        The ID of the constitutive law
+        Poisson's ratio 
     """
     def __init__(self, EX, EY, EZ, GYZ, GXZ, GXY, nuYZ, nuXZ, nuXY, ID=""):
-        ConstitutiveLaw.__init__(self, ID) # heritage
-#        self.__YoungModulus = YoungModulus
-#        self.__PoissonRatio = PoissonRatio
-        
-        Variable("DispX")
-        Variable("DispY")        
-        
-        if GetDimension() == "3D": 
-            Variable("DispZ")
+        Mechanical3D.__init__(self, ID) # heritage
 
         self.__parameters = {'EX':EX, 'EY':EY, 'EZ':EZ, 'GYZ':GYZ, 'GXZ':GXZ, 'GXY':GXY, 'nuYZ':nuYZ, 'nuXZ':nuXZ, 'nuXY':nuXY}
         

@@ -81,7 +81,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
 TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain() 
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetCurrentStress()
+TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
 Volume_mesh = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
@@ -108,20 +108,15 @@ print(MeanStress)
 output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
-    TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
-    TensorStressNd = Assembly.ConvertData(TensorStress, meshID, convertTo = "Node")
+    
+    res = Problem.GetResults("Assembling", ["stress", "strain"], 'node')
+    TensorStrainNd = res['Strain']
+    TensorStressNd = res['Stress']
     
     #Get the stress tensor (element values)
-    TensorStrainEl = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Element")       
-    TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
-    
-    # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
-    # TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
-    
-    # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
-    # TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
+    res = Problem.GetResults("Assembling", ["stress", "strain"], 'element')
+    TensorStrainEl = res['Strain']
+    TensorStressEl = res['Stress']    
     
     # Get the principal directions (vectors on nodes)
     PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
