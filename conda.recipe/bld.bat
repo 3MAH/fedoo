@@ -1,0 +1,1 @@
+xcopy /s /i %SRC_DIR%/fedoo %SP_DIR%
