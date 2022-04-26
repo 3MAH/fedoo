@@ -143,6 +143,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__iter = 0  
             self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
+        def GetAssembly(self):
+            return self.__StiffnessAssembly
     
             
             

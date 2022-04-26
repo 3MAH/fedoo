@@ -144,6 +144,23 @@ class InternalForce(WeakForm):
     def GetConstitutiveLaw(self):
         return self.__ConstitutiveLaw
     
+    def copy(self, new_id = ""):
+        """
+        Return a raw deep copy of the weak form without keeping current state (internal variable).
+
+        Parameters
+        ----------
+        new_id : TYPE, optional
+            The ID of the created constitutive law. The default is "".
+
+        Returns
+        -------
+        The copy of the weakform
+        """
+        new_cl = self.__ConstitutiveLaw.copy()
+        
+        return InternalForce(new_cl, ID = "", nlgeom = self.nlgeom, space = self.space)
+    
     @property
     def nlgeom(self):
         return self.__nlgeom

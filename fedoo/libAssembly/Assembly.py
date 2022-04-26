@@ -1114,6 +1114,23 @@ class Assembly(AssemblyBase):
             return np.c_[F,C] #np.hstack((F,C))            
 
 
+    def copy(self, new_id = ""):
+        """
+        Return a raw deep copy of the assembly without keeping current state (internal variable).
+
+        Parameters
+        ----------
+        new_id : TYPE, optional
+            The ID of the created constitutive law. The default is "".
+
+        Returns
+        -------
+        The copy of the assembly
+        """
+        new_wf = self._weakForm.copy()
+        
+        return Assembly(new_wf, self.__Mesh, self.__elmType, new_id)
+    
 def DeleteMemory():
     Assembly.DeleteMemory()
     

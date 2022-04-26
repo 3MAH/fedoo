@@ -13,6 +13,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             B = 0             
             #D = Assembling.GetVector() #initial stress vector
             D = 0 #initial stress vector #will be initialized later
+            self.print_info = 1 #print info of NR convergence during solve
             self.__Utot = 0 #displacement at the end of the previous converged increment
             self.__DU = 0 #displacement increment
             self.__Err0 = None #initial error for NR error estimation
@@ -58,10 +59,10 @@ def _GenerateClass_NonLinearStatic(libBase):
             #dt and start not used for static problem
             self.SetD(self.__Assembly.GetVector()) 
         
-        def Initialize(self, initialTime=0.):   
+        def Initialize(self, t0=0.):   
             """
             """
-            self.__Assembly.Initialize(self,initialTime)
+            self.__Assembly.Initialize(self,t0)
             # self.SetA(self.__Assembly.GetMatrix())
             # self.SetD(self.__Assembly.GetVector())
         
@@ -78,7 +79,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.UpdateD(dt, start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
             self.Solve()        
 
-            #the the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
+            #set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
             try:
                 self._Problem__Xbc *= 0 
             except:
@@ -145,6 +146,9 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__iter = 0  
             self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
+        def GetAssembly(self):
+            return self.__Assembly
+            
         def ChangeAssembly(self,Assembling, update = True):
             """
             Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)
@@ -168,7 +172,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                     # print('Err0:',self.__Err0)
                 else:
                     self.__Err0 = 1
-                    self.__Err0 = self.NewtonRaphsonError()                     
+                    self.__Err0 = self.NewtonRaphsonError()  
                 return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
@@ -233,6 +237,7 @@ def _GenerateClass_NonLinearStatic(libBase):
 
         def NLSolve(self, **kargs):              
             #parameters
+            self.print_info = kargs.get('print_info',self.print_info)
             max_subiter = kargs.get('max_subiter',6)
             ToleranceNR = kargs.get('ToleranceNR',5e-3)
             self.t0 = kargs.get('t0',self.t0) #time at the start of the time step
@@ -272,7 +277,8 @@ def _GenerateClass_NonLinearStatic(libBase):
 
                 if (convergence) :
                     time = time + current_dt #update time value 
-                    print('Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, dt, nbNRiter, normRes))
+                    if self.print_info > 0:
+                        print('Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, dt, nbNRiter, normRes))
 
                     #Check if dt can be increased
                     if update_dt and nbNRiter < 2: 

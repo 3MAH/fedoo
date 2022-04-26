@@ -168,7 +168,7 @@ class ProblemBase:
             ID is the str ID of the BC ("No ID") by default
             BoundaryType is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
         """
-        listid = [str(i) + ": " + bc.GetID() + " - " + bc.BoundaryType() for i,bc in enumerate(self._BoundaryConditions)]
+        listid = [str(i) + ": " + bc.GetID() + " - " + bc.BoundaryType for i,bc in enumerate(self._BoundaryConditions)]
         print("\n".join(listid))
     
 
@@ -363,8 +363,8 @@ def SetRayleighDamping(alpha, beta):
     """
     ProblemBase.GetActive().SetRayleighDamping(alpha, beta)
 
-def Initialize():
-    ProblemBase.GetActive().Initialize()           
+def Initialize(t0 = 0.):
+    ProblemBase.GetActive().Initialize(t0)           
 
 def GetElasticEnergy():
     """

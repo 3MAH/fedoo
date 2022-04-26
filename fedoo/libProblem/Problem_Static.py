@@ -76,7 +76,10 @@ def Static(Assembling, ID = "MainProblem"):
             libBase.Solve(self)
             if updateWF == True:
                 self.Update(compute = 'none')
-
+            
+        def GetAssembly(self):
+            return self.__Assembly
+        
         def ChangeAssembly(self,Assembling, update = True):
             """
             Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)

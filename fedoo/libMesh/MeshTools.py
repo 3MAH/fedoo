@@ -480,7 +480,7 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', Sy
         Edge7 = GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
         
         m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
-        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, ID="Domain")
+        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, ID=ID)
         return m
     else: 
         return NotImplemented

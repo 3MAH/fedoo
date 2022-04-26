@@ -12,6 +12,8 @@ class WeakForm:
         self.assumeSymmetric = False #use to accelerate assembly if the weak form may be considered as symmetric
         if space is None: 
             space = ModelingSpace.GetActive()
+        elif isinstance(space, str):
+            space = ModelingSpace.GetAll()[space]
         self.__space = space
         
         WeakForm.__dic[self.__ID] = self
@@ -55,6 +57,10 @@ class WeakForm:
     def Reset(self):
         #function called if all the problem history is reseted.
         pass
+    
+    def copy(self):
+        #function to copy a weakform at the initial state
+        raise NotImplementedError()
 
     @property
     def space(self):

@@ -24,7 +24,8 @@ These laws should be associated with :mod:`WeakForm.InternalForce`
    ElasticAnisotropic
    CompositeUD
    ElastoPlasticity
-   Simcoon
+   FE2
+   Simcoon   
 
 Interface mechanical constitutive laws
 ======================================

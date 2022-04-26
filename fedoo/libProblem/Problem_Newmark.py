@@ -108,7 +108,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix    
             self.__UpdateA()
     
-        def Initialize(self):
+        def Initialize(self, t0=0.):
             D = self.__MassMatrix * ( \
                     (1/(self.__Beta*self.__TimeStep**2))*self.__Xold +   \
                     (1/(self.__Beta*self.__TimeStep))   *self.__Xdot +   \

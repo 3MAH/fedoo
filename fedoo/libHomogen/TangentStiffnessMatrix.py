@@ -12,7 +12,52 @@ import numpy as np
 import os
 import time
 
-def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
+def GetHomogenizedStiffness(assemb):
+
+    #Definition of the set of nodes for boundary conditions
+    if isinstance(assemb, str):
+        assemb = Assembly.GetAll()[assemb]
+    mesh = assemb.GetMesh()
+
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        crd = mesh.GetNodeCoordinates()[:-2]
+        crd = mesh.GetNodeCoordinates()[:-2]
+    else: 
+        crd = mesh.GetNodeCoordinates()
+
+    type_el = mesh.GetElementShape()
+    xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
+    ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
+    zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
+    crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
+    center = [np.linalg.norm(crd-crd_center,axis=1).argmin()]
+        
+    BC_perturb = np.eye(6)
+    # BC_perturb[3:6,3:6] *= 2 #2xEXY
+
+    DStrain = []
+    DStress = []
+
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        remove_strain = False
+    else:
+        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        remove_strain = True
+
+    #Type of problem
+    pb = Static(assemb)
+    
+    C = GetTangentStiffness(pb.GetID())
+    if remove_strain:
+       mesh.RemoveNodes(StrainNodes)
+       
+    del pb.GetAll()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
+
+    return C
+
+
+def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
     #################### PERTURBATION METHODE #############################
 
     #Definition of the set of nodes for boundary conditions
@@ -114,55 +159,6 @@ def GetHomogenizedStiffness(mesh, L, meshperio=True, ProblemID=None):
         
     return C
 
-def GetHomogenizedStiffness_2(mesh, material):
-
-    #Definition of the set of nodes for boundary conditions
-    if isinstance(mesh, str):
-        mesh = Mesh.GetAll()[mesh]
-
-    if isinstance(material, str):
-        material = ConstitutiveLaw.GetAll()[material]
-
-    if '_StrainNodes' in mesh.ListSetOfNodes():
-        crd = mesh.GetNodeCoordinates()[:-2]
-        crd = mesh.GetNodeCoordinates()[:-2]
-    else: 
-        crd = mesh.GetNodeCoordinates()
-
-    type_el = mesh.GetElementShape()
-    xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
-    ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
-    zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
-    crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
-    center = [np.linalg.norm(crd-crd_center,axis=1).argmin()]
-        
-    BC_perturb = np.eye(6)
-    # BC_perturb[3:6,3:6] *= 2 #2xEXY
-
-    DStrain = []
-    DStress = []
-
-    if '_StrainNodes' in mesh.ListSetOfNodes():
-        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
-        remove_strain = False
-    else:
-        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
-        remove_strain = True
-        
-    #Assembly
-    wf = InternalForce(material)
-    assemb = Assembly(wf, mesh, type_el)
-
-    #Type of problem
-    pb = Static(assemb)
-    
-    C = GetTangentStiffness(pb.GetID())
-    if remove_strain:
-       mesh.RemoveNodes(StrainNodes)
-       
-    del pb.GetAll()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
-
-    return C
 
 def GetTangentStiffness(ProblemID = None, meshperio = True):
     #################### PERTURBATION METHODE #############################

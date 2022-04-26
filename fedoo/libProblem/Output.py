@@ -204,7 +204,7 @@ class _ProblemOutput:
     def __init__(self):
         self.__list_output = [] #a list containint dictionnary with defined output
                 
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 1):
+    def AddOutput(self, filename, assemb, output_list, output_type='Node', file_format ='vtk', position = 1):
         if output_type.lower() == 'node': output_type = 'Node'
         elif output_type.lower() == 'element': output_type = 'Element'
         elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
@@ -215,7 +215,7 @@ class _ProblemOutput:
             print("WARNING: '", file_format, "' doens't match to any available file format")
             print("Specified output ignored")
             print("List of available file format: ", _available_format)
-        
+                
         for i,res in enumerate(output_list):
             output_list[i] = res = res.lower()
             if res not in _available_output:
@@ -223,7 +223,9 @@ class _ProblemOutput:
                 print("Specified output ignored")
                 print("List of available output: ", _available_output)
         
-        new_output = {'filename': filename, 'assembly': assemblyID, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
+        if isinstance(assemb, str): assemb = AssemblyBase.GetAll()[assemb]     
+        
+        new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)
 
     def SaveResults(self, pb, comp_output=None):
@@ -238,7 +240,7 @@ class _ProblemOutput:
             output_type = output['type'] #'Node', 'Element' or 'GaussPoint'
             position = output['position']
             
-            assemb = AssemblyBase.GetAll()[output['assembly']]               
+            assemb = output['assembly']
             # material = assemb.GetWeakForm().GetConstitutiveLaw()
             
             if comp_output is None:
