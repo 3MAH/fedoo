@@ -22,7 +22,7 @@
 #time
 1
 #Consigne
-E 0.02
+S 0.02
 S 0 S 0
 S 0 S 0 S 0
 #Consigne_T
