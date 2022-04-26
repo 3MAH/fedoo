@@ -7,7 +7,6 @@ source:
   
 build:
   noarch: python
-  script: pip install .
 
 requirements:
   host:
