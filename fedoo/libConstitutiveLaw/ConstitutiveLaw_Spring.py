@@ -27,13 +27,14 @@ class Spring(ConstitutiveLaw):
     #Use with WeakForm.InterfaceForce
     def __init__(self, Kx=0, Ky = 0, Kz = 0, ID=""):        
         ConstitutiveLaw.__init__(self, ID) # heritage        
-        self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}             
+        self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}  
+        self._InterfaceStress = 0           
 
     def GetRelativeDisp(self):
         return self.__Delta
 
     def GetInterfaceStress(self):
-        return self.__InterfaceStress
+        return self._InterfaceStress
 
     def GetTangentMatrix(self):
         return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]     
@@ -73,7 +74,7 @@ class Spring(ConstitutiveLaw):
         #dtime not used for this law
         
         displacement = pb.GetDoFSolution()
-        if displacement is 0: self.__InterfaceStress = self.__Delta = 0
+        if displacement is 0: self._InterfaceStress = self.__Delta = 0
         else:
             op_delta = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
             self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in op_delta]
@@ -88,7 +89,7 @@ class Spring(ConstitutiveLaw):
         #Delta is the relative displacement vector
         K = self.GetK()
         dim = len(Delta)
-        self.__InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
+        self._InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
     
 
 

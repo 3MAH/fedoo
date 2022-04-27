@@ -61,6 +61,9 @@ if USE_SIMCOON:
                
         def GetStatev(self):
             return self.statev.T
+
+        def GetWm(self):
+            return self.Wm.T
         
         def GetCurrentStress(self): #same as GetPKII (used for small def)
             print('Warning : GetCurrentStress will be removed in future versions. Use GetStress instead')

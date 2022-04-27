@@ -65,19 +65,21 @@ class AssemblyBase:
 
 class AssemblySum(AssemblyBase):
    
-    def __init__(self, ListAssembly, ID="", **kargs):        
-        for i,assembly in enumerate(ListAssembly):
-            if isinstance(assembly, str): ListAssembly[i] = AssemblyBase.GetAll()[assembly]                                
+    def __init__(self, list_assembly, ID="", **kargs):        
+        for i,assembly in enumerate(list_assembly):
+            if isinstance(assembly, str): list_assembly[i] = AssemblyBase.GetAll()[assembly]                                
             
-        self.__ListAssembly = ListAssembly
-                
-#        assert assembly1.GetMesh().GetNumberOfNodes() == assembly2.GetMesh().GetNumberOfNodes(), \
-#                    "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+        assert len(set([a.space for a in list_assembly])) == 1, \
+            "Sum of assembly are possible only if all assembly are associated to the same modeling space"
+        assert len(set([a.GetMesh().GetNumberOfNodes() for a in list_assembly])) == 1,\
+            "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+
+        self.__ListAssembly = list_assembly
                     
-        self.__Mesh = ListAssembly[0].GetMesh()
+        self.__Mesh = list_assembly[0].GetMesh()
 
         if ID == "":
-            ID = '_'.join([assembly.GetID() for assembly in ListAssembly])    
+            ID = '_'.join([assembly.GetID() for assembly in list_assembly])    
             
         self.__reload = kargs.pop('reload', 'all')                      
         

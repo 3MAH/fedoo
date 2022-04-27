@@ -18,7 +18,8 @@ _available_output = ['pkii',   'pk2',   'kirchoff',   'kirchhoff',   'cauchy',
                       'pkii_pdir1', 'pk2_pdir1', 'kirchoff_pdir1', 'kirchhoff_pdir1', 'cauchy_pdir1', 'stress_pdir1',
                       'pkii_pdir2', 'pk2_pdir2', 'kirchoff_pdir2', 'kirchhoff_pdir2', 'cauchy_pdir2', 'stress_pdir2',
                       'pkii_pdir3', 'pk2_pdir3', 'kirchoff_pdir3', 'kirchhoff_pdir3', 'cauchy_pdir3', 'stress_pdir3',
-                      'disp', 'rot', 'temp', 'strain', 'statev', 'stress', 'stress_vm', 'external_force', 'internal_force', 'internal_force_global']
+                      'disp', 'rot', 'temp', 'strain', 'statev', 'stress', 'stress_vm', 'external_force', 
+                      'wm', 'internal_force', 'internal_force_global']
 _available_format = ['vtk', 'msh', 'txt', 'npy', 'npz', 'npz_compressed']
 
 _label_dict = {'pkii':'PKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
@@ -182,6 +183,11 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
                 data = material.GetStatev().T                    
                 data = assemb.ConvertData(data, None, output_type)
                 label_data = 'State_Variables'
+            
+            elif res in ['wm']:
+                data = material.GetWm().T                    
+                data = assemb.ConvertData(data, None, output_type)
+                label_data = 'Wm'
             
             elif res == 'internal_force':
                 data = assemb.GetInternalForces(pb.GetDoFSolution(), 'local')

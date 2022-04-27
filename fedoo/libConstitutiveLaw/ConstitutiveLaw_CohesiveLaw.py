@@ -53,6 +53,7 @@ class CohesiveLaw(Spring):
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 
         self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}                          
+        self._InterfaceStress = 0
     
     def GetTangentMatrix(self):
         Umd = 1 - self.__DamageVariable
@@ -192,7 +193,7 @@ class CohesiveLaw(Spring):
 
         displacement = pb.GetDoFSolution()
         
-        if displacement is 0: self.__InterfaceStress = self.__Delta = 0
+        if displacement is 0: self._InterfaceStress = self.__Delta = 0
         else:
             #Delta is the relative displacement 
             op_delta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
@@ -203,7 +204,7 @@ class CohesiveLaw(Spring):
             self.ComputeInterfaceStress(self.__Delta)        
 
             # K = self.__ChangeBasisK(self.GetK())
-            # self.__InterfaceStress = [sum([self.__Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects in 3D  
+            # self._InterfaceStress = [sum([self.__Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects in 3D  
 
     # def GetInterfaceStress(self, Delta, time = None): 
     #     #Delta is the relative displacement vector

@@ -12,7 +12,7 @@ class ConstitutiveLaw:
         self.__localFrame = None
         self._dimension = None #str or None
 
-        ConstitutiveLaw.__dic[self.__ID] = self
+        ConstitutiveLaw.__dic[self.__ID] = self        
 
     def GetID(self):
         return self.__ID
@@ -88,6 +88,9 @@ class Mechanical3D(ConstitutiveLaw):
         return NotImplemented
            
     def GetStatev(self):
+        return NotImplemented
+
+    def GetWm(self):
         return NotImplemented
 
     def GetStress(self, **kargs): #same as GetPKII (used for small def)

@@ -70,7 +70,6 @@ class InternalForce(WeakForm):
         
 
     def Update(self, assembly, pb, dtime):
-        self.__ConstitutiveLaw.Update(assembly, pb, dtime, self.__nlgeom)                           
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
         # self.UpdateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
         

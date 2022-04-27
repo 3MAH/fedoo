@@ -49,9 +49,6 @@ class InterfaceForce(WeakForm):
         #function called when the problem is updated (NR loop or time increment)
         #- No nlgeom effect for now
         #- Change in constitutive law (internal variable)
-        
-        self.__ConstitutiveLaw.Update(assembly, pb, dtime)                           
-        
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetInterfaceStress())
         
         if self.__nlgeom: #need to be modifed for nlgeom

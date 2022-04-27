@@ -472,6 +472,7 @@ class Assembly(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
+        self._weakForm.UpdateConstitutiveLaw(self, pb, dtime)
         self._weakForm.Update(self, pb, dtime)
         self.ComputeGlobalMatrix(compute)
 

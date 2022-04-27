@@ -72,7 +72,7 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')    
+Problem.AddOutput('results/bendingPlastic', 'Assembling', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev', 'wm'], output_type='Node', file_format ='vtk')    
 Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
@@ -81,17 +81,17 @@ tmax = 1
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
+Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter, ID = "disp")
 
 Problem.NLSolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.05)
 
 ################### step 2 ################################
-bc.Remove()
+Problem.RemoveBC("disp")
 #We set initial condition to the applied force to relax the load
 F_app = Problem.GetExternalForces('DispY')[nodes_topCenter]
-bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
+Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.05)
 
 print(time()-start)
 
