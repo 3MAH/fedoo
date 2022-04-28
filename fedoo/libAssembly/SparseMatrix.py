@@ -14,7 +14,7 @@ from numbers import Number
 
 class _BlocSparse():
     
-    def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None, assumeSymmetric = False):
+    def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None, assume_sym = False):
         #savedBlocStructure are data from similar structured blocsparse that avoid time consuming operations
         self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
         if savedBlocStructure is None: 
@@ -42,7 +42,7 @@ class _BlocSparse():
         self.nbBlocRow = nbBlocRow
         self.nbBlocCol = nbBlocCol
         self.nbpg=nbpg
-        self.__assumeSymmetric = assumeSymmetric
+        self.__assume_sym = assume_sym
         
 #    def addToBloc(self, Mat, rowBloc, colBloc):
 #        #Mat should be a scipy matrix using the csr format
@@ -59,8 +59,8 @@ class _BlocSparse():
         #A and B should be scipy matrix using the csr format and with the same number of column per row for each row
         #A and coef may be a list. In this case compute sum([coef[ii]*A[ii] for ii in range(len(A))]).T @ B
         
-        if self.__assumeSymmetric and rowBloc > colBloc:
-            #if self.__assumeSymetric, only compute bloc belonging to inf triangular matrix
+        if self.__assume_sym and rowBloc > colBloc:
+            #if self.__assume_sym, only compute bloc belonging to inf triangular matrix
             return
         
         nb_pg = self.nbpg
@@ -140,7 +140,7 @@ class _BlocSparse():
         # start=time.time()
         method =1
         if method == 0:
-            assert not(self.__assumeSymmetric), "method = 0 for sparse matrix building can't be used with the assumeSymmetric option. Contact developer" 
+            assert not(self.__assume_sym), "method = 0 for sparse matrix building can't be used with the assume_sym option. Contact developer" 
             ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
             ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
             ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
@@ -182,7 +182,7 @@ class _BlocSparse():
                 np.cumsum(nb_nnz_row, out = self.indptr_csr[1:])
 
             if method == 1:
-                if self.__assumeSymmetric == True: 
+                if self.__assume_sym == True: 
                     self.data = [[self.data[i][j] if i<=j else self.data[j][i].transpose(0,2,1) for j in range(self.nbBlocCol)] for i in range(self.nbBlocRow)]
                 
                 blocks = [[sparse.csr_matrix( (self.Matrix_convertCOOtoCSR@self.data[i][j].ravel(), self.indices_csr, self.indptr_csr), shape=(self.blocShape[0],self.blocShape[1]), copy = False) \
@@ -191,7 +191,7 @@ class _BlocSparse():
                 Res = sparse.bmat(blocks, format ='csr')
             
             elif method == 2:
-                assert not(self.__assumeSymmetric), "method = 2 for sparse matrix building can't be used with the assumeSymmetric option. Contact developer" 
+                assert not(self.__assume_sym), "method = 2 for sparse matrix building can't be used with the assume_sym option. Contact developer" 
                 data_coo = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
                 Res = sparse.csr_matrix((self.Matrix_convertCOOtoCSR @ data_coo, self.indices_csr, self.indptr_csr), shape =  (self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol)) 
         

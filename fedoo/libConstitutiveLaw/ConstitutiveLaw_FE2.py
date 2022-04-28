@@ -65,6 +65,9 @@ class FE2(Mechanical3D):
 
     #     return np.squeeze(self.L.transpose(1,2,0)) 
     
+    def GetWm(self):
+        return self.__Wm
+    
     def GetCurrentGradDisp(self):
         if self.__currentGradDisp is 0: return 0
         else: return self.__currentGradDisp

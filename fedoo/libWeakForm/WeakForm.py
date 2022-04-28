@@ -9,14 +9,16 @@ class WeakForm:
     def __init__(self, ClID = "", space=None):
         assert isinstance(ClID, str) , "An ID must be a string" 
         self.__ID = ClID
-        self.assumeSymmetric = False #use to accelerate assembly if the weak form may be considered as symmetric
         if space is None: 
             space = ModelingSpace.GetActive()
         elif isinstance(space, str):
             space = ModelingSpace.GetAll()[space]
         self.__space = space
+        self.assembly_options = {}
+        #self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
         
         WeakForm.__dic[self.__ID] = self
+        
 
     def GetID(self):
         return self.__ID

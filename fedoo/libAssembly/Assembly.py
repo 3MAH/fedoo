@@ -57,10 +57,7 @@ class Assembly(AssemblyBase):
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
         self.__factorizeOp = True #option for debug purpose (should be set to True for performance)
         
-        try:
-            self.assumeSymmetric = weakForm.assumeSymmetric
-        except:
-            self.assumeSymmetric = False
+        self.assume_sym = weakForm.assembly_options.get('assume_sym', False)
 
     def ComputeGlobalMatrix(self, compute = 'all'):
         """
@@ -139,14 +136,14 @@ class Assembly(AssemblyBase):
                 MM = sparse.bmat(blocks, format ='csr')
                 
             else:
-                MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure, assumeSymmetric = self.assumeSymmetric)
+                MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure, assume_sym = self.assume_sym)
                 listMatvir = listCoef_PG = None
 
                 for ii in range(len(wf.op)):
                     if compute == 'matrix' and wf.op[ii] is 1: continue
                     if compute == 'vector' and wf.op[ii] is not 1: continue
                     
-                    if wf.op[ii] is not 1 and self.assumeSymmetric and wf.op[ii].u < wf.op_vir[ii].u:
+                    if wf.op[ii] is not 1 and self.assume_sym and wf.op[ii].u < wf.op_vir[ii].u:
                         continue                
                 
                     if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 

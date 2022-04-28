@@ -46,7 +46,7 @@ Problem.NonLinearStatic("Assembly")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
+Problem.AddOutput('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
 Problem.AddOutput('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
 
 #output result for a random micro cell (here for the 5th integration point)

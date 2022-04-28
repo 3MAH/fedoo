@@ -41,7 +41,7 @@ class InternalForce(WeakForm):
         self.__InitialStressTensor = 0
         self.__InitialGradDispTensor = None
         self.__nlgeom = nlgeom #geometric non linearities
-        self.assumeSymmetric = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
+        self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
         
         if nlgeom:
             GradOperator = self.space.op_grad_u()
