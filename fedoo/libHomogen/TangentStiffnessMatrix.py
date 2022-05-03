@@ -42,6 +42,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True):
         remove_strain = False
     else:
         StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.AddSetOfNodes(StrainNodes, '_StrainNodes')
         remove_strain = True
 
     #Type of problem
@@ -50,6 +51,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True):
     C = GetTangentStiffness(pb,meshperio)
     if remove_strain:
        mesh.RemoveNodes(StrainNodes)
+       mesh.RemoveSetOfNodes('_StrainNodes')
        
     del pb.GetAll()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
 
@@ -119,8 +121,8 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
     DofFree = pb_post_tt._Problem__DofFree
     MatCB = pb_post_tt._Problem__MatCB
 
-    typeBC = 'Dirichlet'
-    # typeBC = 'Neumann'
+    # typeBC = 'Dirichlet' #doesn't work with meshperio = False
+    typeBC = 'Neumann'
     for i in range(6):
         pb_post_tt.RemoveBC("_Strain")
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
@@ -144,16 +146,17 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
         DStrain.append(np.array([pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
                                   pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))
 
+    if typeBC == "Neumann":
+        C = np.linalg.inv(np.array(DStrain).T)
+    else:
+        
         F = MatCB.T @ pb_post_tt.GetA() @ MatCB @ pb_post_tt.GetX()[DofFree]
 
         F = F.reshape(3, -1)
         stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
 
         DStress.append(stress)
-
-    if typeBC == "Neumann":
-        C = np.linalg.inv(np.array(DStrain).T)
-    else:
+        
         C = np.array(DStress).T
         
     return C
@@ -166,7 +169,12 @@ def GetTangentStiffness(pb = None, meshperio = True):
     elif isinstance(pb, str):
         pb = ProblemBase.GetAll()[pb]
     mesh = pb.GetMesh()
-    crd = mesh.GetNodeCoordinates()[:-2]
+    
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        crd = mesh.GetNodeCoordinates()[:-2]
+    else: 
+        crd = mesh.GetNodeCoordinates()
+    
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
     zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
@@ -179,12 +187,17 @@ def GetTangentStiffness(pb = None, meshperio = True):
     DStrain = []
     DStress = []
     
-    StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
-    
-    # ElasticIsotrop(1e5,0.3,'none') #not used because we will replace the assembled stiffness matrix
-    # InternalForce("none") #not used 
-    # Assembly("none", pb.GetMesh(), pb.GetMesh().GetElementShape(), ID="Assembling_post_tt")
-    # pb_post_tt = Static("Assembling_post_tt", ID = "_perturbation")
+    if '_StrainNodes' in mesh.ListSetOfNodes():
+        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        remove_strain = False
+        A = pb.GetA()
+    else:
+        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
+        remove_strain = True
+        A = pb.GetA().copy()
+        A.resize(np.array(pb.GetA().shape)+6)
+    # StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
     
     if "_perturbation" not in pb.GetAll():
         #initialize perturbation problem 
@@ -209,8 +222,8 @@ def GetTangentStiffness(pb = None, meshperio = True):
     
     pb_post_tt.SetA(pb.GetA())
     
-    typeBC = 'Dirichlet'
-    # typeBC = 'Neumann'
+    # typeBC = 'Dirichlet' #doesn't work with meshperio = False
+    typeBC = 'Neumann'
     
     pb_post_tt.ApplyBoundaryCondition()
     
@@ -236,8 +249,13 @@ def GetTangentStiffness(pb = None, meshperio = True):
         pb_post_tt.Solve()
         X = pb_post_tt.GetX()  # alias    
         DStrain.append(np.array([pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))
+                                  pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
+        
+        pb_post_tt.RemoveBC("_Strain")
     
+    if typeBC == "Neumann":
+        C = np.linalg.inv(np.array(DStrain).T)
+    else:
         F = MatCB.T @ pb_post_tt.GetA() @ MatCB @ pb_post_tt.GetX()[DofFree]
     
         F = F.reshape(3, -1)
@@ -245,13 +263,11 @@ def GetTangentStiffness(pb = None, meshperio = True):
     
         DStress.append(stress)
         
-        pb_post_tt.RemoveBC("_Strain")
-
-    
-    if typeBC == "Neumann":
-        C = np.linalg.inv(np.array(DStrain).T)
-    else:
         C = np.array(DStress).T
+                
+    if remove_strain:
+       mesh.RemoveNodes(StrainNodes)
+       mesh.RemoveSetOfNodes('_StrainNodes')
         
     return C
 

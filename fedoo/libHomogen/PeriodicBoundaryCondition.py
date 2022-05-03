@@ -36,7 +36,9 @@ if USE_SIMCOON:
             VarCD = [pb.space.variable_rank(v) for v in VarCD]
         
         coords_nodes = mesh.GetNodeCoordinates()
-        NodeCD_int32 = [n.item() for n in NodeCD]
+        # NodeCD_int32 = [n.item() for n in NodeCD]
+        NodeCD_int32 = [n for n in NodeCD]
+        
         list_nodes = sim.nonperioMPC(coords_nodes, NodeCD_int32, nNeighbours, powInter)
             
         for eq_list in list_nodes:
