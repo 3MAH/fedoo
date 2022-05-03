@@ -42,6 +42,7 @@ class ElastoPlasticity(Mechanical3D):
         self.__TangeantModuli = None
         
         self.__tol = 1e-6 #tolerance of Newton Raphson used to get the updated plasticity state (constutive law alogorithm)    
+        self.nlgeom = False #will be updated with the Initialize function
 
     def GetYoungModulus(self):
         return self.__YoungModulus
@@ -190,13 +191,14 @@ class ElastoPlasticity(Mechanical3D):
         self.__currentSigma = 0 #lissStressTensor object describing the last computed stress (GetStress method)
         self.__TangeantModuli = self.GetHelas()
 
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
         if self._dimension is None:
             self._dimension = assembly.space.GetDimension()     
         self.NewTimeIncrement()
+        self.nlgeom = nlgeom
 
     
-    def Update(self,assembly, pb, time, nlgeom):
+    def Update(self,assembly, pb, time):
         displacement = pb.GetDoFSolution()
         
         if displacement is 0: 
@@ -205,7 +207,7 @@ class ElastoPlasticity(Mechanical3D):
         else:
             self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
             GradValues = self.__currentGradDisp
-            if nlgeom == False:
+            if self.nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 
                 Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
             else:            

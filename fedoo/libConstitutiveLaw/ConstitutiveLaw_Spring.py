@@ -66,11 +66,11 @@ class Spring(ConstitutiveLaw):
             
         return K
 
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+       #nlgeom not implemented
        pass
 
-    def Update(self,assembly, pb, dtime, nlgeom=True):            
-        #nlgeom not implemented
+    def Update(self,assembly, pb, dtime):            
         #dtime not used for this law
         
         displacement = pb.GetDoFSolution()

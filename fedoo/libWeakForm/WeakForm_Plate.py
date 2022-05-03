@@ -77,7 +77,8 @@ class Plate(WeakForm):
         return self.__ShellConstitutiveLaw
 
     def Update(self, assembly, pb, dtime):
-        self.__ShellConstitutiveLaw.Update(assembly, pb, dtime, nlgeom = False)    
+        pass
+        # self.__ShellConstitutiveLaw.Update(assembly, pb, dtime)    
 
 class Plate_RI(Plate):
 

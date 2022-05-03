@@ -1,6 +1,6 @@
 # base class
 from fedoo.libUtil.ModelingSpace import ModelingSpace
-
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import ListConstitutiveLaw
 
 class WeakForm:
 
@@ -15,9 +15,12 @@ class WeakForm:
             space = ModelingSpace.GetAll()[space]
         self.__space = space
         self.assembly_options = {}
-        #self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
+        #possible options : 
+        # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
+        # * 'nb_pg' - set the default nb_pg
+        # * 'mat_lumping' - matrix lumping if set to True
         
-        WeakForm.__dic[self.__ID] = self
+        if ClID != "":WeakForm.__dic[self.__ID] = self
         
 
     def GetID(self):
@@ -30,7 +33,7 @@ class WeakForm:
     def GetConstitutiveLaw(self):
         #no constitutive law by default
         pass
-    
+            
     def Initialize(self, assembly, pb, initialTime=0.):
         #function called at the very begining of the resolution
         pass
@@ -39,20 +42,7 @@ class WeakForm:
         #function called at the begining of a new time increment
         #For now, used only to inform the weak form the the time step for the next increment.
         pass
-    
-    def UpdateConstitutiveLaw(self,assembly, pb, dtime):   
-        if hasattr(self,'nlgeom'): nlgeom = self.nlgeom
-        else: nlgeom=False
-        constitutivelaw = self.GetConstitutiveLaw()
-        
-        if constitutivelaw is not None:
-            if isinstance(constitutivelaw, list):
-                for cl in constitutivelaw:
-                    cl.Update(assembly, pb, dtime, nlgeom)
-            else:
-                constitutivelaw.Update(assembly, pb, dtime, nlgeom)
 
-    
     def Update(self, assembly, pb, dtime):
         #function called when the problem is updated (NR loop or time increment)
         #- New initial Stress
@@ -71,7 +61,7 @@ class WeakForm:
 
     def Reset(self):
         #function called if all the problem history is reseted.
-        pass
+        pass           
     
     def copy(self):
         #function to copy a weakform at the initial state
@@ -86,16 +76,16 @@ class WeakForm:
         return WeakForm.__dic
     
 class WeakFormSum(WeakForm):
-
-    __dic = {}
-
+    
     def __init__(self, list_weakform, ID=""):    
         assert len(set([a.space for a in list_weakform])) == 1, \
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
         WeakForm.__init__(self, ID, space = list_weakform[0].space)        
         
-        self.__constitutivelaw = set([a.GetConstitutiveLaw() for a in list_weakform])
+        self.__constitutivelaw = ListConstitutiveLaw([a.GetConstitutiveLaw() for a in list_weakform])
         self.__list_weakform = list_weakform
+        
+        
         
     def GetConstitutiveLaw(self):
         #return a list of constitutivelaw
@@ -132,13 +122,8 @@ class WeakFormSum(WeakForm):
         raise NotImplementedError()
 
     @property
-    def space(self):
-        return self.__space
-        
-    @staticmethod
-    def GetAll():
-        return WeakForm.__dic
-    
+    def list_weakform(self):
+        return self.__list_weakform
         
 
 

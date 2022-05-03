@@ -33,7 +33,7 @@ class ShellBase(ConstitutiveLaw):
     def GetShellRigidityMatrix_FI(self):
         raise NameError('"GetShellRigidityMatrix_FI" not implemented, contact developer.')
 
-    def Update(self,assembly, pb, dtime, nlgeom):
+    def Update(self,assembly, pb, dtime):
         # disp = pb.GetDisp()
         # rot = pb.GetRot()
         U = pb.GetDoFSolution()

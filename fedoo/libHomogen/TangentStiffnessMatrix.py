@@ -12,7 +12,7 @@ import numpy as np
 import os
 import time
 
-def GetHomogenizedStiffness(assemb):
+def GetHomogenizedStiffness(assemb,meshperio=True):
 
     #Definition of the set of nodes for boundary conditions
     if isinstance(assemb, str):
@@ -20,7 +20,6 @@ def GetHomogenizedStiffness(assemb):
     mesh = assemb.GetMesh()
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        crd = mesh.GetNodeCoordinates()[:-2]
         crd = mesh.GetNodeCoordinates()[:-2]
     else: 
         crd = mesh.GetNodeCoordinates()
@@ -48,7 +47,7 @@ def GetHomogenizedStiffness(assemb):
     #Type of problem
     pb = Static(assemb)
     
-    C = GetTangentStiffness(pb.GetID())
+    C = GetTangentStiffness(pb,meshperio)
     if remove_strain:
        mesh.RemoveNodes(StrainNodes)
        
@@ -160,10 +159,12 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
     return C
 
 
-def GetTangentStiffness(ProblemID = None, meshperio = True):
+def GetTangentStiffness(pb = None, meshperio = True):
     #################### PERTURBATION METHODE #############################
-    if ProblemID is None: ProblemID = ProblemBase.GetActive().GetID()
-    pb = ProblemBase.GetAll()[ProblemID]
+    if pb is None: 
+        pb = ProblemBase.GetActive()
+    elif isinstance(pb, str):
+        pb = ProblemBase.GetAll()[pb]
     mesh = pb.GetMesh()
     crd = mesh.GetNodeCoordinates()[:-2]
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])

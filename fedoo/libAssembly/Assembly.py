@@ -1,6 +1,6 @@
 #simcoon compatible
 
-from fedoo.libAssembly.AssemblyBase import AssemblyBase
+from fedoo.libAssembly.AssemblyBase import AssemblyBase, AssemblySum
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.libMesh.Mesh import Mesh
 from fedoo.libElement import *
@@ -15,7 +15,14 @@ import numpy as np
 from numbers import Number 
 import time
 
-def Create(weakForm, mesh="", elementType="", ID="", **kargs):        
+def Create(weakForm, mesh="", elementType="", ID="", **kargs): 
+    if isinstance(weakForm, str):
+        weakForm = WeakForm.GetAll()[weakForm]
+    if hasattr(weakForm, 'list_weakform'):
+        #WeakFormSum object
+        list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakForm.list_weakform]
+        return AssemblySum(list_assembly, ID, **kargs)       
+    
     return Assembly(weakForm, mesh, elementType, ID, **kargs)
                
 class Assembly(AssemblyBase):
@@ -31,6 +38,10 @@ class Assembly(AssemblyBase):
         if isinstance(weakForm, str):
             weakForm = WeakForm.GetAll()[weakForm]
         
+        if hasattr(weakForm, 'list_weakform'):
+            #WeakFormSum object
+            raise NameError('Assembly associated to WeakFormSum object can only be created using the Create function')
+
         if isinstance(mesh, str):
             mesh = Mesh.GetAll()[mesh]
             
@@ -50,14 +61,18 @@ class Assembly(AssemblyBase):
         self.__TypeOfCoordinateSystem = self._GetTypeOfCoordinateSystem()
 
         self.__nb_pg = kargs.pop('nb_pg', None)
-        if self.__nb_pg is None: self.__nb_pg = GetDefaultNbPG(elementType, mesh)
-
+        if self.__nb_pg is None: 
+            self.__nb_pg = weakForm.assembly_options.get('nb_pg', GetDefaultNbPG(elementType, mesh))
+        
+        self.assume_sym = weakForm.assembly_options.get('assume_sym', False)
+        self.mat_lumping = weakForm.assembly_options.get('mat_lumping', False)
+        
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
         #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
         self.__factorizeOp = True #option for debug purpose (should be set to True for performance)
         
-        self.assume_sym = weakForm.assembly_options.get('assume_sym', False)
+
 
     def ComputeGlobalMatrix(self, compute = 'all'):
         """
@@ -204,11 +219,11 @@ class Assembly(AssemblyBase):
                         if listMatvir is None:
                             for i in range(len(Mat)):
                                 for j in range(len(Matvir)):
-                                    MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+                                    MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i], self.mat_lumping)
                         else:
                             for i in range(len(Mat)):
                                 for j in range(len(Matvir)):
-                                    MM.addToBlocATB(listMatvir[j], Mat[i], [(coef[i]*coef_vir[j]) * coef_PG for coef_PG in listCoef_PG], var_vir[j], var[i])                        
+                                    MM.addToBlocATB(listMatvir[j], Mat[i], [(coef[i]*coef_vir[j]) * coef_PG for coef_PG in listCoef_PG], var_vir[j], var[i], self.mat_lumping)                        
                             listMatvir = None
                             listCoef_PG = None
                         
@@ -447,13 +462,29 @@ class Assembly(AssemblyBase):
         return Assembly.__saveMatrixChangeOfBasis[mesh]
 
 
-
+    # def InitializeConstitutiveLaw(self, assembly, pb, initialTime=0.):
+    #     if hasattr(self,'nlgeom'): nlgeom = self.nlgeom
+    #     else: nlgeom=False
+    #     constitutivelaw = self.GetConstitutiveLaw()
+        
+    #     if constitutivelaw is not None:
+    #         if isinstance(constitutivelaw, list):
+    #             for cl in constitutivelaw:
+    #                 cl.Initialize(assembly, pb, initialTime, nlgeom)
+    #         else:
+    #             constitutivelaw.Initialize(assembly, pb, initialTime, nlgeom)
+ 
     def Initialize(self, pb, initialTime=0.):
         """
         Initialize the associated weak form and assemble the global matrix with the elastic matrix
         Parameters: 
             - initialTime: the initial time        
-        """
+        """        
+        if self._weakForm.GetConstitutiveLaw() is not None:
+            if hasattr(self._weakForm,'nlgeom'): nlgeom = self._weakForm.nlgeom
+            else: nlgeom=False
+            self._weakForm.GetConstitutiveLaw().Initialize(self, pb, initialTime, nlgeom)
+        
         self._weakForm.Initialize(self, pb, initialTime)
                 
     def InitTimeIncrement(self, pb, dtime):
@@ -469,7 +500,8 @@ class Assembly(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        self._weakForm.UpdateConstitutiveLaw(self, pb, dtime)
+        if self._weakForm.GetConstitutiveLaw() is not None:
+            self._weakForm.GetConstitutiveLaw().Update(self, pb, dtime)
         self._weakForm.Update(self, pb, dtime)
         self.ComputeGlobalMatrix(compute)
 
@@ -478,6 +510,8 @@ class Assembly(AssemblyBase):
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
+        if self._weakForm.GetConstitutiveLaw() is not None:
+            self._weakForm.GetConstitutiveLaw().ResetTimeIncrement()
         self._weakForm.ResetTimeIncrement()
         # self.ComputeGlobalMatrix(compute='all')
 
@@ -487,6 +521,8 @@ class Assembly(AssemblyBase):
         Generally used to increase non reversible internal variable
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
+        if self._weakForm.GetConstitutiveLaw() is not None:
+            self._weakForm.GetConstitutiveLaw().NewTimeIncrement()
         self._weakForm.NewTimeIncrement() #should update GetH() method to return elastic rigidity matrix for prediction        
         # self.ComputeGlobalMatrix(compute='matrix')
  
@@ -496,6 +532,8 @@ class Assembly(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         and stored global matrix and vector are deleted
         """
+        if self._weakForm.GetConstitutiveLaw() is not None:
+            self._weakForm.GetConstitutiveLaw().Reset()
         self._weakForm.Reset()    
         self.deleteGlobalMatrix()
 

@@ -25,7 +25,7 @@ class ElasticAnisotropic(Mechanical3D):
 
         self.__H = H
         self.__currentSigma = None
-        self.__currentGradDisp = None               
+        self.__currentGradDisp = None            
     
     def GetTangentMatrix(self):
         return self.__H
@@ -65,11 +65,12 @@ class ElasticAnisotropic(Mechanical3D):
     #     return sigma # list de 6 objets de type OpDiff
        
     
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
         if self._dimension is None:   
             self._dimension = assembly.space.GetDimension()
+        self.nlgeom = nlgeom
     
-    def Update(self,assembly, pb, dtime, nlgeom):
+    def Update(self,assembly, pb, dtime):
         displacement = pb.GetDoFSolution()
         
         if displacement is 0: 
@@ -79,7 +80,7 @@ class ElasticAnisotropic(Mechanical3D):
             self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
 
             GradValues = self.__currentGradDisp
-            if nlgeom == False:
+            if self.nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 
                 Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
             else:            

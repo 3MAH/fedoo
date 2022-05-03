@@ -1,4 +1,4 @@
-from fedoo.libWeakForm.WeakForm   import *
+from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 
 class InternalForce(WeakForm):
@@ -60,41 +60,15 @@ class InternalForce(WeakForm):
         else: self.__NonLinearStrainOperatorVirtual = 0                     
         
     def UpdateInitialStress(self,InitialStressTensor):                                                
-        self.__InitialStressTensor = InitialStressTensor       
+        self.__InitialStressTensor = InitialStressTensor
 
     def GetInitialStress(self):                                                
         return self.__InitialStressTensor 
-        
-    def Initialize(self, assembly, pb, initialTime = 0.):
-        self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)
-        
 
     def Update(self, assembly, pb, dtime):
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
         # self.UpdateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
-        
-        
-        # #### DEBUG ONLY
-        # # # print(self.__ConstitutiveLaw.GetPKII())
-        # # # print(self.__ConstitutiveLaw.GetKirchhoff())
-        # # # print(self.__ConstitutiveLaw.etot)
-        # # # print(self.__ConstitutiveLaw.Detot)
-        # # # print('Lt: ', self.__ConstitutiveLaw.Lt[0][1][1])
-        # print('PKII: ', self.__ConstitutiveLaw.GetPKII()[1][0])
-        # print('Kirch: ', self.__ConstitutiveLaw.GetKirchhoff()[1][0])
-        # print('Cauchy ', self.__ConstitutiveLaw.GetCauchy()[1][0])
-        
-        # # print('Eps: ', self.__ConstitutiveLaw.etot[0][1]+self.__ConstitutiveLaw.Detot[0][1], 'PKII: ', self.__ConstitutiveLaw.GetPKII()[1][0])
-        # crd = assembly.GetMesh().GetNodeCoordinates() + pb.GetDisp().T
-        # import numpy as np
-        # S = np.linalg.norm(crd[1]-crd[0]) * np.linalg.norm(crd[4]-crd[0])
-        # F = assembly.GetExternalForces(pb.GetX())
-        # print(np.sum(F[[0,1,4,5]], axis = 0)[1]/S)
-        # # print('Surface: ', S)
-        
-        # # # print('GradU: ', self.__ConstitutiveLaw.GetCurrentGradDisp())
-        ##### FIN DEBUG ONLY
-        # self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
+                        
         if self.__nlgeom:
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
@@ -103,13 +77,10 @@ class InternalForce(WeakForm):
 
 
     def Reset(self):
-        self.__ConstitutiveLaw.Reset()
         self.__InitialStressTensor = 0
         self.__InitialGradDispTensor = None
 
-    def ResetTimeIncrement(self):
-        self.__ConstitutiveLaw.ResetTimeIncrement()
-        
+    def ResetTimeIncrement(self):       
         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
         if self.__nlgeom:
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
@@ -117,7 +88,7 @@ class InternalForce(WeakForm):
             self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
         
     def NewTimeIncrement(self):
-        self.__ConstitutiveLaw.NewTimeIncrement()
+        pass
         #no need to update Initial Stress because the last computed stress remained unchanged
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):

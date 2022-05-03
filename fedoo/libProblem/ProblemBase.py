@@ -148,9 +148,14 @@ class ProblemBase:
             self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID, self.space))
 
 
-    def GetBC(self):        
-        """Return the list of Boundary Conditions"""
-        return self._BoundaryConditions
+    def GetBC(self, ID=None):        
+        """
+        Return the list of Boundary Conditions
+        if an ID is specified (str value), return a list of BC whith the specified ID
+        """
+        if ID is None: return self._BoundaryConditions
+        else: return [bc for bc in self._BoundaryConditions if bc.GetID() == ID]          
+        
 
     def RemoveBC(self,ID=None):
         """

@@ -42,7 +42,8 @@ if USE_SIMCOON:
             #self.__mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
             #self.__mask[i] contains the column indice for the line i            
             self.__mask = None  #No mask defined
-                        
+            self.__props = props # keep this line until future simcoon release (where copy will be avoided) 
+            
             ### initialization of the simcoon UMAT
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
             # sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), statev, corate, ndi, nshr, 0.)
@@ -158,7 +159,7 @@ if USE_SIMCOON:
             # self.__F0 = None
     
         
-        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):      
+        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):      
             
             if  self._dimension is None:
                 self._dimension = assembly.space.GetDimension()
@@ -173,7 +174,7 @@ if USE_SIMCOON:
                 else: statev = assembly.ConvertData(statev).T
             
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
-            
+                        
             if not(nlgeom):
                 if self.umat_name in ['ELISO'] and self.__mask is None:        
                     self.__mask = [[3,4,5] for i in range(3)]
@@ -181,7 +182,7 @@ if USE_SIMCOON:
                 
             self.Run(0.) #Launch the UMAT to compute the elastic matrix               
     
-        def Update(self,assembly, pb, dtime, nlgeom=True):   
+        def Update(self,assembly, pb, dtime):   
             displacement = pb.GetDoFSolution()
 
             #tranpose for compatibility with simcoon

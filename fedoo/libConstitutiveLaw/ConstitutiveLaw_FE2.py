@@ -102,7 +102,8 @@ class FE2(Mechanical3D):
         # self.__F0 = None
 
     
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):              
+    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
+        self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
             nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
             
@@ -188,12 +189,8 @@ class FE2(Mechanical3D):
         pb.BoundaryCondition('Dirichlet','DispY', strain[4][id_pb], [strain_nodes[1]], initialValue = self.__strain[4][id_pb], ID = 'Strain') #EpsXZ
         pb.BoundaryCondition('Dirichlet','DispZ', strain[5][id_pb], [strain_nodes[1]], initialValue = self.__strain[5][id_pb], ID = 'Strain') #EpsYZ
         
-        #pb.ApplyBoundaryCondition()
-        # pb.elastic_prediction
         
-        pb.NLSolve(dt = dtime, dt_min = dtime, tmax = dtime, update_dt = False, ToleranceNR = 0.05, print_info = 0)
-        
-        
+        pb.NLSolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
         
         self.Lt[id_pb]= GetTangentStiffness(pb.GetID())
         
@@ -205,7 +202,7 @@ class FE2(Mechanical3D):
         self.__Wm[:,id_pb] = (1/self._list_volume[id_pb]) * self.list_assembly[id_pb].IntegrateField(Wm_field)
 
 
-    def Update(self,assembly, pb, dtime, nlgeom=True):   
+    def Update(self,assembly, pb, dtime):   
         displacement = pb.GetDoFSolution()
 
         if displacement is 0: 
@@ -215,7 +212,7 @@ class FE2(Mechanical3D):
             self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
 
             grad_values = self.__currentGradDisp
-            if nlgeom == False:
+            if self.nlgeom == False:
                 strain  = [grad_values[i][i] for i in range(3)] 
                 strain += [grad_values[0][1] + grad_values[1][0], grad_values[0][2] + grad_values[2][0], grad_values[1][2] + grad_values[2][1]]
             else:            

@@ -39,6 +39,7 @@ assemb = Assembly.Create("WeakForm", "Domain2", 'tet4', ID="Assembly")
 
 # Type of problem
 Problem.NonLinearStatic("Assembly")
+Problem.SetNewtonRaphsonErrorCriterion("Work")
 
 # Set the desired ouputs at each time step
 # Problem.AddOutput('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
