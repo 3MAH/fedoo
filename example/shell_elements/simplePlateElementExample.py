@@ -24,7 +24,7 @@ saveResults = True
 material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
 ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate')
+mesh = Mesh.RectangleMesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
 
 nodes_left = mesh.GetSetOfNodes('left')
 nodes_right = mesh.GetSetOfNodes('right')

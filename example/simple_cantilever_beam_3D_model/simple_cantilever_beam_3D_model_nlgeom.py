@@ -22,7 +22,7 @@ ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw", nlgeom = True)
 
 #Assembly (print the time required for assembling)
-Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling") 
+assemb = Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling") 
 
 #Type of problem 
 Problem.NonLinearStatic("Assembling")
@@ -54,8 +54,8 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDisp(),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain(), 'Domain', 'GaussPoint', 'Node')
-TensorStress = Assembly.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(), 'Domain', 'GaussPoint', 'Node')
+TensorStrain = assemb.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')
+TensorStress = assemb.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(), 'GaussPoint', 'Node')
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
                                                    
