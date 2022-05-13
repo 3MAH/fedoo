@@ -38,7 +38,6 @@ node_right_center = nodes_right[(mesh.GetNodeCoordinates()[nodes_right,1]**2).ar
 if reduced_integration == False:
     WeakForm.Plate("PlateSection", ID = "WFplate") #by default k=0 i.e. no shear effect
     Assembly.Create("WFplate", "plate", plateElementType, ID="plate")    
-    post_tt_assembly = 'plate'
 else:    
     WeakForm.Plate_RI("PlateSection", ID = "WFplate_RI") #by default k=0 i.e. no shear effect
     Assembly.Create("WFplate_RI", "plate", plateElementType, ID="plate_RI", nb_pg = 1)    
@@ -46,15 +45,14 @@ else:
     WeakForm.Plate_FI("PlateSection", ID = "WFplate_FI") #by default k=0 i.e. no shear effect
     Assembly.Create("WFplate_FI", "plate", plateElementType, ID="plate_FI") 
     
-    Assembly.Sum("plate_RI", "plate_FI", ID = "plate")
-    post_tt_assembly = 'plate_FI'
+    Assembly.Sum("plate_RI", "plate_FI", ID = "plate", assembly_output = 'plate')
 
 
 Problem.Static("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/simplePlate', post_tt_assembly, ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
+Problem.AddOutput('results/simplePlate', 'plate', ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)

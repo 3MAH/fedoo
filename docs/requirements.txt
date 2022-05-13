@@ -1,3 +1,7 @@
 numpy
 scipy
 matplotlib
+simcoon
+pardiso4py
+pandas
+pytest
