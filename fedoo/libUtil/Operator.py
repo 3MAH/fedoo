@@ -119,7 +119,7 @@ class OpDiff:
         self.op = [self.op[i] for i in sortedIndices]
         self.op_vir = [self.op_vir[i] for i in sortedIndices]
         
-        return [intForSort[i] for i in sortedIndices]
+        return [intForSort[i] for i in sortedIndices], sortedIndices
         
 
     def nvar(self):

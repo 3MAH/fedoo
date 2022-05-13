@@ -436,7 +436,7 @@ def GenerateNodes(mesh, N, data, typeGen = 'straight'):
         listNodes = mesh.AddNodes(m.GetNodeCoordinates()[1:-1]+c)
         return np.array([nd1]+list(listNodes)+[nd2])
 
-def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', Sym= True, ndim = None, ID =""):
+def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sym= True, ndim = None, ID =""):
     """
     Create a mesh of a 2D plate with a hole  
 
@@ -466,7 +466,7 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', Sy
     """   
 
     
-    if Sym == True:
+    if sym == True:
         L = Lx/2
         h = Ly/2
         m = Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
@@ -483,20 +483,40 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', Sy
         m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, ID=ID)
         return m
     else: 
-        return NotImplemented
-        # m = Mesh.Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
-        # Edge1 = Mesh.GenerateNodes(m,Nx,(0,1))
-        # Edge2 = Mesh.GenerateNodes(m,Ny,(1,2))
-        # Edge3 = Mesh.GenerateNodes(m,Nx,(2,5))
-        # Edge4 = Mesh.GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
+        L = Lx/2
+        h = Ly/2
+        m = Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
+        Edge1 = GenerateNodes(m,Nx,(0,1))
+        Edge2 = GenerateNodes(m,Ny,(1,2))
+        Edge3 = GenerateNodes(m,Nx,(2,5))
+        Edge4 = GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
         
-        # Edge5 = Mesh.GenerateNodes(m,Nx,(4,3))
-        # Edge6 = Mesh.GenerateNodes(m,Ny,(3,2))
-        # Edge7 = Mesh.GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
+        Edge5 = GenerateNodes(m,Nx,(4,3))
+        Edge6 = GenerateNodes(m,Ny,(3,2))
+        Edge7 = GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
         
-        # m = Mesh.GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
-        # m = Mesh.GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ID="Domain")
-    
+        m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
+        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim)
+        
+        nnd = m.GetNumberOfNodes()
+        crd = m.GetNodeCoordinates().copy()
+        crd[:,0] = -m.GetNodeCoordinates()[:,0]
+        m2 = Mesh(crd, m.GetElementTable(), m.GetElementShape())
+        m = Mesh.Stack(m,m2)
+        
+        crd = m.GetNodeCoordinates().copy()
+        crd[:,1] = -m.GetNodeCoordinates()[:,1]
+        m2 = Mesh(crd, m.GetElementTable(), m.GetElementShape())
+        m = Mesh.Stack(m,m2, ID=ID)
+        
+        node_to_merge = np.vstack((np.c_[Edge5, Edge5+nnd], 
+                                   np.c_[Edge5+2*nnd, Edge5+3*nnd],
+                                   np.c_[Edge1, Edge1+2*nnd],
+                                   np.c_[Edge1+nnd, Edge1+3*nnd]))
+                                   
+        
+        m.MergeNodes(node_to_merge)
+        return m
 
                 
 if __name__=="__main__":

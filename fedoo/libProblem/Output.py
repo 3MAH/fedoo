@@ -48,7 +48,13 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
 
         if isinstance(assemb, str): 
             assemb = AssemblyBase.GetAll()[assemb]  
-                  
+
+        if hasattr(assemb, 'list_assembly'): #AssemblySum object
+            if assemb.assembly_output is None:
+                raise NameError("AssemblySum objects can't be used to extract outputs")
+            else:
+                assemb = assemb.assembly_output
+                
         material = assemb.GetWeakForm().GetConstitutiveLaw()
         
         result = {}

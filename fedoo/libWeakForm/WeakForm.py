@@ -33,6 +33,9 @@ class WeakForm:
     def GetConstitutiveLaw(self):
         #no constitutive law by default
         pass
+    
+    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+        pass
             
     def Initialize(self, assembly, pb, initialTime=0.):
         #function called at the very begining of the resolution
@@ -82,14 +85,28 @@ class WeakFormSum(WeakForm):
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
         WeakForm.__init__(self, ID, space = list_weakform[0].space)        
         
+        if any([wf.assembly_options!={} for wf in list_weakform]):
+            self.assembly_options = None
+            # if assembly_options is None, the weakForm have to be splited into several sub-weakform before 
+            # being used in an Assembly. This is automatically done when using Assembly.Create function
+            # The restulting Assembly will be an AssemblySum object
+            
         self.__constitutivelaw = ListConstitutiveLaw([a.GetConstitutiveLaw() for a in list_weakform])
         self.__list_weakform = list_weakform
-        
-        
         
     def GetConstitutiveLaw(self):
         #return a list of constitutivelaw
         return self.__constitutivelaw    
+    
+    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+        Diff = 0
+        self._list_mat_lumping = []
+        for wf in self.__list_weakform: 
+            Diff_wf = wf.GetDifferentialOperator(mesh, localFrame)
+            mat_lumping = wf.assembly_options.get('mat_lumping', False) #True of False
+            self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op
+            Diff += Diff_wf            
+        return Diff
     
     def Initialize(self, assembly, pb, initialTime=0.):
         for wf in self.__list_weakform:

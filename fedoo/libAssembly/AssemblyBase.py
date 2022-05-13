@@ -64,7 +64,21 @@ class AssemblyBase:
         AssemblyBase.GetAll()[ID].ComputeGlobalMatrix()
 
 class AssemblySum(AssemblyBase):
-   
+    """
+    Build a sum of Assembly objects
+    All the Assembly objects should be associated to:
+    * meshes based on the same list of nodes.
+    * the same modeling space (ie the same space property)
+        
+    Parameters
+    ----------
+    list_assembly: list of Assembly 
+        list of Assembly objects to sum
+    ID: str
+        ID of the Assembly             
+    assembly_output: Assembly (optional keyword arg)
+        Assembly object used to extract output values (using Problem.GetResults or Problem.SaveResults)
+    """
     def __init__(self, list_assembly, ID="", **kargs):        
         for i,assembly in enumerate(list_assembly):
             if isinstance(assembly, str): list_assembly[i] = AssemblyBase.GetAll()[assembly]                                
@@ -74,8 +88,9 @@ class AssemblySum(AssemblyBase):
         assert len(set([a.GetMesh().GetNumberOfNodes() for a in list_assembly])) == 1,\
             "Sum of assembly are possible only if the two meshes have the same number of Nodes"
 
-        self.__ListAssembly = list_assembly
-                    
+        self.__list_assembly = list_assembly
+        self.__assembly_output = kargs.get('assembly_output', None)
+                        
         self.__Mesh = list_assembly[0].GetMesh()
 
         if ID == "":
@@ -93,16 +108,16 @@ class AssemblySum(AssemblyBase):
 
     def ComputeGlobalMatrix(self,compute='all'):
         if self.__reload == 'all': 
-            for assembly in self.__ListAssembly:
+            for assembly in self.__list_assembly:
                 assembly.ComputeGlobalMatrix(compute)
         else:
             for numAssembly in self.__reload:
-                self.__ListAssembly[numAssembly].ComputeGlobalMatrix(compute)
+                self.__list_assembly[numAssembly].ComputeGlobalMatrix(compute)
             
         if not(compute == 'vector'):         
-            self.SetMatrix(sum([assembly.GetMatrix() for assembly in self.__ListAssembly]))
+            self.SetMatrix(sum([assembly.GetMatrix() for assembly in self.__list_assembly]))
         if not(compute == 'matrix'):
-            self.SetVector(sum([assembly.GetVector() for assembly in self.__ListAssembly]))
+            self.SetVector(sum([assembly.GetVector() for assembly in self.__list_assembly]))
     
     def Update(self, pb, dtime=None, compute = 'all'):
         """
@@ -112,22 +127,22 @@ class AssemblySum(AssemblyBase):
             - time: the current time        
         """
         if self.__reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
-            for assembly in self.__ListAssembly:
+            for assembly in self.__list_assembly:
                 assembly.Update(pb,dtime,compute)           
         else:
             for numAssembly in self.__reload:
-                self.__ListAssembly[numAssembly].Update(pb,dtime,compute)
+                self.__list_assembly[numAssembly].Update(pb,dtime,compute)
                     
         if not(compute == 'vector'):         
-            self.SetMatrix( sum([assembly.GetMatrix() for assembly in self.__ListAssembly]) )
+            self.SetMatrix( sum([assembly.GetMatrix() for assembly in self.__list_assembly]) )
         if not(compute == 'matrix'):
-            self.SetVector( sum([assembly.GetVector() for assembly in self.__ListAssembly]) )
+            self.SetVector( sum([assembly.GetVector() for assembly in self.__list_assembly]) )
 
     def InitTimeIncrement(self, pb, dtime=None):
         """
         May be used if required to initialize a new time increment 
         """
-        for assembly in self.__ListAssembly:
+        for assembly in self.__list_assembly:
             assembly.InitTimeIncrement(pb, dtime)   
 
     def Initialize(self, pb, initialTime=0.):
@@ -135,7 +150,7 @@ class AssemblySum(AssemblyBase):
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        for assembly in self.__ListAssembly:
+        for assembly in self.__list_assembly:
             assembly.Initialize(pb, initialTime=0.)   
 
     def ResetTimeIncrement(self):
@@ -143,7 +158,7 @@ class AssemblySum(AssemblyBase):
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        for assembly in self.__ListAssembly:
+        for assembly in self.__list_assembly:
             assembly.ResetTimeIncrement()        
 
     def NewTimeIncrement(self):
@@ -152,7 +167,7 @@ class AssemblySum(AssemblyBase):
         Generally used to increase non reversible internal variable
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        for assembly in self.__ListAssembly:
+        for assembly in self.__list_assembly:
             assembly.NewTimeIncrement()        
 
     def Reset(self):
@@ -161,10 +176,18 @@ class AssemblySum(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         And stored global matrix and vector are deleted
         """
-        for assembly in self.__ListAssembly:
+        for assembly in self.__list_assembly:
             assembly.Reset() 
         self.deleteGlobalMatrix()
 
+    @property
+    def list_assembly(self):
+        return self.__list_assembly
+   
+    @property
+    def assembly_output(self):
+        return self.__assembly_output
+    
 
 
 

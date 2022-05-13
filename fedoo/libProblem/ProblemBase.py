@@ -199,7 +199,21 @@ class ProblemBase:
     def ChangeAssembly(self,Assembling):
         raise NameError("The method 'ChangeAssembly' is not defined for this kind of problem")    
         
-    def SetNewtonRaphsonErrorCriterion(self,ErrorCriterion):
+    def SetNewtonRaphsonErrorCriterion(self,ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
+        """
+        Set the error criterion used for the newton raphson algorithm
+
+        Parameters
+        ----------
+        ErrorCriterion : str in ['Displacement', 'Force', 'Work']             
+            Set the type of error criterion.             
+        tol : float
+            Tolerance of the NewtonRaphson algorithm (default = 5e-3)
+        max_subiter: int
+            Number of newton raphson iteration before returning an error
+        err0 : scalar
+            Reference value of error used for normalization
+        """
         raise NameError("The method 'SetNewtonRaphsonErrorCriterion' is not defined for this kind of problem")    
         
     def NewtonRaphsonError(self):
@@ -285,7 +299,7 @@ def GetRot(name='all'): return ProblemBase.GetActive().GetRot(name)
 def GetTemp(): return ProblemBase.GetActive().GetTemp()
 def Update(**kargs): return ProblemBase.GetActive().Update(**kargs) 
 def ChangeAssembly(Assembling): ProblemBase.GetActive().ChangeAssembly(Assembling)
-def SetNewtonRaphsonErrorCriterion(ErrorCriterion): ProblemBase.GetActive().SetNewtonRaphsonErrorCriterion(ErrorCriterion)
+def SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None): ProblemBase.GetActive().SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol, max_subiter, err0)
 def NewtonRaphsonError(): return ProblemBase.GetActive().NewtonRaphsonError()
 def NewTimeIncrement(LoadFactor): ProblemBase.GetActive().NewTimeIncrement(LoadFactor)
 def NewtonRaphsonIncr(): ProblemBase.GetActive().NewtonRaphsonIncr()

@@ -18,9 +18,42 @@ import time
 def Create(weakForm, mesh="", elementType="", ID="", **kargs): 
     if isinstance(weakForm, str):
         weakForm = WeakForm.GetAll()[weakForm]
-    if hasattr(weakForm, 'list_weakform'):
-        #WeakFormSum object
-        list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakForm.list_weakform]
+        
+    if hasattr(weakForm, 'list_weakform') and weakForm.assembly_options is None: #WeakFormSum object
+        list_weakform = weakForm.list_weakform
+        
+        if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+        if elementType == "": elementType = mesh.GetElementShape()
+                
+        #get lists of some non compatible assembly_options items for each weakform in list_weakform
+        list_nb_pg = [wf.assembly_options.get('nb_pg', GetDefaultNbPG(elementType, mesh)) for wf in list_weakform]
+        list_assume_sym = [wf.assembly_options.get('assume_sym', False) for wf in list_weakform]
+        list_prop = list(zip(list_nb_pg, list_assume_sym))
+        list_diff_prop = list(set(list_prop)) #list of different non compatible properties that required separated assembly
+        
+        if len(list_diff_prop) == 1: #only 1 assembly is required
+            #update assembly_options
+            prop = list_diff_prop[0]
+            weakForm.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
+            weakForm.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakForm.list_weakform]
+            return Assembly(weakForm, mesh, elementType, ID, **kargs)
+        
+        else: #we need to create and sum several assemblies
+            list_assembly = []
+            for prop in list_diff_prop:
+                l_wf = [list_weakform[i] for i,p in enumerate(list_prop) if p == prop] #list_weakform with compatible properties
+                if len(l_wf) == 1:
+                    wf = l_wf[0] #standard weakform. No WeakFormSum required
+                else:
+                    #create a new WeakFormSum object
+                    wf = WeakFormSum(l_wf) #to modify : add automatic ID
+                    #define the assembly_options dict of the new weakform
+                    wf.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
+                    wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
+                list_assembly.append(Assembly(wf, mesh, elementType, "", **kargs))
+        
+        # list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakForm.list_weakform]
+        kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
         return AssemblySum(list_assembly, ID, **kargs)       
     
     return Assembly(weakForm, mesh, elementType, ID, **kargs)
@@ -38,9 +71,9 @@ class Assembly(AssemblyBase):
         if isinstance(weakForm, str):
             weakForm = WeakForm.GetAll()[weakForm]
         
-        if hasattr(weakForm, 'list_weakform'):
-            #WeakFormSum object
-            raise NameError('Assembly associated to WeakFormSum object can only be created using the Create function')
+        if weakForm.assembly_options is None:
+            #should be a non compatible WeakFormSum object
+            raise NameError('Some Assembly associated to WeakFormSum object can only be created using the Create function')
 
         if isinstance(mesh, str):
             mesh = Mesh.GetAll()[mesh]
@@ -104,7 +137,7 @@ class Assembly(AssemblyBase):
 
         if computeMatrixMethod == 'new': 
             
-            intRef = wf.sort()
+            intRef, sorted_indices = wf.sort()
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
             VV = 0
@@ -153,14 +186,24 @@ class Assembly(AssemblyBase):
             else:
                 MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure, assume_sym = self.assume_sym)
                 listMatvir = listCoef_PG = None
+                                  
+                if hasattr(self._weakForm, '_list_mat_lumping'):
+                    change_mat_lumping = True  #use different mat_lumping option for each operator                             
+                else:
+                    change_mat_lumping = False
+                    mat_lumping = self.mat_lumping                
 
-                for ii in range(len(wf.op)):
+                for ii in range(len(wf.op)):                                        
+                        
                     if compute == 'matrix' and wf.op[ii] is 1: continue
                     if compute == 'vector' and wf.op[ii] is not 1: continue
                     
                     if wf.op[ii] is not 1 and self.assume_sym and wf.op[ii].u < wf.op_vir[ii].u:
                         continue                
-                
+                    
+                    if change_mat_lumping:
+                        mat_lumping = self._weakForm._list_mat_lumping[sorted_indices[ii]]                        
+                    
                     if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
                         #if nb_pg == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii] 
@@ -219,11 +262,11 @@ class Assembly(AssemblyBase):
                         if listMatvir is None:
                             for i in range(len(Mat)):
                                 for j in range(len(Matvir)):
-                                    MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i], self.mat_lumping)
+                                    MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i], mat_lumping)
                         else:
                             for i in range(len(Mat)):
                                 for j in range(len(Matvir)):
-                                    MM.addToBlocATB(listMatvir[j], Mat[i], [(coef[i]*coef_vir[j]) * coef_PG for coef_PG in listCoef_PG], var_vir[j], var[i], self.mat_lumping)                        
+                                    MM.addToBlocATB(listMatvir[j], Mat[i], [(coef[i]*coef_vir[j]) * coef_PG for coef_PG in listCoef_PG], var_vir[j], var[i], mat_lumping)                        
                             listMatvir = None
                             listCoef_PG = None
                         

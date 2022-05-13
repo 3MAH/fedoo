@@ -487,7 +487,7 @@ class Mesh(MeshBase):
             elif selection_criterion == 'Y':
                 return np.where(np.abs(self.__NodeCoordinates[:,1]-value) < tol)[0]
             elif selection_criterion == 'Z':
-                return np.where(np.abs(self.__NodeCoordinates[:,0]-value) < tol)[0]
+                return np.where(np.abs(self.__NodeCoordinates[:,2]-value) < tol)[0]
         elif selection_criterion == 'XY':
             return np.where(np.linalg.norm(self.__NodeCoordinates[:,:2]-value, axis=1) < tol)[0]
         elif selection_criterion == 'XZ':
@@ -498,6 +498,9 @@ class Mesh(MeshBase):
             return np.where(np.linalg.norm(self.__NodeCoordinates-value, axis=1) < tol)[0]
         else:
             raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
+
+    def copy():
+        return Mesh(self.__NodeCoordinates.copy(),self.__ElementTable.copy(), self.__ElementShape)
             
 def GetAll():
     return Mesh.GetAll()

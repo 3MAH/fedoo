@@ -18,6 +18,10 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__DU = 0 #displacement increment
             self.__Err0 = None #initial error for NR error estimation
             self.__ErrCriterion = 'Displacement' #Error criterion type   
+            self.__default_err0 = None #reference value to normalize the NR error. If None, autocomputed
+            self.__tolerance_nr = 5e-3
+            self.__max_subiter = 5
+
             self.__Assembly = Assembling
             libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID, Assembling.space)        
             self.t0 = 0 ; self.tmax = 1
@@ -167,12 +171,16 @@ def _GenerateClass_NonLinearStatic(libBase):
             """
             DofFree = self._Problem__DofFree
             if self.__Err0 is None:
-                if self.__ErrCriterion == 'Displacement': 
-                    self.__Err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
-                    # print('Err0:',self.__Err0)
+                if self.__default_err0 is None: #automatic compute at first iteration
+                    if self.__ErrCriterion == 'Displacement':                     
+                        self.__Err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
+                        # self.__Err0 = np.max(np.abs((self.__Utot + self.__DU))) #Displacement criterion
+                        # print('Err0:',self.__Err0)
+                    else:
+                        self.__Err0 = 1
+                        self.__Err0 = self.NewtonRaphsonError() 
                 else:
-                    self.__Err0 = 1
-                    self.__Err0 = self.NewtonRaphsonError()  
+                    self.__Err0 = self.__default_err0
                 return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
@@ -184,9 +192,12 @@ def _GenerateClass_NonLinearStatic(libBase):
                     if self.GetD() is 0: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__Err0 
                     else: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 
        
-        def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion):
+        def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
             if ErrorCriterion in ['Displacement', 'Force','Work']:
-                self.__ErrCriterion = ErrorCriterion            
+                self.__ErrCriterion = ErrorCriterion     
+                self.__tolerance_nr = tol
+                self.__max_subiter = 5
+                self.__default_err0 = err0 #value used to normalize the nr error. 
             else: 
                 raise NameError('ErrCriterion must be set to "Displacement", "Force" or "Work"')
         
@@ -238,8 +249,8 @@ def _GenerateClass_NonLinearStatic(libBase):
         def NLSolve(self, **kargs):              
             #parameters
             self.print_info = kargs.get('print_info',self.print_info)
-            max_subiter = kargs.get('max_subiter',6)
-            ToleranceNR = kargs.get('ToleranceNR',5e-3)
+            max_subiter = kargs.get('max_subiter',self.__max_subiter)
+            ToleranceNR = kargs.get('ToleranceNR',self.__tolerance_nr)
             self.t0 = kargs.get('t0',self.t0) #time at the start of the time step
             self.tmax = kargs.get('tmax',self.tmax) #time at the end of the time step
             dt = kargs.get('dt',0.1) #initial time step

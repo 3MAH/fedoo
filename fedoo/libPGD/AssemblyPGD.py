@@ -34,7 +34,7 @@ class AssemblyPGD(AssemblyFEM):
         self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
         # [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
-        self.__listAssembly = [AssemblyFEM(self.space, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
     def ComputeGlobalMatrix(self, compute = 'all'):
@@ -176,7 +176,7 @@ class AssemblyPGD(AssemblyFEM):
                 self.__listElementType[dd] = listElementType[i]
                 self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
         
-        self.__listAssembly = [AssemblyFEM(self.space, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(self.__Mesh.GetListMesh())]
                 
     def SetNumberOfGaussPoints(self, listNumberOfGaussPoints, listSubMesh = None):
@@ -204,7 +204,7 @@ class AssemblyPGD(AssemblyFEM):
                 if isinstance(m, str): m = Mesh.GetAll()[m]
                 self.__listNumberOfGaussPoints[self.__Mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
-        self.__listAssembly = [AssemblyFEM(self.space, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
 
