@@ -100,7 +100,30 @@ class OpDiff:
 
     def __div__(self, A):         
         return self*(1/A)
+    
+    def __str__(self):
+        res = ''
+        for ii in range(len(self.op)):
+            if np.isscalar(self.coef[ii]):
+                coef_str = str(self.coef[ii]) + ' '
+            else: coef_str = 'f '
             
+            if self.op[ii] == 1: op_str = ''
+            elif self.op[ii].ordre ==0:
+                op_str = 'u'+str(self.op[ii].u)
+            else:
+                op_str = 'du'+str(self.op[ii].u)+'/dx'+str(self.op[ii].x)
+            
+            if self.op_vir[ii] == 1: op_vir_str = ''
+            elif self.op_vir[ii].ordre ==0:
+                op_vir_str = 'v'+str(self.op_vir[ii].u)
+            else:
+                op_vir_str = 'dv'+str(self.op_vir[ii].u)+'/dx'+str(self.op_vir[ii].x)  
+            if ii!=0: res+= ' + '
+            res +=  coef_str + op_vir_str + ' ' + op_str
+        return res
+            
+        
     def sort(self):
         nn = 50
         intForSort = []

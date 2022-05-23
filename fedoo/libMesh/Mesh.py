@@ -4,6 +4,13 @@ import numpy as np
 # from fedoo.libUtil.Coordinate import Coordinate
 from fedoo.libMesh.MeshBase import MeshBase
 from fedoo.libElement import *
+try:
+    import pyvista as pv
+    import vtk
+    USE_PYVISTA = True
+except:
+    USE_PYVISTA = False
+
 
 def Create(NodeCoordinates, ElementTable, ElementShape, LocalFrame=None, ndim =None, ID = ""):        
     return Mesh(NodeCoordinates, ElementTable, ElementShape, LocalFrame, ndim, ID)
@@ -501,6 +508,35 @@ class Mesh(MeshBase):
 
     def copy():
         return Mesh(self.__NodeCoordinates.copy(),self.__ElementTable.copy(), self.__ElementShape)
+    
+    def to_pyvista(self):
+        if USE_PYVISTA:            
+            cell_type =  {'lin2':3,
+                          'tri3':5,
+                          'quad4':9,
+                          'tet4':10,
+                          'hex8':12,
+                          'wed6':13,
+                          'pyr5':14,
+                          'lin3':21,
+                          'tri6':22,
+                          'quad8':23,           
+                          'tet10':24,
+                          'hex20':25
+                          }.get(self.__ElementShape, None)
+            if cell_type is None: raise NameError('Element Type '+ str(self.__ElementShape) + ' not available in pyvista')
+
+            elm = np.empty((self.__ElementTable.shape[0], self.__ElementTable.shape[1]+1), dtype=int)
+            elm[:,0] = self.__ElementTable.shape[1]
+            elm[:,1:] = self.__ElementTable
+            crd = self.__NodeCoordinates
+            
+            if crd.shape[1]<3:
+                crd = np.hstack((crd, np.zeros((crd.shape[0], 3-crd.shape[1]))))
+                
+            return pv.UnstructuredGrid(elm.ravel(),  np.full(len(elm),cell_type, dtype=int), crd)
+        else:
+            raise NameError('Pyvista not installed.')
             
 def GetAll():
     return Mesh.GetAll()

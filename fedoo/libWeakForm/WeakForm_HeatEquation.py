@@ -61,7 +61,7 @@ class SteadyHeatEquation(WeakForm):
 
     def Update(self, assembly, pb, dtime):
         self.__grad_temp = [0 if operator is 0 else 
-                    assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]                             
+                    assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]   
 
     def Reset(self): #to update
         pass
@@ -72,7 +72,7 @@ class SteadyHeatEquation(WeakForm):
     def GetDifferentialOperator(self, mesh=None, localFrame = None):      
              
         K = self.__ConstitutiveLaw.thermal_conductivity
-       
+
         DiffOp = sum([0 if self.__op_grad_temp_vir[i] is 0 else self.__op_grad_temp_vir[i] * 
                       sum([0 if self.__op_grad_temp[j] is 0 else self.__op_grad_temp[j] * K[i][j] for j in range(3)]) 
                       for i in range(3)])
@@ -81,7 +81,7 @@ class SteadyHeatEquation(WeakForm):
         DiffOp += sum([0 if self.__op_grad_temp_vir[i] is 0 else self.__op_grad_temp_vir[i] * 
                       sum([self.__grad_temp[j] * K[i][j] for j in range(3) if  K[i][j] is not 0 and self.__grad_temp[j] is not 0]) 
                       for i in range(3)])
-        
+                
         return DiffOp
 
     def GetConstitutiveLaw(self):
@@ -139,13 +139,13 @@ class TemperatureTimeDerivative(WeakForm):
         
     def Initialize(self, assembly, pb, initialTime = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
-            self.__temp_start = pb.GetTemp()
+            self.__temp_start = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
             self.__temp = self.__temp_start
         else: 
             self.__temp_start = self.__temp = 0
 
     def Update(self, assembly, pb, dtime):
-        self.__temp = pb.GetTemp()
+        self.__temp = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
         
     def Reset(self):
         pass
@@ -169,7 +169,6 @@ class TemperatureTimeDerivative(WeakForm):
         rho_c = self.__ConstitutiveLaw.density * self.__ConstitutiveLaw.specific_heat        
         
         op_temp = self.space.opdiff('Temp') #temperature increment (incremental weakform)
-                
         #steady state should not include the following term
         if self.__dtime != 0:
             return 1/self.__dtime * rho_c * (op_temp.virtual * op_temp + op_temp.virtual *(self.__temp - self.__temp_start)) 
@@ -249,7 +248,7 @@ def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = Non
         
 #     def Initialize(self, assembly, pb, initialTime = 0.):
 #         if not(np.isscalar(pb.GetDoFSolution())):
-#             self.__temp_start = pb.GetTemp()
+#             self.__temp_start = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
 #             self.__temp = self.__temp_start
 #             self.__grad_temp = [0 if operator is 0 else 
 #                                 assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
@@ -261,7 +260,7 @@ def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = Non
         
 
 #     def Update(self, assembly, pb, dtime):
-#         self.__temp = pb.GetTemp()
+#         self.__temp = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
 #         self.__grad_temp = [0 if operator is 0 else 
 #                     assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
                                

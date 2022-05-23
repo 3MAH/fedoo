@@ -186,7 +186,9 @@ class Assembly(AssemblyBase):
             else:
                 MM = BlocSparse(nvar, nvar, self.__nb_pg, self.__saveBlocStructure, assume_sym = self.assume_sym)
                 listMatvir = listCoef_PG = None
-                                  
+                
+                sum_coef = False #bool that indicate if operator are the same and can be sum
+                
                 if hasattr(self._weakForm, '_list_mat_lumping'):
                     change_mat_lumping = True  #use different mat_lumping option for each operator                             
                 else:
@@ -210,15 +212,18 @@ class Assembly(AssemblyBase):
                     else:
                         coef_PG = self._ConvertToGaussPoints(wf.coef[ii][:])                                                 
                     
-                    if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
+                    # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
+                    if sum_coef: #if same operator as previous with different coef, add the two coef
                         coef_PG_sum += coef_PG
+                        sum_coef = False
                     else: coef_PG_sum = coef_PG   
                     
-                    if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
-                        continue
+                    if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue
+                        if not(change_mat_lumping) or mat_lumping == self._weakForm._list_mat_lumping[sorted_indices[ii+1]]: 
+                            sum_coef = True
+                            continue
                                     
                     coef_PG = coef_PG_sum * MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
-                                              
     #                Matvir = (RowBlocMatrix(self._GetElementaryOp(wf.op_vir[ii]), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
                     #check how it appens with change of variable and rotation dof
                     

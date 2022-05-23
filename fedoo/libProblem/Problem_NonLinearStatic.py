@@ -219,8 +219,11 @@ def _GenerateClass_NonLinearStatic(libBase):
 
         #     return E                   
         
-        def SolveTimeIncrement(self, timeStart, dt, max_subiter = 5, ToleranceNR = 5e-3):                                
-            
+        def SolveTimeIncrement(self, timeStart, dt, max_subiter = None, ToleranceNR = None):                                
+            if max_subiter is None: max_subiter = self.__max_subiter
+            if ToleranceNR is None: ToleranceNR = self.__tolerance_nr 
+
+            self.InitTimeIncrement(dt)
             self.elastic_prediction(timeStart, dt)
             for subiter in range(max_subiter): #newton-raphson iterations
                 #update Stress and initial displacement and Update stiffness matrix
@@ -232,7 +235,9 @@ def _GenerateClass_NonLinearStatic(libBase):
 
                 # print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeStart+dt, normRes))
 
-                if normRes < ToleranceNR:                                                  
+                if normRes < ToleranceNR: #convergence of the NR algorithm                    
+                    #Initialize the next increment                    
+                    self.NewTimeIncrement(dt)                                           
                     return 1, subiter, normRes
                 
                 #--------------- Solve --------------------------------------------------------        
@@ -280,9 +285,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 
                 if time+dt > next_time - self.err_num: #if dt is too high, it is reduced to 
                     current_dt = next_time-time
-                                                   
-                self.InitTimeIncrement(current_dt)
-                
+                                                                   
                 #self.SolveTimeIncrement = Newton Raphson loop
                 convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, current_dt, max_subiter, ToleranceNR)
 
@@ -295,9 +298,6 @@ def _GenerateClass_NonLinearStatic(libBase):
                     if update_dt and nbNRiter < 2: 
                         dt *= 1.25
                         # print('Increase the time increment to {:.5f}'.format(dt))
-
-                    #Initialize the next increment                    
-                    self.NewTimeIncrement(current_dt)
                     
                     #Output results
                     if outputFile is not None: outputFile(self, self.__iter, time, nbNRiter, normRes)                       

@@ -98,8 +98,8 @@ Problem.NLSolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 # print(time()-start)
 
 res = Problem.GetResults('Assembling', ['Strain','Stress'], 'Node') 
-assert np.abs(res['Strain'][0][941]+0.019592056902523462) < 1e-8
-assert np.abs(res['Stress'][3][234]+3.9385936603476956) < 1e-4
+assert np.abs(res['Strain'][0][941]+0.019591764988376507) < 1e-8
+assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4
 
 
 
