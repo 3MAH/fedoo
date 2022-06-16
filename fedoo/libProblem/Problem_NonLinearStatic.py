@@ -16,7 +16,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.print_info = 1 #print info of NR convergence during solve
             self.__Utot = 0 #displacement at the end of the previous converged increment
             self.__DU = 0 #displacement increment
-            self.__Err0 = None #initial error for NR error estimation
+            self.__err0 = None #initial error for NR error estimation
             self.__ErrCriterion = 'Displacement' #Error criterion type   
             self.__default_err0 = None #reference value to normalize the NR error. If None, autocomputed
             self.__tolerance_nr = 5e-3
@@ -89,9 +89,6 @@ def _GenerateClass_NonLinearStatic(libBase):
             except:
                 self._ProblemPGD__Xbc = 0
 
-            #set the reference error to None to for a new estimation of err0            
-            self.__Err0 = None
-
             #update displacement increment
             # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
             # self.__TotalDisplacement += self.GetX()               
@@ -99,18 +96,18 @@ def _GenerateClass_NonLinearStatic(libBase):
         
         def InitTimeIncrement(self,dt):
             self.__Assembly.InitTimeIncrement(self,dt)
+            self.__err0 = self.__default_err0 #initial error for NR error estimation
             
         def NewTimeIncrement(self,dt):
             #dt not used for static problem
             #dt = dt for the previous increment
             self.__Utot += self.__DU
             self.__DU = 0
-            # self.__TotalDisplacementStart = self.__TotalDisplacement.copy()                       
             self.__Assembly.NewTimeIncrement()     
 
         def ResetTimeIncrement(self):   
-            self.__DU = 0                           
-            # self.__TotalDisplacement = self.__TotalDisplacementStart.copy()
+            self.__DU = 0                       
+            self.__err0 = self.__default_err0 #initial error for NR error estimation
             self.__Assembly.ResetTimeIncrement()
                               
         def NewtonRaphsonIncrement(self):                                      
@@ -145,7 +142,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__Utot = 0
             self.__DU = 0
                         
-            self.__Err0 = None #initial error for NR error estimation   
+            self.__err0 = self.__default_err0 #initial error for NR error estimation   
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
             self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
@@ -170,33 +167,29 @@ def _GenerateClass_NonLinearStatic(libBase):
             (Update method).
             """
             DofFree = self._Problem__DofFree
-            if self.__Err0 is None:
-                if self.__default_err0 is None: #automatic compute at first iteration
-                    if self.__ErrCriterion == 'Displacement':                     
-                        self.__Err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
-                        # self.__Err0 = np.max(np.abs((self.__Utot + self.__DU))) #Displacement criterion
-                        # print('Err0:',self.__Err0)
-                    else:
-                        self.__Err0 = 1
-                        self.__Err0 = self.NewtonRaphsonError() 
+            if self.__err0 is None: # if self.__err0 is None -> initialize the value of err0            
+                if self.__ErrCriterion == 'Displacement':                     
+                    self.__err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
+                    return np.max(np.abs(self.GetX()))/self.__err0
                 else:
-                    self.__Err0 = self.__default_err0
-                return 1                
+                    self.__err0 = 1
+                    self.__err0 = self.NewtonRaphsonError() 
+                    return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.GetX()))/self.__Err0  #Displacement criterion
+                    return np.max(np.abs(self.GetX()))/self.__err0  #Displacement criterion
                 elif self.__ErrCriterion == 'Force': #Force criterion              
-                    if self.GetD() is 0: return np.max(np.abs(self.GetB()[DofFree]))/self.__Err0 
-                    else: return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0                     
+                    if self.GetD() is 0: return np.max(np.abs(self.GetB()[DofFree]))/self.__err0 
+                    else: return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__err0                     
                 else: #self.__ErrCriterion == 'Work': #work criterion
-                    if self.GetD() is 0: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__Err0 
-                    else: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__Err0 
+                    if self.GetD() is 0: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__err0 
+                    else: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__err0 
        
         def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
             if ErrorCriterion in ['Displacement', 'Force','Work']:
                 self.__ErrCriterion = ErrorCriterion     
                 self.__tolerance_nr = tol
-                self.__max_subiter = 5
+                self.__max_subiter = max_subiter
                 self.__default_err0 = err0 #value used to normalize the nr error. 
             else: 
                 raise NameError('ErrCriterion must be set to "Displacement", "Force" or "Work"')
@@ -233,7 +226,8 @@ def _GenerateClass_NonLinearStatic(libBase):
                 #Check convergence     
                 normRes = self.NewtonRaphsonError()    
 
-                # print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeStart+dt, normRes))
+                if self.print_info > 1:
+                    print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeStart+dt, normRes))
 
                 if normRes < ToleranceNR: #convergence of the NR algorithm                    
                     #Initialize the next increment                    
@@ -288,7 +282,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                                                                    
                 #self.SolveTimeIncrement = Newton Raphson loop
                 convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, current_dt, max_subiter, ToleranceNR)
-
+                
                 if (convergence) :
                     time = time + current_dt #update time value 
                     if self.print_info > 0:
@@ -301,7 +295,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                     
                     #Output results
                     if outputFile is not None: outputFile(self, self.__iter, time, nbNRiter, normRes)                       
-                    if (time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%self.intervalOutput == 0):
+                    if (time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%intervalOutput == 0):
                         # self.__ProblemOutput.SaveResults(self, self.__compteurOutput)  
                         self.SaveResults(self.__compteurOutput)                              
                         self.__compteurOutput += 1     

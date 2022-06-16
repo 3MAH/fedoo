@@ -85,9 +85,14 @@ sargs = dict(
     # n_colors= 10
 )
 
-cpos = [(-2.05821994783786, 1.967185181335808, 1.731622321366397),
-        (0.7843951189600558, 0.21392551951633995, 0.16595366983397655),
-        (0.4236410761781089, -0.11545074454760883, 0.8984427439509189)]
+# cpos = [(-2.05821994783786, 1.967185181335808, 1.731622321366397),
+#         (0.7843951189600558, 0.21392551951633995, 0.16595366983397655),
+#         (0.4236410761781089, -0.11545074454760883, 0.8984427439509189)]
+
+cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
+        (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),
+        (0.42357673667356105, -0.37693638734293083, 0.8237121512068624)]
+
 pl.camera_position = cpos
 
 res = np.load('results/thermal3D_43.npz')
@@ -99,62 +104,6 @@ pl.add_mesh(meshplot, scalars = "data", show_edges = True, scalar_bar_args=sargs
 
 
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-cpos = pl.show(return_cpos = True)  
+cpos = pl.show(return_cpos = True, screenshot='gyroid.png')  
 
 # assert 0
-
-
-
-
-#### save a video (need imageio-ffmpeg - conda install imageio-ffmpeg -c conda-forge 
-pl = pv.Plotter()
-pl.set_background('White')
-
-pl.open_movie('test2.mp4', framerate=24)
-
-meshplot = mesh.to_pyvista()
-
-res = np.load('results/thermal3D_0.npz')
-meshplot.point_data["data"] = res['Temp_Node']
-actor = pl.add_mesh(meshplot, scalars = 'data', show_edges = True, scalar_bar_args=sargs, cmap="bwr", clim = [0,100])
-
-
-sargs = dict(
-    interactive=True,
-    title_font_size=20,
-    label_font_size=16,
-    color='Black',
-    # n_colors= 10
-)
-
-# cpos = [(-2.05821994783786, 1.967185181335808, 1.731622321366397),
-#         (0.7843951189600558, 0.21392551951633995, 0.16595366983397655),
-#         (0.4236410761781089, -0.11545074454760883, 0.8984427439509189)]
-
-
-cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
-        (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),
-        (0.42357673667356105, -0.37693638734293083, 0.8237121512068624)]
-pl.camera_position = cpos
-pl.add_text(f"Iteration: 0", name='time-label', color='Black')
-pl.write_frame()  # write initial data
-
-# pl.show(auto_close=False)  # only necessary for an off-screen movie
-
-for i in range(1,nb_iter):
-    # meshplot = pv.read('results/thermal3D_' +str(i)+'.vtk')
-    res = np.load('results/thermal3D_{}.npz'.format(i))
-    meshplot.point_data["data"] = res['Temp_Node']
-         
-    # Run through each frame
-    pl.add_text(f"Iteration: {i}", name='time-label', color='Black')
-    pl.write_frame()  # write initial data
-    # pl.remove_actor(actor)
-    
-pl.close()
-    
-    
-    
-    
-    
-    

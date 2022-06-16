@@ -481,7 +481,6 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
         
         m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
         m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, ID=ID)
-        return m
     else: 
         L = Lx/2
         h = Ly/2
@@ -516,8 +515,16 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
                                    
         
         m.MergeNodes(node_to_merge)
-        return m
-
+        
+    if ElementShape == 'quad4': return m
+    elif ElementShape == 'tri3': return quad2tri(m)
+    else: raise NameError('Non compatible element shape')
+    
+def quad2tri(mesh):
+    assert mesh.GetElementShape() == 'quad4', "element shape should be 'quad4' for quad2tri"
+    crd = mesh.GetNodeCoordinates()
+    elm = mesh.GetElementTable()
+    return Mesh(crd, np.vstack( [elm[:,0:3], elm[:,[0,2,3]]]), 'tri3')
                 
 if __name__=="__main__":
     import math

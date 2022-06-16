@@ -47,6 +47,8 @@ if USE_SIMCOON:
             ### initialization of the simcoon UMAT
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
             # sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), statev, corate, ndi, nshr, 0.)
+            
+            self.use_elastic_lt = False
                 
         def GetPKII(self):
             return listStressTensor(self.PKII.T)
@@ -100,9 +102,10 @@ if USE_SIMCOON:
                 
                 sim.Umat_fedoo.Initialize(self, 0., statev, False)
                     
-                self.Run(0.) #Launch the UMAT to compute the elastic matrix  
-                
-                
+                self.Run(0.) #Launch the UMAT to compute the elastic matrix 
+                                
+            if  self.use_elastic_lt: return np.squeeze(self.elastic_Lt.transpose(1,2,0)) ### debut only ####
+        
             H = np.squeeze(self.Lt.transpose(1,2,0))
             # H = np.squeeze(self.L.transpose(1,2,0))
             if self.__mask is None:
@@ -180,7 +183,8 @@ if USE_SIMCOON:
                     self.__mask = [[3,4,5] for i in range(3)]
                     self.__mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
                 
-            self.Run(0.) #Launch the UMAT to compute the elastic matrix               
+            self.Run(0.) #Launch the UMAT to compute the elastic matrix         
+            if self.use_elastic_lt: self.elastic_Lt = self.Lt.copy() ### debut only ####
     
         def Update(self,assembly, pb, dtime):   
             displacement = pb.GetDoFSolution()
@@ -204,8 +208,6 @@ if USE_SIMCOON:
             
 
             self.Run(dtime)
-
-            # (DRloc , listDR, Detot, statev) = self.Run(dtime)
         
         def copy(self, new_id=""):
             """
