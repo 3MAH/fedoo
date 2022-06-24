@@ -74,6 +74,8 @@ class Mechanical3D(ConstitutiveLaw):
 
     def __init__(self, ClID = ""):
         ConstitutiveLaw.__init__(self,ClID)
+        self._stress = 0 #current stress (pk2 if nlgeom) at integration points
+        self._grad_disp = 0 #current grad_disp at integration points
         
     def GetPKII(self):
         return NotImplemented

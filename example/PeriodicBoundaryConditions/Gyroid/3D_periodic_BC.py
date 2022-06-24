@@ -45,7 +45,7 @@ E = [0,0,0,0,0,1] #[EXX, EYY, EZZ, EXY, EXZ, EYZ]
 #Util.DefinePeriodicBoundaryCondition(meshID,
 #        [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
 #        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
-Util.DefinePeriodicBoundaryConditionNonPerioMesh(meshID,
+Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(meshID,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', tol=1e-4, nNeighbours = 3, powInter = 1.0)
 
@@ -62,7 +62,7 @@ Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
 Problem.ApplyBoundaryCondition()
 
-#--------------- Solve --------------------------------------------------------
+#lv--------------- Soe --------------------------------------------------------
 Problem.SetSolver('CG')
 print('Solving...')
 print(time.time()-t0)
