@@ -10,7 +10,7 @@ start = time()
 
 Util.ProblemDimension("2Dplane")
 
-NLGEOM =True
+NLGEOM =1
 typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
@@ -72,8 +72,8 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev', 'wm'], output_type='Node', file_format ='vtk')    
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+Problem.AddOutput('results/bendingPlastic', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
+Problem.AddOutput('results/bendingPlastic', 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################

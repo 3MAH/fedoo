@@ -27,15 +27,7 @@ if USE_SIMCOON:
             # self.__useElasticModulus = True ??
             
             self.__currentGradDisp = self.__initialGradDisp = 0        
-    
-            # if GetDimension() == "3D":
-            #     ndi = 3 ; nshr = 3
-            # elif GetDimension() in ['2Dstress']:
-            #     # ndi = 2 ; nshr = 1
-            #     ndi = 3 ; nshr = 3###shoud be modified?
-            # elif GetDimension() in ['2Dplane']:
-            #      ndi = 3 ; nshr = 3 # the constitutive law is treated in a classical way
-            
+                
             ndi = nshr = 3 #compute the 3D constitutive law even for 2D law 
             self.umat_name = umat_name
             
@@ -48,7 +40,7 @@ if USE_SIMCOON:
             sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), corate, ndi, nshr)
             # sim.Umat_fedoo.__init__(self, umat_name, np.atleast_2d(props), statev, corate, ndi, nshr, 0.)
             
-            self.use_elastic_lt = False
+            self.use_elastic_lt = False #mainly for debug purpose
                 
         def GetPKII(self):
             return listStressTensor(self.PKII.T)
@@ -177,13 +169,7 @@ if USE_SIMCOON:
                 else: statev = assembly.ConvertData(statev).T
             
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
-                        
-            if not(nlgeom):
-                if self.umat_name in ['ELISO'] and self.__mask is None:        
-                    self.__mask = [[3,4,5] for i in range(3)]
-                    self.__mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-                
-            self.Run(0.) #Launch the UMAT to compute the elastic matrix         
+            self.Run(0.) #Launch the UMAT to compute the elastic matrix                 
             if self.use_elastic_lt: self.elastic_Lt = self.Lt.copy() ### debut only ####
     
         def Update(self,assembly, pb, dtime):   
@@ -198,7 +184,7 @@ if USE_SIMCOON:
                 self.__currentGradDisp = np.array(assembly.GetGradTensor(displacement, "GaussPoint"))            
 
                 #F0.strides and F1.strides should be [n_cols*n_rows*8, 8, n_rows*8] for compatibiliy with the sim.RunUmat_fedoo function
-                F1 = np.add( np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
+                F1 = np.add(np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
                 
             self.compute_Detot(dtime, F1)  
             

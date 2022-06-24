@@ -13,7 +13,9 @@ from fedoo.libAssembly.SparseMatrix import RowBlocMatrix
 from scipy import sparse
 import numpy as np
 from numbers import Number 
+from copy import copy
 import time
+
 
 def Create(weakForm, mesh="", elementType="", ID="", **kargs): 
     if isinstance(weakForm, str):
@@ -87,6 +89,10 @@ class Assembly(AssemblyBase):
             self._weakForm = None
             AssemblyBase.__init__(self, ID, space = weakForm)
         
+        #attributes to set assembly related to current (deformed) configuration
+        #used for update lagrangian method. 
+        self.current = self 
+        
         self.__MeshChange = kargs.pop('MeshChange', False)        
         self.__Mesh = mesh   
         if elementType == "": elementType = mesh.GetElementShape()
@@ -103,8 +109,7 @@ class Assembly(AssemblyBase):
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
         #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
-        self.__factorizeOp = True #option for debug purpose (should be set to True for performance)
-        
+        self.__factorizeOp = True #option for debug purpose (should be set to True for performance)        
 
 
     def ComputeGlobalMatrix(self, compute = 'all'):
@@ -551,7 +556,7 @@ class Assembly(AssemblyBase):
         if self._weakForm.GetConstitutiveLaw() is not None:
             self._weakForm.GetConstitutiveLaw().Update(self, pb, dtime)
         self._weakForm.Update(self, pb, dtime)
-        self.ComputeGlobalMatrix(compute)
+        self.current.ComputeGlobalMatrix(compute)
 
     def ResetTimeIncrement(self):
         """
@@ -993,7 +998,21 @@ class Assembly(AssemblyBase):
     #     else:
     #         assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
         
-        
+    
+    def set_disp(self, disp):
+        if disp is 0: self.current = self
+        else:
+            new_crd = self.GetMesh().GetNodeCoordinates() + disp.T
+            if self.current == self:
+                #initialize a new assembly
+                new_mesh = copy(self.GetMesh())
+                new_mesh.SetNodeCoordinates(new_crd)                                
+                new_assembly = copy(self)                                                    
+                new_assembly.SetMesh(new_mesh)   
+                self.current = new_assembly
+            else: 
+                self.current.GetMesh().SetNodeCoordinates(new_crd)
+                
     def GetStrainTensor(self, U, Type="Nodal", nlgeom = None):
         """
         Not a static method.
@@ -1214,6 +1233,10 @@ class Assembly(AssemblyBase):
         new_wf = self._weakForm.copy()
         
         return Assembly(new_wf, self.__Mesh, self.__elmType, new_id)
+    
+    @property
+    def elm_type(self):
+        return self.__elmType
     
 def DeleteMemory():
     Assembly.DeleteMemory()

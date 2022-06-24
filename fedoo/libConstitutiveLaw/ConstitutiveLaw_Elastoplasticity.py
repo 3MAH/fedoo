@@ -143,7 +143,11 @@ class ElastoPlasticity(Mechanical3D):
     
     def GetPKII(self):
         return self.__currentSigma
-
+    
+    def GetCauchy(self, **kargs): #same as GetPKII
+        #alias of GetPKII mainly use for small strain displacement problems
+        return self.__currentSigma
+    
     def GetStress(self, **kargs): #same as GetPKII
         #alias of GetPKII mainly use for small strain displacement problems
         return self.__currentSigma

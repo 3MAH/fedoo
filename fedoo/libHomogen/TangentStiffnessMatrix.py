@@ -12,7 +12,7 @@ import numpy as np
 import os
 import time
 
-def GetHomogenizedStiffness(assemb,meshperio=True):
+def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
 
     #Definition of the set of nodes for boundary conditions
     if isinstance(assemb, str):
@@ -48,7 +48,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True):
     #Type of problem
     pb = Static(assemb)
     
-    C = GetTangentStiffness(pb,meshperio)
+    C = GetTangentStiffness(pb,meshperio, **kargs)
     if remove_strain:
        mesh.RemoveNodes(StrainNodes)
        mesh.RemoveSetOfNodes('_StrainNodes')
@@ -58,9 +58,11 @@ def GetHomogenizedStiffness(assemb,meshperio=True):
     return C
 
 
-def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
+def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
     #################### PERTURBATION METHODE #############################
 
+    solver = kargs.get('solver', 'direct')
+    
     #Definition of the set of nodes for boundary conditions
     if isinstance(mesh, str):
         mesh = Mesh.GetAll()[mesh]
@@ -100,6 +102,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
     pb = Static("Assembling")
 
     pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
+    pb_post_tt.SetSolver(solver)
     pb_post_tt.SetA(pb.GetA())    
     
     #Shall add other conditions later on
@@ -162,8 +165,10 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None):
     return C
 
 
-def GetTangentStiffness(pb = None, meshperio = True):
-    #################### PERTURBATION METHODE #############################
+def GetTangentStiffness(pb = None, meshperio = True, **kargs):
+    #################### PERTURBATION METHODE #############################    
+    solver = kargs.get('solver', 'direct')
+    
     if pb is None: 
         pb = ProblemBase.GetActive()
     elif isinstance(pb, str):
@@ -202,6 +207,8 @@ def GetTangentStiffness(pb = None, meshperio = True):
     if "_perturbation" not in pb.GetAll():
         #initialize perturbation problem 
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
+        pb_post_tt.SetSolver('cg')
+        
         pb.MakeActive()
         
         #Shall add other conditions later on

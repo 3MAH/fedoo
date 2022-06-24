@@ -8,7 +8,7 @@ def _GenerateClass_NonLinearStatic(libBase):
     class __NonLinearStatic(libBase):
         
         def __init__(self, Assembling, ID):                                  
-            #A = Assembling.GetMatrix() #tangent stiffness matrix
+            #A = Assembling.current.GetMatrix() #tangent stiffness matrix
             A = 0 #tangent stiffness matrix - will be initialized only when required
             B = 0             
             #D = Assembling.GetVector() #initial stress vector
@@ -57,18 +57,18 @@ def _GenerateClass_NonLinearStatic(libBase):
         
         def UpdateA(self, dt = None):
             #dt not used for static problem
-            self.SetA(self.__Assembly.GetMatrix())
+            self.SetA(self.__Assembly.current.GetMatrix())
         
         def UpdateD(self,dt=None, start=False):            
             #dt and start not used for static problem
-            self.SetD(self.__Assembly.GetVector()) 
+            self.SetD(self.__Assembly.current.GetVector()) 
         
         def Initialize(self, t0=0.):   
             """
             """
             self.__Assembly.Initialize(self,t0)
-            # self.SetA(self.__Assembly.GetMatrix())
-            # self.SetD(self.__Assembly.GetVector())
+            # self.SetA(self.__Assembly.current.GetMatrix())
+            # self.SetD(self.__Assembly.current.GetVector())
         
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
@@ -128,15 +128,15 @@ def _GenerateClass_NonLinearStatic(libBase):
             if updateWeakForm == True:
                 self.__Assembly.Update(self, dtime, compute)
             else: 
-                self.__Assembly.ComputeGlobalMatrix(compute)
+                self.__Assembly.current.ComputeGlobalMatrix(compute)
 
         def Reset(self):
             self.__Assembly.Reset()
             
             self.SetA(0) #tangent stiffness 
             self.SetD(0)                 
-            # self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
-            # self.SetD(self.__Assembly.GetVector())            
+            # self.SetA(self.__Assembly.current.GetMatrix()) #tangent stiffness 
+            # self.SetD(self.__Assembly.current.GetVector())            
 
             B = 0
             self.__Utot = 0
@@ -235,8 +235,8 @@ def _GenerateClass_NonLinearStatic(libBase):
                     return 1, subiter, normRes
                 
                 #--------------- Solve --------------------------------------------------------        
-                # self.__Assembly.ComputeGlobalMatrix(compute = 'matrix')
-                # self.SetA(self.__Assembly.GetMatrix())
+                # self.__Assembly.current.ComputeGlobalMatrix(compute = 'matrix')
+                # self.SetA(self.__Assembly.current.GetMatrix())
                 self.Update(dt, compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
                 self.UpdateA(dt)
 

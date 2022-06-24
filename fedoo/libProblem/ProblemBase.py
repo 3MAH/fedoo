@@ -260,6 +260,10 @@ class ProblemBase:
     def UpdatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
     def UpdateAlpha(self): raise NameError("Method only defined for PGD Problems") 
     def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): raise NameError("Method only defined for PGD Problems") 
+    
+    @property
+    def solver(self):
+        return self.__solver[0]
 
 
 
