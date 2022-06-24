@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Dec 16 17:54:05 2021
-
 @author: Etienne
 """
 
@@ -438,5 +437,3 @@ class _ProblemOutput:
                     elif file_format == 'msh': OUT.toMSH(list_filename[i])
                     elif file_format == 'npz': np.savez(list_filename[i], **OUT)
                     elif file_format == 'npz_compressed': np.savez_compressed(list_filename[i], **OUT)
-            
-
