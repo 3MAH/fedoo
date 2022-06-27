@@ -249,11 +249,11 @@ class UniqueBoundaryCondition() :
 #         row = [[] for i in range(meshPGD.GetDimension())] 
 #         col = [[] for i in range(meshPGD.GetDimension())] 
         
-#         Nnd  = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
+#         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
 #         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
         
 #         for e in BoundaryCondition.GetAll(ProblemID):
-#             SetOfNodesForBC = meshPGD.GetSetOfNodes(e.__SetOfID)            
+#             SetOfNodesForBC = meshPGD.node_sets[e.__SetOfID]            
 #             if isinstance(e.__Value, list): e.__Value = np.array(e.__Value)
             
 #             Value = e.GetValue(timeFactor, timeFactorOld)
@@ -321,7 +321,7 @@ class UniqueBoundaryCondition() :
 #                     return NotImplemented    
             
 #             elif e.__BoundaryType == 'MPC':
-#                 SetOfNodesForBC_Master = [meshPGD.GetSetOfNodes(setofid) for setofid in e.__SetOfIDMaster] 
+#                 SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.__SetOfIDMaster] 
                 
 #                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
 #                 if len(SetOfNodesForBC[1]) == 1 \

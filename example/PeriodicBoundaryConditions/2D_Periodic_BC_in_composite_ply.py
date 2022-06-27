@@ -34,9 +34,9 @@ nu_matrix = 0.33
 # E=E_fiber ; nu = nu_fiber
 
 meshID = "Domain" #ID of the mesh    
-type_el = Mesh.GetAll()[meshID].GetElementShape() #Type of element for geometrical interpolation
+type_el = Mesh.GetAll()[meshID].elm_type #Type of element for geometrical interpolation
 try:
-    list_Elm_Matrix = Mesh.GetAll()[meshID].GetSetOfElements('alla_matrix')
+    list_Elm_Matrix = Mesh.GetAll()[meshID].element_sets['alla_matrix']
 except: 
     print('No matrix element')
     list_Elm_Matrix = []
@@ -45,7 +45,7 @@ except:
 # Set of nodes for boundary conditions
 #------------------------------------------------------------------------------
 
-crd = Mesh.GetAll()[meshID].GetNodeCoordinates() 
+crd = Mesh.GetAll()[meshID].nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
@@ -55,7 +55,7 @@ center = [np.linalg.norm(crd,axis=1).argmin()]
 #------------------------------------------------------------------------------
 # Adding virtual nodes related the macroscopic strain
 #------------------------------------------------------------------------------
-StrainNodes = Mesh.GetAll()[meshID].AddNodes(np.zeros(crd.shape[1]),1) 
+StrainNodes = Mesh.GetAll()[meshID].add_nodes(np.zeros(crd.shape[1]),1) 
 #The position of the virtual node has no importance (the position is arbitrary set to [0,0,0])
 #For a problem in 3D with a 2D periodicity, we have 3 strain component that can be represented with only one node
 #In case of a 2D problem, 2 nodes will be required
@@ -63,8 +63,8 @@ StrainNodes = Mesh.GetAll()[meshID].AddNodes(np.zeros(crd.shape[1]),1)
 #------------------------------------------------------------------------------
 #Material definition
 #------------------------------------------------------------------------------
-E = E_fiber*np.ones(Mesh.GetAll()[meshID].GetNumberOfElements())
-nu = nu_fiber*np.ones(Mesh.GetAll()[meshID].GetNumberOfElements())
+E = E_fiber*np.ones(Mesh.GetAll()[meshID].n_elements)
+nu = nu_fiber*np.ones(Mesh.GetAll()[meshID].n_elements)
 E[list_Elm_Matrix] = E_matrix
 nu[list_Elm_Matrix] = nu_matrix
 
@@ -161,7 +161,7 @@ PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
 
 #Get the displacement vector on nodes for export to vtk
 U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-N = Mesh.GetAll()[meshID].GetNumberOfNodes()
+N = Mesh.GetAll()[meshID].n_nodes
 # U = np.c_[U,np.zeros(N)]
 
 SetId = 'all_fibers' #or None
@@ -170,7 +170,7 @@ if SetId is None:
     ElSet = slice(None) #we keep all elements
 else:
     Mesh.GetAll()[meshID].ExtractSetOfElements(SetId, ID="output")
-    ElSet = Mesh.GetAll()[meshID].GetSetOfElements(SetId) #keep only some elements    
+    ElSet = Mesh.GetAll()[meshID].element_sets[SetId] #keep only some elements    
     OUT = Util.ExportData("output")
 
 #Write the vtk file                            

@@ -36,7 +36,7 @@ if USE_SIMCOON:
         if isinstance(VarCD, str):
             VarCD = [pb.space.variable_rank(v) for v in VarCD]
         
-        coords_nodes = mesh.GetNodeCoordinates()
+        coords_nodes = mesh.nodes
         if isinstance(NodeCD[0], np.int64):
             NodeCD_int32 = [n.item() for n in NodeCD]
         else:
@@ -55,11 +55,11 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     ----------
     crd : mesh ID or mesh object
         A periodic mesh to apply the periodic boundary conditions
-    NodeEps : list of int
+    NodeCD : list of int
         NodeCD is a list containing the node index of Grad displacement tensor component (virtual node)
         In 2D: [[GradU_XX, GradU_XY],[GradU_YX, GradU_YY]]
         In 3D: [[GradU_XX, GradU_XY, GradU_XZ],[GradU_YX, GradU_YY, GradU_YZ],[GradU_ZX, GradU_ZY, GradU_ZZ]]
-    VarEps : list of string
+    VarCD : list of string
         VarEps is a list containing the variable id used for each component
     dim : '2D' or '3D', optional
         This parameter is used to define if the periodicity is in 2D or in 3D.
@@ -88,7 +88,7 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
     ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
 
-    crd = mesh.GetNodeCoordinates()
+    crd = mesh.nodes
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
     if dim == 3:                        
@@ -405,7 +405,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
     ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
 
-    crd = mesh.GetNodeCoordinates()
+    crd = mesh.nodes
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
     

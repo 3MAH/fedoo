@@ -27,7 +27,7 @@ uimp = -0.5
 Mesh.RectangleMesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
 mesh = Mesh.GetAll()[meshID]
 
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 
 mat =1
 if mat == 0:

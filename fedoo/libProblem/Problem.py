@@ -18,7 +18,7 @@ class Problem(ProblemBase):
         ProblemBase.__init__(self, ID, space)
 
         #self.__ProblemDimension = A.shape[0]
-        self.__ProblemDimension = Mesh.GetNumberOfNodes() * self.space.nvar
+        self.__ProblemDimension = Mesh.n_nodes * self.space.nvar
 
         self.__A = A
 
@@ -50,7 +50,7 @@ class Problem(ProblemBase):
             vector[:] = value
         else:
             i = self.space.variable_rank(name)
-            n = self.GetMesh().GetNumberOfNodes()
+            n = self.GetMesh().n_nodes
             vector[i*n : (i+1)*n] = value      
 
     def _GetVectorComponent(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
@@ -59,7 +59,7 @@ class Problem(ProblemBase):
         if name.lower() == 'all':                             
             return vector
 
-        n = self.__Mesh.GetNumberOfNodes()
+        n = self.__Mesh.n_nodes
         
         if name in self.space.list_vector():
             vec = self.space.get_vector(name)
@@ -142,7 +142,7 @@ class Problem(ProblemBase):
 
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
                 
-        n = self.__Mesh.GetNumberOfNodes()
+        n = self.__Mesh.n_nodes
         nvar = self.space.nvar
         Uimp = np.zeros(nvar*n)
         F = np.zeros(nvar*n)
@@ -224,7 +224,7 @@ class Problem(ProblemBase):
         ### is used only for incremental problems
         U = self.GetDoFSolution() 
         F = self.GetExternalForces()
-        Nnodes = self.GetMesh().GetNumberOfNodes()
+        Nnodes = self.GetMesh().n_nodes
         for e in self._BoundaryConditions:            
             if e.DefaultInitialValue is None:
                 if e.BoundaryType == 'Dirichlet':

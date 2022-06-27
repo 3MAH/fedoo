@@ -23,10 +23,10 @@ Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling")
 Problem.Static("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.GetAll()[meshID].GetSetOfNodes("left")
-nodes_right = Mesh.GetAll()[meshID].GetSetOfNodes("right")
-nodes_top = Mesh.GetAll()[meshID].GetSetOfNodes("top")
-nodes_bottom = Mesh.GetAll()[meshID].GetSetOfNodes("bottom")
+nodes_left = Mesh.GetAll()[meshID].node_sets["left"]
+nodes_right = Mesh.GetAll()[meshID].node_sets["right"]
+nodes_top = Mesh.GetAll()[meshID].node_sets["top"]
+nodes_bottom = Mesh.GetAll()[meshID].node_sets["bottom"]
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)

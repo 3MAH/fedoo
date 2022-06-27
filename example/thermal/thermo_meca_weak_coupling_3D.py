@@ -19,16 +19,16 @@ filename_res = 'results/thermo_meca_nl'
 
 mesh = Mesh.GetAll()[meshID]
 
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 
 #note set for boundary conditions
-Xmin, Xmax = mesh.GetBoundingBox()
-left = mesh.FindNodes('X', Xmin[0])
-right = mesh.FindNodes('X', Xmax[0])
-bottom = mesh.FindNodes('Y', Xmin[1])
-top = mesh.FindNodes('Y', Xmax[1])
-back = mesh.FindNodes('Z', Xmin[2])
-front = mesh.FindNodes('Z', Xmax[2])
+Xmin, Xmax = mesh.bounding_box()
+left = mesh.find_nodes('X', Xmin[0])
+right = mesh.find_nodes('X', Xmax[0])
+bottom = mesh.find_nodes('Y', Xmin[1])
+top = mesh.find_nodes('Y', Xmax[1])
+back = mesh.find_nodes('Z', Xmin[2])
+front = mesh.find_nodes('Z', Xmax[2])
 
 
 

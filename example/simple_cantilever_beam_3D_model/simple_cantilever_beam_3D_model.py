@@ -12,10 +12,10 @@ Mesh.BoxMesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_mi
 
 meshID = "Domain"
 #mesh = Mesh.GetAll()[meshID]
-#crd = mesh.GetNodeCoordinates() 
+#crd = mesh.nodes 
 #xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
-#mesh.AddSetOfNodes(list(np.where(mesh.GetNodeCoordinates()[:,0] == xmin)[0]), "left")
-#mesh.AddSetOfNodes(list(np.where(mesh.GetNodeCoordinates()[:,0] == xmax)[0]), "right")
+#mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmin)[0]), "left")
+#mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmax)[0]), "right")
 
 #Material definition
 ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
@@ -28,10 +28,10 @@ Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling")
 Problem.Static("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.GetAll()[meshID].GetSetOfNodes("left")
-nodes_right = Mesh.GetAll()[meshID].GetSetOfNodes("right")
-nodes_top = Mesh.GetAll()[meshID].GetSetOfNodes("top")
-nodes_bottom = Mesh.GetAll()[meshID].GetSetOfNodes("bottom")
+nodes_left = Mesh.GetAll()[meshID].node_sets["left"]
+nodes_right = Mesh.GetAll()[meshID].node_sets["right"]
+nodes_top = Mesh.GetAll()[meshID].node_sets["top"]
+nodes_bottom = Mesh.GetAll()[meshID].node_sets["bottom"]
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)

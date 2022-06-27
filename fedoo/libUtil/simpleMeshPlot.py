@@ -48,14 +48,14 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     
     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
 
-    crd = mesh.GetNodeCoordinates()
-    elm = mesh.GetElementTable()
-    type_el = mesh.GetElementShape()
+    crd = mesh.nodes
+    elm = mesh.elements
+    type_el = mesh.elm_type
 
     if disp is not None: 
     #Get the displacement vector on nodes for export to vtk
         U = np.reshape(disp,(2,-1)).T    
-        N = mesh.GetNumberOfNodes()
+        N = mesh.n_nodes
         U = np.c_[U,np.zeros(N)]    
         x = crd[:,0] + U[:,0]*scale_factor
         y = crd[:,1] + U[:,1]*scale_factor
@@ -131,9 +131,9 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
         plt.gca().set_title(dataID+'_'+str(component))
         return
     
-    crd = mesh.GetNodeCoordinates()
-    elm = mesh.GetElementTable()
-    type_el = mesh.GetElementShape()
+    crd = mesh.nodes
+    elm = mesh.elements
+    type_el = mesh.elm_type
 
     if type_plot.lower() == "smooth":
         # mesh2 = Mesh(crd, elm, type_el, ID='visu')
@@ -184,7 +184,7 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
     # color = plt.cm.hsv
 
     # U = np.reshape(U,(2,-1)).T
-    # N = mesh2.GetNumberOfNodes()
+    # N = mesh2.n_nodes
     # U = np.c_[U,np.zeros(N)]
         
     # x = crd2[:,0] + U[:,0]*scale_factor

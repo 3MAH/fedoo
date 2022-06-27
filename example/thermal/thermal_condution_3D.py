@@ -20,7 +20,7 @@ Mesh.ImportFromFile('data/gyroid.msh', meshID = "Domain")
 
 mesh = Mesh.GetAll()[meshID]
 
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 
 K = 500 # K = 18 #W/K/m
 c = 0.500 #J/kg/K
@@ -30,11 +30,11 @@ wf = WeakForm.HeatEquation("ThermalLaw")
 assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling")    
 
 #note set for boundary conditions
-Xmin, Xmax = mesh.GetBoundingBox()
-bottom = mesh.FindNodes('Z', Xmin[2])
-top = mesh.FindNodes('Z', Xmax[2])
-left = mesh.FindNodes('X', Xmin[2])
-right = mesh.FindNodes('X', Xmax[2])
+Xmin, Xmax = mesh.bounding_box()
+bottom = mesh.find_nodes('Z', Xmin[2])
+top = mesh.find_nodes('Z', Xmax[2])
+left = mesh.find_nodes('X', Xmin[2])
+right = mesh.find_nodes('X', Xmax[2])
 
 Problem.NonLinearStatic("Assembling")
 

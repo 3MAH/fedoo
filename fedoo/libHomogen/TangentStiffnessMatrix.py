@@ -20,11 +20,11 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
     mesh = assemb.GetMesh()
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        crd = mesh.GetNodeCoordinates()[:-2]
+        crd = mesh.nodes[:-2]
     else: 
-        crd = mesh.GetNodeCoordinates()
+        crd = mesh.nodes
 
-    type_el = mesh.GetElementShape()
+    type_el = mesh.elm_type
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
     zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
@@ -38,11 +38,11 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
     DStress = []
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        StrainNodes = mesh.node_sets['_StrainNodes']
         remove_strain = False
     else:
-        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
-        mesh.AddSetOfNodes(StrainNodes, '_StrainNodes')
+        StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.add_node_set(StrainNodes, '_StrainNodes')
         remove_strain = True
 
     #Type of problem
@@ -68,11 +68,11 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
         mesh = Mesh.GetAll()[mesh]
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        crd = mesh.GetNodeCoordinates()[:-2]
+        crd = mesh.nodes[:-2]
     else: 
-        crd = mesh.GetNodeCoordinates()
+        crd = mesh.nodes
         
-    type_el = mesh.GetElementShape()
+    type_el = mesh.elm_type
     # type_el = 'hex20'
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -87,10 +87,10 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
     DStress = []
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        StrainNodes = mesh.node_sets['_StrainNodes']
     else:
-        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
-        mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
+        StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.add_node_set(StrainNodes,'_StrainNodes')
 
     ElasticAnisotropic(L, ID = 'ElasticLaw')
         
@@ -176,9 +176,9 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     mesh = pb.GetMesh()
     
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        crd = mesh.GetNodeCoordinates()[:-2]
+        crd = mesh.nodes[:-2]
     else: 
-        crd = mesh.GetNodeCoordinates()
+        crd = mesh.nodes
     
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -193,12 +193,12 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     DStress = []
     
     if '_StrainNodes' in mesh.ListSetOfNodes():
-        StrainNodes = mesh.GetSetOfNodes('_StrainNodes')
+        StrainNodes = mesh.node_sets['_StrainNodes']
         remove_strain = False
         A = pb.GetA()
     else:
-        StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
-        mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
+        StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
+        mesh.add_node_set(StrainNodes,'_StrainNodes')
         remove_strain = True
         A = pb.GetA().copy()
         A.resize(np.array(pb.GetA().shape)+6)

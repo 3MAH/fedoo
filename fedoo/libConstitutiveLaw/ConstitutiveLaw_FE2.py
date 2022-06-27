@@ -105,7 +105,7 @@ class FE2(Mechanical3D):
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
         self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
-            nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().GetNumberOfElements()
+            nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().n_elements
             
             #Definition of the set of nodes for boundary conditions
             if not(isinstance(self.__mesh, list)):            
@@ -124,8 +124,8 @@ class FE2(Mechanical3D):
             for i in range(nb_points):
                 print("\r", str(i+1),'/',str(nb_points), end="")
                 
-                crd = self.list_mesh[i].GetNodeCoordinates()
-                type_el = self.list_mesh[i].GetElementShape()
+                crd = self.list_mesh[i].nodes
+                type_el = self.list_mesh[i].elm_type
                 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
                 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
                 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
@@ -134,10 +134,10 @@ class FE2(Mechanical3D):
                 self._list_volume[i] = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
         
                 if '_StrainNodes' in self.list_mesh[i].ListSetOfNodes():
-                    strain_nodes = self.list_mesh[i].GetSetOfNodes('_StrainNodes')            
+                    strain_nodes = self.list_mesh[i].node_sets['_StrainNodes']            
                 else:
-                    strain_nodes = self.list_mesh[i].AddNodes(crd_center,2) #add virtual nodes for macro strain
-                    self.list_mesh[i].AddSetOfNodes(strain_nodes,'_StrainNodes')
+                    strain_nodes = self.list_mesh[i].add_nodes(crd_center,2) #add virtual nodes for macro strain
+                    self.list_mesh[i].add_node_set(strain_nodes,'_StrainNodes')
                
                 self._list_center[i] = np.linalg.norm(crd[:-2]-crd_center,axis=1).argmin()
                             # list_material.append(self.__constitutivelaw.copy())
@@ -179,7 +179,7 @@ class FE2(Mechanical3D):
         pb = self.list_problem[id_pb]
 
         print("\r", str(id_pb+1),'/',str(nb_points), end="")
-        strain_nodes = self.list_mesh[id_pb].GetSetOfNodes('_StrainNodes')  
+        strain_nodes = self.list_mesh[id_pb].node_sets['_StrainNodes']  
 
         pb.RemoveBC("Strain")
         pb.BoundaryCondition('Dirichlet','DispX', strain[0][id_pb], [strain_nodes[0]], initialValue = self.__strain[0][id_pb], ID = 'Strain') #EpsXX

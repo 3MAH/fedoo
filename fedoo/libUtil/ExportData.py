@@ -16,18 +16,18 @@ class ExportData:
         self.header = 'Some data'
     
     def addNodeData(self, Data, Name=None):      
-        if len(Data) != self.mesh.GetNumberOfNodes():
+        if len(Data) != self.mesh.n_nodes:
             raise NameError('Data dimension doesnt match the number of nodes')
         if len(Data.shape) == 1: Data = np.c_[Data]
         if Data.shape[1] == 2:
-            Data = np.c_[Data,np.zeros(self.mesh.GetNumberOfNodes())]
+            Data = np.c_[Data,np.zeros(self.mesh.n_nodes)]
         self.NodeData += [np.array(Data)]
         if Name==None:
             Name = 'Data_{}'.format(len(self.NodeData))
         self.NodeDataName += [Name]
 
     def addElmData(self, Data, Name=None):        
-        if len(Data) != self.mesh.GetNumberOfElements():
+        if len(Data) != self.mesh.n_elements:
             raise NameError('Data dimension doesnt match the number of elements')        
         self.ElmData+= [Data]
         if Name==None:
@@ -38,7 +38,7 @@ class ExportData:
         if self.multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
         
         datatype = 'UNSTRUCTURED_GRID'
-        type_elm = self.mesh.GetElementShape()
+        type_elm = self.mesh.elm_type
         try: #get the number of nodes per element (in case  there is additional internal nodes)
             nb_nd_elm =  str(int(type_elm[-2:]))
         except:
@@ -46,10 +46,10 @@ class ExportData:
             
 #        nb_nd_elm = str(np.shape(elm)[1]) #Number of nodes per element       
 
-        crd = self.mesh.GetNodeCoordinates()
-        elm = self.mesh.GetElementTable()[:,:int(nb_nd_elm)]
-        Ncrd = self.mesh.GetNumberOfNodes()
-        Nel = self.mesh.GetNumberOfElements()
+        crd = self.mesh.nodes
+        elm = self.mesh.elements[:,:int(nb_nd_elm)]
+        Ncrd = self.mesh.n_nodes
+        Nel = self.mesh.n_elements
         
         if type_elm == 'hex20':
             elm = elm[:,[0,1,2,3,4,5,6,7,8,9,10,11,16,17,18,19,12,13,14,15]]
@@ -145,7 +145,7 @@ class ExportData:
     def toMSH(self, filename='test.msh'):
         if self.multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
 
-        type_elm = self.mesh.GetElementShape()
+        type_elm = self.mesh.elm_type
         try: #get the number of nodes per element (in case  there is additional internal nodes)
             nb_nd_elm =  int(type_elm[-2:])
         except:
@@ -153,10 +153,10 @@ class ExportData:
             
 #        nb_nd_elm = str(np.shape(elm)[1]) #Number of nodes per element      
         
-        crd = self.mesh.GetNodeCoordinates()
-        elm = self.mesh.GetElementTable()[:,:nb_nd_elm]        
-        Ncrd = self.mesh.GetNumberOfNodes()
-        Nel = self.mesh.GetNumberOfElements()  
+        crd = self.mesh.nodes
+        elm = self.mesh.elements[:,:nb_nd_elm]        
+        Ncrd = self.mesh.n_nodes
+        Nel = self.mesh.n_elements  
         
         if type_elm == 'tet10':
             elm = elm[:, [1,2,3,4,5,6,7,9,8]]

@@ -72,11 +72,11 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
 
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, ndim, ID)
     if ElementShape != 'quad8':
-        N = ReturnedMesh.GetNumberOfNodes()
-        ReturnedMesh.AddSetOfNodes([nd for nd in range(Nx)], 'bottom')
-        ReturnedMesh.AddSetOfNodes([nd for nd in range(N-Nx,N)], 'top')
-        ReturnedMesh.AddSetOfNodes([nd for nd in range(0,N,Nx)], 'left')
-        ReturnedMesh.AddSetOfNodes([nd for nd in range(Nx-1,N,Nx)], 'right')
+        N = ReturnedMesh.n_nodes
+        ReturnedMesh.add_node_set([nd for nd in range(Nx)], 'bottom')
+        ReturnedMesh.add_node_set([nd for nd in range(N-Nx,N)], 'top')
+        ReturnedMesh.add_node_set([nd for nd in range(0,N,Nx)], 'left')
+        ReturnedMesh.add_node_set([nd for nd in range(Nx-1,N,Nx)], 'right')
     else: 
         print('Warning: no boundary set of nodes defined for quad8 elements')    
 
@@ -120,21 +120,21 @@ def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max
     else: 
         m = RectangleMesh(Nr, Ntheta, r_min, r_max, theta_max, theta_min, ElementShape, ndim, ID)
 
-    r = m.GetNodeCoordinates()[:,0]
-    theta = m.GetNodeCoordinates()[:,1]
+    r = m.nodes[:,0]
+    theta = m.nodes[:,1]
     crd = np.c_[r*np.cos(theta) , r*np.sin(theta)] 
-    ReturnedMesh = Mesh(crd, m.GetElementTable(), ElementShape, m.GetLocalFrame(), ndim, ID)
+    ReturnedMesh = Mesh(crd, m.elements, ElementShape, m.local_frame, ndim, ID)
 
     if theta_min<theta_max: 
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "bottom")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "top")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("bottom"), "left")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("top"), "right")
+        ReturnedMesh.add_node_set(m.node_sets["left"], "bottom")
+        ReturnedMesh.add_node_set(m.node_sets["right"], "top")
+        ReturnedMesh.add_node_set(m.node_sets["bottom"], "left")
+        ReturnedMesh.add_node_set(m.node_sets["top"], "right")
     else: 
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "bottom")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "top")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("top"), "left")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("bottom"), "right")
+        ReturnedMesh.add_node_set(m.node_sets["left"], "bottom")
+        ReturnedMesh.add_node_set(m.node_sets["right"], "top")
+        ReturnedMesh.add_node_set(m.node_sets["top"], "left")
+        ReturnedMesh.add_node_set(m.node_sets["bottom"], "right")
     
     return ReturnedMesh
     
@@ -181,8 +181,8 @@ def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
         elm = np.c_[np.arange(0,N-3,3), np.arange(1,N-2,3), np.arange(2,N-1,3), np.arange(3,N,3)] #Elements 
 
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, None, ID)
-    ReturnedMesh.AddSetOfNodes([0], "left")
-    ReturnedMesh.AddSetOfNodes([N-1], "right")
+    ReturnedMesh.add_node_set([0], "left")
+    ReturnedMesh.add_node_set([N-1], "right")
     
     return ReturnedMesh
 
@@ -218,19 +218,19 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ndim = None, ID = ""
         m = LineMesh1D(N,x_min,x_max,ElementShape,ID)    
         # if ModelingSpace.GetDimension() in ['2Dplane', '2Dstress'] : dim = 2
         # else: dim = 3
-        crd = np.c_[m.GetNodeCoordinates(), np.zeros((N,ndim-1))]
-        elm = m.GetElementTable()
+        crd = np.c_[m.nodes, np.zeros((N,ndim-1))]
+        elm = m.elements
         ReturnedMesh = Mesh(crd,elm,ElementShape, None, None, ID)
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
+        ReturnedMesh.add_node_set(m.node_sets["left"], "left")
+        ReturnedMesh.add_node_set(m.node_sets["right"], "right")
     else: 
         m = LineMesh1D(N,0.,1.,ElementShape,ID)    
-        crd = m.GetNodeCoordinates()
+        crd = m.nodes
         crd = (np.array(x_max)-np.array(x_min))*crd+np.array(x_min)
-        elm = m.GetElementTable()
+        elm = m.elements
         ReturnedMesh = Mesh(crd,elm,ElementShape, None, None, ID)
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
-        ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
+        ReturnedMesh.add_node_set(m.node_sets["left"], "left")
+        ReturnedMesh.add_node_set(m.node_sets["right"], "right")
         
     return ReturnedMesh
     
@@ -267,16 +267,16 @@ def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape 
     """
     # init_rep_loc = 1 si on veut initialiser le repère local (0 par défaut)
     m = LineMesh1D(Ntheta,theta_min,theta_max,ElementShape,ID)       
-    theta = m.GetNodeCoordinates()[:,0]
-    elm = m.GetElementTable()
+    theta = m.nodes[:,0]
+    elm = m.elements
 
     LocalFrame = np.array( [ [[np.sin(t),-np.cos(t)],[np.cos(t),np.sin(t)]] for t in theta ] )
 
     crd = np.c_[r*np.cos(theta), r*np.sin(theta)]
         
     ReturnedMesh = Mesh(crd,elm,ElementShape, LocalFrame, ndim, ID)
-    ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("left"), "left")
-    ReturnedMesh.AddSetOfNodes(m.GetSetOfNodes("right"), "right")
+    ReturnedMesh.add_node_set(m.node_sets["left"], "left")
+    ReturnedMesh.add_node_set(m.node_sets["right"], "right")
     
     return ReturnedMesh
 
@@ -354,7 +354,7 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
     ReturnedMesh = Mesh(crd, elm, ElementShape, None, None, ID)  
     for i, ndSet in enumerate([right, left, top, bottom, front, back]):
         ndSetId = ('right', 'left', 'top', 'bottom', 'front', 'back')[i]
-        ReturnedMesh.AddSetOfNodes(ndSet, ndSetId)
+        ReturnedMesh.add_node_set(ndSet, ndSetId)
                  
     return ReturnedMesh
 
@@ -367,12 +367,12 @@ def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4
 #     #last node of Edge1 should be the first of Edge2 and so on...
 #     if no ID is defined, the ID is the same as crd
     
-    if hasattr(data,'GetElementTable'): #data is a mesh        
-        if data.GetElementTable() is None: elm = []
+    if hasattr(data,'elm_type'): #data is a mesh        
+        if data.elements is None: elm = []
         else: 
-            elm = list(data.GetElementTable())
-            ElementShape = data.GetElementShape()
-        crd = data.GetNodeCoordinates()
+            elm = list(data.elements)
+            ElementShape = data.elm_type
+        crd = data.nodes
         if ID == "": ID = data.GetID()
     else: 
         elm = []
@@ -419,10 +419,10 @@ def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4
 def GenerateNodes(mesh, N, data, typeGen = 'straight'):
     #if typeGen == 'straight' -> data = (node1, node2)
     #if typeGen == 'circular' -> data = (node1, node2, (center_x, center_y))
-    crd = mesh.GetNodeCoordinates()    
+    crd = mesh.nodes    
     if typeGen == 'straight':
         node1 = data[0] ; node2 = data[1]
-        listNodes = mesh.AddNodes(LineMesh(N, crd[node1], crd[node2]).GetNodeCoordinates()[1:-1])
+        listNodes = mesh.add_nodes(LineMesh(N, crd[node1], crd[node2]).nodes[1:-1])
         return np.array([node1]+list(listNodes)+[node2])
     if typeGen == 'circular':
         nd1 = data[0] ; nd2 = data[1] ; c = data[2]
@@ -433,7 +433,7 @@ def GenerateNodes(mesh, N, data, typeGen = 'straight'):
         theta_min = np.arctan2(crd[nd1,1]-c[1],crd[nd1,0]-c[0])
         theta_max = np.arctan2(crd[nd2,1]-c[1],crd[nd2,0]-c[0])
         m = LineMeshCylindric(N, R, theta_min, theta_max) #circular mesh
-        listNodes = mesh.AddNodes(m.GetNodeCoordinates()[1:-1]+c)
+        listNodes = mesh.add_nodes(m.nodes[1:-1]+c)
         return np.array([nd1]+list(listNodes)+[nd2])
 
 def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sym= True, ndim = None, ID =""):
@@ -497,15 +497,15 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
         m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
         m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim)
         
-        nnd = m.GetNumberOfNodes()
-        crd = m.GetNodeCoordinates().copy()
-        crd[:,0] = -m.GetNodeCoordinates()[:,0]
-        m2 = Mesh(crd, m.GetElementTable(), m.GetElementShape())
+        nnd = m.n_nodes
+        crd = m.nodes.copy()
+        crd[:,0] = -m.nodes[:,0]
+        m2 = Mesh(crd, m.elements, m.elm_type)
         m = Mesh.Stack(m,m2)
         
-        crd = m.GetNodeCoordinates().copy()
-        crd[:,1] = -m.GetNodeCoordinates()[:,1]
-        m2 = Mesh(crd, m.GetElementTable(), m.GetElementShape())
+        crd = m.nodes.copy()
+        crd[:,1] = -m.nodes[:,1]
+        m2 = Mesh(crd, m.elements, m.elm_type)
         m = Mesh.Stack(m,m2, ID=ID)
         
         node_to_merge = np.vstack((np.c_[Edge5, Edge5+nnd], 
@@ -521,9 +521,9 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
     else: raise NameError('Non compatible element shape')
     
 def quad2tri(mesh):
-    assert mesh.GetElementShape() == 'quad4', "element shape should be 'quad4' for quad2tri"
-    crd = mesh.GetNodeCoordinates()
-    elm = mesh.GetElementTable()
+    assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
+    crd = mesh.nodes
+    elm = mesh.elements
     return Mesh(crd, np.vstack( [elm[:,0:3], elm[:,[0,2,3]]]), 'tri3')
                 
 if __name__=="__main__":
@@ -531,5 +531,5 @@ if __name__=="__main__":
     a = LineMeshCylindric(11, 1, 0, math.pi, 'lin2', init_rep_loc = 0)
     b = LineMeshCylindric(11, 1, 0, math.pi, 'lin4', init_rep_loc = 1)
 
-    print(b.GetNodeCoordinates())
+    print(b.nodes)
 

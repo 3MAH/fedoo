@@ -61,7 +61,7 @@ class ParametricBeam(WeakForm):
         self.__parameters = {'E':E, 'nu':nu, 'S':S, 'Jx':Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}
    
     def __GetKe(self, mesh):
-        NN = mesh.GetNumberOfNodes() #number of nodes for every submeshes
+        NN = mesh.n_nodes #number of nodes for every submeshes
         E_S = SeparatedOnes(NN) 
         G_Jx = SeparatedOnes(NN) #G = E/(1+nu)/2
         E_Iyy = SeparatedOnes(NN)
@@ -77,30 +77,30 @@ class ParametricBeam(WeakForm):
                 col = mesh.GetListMesh()[id_mesh].GetCoordinateID().index(param)
 
                 if param == 'R':
-                    E_S.data[id_mesh][:,0] = E_S.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col] ** 2 *np.pi)
-                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col] ** 4 * (np.pi/2))
-                    E_Iyy.data[id_mesh][:,0] = E_Iyy.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col] ** 4 * (np.pi/4))
+                    E_S.data[id_mesh][:,0] = E_S.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].nodes[:,col] ** 2 *np.pi)
+                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].nodes[:,col] ** 4 * (np.pi/2))
+                    E_Iyy.data[id_mesh][:,0] = E_Iyy.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].nodes[:,col] ** 4 * (np.pi/4))
                     E_Izz = E_Iyy
                     if kG_S is not 0:
-                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col] ** 2 *np.pi)
+                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].nodes[:,col] ** 2 *np.pi)
                     break
                     
                 if param in ['E','S']:
-                    E_S.data[id_mesh][:,0] = E_S.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]
+                    E_S.data[id_mesh][:,0] = E_S.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]
                     if kG_S is not 0:
-                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]
+                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]
                     if param == 'E':
-                        G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]            
+                        G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]            
                 if param == 'Jx':
-                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]
+                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]
                 if param == 'nu':                    
-                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * (0.5 / (1 + mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]))
+                    G_Jx.data[id_mesh][:,0] = G_Jx.data[id_mesh][:,0] * (0.5 / (1 + mesh.GetListMesh()[id_mesh].nodes[:,col]))
                     if kG_S is not 0:
-                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * (0.5 / (1 + mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]))
+                        kG_S.data[id_mesh][:,0] = kG_S.data[id_mesh][:,0] * (0.5 / (1 + mesh.GetListMesh()[id_mesh].nodes[:,col]))
                 if param in ['E','Iyy']:
-                    E_Iyy.data[id_mesh][:,0] = E_Iyy.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]
+                    E_Iyy.data[id_mesh][:,0] = E_Iyy.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]
                 if param in ['E','Izz']:
-                    E_Izz.data[id_mesh][:,0] = E_Izz.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].GetNodeCoordinates()[:,col]                             
+                    E_Izz.data[id_mesh][:,0] = E_Izz.data[id_mesh][:,0] * mesh.GetListMesh()[id_mesh].nodes[:,col]                             
             
             elif self.__parameters[param] is not None:                
                 if param in ['E','S']: 

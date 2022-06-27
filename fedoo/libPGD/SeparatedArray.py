@@ -602,7 +602,7 @@ class SeparatedArray: #Fonction discrete sous forme séparée
 
     def GetVariable(self, var, meshPGD):
         specificVariable = [meshPGD._GetSpecificVariableRank(dd, var) for dd in range(self.dim)]
-        NN = meshPGD.GetNumberOfNodes()
+        NN = meshPGD.n_nodes
         return SeparatedArray([self.data[dd][specificVariable[dd]*NN[dd]:(specificVariable[dd]+1)*NN[dd],:] for dd in range(self.dim)])
 
     def swap_space(self, ind1, ind2=0): 

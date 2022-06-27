@@ -15,14 +15,14 @@ Mesh.ImportFromFile('plate_with_hole.msh', meshID = "Domain")
 #alternative mesh below (uncomment the line)
 # Mesh.RectangleMesh(Nx=51, Ny=51, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = 'quad4', ID ="Domain")
 meshID = "Domain"
-type_el = Mesh.GetAll()[meshID].GetElementShape()
+type_el = Mesh.GetAll()[meshID].elm_type
 Util.meshPlot2d(meshID) #plot the mesh (using matplotlib)
 
 #------------------------------------------------------------------------------
 # Set of nodes for boundary conditions
 #------------------------------------------------------------------------------
 mesh = Mesh.GetAll()[meshID]
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 
@@ -31,7 +31,7 @@ center = [np.linalg.norm(crd,axis=1).argmin()]
 #------------------------------------------------------------------------------
 # Adding virtual nodes related the macroscopic strain
 #------------------------------------------------------------------------------
-StrainNodes = Mesh.GetAll()[meshID].AddNodes(np.zeros(crd.shape[1]),2) 
+StrainNodes = Mesh.GetAll()[meshID].add_nodes(np.zeros(crd.shape[1]),2) 
 #The position of the virtual node has no importance (the position is arbitrary set to [0,0,0])
 #For a problem in 2D with a 2D periodicity, we need 3 independant strain component 
 #2 nodes (with 2 dof per node in 2D) are required
@@ -130,7 +130,7 @@ print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 
 # #Get the displacement vector on nodes for export to vtk
 # U = np.reshape(Problem.GetDoFSolution('all'),(2,-1)).T
-# N = Mesh.GetAll()[meshID].GetNumberOfNodes()
+# N = Mesh.GetAll()[meshID].n_nodes
 # U = np.c_[U,np.zeros(N)]
 
 # #write the vtk file                     

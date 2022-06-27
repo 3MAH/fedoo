@@ -85,7 +85,7 @@ class AssemblySum(AssemblyBase):
             
         assert len(set([a.space for a in list_assembly])) == 1, \
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
-        assert len(set([a.GetMesh().GetNumberOfNodes() for a in list_assembly])) == 1,\
+        assert len(set([a.GetMesh().n_nodes for a in list_assembly])) == 1,\
             "Sum of assembly are possible only if the two meshes have the same number of Nodes"
 
         self.__list_assembly = list_assembly

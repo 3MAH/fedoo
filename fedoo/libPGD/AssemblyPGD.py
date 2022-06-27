@@ -30,7 +30,7 @@ class AssemblyPGD(AssemblyFEM):
 
         self._weakForm = weakForm
         self.__Mesh = mesh #should be a MeshPGD object 
-        self.__listElementType = [m.GetElementShape() for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.__Mesh
+        self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.__Mesh
         self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
         # [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
@@ -243,7 +243,7 @@ class AssemblyPGD(AssemblyFEM):
             The vector lenght is the number of element in the mesh              
         """
 
-        list_nb_elm = self.__Mesh.GetNumberOfElements()
+        list_nb_elm = self.__Mesh.n_elements
         res = self.GetGaussPointResult(operator, U)
         NumberOfGaussPoint = [res.data[dd].shape[0]//list_nb_elm[dd] for dd in range(len(res))]
                 
@@ -353,10 +353,10 @@ class AssemblyPGD(AssemblyFEM):
             constitutiveLaw = ConstitutiveLaw.GetAll()[constitutiveLaw]
 
         if IntegrationType == "Nodal":            
-            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfNodes()) for e in constitutiveLaw.GetStress()]
+            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_nodes) for e in constitutiveLaw.GetStress()]
         
         elif IntegrationType == "Element":
-            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfElements()) for e in constitutiveLaw.GetStress()]
+            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_elements) for e in constitutiveLaw.GetStress()]
         
         else:
             assert 0, "Wrong argument for IntegrationType"
@@ -376,10 +376,10 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfNodes()) for e in self.space.op_strain()])
+            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
-            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.GetNumberOfElements()) for e in self.space.op_strain()])
+            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_elements) for e in self.space.op_strain()])
         
         else:
             assert 0, "Wrong argument for IntegrationType"

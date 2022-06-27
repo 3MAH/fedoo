@@ -56,7 +56,7 @@ Problem.AddOutput('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], 
 
 
 #Definition of the set of nodes for boundary conditions
-crd = mesh_macro.GetNodeCoordinates()
+crd = mesh_macro.nodes
 left  = np.where(crd[:,0] == np.min(crd[:,0]))[0]
 right = np.where(crd[:,0] == np.max(crd[:,0]))[0]  
 bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0] 

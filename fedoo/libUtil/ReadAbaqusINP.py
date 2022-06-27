@@ -156,7 +156,7 @@ class ReadINP:
             #add set of nodes
             for SetOfId in self.__NodeSet:
                 NodeIndexes = self.__NodeSet[SetOfId]
-                Mesh.GetAll()[importedMeshName].AddSetOfNodes(self.__ConvertNode(NodeIndexes),SetOfId)
+                Mesh.GetAll()[importedMeshName].add_node_set(self.__ConvertNode(NodeIndexes),SetOfId)
             
             ElementNumber = dict_elm['ElementNumber']
             ConvertElementDict = dict(zip(ElementNumber, list(range(0,len(ElementNumber)))))        
@@ -164,7 +164,7 @@ class ReadINP:
             for SetOfId in self.__ElementSet:
                 ElementIndexes = self.__ElementSet[SetOfId]
                 Temp = ConvertElement(ElementIndexes)                
-                Mesh.GetAll()[importedMeshName].AddSetOfElements(Temp[Temp != None].astype(int),SetOfId)                    
+                Mesh.GetAll()[importedMeshName].add_element_set(Temp[Temp != None].astype(int),SetOfId)                    
 
     def applyBoundaryCondition(self, ProblemID = "MainProblem"):
         for listVar in self.__Equation:

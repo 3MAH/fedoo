@@ -25,7 +25,7 @@ def Create(weakForm, mesh="", elementType="", ID="", **kargs):
         list_weakform = weakForm.list_weakform
         
         if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
-        if elementType == "": elementType = mesh.GetElementShape()
+        if elementType == "": elementType = mesh.elm_type
                 
         #get lists of some non compatible assembly_options items for each weakform in list_weakform
         list_nb_pg = [wf.assembly_options.get('nb_pg', GetDefaultNbPG(elementType, mesh)) for wf in list_weakform]
@@ -95,7 +95,7 @@ class Assembly(AssemblyBase):
         
         self.__MeshChange = kargs.pop('MeshChange', False)        
         self.__Mesh = mesh   
-        if elementType == "": elementType = mesh.GetElementShape()
+        if elementType == "": elementType = mesh.elm_type
         self.__elmType= elementType #.lower()
         self.__TypeOfCoordinateSystem = self._GetTypeOfCoordinateSystem()
 
@@ -146,7 +146,7 @@ class Assembly(AssemblyBase):
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
             VV = 0
-            nbNodes = self.__Mesh.GetNumberOfNodes()            
+            nbNodes = self.__Mesh.n_nodes            
             sl = [slice(i*nbNodes, (i+1)*nbNodes) for i in range(nvar)] 
             
             if nb_pg == 0: #if finite difference elements, don't use BlocSparse                              
@@ -170,7 +170,7 @@ class Assembly(AssemblyBase):
                     assert wf.op_vir[ii].ordre == 0, "This weak form is not compatible with finite difference mesh"
                     
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector which is the nodal values
-                        if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                        if VV is 0: VV = np.zeros((self.__Mesh.n_nodes * nvar))
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - (coef_PG) 
                             
                     else: #virtual and real operators -> compute a matrix
@@ -254,7 +254,7 @@ class Assembly(AssemblyBase):
                         coef_vir.extend(associatedVariables[var_vir[0]][1])   
                     
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector 
-                        if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                        if VV is 0: VV = np.zeros((self.__Mesh.n_nodes * nvar))
                         for i in range(len(Matvir)):
                             VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
                             
@@ -320,7 +320,7 @@ class Assembly(AssemblyBase):
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
             VV = 0
-            nbNodes = self.__Mesh.GetNumberOfNodes()            
+            nbNodes = self.__Mesh.n_nodes            
             sl = [slice(i*nbNodes, (i+1)*nbNodes) for i in range(nvar)] 
             
             for ii in range(len(wf.op)):                   
@@ -350,7 +350,7 @@ class Assembly(AssemblyBase):
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                                             
                     Matvir = self._GetElementaryOp(wf.op_vir[ii])         
-                    if VV is 0: VV = np.zeros((self.__Mesh.GetNumberOfNodes() * nvar))
+                    if VV is 0: VV = np.zeros((self.__Mesh.n_nodes * nvar))
                     for i in range(len(Matvir)):
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
                         
@@ -457,16 +457,16 @@ class Assembly(AssemblyBase):
             MatrixChangeOfBasis = 1
             computeMatrixChangeOfBasis = False
 
-            Nnd = mesh.GetNumberOfNodes()
-            Nel = mesh.GetNumberOfElements()
-            elm = mesh.GetElementTable()
+            Nnd = mesh.n_nodes
+            Nel = mesh.n_elements
+            elm = mesh.elements
             nNd_elm = np.shape(elm)[1]            
-            crd = mesh.GetNodeCoordinates()
+            crd = mesh.nodes
             dim = self.space.ndim
-            localFrame = mesh.GetLocalFrame()
-            elmRefGeom = eval(mesh.GetElementShape())(mesh=mesh)
+            localFrame = mesh.local_frame
+            elmRefGeom = eval(mesh.elm_type)(mesh=mesh)
     #        xi_nd = elmRefGeom.xi_nd
-            xi_nd = GetNodePositionInElementCoordinates(mesh.GetElementShape(), nNd_elm) #function to define
+            xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, nNd_elm) #function to define
 
             if 'X' in mesh.GetCoordinateID() and 'Y' in mesh.GetCoordinateID(): #if not in physical space, no change of variable                
                 for nameVector in self.space.list_vector():
@@ -622,11 +622,11 @@ class Assembly(AssemblyBase):
         if nb_pg is None: NumberOfGaussPoint = self.__nb_pg
         else: NumberOfGaussPoint = nb_pg
                   
-        Nnd = mesh.GetNumberOfNodes()
-        Nel = mesh.GetNumberOfElements()
-        elm = mesh.GetElementTable()
+        Nnd = mesh.n_nodes
+        Nel = mesh.n_elements
+        elm = mesh.elements
         nNd_elm = np.shape(elm)[1]
-        crd = mesh.GetNodeCoordinates()
+        crd = mesh.nodes
         
         #-------------------------------------------------------------------
         #Case of finite difference mesh    
@@ -645,11 +645,11 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------
         #Initialise the geometrical interpolation
         #-------------------------------------------------------------------   
-        elmRefGeom = eval(mesh.GetElementShape())(NumberOfGaussPoint, mesh=mesh) #initialise element
+        elmRefGeom = eval(mesh.elm_type)(NumberOfGaussPoint, mesh=mesh) #initialise element
         nNd_elm_geom = len(elmRefGeom.xi_nd) #number of dof used in the geometrical interpolation
         elm_geom = elm[:,:nNd_elm_geom] 
 
-        localFrame = mesh.GetLocalFrame()
+        localFrame = mesh.local_frame
         nb_elm_nd = np.bincount(elm_geom.reshape(-1)) #len(nb_elm_nd) = Nnd #number of element connected to each node        
         vec_xi = elmRefGeom.xi_pg #coordinate of points of gauss in element coordinate (xi)
         
@@ -850,7 +850,7 @@ class Assembly(AssemblyBase):
         """
                 
         res = self.GetGaussPointResult(operator, U)
-        NumberOfGaussPoint = res.shape[0]//self.__Mesh.GetNumberOfElements()
+        NumberOfGaussPoint = res.shape[0]//self.__Mesh.n_elements
         return np.reshape(res, (NumberOfGaussPoint,-1)).sum(0) / NumberOfGaussPoint
 
     def GetGaussPointResult(self, operator, U, nb_pg = None):
@@ -986,13 +986,13 @@ class Assembly(AssemblyBase):
     #         constitutiveLaw = ConstitutiveLaw.GetAll()[constitutiveLaw]
 
     #     if Type == "Nodal":
-    #         return listStressTensor([self.GetNodeResult(e, U) if e!=0 else np.zeros(self.__Mesh.GetNumberOfNodes()) for e in constitutiveLaw.GetStressOperator()])
+    #         return listStressTensor([self.GetNodeResult(e, U) if e!=0 else np.zeros(self.__Mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "Element":
-    #         return listStressTensor([self.GetElementResult(e, U) if e!=0 else np.zeros(self.__Mesh.GetNumberOfElements()) for e in constitutiveLaw.GetStressOperator()])
+    #         return listStressTensor([self.GetElementResult(e, U) if e!=0 else np.zeros(self.__Mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "GaussPoint":
-    #         NumberOfGaussPointValues = self.__Mesh.GetNumberOfElements() * self.__nb_pg #Assembly.__saveOperator[(self.__Mesh, self.__elmType, self.__nb_pg)][0].shape[0]
+    #         NumberOfGaussPointValues = self.__Mesh.n_elements * self.__nb_pg #Assembly.__saveOperator[(self.__Mesh, self.__elmType, self.__nb_pg)][0].shape[0]
     #         return listStressTensor([self.GetGaussPointResult(e, U) if e!=0 else np.zeros(NumberOfGaussPointValues) for e in constitutiveLaw.GetStressOperator()])
         
     #     else:
@@ -1002,16 +1002,16 @@ class Assembly(AssemblyBase):
     def set_disp(self, disp):
         if disp is 0: self.current = self
         else:
-            new_crd = self.GetMesh().GetNodeCoordinates() + disp.T
+            new_crd = self.GetMesh().nodes + disp.T
             if self.current == self:
                 #initialize a new assembly
                 new_mesh = copy(self.GetMesh())
-                new_mesh.SetNodeCoordinates(new_crd)                                
+                new_mesh.nodes = new_crd
                 new_assembly = copy(self)                                                    
                 new_assembly.SetMesh(new_mesh)   
                 self.current = new_assembly
             else: 
-                self.current.GetMesh().SetNodeCoordinates(new_crd)
+                self.current.GetMesh().nodes = new_crd
                 
     def GetStrainTensor(self, U, Type="Nodal", nlgeom = None):
         """
@@ -1059,13 +1059,13 @@ class Assembly(AssemblyBase):
         grad_operator = self.space.op_grad_u()        
 
         if Type == "Nodal":
-            return [ [self.GetNodeResult(op, U) if op != 0 else np.zeros(self.__Mesh.GetNumberOfNodes()) for op in line_op] for line_op in grad_operator]
+            return [ [self.GetNodeResult(op, U) if op != 0 else np.zeros(self.__Mesh.n_nodes) for op in line_op] for line_op in grad_operator]
             
         elif Type == "Element":
-            return [ [self.GetElementResult(op, U) if op!=0 else np.zeros(self.__Mesh.GetNumberOfElements()) for op in line_op] for line_op in grad_operator]        
+            return [ [self.GetElementResult(op, U) if op!=0 else np.zeros(self.__Mesh.n_elements) for op in line_op] for line_op in grad_operator]        
         
         elif Type == "GaussPoint":
-            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.GetNumberOfElements() #Assembly.__saveMatGaussianQuadrature[(self.__Mesh, self.__nb_pg)].shape[0]
+            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.n_elements #Assembly.__saveMatGaussianQuadrature[(self.__Mesh, self.__nb_pg)].shape[0]
             return [ [self.GetGaussPointResult(op, U) if op!=0 else np.zeros(NumberOfGaussPointValues) for op in line_op] for line_op in grad_operator]        
         else:
             assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
@@ -1112,7 +1112,7 @@ class Assembly(AssemblyBase):
                  
         
 #        res = np.reshape(res,(6,-1)).T
-#        Nel = mesh.GetNumberOfElements()
+#        Nel = mesh.n_elements
 #        res = (res[Nel:,:]-res[0:Nel:,:])/2
 #        res = res[:, [self.space.variable_rank('DispX'), self.space.variable_rank('DispY'), self.space.variable_rank('DispZ'), \
 #                              self.space.variable_rank('ThetaX'), self.space.variable_rank('ThetaY'), self.space.variable_rank('ThetaZ')]]         
@@ -1121,16 +1121,16 @@ class Assembly(AssemblyBase):
 #        elif CoordinateSystem == 'global': 
 #            #require a transformation between local and global coordinates on element
 #            #classical MatrixChangeOfBasis transform only toward nodal values
-#            elmRef = eval(self.__Mesh.GetElementShape())(1, mesh=mesh)#one pg  with the geometrical element
+#            elmRef = eval(self.__Mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element
 #            vec = [0,1,2] ; dim = 3
 #       
 #            #Data to build MatrixChangeOfBasisElement with coo sparse format
-#            crd = mesh.GetNodeCoordinates() ; elm = mesh.GetElementTable()
+#            crd = mesh.nodes ; elm = mesh.elements
 #            rowMCB = np.empty((Nel, 1, dim,dim))
 #            colMCB = np.empty((Nel, 1, dim,dim))            
 #            rowMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*Nel # [[id_el + var*Nel] for var in vec]    
 #            colMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*Nel # [id_el+Nel*var for var in vec]
-#            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.GetLocalFrame()) #array of shape (Nel, nb_pg=1, nb of vectors in basis = dim, dim)                        
+#            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (Nel, nb_pg=1, nb of vectors in basis = dim, dim)                        
 #
 #            MatrixChangeOfBasisElement = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*Nel, dim*Nel)).tocsr()
 #            
@@ -1182,7 +1182,7 @@ class Assembly(AssemblyBase):
         
         res = np.reshape(res,(nvar,-1)).T
         
-        Nel = mesh.GetNumberOfElements()
+        Nel = mesh.n_elements
         res = (res[Nel:2*Nel,:]-res[0:Nel:,:])/2
         
         # if dim == 3:
@@ -1195,17 +1195,17 @@ class Assembly(AssemblyBase):
         elif CoordinateSystem == 'global': 
             #require a transformation between local and global coordinates on element
             #classical MatrixChangeOfBasis transform only toward nodal values
-            elmRef = eval(self.__Mesh.GetElementShape())(1, mesh=mesh)#one pg  with the geometrical element            
+            elmRef = eval(self.__Mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element            
             if dim == 3: vec = [0,1,2] 
             else: vec = [0,1]
        
             #Data to build MatrixChangeOfBasisElement with coo sparse format
-            crd = mesh.GetNodeCoordinates() ; elm = mesh.GetElementTable()
+            crd = mesh.nodes ; elm = mesh.elements
             rowMCB = np.empty((Nel, 1, dim,dim))
             colMCB = np.empty((Nel, 1, dim,dim))            
             rowMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*Nel # [[id_el + var*Nel] for var in vec]    
             colMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*Nel # [id_el+Nel*var for var in vec]
-            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.GetLocalFrame()) #array of shape (Nel, nb_pg=1, nb of vectors in basis = dim, dim)                        
+            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (Nel, nb_pg=1, nb of vectors in basis = dim, dim)                        
 
             MatrixChangeOfBasisElement = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*Nel, dim*Nel)).tocsr()
             
@@ -1246,7 +1246,7 @@ def DeleteMemory():
 #     if isinstance(data, Number): return data
     
 #     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
-#     if elmType is None: elmType = mesh.GetElementShape()
+#     if elmType is None: elmType = mesh.elm_type
 #     if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
     
 #     if isinstance(data, (listStrainTensor, listStressTensor)):        
@@ -1280,13 +1280,13 @@ def DetermineDataType(data, mesh, nb_pg):
         if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
  
         test = 0
-        if len(data) == mesh.GetNumberOfNodes(): 
+        if len(data) == mesh.n_nodes: 
             dataType = 'Node' #fonction définie aux noeuds   
             test+=1               
-        if len(data) == mesh.GetNumberOfElements(): 
+        if len(data) == mesh.n_elements: 
             dataType = 'Element' #fonction définie aux éléments
             test += 1
-        if len(data) == nb_pg*mesh.GetNumberOfElements():
+        if len(data) == nb_pg*mesh.n_elements:
             dataType = 'GaussPoint'
             test += 1
         assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."

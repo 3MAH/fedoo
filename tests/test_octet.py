@@ -13,15 +13,14 @@ Mesh.ImportFromFile('data/MeshPeriodic.msh', meshID = "Domain")
 mesh = Mesh.GetAll()["Domain2"]
 
 #Get the bounding box (corners coordinates and center)
-Xmin, Xmax, crd_center = mesh.GetBoundingBox(return_center = True)
-# total volume of the bounding box
-Volume = (Xmax-Xmin).prod()
-
+bounds = mesh.bounding_box
+volume = bounds.volume
+crd_center = bounds.center
 #Nearest node to the center of the bounding box for boundary conditions
-center = mesh.GetNearestNode(crd_center)
+center = mesh.nearest_node(crd_center)
 
 # Add 2 virtual nodes for macro strain 
-StrainNodes = Mesh.GetAll()["Domain2"].AddNodes(crd_center, 2)  
+StrainNodes = Mesh.GetAll()["Domain2"].add_nodes(crd_center, 2)  
 
 # Material definition and simcoon elasto-plastic constitutive law
 Re = 300

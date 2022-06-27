@@ -30,10 +30,10 @@ ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], ID = 'Plate
 
 mesh = Mesh.RectangleMesh(21,5,0,L,-h/2,h/2, geomElementType, ndim = 3, ID='plate')
 
-nodes_left = mesh.GetSetOfNodes('left')
-nodes_right = mesh.GetSetOfNodes('right')
+nodes_left = mesh.node_sets['left']
+nodes_right = mesh.node_sets['right']
 
-node_right_center = nodes_right[(mesh.GetNodeCoordinates()[nodes_right,1]**2).argmin()]
+node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
 if reduced_integration == False:

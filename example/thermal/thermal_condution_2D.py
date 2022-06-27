@@ -22,7 +22,7 @@ uimp = -5
 Mesh.RectangleMesh(Nx=21, Ny=21, x_min=0, x_max=L, y_min=0, y_max=L, ElementShape = 'quad4', ID = meshID) 
 mesh = Mesh.GetAll()[meshID]
 
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 
 K = 18 #W/K/m
 c = 0.500 #J/kg/K
@@ -31,8 +31,8 @@ Material = ConstitutiveLaw.ThermalProperties(K, c, rho, ID='ThermalLaw')
 wf = WeakForm.HeatEquation("ThermalLaw")
 assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling")    
 
-left = mesh.FindNodes('X', 0)
-right = mesh.FindNodes('X', L)
+left = mesh.find_nodes('X', 0)
+right = mesh.find_nodes('X', L)
 
 Problem.NonLinearStatic("Assembling")
 

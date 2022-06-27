@@ -34,8 +34,8 @@ outputdatfile = 'output.dat'
 #Definition of the set of nodes for boundary conditions
 mesh = Mesh.GetAll()[meshID]
     
-crd = mesh.GetNodeCoordinates()
-type_el = mesh.GetElementShape()
+crd = mesh.nodes
+type_el = mesh.elm_type
 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -45,10 +45,10 @@ crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
 
 if '_StrainNodes' in mesh.ListSetOfNodes():
-    StrainNodes = mesh.GetSetOfNodes('_StrainNodes')            
+    StrainNodes = mesh.node_sets['_StrainNodes']            
 else:
-    StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
-    mesh.AddSetOfNodes(StrainNodes,'_StrainNodes')
+    StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
+    mesh.add_node_set(StrainNodes,'_StrainNodes')
 
 # center = [np.linalg.norm(crd[:-2]-crd_center,axis=1).argmin()] 
 # center = [len(crd)-1]

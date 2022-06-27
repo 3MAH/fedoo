@@ -27,7 +27,7 @@ crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[1,0,0]])
 # crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[0,0,1]]) #beam oriented in the Z axis 
 elm = np.c_[np.arange(0,Nb_elm), np.arange(1,Nb_elm+1)]
 
-Mesh.Mesh(crd,elm,'lin2',ID='beam')
+Mesh.Mesh(crd,elm,'lin2',name='beam')
 nodes_left = [0]
 nodes_right = [Nb_elm]
 

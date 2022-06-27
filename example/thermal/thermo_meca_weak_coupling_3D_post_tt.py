@@ -27,10 +27,10 @@ component = 1
 # clim = None 
 clim = [0,100] 
 
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 
 # #note set for boundary conditions
-Xmin, Xmax, center = mesh.GetBoundingBox(return_center=True)
+Xmin, Xmax, center = mesh.bounding_box(return_center=True)
 
 
 

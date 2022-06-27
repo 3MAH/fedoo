@@ -27,8 +27,8 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         if len(set(listCrdID)) != len(listCrdID): 
             print("Warning: some coordinate ID are defined in more than one mesh")
         
-        self.__SetOfNodes = {} #node on the boundary for instance
-        self.__SetOfElements = {}
+        self.node_sets = {} #node on the boundary for instance
+        self.element_sets = {}
         self.__SpecificVariableRank = {} #to define specific variable rank for each submesh (used for the PGD)
     
     def _SetSpecificVariableRank(self, idmesh, idvar, specific_rank):
@@ -69,17 +69,17 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
     def GetListMesh(self):
         return self.__ListMesh
     
-    def AddSetOfNodes(self, listNodeIndexes, listSubMesh = None, ID=None):
+    def add_node_set(self, listNodeIndexes, listSubMesh = None, ID=None):
         """
         The Set Of Nodes in Mesh PGD object are used to defined the boundary conditions.
         There is two ways of defining a SetOfNodes:
         
-        PGD.Mesh.AddSetOfNodes([nodeIndexes_1,...,nodeIndexes_n ], ID=SetOfID)
+        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], ID=SetOfID)
             * nodeIndexes_i a list of node indexe cooresponding to the ith subMesh (as defined in the constructor of the PGD.Mesh object)
             * nodeIndexes_i can also be set to "all" to indicate that all the nodes have to be included
             * SetOfID is the ID of the SetOf
             
-        PGD.Mesh.AddSetOfNodes([nodeIndexes_1,...,nodeIndexes_n ], [subMesh_1,...,subMesh_n], ID=SetOfID)
+        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], [subMesh_1,...,subMesh_n], ID=SetOfID)
             * nodeIndexes_i a list of node indexe cooresponding to the mesh indicated in subMesh_i
             * subMesh_i can be either a mesh ID (str object) or a Mesh object
             * the keyword "all" is NOT available when the subMesh are indicated.
@@ -88,7 +88,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         """
         if ID == None:
             num = 1
-            while "NodeSet"+str(num) in self.__SetOfNodes: 
+            while "NodeSet"+str(num) in self.node_sets: 
                 num += 1
             ID = "NodeSet"+str(num)                
         
@@ -101,16 +101,16 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             # listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
             listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
             
-        self.__SetOfNodes[ID] = [listSubMesh, listNodeIndexes]
+        self.node_sets[ID] = [listSubMesh, listNodeIndexes]
         
-    def AddSetOfElements(self, listElementIndexes, listSubMesh = None, ID=None):
+    def add_element_set(self, listElementIndexes, listSubMesh = None, ID=None):
         """
-        See the documention of AddSetOfNodes. 
-        AddSetOfElements is a similar method for Elements.
+        See the documention of add_node_set. 
+        add_element_set is a similar method for Elements.
         """
         if ID == None:
             num = 1
-            while "ElementSet"+str(num) in self.__SetOfNodes: 
+            while "ElementSet"+str(num) in self.node_sets: 
                 num += 1
             ID = "ElementSet"+str(num)                
         
@@ -122,25 +122,25 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         else:
             listSubMesh = [MeshBase.GetAll()[m] if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
         
-        self.__SetOfElements[ID] = [listSubMesh, listElementIndexes]
+        self.element_sets[ID] = [listSubMesh, listElementIndexes]
 
     def GetSetOfNodes(self,SetOfId):
-        return self.__SetOfNodes[SetOfId]
+        return self.node_sets[SetOfId]
         
     def GetSetOfElements(self,SetOfId):
-        return self.__SetOfElements[SetOfId]
+        return self.element_sets[SetOfId]
 
     def RemoveSetOfNodes(self,SetOfId):
-        del self.__SetOfNodes[SetOfId]
+        del self.node_sets[SetOfId]
         
     def RemoveSetOfElements(self,SetOfId):
-        del self.__SetOfElements[SetOfId]
+        del self.element_sets[SetOfId]
 
     def ListSetOfNodes(self):
-        return [key for key in self.__SetOfNodes]
+        return [key for key in self.node_sets]
 
     def ListSetOfElements(self):    
-        return [key for key in self.__SetOfElements]
+        return [key for key in self.element_sets]
     
     def FindCoordinateID(self, crd):
         """
@@ -156,13 +156,13 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         """
         Return a list containing the number of nodes for all submeshes
         """
-        return [m.GetNumberOfNodes() for m in self.__ListMesh]
+        return [m.n_nodes for m in self.__ListMesh]
     
     def GetNumberOfElements(self):
         """
         Return a list containing the number of nodes for all submeshes
         """
-        return [m.GetNumberOfElements() for m in self.__ListMesh]
+        return [m.n_elements for m in self.__ListMesh]
 
     @staticmethod        
     def Create(*args, **kargs):        
@@ -188,67 +188,67 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         if len(self.__ListMesh) == 3: 
             return NotImplemented
 #            mesh1 = self.__ListMesh[0] ; mesh2 = self.__ListMesh[1] ; mesh3 = self.__ListMesh[2]
-#            if mesh1.__ElementShape == 'lin2' and mesh2.__ElementShape == 'lin2' and mesh3.__ElementShape == 'lin2':
+#            if mesh1.elm_type == 'lin2' and mesh2.elm_type == 'lin2' and mesh3.elm_type == 'lin2':
 #                elmType = 'hex8'                
 #                
 #            else: 'element doesnt exist'
         elif len(self.__ListMesh) == 2:            
             mesh1 = self.__ListMesh[1] ; mesh0 = self.__ListMesh[0]
             
-            Nel1 = mesh1.GetNumberOfElements() ; Nel0 = mesh0.GetNumberOfElements() 
+            Nel1 = mesh1.n_elements ; Nel0 = mesh0.n_elements 
             Nel = Nel1*Nel0
-            ndInElm1 = np.shape(mesh1.GetElementTable())[1] 
-            ndInElm0 = np.shape(mesh0.GetElementTable())[1]
+            ndInElm1 = np.shape(mesh1.elements)[1] 
+            ndInElm0 = np.shape(mesh0.elements)[1]
             elm = np.zeros((Nel,ndInElm1*ndInElm0), dtype=int)
            
-            if mesh0.GetElementShape() == 'lin2': #mesh0 is 'lin2'
+            if mesh0.elm_type == 'lin2': #mesh0 is 'lin2'
                 dim_mesh0 = 1
-                if mesh1.GetElementShape() == 'lin2': 
+                if mesh1.elm_type == 'lin2': 
                     type_elm = 'quad4'    
                     dim_mesh1 = 1
                     for i in range(Nel0):
-                        elm[i*Nel1:(i+1)*Nel1 , [0,1]] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,0]*mesh1.GetNumberOfNodes()
-                        elm[i*Nel1:(i+1)*Nel1 , [3,2]] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,1]*mesh1.GetNumberOfNodes()
-                elif mesh1.GetElementShape() == 'quad4': 
+                        elm[i*Nel1:(i+1)*Nel1 , [0,1]] = mesh1.elements + mesh0.elements[i,0]*mesh1.n_nodes
+                        elm[i*Nel1:(i+1)*Nel1 , [3,2]] = mesh1.elements + mesh0.elements[i,1]*mesh1.n_nodes
+                elif mesh1.elm_type == 'quad4': 
                     dim_mesh1 = 2
                     type_elm = 'hex8'
                     for i in range(Nel0):                
-                        elm[i*Nel1:(i+1)*Nel1 , 0:ndInElm1         ] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,0]*mesh1.GetNumberOfNodes()
-                        elm[i*Nel1:(i+1)*Nel1 , ndInElm1:2*ndInElm1] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,1]*mesh1.GetNumberOfNodes()                        
+                        elm[i*Nel1:(i+1)*Nel1 , 0:ndInElm1         ] = mesh1.elements + mesh0.elements[i,0]*mesh1.n_nodes
+                        elm[i*Nel1:(i+1)*Nel1 , ndInElm1:2*ndInElm1] = mesh1.elements + mesh0.elements[i,1]*mesh1.n_nodes                        
                 else: raise NameError('Element not implemented')
 
-            elif mesh0.GetElementShape() == 'lin3':     #need verification because the node numerotation for lin2 has changed             
+            elif mesh0.elm_type == 'lin3':     #need verification because the node numerotation for lin2 has changed             
                 dim_mesh0 = 1
-                if mesh1.GetElementShape() == 'lin3': #mesh1 and mesh0 are lin3 elements
+                if mesh1.elm_type == 'lin3': #mesh1 and mesh0 are lin3 elements
                     dim_mesh1 = 1
                     type_elm = 'quad9'
                     for i in range(Nel0): #éléments 1D à 3 noeuds (pour le moment uniquement pour générer des éléments quad9)
-                        elm[i*Nel1:(i+1)*Nel1 , [0,4,1] ] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,0]*mesh1.GetNumberOfNodes()
-                        elm[i*Nel1:(i+1)*Nel1 , [7,8,5] ] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,1]*mesh1.GetNumberOfNodes()
-                        elm[i*Nel1:(i+1)*Nel1 , [3,6,2] ] = mesh1.GetElementTable() + mesh0.GetElementTable()[i,2]*mesh1.GetNumberOfNodes()
+                        elm[i*Nel1:(i+1)*Nel1 , [0,4,1] ] = mesh1.elements + mesh0.elements[i,0]*mesh1.n_nodes
+                        elm[i*Nel1:(i+1)*Nel1 , [7,8,5] ] = mesh1.elements + mesh0.elements[i,1]*mesh1.n_nodes
+                        elm[i*Nel1:(i+1)*Nel1 , [3,6,2] ] = mesh1.elements + mesh0.elements[i,2]*mesh1.n_nodes
                 else: raise NameError('Element not implemented')
                 
-            elif mesh0.GetElementShape() == 'quad4':
+            elif mesh0.elm_type == 'quad4':
                 dim_mesh0 = 2
-                if mesh1.GetElementShape() == 'lin2':
+                if mesh1.elm_type == 'lin2':
                     dim_mesh1 = 1
                     type_elm = 'hex8'                        
                     for i in range(Nel1):                
-                        elm[i::Nel1 , 0:ndInElm0         ] = mesh0.GetElementTable()*mesh1.GetNumberOfNodes() + mesh1.GetElementTable()[i,0]
-                        elm[i::Nel1 , ndInElm0:2*ndInElm0] = mesh0.GetElementTable()*mesh1.GetNumberOfNodes() + mesh1.GetElementTable()[i,1]
+                        elm[i::Nel1 , 0:ndInElm0         ] = mesh0.elements*mesh1.n_nodes + mesh1.elements[i,0]
+                        elm[i::Nel1 , ndInElm0:2*ndInElm0] = mesh0.elements*mesh1.n_nodes + mesh1.elements[i,1]
                             
             else: raise NameError('Element not implemented') 
             
             if useLocalFrame == False:       
-                Ncrd = mesh1.GetNumberOfNodes() * mesh0.GetNumberOfNodes()
-#                crd = np.c_[np.tile(mesh1.GetNodeCoordinates()[:,:dim_mesh1],(mesh0.GetNumberOfNodes(),1)), \
-#                            np.reshape([np.ones((mesh1.GetNumberOfNodes(),1))*mesh0.GetNodeCoordinates()[i,:dim_mesh0] for i in range(mesh0.GetNumberOfNodes())] ,(Ncrd,-1)) ] 
-                crd = np.c_[np.reshape([np.ones((mesh1.GetNumberOfNodes(),1))*mesh0.GetNodeCoordinates()[i,:dim_mesh0] for i in range(mesh0.GetNumberOfNodes())] ,(Ncrd,-1)), \
-                            np.tile(mesh1.GetNodeCoordinates()[:,:dim_mesh1],(mesh0.GetNumberOfNodes(),1))] 
+                Ncrd = mesh1.n_nodes * mesh0.n_nodes
+#                crd = np.c_[np.tile(mesh1.nodes[:,:dim_mesh1],(mesh0.n_nodes,1)), \
+#                            np.reshape([np.ones((mesh1.n_nodes,1))*mesh0.nodes[i,:dim_mesh0] for i in range(mesh0.n_nodes)] ,(Ncrd,-1)) ] 
+                crd = np.c_[np.reshape([np.ones((mesh1.n_nodes,1))*mesh0.nodes[i,:dim_mesh0] for i in range(mesh0.n_nodes)] ,(Ncrd,-1)), \
+                            np.tile(mesh1.nodes[:,:dim_mesh1],(mesh0.n_nodes,1))] 
             elif dim_mesh0 == 1: #dim_mesh0 is the thickness
-                crd = np.zeros((mesh1.GetNumberOfNodes()*mesh0.GetNumberOfNodes(), np.shape(mesh1.GetNodeCoordinates())[1]))
-                for i in range(mesh0.GetNumberOfNodes()):
-                    crd[i*mesh1.GetNumberOfNodes():(i+1)*mesh1.GetNumberOfNodes(),:] = mesh1.GetNodeCoordinates() + mesh1.GetLocalFrame()[:,-1,:]*mesh0.GetNodeCoordinates()[i][0]
+                crd = np.zeros((mesh1.n_nodes*mesh0.n_nodes, np.shape(mesh1.nodes)[1]))
+                for i in range(mesh0.n_nodes):
+                    crd[i*mesh1.n_nodes:(i+1)*mesh1.n_nodes,:] = mesh1.nodes + mesh1.local_frame[:,-1,:]*mesh0.nodes[i][0]
             else: return NotImplemented
             
             return MeshFEM(crd, elm, type_elm, ID=ID)                        

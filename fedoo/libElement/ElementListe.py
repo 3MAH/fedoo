@@ -64,4 +64,4 @@ def GetDefaultNbPG(element, mesh=None, raiseError=True):
         raise NameError('Element unknown: no default number of integration points')
         
     if mesh is not None: 
-        return GetDefaultNbPG(mesh.GetElementShape())
+        return GetDefaultNbPG(mesh.elm_type)

@@ -22,7 +22,7 @@ class ProblemPGD(ProblemBase):
         self.__Mesh = Mesh
         self.__NumberOfSubspace = Mesh.GetDimension()
         
-        listNumberOfNodes = Mesh.GetNumberOfNodes()  #list of number of nodes for all submesh
+        listNumberOfNodes = Mesh.n_nodes  #list of number of nodes for all submesh
         #self.__ProblemDimension is a list of number of DoF for each subspace
         self.__ProblemDimension = [Mesh._GetSpecificNumberOfVariables(idmesh, nvar)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
         #self.__ProblemDimension = self.__A.GetShape()
@@ -59,7 +59,7 @@ class ProblemPGD(ProblemBase):
 #
 #            i = self.space.variable_rank(name)
 #
-#            n = Problem.__Mesh.GetNumberOfNodes()
+#            n = Problem.__Mesh.n_nodes
 #
 #            NewmarkPGD.__Xdotdot[i*n : (i+1)*n] = value            
     
@@ -291,11 +291,11 @@ class ProblemPGD(ProblemBase):
         row = [[] for i in self.__ProblemDimension] 
         col = [[] for i in self.__ProblemDimension] 
         
-        Nnd  = [meshPGD.GetListMesh()[d].GetNumberOfNodes() for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
+        Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.GetDimension())]
         
         for e in self._BoundaryConditions:
-            SetOfNodesForBC = meshPGD.GetSetOfNodes(e.SetOfID)            
+            SetOfNodesForBC = meshPGD.node_sets[e.SetOfID]            
             # if isinstance(e.FinalValue, list): e.__Value = np.array(e.__Value)
             
             Value = e.GetValue(timeFactor, timeFactorOld)
@@ -363,7 +363,7 @@ class ProblemPGD(ProblemBase):
                     return NotImplemented    
             
             elif e.BoundaryType == 'MPC':
-                SetOfNodesForBC_Master = [meshPGD.GetSetOfNodes(setofid) for setofid in e.SetOfIDMaster] 
+                SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfIDMaster] 
                 
                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
                 if len(SetOfNodesForBC[1]) == 1 \

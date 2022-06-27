@@ -280,7 +280,7 @@ def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume
                 else: importedMeshName = meshID+str(count)
                     
                 print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-                Mesh(crd, elm, type_elm, ID = importedMeshName)            
+                Mesh(crd, elm, type_elm, name = importedMeshName)            
                 #Rajouter GeometricalEntity en elSet
                 count+=1
         
@@ -304,7 +304,7 @@ def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume
             
             #add entity set of elements
             for elset in element_all[elementType][1]:
-                m.AddSetOfElements(element_all[elementType][1][elset], elset)
+                m.add_element_set(element_all[elementType][1][elset], elset)
                 
             
             count+=1

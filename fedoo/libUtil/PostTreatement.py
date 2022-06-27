@@ -66,7 +66,7 @@ class listStressTensor(list):
     def convertPiolaToCauchy(self, GradDeformedCoordinates): 
         PiolaKStress = self.GetFullTensor().transpose(2,0,1)          
         
-    #            GradX = [[Assembly.GetAll()['Assembling'].GetNodeResult(GradOp[i][j], Mesh.GetAll()[meshID].GetNodeCoordinates().T.reshape(-1)+Problem.GetDisp()) for j in range(3)] for i in range(3)] 
+    #            GradX = [[Assembly.GetAll()['Assembling'].GetNodeResult(GradOp[i][j], Mesh.GetAll()[meshID].nodes.T.reshape(-1)+Problem.GetDisp()) for j in range(3)] for i in range(3)] 
         GradX = np.transpose(np.array(GradDeformedCoordinates)[:,:,:],(2,0,1))
         DetGradX = np.linalg.det(GradX)
     

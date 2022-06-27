@@ -66,7 +66,7 @@ def GlobalLocalFrame(NumberOfPoints):
 
 def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
     if isinstance(crd, MeshFEM):
-       crd = MeshFEM.GetNodeCoordinates()               
+       crd = MeshFEM.nodes               
             
     localFrame = np.zeros((len(crd), dim, dim))
     if dim == 3:        
@@ -123,7 +123,7 @@ def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
 #        for ii, IDcrd in enumerate(['X','Y','Z']):
 #            idmesh = mesh.FindCoordinateID(IDcrd)     
 #            subMesh = mesh.GetListMesh()[idmesh]
-#            crd = subMesh.GetNodeCoordinates()[:, subMesh.GetCoordinateID().index(IDcrd)]
+#            crd = subMesh.nodes[:, subMesh.GetCoordinateID().index(IDcrd)]
 #            crd_all.append(SeparatedArray([np.c_[crd] if i == idmesh else np.array([[1.]]) for i in range(mesh.GetDimension())]))
 #            
 #        localFrame = np.zeros((dim, dim), dtype =object)

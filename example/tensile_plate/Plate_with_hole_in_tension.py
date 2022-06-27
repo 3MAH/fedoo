@@ -14,7 +14,7 @@ Mesh.ImportFromFile('plate_with_hole.msh', meshID = "Domain")
 
 #alternative mesh below (uncomment the line)
 #Mesh.RectangleMesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, ID ="Domain")
-type_el = Mesh.GetAll()['Domain'].GetElementShape()
+type_el = Mesh.GetAll()['Domain'].elm_type
 meshID = "Domain"
 
 #Material definition
@@ -31,13 +31,13 @@ Problem.Static("Assembling")
 
 #Definition of the set of nodes for boundary conditions
 mesh = Mesh.GetAll()[meshID]
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
-mesh.AddSetOfNodes(list(np.where(crd[:,0] == xmin)[0]), "left")
-mesh.AddSetOfNodes(list(np.where(crd[:,0] == xmax)[0]), "right")
+mesh.add_node_set(list(np.where(crd[:,0] == xmin)[0]), "left")
+mesh.add_node_set(list(np.where(crd[:,0] == xmax)[0]), "right")
 
-Problem.BoundaryCondition('Dirichlet','DispX',-5e-1,mesh.GetSetOfNodes("left"))
-Problem.BoundaryCondition('Dirichlet','DispX', 5e-1,mesh.GetSetOfNodes("right"))
+Problem.BoundaryCondition('Dirichlet','DispX',-5e-1,mesh.node_sets["left"])
+Problem.BoundaryCondition('Dirichlet','DispX', 5e-1,mesh.node_sets["right"])
 Problem.BoundaryCondition('Dirichlet','DispY',0,[0])
 
 Problem.ApplyBoundaryCondition()

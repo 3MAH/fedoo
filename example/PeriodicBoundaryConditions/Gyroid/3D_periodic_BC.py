@@ -9,18 +9,18 @@ Util.ProblemDimension("3D")
 Mesh.ImportFromFile('gyroid.msh', meshID = "Domain")
 meshID = "Domain"
 
-type_el = Mesh.GetAll()[meshID].GetElementShape()
+type_el = Mesh.GetAll()[meshID].elm_type
 
 #Definition of the set of nodes for boundary conditions
 mesh = Mesh.GetAll()[meshID]
-crd = mesh.GetNodeCoordinates() 
+crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
 center = [np.linalg.norm(crd,axis=1).argmin()]
 
 crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
-StrainNodes = mesh.AddNodes(crd_center,2) #add virtual nodes for macro strain
+StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
 
 #Material definition
 material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
@@ -98,7 +98,7 @@ if output_VTK == 1:
     
     #Get the displacement vector on nodes for export to vtk
     U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-    N = Mesh.GetAll()[meshID].GetNumberOfNodes()
+    N = Mesh.GetAll()[meshID].n_nodes
     # U = np.c_[U,np.zeros(N)]
     
     SetId = None

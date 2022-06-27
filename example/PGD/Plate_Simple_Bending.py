@@ -28,17 +28,17 @@ PGD.Assembly.Launch("Assembling")
 
 #PGD.Assembly.sum à définir
 
-nodes_left   = Mesh.GetAll()["Midplane"].GetSetOfNodes("left")
-nodes_right  = Mesh.GetAll()["Midplane"].GetSetOfNodes("right")
-nodes_top   = Mesh.GetAll()["Midplane"].GetSetOfNodes("top")
+nodes_left   = Mesh.GetAll()["Midplane"].node_sets["left"]
+nodes_right  = Mesh.GetAll()["Midplane"].node_sets["right"]
+nodes_top   = Mesh.GetAll()["Midplane"].node_sets["top"]
 
-#nodes_all1d = Mesh.GetAll()["Thickness"].GetSetOfNodes("all")
+#nodes_all1d = Mesh.GetAll()["Thickness"].node_sets["all"]
 
 #
 #nodes_face_left = nodes_left * nodes_all1d
 
-Mesh.GetAll()["Domain"].AddSetOfNodes([nodes_left ,"all"], ID = "faceLeft")
-Mesh.GetAll()["Domain"].AddSetOfNodes([nodes_right,"all"], ID = "faceRight")
+Mesh.GetAll()["Domain"].add_node_set([nodes_left ,"all"], ID = "faceLeft")
+Mesh.GetAll()["Domain"].add_node_set([nodes_right,"all"], ID = "faceRight")
 
 Problem.Static("Assembling")
 
