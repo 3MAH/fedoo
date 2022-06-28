@@ -10,19 +10,19 @@ method_output = 1
 
 Util.ProblemDimension("2Dstress")
 
-Mesh.import_file('plate_with_hole.msh', meshID = "Domain")
+Mesh.import_file('plate_with_hole.msh', meshname = "Domain")
 
 #alternative mesh below (uncomment the line)
-#Mesh.rectangle_mesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, ID ="Domain")
+#Mesh.rectangle_mesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, name ="Domain")
 type_el = Mesh.get_all()['Domain'].elm_type
-meshID = "Domain"
+meshname = "Domain"
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
+ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.Create("ElasticLaw", meshID, type_el, ID="Assembling") 
+Assembly.Create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #Type of problem 
 Problem.Static("Assembling")
@@ -30,7 +30,7 @@ Problem.Static("Assembling")
 #Boundary conditions
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 mesh.add_node_set(list(np.where(crd[:,0] == xmin)[0]), "left")
@@ -81,7 +81,7 @@ elif method_output == 2:
     U = Problem.GetDisp().T #transpose for comatibility to vtk export
     
     #Write the vtk file                            
-    OUT = Util.ExportData(meshID)
+    OUT = Util.ExportData(meshname)
     
     OUT.addNodeData(U,'Displacement')
     OUT.addNodeData(TensorStress.vtkFormat(),'Stress')

@@ -6,16 +6,16 @@ class ModelingSpace:
     __active_space = None
     __dic = {} #dic containing all the modeling spaces
 
-    def __init__(self, dimension, ID="Main"):
-        # assert ID not in ModelingSpace.__dic, str(ID) + " already exist. Delete it first."
+    def __init__(self, dimension, name ="Main"):
+        # assert name not in ModelingSpace.__dic, str(name) + " already exist. Delete it first."
         assert isinstance(dimension,str) , "The dimension value must be a string"
         assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '3D', '2Dplane' or '2Dstress'"        
         
         #Static attributs 
         ModelingSpace.__active_space = self
-        ModelingSpace.__dic[ID] = self
+        ModelingSpace.__dic[name] = self
         
-        self.__ID = ID
+        self.__name = name
         
         #coordinates
         self._coordinate = {} # dic containing all the coordinate related to the modeling space
@@ -38,16 +38,19 @@ class ModelingSpace:
             self.new_coordinate('Z')
         if dimension == "2Dplane" or dimension == "2Dstress":
             self.__ndim = 2                    
+       
 
-    def GetID(self):
-        return self.__ID
-    
     def MakeActive(self):
         ModelingSpace.__active_space = self
     
+   
+    def GetDimension(self):
+        return self._dimension
+
+
     @staticmethod
-    def SetActive(ID):
-        ModelingSpace.__active_space = ModelingSpace.__dic[ID]
+    def SetActive(name):
+        ModelingSpace.__active_space = ModelingSpace.__dic[name]
     
     @staticmethod    
     def GetActive():
@@ -57,14 +60,14 @@ class ModelingSpace:
     @staticmethod
     def get_all():
         return ModelingSpace.__dic
-        
-    def GetDimension(self):
-        return self._dimension
-    
+            
     @property
     def ndim(self):
         return self.__ndim
 
+    @property
+    def name(self):
+        return self.__name
 
     #Methods related to Coordinates
     def new_coordinate(self,name): 
@@ -149,9 +152,9 @@ class ModelingSpace:
     #build usefull list of operators 
     def op_grad_u(self):
        if self.ndim == 3:        
-           return [[self.opdiff(IDvar, IDcoord,1) for IDcoord in ['X','Y','Z']] for IDvar in ['DispX','DispY','DispZ']]
+           return [[self.opdiff(namevar, namecoord,1) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
        else:
-           return [[self.opdiff(IDvar, IDcoord,1) for IDcoord in ['X','Y']] + [0] for IDvar in ['DispX','DispY']] + [[0,0,0]]
+           return [[self.opdiff(namevar, namecoord,1) for namecoord in ['X','Y']] + [0] for namevar in ['DispX','DispY']] + [[0,0,0]]
        
                    
     def op_strain(self, InitialGradDisp = None):
@@ -236,12 +239,12 @@ class ModelingSpace:
 
 
     
-def ProblemDimension(value, modelingSpaceID = "Main"):
+def ProblemDimension(value, modelingSpacename = "Main"):
     """
     Create a new modeling space with the specified problem dimension
     value must be '3D', '2Dplane' or '2Dstress'
     """
-    ModelingSpace(value, modelingSpaceID)
+    ModelingSpace(value, modelingSpacename)
     
 # def new_coordinate(name):
 #     #     """

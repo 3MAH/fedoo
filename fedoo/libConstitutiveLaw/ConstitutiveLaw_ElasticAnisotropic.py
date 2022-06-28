@@ -17,11 +17,11 @@ class ElasticAnisotropic(Mechanical3D):
     H : list of list or an array (shape=(6,6)) of scalars or arrays of gauss point values.
         The rigidity matrix. 
         If H is a list of gauss point values, the shape shoud be H.shape = (6,6,NumberOfGaussPoints)
-    ID : str, optional
-        The ID of the constitutive law      
+    name : str, optional
+        The name of the constitutive law      
     """
-    def __init__(self, H, ID=""):
-        Mechanical3D.__init__(self, ID) # heritage
+    def __init__(self, H, name =""):
+        Mechanical3D.__init__(self, name) # heritage
 
         self.__H = H
         self._stress = 0

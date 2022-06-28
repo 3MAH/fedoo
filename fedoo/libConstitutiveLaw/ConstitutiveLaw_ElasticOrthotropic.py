@@ -25,8 +25,8 @@ class ElasticOrthotropic(ElasticAnisotropic):
     nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
         Poisson's ratio 
     """
-    def __init__(self, EX, EY, EZ, GYZ, GXZ, GXY, nuYZ, nuXZ, nuXY, ID=""):
-        Mechanical3D.__init__(self, ID) # heritage
+    def __init__(self, EX, EY, EZ, GYZ, GXZ, GXY, nuYZ, nuXZ, nuXY, name =""):
+        Mechanical3D.__init__(self, name) # heritage
 
         self.__parameters = {'EX':EX, 'EY':EY, 'EZ':EZ, 'GYZ':GYZ, 'GXZ':GXZ, 'GXY':GXY, 'nuYZ':nuYZ, 'nuXZ':nuXZ, 'nuXY':nuXY}
         

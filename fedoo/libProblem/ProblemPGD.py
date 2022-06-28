@@ -13,10 +13,10 @@ from fedoo.libProblem import ProblemBase, BoundaryCondition
 
 class ProblemPGD(ProblemBase): 
     
-    def __init__(self, A, B, D, Mesh, ID = "MainProblem", space = None):  
+    def __init__(self, A, B, D, Mesh, name = "MainProblem", space = None):  
         
         # the problem is AX = B + D        
-        ProblemBase.__init__(self, ID, space)
+        ProblemBase.__init__(self, name, space)
         
         nvar = self.space.nvar
         self.__Mesh = Mesh
@@ -295,7 +295,7 @@ class ProblemPGD(ProblemBase):
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.GetDimension())]
         
         for e in self._BoundaryConditions:
-            SetOfNodesForBC = meshPGD.node_sets[e.SetOfID]            
+            SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]            
             # if isinstance(e.FinalValue, list): e.__Value = np.array(e.__Value)
             
             Value = e.GetValue(timeFactor, timeFactorOld)
@@ -363,7 +363,7 @@ class ProblemPGD(ProblemBase):
                     return NotImplemented    
             
             elif e.BoundaryType == 'MPC':
-                SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfIDMaster] 
+                SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfnameMaster] 
                 
                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
                 if len(SetOfNodesForBC[1]) == 1 \

@@ -16,20 +16,20 @@ w = 10
 L = 1
 # E = 200e3
 # nu=0.3
-meshID = "Domain"
+meshname = "Domain"
 uimp = -5
 
-Mesh.rectangle_mesh(Nx=21, Ny=21, x_min=0, x_max=L, y_min=0, y_max=L, ElementShape = 'quad4', ID = meshID) 
-mesh = Mesh.get_all()[meshID]
+Mesh.rectangle_mesh(Nx=21, Ny=21, x_min=0, x_max=L, y_min=0, y_max=L, ElementShape = 'quad4', name = meshname) 
+mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
 K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
-Material = ConstitutiveLaw.ThermalProperties(K, c, rho, ID='ThermalLaw')
+Material = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf = WeakForm.HeatEquation("ThermalLaw")
-assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling")    
+assemb = Assembly.Create("ThermalLaw", meshname, name="Assembling")    
 
 left = mesh.find_nodes('X', 0)
 right = mesh.find_nodes('X', L)

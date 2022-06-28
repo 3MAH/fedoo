@@ -7,9 +7,9 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 Util.ProblemDimension("3D")
 
-Mesh.import_file('./meshes/octet_surf.msh', meshID = "Domain")
+Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")
 
-meshID = "Domain2"
+meshname = "Domain2"
 
 umat_name = 'ELISO'
 props = np.array([[1e5, 0.3, 1]])
@@ -28,4 +28,4 @@ path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
 outputdatfile = 'output.dat'
 
-Homogen.SolverUnitCell(meshID, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
+Homogen.SolverUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)

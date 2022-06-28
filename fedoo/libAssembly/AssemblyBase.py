@@ -4,19 +4,16 @@ class AssemblyBase:
 
     __dic = {}
 
-    def __init__(self, ID = "", space=None):
-        assert isinstance(ID, str) , "An ID must be a string" 
-        self.__ID = ID
+    def __init__(self, name = "", space=None):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
 
         self.__GlobalMatrix = None
         self.__GlobalVector = None
         self.__Mesh = None 
         
-        if ID != "": AssemblyBase.__dic[self.__ID] = self
+        if name != "": AssemblyBase.__dic[self.__name] = self
         self.__space = space
-
-    def GetID(self):
-        return self.__ID
 
     def GetMatrix(self):
         if self.__GlobalMatrix is None: self.ComputeGlobalMatrix()        
@@ -56,12 +53,17 @@ class AssemblyBase:
         return AssemblyBase.__dic
     
     @staticmethod
-    def Launch(ID):
+    def Launch(name):
         """
-        Assemble the global matrix and global vector of the assembly ID
-        ID is a str
+        Assemble the global matrix and global vector of the assembly name
+        name is a str
         """
-        AssemblyBase.get_all()[ID].ComputeGlobalMatrix()
+        AssemblyBase.get_all()[name].ComputeGlobalMatrix()
+    
+    @property
+    def name(self):
+        return self.__name
+
 
 class AssemblySum(AssemblyBase):
     """
@@ -74,12 +76,12 @@ class AssemblySum(AssemblyBase):
     ----------
     list_assembly: list of Assembly 
         list of Assembly objects to sum
-    ID: str
-        ID of the Assembly             
+    name: str
+        name of the Assembly             
     assembly_output: Assembly (optional keyword arg)
         Assembly object used to extract output values (using Problem.GetResults or Problem.SaveResults)
     """
-    def __init__(self, list_assembly, ID="", **kargs):        
+    def __init__(self, list_assembly, name ="", **kargs):        
         for i,assembly in enumerate(list_assembly):
             if isinstance(assembly, str): list_assembly[i] = AssemblyBase.get_all()[assembly]                                
             
@@ -93,12 +95,12 @@ class AssemblySum(AssemblyBase):
                         
         self.__Mesh = list_assembly[0].GetMesh()
 
-        if ID == "":
-            ID = '_'.join([assembly.GetID() for assembly in list_assembly])    
+        if name == "":
+            name = '_'.join([assembly.name for assembly in list_assembly])    
             
         self.__reload = kargs.pop('reload', 'all')                      
         
-        AssemblyBase.__init__(self, ID)                       
+        AssemblyBase.__init__(self, name)                       
 
     def SetMesh(self, mesh):
         self.__Mesh = mesh
@@ -191,20 +193,20 @@ class AssemblySum(AssemblyBase):
 
 
 
-def Sum(*listAssembly, ID="", **kargs):
+def Sum(*listAssembly, name ="", **kargs):
     """
     Return a new assembly which is a sum of N assembly. 
-    Assembly.Sum(assembly1, assembly2, ..., assemblyN, ID="", reload = [1,4] )
+    Assembly.Sum(assembly1, assembly2, ..., assemblyN, name ="", reload = [1,4] )
     
     The N first arguments are the assembly to be summed.
-    ID is the name of the created assembly:
+    name is the name of the created assembly:
     reload: a list of indices for subassembly that are recomputed at each time the summed assembly
     is Launched. Default is 'all' (equivalent to all indices).     
     """
-    return AssemblySum(list(listAssembly), ID, **kargs)
+    return AssemblySum(list(listAssembly), name, **kargs)
             
 def get_all():
     return AssemblyBase.get_all()
 
-def Launch(ID):
-    AssemblyBase.get_all()[ID].ComputeGlobalMatrix()    
+def Launch(name):
+    AssemblyBase.get_all()[name].ComputeGlobalMatrix()    

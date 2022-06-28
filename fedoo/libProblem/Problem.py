@@ -11,11 +11,11 @@ import time
 
 class Problem(ProblemBase):
     
-    def __init__(self, A, B, D, Mesh, ID = "MainProblem", space = None):
+    def __init__(self, A, B, D, Mesh, name = "MainProblem", space = None):
 
         # the problem is AX = B + D
         
-        ProblemBase.__init__(self, ID, space)
+        ProblemBase.__init__(self, name, space)
 
         #self.__ProblemDimension = A.shape[0]
         self.__ProblemDimension = Mesh.n_nodes * self.space.nvar
@@ -73,8 +73,8 @@ class Problem(ProblemBase):
         
             return vector[i*n : (i+1)*n]   
 
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 1):
-        self.__ProblemOutput.AddOutput(filename, assemblyID, output_list, output_type, file_format, position)            
+    def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 1):
+        self.__ProblemOutput.AddOutput(filename, assemblyname, output_list, output_type, file_format, position)            
 
     def SaveResults(self, iterOutput=None):
         self.__ProblemOutput.SaveResults(self, iterOutput)                                

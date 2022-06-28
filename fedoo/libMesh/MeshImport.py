@@ -1,15 +1,15 @@
 from fedoo.libMesh.Mesh import Mesh
 import numpy as np
 
-def import_file(filename, meshID = None):
+def import_file(filename, meshname = None):
     if filename[-4:].lower() == '.msh':
-        return import_msh(filename, meshID)
+        return import_msh(filename, meshname)
     elif filename[-4:].lower() == '.vtk':
-        return import_vtk(filename, meshID)    
+        return import_vtk(filename, meshname)    
     else: assert 0, "Only .vtk and .msh file can be imported"
 
 
-def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
+def import_msh(filename, meshname = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
     
     if isinstance(meshType, str): meshType = [meshType]
     
@@ -37,10 +37,10 @@ def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'],
     
     filename = filename.strip()
 
-    if meshID == None:
-        meshID = filename
-        if meshID[-4:].lower() == '.msh':
-            meshID = meshID[:-4]
+    if meshname == None:
+        meshname = filename
+        if meshname[-4:].lower() == '.msh':
+            meshname = meshname[:-4]
     mesh = None
        
     #print 'Reading file',`filename`
@@ -276,8 +276,8 @@ def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'],
             if type_elm is None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
             else:          
                 if len(list(np.unique(celltype_all))) == 1:
-                    importedMeshName = meshID
-                else: importedMeshName = meshID+str(count)
+                    importedMeshName = meshname
+                else: importedMeshName = meshname+str(count)
                     
                 print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
                 Mesh(crd, elm, type_elm, name = importedMeshName)            
@@ -296,11 +296,11 @@ def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'],
                 elm[:, [8, 9]] = elm[:, [9, 8]]
             
             if len(element_all) == 1:
-                importedMeshName = meshID
-            else: importedMeshName = meshID+str(count)
+                importedMeshName = meshname
+            else: importedMeshName = meshname+str(count)
                 
             # print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-            m = Mesh(crd, elm, type_elm, ID = importedMeshName)            
+            m = Mesh(crd, elm, type_elm, name = importedMeshName)            
             
             #add entity set of elements
             for elset in element_all[elementType][1]:
@@ -317,12 +317,12 @@ def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'],
     
     
 
-def import_vtk(filename, meshID = None):
+def import_vtk(filename, meshname = None):
     filename = filename.strip()
 
-    if meshID == None:
-        meshID = filename
-        if meshID[-4:].lower() == '.vtk': meshID = meshID[:-4]
+    if meshname == None:
+        meshname = filename
+        if meshname[-4:].lower() == '.vtk': meshname = meshname[:-4]
         
     #print 'Reading file',`filename`
     f = open(filename,'r')
@@ -433,8 +433,8 @@ def import_vtk(filename, meshID = None):
         if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
         else:            
             if len(list(np.unique(celltype_all))) == 1:
-                importedMeshName = meshID
-            else: importedMeshName = meshID+str(count)
+                importedMeshName = meshname
+            else: importedMeshName = meshname+str(count)
                 
             print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
             Mesh(crd, elm, type_elm, name = importedMeshName)

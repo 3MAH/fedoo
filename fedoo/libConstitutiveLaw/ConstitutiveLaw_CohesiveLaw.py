@@ -29,12 +29,12 @@ class CohesiveLaw(Spring):
         Initial interface rigidity before damage
     axis: int
         axis should be eiter 0,1 or 2 (default). It define the normal direction to the failure plane the is used for mode identification. The axis is defined in local coordinate system.
-    ID: str, optional
-        The ID of the constitutive law
+    name: str, optional
+        The name of the constitutive law
     """
     
     #Use with WeakForm.InterfaceForce
-    def __init__(self, GIc=0.3, SImax = 60, KI = 1e4, GIIc = 1.6, SIImax=None, KII=5e4, axis = 2, ID=""):
+    def __init__(self, GIc=0.3, SImax = 60, KI = 1e4, GIIc = 1.6, SIImax=None, KII=5e4, axis = 2, name =""):
         # GIc la ténacité (l'énergie à la rupture = l'aire sous la courbe du modèle en N/mm)
         #        SImax = 60.  # la contrainte normale maximale de l'interface (MPa)
         #        KI = 1e4          # la raideur des éléments cohésive (la pente du modèle en N/mm3)
@@ -48,7 +48,7 @@ class CohesiveLaw(Spring):
 #        alpha = 2. 
 #        
         
-        ConstitutiveLaw.__init__(self, ID) # heritage
+        ConstitutiveLaw.__init__(self, name) # heritage
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 

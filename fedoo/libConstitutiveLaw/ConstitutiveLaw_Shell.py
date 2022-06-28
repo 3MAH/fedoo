@@ -8,10 +8,10 @@ import numpy as np
 
 class ShellBase(ConstitutiveLaw):
     #base model class that should derive any other shell constitutive laws
-    def __init__(self, thickness, k=1, ID=""):        
+    def __init__(self, thickness, k=1, name =""):        
         # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
-        ConstitutiveLaw.__init__(self, ID) # heritage   
+        ConstitutiveLaw.__init__(self, name) # heritage   
 
         self.__thickness = thickness
         self.__k = k
@@ -89,14 +89,14 @@ class ShellBase(ConstitutiveLaw):
   
 class ShellHomogeneous(ShellBase):
     
-    def __init__(self, MatConstitutiveLaw, thickness, k=1, ID=""):        
+    def __init__(self, MatConstitutiveLaw, thickness, k=1, name =""):        
         # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         if isinstance(MatConstitutiveLaw, str):
             MatConstitutiveLaw = ConstitutiveLaw.get_all()[MatConstitutiveLaw]
 
 
-        ShellBase.__init__(self, thickness, k, ID) # heritage
+        ShellBase.__init__(self, thickness, k, name) # heritage
 
         self.__material = MatConstitutiveLaw
     
@@ -164,7 +164,7 @@ class ShellHomogeneous(ShellBase):
 
 class ShellLaminate(ShellBase):
     
-    def __init__(self, listMat, listThickness, k=1, ID=""):        
+    def __init__(self, listMat, listThickness, k=1, name =""):        
         # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
         
         self.__listMat = [ConstitutiveLaw.get_all()[mat] if isinstance(mat, str) else mat for mat in listMat]
@@ -173,7 +173,7 @@ class ShellLaminate(ShellBase):
         self.__layer =  np.hstack((0, np.cumsum(listThickness))) - np.sum(listThickness)/2 #z coord of layers interfaces
         self.__listThickness = listThickness
         
-        ShellBase.__init__(self, thickness, k, ID) # heritage
+        ShellBase.__init__(self, thickness, k, name) # heritage
           
     def GetShellRigidityMatrix(self):
         H = np.zeros((8,8), dtype='object')  

@@ -21,22 +21,22 @@ class SteadyHeatEquation(WeakForm):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
     """
-    def __init__(self, thermal_constitutivelaw, ID = None, nlgeom = False, space = None):
+    def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
-        if ID is None:
-            ID = thermal_constitutivelaw.GetID()
+        if name is None:
+            name = thermal_constitutivelaw.name
             
-        WeakForm.__init__(self,ID,space)
+        WeakForm.__init__(self,name,space)
         
         self.space.new_variable("Temp") #temperature
         
@@ -104,22 +104,22 @@ class TemperatureTimeDerivative(WeakForm):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
     """
-    def __init__(self, thermal_constitutivelaw, ID = None, nlgeom = False, space = None):
+    def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
-        if ID is None:
-            ID = thermal_constitutivelaw.GetID()
+        if name is None:
+            name = thermal_constitutivelaw.name
             
-        WeakForm.__init__(self,ID,space)
+        WeakForm.__init__(self,name,space)
         
         self.space.new_variable("Temp") #temperature
             
@@ -185,14 +185,14 @@ class TemperatureTimeDerivative(WeakForm):
     
     
     
-def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = None):
+def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = None):
     heat_eq_diffusion = SteadyHeatEquation(thermal_constitutivelaw, "", nlgeom, space)
     heat_eq_time = TemperatureTimeDerivative(thermal_constitutivelaw, "", nlgeom, space)
     heat_eq_time.assembly_options['mat_lumping'] = True #use mat_lumping for the temperature time derivative 
-    if ID is None: 
-        if isinstance(thermal_constitutivelaw,str): ID = ConstitutiveLaw().get_all()[thermal_constitutivelaw].GetID()
-        else: ID = thermal_constitutivelaw.GetID()
-    return WeakFormSum([heat_eq_diffusion, heat_eq_time], ID)
+    if name is None: 
+        if isinstance(thermal_constitutivelaw,str): name = ConstitutiveLaw().get_all()[thermal_constitutivelaw].name
+        else: name = thermal_constitutivelaw.name
+    return WeakFormSum([heat_eq_diffusion, heat_eq_time], name)
 
 # class HeatEquation(WeakForm):
 #     """
@@ -205,22 +205,22 @@ def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = Non
     
 #     Parameters
 #     ----------
-#     CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+#     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
 #         Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-#     ID: str
-#         ID of the WeakForm     
+#     name: str
+#         name of the WeakForm     
 #     nlgeom: bool (default = False)
 #         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
 #         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
 #     """
-#     def __init__(self, thermal_constitutivelaw, ID = "", nlgeom = False, space = None):
+#     def __init__(self, thermal_constitutivelaw, name = "", nlgeom = False, space = None):
 #         if isinstance(thermal_constitutivelaw, str):
 #             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
-#         if ID == "":
-#             ID = thermal_constitutivelaw.GetID()
+#         if name == "":
+#             name = thermal_constitutivelaw.name
             
-#         WeakForm.__init__(self,ID,space)
+#         WeakForm.__init__(self,name,space)
         
 #         self.space.new_variable("Temp") #temperature
         

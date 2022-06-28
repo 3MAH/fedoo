@@ -18,13 +18,13 @@ class ElasticIsotrop(ElasticAnisotropic):
         The Young Modulus of the elastic isotropic material
     PoissonRatio : scalars or arrays of gauss point values.
         The PoissonRatio of the elastic isotropic material
-    ID : str, optional
-        The ID of the constitutive law       
+    name : str, optional
+        The name of the constitutive law       
     """
     
-    def __init__(self, YoungModulus, PoissonRatio, ID=""):
+    def __init__(self, YoungModulus, PoissonRatio, name =""):
 
-        Mechanical3D.__init__(self, ID) # heritage
+        Mechanical3D.__init__(self, name) # heritage
         self.__YoungModulus = YoungModulus
         self.__PoissonRatio = PoissonRatio    
 

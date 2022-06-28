@@ -15,17 +15,17 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
     """      
  
     def __init__(self, *args, **kargs):
-        if 'ID' in kargs: ID = kargs['ID']
-        else: ID = 'PGDMesh'
+        if 'name' in kargs: name = kargs['name']
+        else: name = 'PGDMesh'
         
-        if not isinstance(ID, str): assert 0, "An ID must be a string"
+        if not isinstance(name, str): assert 0, "An name must be a string"
         
-        MeshBase.__init__(self, ID)
+        MeshBase.__init__(self, name)
         self.__ListMesh = [MeshBase.get_all()[m] if isinstance(m,str) else m for m in args]
         
-        listCrdID = [crdid for m in self.__ListMesh for crdid in m.crd_name ]
-        if len(set(listCrdID)) != len(listCrdID): 
-            print("Warning: some coordinate ID are defined in more than one mesh")
+        listCrdname = [crdid for m in self.__ListMesh for crdid in m.crd_name ]
+        if len(set(listCrdname)) != len(listCrdname): 
+            print("Warning: some coordinate name are defined in more than one mesh")
         
         self.node_sets = {} #node on the boundary for instance
         self.element_sets = {}
@@ -69,28 +69,28 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
     def GetListMesh(self):
         return self.__ListMesh
     
-    def add_node_set(self, listNodeIndexes, listSubMesh = None, ID=None):
+    def add_node_set(self, listNodeIndexes, listSubMesh = None, name =None):
         """
         The Set Of Nodes in Mesh PGD object are used to defined the boundary conditions.
         There is two ways of defining a SetOfNodes:
         
-        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], ID=SetOfID)
+        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], name =SetOfname)
             * nodeIndexes_i a list of node indexe cooresponding to the ith subMesh (as defined in the constructor of the PGD.Mesh object)
             * nodeIndexes_i can also be set to "all" to indicate that all the nodes have to be included
-            * SetOfID is the ID of the SetOf
+            * SetOfname is the name of the SetOf
             
-        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], [subMesh_1,...,subMesh_n], ID=SetOfID)
+        PGD.Mesh.add_node_set([nodeIndexes_1,...,nodeIndexes_n ], [subMesh_1,...,subMesh_n], name =SetOfname)
             * nodeIndexes_i a list of node indexe cooresponding to the mesh indicated in subMesh_i
-            * subMesh_i can be either a mesh ID (str object) or a Mesh object
+            * subMesh_i can be either a mesh name (str object) or a Mesh object
             * the keyword "all" is NOT available when the subMesh are indicated.
             * If a subMesh is not included in listSubMesh, all the Nodes are considered
-            * SetOfID is the ID of the SetOf
+            * SetOfname is the name of the SetOf
         """
-        if ID == None:
+        if name == None:
             num = 1
             while "NodeSet"+str(num) in self.node_sets: 
                 num += 1
-            ID = "NodeSet"+str(num)                
+            name = "NodeSet"+str(num)                
         
         if listSubMesh is None:
             if len(listNodeIndexes) != len(self.__ListMesh):
@@ -101,18 +101,18 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             # listSubMesh = [self.__ListMesh.index(MeshBase.get_all()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
             listSubMesh = [self.__ListMesh.index(MeshBase.get_all()[m]) if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
             
-        self.node_sets[ID] = [listSubMesh, listNodeIndexes]
+        self.node_sets[name] = [listSubMesh, listNodeIndexes]
         
-    def add_element_set(self, listElementIndexes, listSubMesh = None, ID=None):
+    def add_element_set(self, listElementIndexes, listSubMesh = None, name =None):
         """
         See the documention of add_node_set. 
         add_element_set is a similar method for Elements.
         """
-        if ID == None:
+        if name == None:
             num = 1
             while "ElementSet"+str(num) in self.node_sets: 
                 num += 1
-            ID = "ElementSet"+str(num)                
+            name = "ElementSet"+str(num)                
         
         if listSubMesh is None:
             if len(listElementIndexes) != len(self.__ListMesh):
@@ -122,7 +122,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         else:
             listSubMesh = [MeshBase.get_all()[m] if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
         
-        self.element_sets[ID] = [listSubMesh, listElementIndexes]
+        self.element_sets[name] = [listSubMesh, listElementIndexes]
 
     def GetSetOfNodes(self,SetOfId):
         return self.node_sets[SetOfId]
@@ -142,7 +142,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
     def ListSetOfElements(self):    
         return [key for key in self.element_sets]
     
-    def FindCoordinateID(self, crd):
+    def FindCoordinatename(self, crd):
         """
         Try to find a coordinate in the submeshes. 
         Return the position of the mesh in the list MeshPGD.GetListMesh() or None if the coordinate is not found
@@ -184,7 +184,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         
 
 
-    def ExtractFullMesh(self, ID = "FullMesh", useLocalFrame = False):
+    def ExtractFullMesh(self, name = "FullMesh", useLocalFrame = False):
         if len(self.__ListMesh) == 3: 
             return NotImplemented
 #            mesh1 = self.__ListMesh[0] ; mesh2 = self.__ListMesh[1] ; mesh3 = self.__ListMesh[2]
@@ -251,7 +251,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
                     crd[i*mesh1.n_nodes:(i+1)*mesh1.n_nodes,:] = mesh1.nodes + mesh1.local_frame[:,-1,:]*mesh0.nodes[i][0]
             else: return NotImplemented
             
-            return MeshFEM(crd, elm, type_elm, ID=ID)                        
+            return MeshFEM(crd, elm, type_elm, name =name)                        
         
         elif len(self.__ListMesh) == 1 : return self.__ListMesh[0]
         else: raise NameError("FullMesh can only be extracted from Separated Mesh of dimenson <= 3")

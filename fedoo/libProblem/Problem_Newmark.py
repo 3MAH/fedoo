@@ -3,7 +3,7 @@ from fedoo.libAssembly.Assembly import *
 from fedoo.libProblem.Problem   import *
 
 #dynamical inheritance. The class is generated inside a function
-def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling = 0, ID = "MainProblem"):
+def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling = 0, name = "MainProblem"):
     """
     Define a Newmark problem
     The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
@@ -23,7 +23,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     
     class __Newmark(libBase):    
             
-        def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, ID):
+        def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name):
                     
             if DampingAssembling is 0:
                 A = StiffnessAssembling.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembling.GetMatrix()
@@ -45,7 +45,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             if DampingAssembling == 0: self.__DampMatrix = 0
             else: self.__DampMatrix = DampingAssembling.GetMatrix()
             
-            libBase.__init__(self,A,B,D,StiffnessAssembling.GetMesh(),ID)        
+            libBase.__init__(self,A,B,D,StiffnessAssembling.GetMesh(),name)        
     
         def __UpdateA(self): #internal function to be used when modifying M, K or C
             if self.__DampMatrix is 0:
@@ -180,7 +180,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             self.__StiffMatrix = StiffnessAssembling.GetMatrix()
             self.__UpdateA()
     
-    return __Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, ID)
+    return __Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name)
 
 
 

@@ -37,7 +37,7 @@ class ExportData:
     def toVTK(self, filename='test.vtk'):
         if self.multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
         
-        datatype = 'UNSTRUCTURED_GRID'
+        datatype = 'UNSTRUCTURED_GRname'
         type_elm = self.mesh.elm_type
         try: #get the number of nodes per element (in case  there is additional internal nodes)
             nb_nd_elm =  str(int(type_elm[-2:]))

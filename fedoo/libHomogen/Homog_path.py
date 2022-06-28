@@ -36,7 +36,7 @@ if USE_SIMCOON:
                 
         return content
     
-    def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True, ProblemID='MainProblem'):
+    def SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True, Problemname ='MainProblem'):
     
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
@@ -61,27 +61,27 @@ if USE_SIMCOON:
         center = [np.linalg.norm(crd[:-2]-crd_center,axis=1).argmin()] 
        
         if isinstance(umat_name, str):
-            material = Simcoon(umat_name, props, nstatev, ID='ConstitutiveLaw')
+            material = Simcoon(umat_name, props, nstatev, name ='ConstitutiveLaw')
             material.corate = corate_type
         else:
             material = umat_name
     
         #Assembly
-        InternalForce(material, ID="wf")
-        Assembly("wf", mesh, type_el, ID="Assembling")
+        InternalForce(material, name ="wf")
+        Assembly("wf", mesh, type_el, name ="Assembling")
     
         #Type of problem
-        pb = NonLinearStatic("Assembling", ID=ProblemID)
+        pb = NonLinearStatic("Assembling", name =Problemname)
         
         #Shall add other conditions later on
         if meshperio:
             DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
         else:
             DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
             
     
         readPath = sim.read_path(path_data,path_file)
@@ -139,12 +139,12 @@ if USE_SIMCOON:
                     initValue[step.cBC_meca.astype(bool)] = MeanStress[step.cBC_meca.astype(bool)]
                     
                     pb.RemoveBC("Strain")
-                    pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
-                    pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
-                    pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
-                    pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
-                    pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
-                    pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
+                    pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], name = 'Strain') #EpsXX
+                    pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], name = 'Strain') #EpsYY
+                    pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], name = 'Strain') #EpsZZ
+                    pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], name = 'Strain') #EpsXY
+                    pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], name = 'Strain') #EpsXZ
+                    pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], name = 'Strain') #EpsYZ
                     
                     #pb.ApplyBoundaryCondition()
                     pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
@@ -171,7 +171,7 @@ if USE_SIMCOON:
     
                     if Tangent_bool:
                     
-                        TangentMatrix = GetTangentStiffness(ProblemID)
+                        TangentMatrix = GetTangentStiffness(Problemname)
                         TangentMatrix_All.append(TangentMatrix.flatten())
                         
                     ###DEBUG ONLY####
@@ -186,9 +186,9 @@ if USE_SIMCOON:
         else: 
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All
     
-    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = 'MainProblem'):
+    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, Problemname = 'MainProblem'):
         
-        SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = ProblemID)
+        SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, Problemname = Problemname)
             
         content = Read_outputfile(path_data,outputdat_file)
         

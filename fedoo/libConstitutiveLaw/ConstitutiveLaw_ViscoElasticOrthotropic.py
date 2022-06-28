@@ -5,8 +5,8 @@ from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
 import scipy as sp
 
 class ViscoElasticComposites(Mechanical3D):
-    def __init__(self, EL, ET, GLT, GTT, nuLT, nuTT, CL=0, CT=0, CLT=0, RefStrainRate=1, SLc_T = None, SLc_C = None, SYc_T =None, SYc_C =None, SZc_T=None, SZc_C=None, SLYc=None, SLZc=None,ID=""):
-        Mechanical3D.__init__(self, ID) # heritage
+    def __init__(self, EL, ET, GLT, GTT, nuLT, nuTT, CL=0, CT=0, CLT=0, RefStrainRate=1, SLc_T = None, SLc_C = None, SYc_T =None, SYc_C =None, SZc_T=None, SZc_C=None, SLYc=None, SLZc=None,name =""):
+        Mechanical3D.__init__(self, name) # heritage
 
         self.__parameters = {'EL':EL, 'ET':ET, 'GLT':GLT, 'GTT':GTT, 'nuLT':nuLT, 'nuTT':nuTT, 'CL':CL, 'CT':CT, 'CLT':CLT, 'RefStrainRate': RefStrainRate, \
                              'SLc_T':SLc_T, 'SLc_C':SLc_C, 'SYc_T':SYc_T, 'SYc_C':SYc_C, 'SZc_T':SZc_T, 'SZc_C':SZc_C, 'SLYc':SLYc, 'SLZc':SLZc}

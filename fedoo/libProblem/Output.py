@@ -270,7 +270,7 @@ class _ProblemOutput:
                 if not(filename in list_filename): 
                     #if file name don't exist in the list we create it
                     list_filename.append(filename)
-                    if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.GetMesh().GetID())
+                    if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.GetMesh().name)
                     else: OUT = {} #empty dictionnary cotaining variable                        
                     list_ExportData.append(OUT)                        
                 else: 

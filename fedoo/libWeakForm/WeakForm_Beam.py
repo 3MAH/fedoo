@@ -8,7 +8,7 @@ class Beam(WeakForm):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law used to get the young modulus and poisson ratio
         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
         (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
@@ -22,19 +22,19 @@ class Beam(WeakForm):
         Second moment of area with respect to z (beam local coordinate system)
     k=0: scalar or arrays of gauss point values
         Shear coefficient. If k=0 (*default*) the beam use the bernoulli hypothesis
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     """
-    def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = "", space = None):
+    def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, name = "", space = None):
         #k: shear shape factor
         
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
-        if ID == "":
-            ID = CurrentConstitutiveLaw.GetID()
+        if name == "":
+            name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,ID, space)
+        WeakForm.__init__(self,name, space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")            
@@ -80,14 +80,14 @@ class Beam(WeakForm):
         return [eps[i] * Ke[i] for i in range(6)]
 
 
-def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
+def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
     """
     Weak formulation of the mechanical equilibrium equation for beam model base on the Bernoulli hypothesis (no shear strain)   
     This weak formulation is an alias for :mod:`fedoo.libWeakForm.Beam` with k=0
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law used to get the young modulus and poisson ratio
         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
         (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
@@ -99,21 +99,21 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
         Second moment of area with respect to y (beam local coordinate system)
     Izz:
         Second moment of area with respect to z (beam local coordinate system)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     """
     #same as beam with k=0 (no shear effect)
-    return Beam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, ID = ID)
+    return Beam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, name = name)
 
 # class BernoulliBeam(WeakForm):
-#     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
+#     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         if isinstance(CurrentConstitutiveLaw, str):
 #             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
-#         if ID == "":
-#             ID = CurrentConstitutiveLaw.GetID()
+#         if name == "":
+#             name = CurrentConstitutiveLaw.name
             
-#         WeakForm.__init__(self,ID)
+#         WeakForm.__init__(self,name)
 
 #         Variable("DispX") 
 #         Variable("DispY")     

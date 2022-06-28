@@ -21,13 +21,13 @@ plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interp
 reduced_integration = False #if true, use reduce integration for shear 
 saveResults = True
 
-mat1 = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Mat1')
-mat2 = ConstitutiveLaw.ElasticIsotrop(E/10, nu, ID = 'Mat2')
+mat1 = ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'Mat1')
+mat2 = ConstitutiveLaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
 
-# ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
-ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], ID = 'PlateSection')
+# ConstitutiveLaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
+ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], name = 'PlateSection')
 
-mesh = Mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
+mesh = Mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geomElementType, name='plate', ndim = 3)
 
 nodes_left = mesh.node_sets['left']
 nodes_right = mesh.node_sets['right']
@@ -36,16 +36,16 @@ node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
 if reduced_integration == False:
-    WeakForm.Plate("PlateSection", ID = "WFplate") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate", "plate", plateElementType, ID="plate")    
+    WeakForm.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+    Assembly.Create("WFplate", "plate", plateElementType, name="plate")    
 else:    
-    WeakForm.Plate_RI("PlateSection", ID = "WFplate_RI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_RI", "plate", plateElementType, ID="plate_RI", nb_pg = 1)    
+    WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+    Assembly.Create("WFplate_RI", "plate", plateElementType, name="plate_RI", nb_pg = 1)    
     
-    WeakForm.Plate_FI("PlateSection", ID = "WFplate_FI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_FI", "plate", plateElementType, ID="plate_FI") 
+    WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+    Assembly.Create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    Assembly.Sum("plate_RI", "plate_FI", ID = "plate", assembly_output = 'plate')
+    Assembly.Sum("plate_RI", "plate_FI", name = "plate", assembly_output = 'plate')
 
 
 Problem.Static("plate")

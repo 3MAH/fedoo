@@ -17,10 +17,10 @@ if USE_SIMCOON:
     import numpy as np
     
     class Simcoon(Mechanical3D, sim.Umat_fedoo):
-        def __init__(self,umat_name, props, statev, corate=0, ID=""):
+        def __init__(self,umat_name, props, statev, corate=0, name =""):
             #props is a nparray containing all the material variables
             #nstatev is a nparray containing all the material variables
-            Mechanical3D.__init__(self, ID) # heritage
+            Mechanical3D.__init__(self, name) # heritage
         
             
             self.__statev_initial = statev #statev may be an int or an array        
@@ -202,7 +202,7 @@ if USE_SIMCOON:
             Parameters
             ----------
             new_id : TYPE, optional
-                The ID of the created constitutive law. The default is "".
+                The name of the created constitutive law. The default is "".
 
             Returns
             -------

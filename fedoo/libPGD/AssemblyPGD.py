@@ -17,7 +17,7 @@ from numbers import Number
 class AssemblyPGD(AssemblyFEM):
             
       
-    def __init__(self,weakForm, mesh="", ID=""):
+    def __init__(self,weakForm, mesh="", name =""):
         #mesh should be of type PGD.Mesh
 
         if isinstance(weakForm, str):            
@@ -26,7 +26,7 @@ class AssemblyPGD(AssemblyFEM):
         if isinstance(mesh, str):
             mesh = MeshFEM.get_all()[mesh]
                                 
-        AssemblyBase.__init__(self, ID, weakForm.space)        
+        AssemblyBase.__init__(self, name, weakForm.space)        
 
         self._weakForm = weakForm
         self.__Mesh = mesh #should be a MeshPGD object 
@@ -160,7 +160,7 @@ class AssemblyPGD(AssemblyFEM):
             
         PGD.Assembly.SetElementType([ElementType_1,...,ElementType_n ], [subMesh_1,...,subMesh_n] )
             * ElementType_i is a list of ElementType cooresponding to the mesh indicated in subMesh_i
-            * subMesh_i can be either a mesh ID (str object) or a Mesh object
+            * subMesh_i can be either a mesh name (str object) or a Mesh object
             * If a subMesh is not included in listSubMesh, the ElementType for assembly is not modified (based on the geometrical element shape by default)
         """ 
         
@@ -191,7 +191,7 @@ class AssemblyPGD(AssemblyFEM):
             
         PGD.Assembly.NumberOfGaussPoints([NumberOfGaussPoints_1,...,NumberOfGaussPoints_n ], [subMesh_1,...,subMesh_n] )
             * NumberOfGaussPoints_i is a list of NumberOfGaussPoints cooresponding to the mesh indicated in subMesh_i
-            * subMesh_i can be either a mesh ID (str object) or a Mesh object
+            * subMesh_i can be either a mesh name (str object) or a Mesh object
             * If a subMesh is not included in listSubMesh, the NumberOfGaussPoints for assembly is not modified        
         """ 
         
@@ -228,7 +228,7 @@ class AssemblyPGD(AssemblyFEM):
         Parameters
         ----------
         mesh: string or Mesh 
-            If mesh is a string, it should be a meshID.
+            If mesh is a string, it should be a meshname.
             Define the mesh to get the results from
             
         operator: OpDiff
@@ -409,5 +409,5 @@ class AssemblyPGD(AssemblyFEM):
     
     
     @staticmethod        
-    def Create(weakForm, mesh="", ID=""):        
-        return AssemblyPGD(weakForm, mesh, ID)
+    def Create(weakForm, mesh="", name =""):        
+        return AssemblyPGD(weakForm, mesh, name)

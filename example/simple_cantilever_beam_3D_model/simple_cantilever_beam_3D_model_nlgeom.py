@@ -7,31 +7,31 @@ import time
 Util.ProblemDimension("3D")
 
 #Units: N, mm, MPa
-#Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
-Mesh.box_mesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
+#Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
+Mesh.box_mesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
 
-meshID = "Domain"
-#mesh = Mesh.get_all()[meshID]
+meshname = "Domain"
+#mesh = Mesh.get_all()[meshname]
 #crd = mesh.nodes 
 #xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 #mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmin)[0]), "left")
 #mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmax)[0]), "right")
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
+ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw", nlgeom = True)
 
 #Assembly (print the time required for assembling)
-assemb = Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling") 
+assemb = Assembly.Create("ElasticLaw", meshname, 'hex8', name="Assembling") 
 
 #Type of problem 
 Problem.NonLinearStatic("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.get_all()[meshID].node_sets["left"]
-nodes_right = Mesh.get_all()[meshID].node_sets["right"]
-nodes_top = Mesh.get_all()[meshID].node_sets["top"]
-nodes_bottom = Mesh.get_all()[meshID].node_sets["bottom"]
+nodes_left = Mesh.get_all()[meshname].node_sets["left"]
+nodes_right = Mesh.get_all()[meshname].node_sets["right"]
+nodes_top = Mesh.get_all()[meshname].node_sets["top"]
+nodes_bottom = Mesh.get_all()[meshname].node_sets["bottom"]
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
@@ -61,7 +61,7 @@ TensorStress = assemb.ConvertData(ConstitutiveLaw.get_all()['ElasticLaw'].GetStr
                                                    
 
 #Write the vtk file                            
-OUT = Util.ExportData(meshID)
+OUT = Util.ExportData(meshname)
 
 OUT.addNodeData(U.astype(float),'Displacement')
 OUT.addNodeData(TensorStress.vtkFormat(),'Stress')

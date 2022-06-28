@@ -25,15 +25,15 @@ class ProblemBase:
     """
 
     __dic = {}
-    __activeProblem = None #ID of the current active problem
+    __activeProblem = None #name of the current active problem
 
-    def __init__(self, ID = "", space = None):
-        assert isinstance(ID, str) , "An ID must be a string" 
-        self.__ID = ID
+    def __init__(self, name = "", space = None):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
         self.__solver = ['direct']
         self._BoundaryConditions = [] #list containing boundary contidions associated to the problem        
         
-        ProblemBase.__dic[self.__ID] = self
+        ProblemBase.__dic[self.__name] = self
         
         if space is None: 
             space = ModelingSpace.GetActive()
@@ -41,8 +41,8 @@ class ProblemBase:
         
         self.MakeActive()
 
-    def GetID(self):
-        return self.__ID
+    def name(self):
+        return self.__name
     
     @property
     def space(self):
@@ -52,8 +52,8 @@ class ProblemBase:
         ProblemBase.__activeProblem = self
     
     @staticmethod
-    def SetActive(ProblemID):
-        ProblemBase.__activeProblem = ProblemBase.get_all()[ProblemID]
+    def SetActive(Problemname):
+        ProblemBase.__activeProblem = ProblemBase.get_all()[Problemname]
     
     @staticmethod
     def GetActive():
@@ -90,7 +90,7 @@ class ProblemBase:
         return ProblemBase.__dic
        
     ### Functions related to boundary contidions
-    def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID"):
+    def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
         """
         Define some boundary conditions        
 
@@ -109,8 +109,8 @@ class ProblemBase:
         Index : list of int, str, list of list of int, list of str
             For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
             For FEM Problem with MPC: list Node Indexes (list of list of int) 
-            For PGD Problem with Neumann/Dirichlet BC: SetOfID (type str) defining a set of Nodes of the reference mesh
-            For PGD Problem with MPC: list of SetOfID (str)
+            For PGD Problem with Neumann/Dirichlet BC: SetOfname (type str) defining a set of Nodes of the reference mesh
+            For PGD Problem with MPC: list of SetOfname (str)
         Constant : scalar, optional
             For MPC only, constant value on the equation
         timeEvolution : function
@@ -121,8 +121,8 @@ class ProblemBase:
             if array: the len of the array should be = to the number of dof defined in the BC
 
             Default: None
-        ID : str, optional
-            Define an ID for the Boundary Conditions. Default is "No ID". The same ID may be used for several BC.
+        name : str, optional
+            Define an name for the Boundary Conditions. Default is "No name". The same name may be used for several BC.
 
         Returns
         -------
@@ -143,37 +143,37 @@ class ProblemBase:
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, ID, self.space))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
         else:
-            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID, self.space))
+            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
 
 
-    def GetBC(self, ID=None):        
+    def GetBC(self, name =None):        
         """
         Return the list of Boundary Conditions
-        if an ID is specified (str value), return a list of BC whith the specified ID
+        if an name is specified (str value), return a list of BC whith the specified name
         """
-        if ID is None: return self._BoundaryConditions
-        else: return [bc for bc in self._BoundaryConditions if bc.GetID() == ID]          
+        if name is None: return self._BoundaryConditions
+        else: return [bc for bc in self._BoundaryConditions if bc.name == name]          
         
 
-    def RemoveBC(self,ID=None):
+    def RemoveBC(self,name =None):
         """
-        Remove all the BC which have the specified ID. 
-        If ID = None (default) remove all boundary conditions
+        Remove all the BC which have the specified name. 
+        If name = None (default) remove all boundary conditions
         """
-        if ID is None: self._BoundaryConditions = []
-        else: self._BoundaryConditions = [bc for bc in self._BoundaryConditions if bc.GetID() != ID]          
+        if name is None: self._BoundaryConditions = []
+        else: self._BoundaryConditions = [bc for bc in self._BoundaryConditions if bc.name != name]          
     
     def PrintBC(self):        
         """
         Print all the boundary conditions under the form:
-            ind_bc : ID - BoundaryType
+            ind_bc : name - BoundaryType
             ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
-            ID is the str ID of the BC ("No ID") by default
+            name is the str name of the BC ("No name") by default
             BoundaryType is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
         """
-        listid = [str(i) + ": " + bc.GetID() + " - " + bc.BoundaryType for i,bc in enumerate(self._BoundaryConditions)]
+        listid = [str(i) + ": " + bc.name + " - " + bc.BoundaryType for i,bc in enumerate(self._BoundaryConditions)]
         print("\n".join(listid))
     
 
@@ -243,7 +243,7 @@ class ProblemBase:
     def GetExternalForces(self, name = 'all'):
         raise NameError("The method 'GetExternalForces' is not defined for this kind of problem")    
 
-    def AddOutput(self, filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
         raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
         
     def SaveResults(self, iterOutput=None):        
@@ -276,8 +276,8 @@ def get_all():
     return ProblemBase.get_all()
 def GetActive():
     return ProblemBase.GetActive()
-def SetActive(ProblemID):
-    ProblemBase.SetActive(ProblemID)
+def SetActive(Problemname):
+    ProblemBase.SetActive(Problemname)
 
 
 
@@ -285,13 +285,13 @@ def SetSolver(solver, tol=1e-5, precond=True):
     ProblemBase.GetActive().SetSolver(solver,tol,precond)
 
 ## Functions related to boundary contidions
-def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", ProblemID = None):
-    if ProblemID is None: problem = ProblemBase.GetActive()
-    else: problem = ProblemBase.get_all()[ProblemID]
-    problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID)
+def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", Problemname = None):
+    if Problemname is None: problem = ProblemBase.GetActive()
+    else: problem = ProblemBase.get_all()[Problemname]
+    problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name)
 
 def GetBC(): return ProblemBase.GetActive()._BoundaryConditions    
-def RemoveBC(ID=None): ProblemBase.GetActive().RemoveBC(ID)    
+def RemoveBC(name =None): ProblemBase.GetActive().RemoveBC(name)    
 def PrintBC(): ProblemBase.GetActive().PrintBC()    
  
 
@@ -311,8 +311,8 @@ def ResetTimeIncrement(): ProblemBase.GetActive().ResetTimeIncrement()
 def Reset(): ProblemBase.GetActive().Reset()
 def ResetLoadFactor(): ProblemBase.GetActive().ResetLoadFactor()
 def NLSolve(**kargs): return ProblemBase.GetActive().NLSolve(**kargs)  
-def AddOutput(filename, assemblyID, output_list, output_type='Node', file_format ='vtk', position = 'top'):
-    return ProblemBase.GetActive().AddOutput(filename, assemblyID, output_list, output_type, file_format, position)
+def AddOutput(filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    return ProblemBase.GetActive().AddOutput(filename, assemblyname, output_list, output_type, file_format, position)
 def SaveResults(iterOutput=None):        
     return ProblemBase.GetActive().SaveResults(iterOutput)
 def GetResults(assemb, output_list, output_type='Node', position = 1, res_format = None):

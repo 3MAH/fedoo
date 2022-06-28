@@ -17,7 +17,7 @@ from copy import copy
 import time
 
 
-def Create(weakForm, mesh="", elementType="", ID="", **kargs): 
+def Create(weakForm, mesh="", elementType="", name ="", **kargs): 
     if isinstance(weakForm, str):
         weakForm = WeakForm.get_all()[weakForm]
         
@@ -38,7 +38,7 @@ def Create(weakForm, mesh="", elementType="", ID="", **kargs):
             prop = list_diff_prop[0]
             weakForm.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
             weakForm.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakForm.list_weakform]
-            return Assembly(weakForm, mesh, elementType, ID, **kargs)
+            return Assembly(weakForm, mesh, elementType, name, **kargs)
         
         else: #we need to create and sum several assemblies
             list_assembly = []
@@ -48,7 +48,7 @@ def Create(weakForm, mesh="", elementType="", ID="", **kargs):
                     wf = l_wf[0] #standard weakform. No WeakFormSum required
                 else:
                     #create a new WeakFormSum object
-                    wf = WeakFormSum(l_wf) #to modify : add automatic ID
+                    wf = WeakFormSum(l_wf) #to modify : add automatic name
                     #define the assembly_options dict of the new weakform
                     wf.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
                     wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
@@ -56,9 +56,9 @@ def Create(weakForm, mesh="", elementType="", ID="", **kargs):
         
         # list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakForm.list_weakform]
         kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
-        return AssemblySum(list_assembly, ID, **kargs)       
+        return AssemblySum(list_assembly, name, **kargs)       
     
-    return Assembly(weakForm, mesh, elementType, ID, **kargs)
+    return Assembly(weakForm, mesh, elementType, name, **kargs)
                
 class Assembly(AssemblyBase):
     __saveOperator = {} 
@@ -68,7 +68,7 @@ class Assembly(AssemblyBase):
     __savePGtoNodeMatrix = {}
     __associatedVariables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
            
-    def __init__(self,weakForm, mesh="", elementType="", ID="", **kargs):                      
+    def __init__(self,weakForm, mesh="", elementType="", name ="", **kargs):                      
         
         if isinstance(weakForm, str):
             weakForm = WeakForm.get_all()[weakForm]
@@ -82,12 +82,12 @@ class Assembly(AssemblyBase):
             
         if isinstance(weakForm, WeakForm):
             self._weakForm = weakForm
-            AssemblyBase.__init__(self, ID, weakForm.space)
+            AssemblyBase.__init__(self, name, weakForm.space)
         else: #weakForm should be a ModelingSpace object
             assert hasattr(weakForm, 'list_variable') and hasattr(weakForm, 'list_coordinate'),\
                 'WeakForm not understood'
             self._weakForm = None
-            AssemblyBase.__init__(self, ID, space = weakForm)
+            AssemblyBase.__init__(self, name, space = weakForm)
         
         #attributes to set assembly related to current (deformed) configuration
         #used for update lagrangian method. 
@@ -107,7 +107,6 @@ class Assembly(AssemblyBase):
         self.mat_lumping = weakForm.assembly_options.get('mat_lumping', False)
         
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
-        #print('Finite element operator for Assembly "' + ID + '" built in ' + str(time.time()-t0) + ' seconds')        
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
         self.__factorizeOp = True #option for debug purpose (should be set to True for performance)        
 
@@ -360,12 +359,12 @@ class Assembly(AssemblyBase):
                         var.extend(associatedVariables[var[0]][0])
                         coef.extend(associatedVariables[var[0]][1])                                                                                     
                     
-                    tupleID = (list_elementType[wf.op_vir[ii].u], wf.op_vir[ii].x, wf.op_vir[ii].ordre, list_elementType[wf.op[ii].u], wf.op[ii].x, wf.op[ii].ordre) #tuple to identify operator
-                    if tupleID in saveOperator:
-                        MatvirT_Mat = saveOperator[tupleID] #MatvirT_Mat is an array that contains usefull data to build the matrix MatvirT*Matcoef*Mat where Matcoef is a diag coefficient matrix. MatvirT_Mat is build with BlocSparse class
+                    tuplename = (list_elementType[wf.op_vir[ii].u], wf.op_vir[ii].x, wf.op_vir[ii].ordre, list_elementType[wf.op[ii].u], wf.op[ii].x, wf.op[ii].ordre) #tuple to identify operator
+                    if tuplename in saveOperator:
+                        MatvirT_Mat = saveOperator[tuplename] #MatvirT_Mat is an array that contains usefull data to build the matrix MatvirT*Matcoef*Mat where Matcoef is a diag coefficient matrix. MatvirT_Mat is build with BlocSparse class
                     else: 
                         MatvirT_Mat = None
-                        saveOperator[tupleID] = [[None for i in range(len(var))] for j in range(len(var_vir))]
+                        saveOperator[tuplename] = [[None for i in range(len(var))] for j in range(len(var_vir))]
                         Matvir = self._GetElementaryOp(wf.op_vir[ii])         
                         Mat = self._GetElementaryOp(wf.op[ii])
 
@@ -374,7 +373,7 @@ class Assembly(AssemblyBase):
                             if MatvirT_Mat is not None:           
                                 MM.addToBloc(MatvirT_Mat[j][i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])                                     
                             else:  
-                                saveOperator[tupleID][j][i] = MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
+                                saveOperator[tuplename][j][i] = MM.addToBlocATB(Matvir[j], Mat[i], (coef[i]*coef_vir[j]) * coef_PG, var_vir[j], var[i])
                                 if saveOperator['colBlocSparse'] is None: 
                                     saveOperator['colBlocSparse'] = MM.col
                                     saveOperator['rowBlocSparse'] = MM.row
@@ -759,8 +758,8 @@ class Assembly(AssemblyBase):
             return data[0]
         
         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-        ListMeshCoordinateIDRank = [self.space.coordinate_rank(crdID) for crdID in mesh.crd_name if crdID in self.space.list_coordinate()]
-        if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
+        ListMeshCoordinatenameRank = [self.space.coordinate_rank(crdname) for crdname in mesh.crd_name if crdname in self.space.list_coordinate()]
+        if deriv.x in ListMeshCoordinatenameRank: xx= ListMeshCoordinatenameRank.index(deriv.x)
         else: return data[0] #if the coordinate doesnt exist, return operator without derivation (for PGD)
                          
         if (deriv.ordre, xx) in data:
@@ -834,7 +833,7 @@ class Assembly(AssemblyBase):
         Parameters
         ----------
         mesh: string or Mesh 
-            If mesh is a string, it should be a meshID.
+            If mesh is a string, it should be a meshname.
             Define the mesh to get the results from
             
         operator: OpDiff
@@ -1224,7 +1223,7 @@ class Assembly(AssemblyBase):
         Parameters
         ----------
         new_id : TYPE, optional
-            The ID of the created constitutive law. The default is "".
+            The name of the created constitutive law. The default is "".
 
         Returns
         -------

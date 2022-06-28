@@ -10,34 +10,34 @@ Util.ProblemDimension("3D")
 DataINP = Util.ReadINP('Job-1.inp')
 
 INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh -> dont work quite well
-INP.toMesh(meshID = "Domain")
+INP.toMesh(meshname = "Domain")
 
 # data = Util.ExportData(Mesh.get_all()['Domain'])
 # data.toVTK()
 
 #alternative mesh below (uncomment the line)
-# Mesh.box_mesh(Nx=51, Ny=51, Nz=51, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
+# Mesh.box_mesh(Nx=51, Ny=51, Nz=51, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', name ="Domain" )
     
 type_el = Mesh.get_all()['Domain'].elm_type
 
-meshID = "Domain"
+meshname = "Domain"
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
 center = [np.linalg.norm(crd,axis=1).argmin()]
 
-StrainNodes = Mesh.get_all()[meshID].add_nodes(np.zeros(crd.shape[1]),2) #add virtual nodes for macro strain
+StrainNodes = Mesh.get_all()[meshname].add_nodes(np.zeros(crd.shape[1]),2) #add virtual nodes for macro strain
 
 #Material definition
-material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
+material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.Create("ElasticLaw", meshID, type_el, ID="Assembling") 
+Assembly.Create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #Type of problem 
 Problem.Static("Assembling")
@@ -123,18 +123,18 @@ if output_VTK == 1:
     
     #Get the displacement vector on nodes for export to vtk
     U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-    N = Mesh.get_all()[meshID].n_nodes
+    N = Mesh.get_all()[meshname].n_nodes
     # U = np.c_[U,np.zeros(N)]
     
     
     # SetId = None
     SetId = 'all_fibers' #to extract only mesh and data related to fibers    
     if SetId is None:
-        OUT = Util.ExportData(meshID)
+        OUT = Util.ExportData(meshname)
         ElSet = slice(None) #we keep all elements
     else:
-        Mesh.get_all()[meshID].extract_elements(SetId, ID="output")
-        ElSet = Mesh.get_all()[meshID].element_sets[SetId] #keep only some elements    
+        Mesh.get_all()[meshname].extract_elements(SetId, name="output")
+        ElSet = Mesh.get_all()[meshname].element_sets[SetId] #keep only some elements    
         OUT = Util.ExportData("output")
     
     #Write the vtk file                            

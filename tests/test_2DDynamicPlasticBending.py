@@ -21,28 +21,27 @@ E = 200e3
 nu=0.3
 alpha = 1e-5 #???
 rho = 1600e-6
-meshID = "Domain"
 uimp = -0.5
 
-Mesh.rectangle_mesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
-mesh = Mesh.get_all()[meshID]
+Mesh.rectangle_mesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', name = "Domain")
+mesh = Mesh.get_all()["Domain"]
 
 crd = mesh.nodes 
 
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
     Material.corate = 0
 elif mat == 1:
     Re = 300
     k=1000
     m=0.25
     props = np.array([[E, nu, alpha, Re,k,m]])
-    Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
     Material.corate = 0
 else:
-    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
 WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 
@@ -53,11 +52,11 @@ nodes_bottomRight = np.where((crd[:,0]==L) * (crd[:,1]==0))[0]
 nodes_top1 = np.where((crd[:,0]==L/4) * (crd[:,1]==h))[0]
 nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
 
-Assembly.Create("ConstitutiveLaw", meshID, 'quad4', ID="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+Assembly.Create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 #Mass matrix
 WeakForm.Inertia(rho,"Inertia")
-Assembly.Create("Inertia", meshID, "quad4", ID="MassAssembling")
+Assembly.Create("Inertia", "Domain", "quad4", name="MassAssembling")
 
 Problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 

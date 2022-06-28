@@ -29,12 +29,12 @@ class CompositeUD(ElasticAnisotropic):
         Matrix Poisson Ratio
     angle: scalar or arrays of gauss point values (*default=0*)
         The angle of the fibers relative to the X direction normal to the Z direction (if defined, the local material coordinates are used)
-    ID: str, optional
-        The ID of the constitutive law
+    name: str, optional
+        The name of the constitutive law
     """
     
-    def __init__(self, Vf=0.6, E_f=250000, E_m = 3500, nu_f = 0.33, nu_m = 0.3, angle=0, ID=""):
-        Mechanical3D.__init__(self, ID) # heritage
+    def __init__(self, Vf=0.6, E_f=250000, E_m = 3500, nu_f = 0.33, nu_m = 0.3, angle=0, name =""):
+        Mechanical3D.__init__(self, name) # heritage
 
         self.__parameters = {'Vf':Vf, 'E_f':E_f, 'E_m':E_m, 'nu_f':nu_f, 'nu_m':nu_m, 'angle':angle}   
         

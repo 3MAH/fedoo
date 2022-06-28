@@ -7,7 +7,7 @@ from fedoo.libProblem.ProblemPGD   import ProblemPGD
 def _GenerateClass_NonLinearStatic(libBase):
     class __NonLinearStatic(libBase):
         
-        def __init__(self, Assembling, ID):                                  
+        def __init__(self, Assembling, name):                                  
             #A = Assembling.current.GetMatrix() #tangent stiffness matrix
             A = 0 #tangent stiffness matrix - will be initialized only when required
             B = 0             
@@ -23,7 +23,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__max_subiter = 5
 
             self.__Assembly = Assembling
-            libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID, Assembling.space)        
+            libBase.__init__(self,A,B,D,Assembling.GetMesh(), name, Assembling.space)        
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
             self.__compteurOutput = 0
@@ -321,7 +321,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                                                                                         
     return __NonLinearStatic
 
-def NonLinearStatic(Assembling, ID = "MainProblem"):
+def NonLinearStatic(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                
@@ -330,4 +330,4 @@ def NonLinearStatic(Assembling, ID = "MainProblem"):
 
     __NonLinearStatic = _GenerateClass_NonLinearStatic(libBase) 
 
-    return __NonLinearStatic(Assembling, ID)
+    return __NonLinearStatic(Assembling, name)

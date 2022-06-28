@@ -10,11 +10,11 @@ import numpy as np
 from fedoo.libMesh.Mesh import MeshBase
 from fedoo.libUtil.ModelingSpace import ModelingSpace
 
-# def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+# def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = 'MainProblem'):
 #     """
 #     Parameters
 #     ----------
-#     crd : mesh ID or mesh object
+#     crd : mesh name or mesh object
 #         A periodic mesh to apply the periodic boundary conditions
 #     NodeEps : lise of int
 #         NodeCD is a list containing the node index of Grad displacement tensor component (virtual node)
@@ -28,7 +28,7 @@ from fedoo.libUtil.ModelingSpace import ModelingSpace
 #         The default is '2D'.
 #     tol : float, optional
 #         Tolerance for the position of nodes. The default is 1e-8.
-#     ProblemID : ProblemID on which the boundary conditions are applied
+#     Problemname : Problemname on which the boundary conditions are applied
 #         The default is 'MainProblem'.
 
 #     Returns
@@ -64,40 +64,40 @@ from fedoo.libUtil.ModelingSpace import ModelingSpace
 #         top = top[np.argsort(crd[top,0])]
 #         bottom = bottom[np.argsort(crd[bottom,0])]
         
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[1][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[1][1])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[1][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[1][1])], Problemname = Problemname)
         
 #         #elimination of DOF from edge left/top -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[0][1])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[0][1])], Problemname = Problemname)
 #         #elimination of DOF from edge right/bottom -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[1][0])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[1][0])], Problemname = Problemname)
 #         #elimination of DOF from edge right/top -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[0][0]), np.full_like(corner_rt,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[1][0]), np.full_like(corner_rt,NodeCD[1][1])], ProblemID = ProblemID)                
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[0][0]), np.full_like(corner_rt,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[1][0]), np.full_like(corner_rt,NodeCD[1][1])], Problemname = Problemname)                
                                        
 #         #if rot DOF are used, apply continuity of the rotational dof on each oposite faces and corner
 #         if 'RotZ' in ModelingSpace.ListVariable():
-#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
 #         if 'RotY' in ModelingSpace.ListVariable():
-#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
 #         if 'RotX' in ModelingSpace.ListVariable():
-#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+#             BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
         
 #     elif dim == 3:                        
         
@@ -194,95 +194,95 @@ from fedoo.libUtil.ModelingSpace import ModelingSpace
 #         dx = xmax-xmin ; dy = ymax-ymin ; dz = zmax-zmin        
 #         #[EpsXX, EpsYY, EpsZZ, EpsYZ, EpsXZ, EpsXY]
 #         #Left/right faces
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[1][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[2][0])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[1][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[2][0])], Problemname = Problemname)
 #         #top/bottom faces
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[2][1])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[2][1])], Problemname = Problemname)
 #         #front/behind faces
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[2][2])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[2][2])], Problemname = Problemname)
                 
 #         #elimination of DOF from edge left/top -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[2][1])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[2][1])], Problemname = Problemname)        
 #         #elimination of DOF from edge right/bottom -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[1][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[2][0])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[1][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[2][0])], Problemname = Problemname)        
 #         #elimination of DOF from edge right/top -> edge left/bottom
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[0][0]), np.full_like(edge_rt,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[1][0]), np.full_like(edge_rt,NodeCD[1][1])], ProblemID = ProblemID)                
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[2][0]), np.full_like(edge_rt,NodeCD[2][1])], ProblemID = ProblemID)                
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[0][0]), np.full_like(edge_rt,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[1][0]), np.full_like(edge_rt,NodeCD[1][1])], Problemname = Problemname)                
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[2][0]), np.full_like(edge_rt,NodeCD[2][1])], Problemname = Problemname)                
                                        
 #         #elimination of DOF from edge top/behind -> edge bottom/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[2][1])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[2][1])], Problemname = Problemname)        
 #         #elimination of DOF from edge bottom/front -> edge bottom/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[2][2])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[2][2])], Problemname = Problemname)        
 #         #elimination of DOF from edge top/front -> edge bottom/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[0][1]), np.full_like(edge_tf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[1][1]), np.full_like(edge_tf,NodeCD[1][2])], ProblemID = ProblemID)                
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[2][1]), np.full_like(edge_tf,NodeCD[2][2])], ProblemID = ProblemID)                
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[0][1]), np.full_like(edge_tf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[1][1]), np.full_like(edge_tf,NodeCD[1][2])], Problemname = Problemname)                
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[2][1]), np.full_like(edge_tf,NodeCD[2][2])], Problemname = Problemname)                
    
 #         #elimination of DOF from edge right/behind -> edge left/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[1][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[2][0])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[1][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[2][0])], Problemname = Problemname)        
 #         #elimination of DOF from edge left/front -> edge left/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[2][2])], ProblemID = ProblemID)        
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[2][2])], Problemname = Problemname)        
 #         #elimination of DOF from edge right/front -> edge left/behind
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[0][0]), np.full_like(edge_rf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[1][0]), np.full_like(edge_rf,NodeCD[1][2])], ProblemID = ProblemID)                
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[2][0]), np.full_like(edge_rf,NodeCD[2][2])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[0][0]), np.full_like(edge_rf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[1][0]), np.full_like(edge_rf,NodeCD[1][2])], Problemname = Problemname)                
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[2][0]), np.full_like(edge_rf,NodeCD[2][2])], Problemname = Problemname)
         
 #         # #### CORNER ####
 #         #elimination of DOF from corner right/bottom/behind (corner_rbd) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[0][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[1][0])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[2][0])], ProblemID = ProblemID) 
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[0][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[1][0])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[2][0])], Problemname = Problemname) 
 #         #elimination of DOF from corner left/top/behind (corner_ltd) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[2][1])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[2][1])], Problemname = Problemname)
 #         #elimination of DOF from corner left/bottom/front (corner_lbf) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[2][2])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[2][2])], Problemname = Problemname)
 #         #elimination of DOF from corner right/top/behind (corner_rtd) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[0][0]), np.full_like(corner_rtd,NodeCD[0][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[1][0]), np.full_like(corner_rtd,NodeCD[1][1])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[2][0]), np.full_like(corner_rtd,NodeCD[2][1])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[0][0]), np.full_like(corner_rtd,NodeCD[0][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[1][0]), np.full_like(corner_rtd,NodeCD[1][1])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[2][0]), np.full_like(corner_rtd,NodeCD[2][1])], Problemname = Problemname)
 #         #elimination of DOF from corner left/top/front (corner_ltf) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[0][1]), np.full_like(corner_ltf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[1][1]), np.full_like(corner_ltf,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[2][1]), np.full_like(corner_ltf,NodeCD[2][2])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[0][1]), np.full_like(corner_ltf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[1][1]), np.full_like(corner_ltf,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[2][1]), np.full_like(corner_ltf,NodeCD[2][2])], Problemname = Problemname)
 #         #elimination of DOF from corner right/bottom/front (corner_rbf) -> corner left/bottom/behind (corner_lbd) 
-#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[0][0]), np.full_like(corner_rbf,NodeCD[0][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[1][0]), np.full_like(corner_rbf,NodeCD[1][2])], ProblemID = ProblemID)
-#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[2][0]), np.full_like(corner_rbf,NodeCD[2][2])], ProblemID = ProblemID)
+#         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[0][0]), np.full_like(corner_rbf,NodeCD[0][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[1][0]), np.full_like(corner_rbf,NodeCD[1][2])], Problemname = Problemname)
+#         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[2][0]), np.full_like(corner_rbf,NodeCD[2][2])], Problemname = Problemname)
         
         
                 
 #         #elimination of DOF from corner right/top/front (corner_rtf) -> corner left/bottom/behind (corner_lbd) 
 #         BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1], VarCD[0][2]], 
 #                                   [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)], 
-#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[0][0]), np.full_like(corner_rtf,NodeCD[0][1]), np.full_like(corner_rtf,NodeCD[0][2])], ProblemID = ProblemID)
+#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[0][0]), np.full_like(corner_rtf,NodeCD[0][1]), np.full_like(corner_rtf,NodeCD[0][2])], Problemname = Problemname)
 #         BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1], VarCD[1][2]], 
 #                                   [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
-#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[1][0]), np.full_like(corner_rtf,NodeCD[1][1]), np.full_like(corner_rtf,NodeCD[1][2])], ProblemID = ProblemID)
+#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[1][0]), np.full_like(corner_rtf,NodeCD[1][1]), np.full_like(corner_rtf,NodeCD[1][2])], Problemname = Problemname)
 #         BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1], VarCD[2][2]], 
 #                                   [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)    ], 
-#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[2][0]), np.full_like(corner_rtf,NodeCD[2][1]), np.full_like(corner_rtf,NodeCD[2][2])], ProblemID = ProblemID)
+#                                   [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[2][0]), np.full_like(corner_rtf,NodeCD[2][1]), np.full_like(corner_rtf,NodeCD[2][2])], Problemname = Problemname)
 
 #         #if rot DOF are used, apply continuity of the rotational dof
 #         list_rot_var = []
@@ -292,38 +292,38 @@ from fedoo.libUtil.ModelingSpace import ModelingSpace
         
 #         for var in list_rot_var: 
 #             #### FACES ####
-#             BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind], ProblemID = ProblemID)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind], Problemname = Problemname)
                      
 #             #### EDGES ####
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb], ProblemID = ProblemID)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb], Problemname = Problemname)        
             
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd], ProblemID = ProblemID)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd], Problemname = Problemname)        
 
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld], ProblemID = ProblemID)        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld], ProblemID = ProblemID)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld], Problemname = Problemname)        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld], Problemname = Problemname)        
                            
 #             #### CORNERS ####
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd], ProblemID = ProblemID)                       
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd], ProblemID = ProblemID)                        
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd], ProblemID = ProblemID)            
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd], ProblemID = ProblemID)            
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd], ProblemID = ProblemID)
-#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd], ProblemID = ProblemID)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd], Problemname = Problemname)                       
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd], Problemname = Problemname)                        
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd], Problemname = Problemname)            
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd], Problemname = Problemname)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd], Problemname = Problemname)            
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd], Problemname = Problemname)
+#             BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd], Problemname = Problemname)
 
 
-def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, ProblemID = 'MainProblem'):
+def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, Problemname = 'MainProblem'):
     """
     Parameters
     ----------
-    mesh : mesh ID or mesh object
+    mesh : mesh name or mesh object
         A periodic mesh to apply the periodic boundary conditions
     NodeEps : lise of int
         NodeEps is a list containing the node index of strain tensor component (virtual node)
@@ -337,7 +337,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         The default is '2D'.
     tol : float, optional
         Tolerance for the position of nodes. The default is 1e-8.
-    ProblemID : ProblemID on which the boundary conditions are applied
+    Problemname : Problemname on which the boundary conditions are applied
         The default is 'MainProblem'.
 
     Returns
@@ -351,9 +351,9 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
 
     if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
     
-    numGeometricMesh = mesh.FindCoordinateID('X')
-    assert(numGeometricMesh == mesh.FindCoordinateID('X'), "Not possible to define periodic condition on the given sepearated mesh" )
-    if dim == 3: assert(numGeometricMesh == mesh.FindCoordinateID('Z'), "Not possible to define periodic condition on the given sepearated mesh" )
+    numGeometricMesh = mesh.FindCoordinatename('X')
+    assert(numGeometricMesh == mesh.FindCoordinatename('X'), "Not possible to define periodic condition on the given sepearated mesh" )
+    if dim == 3: assert(numGeometricMesh == mesh.FindCoordinatename('Z'), "Not possible to define periodic condition on the given sepearated mesh" )
      
     GeometricMesh = mesh.GetListMesh()[numGeometricMesh]
     crd = GeometricMesh.nodes
@@ -381,59 +381,59 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         bottom = bottom[np.argsort(crd[bottom,0])]
         
         ################ Define set of nodes for PGD mesh #####################
-        mesh.add_node_set([left],      [numGeometricMesh], ID='left')
-        mesh.add_node_set([right],     [numGeometricMesh], ID='right')
-        mesh.add_node_set([top],       [numGeometricMesh], ID='top')
-        mesh.add_node_set([bottom],    [numGeometricMesh], ID='bottom')
-        mesh.add_node_set([corner_lb], [numGeometricMesh], ID='corner_lb')
-        mesh.add_node_set([corner_rb], [numGeometricMesh], ID='corner_rb')
-        mesh.add_node_set([corner_lt], [numGeometricMesh], ID='corner_lt')
-        mesh.add_node_set([corner_rt], [numGeometricMesh], ID='corner_rt')
+        mesh.add_node_set([left],      [numGeometricMesh], name ='left')
+        mesh.add_node_set([right],     [numGeometricMesh], name ='right')
+        mesh.add_node_set([top],       [numGeometricMesh], name ='top')
+        mesh.add_node_set([bottom],    [numGeometricMesh], name ='bottom')
+        mesh.add_node_set([corner_lb], [numGeometricMesh], name ='corner_lb')
+        mesh.add_node_set([corner_rb], [numGeometricMesh], name ='corner_rb')
+        mesh.add_node_set([corner_lt], [numGeometricMesh], name ='corner_lt')
+        mesh.add_node_set([corner_rt], [numGeometricMesh], name ='corner_rt')
         
-        mesh.add_node_set([np.full_like(right, NodeEps[0])], [numGeometricMesh], ID='EpsXX_right')
-        mesh.add_node_set([np.full_like(right, NodeEps[2])], [numGeometricMesh], ID='EpsXY_right')
-        mesh.add_node_set([np.full_like(top,NodeEps[2])],    [numGeometricMesh], ID='EpsXY_top')
-        mesh.add_node_set([np.full_like(top,NodeEps[1])],    [numGeometricMesh], ID='EpsYY_top')        
-        mesh.add_node_set([np.full_like(corner_lt,NodeEps[0])], [numGeometricMesh], ID='EpsXX_corner')
-        mesh.add_node_set([np.full_like(corner_lt,NodeEps[1])], [numGeometricMesh], ID='EpsYY_corner')
-        mesh.add_node_set([np.full_like(corner_lt,NodeEps[2])], [numGeometricMesh], ID='EpsXY_corner')
+        mesh.add_node_set([np.full_like(right, NodeEps[0])], [numGeometricMesh], name ='EpsXX_right')
+        mesh.add_node_set([np.full_like(right, NodeEps[2])], [numGeometricMesh], name ='EpsXY_right')
+        mesh.add_node_set([np.full_like(top,NodeEps[2])],    [numGeometricMesh], name ='EpsXY_top')
+        mesh.add_node_set([np.full_like(top,NodeEps[1])],    [numGeometricMesh], name ='EpsYY_top')        
+        mesh.add_node_set([np.full_like(corner_lt,NodeEps[0])], [numGeometricMesh], name ='EpsXX_corner')
+        mesh.add_node_set([np.full_like(corner_lt,NodeEps[1])], [numGeometricMesh], name ='EpsYY_corner')
+        mesh.add_node_set([np.full_like(corner_lt,NodeEps[2])], [numGeometricMesh], name ='EpsXY_corner')
         
         ############## Apply Boundary conditions ##############################
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right, 1), np.full_like(left, -1), np.full_like(right, -(xmax-xmin), dtype=float)],  ['right','left','EpsXX_right'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*(xmax-xmin), dtype=float)], ['right','left','EpsXY_right'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*(ymax-ymin), dtype=float)], ['top','bottom',np.full_like(top,NodeEps[2])], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-(ymax-ymin), dtype=float)], ['top','bottom',np.full_like(top,NodeEps[1])], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right, 1), np.full_like(left, -1), np.full_like(right, -(xmax-xmin), dtype=float)],  ['right','left','EpsXX_right'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*(xmax-xmin), dtype=float)], ['right','left','EpsXY_right'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*(ymax-ymin), dtype=float)], ['top','bottom',np.full_like(top,NodeEps[2])], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-(ymax-ymin), dtype=float)], ['top','bottom',np.full_like(top,NodeEps[1])], Problemname = Problemname)
         
         #elimination of DOF from edge left/top -> edge left/bottom
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], ['corner_lt', 'corner_lb', 'EpsYY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-0.5*(ymax-ymin), dtype=float)], ['corner_lt', 'corner_lb', 'EpsXY_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], ['corner_lt', 'corner_lb', 'EpsYY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-0.5*(ymax-ymin), dtype=float)], ['corner_lt', 'corner_lb', 'EpsXY_corner'], Problemname = Problemname)
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], ['corner_rb', 'corner_lb', 'EpsXX_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-0.5*(xmax-xmin), dtype=float)], ['corner_rb', 'corner_lb', np.full_like(corner_lt, NodeEps[2])], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], ['corner_rb', 'corner_lb', 'EpsXX_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-0.5*(xmax-xmin), dtype=float)], ['corner_rb', 'corner_lb', np.full_like(corner_lt, NodeEps[2])], Problemname = Problemname)
         #elimination of DOF from edge right/top -> edge left/bottom
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[2]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-0.5*(ymax-ymin), dtype=float)], ['corner_rt', 'corner_lb', 'EpsXX_corner', 'EpsXY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2],VarEps[1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-0.5*(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], ['corner_rt', 'corner_lb', 'EpsXY_corner', 'EpsYY_corner'], ProblemID = ProblemID)                
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[2]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-0.5*(ymax-ymin), dtype=float)], ['corner_rt', 'corner_lb', 'EpsXX_corner', 'EpsXY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[2],VarEps[1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-0.5*(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], ['corner_rt', 'corner_lb', 'EpsXY_corner', 'EpsYY_corner'], Problemname = Problemname)                
                                        
                       
         #if rot DOF are used, apply continuity of the rotational dof
         if 'RotZ' in ModelingSpace.ListVariable():
-            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
         if 'RotY' in ModelingSpace.ListVariable():
-            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
         if 'RotX' in ModelingSpace.ListVariable():
-            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], ProblemID = ProblemID)
-            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], ProblemID = ProblemID)
+            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb], Problemname = Problemname)
+            BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb], Problemname = Problemname)
         
         
         #StrainNode[0] - 'DispX' is a virtual dof for EXX
@@ -535,71 +535,71 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         
         
         ################ Define set of nodes for PGD mesh #####################
-        mesh.add_node_set([left],      [numGeometricMesh], ID='left')
-        mesh.add_node_set([right],     [numGeometricMesh], ID='right')
-        mesh.add_node_set([bottom],    [numGeometricMesh], ID='bottom')
-        mesh.add_node_set([top],       [numGeometricMesh], ID='top')
-        mesh.add_node_set([behind],    [numGeometricMesh], ID='behind')
-        mesh.add_node_set([front],     [numGeometricMesh], ID='front')
+        mesh.add_node_set([left],      [numGeometricMesh], name ='left')
+        mesh.add_node_set([right],     [numGeometricMesh], name ='right')
+        mesh.add_node_set([bottom],    [numGeometricMesh], name ='bottom')
+        mesh.add_node_set([top],       [numGeometricMesh], name ='top')
+        mesh.add_node_set([behind],    [numGeometricMesh], name ='behind')
+        mesh.add_node_set([front],     [numGeometricMesh], name ='front')
         
-        mesh.add_node_set([edge_lb], [numGeometricMesh], ID='edge_lb')
-        mesh.add_node_set([edge_lt], [numGeometricMesh], ID='edge_lt')
-        mesh.add_node_set([edge_rb], [numGeometricMesh], ID='edge_rb')
-        mesh.add_node_set([edge_rt], [numGeometricMesh], ID='edge_rt')
+        mesh.add_node_set([edge_lb], [numGeometricMesh], name ='edge_lb')
+        mesh.add_node_set([edge_lt], [numGeometricMesh], name ='edge_lt')
+        mesh.add_node_set([edge_rb], [numGeometricMesh], name ='edge_rb')
+        mesh.add_node_set([edge_rt], [numGeometricMesh], name ='edge_rt')
 
-        mesh.add_node_set([edge_bd], [numGeometricMesh], ID='edge_bd')
-        mesh.add_node_set([edge_bf], [numGeometricMesh], ID='edge_bf')
-        mesh.add_node_set([edge_td], [numGeometricMesh], ID='edge_td')
-        mesh.add_node_set([edge_tf], [numGeometricMesh], ID='edge_tf')
+        mesh.add_node_set([edge_bd], [numGeometricMesh], name ='edge_bd')
+        mesh.add_node_set([edge_bf], [numGeometricMesh], name ='edge_bf')
+        mesh.add_node_set([edge_td], [numGeometricMesh], name ='edge_td')
+        mesh.add_node_set([edge_tf], [numGeometricMesh], name ='edge_tf')
 
-        mesh.add_node_set([edge_ld], [numGeometricMesh], ID='edge_ld')
-        mesh.add_node_set([edge_lf], [numGeometricMesh], ID='edge_lf')
-        mesh.add_node_set([edge_rd], [numGeometricMesh], ID='edge_rd')
-        mesh.add_node_set([edge_rf], [numGeometricMesh], ID='edge_rf')
+        mesh.add_node_set([edge_ld], [numGeometricMesh], name ='edge_ld')
+        mesh.add_node_set([edge_lf], [numGeometricMesh], name ='edge_lf')
+        mesh.add_node_set([edge_rd], [numGeometricMesh], name ='edge_rd')
+        mesh.add_node_set([edge_rf], [numGeometricMesh], name ='edge_rf')
            
-        mesh.add_node_set([corner_lbd], [numGeometricMesh], ID='corner_lbd')
-        mesh.add_node_set([corner_lbf], [numGeometricMesh], ID='corner_lbf')
-        mesh.add_node_set([corner_ltd], [numGeometricMesh], ID='corner_ltd')
-        mesh.add_node_set([corner_ltf], [numGeometricMesh], ID='corner_ltf')
-        mesh.add_node_set([corner_rbd], [numGeometricMesh], ID='corner_rbd')
-        mesh.add_node_set([corner_rbf], [numGeometricMesh], ID='corner_rbf')
-        mesh.add_node_set([corner_rtd], [numGeometricMesh], ID='corner_rtd')
-        mesh.add_node_set([corner_rtf], [numGeometricMesh], ID='corner_rtf')
+        mesh.add_node_set([corner_lbd], [numGeometricMesh], name ='corner_lbd')
+        mesh.add_node_set([corner_lbf], [numGeometricMesh], name ='corner_lbf')
+        mesh.add_node_set([corner_ltd], [numGeometricMesh], name ='corner_ltd')
+        mesh.add_node_set([corner_ltf], [numGeometricMesh], name ='corner_ltf')
+        mesh.add_node_set([corner_rbd], [numGeometricMesh], name ='corner_rbd')
+        mesh.add_node_set([corner_rbf], [numGeometricMesh], name ='corner_rbf')
+        mesh.add_node_set([corner_rtd], [numGeometricMesh], name ='corner_rtd')
+        mesh.add_node_set([corner_rtf], [numGeometricMesh], name ='corner_rtf')
                 
-        mesh.add_node_set([np.full_like(right, NodeEps[0])], [numGeometricMesh], ID='EpsXX_right')
-        mesh.add_node_set([np.full_like(right, NodeEps[3])], [numGeometricMesh], ID='EpsXY_right')
-        mesh.add_node_set([np.full_like(right, NodeEps[4])], [numGeometricMesh], ID='EpsXZ_right')
-        mesh.add_node_set([np.full_like(top,NodeEps[3])],    [numGeometricMesh], ID='EpsXY_top')
-        mesh.add_node_set([np.full_like(top,NodeEps[1])],    [numGeometricMesh], ID='EpsYY_top')
-        mesh.add_node_set([np.full_like(top,NodeEps[5])],    [numGeometricMesh], ID='EpsYZ_top')
-        mesh.add_node_set([np.full_like(front,NodeEps[4])],  [numGeometricMesh], ID='EpsXZ_front')
-        mesh.add_node_set([np.full_like(front,NodeEps[5])],  [numGeometricMesh], ID='EpsYZ_front')
-        mesh.add_node_set([np.full_like(front,NodeEps[2])],  [numGeometricMesh], ID='EpsZZ_front')
+        mesh.add_node_set([np.full_like(right, NodeEps[0])], [numGeometricMesh], name ='EpsXX_right')
+        mesh.add_node_set([np.full_like(right, NodeEps[3])], [numGeometricMesh], name ='EpsXY_right')
+        mesh.add_node_set([np.full_like(right, NodeEps[4])], [numGeometricMesh], name ='EpsXZ_right')
+        mesh.add_node_set([np.full_like(top,NodeEps[3])],    [numGeometricMesh], name ='EpsXY_top')
+        mesh.add_node_set([np.full_like(top,NodeEps[1])],    [numGeometricMesh], name ='EpsYY_top')
+        mesh.add_node_set([np.full_like(top,NodeEps[5])],    [numGeometricMesh], name ='EpsYZ_top')
+        mesh.add_node_set([np.full_like(front,NodeEps[4])],  [numGeometricMesh], name ='EpsXZ_front')
+        mesh.add_node_set([np.full_like(front,NodeEps[5])],  [numGeometricMesh], name ='EpsYZ_front')
+        mesh.add_node_set([np.full_like(front,NodeEps[2])],  [numGeometricMesh], name ='EpsZZ_front')
 
-        mesh.add_node_set([np.full_like(edge_lt,NodeEps[0])],[numGeometricMesh], ID='EpsXX_edge_lt')
-        mesh.add_node_set([np.full_like(edge_lt,NodeEps[1])],[numGeometricMesh], ID='EpsYY_edge_lt')
-        mesh.add_node_set([np.full_like(edge_lt,NodeEps[3])],[numGeometricMesh], ID='EpsXY_edge_lt')
-        mesh.add_node_set([np.full_like(edge_lt,NodeEps[4])],[numGeometricMesh], ID='EpsXZ_edge_lt')
-        mesh.add_node_set([np.full_like(edge_lt,NodeEps[5])],[numGeometricMesh], ID='EpsYZ_edge_lt')
+        mesh.add_node_set([np.full_like(edge_lt,NodeEps[0])],[numGeometricMesh], name ='EpsXX_edge_lt')
+        mesh.add_node_set([np.full_like(edge_lt,NodeEps[1])],[numGeometricMesh], name ='EpsYY_edge_lt')
+        mesh.add_node_set([np.full_like(edge_lt,NodeEps[3])],[numGeometricMesh], name ='EpsXY_edge_lt')
+        mesh.add_node_set([np.full_like(edge_lt,NodeEps[4])],[numGeometricMesh], name ='EpsXZ_edge_lt')
+        mesh.add_node_set([np.full_like(edge_lt,NodeEps[5])],[numGeometricMesh], name ='EpsYZ_edge_lt')
     
-        mesh.add_node_set([np.full_like(edge_bf,NodeEps[1])],[numGeometricMesh], ID='EpsYY_edge_bf')
-        mesh.add_node_set([np.full_like(edge_bf,NodeEps[2])],[numGeometricMesh], ID='EpsZZ_edge_bf')
-        mesh.add_node_set([np.full_like(edge_bf,NodeEps[3])],[numGeometricMesh], ID='EpsXY_edge_bf')
-        mesh.add_node_set([np.full_like(edge_bf,NodeEps[4])],[numGeometricMesh], ID='EpsXZ_edge_bf')
-        mesh.add_node_set([np.full_like(edge_bf,NodeEps[5])],[numGeometricMesh], ID='EpsYZ_edge_bf')
+        mesh.add_node_set([np.full_like(edge_bf,NodeEps[1])],[numGeometricMesh], name ='EpsYY_edge_bf')
+        mesh.add_node_set([np.full_like(edge_bf,NodeEps[2])],[numGeometricMesh], name ='EpsZZ_edge_bf')
+        mesh.add_node_set([np.full_like(edge_bf,NodeEps[3])],[numGeometricMesh], name ='EpsXY_edge_bf')
+        mesh.add_node_set([np.full_like(edge_bf,NodeEps[4])],[numGeometricMesh], name ='EpsXZ_edge_bf')
+        mesh.add_node_set([np.full_like(edge_bf,NodeEps[5])],[numGeometricMesh], name ='EpsYZ_edge_bf')
 
-        mesh.add_node_set([np.full_like(edge_ld,NodeEps[0])],[numGeometricMesh], ID='EpsXX_edge_ld')
-        mesh.add_node_set([np.full_like(edge_ld,NodeEps[2])],[numGeometricMesh], ID='EpsZZ_edge_ld')
-        mesh.add_node_set([np.full_like(edge_ld,NodeEps[3])],[numGeometricMesh], ID='EpsXY_edge_ld')
-        mesh.add_node_set([np.full_like(edge_ld,NodeEps[4])],[numGeometricMesh], ID='EpsXZ_edge_ld')
-        mesh.add_node_set([np.full_like(edge_ld,NodeEps[5])],[numGeometricMesh], ID='EpsYZ_edge_ld')
+        mesh.add_node_set([np.full_like(edge_ld,NodeEps[0])],[numGeometricMesh], name ='EpsXX_edge_ld')
+        mesh.add_node_set([np.full_like(edge_ld,NodeEps[2])],[numGeometricMesh], name ='EpsZZ_edge_ld')
+        mesh.add_node_set([np.full_like(edge_ld,NodeEps[3])],[numGeometricMesh], name ='EpsXY_edge_ld')
+        mesh.add_node_set([np.full_like(edge_ld,NodeEps[4])],[numGeometricMesh], name ='EpsXZ_edge_ld')
+        mesh.add_node_set([np.full_like(edge_ld,NodeEps[5])],[numGeometricMesh], name ='EpsYZ_edge_ld')
 
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[0])], [numGeometricMesh], ID='EpsXX_corner')
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[1])], [numGeometricMesh], ID='EpsYY_corner')
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[2])], [numGeometricMesh], ID='EpsZZ_corner')
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[3])], [numGeometricMesh], ID='EpsXY_corner')
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[4])], [numGeometricMesh], ID='EpsXZ_corner')
-        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[5])], [numGeometricMesh], ID='EpsYZ_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[0])], [numGeometricMesh], name ='EpsXX_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[1])], [numGeometricMesh], name ='EpsYY_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[2])], [numGeometricMesh], name ='EpsZZ_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[3])], [numGeometricMesh], name ='EpsXY_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[4])], [numGeometricMesh], name ='EpsXZ_corner')
+        mesh.add_node_set([np.full_like(corner_rbd,NodeEps[5])], [numGeometricMesh], name ='EpsYZ_corner')
         
         
         ############## Apply Boundary conditions ##############################
@@ -607,93 +607,93 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         dx = xmax-xmin ; dy = ymax-ymin ; dz = zmax-zmin        
         #[EpsXX, EpsYY, EpsZZ, EpsYZ, EpsXZ, EpsXY]
         #Left/right faces
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right,1), np.full_like(left, -1), np.full_like(right, -dx, dtype=float)]  , ['right','left','EpsXX_right'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], ['right','left','EpsXY_right'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], ['right','left','EpsXY_right'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right,1), np.full_like(left, -1), np.full_like(right, -dx, dtype=float)]  , ['right','left','EpsXX_right'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], ['right','left','EpsXY_right'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], ['right','left','EpsXY_right'], Problemname = Problemname)
         #top/bottom faces
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], ['top','bottom','EpsXY_top'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top, -dy, dtype=float)]   , ['top','bottom','EpsYY_top'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], ['top','bottom','EpsYZ_top'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], ['top','bottom','EpsXY_top'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top, -dy, dtype=float)]   , ['top','bottom','EpsYY_top'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], ['top','bottom','EpsYZ_top'], Problemname = Problemname)
         #front/behind faces
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], ['front','behind','EpsXZ_front'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], ['front','behind','EpsYZ_front'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)    ], ['front','behind','EpsZZ_front'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], ['front','behind','EpsXZ_front'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], ['front','behind','EpsYZ_front'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)    ], ['front','behind','EpsZZ_front'], Problemname = Problemname)
                 
         #elimination of DOF from edge left/top -> edge left/bottom
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], ['edge_lt', 'edge_lb', 'EpsXY_edge_lt'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)    ], ['edge_lt', 'edge_lb', 'EpsYY_edge_lt'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], ['edge_lt', 'edge_lb', 'EpsYZ_edge_lt'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], ['edge_lt', 'edge_lb', 'EpsXY_edge_lt'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)    ], ['edge_lt', 'edge_lb', 'EpsYY_edge_lt'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], ['edge_lt', 'edge_lb', 'EpsYZ_edge_lt'], Problemname = Problemname)        
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)    ], ['edge_rb', 'edge_lb', 'EpsXX_edge_lt'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], ['edge_rb', 'edge_lb', 'EpsXY_edge_lt'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], ['edge_rb', 'edge_lb', 'EpsXZ_edge_lt'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)    ], ['edge_rb', 'edge_lb', 'EpsXX_edge_lt'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], ['edge_rb', 'edge_lb', 'EpsXY_edge_lt'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], ['edge_rb', 'edge_lb', 'EpsXZ_edge_lt'], Problemname = Problemname)        
         #elimination of DOF from edge right/top -> edge left/bottom
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXX_edge_lt', 'EpsXY_edge_lt'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXY_edge_lt', 'EpsYY_edge_lt'], ProblemID = ProblemID)                
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXZ_edge_lt', 'EpsYZ_edge_lt'], ProblemID = ProblemID)                
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXX_edge_lt', 'EpsXY_edge_lt'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXY_edge_lt', 'EpsYY_edge_lt'], Problemname = Problemname)                
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], ['edge_rt', 'edge_lb', 'EpsXZ_edge_lt', 'EpsYZ_edge_lt'], Problemname = Problemname)                
                                        
         #elimination of DOF from edge top/behind -> edge bottom/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], ['edge_td', 'edge_bd', 'EpsXY_edge_bf'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)    ], ['edge_td', 'edge_bd', 'EpsYY_edge_bf'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], ['edge_td', 'edge_bd', 'EpsYZ_edge_bf'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], ['edge_td', 'edge_bd', 'EpsXY_edge_bf'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)    ], ['edge_td', 'edge_bd', 'EpsYY_edge_bf'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], ['edge_td', 'edge_bd', 'EpsYZ_edge_bf'], Problemname = Problemname)        
         #elimination of DOF from edge bottom/front -> edge bottom/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], ['edge_bf', 'edge_bd', 'EpsXZ_edge_bf'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], ['edge_bf', 'edge_bd', 'EpsYZ_edge_bf'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)    ], ['edge_bf', 'edge_bd', 'EpsZZ_edge_bf'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], ['edge_bf', 'edge_bd', 'EpsXZ_edge_bf'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], ['edge_bf', 'edge_bd', 'EpsYZ_edge_bf'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)    ], ['edge_bf', 'edge_bd', 'EpsZZ_edge_bf'], Problemname = Problemname)        
         #elimination of DOF from edge top/front -> edge bottom/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-0.5*dz, dtype=float)], ['edge_tf', 'edge_bd', 'EpsXY_edge_bf', 'EpsXZ_edge_bf'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float)    , np.full_like(edge_tf,-0.5*dz, dtype=float)], ['edge_tf', 'edge_bd', 'EpsYY_edge_bf', 'EpsYZ_edge_bf'], ProblemID = ProblemID)                
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)    ], ['edge_tf', 'edge_bd', 'EpsYZ_edge_bf', 'EpsZZ_edge_bf'], ProblemID = ProblemID)                
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-0.5*dz, dtype=float)], ['edge_tf', 'edge_bd', 'EpsXY_edge_bf', 'EpsXZ_edge_bf'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float)    , np.full_like(edge_tf,-0.5*dz, dtype=float)], ['edge_tf', 'edge_bd', 'EpsYY_edge_bf', 'EpsYZ_edge_bf'], Problemname = Problemname)                
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)    ], ['edge_tf', 'edge_bd', 'EpsYZ_edge_bf', 'EpsZZ_edge_bf'], Problemname = Problemname)                
    
         #elimination of DOF from edge right/behind -> edge left/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)    ], ['edge_rd', 'edge_ld', 'EpsXX_edge_ld'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], ['edge_rd', 'edge_ld', 'EpsXY_edge_ld'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], ['edge_rd', 'edge_ld', 'EpsXZ_edge_ld'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)    ], ['edge_rd', 'edge_ld', 'EpsXX_edge_ld'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], ['edge_rd', 'edge_ld', 'EpsXY_edge_ld'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], ['edge_rd', 'edge_ld', 'EpsXZ_edge_ld'], Problemname = Problemname)        
         #elimination of DOF from edge left/front -> edge left/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], ['edge_lf', 'edge_ld', 'EpsXZ_edge_ld'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], ['edge_lf', 'edge_ld', 'EpsYZ_edge_ld'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)    ], ['edge_lf', 'edge_ld', 'EpsZZ_edge_ld'], ProblemID = ProblemID)        
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], ['edge_lf', 'edge_ld', 'EpsXZ_edge_ld'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], ['edge_lf', 'edge_ld', 'EpsYZ_edge_ld'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)    ], ['edge_lf', 'edge_ld', 'EpsZZ_edge_ld'], Problemname = Problemname)        
         #elimination of DOF from edge right/front -> edge left/behind
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx    , dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], ['edge_rf', 'edge_ld', 'EpsXX_edge_ld', 'EpsXZ_edge_ld'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], ['edge_rf', 'edge_ld', 'EpsXY_edge_ld', 'EpsYZ_edge_ld'], ProblemID = ProblemID)                
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)    ], ['edge_rf', 'edge_ld', 'EpsXZ_edge_ld', 'EpsZZ_edge_ld'], ProblemID = ProblemID)                
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx    , dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], ['edge_rf', 'edge_ld', 'EpsXX_edge_ld', 'EpsXZ_edge_ld'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], ['edge_rf', 'edge_ld', 'EpsXY_edge_ld', 'EpsYZ_edge_ld'], Problemname = Problemname)                
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)    ], ['edge_rf', 'edge_ld', 'EpsXZ_edge_ld', 'EpsZZ_edge_ld'], Problemname = Problemname)                
         
         #### CORNER ####
         #elimination of DOF from corner right/bottom/behind (corner_rbd) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)    ], ['corner_rbd', 'corner_lbd', 'EpsXX_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], ['corner_rbd', 'corner_lbd', 'EpsXY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], ['corner_rbd', 'corner_lbd', 'EpsXZ_corner'], ProblemID = ProblemID) 
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)    ], ['corner_rbd', 'corner_lbd', 'EpsXX_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], ['corner_rbd', 'corner_lbd', 'EpsXY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], ['corner_rbd', 'corner_lbd', 'EpsXZ_corner'], Problemname = Problemname) 
         #elimination of DOF from corner left/top/behind (corner_ltd) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], ['corner_ltd', 'corner_lbd', 'EpsXY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)    ], ['corner_ltd', 'corner_lbd', 'EpsYY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], ['corner_ltd', 'corner_lbd', 'EpsYZ_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], ['corner_ltd', 'corner_lbd', 'EpsXY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)    ], ['corner_ltd', 'corner_lbd', 'EpsYY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], ['corner_ltd', 'corner_lbd', 'EpsYZ_corner'], Problemname = Problemname)
         #elimination of DOF from corner left/bottom/front (corner_lbf) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], ['corner_lbf', 'corner_lbd', 'EpsXZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], ['corner_lbf', 'corner_lbd', 'EpsYZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)    ], ['corner_lbf', 'corner_lbd', 'EpsZZ_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], ['corner_lbf', 'corner_lbd', 'EpsXZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], ['corner_lbf', 'corner_lbd', 'EpsYZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)    ], ['corner_lbf', 'corner_lbd', 'EpsZZ_corner'], Problemname = Problemname)
         #elimination of DOF from corner right/top/behind (corner_rtd) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float)    , np.full_like(corner_rtd,-0.5*dy, dtype=float)], ['corner_rtd', 'corner_lbd', 'EpsXX_corner', 'EpsXY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)    ], ['corner_rtd', 'corner_lbd', 'EpsXY_corner', 'EpsYY_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-0.5*dy, dtype=float)], ['corner_rtd', 'corner_lbd', 'EpsXZ_corner', 'EpsYZ_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float)    , np.full_like(corner_rtd,-0.5*dy, dtype=float)], ['corner_rtd', 'corner_lbd', 'EpsXX_corner', 'EpsXY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)    ], ['corner_rtd', 'corner_lbd', 'EpsXY_corner', 'EpsYY_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-0.5*dy, dtype=float)], ['corner_rtd', 'corner_lbd', 'EpsXZ_corner', 'EpsYZ_corner'], Problemname = Problemname)
         #elimination of DOF from corner left/top/front (corner_ltf) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-0.5*dz, dtype=float)], ['corner_ltf', 'corner_lbd', 'EpsXY_corner', 'EpsXZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float)    , np.full_like(corner_ltf,-0.5*dz, dtype=float)], ['corner_ltf', 'corner_lbd', 'EpsYY_corner', 'EpsYZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)    ], ['corner_ltf', 'corner_lbd', 'EpsYZ_corner', 'EpsYY_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-0.5*dz, dtype=float)], ['corner_ltf', 'corner_lbd', 'EpsXY_corner', 'EpsXZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float)    , np.full_like(corner_ltf,-0.5*dz, dtype=float)], ['corner_ltf', 'corner_lbd', 'EpsYY_corner', 'EpsYZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)    ], ['corner_ltf', 'corner_lbd', 'EpsYZ_corner', 'EpsYY_corner'], Problemname = Problemname)
         #elimination of DOF from corner right/bottom/front (corner_rbf) -> corner left/bottom/behind (corner_lbd) 
-        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float)    , np.full_like(corner_rbf,-0.5*dz, dtype=float)], ['corner_rbf', 'corner_lbd', 'EpsXX_corner', 'EpsXZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-0.5*dz, dtype=float)], ['corner_rbf', 'corner_lbd', 'EpsXY_corner', 'EpsYZ_corner'], ProblemID = ProblemID)
-        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)    ], ['corner_rbf', 'corner_lbd', 'EpsXX_corner', 'EpsZZ_corner'], ProblemID = ProblemID)
+        BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float)    , np.full_like(corner_rbf,-0.5*dz, dtype=float)], ['corner_rbf', 'corner_lbd', 'EpsXX_corner', 'EpsXZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-0.5*dz, dtype=float)], ['corner_rbf', 'corner_lbd', 'EpsXY_corner', 'EpsYZ_corner'], Problemname = Problemname)
+        BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)    ], ['corner_rbf', 'corner_lbd', 'EpsXX_corner', 'EpsZZ_corner'], Problemname = Problemname)
         
         #elimination of DOF from corner right/top/front (corner_rtf) -> corner left/bottom/behind (corner_lbd) 
         BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3], VarEps[4]], 
                                  [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float)    , np.full_like(corner_rtf,-0.5*dy, dtype=float), np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
-                                 ['corner_rtf', 'corner_lbd', 'EpsXX_corner', 'EpsXY_corner', 'EpsXZ_corner'], ProblemID = ProblemID)
+                                 ['corner_rtf', 'corner_lbd', 'EpsXX_corner', 'EpsXY_corner', 'EpsXZ_corner'], Problemname = Problemname)
         BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1], VarEps[5]], 
                                  [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-0.5*dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float)    , np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
-                                 ['corner_rtf', 'corner_lbd', 'EpsXY_corner', 'EpsYY_corner', 'EpsYZ_corner'], ProblemID = ProblemID)
+                                 ['corner_rtf', 'corner_lbd', 'EpsXY_corner', 'EpsYY_corner', 'EpsYZ_corner'], Problemname = Problemname)
         BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5], VarEps[2]], 
                                  [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-0.5*dx, dtype=float), np.full_like(corner_rtf,-0.5*dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)    ], 
-                                 ['corner_rtf', 'corner_lbd', 'EpsXZ_corner', 'EpsYZ_corner', 'EpsZZ_corner'], ProblemID = ProblemID)
+                                 ['corner_rtf', 'corner_lbd', 'EpsXZ_corner', 'EpsYZ_corner', 'EpsZZ_corner'], Problemname = Problemname)
 
         #if rot DOF are used, apply continuity of the rotational dof
         list_rot_var = []
@@ -703,30 +703,30 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         
         for var in list_rot_var: 
             #### FACES ####
-            BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], ['right','left'], ProblemID = ProblemID)
-            BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], ['top','bottom'], ProblemID = ProblemID)
-            BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], ['front','behind'], ProblemID = ProblemID)
+            BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], ['right','left'], Problemname = Problemname)
+            BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], ['top','bottom'], Problemname = Problemname)
+            BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], ['front','behind'], Problemname = Problemname)
                      
             #### EDGES ####
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], ['edge_lt', 'edge_lb'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], ['edge_rb', 'edge_lb'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], ['edge_rt', 'edge_lb'], ProblemID = ProblemID)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], ['edge_lt', 'edge_lb'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], ['edge_rb', 'edge_lb'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], ['edge_rt', 'edge_lb'], Problemname = Problemname)        
             
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], ['edge_td', 'edge_bd'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], ['edge_bf', 'edge_bd'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], ['edge_tf', 'edge_bd'], ProblemID = ProblemID)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], ['edge_td', 'edge_bd'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], ['edge_bf', 'edge_bd'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], ['edge_tf', 'edge_bd'], Problemname = Problemname)        
 
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], ['edge_rd', 'edge_ld'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], ['edge_lf', 'edge_ld'], ProblemID = ProblemID)        
-            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], ['edge_rf', 'edge_ld'], ProblemID = ProblemID)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], ['edge_rd', 'edge_ld'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], ['edge_lf', 'edge_ld'], Problemname = Problemname)        
+            BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], ['edge_rf', 'edge_ld'], Problemname = Problemname)        
                            
             #### CORNERS ####
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], ['corner_rbd', 'corner_lbd'], ProblemID = ProblemID)                       
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], ['corner_ltd', 'corner_lbd'], ProblemID = ProblemID)                        
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], ['corner_lbf', 'corner_lbd'], ProblemID = ProblemID)            
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], ['corner_rtd', 'corner_lbd'], ProblemID = ProblemID)
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], ['corner_ltf', 'corner_lbd'], ProblemID = ProblemID)            
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], ['corner_rbf', 'corner_lbd'], ProblemID = ProblemID)
-            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], ['corner_rtf', 'corner_lbd'], ProblemID = ProblemID)
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], ['corner_rbd', 'corner_lbd'], Problemname = Problemname)                       
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], ['corner_ltd', 'corner_lbd'], Problemname = Problemname)                        
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], ['corner_lbf', 'corner_lbd'], Problemname = Problemname)            
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], ['corner_rtd', 'corner_lbd'], Problemname = Problemname)
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], ['corner_ltf', 'corner_lbd'], Problemname = Problemname)            
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], ['corner_rbf', 'corner_lbd'], Problemname = Problemname)
+            BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], ['corner_rtf', 'corner_lbd'], Problemname = Problemname)
                                     
         

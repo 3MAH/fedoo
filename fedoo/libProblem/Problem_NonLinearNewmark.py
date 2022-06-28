@@ -9,8 +9,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
     NLStaticClass = _GenerateClass_NonLinearStatic(libBase)
     class __Newmark(NLStaticClass):    
             
-        def __init__(self, StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, ID):
-            NLStaticClass.__init__(self, StiffnessAssembly, ID)  
+        def __init__(self, StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, name):
+            NLStaticClass.__init__(self, StiffnessAssembly, name)  
             
             # if DampingAssembly is 0:
             #     A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() #tangent matrix
@@ -342,7 +342,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
     
     return __Newmark
 
-def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly = 0, ID = "MainProblem"):
+def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly = 0, name = "MainProblem"):
     """
     Define a Newmark problem
     The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
@@ -361,6 +361,6 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssem
     else: libBase = Problem
 
     __Newmark = _GenerateClass_NonLinearNewmark(libBase)
-    return __Newmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, ID)
+    return __Newmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, name)
 
 

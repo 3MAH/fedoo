@@ -10,15 +10,15 @@ class Inertia(WeakForm):
     ----------
     Density: scalar or arrays of gauss point values.
         Material density
-    ID: str
-        ID of the WeakForm 
+    name: str
+        name of the WeakForm 
     """
-    def __init__(self, Density, ID = "", space = None):
+    def __init__(self, Density, name = "", space = None):
            
-        if ID == "":
-            ID = "Inertia"
+        if name == "":
+            name = "Inertia"
             
-        WeakForm.__init__(self,ID,space)
+        WeakForm.__init__(self,name,space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                

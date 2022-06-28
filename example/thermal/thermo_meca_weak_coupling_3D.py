@@ -10,14 +10,14 @@ start = time()
 
 
 # -------------------- MESH ------------------------------
-# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = meshID) 
-# Mesh.import_file('octet_surf.msh', meshID = "Domain")
-# Mesh.import_file('data/octet_1.msh', meshID = "Domain")
-Mesh.import_file('data/gyroid.msh', meshID = "Domain")
-meshID = "Domain"
+# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
+# Mesh.import_file('octet_surf.msh', meshname = "Domain")
+# Mesh.import_file('data/octet_1.msh', meshname = "Domain")
+Mesh.import_file('data/gyroid.msh', meshname = "Domain")
+meshname = "Domain"
 filename_res = 'results/thermo_meca_nl'
 
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
@@ -41,9 +41,9 @@ thermal_space = Util.ProblemDimension("3D")
 K = 500 # K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
-thermal_law = ConstitutiveLaw.ThermalProperties(K, c, rho, ID='ThermalLaw')
+thermal_law = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf_th = WeakForm.HeatEquation("ThermalLaw", space = thermal_space)
-assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling_T")    
+assemb = Assembly.Create("ThermalLaw", meshname, name="Assembling_T")    
 
 pb_th = Problem.NonLinearStatic("Assembling_T")
 
@@ -60,7 +60,7 @@ NLGEOM = False
 mat =0
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    mechancial_law = ConstitutiveLaw.Simcoon("ELISO", props, 1, ID='MechanicalLaw')
+    mechancial_law = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='MechanicalLaw')
     mechancial_law.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
 elif mat == 1 or mat == 2:
@@ -69,17 +69,17 @@ elif mat == 1 or mat == 2:
     m=1#0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        mechancial_law = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='MechanicalLaw')
+        mechancial_law = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='MechanicalLaw')
         mechancial_law.corate = 2
     elif mat == 2:
-        mechancial_law = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, ID='MechanicalLaw')
+        mechancial_law = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='MechanicalLaw')
         mechancial_law.SetHardeningFunction('power', H=k, beta=m)
 else:
-    mechancial_law = ConstitutiveLaw.ElasticIsotrop(E, nu, ID='MechanicalLaw')
+    mechancial_law = ConstitutiveLaw.ElasticIsotrop(E, nu, name='MechanicalLaw')
 
 WeakForm.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
 
-Assembly.Create("MechanicalLaw", meshID, ID="Assembling_M")     #uses MeshChange=True when the mesh change during the time
+Assembly.Create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
 pb_m = Problem.NonLinearStatic("Assembling_M")
 # pb_m.SetSolver('cg', precond = True)
@@ -101,8 +101,8 @@ def timeEvolution(timeFactor):
     else: return 1
 
 
-pb_th.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution, ID='temp')
-# pb_th.BoundaryCondition('Dirichlet','Temp',100,right, ID='temp')
+pb_th.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution, name='temp')
+# pb_th.BoundaryCondition('Dirichlet','Temp',100,right, name='temp')
 
 pb_m.BoundaryCondition('Dirichlet','Disp',0,boundary)
 
@@ -137,7 +137,7 @@ for i in range(nb_iter):
 
 
 # pb_th.RemoveBC('temp')
-# pb_th.BoundaryCondition('Dirichlet','Temp',0,right, timeEvolution=timeEvolution, initialValue = 100, ID='temp')
+# pb_th.BoundaryCondition('Dirichlet','Temp',0,right, timeEvolution=timeEvolution, initialValue = 100, name='temp')
 pb_th.GetBC('temp')[0].ChangeValue(0, initialValue = 'Current')
 # pb_th.ApplyBoundaryCondition()
 

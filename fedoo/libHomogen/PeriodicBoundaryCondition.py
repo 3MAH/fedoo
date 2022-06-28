@@ -22,12 +22,12 @@ if USE_SIMCOON:
 
 if USE_SIMCOON:    
     
-    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None, nNeighbours = 3, powInter = 1.0):
+    def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = None, nNeighbours = 3, powInter = 1.0):
         
-        if ProblemID is None: pb = ProblemBase.GetActive()
-        elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
-        elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
-        else: raise NameError('ProblemID not understood')
+        if Problemname is None: pb = ProblemBase.GetActive()
+        elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
+        elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
+        else: raise NameError('Problemname not understood')
         
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
@@ -49,11 +49,11 @@ if USE_SIMCOON:
             listVar = tuple(eq[1::3].astype(int)-1)
             pb.BoundaryCondition('MPC', listVar, eq[2::3], eq[0::3].astype(int))
 
-def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None):
+def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = None):
     """
     Parameters
     ----------
-    crd : mesh ID or mesh object
+    crd : mesh name or mesh object
         A periodic mesh to apply the periodic boundary conditions
     NodeCD : list of int
         NodeCD is a list containing the node index of Grad displacement tensor component (virtual node)
@@ -67,7 +67,7 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
         The default is '2D'.
     tol : float, optional
         Tolerance for the position of nodes. The default is 1e-8.
-    ProblemID : ProblemID on which the boundary conditions are applied
+    Problemname : Problemname on which the boundary conditions are applied
         The default is the active Problem.
 
     Returns
@@ -77,10 +77,10 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     """    
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
-    if ProblemID is None: pb = ProblemBase.GetActive()
-    elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
-    elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
-    else: raise NameError('ProblemID not understood')
+    if Problemname is None: pb = ProblemBase.GetActive()
+    elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
+    elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
+    else: raise NameError('Problemname not understood')
     
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3
@@ -366,11 +366,11 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
             pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd])
 
 
-def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, ProblemID = None):
+def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, Problemname = None):
     """
     Parameters
     ----------
-    mesh : mesh ID or mesh object
+    mesh : mesh name or mesh object
         A periodic mesh to apply the periodic boundary conditions
     NodeEps : lise of int
         NodeEps is a list containing the node index of strain tensor component (virtual node)
@@ -384,7 +384,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         The default is '2D'.
     tol : float, optional
         Tolerance for the position of nodes. The default is 1e-8.
-    ProblemID : ProblemID on which the boundary conditions are applied
+    Problemname : Problemname on which the boundary conditions are applied
         The default is 'MainProblem'.
 
     Returns
@@ -394,10 +394,10 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     """
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
-    if ProblemID is None: pb = ProblemBase.GetActive()
-    elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
-    elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
-    else: raise NameError('ProblemID not understood')
+    if Problemname is None: pb = ProblemBase.GetActive()
+    elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
+    elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
+    else: raise NameError('Problemname not understood')
         
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3

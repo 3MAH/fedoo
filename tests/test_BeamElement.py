@@ -8,7 +8,7 @@ import numpy as np
 Util.ProblemDimension("3D")
 E = 1e5 
 nu = 0.3
-ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'ElasticLaw')
+ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 
 #circular section 
 R = 1
@@ -37,16 +37,16 @@ nodes_right = [Nb_elm]
 for computeShear in range(3):
     
     if computeShear == 0:
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, ID = "WFbeam") #by default k=0 i.e. no shear effect
-        Assembly.Create("WFbeam", "beam", "bernoulliBeam", ID="beam", MeshChange = True)    
+        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
+        Assembly.Create("WFbeam", "beam", "bernoulliBeam", name="beam", MeshChange = True)    
     elif computeShear == 1:
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,ID = "WFbeam")
+        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
         Element.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
-        Assembly.Create("WFbeam", "beam", "beam", ID="beam", MeshChange = True)
+        Assembly.Create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
         Mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, ID = "WFbeam")
-        Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam", MeshChange = True)    
+        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
+        Assembly.Create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
     
     Problem.Static("beam")
     

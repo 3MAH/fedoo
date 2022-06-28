@@ -7,10 +7,10 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 Util.ProblemDimension("3D")
 
-meshID = "Domain2"
+meshname = "Domain2"
 
-# Mesh.import_file('./meshes/octet_surf.msh', meshID = "Domain")
-Mesh.box_mesh(2,2,2, ElementShape = 'hex8', ID = "Domain2")
+# Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")
+Mesh.box_mesh(2,2,2, ElementShape = 'hex8', name = "Domain2")
 
 umat_name = 'ELISO'
 props = np.array([[1e5, 0.3, 1]])
@@ -29,10 +29,10 @@ path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
 outputdatfile = 'output.dat'
 
-# Homogen.SolverUnitCell(meshID, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
+# Homogen.SolverUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
     
 crd = mesh.nodes
 type_el = mesh.elm_type
@@ -55,14 +55,14 @@ else:
 center = [0] 
 
 if isinstance(umat_name, str):
-    material = ConstitutiveLaw.Simcoon(umat_name, props, nstatev, ID='ConstitutiveLaw')
+    material = ConstitutiveLaw.Simcoon(umat_name, props, nstatev, name='ConstitutiveLaw')
     material.corate = corate_type
 else:
     material = umat_name
 
 #Assembly
-WeakForm.InternalForce(material, ID="wf")
-Assembly.Create("wf", mesh, type_el, ID="Assembling", nb_pg = 1)
+WeakForm.InternalForce(material, name="wf")
+Assembly.Create("wf", mesh, type_el, name="Assembling", nb_pg = 1)
 
 #Type of problem
 pb = Problem.NonLinearStatic("Assembling")
@@ -128,12 +128,12 @@ for blocknumber, block in enumerate(blocks):
             initValue[step.cBC_meca.astype(bool)] = MeanStress[step.cBC_meca.astype(bool)]
             
             pb.RemoveBC("Strain")
-            pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], ID = 'Strain') #EpsXX
-            pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], ID = 'Strain') #EpsYY
-            pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], ID = 'Strain') #EpsZZ
-            pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], ID = 'Strain') #EpsXY
-            pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
-            pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
+            pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], name = 'Strain') #EpsXX
+            pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], name = 'Strain') #EpsYY
+            pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], name = 'Strain') #EpsZZ
+            pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], name = 'Strain') #EpsXY
+            pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], name = 'Strain') #EpsXZ
+            pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], name = 'Strain') #EpsYZ
             
             #pb.ApplyBoundaryCondition()
             # pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = False, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
@@ -161,7 +161,7 @@ for blocknumber, block in enumerate(blocks):
 
             if Tangent_bool:
             
-                TangentMatrix = GetTangentStiffness(ProblemID)
+                TangentMatrix = GetTangentStiffness(Problemname)
                 TangentMatrix_All.append(TangentMatrix.flatten())
                 
 print(material.GetStress())

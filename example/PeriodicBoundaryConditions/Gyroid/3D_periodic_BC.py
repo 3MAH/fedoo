@@ -6,13 +6,13 @@ import time
 
 t0 = time.time()
 Util.ProblemDimension("3D")
-Mesh.import_file('gyroid.msh', meshID = "Domain")
-meshID = "Domain"
+Mesh.import_file('gyroid.msh', meshname = "Domain")
+meshname = "Domain"
 
-type_el = Mesh.get_all()[meshID].elm_type
+type_el = Mesh.get_all()[meshname].elm_type
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -23,11 +23,11 @@ crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
 StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
 
 #Material definition
-material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
+material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.Create("ElasticLaw", meshID, type_el, ID="Assembling") 
+Assembly.Create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #Type of problem 
 Problem.Static("Assembling")
@@ -42,10 +42,10 @@ E = [0,0,0,0,0,1] #[EXX, EYY, EZZ, EXY, EXZ, EYZ]
 #StrainNode[1] - 'DispY' is a virtual dof for EXZ
 #StrainNode[1] - 'DispZ' is a virtual dof for EYZ
 
-#Util.DefinePeriodicBoundaryCondition(meshID,
+#Util.DefinePeriodicBoundaryCondition(meshname,
 #        [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
 #        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
-Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(meshID,
+Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(meshname,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', tol=1e-4, nNeighbours = 3, powInter = 1.0)
 
@@ -78,12 +78,12 @@ TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
-    TensorStrainNd = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Node")
-    TensorStressNd = Assembly.ConvertData(TensorStress, meshID, convertTo = "Node")
+    TensorStrainNd = Assembly.ConvertData(TensorStrain, meshname, convertTo = "Node")
+    TensorStressNd = Assembly.ConvertData(TensorStress, meshname, convertTo = "Node")
     
     #Get the stress tensor (element values)
-    TensorStrainEl = Assembly.ConvertData(TensorStrain, meshID, convertTo = "Element")       
-    TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
+    TensorStrainEl = Assembly.ConvertData(TensorStrain, meshname, convertTo = "Element")       
+    TensorStressEl = Assembly.ConvertData(TensorStress, meshname, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
     # TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
@@ -98,11 +98,11 @@ if output_VTK == 1:
     
     #Get the displacement vector on nodes for export to vtk
     U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-    N = Mesh.get_all()[meshID].n_nodes
+    N = Mesh.get_all()[meshname].n_nodes
     # U = np.c_[U,np.zeros(N)]
     
     SetId = None
-    OUT = Util.ExportData(meshID)
+    OUT = Util.ExportData(meshname)
     ElSet = slice(None) #we keep all elements
     
     #Write the vtk file                            

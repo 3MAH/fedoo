@@ -10,10 +10,10 @@ class ReadINP:
         inp = []
         for filename in args:
             filename = filename.strip()
-            # if meshID == None:
-            #     meshID = filename
-            #     if meshID[-4:].lower() == '.msh':
-            #         meshID = meshID[:-4]
+            # if meshname == None:
+            #     meshname = filename
+            #     if meshname[-4:].lower() == '.msh':
+            #         meshname = meshname[:-4]
             # mesh = None
                
             #print 'Reading file',`filename`
@@ -143,16 +143,16 @@ class ReadINP:
         # self.ConvertNode = self.__ConvertNode
         # self.Element = Element
     
-    def toMesh(self, meshID = None):     
-        if meshID == None:
-            meshID = self.filename
-            if meshID[-4:].lower() == '.inp': meshID = meshID[:-4]           
+    def toMesh(self, meshname = None):     
+        if meshname == None:
+            meshname = self.filename
+            if meshname[-4:].lower() == '.inp': meshname = meshname[:-4]           
         for count,dict_elm in enumerate(self.__Element):
-            if len(self.__Element) < 2: importedMeshName = meshID
-            else: importedMeshName = meshID+str(count)
+            if len(self.__Element) < 2: importedMeshName = meshname
+            else: importedMeshName = meshname+str(count)
             
             elm = self.__ConvertNode(dict_elm['ElementTable'])
-            Mesh(self.__NodeCoordinate, elm, dict_elm['ElementType'], ID = importedMeshName) 
+            Mesh(self.__NodeCoordinate, elm, dict_elm['ElementType'], name = importedMeshName) 
             #add set of nodes
             for SetOfId in self.__NodeSet:
                 NodeIndexes = self.__NodeSet[SetOfId]
@@ -166,10 +166,10 @@ class ReadINP:
                 Temp = ConvertElement(ElementIndexes)                
                 Mesh.get_all()[importedMeshName].add_element_set(Temp[Temp != None].astype(int),SetOfId)                    
 
-    def applyBoundaryCondition(self, ProblemID = "MainProblem"):
+    def applyBoundaryCondition(self, Problemname = "MainProblem"):
         for listVar in self.__Equation:
             eq = np.array(self.__Equation[listVar])
-            BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), ProblemID = ProblemID)
+            BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), Problemname = Problemname)
 
             
     
@@ -177,12 +177,12 @@ class ReadINP:
     
     
 
-# def import_vtk(filename, meshID = None):
+# def import_vtk(filename, meshname = None):
 #     filename = filename.strip()
 
-#     if meshID == None:
-#         meshID = filename
-#         if meshID[-4:].lower() == '.vtk': meshID = meshID[:-4]
+#     if meshname == None:
+#         meshname = filename
+#         if meshname[-4:].lower() == '.vtk': meshname = meshname[:-4]
         
 #     #print 'Reading file',`filename`
 #     f = open(filename,'r')
@@ -293,11 +293,11 @@ class ReadINP:
 #         if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
 #         else:            
 #             if len(list(np.unique(celltype_all))) == 1:
-#                 importedMeshName = meshID
-#             else: importedMeshName = meshID+str(count)
+#                 importedMeshName = meshname
+#             else: importedMeshName = meshname+str(count)
                 
 #             print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-#             Mesh(crd, elm, type_elm, ID = importedMeshName)
+#             Mesh(crd, elm, type_elm, name = importedMeshName)
 #             count+=1
 
 #     return NodeData, NodeDataName, ElmData, ElmDataName

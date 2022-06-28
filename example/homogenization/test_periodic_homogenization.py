@@ -20,18 +20,18 @@ else:
     Util.ProblemDimension("3D")
 
 if dim == 3: 
-    # Mesh.import_file('./meshes/octet_surf.msh', meshID = "Domain")
-    # Mesh.import_file('./meshes/gyroid.msh', meshID = "Domain2") meshperio = False
-    Mesh.import_file('./meshes/gyroid_per.vtk', meshID = "Domain2") ; 
-    # Mesh.import_file('./meshes/MeshPeriodic2_quad.msh', meshID = "Domain")
-    # Mesh.box_mesh(10,10,10, ElementShape = 'hex20', ID = "Domain2")
+    # Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")
+    # Mesh.import_file('./meshes/gyroid.msh', meshname = "Domain2") meshperio = False
+    Mesh.import_file('./meshes/gyroid_per.vtk', meshname = "Domain2") ; 
+    # Mesh.import_file('./meshes/MeshPeriodic2_quad.msh', meshname = "Domain")
+    # Mesh.box_mesh(10,10,10, ElementShape = 'hex20', name = "Domain2")
 else: 
-    Mesh.rectangle_mesh(10,10, ElementShape = 'quad8', ID = "Domain2")
+    Mesh.rectangle_mesh(10,10, ElementShape = 'quad8', name = "Domain2")
     
 # out = Util.ExportData("Domain")
 # out.toVTK()
-meshID = "Domain2"
-mesh = Mesh.get_all()[meshID]
+meshname = "Domain2"
+mesh = Mesh.get_all()[meshname]
 crd = mesh.nodes
 elm = mesh.elements
 # mesh.SetElementShape('hex8')
@@ -51,17 +51,17 @@ props_test = sim.L_iso_props(L)
 print('props', props_test)
 
 if method == 0:
-    Material = ConstitutiveLaw.ElasticAnisotropic(L, ID = 'ElasticLaw')
-    wf = WeakForm.InternalForce("ElasticLaw", ID = "WeakForm", nlgeom=False)
+    Material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
+    wf = WeakForm.InternalForce("ElasticLaw", name = "WeakForm", nlgeom=False)
 
     # Assembly
-    assemb = Assembly.Create("WeakForm", meshID, mesh.elm_type, ID="Assembly")
+    assemb = Assembly.Create("WeakForm", meshname, mesh.elm_type, name="Assembly")
 
     if '_perturbation' in Problem.get_all(): 
         del Problem.get_all()['_perturbation']
     L_eff = Homogen.GetHomogenizedStiffness(assemb, meshperio)
 elif method == 1: 
-    L_eff = Homogen.GetHomogenizedStiffness_2(meshID, L, meshperio=meshperio)
+    L_eff = Homogen.GetHomogenizedStiffness_2(meshname, L, meshperio=meshperio)
 else:            
     type_el = mesh.elm_type
     # type_el = 'hex20'
@@ -83,31 +83,31 @@ else:
     DStrain = []
     DStress = []
     
-    material = ConstitutiveLaw.ElasticAnisotropic(L, ID = 'ElasticLaw')
+    material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
     WeakForm.InternalForce("ElasticLaw")
-    assemb = Assembly.Create("ElasticLaw", mesh, type_el, ID="Assembling")
+    assemb = Assembly.Create("ElasticLaw", mesh, type_el, name="Assembling")
     
     #Type of problem
     pb = Problem.Static("Assembling")
     
     #Shall add other conditions later on
-    ProblemID = None
+    Problemname = None
     if dim == 3: 
         if meshperio:
             Homogen.DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
         else:
             Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = ProblemID)
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
     elif dim == 2: 
         if meshperio:
             Homogen.DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispX'], dim='2D', ProblemID = ProblemID)            
+            ['DispX',        'DispY',        'DispX'], dim='2D', Problemname = Problemname)            
         else:
             assert 0, 'NotImplemented'
     
@@ -117,10 +117,10 @@ else:
     pb.AddOutput('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
 
     
-    pb.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
-    pb.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
+    pb.BoundaryCondition('Dirichlet', 'DispX', 0, center, name = 'center')
+    pb.BoundaryCondition('Dirichlet', 'DispY', 0, center, name = 'center')
     if dim ==3:
-        pb.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+        pb.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
     
     pb.ApplyBoundaryCondition()
     
@@ -132,21 +132,21 @@ else:
     for i in range(6):
         pb.RemoveBC("_Strain")
         pb.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
+              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsXX
         pb.BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY        
+              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsYY        
         pb.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
+              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXY
         
         if dim == 3:         
             pb.BoundaryCondition(typeBC, 'DispZ',
-                  BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ        
+                  BC_perturb[i][2], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsZZ        
             pb.BoundaryCondition(typeBC, 'DispY',
-                  BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
+                  BC_perturb[i][4], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXZ
             pb.BoundaryCondition(typeBC, 'DispZ',
-                  BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
+                  BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         else:
-            pb.BoundaryCondition('Dirichlet', 'DispY', 0, StrainNodes[1], ID = '_Strain')
+            pb.BoundaryCondition('Dirichlet', 'DispY', 0, StrainNodes[1], name = '_Strain')
 
         
         pb.ApplyBoundaryCondition()

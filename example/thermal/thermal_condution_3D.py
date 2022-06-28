@@ -10,24 +10,24 @@ start = time()
 
 Util.ProblemDimension("3D")
 
-meshID = "Domain"
+meshname = "Domain"
 nb_iter = 100
 
-# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = meshID) 
-# Mesh.import_file('octet_surf.msh', meshID = "Domain")
-# Mesh.import_file('data/octet_1.msh', meshID = "Domain")
-Mesh.import_file('data/gyroid.msh', meshID = "Domain")
+# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
+# Mesh.import_file('octet_surf.msh', meshname = "Domain")
+# Mesh.import_file('data/octet_1.msh', meshname = "Domain")
+Mesh.import_file('data/gyroid.msh', meshname = "Domain")
 
-mesh = Mesh.get_all()[meshID]
+mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
 K = 500 # K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
-Material = ConstitutiveLaw.ThermalProperties(K, c, rho, ID='ThermalLaw')
+Material = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf = WeakForm.HeatEquation("ThermalLaw")
-assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling")    
+assemb = Assembly.Create("ThermalLaw", meshname, name="Assembling")    
 
 #note set for boundary conditions
 Xmin, Xmax = mesh.bounding_box()

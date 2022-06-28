@@ -5,7 +5,7 @@ from fedoo.libProblem.ProblemPGD   import ProblemPGD
 # from fedoo.libProblem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
-def Static(Assembling, ID = "MainProblem"):
+def Static(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                 
@@ -14,14 +14,14 @@ def Static(Assembling, ID = "MainProblem"):
     
     class __Static(libBase):
                 
-        def __init__(self, Assembling, ID):   
+        def __init__(self, Assembling, name):   
             Assembling.Initialize(self,0)                         
             A = Assembling.GetMatrix()
             B = 0             
             D = Assembling.GetVector()     
             self.__Assembly = Assembling
             
-            libBase.__init__(self,A,B,D,Assembling.GetMesh(), ID)
+            libBase.__init__(self,A,B,D,Assembling.GetMesh(), name)
     
         def GetElasticEnergy(self): #only work for classical FEM
             """
@@ -98,6 +98,6 @@ def Static(Assembling, ID = "MainProblem"):
             if name == 'all': name = 'Rot'
             return self.GetDoFSolution(name)
         
-    return __Static(Assembling, ID)
+    return __Static(Assembling, name)
 
 

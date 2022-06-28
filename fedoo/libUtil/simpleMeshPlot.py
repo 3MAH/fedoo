@@ -110,8 +110,8 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     # plt.ion()
     
     
-# def fieldPlot2d(mesh, MatID, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
-def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
+# def fieldPlot2d(mesh, Matname, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
+def fieldPlot2d(assemb, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
     if isinstance(assemb, str):
         assemb = Assembly.get_all()[assemb]
@@ -119,16 +119,16 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
     wf = assemb.GetWeakForm()
 
     #type_plot is "real" or "smooth"
-    if dataID is None: # no data, just plot mesh
+    if dataname is None: # no data, just plot mesh
         meshPlot2d(mesh, disp, None, None, None, scale_factor, plot_edge, nb_level)
         return    
-    elif dataID.lower() == 'disp': #if data is disp, no difference between "real" and "smooth" plot
+    elif dataname.lower() == 'disp': #if data is disp, no difference between "real" and "smooth" plot
         try:
             meshPlot2d(mesh, disp, disp.reshape(2,-1)[component], data_min,data_max, scale_factor, plot_edge, nb_level)
         except: 
-            raise NameError('DataID: '+ str(dataID)+ ' and component: '+ str(component)+" doesn't exist")    
+            raise NameError('Dataname: '+ str(dataname)+ ' and component: '+ str(component)+" doesn't exist")    
         
-        plt.gca().set_title(dataID+'_'+str(component))
+        plt.gca().set_title(dataname+'_'+str(component))
         return
     
     crd = mesh.nodes
@@ -136,18 +136,18 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
     type_el = mesh.elm_type
 
     if type_plot.lower() == "smooth":
-        # mesh2 = Mesh(crd, elm, type_el, ID='visu')
+        # mesh2 = Mesh(crd, elm, type_el, name ='visu')
         # crd2=crd ; elm2=elm
         U = disp.ravel()
         assemb_visu = assemb
     elif type_plot.lower() == "real":
         crd2 = crd[elm.ravel()]
         elm2 = np.arange(elm.shape[0]*elm.shape[1]).reshape(-1,elm.shape[1])
-        mesh2 = Mesh(crd2, elm2, type_el, ID='visu')         
+        mesh2 = Mesh(crd2, elm2, type_el, name ='visu')         
         U = ((disp.reshape(2,-1).T[elm.ravel()]).T).ravel()
         
         #reload the assembly with the new mesh
-        assemb_visu = Assembly(wf, 'visu', type_el, ID="visu", MeshChange = True) 
+        assemb_visu = Assembly(wf, 'visu', type_el, name ="visu", MeshChange = True) 
         assemb_visu.PreComputeElementaryOperators()
     else: 
         raise NameError("type_plot should be either 'real' or 'smooth'")
@@ -156,7 +156,7 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
 
     #compute tensorstrain and tensorstress
     # TensorStrain = assemb_visu.GetStrainTensor(U, "Nodal", nlgeom = False)       
-    # TensorStress = ConstitutiveLaw.get_all()[MatID].GetStressFromStrain(TensorStrain)
+    # TensorStress = ConstitutiveLaw.get_all()[Matname].GetStressFromStrain(TensorStrain)
 
     TensorStrain = assemb_visu.GetStrainTensor(U, "GaussPoint", nlgeom = False)       
     TensorStress = wf.GetConstitutiveLaw().GetStressFromStrain(TensorStrain)
@@ -165,15 +165,15 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
 
     
     try:
-        if dataID.lower() == 'stress':
+        if dataname.lower() == 'stress':
             if isinstance(component,str) and component.lower()=='vm':
                 data=TensorStress.vonMises()
             else: 
                 data=TensorStress[component]            
-        elif dataID.lower() == 'strain':
+        elif dataname.lower() == 'strain':
             data = TensorStrain[component]
     except: 
-        raise NameError('DataID: '+ str(dataID)+ ' and component: '+ str(component)+" doesn't exist")
+        raise NameError('Dataname: '+ str(dataname)+ ' and component: '+ str(component)+" doesn't exist")
     
     if type_plot.lower() == "smooth":
         meshPlot2d(mesh, U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
@@ -212,7 +212,7 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
     # plt.colorbar(orientation = 'horizontal')
     # plt.xlabel('x')
     # plt.ylabel('y')
-    plt.gca().set_title(dataID+'_'+str(component))
+    plt.gca().set_title(dataname+'_'+str(component))
 
 
 

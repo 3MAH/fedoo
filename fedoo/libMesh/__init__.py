@@ -25,7 +25,7 @@ Mesh manipulation functions
    :toctree: generated/
    
    get_all
-   Stack
+   stack
 
 Import/Export Fedoo Mesh object        
 ==================================
@@ -33,7 +33,7 @@ Import/Export Fedoo Mesh object
 .. autosummary::
    :toctree: generated/
 
-   import
+   import_file
    import_msh
    import_vtk
 
@@ -53,14 +53,6 @@ Mesh Creation Functions
    generate_nodes          
 """
 
-# .. automodule:: fedoo.libMesh.MeshImport
-#     :members:
-#     :undoc-members:
-    
-# .. automodule:: fedoo.libMesh.MeshTools
-#     :members:
-#     :undoc-members:
-# # 
 
 import pkgutil
 

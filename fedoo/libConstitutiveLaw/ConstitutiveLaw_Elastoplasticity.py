@@ -21,13 +21,13 @@ class ElastoPlasticity(Mechanical3D):
         Poisson's Ratio
     YieldStress: scalars or arrays of gauss point values
         Yield Stress Value    
-    ID: str, optional
-        The ID of the constitutive law      
+    name: str, optional
+        The name of the constitutive law      
     """
     
-    def __init__(self,YoungModulus, PoissonRatio, YieldStress, ID=""):
+    def __init__(self,YoungModulus, PoissonRatio, YieldStress, name =""):
         #only scalar values of YoungModulus and PoissonRatio are possible
-        Mechanical3D.__init__(self, ID) # heritage
+        Mechanical3D.__init__(self, name) # heritage
 
         self.__YoungModulus = YoungModulus
         self.__PoissonRatio = PoissonRatio
@@ -94,8 +94,8 @@ class ElastoPlasticity(Mechanical3D):
             For now, the only possible value is 'power' for power law.            
         H (keyword argument): scalar        
         beta(keyword argument): scalar
-        ID: str, optional
-            The ID of the constitutive law
+        name: str, optional
+            The name of the constitutive law
         
         """
         if FunctionType.lower() == 'power':

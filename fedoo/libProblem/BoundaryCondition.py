@@ -11,7 +11,7 @@ class UniqueBoundaryCondition() :
     Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
-    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", space = None):
+    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", space = None):
         """
         Define some boundary conditions        
 
@@ -26,8 +26,8 @@ class UniqueBoundaryCondition() :
         Index : list of int, str, list of list of int, list of str
             For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
             For FEM Problem with MPC: list Node Indexes (list of list of int) 
-            For PGD Problem with Neumann/Dirichlet BC: SetOfID (type str) defining a set of Nodes of the reference mesh
-            For PGD Problem with MPC: list of SetOfID (str)
+            For PGD Problem with Neumann/Dirichlet BC: SetOfname (type str) defining a set of Nodes of the reference mesh
+            For PGD Problem with MPC: list of SetOfname (str)
         Constant : scalar, optional
             For MPC only, constant value on the equation
         timeEvolution : function
@@ -38,9 +38,9 @@ class UniqueBoundaryCondition() :
             if array: the len of the array should be = to the number of dof defined in the BC
 
             Default: None
-        ID : str, optional
-            Define an ID for the Boundary Conditions. Default is "". The same ID may be used for several BC.
-        ProblemID : str, optional
+        name : str, optional
+            Define an name for the Boundary Conditions. Default is "". The same name may be used for several BC.
+        Problemname : str, optional
             DESCRIPTION. The default is the active Problem.
 
         Returns
@@ -51,14 +51,14 @@ class UniqueBoundaryCondition() :
         -------
         To define many MPC in one operation, use array where each line define a single MPC        
         """
-        # if ProblemID is None: problem = ProblemBase.GetActive()
+        # if Problemname is None: problem = ProblemBase.GetActive()
         # else: 
-        #     assert ProblemID in ProblemBase.get_all(), "The problem " + ProblemID + " doesn't exit. Create the Problem before defining boundary conditions."
-        #     problem = ProblemBase.get_all()['ProblemID']        
+        #     assert Problemname in ProblemBase.get_all(), "The problem " + Problemname + " doesn't exit. Create the Problem before defining boundary conditions."
+        #     problem = ProblemBase.get_all()['Problemname']        
         
         assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
         
-        self.__ID = ID
+        self.__name = name
         
         if timeEvolution is None: 
             def timeEvolution(timeFactor): return timeFactor
@@ -81,15 +81,15 @@ class UniqueBoundaryCondition() :
               
         if BoundaryType in ['Dirichlet', 'Neumann']:
             self.__Value = Value # can be a float or an array !
-            if isinstance(Index, str): self.__SetOfID = Index # must be a string defining a set of nodes
+            if isinstance(Index, str): self.__SetOfname = Index # must be a string defining a set of nodes
             else: self.__Index = np.array(Index).astype(int) # must be a np.array  #Not for PGD
   
         elif BoundaryType == 'MPC':  #only for FEM for now
             
             Factor =  Value #for MPC, Value is a list containing the factor 
             if type(Index[0]) == str: #PGD problem
-                self.__SetOfID = Index[0] #SetOfID decribing node indexes for slave DOF (eliminated DOF) #use SetOf for PGD
-                self.__SetOfIDMaster = Index[1:]
+                self.__SetOfname = Index[0] #SetOfname decribing node indexes for slave DOF (eliminated DOF) #use SetOf for PGD
+                self.__SetOfnameMaster = Index[1:]
                 if Constant is not None:   
                     raise NameError("MPC boundary condition with PGD problem isn't compatible with a non zero constant value")
                 else: self.__Value = 0
@@ -151,8 +151,8 @@ class UniqueBoundaryCondition() :
     def ChangeInitialValue(self, initialValue):
         self.__initialValue = initialValue
 
-    def GetID(self):
-        return self.__ID
+    def name(self):
+        return self.__name
     
     # def GetType(self):
     #     return self.__BoundaryType
@@ -181,8 +181,8 @@ class UniqueBoundaryCondition() :
         return self.__BoundaryType
     
     @property    
-    def SetOfID(self):
-        return self.__SetOfID
+    def SetOfname(self):
+        return self.__SetOfname
         
     @property    
     def Index(self):
@@ -203,11 +203,11 @@ class UniqueBoundaryCondition() :
             raise NameError('Master Index only defined for MPC boundary type')
     
     @property    
-    def SetOfIDMaster(self):
+    def SetOfnameMaster(self):
         try: 
-            return self.__SetOfIDMaster
+            return self.__SetOfnameMaster
         except: 
-            raise NameError('SetOfIDMaster is only defined for MPC boundary type')
+            raise NameError('SetOfnameMaster is only defined for MPC boundary type')
     
     @property    
     def VariableMaster(self):
@@ -236,7 +236,7 @@ class UniqueBoundaryCondition() :
 #     # verifier l'utlisation de var dans boundary conditions PGD
 #     # reprendre les conditions aux limites en incluant les méthodes de pénalités pour des conditions aux limites plus exotiques
 #     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
-#     def ApplyToPGD(meshPGD, X, shapeX, timeFactor = 1, timeFactorOld = None, ProblemID = None):
+#     def ApplyToPGD(meshPGD, X, shapeX, timeFactor = 1, timeFactorOld = None, Problemname = None):
 
 #         Xbc = 0 #SeparatedZeros(shapeX)
 #         F = 0 
@@ -252,8 +252,8 @@ class UniqueBoundaryCondition() :
 #         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
 #         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
         
-#         for e in BoundaryCondition.get_all(ProblemID):
-#             SetOfNodesForBC = meshPGD.node_sets[e.__SetOfID]            
+#         for e in BoundaryCondition.get_all(Problemname):
+#             SetOfNodesForBC = meshPGD.node_sets[e.__SetOfname]            
 #             if isinstance(e.__Value, list): e.__Value = np.array(e.__Value)
             
 #             Value = e.GetValue(timeFactor, timeFactorOld)
@@ -321,7 +321,7 @@ class UniqueBoundaryCondition() :
 #                     return NotImplemented    
             
 #             elif e.__BoundaryType == 'MPC':
-#                 SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.__SetOfIDMaster] 
+#                 SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.__SetOfnameMaster] 
                 
 #                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
 #                 if len(SetOfNodesForBC[1]) == 1 \
@@ -437,8 +437,8 @@ class UniqueBoundaryCondition() :
     
     
     
-    # def Remove(self, ProblemID = None):
-    #     BoundaryCondition.get_all(ProblemID).remove(self)
+    # def Remove(self, Problemname = None):
+    #     BoundaryCondition.get_all(Problemname).remove(self)
     #     del self
         
     

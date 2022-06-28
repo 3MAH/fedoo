@@ -7,18 +7,18 @@ import numpy as np
 
 class ParametricBeam(WeakForm):
     """
-    ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, ID = "").
+    ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, name = "").
     * Same has BernoulliBeam but with the possibility to set each parameter as a coordinate of the problem.
     * Mainly usefull for parametric problem with the Proper Generalized Decomposition
     """
-    def __init__(self, E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, k=0, ID = "", space = None):
+    def __init__(self, E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, k=0, name = "", space = None):
         """
         Weak formulation dedicated to treat parametric problems using Bernoulli beams for isotropic materials
         
         Arugments
         ----------
-        ID: str
-            ID of the weak formulation
+        name: str
+            name of the weak formulation
         List of other optional parameters
             E: Young Modulus
             nu: Poisson Ratio
@@ -26,7 +26,7 @@ class ParametricBeam(WeakForm):
             Jx: Torsion constant
             Iyy, Izz: Second moment of area, if Izz is not specified, Iyy = Izz is assumed
             k is a scalar. k=0 for no shear effect. For other values, k is the shear area coefficient            
-        When the differntial operator is generated (using PGD.Assembly) the parameters are searched among the CoordinateID defining the associated mesh.
+        When the differntial operator is generated (using PGD.Assembly) the parameters are searched among the Coordinatename defining the associated mesh.
         If a parameter is not found , a Numeric value should be specified in argument.
         
         In the particular case of cylindrical beam, the radius R can be specified instead of S, Jx, Iyy and Izz.
@@ -35,7 +35,7 @@ class ParametricBeam(WeakForm):
             Iyy = Izz = pi * R**4/4         
         """
     
-        WeakForm.__init__(self,ID, space)
+        WeakForm.__init__(self,name, space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")     
@@ -70,9 +70,9 @@ class ParametricBeam(WeakForm):
         else: kG_S = 0                
         
         for param in ['E', 'nu', 'R', 'S', 'Jx', 'Iyy', 'Izz']:     
-            if mesh.FindCoordinateID(param) is not None:
+            if mesh.FindCoordinatename(param) is not None:
                 self.space.new_coordinate(param)
-                id_mesh = mesh.FindCoordinateID(param)
+                id_mesh = mesh.FindCoordinatename(param)
                 mesh._SetSpecificVariableRank(id_mesh, 'default', 0) #all the variables use the same function for the submeshes related to parametric coordinates                              
                 col = mesh.GetListMesh()[id_mesh].crd_name.index(param)
 
@@ -139,8 +139,8 @@ class ParametricBeam(WeakForm):
 
     
     
-def ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, ID = ""):
+def ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, name = ""):
     #same as ParametricBeam with k=0 (no shear effect)
-    return ParametricBeam(E=E, nu = nu, S=S, Jx=Jx, Iyy=Iyy, Izz=Izz, R=R, k=0, ID = ID)
+    return ParametricBeam(E=E, nu = nu, S=S, Jx=Jx, Iyy=Iyy, Izz=Izz, R=R, k=0, name = name)
     
     

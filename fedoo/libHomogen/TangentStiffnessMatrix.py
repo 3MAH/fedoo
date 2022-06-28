@@ -58,7 +58,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
     return C
 
 
-def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
+def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **kargs):
     #################### PERTURBATION METHODE #############################
 
     solver = kargs.get('solver', 'direct')
@@ -92,16 +92,16 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
         StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
         mesh.add_node_set(StrainNodes,'_StrainNodes')
 
-    ElasticAnisotropic(L, ID = 'ElasticLaw')
+    ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
     InternalForce("ElasticLaw")
-    Assembly("ElasticLaw", mesh, type_el, ID="Assembling")
+    Assembly("ElasticLaw", mesh, type_el, name ="Assembling")
 
     #Type of problem
     pb = Static("Assembling")
 
-    pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
+    pb_post_tt = Problem(0,0,0, mesh, name = "_perturbation")
     pb_post_tt.SetSolver(solver)
     pb_post_tt.SetA(pb.GetA())    
     
@@ -109,15 +109,15 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
     if meshperio:
         DefinePeriodicBoundaryCondition(mesh,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = "_perturbation")
     else:
         DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = "_perturbation")
 
-    pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
-    pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
-    pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, name = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, name = 'center')
+    pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
 
     pb_post_tt.ApplyBoundaryCondition()
 
@@ -129,17 +129,17 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
     for i in range(6):
         pb_post_tt.RemoveBC("_Strain")
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
+              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsXX
         pb_post_tt.BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY
+              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsYY
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ
+              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsZZ
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
+              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXY
         pb_post_tt.BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
+              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXZ
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
+              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         
         pb_post_tt.ApplyBoundaryCondition()
 
@@ -206,7 +206,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     
     if "_perturbation" not in pb.get_all():
         #initialize perturbation problem 
-        pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
+        pb_post_tt = Problem(0,0,0, mesh, name = "_perturbation")
         pb_post_tt.SetSolver('cg')
         
         pb.MakeActive()
@@ -215,15 +215,15 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         if meshperio:
             DefinePeriodicBoundaryCondition(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = "_perturbation")
         else:
             DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
             [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = "_perturbation")
+            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = "_perturbation")
             
-        pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, ID = 'center')
-        pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
-        pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispX', 0, center, name = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, name = 'center')
+        pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
     else: 
         pb_post_tt = Problem.get_all()["_perturbation"]
     
@@ -239,17 +239,17 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     
     for i in range(6):
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsXX
+              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsXX
         pb_post_tt.BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsYY
+              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsYY
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, ID = '_Strain')  # EpsZZ
+              BC_perturb[i][2], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsZZ
         pb_post_tt.BoundaryCondition(typeBC, 'DispX',
-              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXY
+              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXY
         pb_post_tt.BoundaryCondition(typeBC, 'DispY',
-              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsXZ
+              BC_perturb[i][4], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXZ
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
-              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, ID = '_Strain')  # EpsYZ
+              BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         
         pb_post_tt.ApplyBoundaryCondition()
     

@@ -19,16 +19,16 @@ class FE2(Mechanical3D):
     
     Parameters
     ----------
-    assemb: Assembly or Assembly ID (str), or list of Assembly (with len(list) = number of integration points).
+    assemb: Assembly or Assembly name (str), or list of Assembly (with len(list) = number of integration points).
         Assembly that correspond to the microscopic problem
-    ID: str, optional
-        The ID of the constitutive law
+    name: str, optional
+        The name of the constitutive law
     """
-    def __init__(self, assemb, ID=""):
+    def __init__(self, assemb, name =""):
         #props is a nparray containing all the material variables
         #nstatev is a nparray containing all the material variables
         if isinstance(assemb, str): assemb = Assembly.get_all()[assemb]
-        Mechanical3D.__init__(self, ID) # heritage      
+        Mechanical3D.__init__(self, name) # heritage      
         
         if isinstance(assemb, list):
             self.__assembly = [Assembly.get_all()[a] if isinstance(a,str) else a for a in assemb]
@@ -143,7 +143,7 @@ class FE2(Mechanical3D):
                             # list_material.append(self.__constitutivelaw.copy())
                       
                 #Type of problem
-                self.list_problem.append(NonLinearStatic(self.list_assembly[i], ID = '_fe2_cell_'+str(i)))            
+                self.list_problem.append(NonLinearStatic(self.list_assembly[i], name = '_fe2_cell_'+str(i)))            
                 pb_micro = self.list_problem[-1]
                 meshperio = True
                 
@@ -151,11 +151,11 @@ class FE2(Mechanical3D):
                 if meshperio:
                     DefinePeriodicBoundaryCondition(self.list_mesh[i],
                     [strain_nodes[0], strain_nodes[0], strain_nodes[0], strain_nodes[1], strain_nodes[1], strain_nodes[1]],
-                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = '_fe2_cell_'+str(i))
+                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = '_fe2_cell_'+str(i))
                 else:
                     DefinePeriodicBoundaryConditionNonPerioMesh(self.list_mesh[i],
                     [strain_nodes[0], strain_nodes[0], strain_nodes[0], strain_nodes[1], strain_nodes[1], strain_nodes[1]],
-                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', ProblemID = '_fe2_cell_'+str(i))
+                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = '_fe2_cell_'+str(i))
                     
                 pb_micro.BoundaryCondition('Dirichlet','DispX', 0, [self._list_center[i]])
                 pb_micro.BoundaryCondition('Dirichlet','DispY', 0, [self._list_center[i]])
@@ -182,17 +182,17 @@ class FE2(Mechanical3D):
         strain_nodes = self.list_mesh[id_pb].node_sets['_StrainNodes']  
 
         pb.RemoveBC("Strain")
-        pb.BoundaryCondition('Dirichlet','DispX', strain[0][id_pb], [strain_nodes[0]], initialValue = self.__strain[0][id_pb], ID = 'Strain') #EpsXX
-        pb.BoundaryCondition('Dirichlet','DispY', strain[1][id_pb], [strain_nodes[0]], initialValue = self.__strain[1][id_pb], ID = 'Strain') #EpsYY
-        pb.BoundaryCondition('Dirichlet','DispZ', strain[2][id_pb], [strain_nodes[0]], initialValue = self.__strain[2][id_pb], ID = 'Strain') #EpsZZ
-        pb.BoundaryCondition('Dirichlet','DispX', strain[3][id_pb], [strain_nodes[1]], initialValue = self.__strain[3][id_pb], ID = 'Strain') #EpsXY
-        pb.BoundaryCondition('Dirichlet','DispY', strain[4][id_pb], [strain_nodes[1]], initialValue = self.__strain[4][id_pb], ID = 'Strain') #EpsXZ
-        pb.BoundaryCondition('Dirichlet','DispZ', strain[5][id_pb], [strain_nodes[1]], initialValue = self.__strain[5][id_pb], ID = 'Strain') #EpsYZ
+        pb.BoundaryCondition('Dirichlet','DispX', strain[0][id_pb], [strain_nodes[0]], initialValue = self.__strain[0][id_pb], name = 'Strain') #EpsXX
+        pb.BoundaryCondition('Dirichlet','DispY', strain[1][id_pb], [strain_nodes[0]], initialValue = self.__strain[1][id_pb], name = 'Strain') #EpsYY
+        pb.BoundaryCondition('Dirichlet','DispZ', strain[2][id_pb], [strain_nodes[0]], initialValue = self.__strain[2][id_pb], name = 'Strain') #EpsZZ
+        pb.BoundaryCondition('Dirichlet','DispX', strain[3][id_pb], [strain_nodes[1]], initialValue = self.__strain[3][id_pb], name = 'Strain') #EpsXY
+        pb.BoundaryCondition('Dirichlet','DispY', strain[4][id_pb], [strain_nodes[1]], initialValue = self.__strain[4][id_pb], name = 'Strain') #EpsXZ
+        pb.BoundaryCondition('Dirichlet','DispZ', strain[5][id_pb], [strain_nodes[1]], initialValue = self.__strain[5][id_pb], name = 'Strain') #EpsYZ
         
         
         pb.NLSolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
         
-        self.Lt[id_pb]= GetTangentStiffness(pb.GetID())
+        self.Lt[id_pb]= GetTangentStiffness(pb.name)
         
         material = self.list_assembly[id_pb].GetWeakForm().GetConstitutiveLaw()
         stress_field = material.GetStress()

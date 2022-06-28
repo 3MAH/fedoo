@@ -6,16 +6,13 @@ class ConstitutiveLaw:
 
     __dic = {}
 
-    def __init__(self, ClID = ""):
-        assert isinstance(ClID, str) , "An ID must be a string" 
-        self.__ID = ClID
+    def __init__(self, name = ""):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
         self.__localFrame = None
         self._dimension = None #str or None to specify a space and associated model (for instance "2Dstress" for plane stress)
 
-        ConstitutiveLaw.__dic[self.__ID] = self        
-
-    def GetID(self):
-        return self.__ID
+        ConstitutiveLaw.__dic[self.__name] = self        
 
     def SetLocalFrame(self, localFrame):
         self.__localFrame = localFrame
@@ -50,14 +47,14 @@ class ConstitutiveLaw:
         Parameters
         ----------
         new_id : TYPE, optional
-            The ID of the created constitutive law. The default is "".
+            The name of the created constitutive law. The default is "".
 
         Returns
         -------
         The copy of the constitutive law
         """
         new_cl = deepcopy(self)        
-        new_cl._ConstitutiveLaw__ID = new_id
+        new_cl._ConstitutiveLaw__name = new_id
         self.__dic[new_id] = new_cl
         new_cl.Reset()
         return new_cl
@@ -65,6 +62,10 @@ class ConstitutiveLaw:
     @staticmethod
     def get_all():
         return ConstitutiveLaw.__dic
+    
+    @property
+    def name(self):
+        return self.__name
 
 
 
@@ -72,8 +73,8 @@ class ConstitutiveLaw:
 class Mechanical3D(ConstitutiveLaw):  
     # model of constitutive law for InternalForce Weakform
 
-    def __init__(self, ClID = ""):
-        ConstitutiveLaw.__init__(self,ClID)
+    def __init__(self, name = ""):
+        ConstitutiveLaw.__init__(self,name)
         self._stress = 0 #current stress (pk2 if nlgeom) at integration points
         self._grad_disp = 0 #current grad_disp at integration points
         
@@ -142,8 +143,8 @@ class Mechanical3D(ConstitutiveLaw):
     
 
 class ListConstitutiveLaw(ConstitutiveLaw):
-    def __init__(self, list_constitutivelaw, ID=""):    
-        ConstitutiveLaw.__init__(self,ID)   
+    def __init__(self, list_constitutivelaw, name =""):    
+        ConstitutiveLaw.__init__(self,name)   
         
         self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
@@ -216,8 +217,8 @@ class ListConstitutiveLaw(ConstitutiveLaw):
 
 class ThermalProperties(ConstitutiveLaw):  
     
-    def __init__(self, thermal_conductivity, specific_heat, density, ID=""):
-        ConstitutiveLaw.__init__(self, ID)
+    def __init__(self, thermal_conductivity, specific_heat, density, name =""):
+        ConstitutiveLaw.__init__(self, name)
         if np.isscalar(thermal_conductivity): 
             self.thermal_conductivity = [[thermal_conductivity,0,0], [0,thermal_conductivity,0], [0,0,thermal_conductivity]]
         else: 

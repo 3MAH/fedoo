@@ -8,9 +8,9 @@ Util.ProblemDimension("3D", 'micro_space')
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
 mesh_macro = Mesh.hole_plate_mesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
-	ElementShape = 'quad4', ID ="macro") 
+	ElementShape = 'quad4', name ="macro") 
     
-Mesh.import_file('octet_surf.msh', meshID = "micro")
+Mesh.import_file('octet_surf.msh', meshname = "micro")
 mesh_micro = Mesh.get_all()['micro2']
 
 # Util.meshPlot2d("macro")
@@ -26,19 +26,19 @@ m=0.25
 uimp = -5
 
 props = np.array([[E, nu, alpha, Re,k,m]])
-Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
-WeakForm.InternalForce("ConstitutiveLaw", ID = 'micro_wf', space = 'micro_space') 
+WeakForm.InternalForce("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
 
 micro_assembly = Assembly.Create('micro_wf', mesh_micro)
 
-micro_cells = ConstitutiveLaw.FE2(micro_assembly, ID='FEM')
+micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
 
 #Create the weak formulation of the mechanical equilibrium equation
-WeakForm.InternalForce("FEM", ID = "WeakForm") 
+WeakForm.InternalForce("FEM", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.Create("WeakForm", "macro", ID="Assembly", MeshChange = True) 
+Assembly.Create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
 Problem.NonLinearStatic("Assembly")

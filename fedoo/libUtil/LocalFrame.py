@@ -96,10 +96,10 @@ def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
     """    
     
     dim = localFrame.shape[-1]
-    idmesh = mesh.FindCoordinateID(dimensions[0])
-    if idmesh != mesh.FindCoordinateID(dimensions[1]): raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh".format(dimensions[0], dimensions[1]))
+    idmesh = mesh.FindCoordinatename(dimensions[0])
+    if idmesh != mesh.FindCoordinatename(dimensions[1]): raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh".format(dimensions[0], dimensions[1]))
     if dim == 3: 
-        if idmesh != mesh.FindCoordinateID(dimensions[3]):  raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh. Consider using a 2D local frame.".format(dimensions[0], dimensions[2]))
+        if idmesh != mesh.FindCoordinatename(dimensions[3]):  raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh. Consider using a 2D local frame.".format(dimensions[0], dimensions[2]))
 
     id_crd = []
     for label in dimensions:
@@ -120,10 +120,10 @@ def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
 #   if isinstance(crd, MeshPGD):
 #        mesh = crd        
 #        crd_all = [] #list containing the values of coordinates for each nodes of the separated mesh using 3 SeparatedArray objects
-#        for ii, IDcrd in enumerate(['X','Y','Z']):
-#            idmesh = mesh.FindCoordinateID(IDcrd)     
+#        for ii, namecrd in enumerate(['X','Y','Z']):
+#            idmesh = mesh.FindCoordinatename(namecrd)     
 #            subMesh = mesh.GetListMesh()[idmesh]
-#            crd = subMesh.nodes[:, subMesh.crd_name.index(IDcrd)]
+#            crd = subMesh.nodes[:, subMesh.crd_name.index(namecrd)]
 #            crd_all.append(SeparatedArray([np.c_[crd] if i == idmesh else np.array([[1.]]) for i in range(mesh.GetDimension())]))
 #            
 #        localFrame = np.zeros((dim, dim), dtype =object)

@@ -20,13 +20,13 @@ class Spring(ConstitutiveLaw):
         the rigidity along the Y direction in material coordinates
     Kz: scalar
         the rigidity along the Z direction in material coordinates        
-    ID: str, optional
-        The ID of the constitutive law
+    name: str, optional
+        The name of the constitutive law
     """
     #Similar to CohesiveLaw but with different rigidity axis and without damage variable
     #Use with WeakForm.InterfaceForce
-    def __init__(self, Kx=0, Ky = 0, Kz = 0, ID=""):        
-        ConstitutiveLaw.__init__(self, ID) # heritage        
+    def __init__(self, Kx=0, Ky = 0, Kz = 0, name =""):        
+        ConstitutiveLaw.__init__(self, name) # heritage        
         self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}  
         self._InterfaceStress = 0           
 

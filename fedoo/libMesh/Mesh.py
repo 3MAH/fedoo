@@ -48,11 +48,11 @@ class Mesh(MeshBase):
         elif ndim > self.nodes.shape[1]:
             dim_add = ndim-self.nodes.shape[1]
             self.nodes = np.c_[self.nodes, np.zeros((self.n_nodes, dim_add))]
-            if ndim == 3 and local_frame is not None:
-                local_frame_temp = np.zeros((self.n_nodes,3,3))
-                local_frame_temp[:,:2,:2] = self.local_frame
-                local_frame_temp[:,2,2]   = 1
-                self.local_frame = local_frame_temp
+            # if ndim == 3 and local_frame is not None:
+            #     local_frame_temp = np.zeros((self.n_nodes,3,3))
+            #     local_frame_temp[:,:2,:2] = self.local_frame
+            #     local_frame_temp[:,2,2]   = 1
+            #     self.local_frame = local_frame_temp
         
         if ndim == 1: self.crd_name = ('X')
         elif self.nodes.shape[1] == 2: self.crd_name = ('X', 'Y')
@@ -69,7 +69,7 @@ class Mesh(MeshBase):
         node indices : list or 1D numpy.array
             A list of node indices
         name : str
-            ID of the set of nodes            
+            name of the set of nodes            
         """
         self.node_sets[name] = node_indices
         
@@ -83,7 +83,7 @@ class Mesh(MeshBase):
         element_indices : list or 1D numpy.array
             A list of node indexes
         name : str
-            ID of the set of nodes            
+            name of the set of nodes            
         """
         self.element_sets[name] = element_indices
         
@@ -124,7 +124,7 @@ class Mesh(MeshBase):
     
     # warning , this method must be static
     @staticmethod
-    def stack(mesh1,mesh2, ID = ""):       
+    def stack(mesh1,mesh2, name = ""):       
         """
         *Static method* - Make the spatial stack of two mesh objects which have the same element shape. 
         This function doesn't merge coindicent Nodes. 
@@ -161,7 +161,7 @@ class Mesh(MeshBase):
             else:
                 new_elSets[key] = np.array(mesh2.element_sets[key]) + Nel    
                    
-        mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, ID = ID)
+        mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, name = name)
         mesh3.node_sets = new_ndSets
         mesh3.element_sets = new_elSets
         return mesh3
@@ -278,7 +278,7 @@ class Mesh(MeshBase):
         self.nodes = self.nodes + disp.T        
         
     
-    def extract_elements(self,SetOfElementKey, ID=""):
+    def extract_elements(self,SetOfElementKey, name =""):
         """
         Return a new mesh from the set of elements defined by SetOfElementKey
         """
@@ -287,7 +287,7 @@ class Mesh(MeshBase):
         for key in self.element_sets:
             new_SetOfElements[key] = np.array([el for el in self.element_sets[key] if el in ListElm])       
         
-        subMesh = Mesh(self.nodes, self.elements[ListElm], self.elm_type, self.local_frame, ID=ID)                
+        subMesh = Mesh(self.nodes, self.elements[ListElm], self.elm_type, self.local_frame, name =name)                
         return subMesh    
        
     
@@ -415,11 +415,11 @@ class Mesh(MeshBase):
         return BoundingBox(self)
 
 
-    # def GetCoordinateID(self):
+    # def GetCoordinatename(self):
     #     return self.crd_name
     
-    # def SetCoordinateID(self,ListCoordinateID):        
-    #     self.crd_name = ListCoordinateID
+    # def SetCoordinatename(self,ListCoordinatename):        
+    #     self.crd_name = ListCoordinatename
     
     
     #
@@ -479,12 +479,12 @@ class Mesh(MeshBase):
     
     # def GetSetOfNodes(self,SetOfId):
     #     """
-    #     Return the set of nodes whose ID is SetOfId
+    #     Return the set of nodes whose name is SetOfId
         
     #     Parameters
     #     ----------
     #     SetOfId : str
-    #         ID of the set of nodes
+    #         name of the set of nodes
 
     #     Returns
     #     -------
@@ -494,12 +494,12 @@ class Mesh(MeshBase):
         
     # def GetSetOfElements(self,SetOfId):
     #     """
-    #     Return the set of elements whose ID is SetOfId
+    #     Return the set of elements whose name is SetOfId
         
     #     Parameters
     #     ----------
     #     SetOfId : str
-    #         ID of the set of elements
+    #         name of the set of elements
 
     #     Returns
     #     -------
@@ -509,35 +509,35 @@ class Mesh(MeshBase):
 
     # def RemoveSetOfNodes(self,SetOfId):
     #     """
-    #     Remove the set of nodes whose ID is SetOfId from the Mesh
+    #     Remove the set of nodes whose name is SetOfId from the Mesh
         
     #     Parameters
     #     ----------
     #     SetOfId : str
-    #         ID of the set of nodes
+    #         name of the set of nodes
     #     """
     #     del self.node_sets[SetOfId]
         
     # def RemoveSetOfElements(self,SetOfId):
     #     """
-    #     Remove the set of elements whose ID is SetOfId from the Mesh
+    #     Remove the set of elements whose name is SetOfId from the Mesh
         
     #     Parameters
     #     ----------
     #     SetOfId : str
-    #         ID of the set of elements
+    #         name of the set of elements
     #     """
     #     del self.element_sets[SetOfId]
 
     # def ListSetOfNodes(self):
     #     """
-    #     Return a list containing the ID (str) of all set of nodes defined in the Mesh.
+    #     Return a list containing the name (str) of all set of nodes defined in the Mesh.
     #     """
     #     return [key for key in self.node_sets]
 
     # def ListSetOfElements(self):    
     #     """
-    #     Return a list containing the ID (str) of all set of elements defined in the Mesh.
+    #     Return a list containing the name (str) of all set of elements defined in the Mesh.
     #     """
     #     return [key for key in self.element_sets]
                                 
@@ -548,7 +548,7 @@ class Mesh(MeshBase):
     #     Parameters
     #     ----------
     #     SetOfId : str
-    #         ID of the set of nodes
+    #         name of the set of nodes
             
     #     The element shape if defined as a str according the the list of available element shape.
     #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
@@ -646,7 +646,7 @@ class BoundingBox(list):
 def get_all():
     return Mesh.get_all()
 
-def stack(mesh1,mesh2, ID = ""):
+def stack(mesh1,mesh2, name = ""):
         """
         Make the spatial stack of two mesh objects which have the same element shape. 
         This function doesn't merge coindicent Nodes. 
@@ -657,7 +657,7 @@ def stack(mesh1,mesh2, ID = ""):
         ---------
         Mesh object with is the spacial stack of mesh1 and mesh2
         """
-        return Mesh.stack(mesh1,mesh2,ID)
+        return Mesh.stack(mesh1,mesh2,name)
 
 if __name__=="__main__":
     import scipy as sp

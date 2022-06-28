@@ -10,22 +10,22 @@ class InterfaceForce(WeakForm):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     nlgeom: bool (default = False)
         For future development
         If True, return a NotImplemented Error
     """
-    def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
+    def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = False):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
-        if ID == "":
-            ID = CurrentConstitutiveLaw.GetID()
+        if name == "":
+            name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,ID)
+        WeakForm.__init__(self,name)
         
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                

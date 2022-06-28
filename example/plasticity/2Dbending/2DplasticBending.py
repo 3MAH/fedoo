@@ -19,31 +19,31 @@ L = 16
 E = 200e3
 nu=0.3
 alpha = 1e-5 #???
-meshID = "Domain"
+meshname = "Domain"
 uimp = -5
 
-Mesh.rectangle_mesh(Nx=41, Ny=21, x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
-mesh = Mesh.get_all()[meshID]
+Mesh.rectangle_mesh(Nx=41, Ny=21, x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', name = meshname)
+mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
     Material.corate = 101
 elif mat == 1:
     Re = 300
     k=1000
     m=0.25
     props = np.array([[E, nu, alpha, Re,k,m]])
-    Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
     Material.corate = 0
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
     # Material.SetMaskH(mask)
 else:
-    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID='ConstitutiveLaw')
+    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
 WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 
@@ -60,7 +60,7 @@ else:
     nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-Assembly.Create("ConstitutiveLaw", meshID, 'quad4', ID="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+Assembly.Create("ConstitutiveLaw", meshname, 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
 
@@ -81,7 +81,7 @@ tmax = 1
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter, ID = "disp")
+Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter, name = "disp")
 
 Problem.NLSolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.05)
 

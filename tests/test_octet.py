@@ -7,7 +7,7 @@ Assembly.DeleteMemory()
 Util.ProblemDimension("3D")
 
 #Import the mesh generated with Microgen
-Mesh.import_file('data/MeshPeriodic.msh', meshID = "Domain")
+Mesh.import_file('data/MeshPeriodic.msh', meshname = "Domain")
 
 #Get the imported mesh 
 mesh = Mesh.get_all()["Domain2"]
@@ -28,13 +28,13 @@ k = 1000
 m = 0.25
 alpha = 1e-5
 props = np.array([[1e5, 0.3, alpha, Re, k, m]])
-Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
 #Create the weak formulation of the mechanical equilibrium equation
-wf = WeakForm.InternalForce("ConstitutiveLaw", ID = "WeakForm", nlgeom=False)
+wf = WeakForm.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
 
 # Assembly
-assemb = Assembly.Create("WeakForm", "Domain2", 'tet4', ID="Assembly")
+assemb = Assembly.Create("WeakForm", "Domain2", 'tet4', name="Assembly")
 
 # Type of problem
 Problem.NonLinearStatic("Assembly")

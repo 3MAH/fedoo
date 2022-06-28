@@ -3,7 +3,7 @@ from fedoo.libAssembly.Assembly import *
 from fedoo.libProblem.Problem   import *
 import scipy.sparse as sparse
 
-def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling = 0, ID = "MainProblem"):
+def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling = 0, name = "MainProblem"):
     """
     Define a Centred Difference problem for structural dynamic
     For damping, the backward euler derivative is used to compute the velocity
@@ -25,7 +25,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
     class __ExplicitDynamic(libBase):
         
-        def __init__(self, StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling, ID):  
+        def __init__(self, StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling, name):  
 
             A = 1/(TimeStep**2)*MassAssembling.GetMatrix()   
             B = 0 ; D = 0
@@ -42,7 +42,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             if DampingAssembling == 0: self.__DampMatrix = 0
             else: self.__DampMatrix = DampingAssembling.GetMatrix()
             
-            libBase.__init__(self,A,B,D,StiffnessAssembling.GetMesh(),ID)        
+            libBase.__init__(self,A,B,D,StiffnessAssembling.GetMesh(),name)        
 
         def __UpdateA(): #internal function to be used when modifying M
             # if MassLumping == True, A is a vector representing the diagonal value

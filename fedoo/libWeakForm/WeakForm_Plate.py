@@ -13,21 +13,21 @@ class Plate(WeakForm):
     
     Parameters
     ----------
-    PlateConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    PlateConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Shell Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     """
-    def __init__(self, PlateConstitutiveLaw, ID = "", space=None):
+    def __init__(self, PlateConstitutiveLaw, name = "", space=None):
         #k: shear shape factor
         
         if isinstance(PlateConstitutiveLaw, str):
             PlateConstitutiveLaw = ConstitutiveLaw.get_all()[PlateConstitutiveLaw]
 
-        if ID == "":
-            ID = PlateConstitutiveLaw.GetID()
+        if name == "":
+            name = PlateConstitutiveLaw.name
             
-        WeakForm.__init__(self,ID, space)
+        WeakForm.__init__(self,name, space)
         
         assert self.space.ndim == 3, "No 2D model for a plate kinematic. Choose '3D' problem dimension."
 

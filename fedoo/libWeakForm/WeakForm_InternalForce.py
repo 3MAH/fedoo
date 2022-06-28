@@ -12,22 +12,22 @@ class InternalForce(WeakForm):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-    ID: str
-        ID of the WeakForm     
+    name: str
+        name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
     """
-    def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = 0, space = None):
+    def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = 0, space = None):
         if isinstance(CurrentConstitutiveLaw, str):
             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
-        if ID == "":
-            ID = CurrentConstitutiveLaw.GetID()
+        if name == "":
+            name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,ID, space)
+        WeakForm.__init__(self,name, space)
         
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                
@@ -112,7 +112,7 @@ class InternalForce(WeakForm):
         Parameters
         ----------
         new_id : TYPE, optional
-            The ID of the created constitutive law. The default is "".
+            The name of the created constitutive law. The default is "".
 
         Returns
         -------
@@ -120,7 +120,7 @@ class InternalForce(WeakForm):
         """
         new_cl = self.__ConstitutiveLaw.copy()
         
-        return InternalForce(new_cl, ID = "", nlgeom = self.nlgeom, space = self.space)
+        return InternalForce(new_cl, name = "", nlgeom = self.nlgeom, space = self.space)
     
     @property
     def nlgeom(self):
@@ -142,22 +142,22 @@ class InternalForce(WeakForm):
     
 #     Parameters
 #     ----------
-#     CurrentConstitutiveLaw: ConstitutiveLaw ID (str) or ConstitutiveLaw object
+#     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
 #         Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
-#     ID: str
-#         ID of the WeakForm     
+#     name: str
+#         name of the WeakForm     
 #     nlgeom: bool (default = False)
 #         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
 #         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
 #     """
-#     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False, space = None):
+#     def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = False, space = None):
 #         if isinstance(CurrentConstitutiveLaw, str):
 #             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
-#         if ID == "":
-#             ID = CurrentConstitutiveLaw.GetID()
+#         if name == "":
+#             name = CurrentConstitutiveLaw.name
             
-#         WeakForm.__init__(self,ID, space)
+#         WeakForm.__init__(self,name, space)
         
 #         self.space.new_variable("DispX") 
 #         self.space.new_variable("DispY")                
@@ -249,7 +249,7 @@ class InternalForce(WeakForm):
 #         Parameters
 #         ----------
 #         new_id : TYPE, optional
-#             The ID of the created constitutive law. The default is "".
+#             The name of the created constitutive law. The default is "".
 
 #         Returns
 #         -------
@@ -257,7 +257,7 @@ class InternalForce(WeakForm):
 #         """
 #         new_cl = self.__ConstitutiveLaw.copy()
         
-#         return InternalForce(new_cl, ID = "", nlgeom = self.nlgeom, space = self.space)
+#         return InternalForce(new_cl, name = "", nlgeom = self.nlgeom, space = self.space)
     
 #     @property
 #     def nlgeom(self):
