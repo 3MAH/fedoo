@@ -63,7 +63,7 @@ class ConstitutiveLaw:
         return new_cl
    
     @staticmethod
-    def GetAll():
+    def get_all():
         return ConstitutiveLaw.__dic
 
 
@@ -227,7 +227,7 @@ class ThermalProperties(ConstitutiveLaw):
         self.density = density
         
         
-def GetAll():
-    return ConstitutiveLaw.GetAll()
+def get_all():
+    return ConstitutiveLaw.get_all()
 
 

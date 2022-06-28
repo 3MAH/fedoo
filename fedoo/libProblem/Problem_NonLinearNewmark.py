@@ -336,7 +336,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         
         # def UpdateStiffness(self, StiffnessAssembling):
         #     if isinstance(StiffnessAssembling,str):
-        #         StiffnessAssembling = Assembly.GetAll()[StiffnessAssembling]
+        #         StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
         #     self.__StiffMatrix = StiffnessAssembling.GetMatrix()
         #     self.__UpdateA()
     
@@ -349,13 +349,13 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssem
     """
         
     if isinstance(StiffnessAssembly,str):
-        StiffnessAssembly = Assembly.GetAll()[StiffnessAssembly]
+        StiffnessAssembly = Assembly.get_all()[StiffnessAssembly]
                 
     if isinstance(MassAssembly,str):
-        MassAssembly = Assembly.GetAll()[MassAssembly]
+        MassAssembly = Assembly.get_all()[MassAssembly]
         
     if isinstance(DampingAssembly,str):
-        DampingAssembly = Assembly.GetAll()[DampingAssembly]
+        DampingAssembly = Assembly.get_all()[DampingAssembly]
 
     if hasattr(StiffnessAssembly.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem

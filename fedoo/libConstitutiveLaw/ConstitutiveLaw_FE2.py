@@ -27,11 +27,11 @@ class FE2(Mechanical3D):
     def __init__(self, assemb, ID=""):
         #props is a nparray containing all the material variables
         #nstatev is a nparray containing all the material variables
-        if isinstance(assemb, str): assemb = Assembly.GetAll()[assemb]
+        if isinstance(assemb, str): assemb = Assembly.get_all()[assemb]
         Mechanical3D.__init__(self, ID) # heritage      
         
         if isinstance(assemb, list):
-            self.__assembly = [Assembly.GetAll()[a] if isinstance(a,str) else a for a in assemb]
+            self.__assembly = [Assembly.get_all()[a] if isinstance(a,str) else a for a in assemb]
             self.__mesh = [a.GetMesh() for a in self.__assembly]
         else:
             self.__mesh = assemb.GetMesh()

@@ -7,10 +7,10 @@ Assembly.DeleteMemory()
 Util.ProblemDimension("3D")
 
 #Import the mesh generated with Microgen
-Mesh.ImportFromFile('data/MeshPeriodic.msh', meshID = "Domain")
+Mesh.import_file('data/MeshPeriodic.msh', meshID = "Domain")
 
 #Get the imported mesh 
-mesh = Mesh.GetAll()["Domain2"]
+mesh = Mesh.get_all()["Domain2"]
 
 #Get the bounding box (corners coordinates and center)
 bounds = mesh.bounding_box
@@ -20,7 +20,7 @@ crd_center = bounds.center
 center = mesh.nearest_node(crd_center)
 
 # Add 2 virtual nodes for macro strain 
-StrainNodes = Mesh.GetAll()["Domain2"].add_nodes(crd_center, 2)  
+StrainNodes = Mesh.get_all()["Domain2"].add_nodes(crd_center, 2)  
 
 # Material definition and simcoon elasto-plastic constitutive law
 Re = 300

@@ -44,7 +44,7 @@ for computeShear in range(3):
         Element.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
         Assembly.Create("WFbeam", "beam", "beam", ID="beam", MeshChange = True)
     else:  #computeShear = 2
-        Mesh.GetAll()['beam'].AddInternalNodes(1) #adding one internal nodes per element (this node has no geometrical sense)
+        Mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
         WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, ID = "WFbeam")
         Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam", MeshChange = True)    
     
@@ -63,7 +63,7 @@ for computeShear in range(3):
     Problem.Solve()
     
     #Post treatment               
-    results = Assembly.GetAll()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
+    results = Assembly.get_all()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
     
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -79,7 +79,7 @@ for computeShear in range(3):
     assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = Assembly.GetAll()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
+    results = Assembly.get_all()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
     IntMoment = results[:,3:]
     IntForce = results[:,0:3]    
     

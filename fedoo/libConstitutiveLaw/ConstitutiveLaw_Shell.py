@@ -93,7 +93,7 @@ class ShellHomogeneous(ShellBase):
         # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         if isinstance(MatConstitutiveLaw, str):
-            MatConstitutiveLaw = ConstitutiveLaw.GetAll()[MatConstitutiveLaw]
+            MatConstitutiveLaw = ConstitutiveLaw.get_all()[MatConstitutiveLaw]
 
 
         ShellBase.__init__(self, thickness, k, ID) # heritage
@@ -167,7 +167,7 @@ class ShellLaminate(ShellBase):
     def __init__(self, listMat, listThickness, k=1, ID=""):        
         # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
         
-        self.__listMat = [ConstitutiveLaw.GetAll()[mat] if isinstance(mat, str) else mat for mat in listMat]
+        self.__listMat = [ConstitutiveLaw.get_all()[mat] if isinstance(mat, str) else mat for mat in listMat]
         thickness = sum(listThickness) #total thickness
         
         self.__layer =  np.hstack((0, np.cumsum(listThickness))) - np.sum(listThickness)/2 #z coord of layers interfaces

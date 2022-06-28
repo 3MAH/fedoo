@@ -31,7 +31,7 @@ class SteadyHeatEquation(WeakForm):
     """
     def __init__(self, thermal_constitutivelaw, ID = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
-            thermal_constitutivelaw = ConstitutiveLaw.GetAll()[thermal_constitutivelaw]
+            thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
         if ID is None:
             ID = thermal_constitutivelaw.GetID()
@@ -114,7 +114,7 @@ class TemperatureTimeDerivative(WeakForm):
     """
     def __init__(self, thermal_constitutivelaw, ID = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
-            thermal_constitutivelaw = ConstitutiveLaw.GetAll()[thermal_constitutivelaw]
+            thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
         if ID is None:
             ID = thermal_constitutivelaw.GetID()
@@ -190,7 +190,7 @@ def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = Non
     heat_eq_time = TemperatureTimeDerivative(thermal_constitutivelaw, "", nlgeom, space)
     heat_eq_time.assembly_options['mat_lumping'] = True #use mat_lumping for the temperature time derivative 
     if ID is None: 
-        if isinstance(thermal_constitutivelaw,str): ID = ConstitutiveLaw().GetAll()[thermal_constitutivelaw].GetID()
+        if isinstance(thermal_constitutivelaw,str): ID = ConstitutiveLaw().get_all()[thermal_constitutivelaw].GetID()
         else: ID = thermal_constitutivelaw.GetID()
     return WeakFormSum([heat_eq_diffusion, heat_eq_time], ID)
 
@@ -215,7 +215,7 @@ def HeatEquation(thermal_constitutivelaw, ID = None, nlgeom = False, space = Non
 #     """
 #     def __init__(self, thermal_constitutivelaw, ID = "", nlgeom = False, space = None):
 #         if isinstance(thermal_constitutivelaw, str):
-#             thermal_constitutivelaw = ConstitutiveLaw.GetAll()[thermal_constitutivelaw]
+#             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
 
 #         if ID == "":
 #             ID = thermal_constitutivelaw.GetID()

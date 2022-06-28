@@ -40,7 +40,7 @@ from fedoo.libUtil.ModelingSpace import ModelingSpace
 #     if dim in ['2D','2d']: dim = 2
 #     if dim in ['3D','3d']: dim = 3
 
-#     if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
+#     if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
 #     crd = mesh.nodes
 #     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 #     ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -349,7 +349,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3
 
-    if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
+    if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
     
     numGeometricMesh = mesh.FindCoordinateID('X')
     assert(numGeometricMesh == mesh.FindCoordinateID('X'), "Not possible to define periodic condition on the given sepearated mesh" )

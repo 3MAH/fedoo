@@ -10,11 +10,11 @@ method_output = 1
 
 Util.ProblemDimension("2Dstress")
 
-Mesh.ImportFromFile('plate_with_hole.msh', meshID = "Domain")
+Mesh.import_file('plate_with_hole.msh', meshID = "Domain")
 
 #alternative mesh below (uncomment the line)
-#Mesh.RectangleMesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, ID ="Domain")
-type_el = Mesh.GetAll()['Domain'].elm_type
+#Mesh.rectangle_mesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, ID ="Domain")
+type_el = Mesh.get_all()['Domain'].elm_type
 meshID = "Domain"
 
 #Material definition
@@ -30,7 +30,7 @@ Problem.Static("Assembling")
 #Boundary conditions
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.GetAll()[meshID]
+mesh = Mesh.get_all()[meshID]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 mesh.add_node_set(list(np.where(crd[:,0] == xmin)[0]), "left")

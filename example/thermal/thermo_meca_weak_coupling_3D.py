@@ -10,14 +10,14 @@ start = time()
 
 
 # -------------------- MESH ------------------------------
-# Mesh.BoxMesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = meshID) 
-# Mesh.ImportFromFile('octet_surf.msh', meshID = "Domain")
-# Mesh.ImportFromFile('data/octet_1.msh', meshID = "Domain")
-Mesh.ImportFromFile('data/gyroid.msh', meshID = "Domain")
+# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = meshID) 
+# Mesh.import_file('octet_surf.msh', meshID = "Domain")
+# Mesh.import_file('data/octet_1.msh', meshID = "Domain")
+Mesh.import_file('data/gyroid.msh', meshID = "Domain")
 meshID = "Domain"
 filename_res = 'results/thermo_meca_nl'
 
-mesh = Mesh.GetAll()[meshID]
+mesh = Mesh.get_all()[meshID]
 
 crd = mesh.nodes 
 

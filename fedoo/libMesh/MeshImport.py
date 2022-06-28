@@ -1,15 +1,15 @@
 from fedoo.libMesh.Mesh import Mesh
 import numpy as np
 
-def ImportFromFile(filename, meshID = None):
+def import_file(filename, meshID = None):
     if filename[-4:].lower() == '.msh':
-        return ImportFromMSH(filename, meshID)
+        return import_msh(filename, meshID)
     elif filename[-4:].lower() == '.vtk':
-        return ImportFromVTK(filename, meshID)    
+        return import_vtk(filename, meshID)    
     else: assert 0, "Only .vtk and .msh file can be imported"
 
 
-def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
+def import_msh(filename, meshID = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
     
     if isinstance(meshType, str): meshType = [meshType]
     
@@ -317,7 +317,7 @@ def ImportFromMSH(filename, meshID = None, meshType = ['curve','surface','volume
     
     
 
-def ImportFromVTK(filename, meshID = None):
+def import_vtk(filename, meshID = None):
     filename = filename.strip()
 
     if meshID == None:
@@ -437,7 +437,7 @@ def ImportFromVTK(filename, meshID = None):
             else: importedMeshName = meshID+str(count)
                 
             print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-            Mesh(crd, elm, type_elm, ID = importedMeshName)
+            Mesh(crd, elm, type_elm, name = importedMeshName)
             count+=1
 
     return NodeData, NodeDataName, ElmData, ElmDataName

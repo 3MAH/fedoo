@@ -24,7 +24,7 @@ saveResults = True
 material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
 ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
+mesh = Mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
 
 nodes_left = mesh.node_sets['left']
 nodes_right = mesh.node_sets['right']
@@ -73,5 +73,5 @@ print('Numerical deflection: ', Problem.GetDisp('DispZ')[node_right_center])
 if saveResults == True: 
     Problem.SaveResults() #save in vtk
 
-z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(20)
+z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(20)
 plt.plot(StressDistribution[0], z)

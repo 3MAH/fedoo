@@ -4,18 +4,20 @@ class MeshBase:
 
     __dic = {}
 
-    def __init__(self, meshID = ""):
-        assert isinstance(meshID, str) , "An ID must be a string" 
-        self.__ID = meshID
+    def __init__(self, name = ""):
+        assert isinstance(name, str) , "name must be a string" 
+        self.__name = name
+        
+        if name != "":
+            MeshBase.__dic[self.__name] = self
 
-        MeshBase.__dic[self.__ID] = self
-
-    def GetID(self):
-        return self.__ID
+    @property
+    def name(self):
+        return self.__name
 
     @staticmethod
-    def GetAll():
+    def get_all():
         return MeshBase.__dic
 
-def GetAll():
-    return MeshBase.GetAll()
+def get_all():
+    return MeshBase.get_all()

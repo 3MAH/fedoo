@@ -22,7 +22,7 @@ class Plate(WeakForm):
         #k: shear shape factor
         
         if isinstance(PlateConstitutiveLaw, str):
-            PlateConstitutiveLaw = ConstitutiveLaw.GetAll()[PlateConstitutiveLaw]
+            PlateConstitutiveLaw = ConstitutiveLaw.get_all()[PlateConstitutiveLaw]
 
         if ID == "":
             ID = PlateConstitutiveLaw.GetID()

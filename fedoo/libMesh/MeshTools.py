@@ -8,7 +8,8 @@ import numpy as np
 # utility fuctions
 # Only Functions are declared here !!
 
-def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape = 'quad4', ndim = None, ID =""):
+
+def rectangle_mesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape = 'quad4', ndim = None, name =""):
     """
     Create a rectangular Mesh
 
@@ -34,11 +35,11 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
 
     See Also
     --------
-    LineMesh : 1D mesh of a line    
-    RectangleMesh : Surface mesh of a rectangle
-    BoxMesh : Volume mesh of a box 
-    GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
-    LineMeshCylindric : Line mesh in cylindrical coordinate
+    line_mesh : 1D mesh of a line    
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box 
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate 
+    line_mesh_cylindric : Line mesh in cylindrical coordinate
     """
         
     if ElementShape == 'quad9' or ElementShape == 'tri6': 
@@ -70,20 +71,20 @@ def RectangleMesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape
             
     elm = np.array(elm)
 
-    ReturnedMesh = Mesh(crd, elm, ElementShape, None, ndim, ID)
+    returned_mesh = Mesh(crd, elm, ElementShape, ndim, name)
     if ElementShape != 'quad8':
-        N = ReturnedMesh.n_nodes
-        ReturnedMesh.add_node_set([nd for nd in range(Nx)], 'bottom')
-        ReturnedMesh.add_node_set([nd for nd in range(N-Nx,N)], 'top')
-        ReturnedMesh.add_node_set([nd for nd in range(0,N,Nx)], 'left')
-        ReturnedMesh.add_node_set([nd for nd in range(Nx-1,N,Nx)], 'right')
+        N = returned_mesh.n_nodes
+        returned_mesh.add_node_set([nd for nd in range(Nx)], 'bottom')
+        returned_mesh.add_node_set([nd for nd in range(N-Nx,N)], 'top')
+        returned_mesh.add_node_set([nd for nd in range(0,N,Nx)], 'left')
+        returned_mesh.add_node_set([nd for nd in range(Nx-1,N,Nx)], 'right')
     else: 
         print('Warning: no boundary set of nodes defined for quad8 elements')    
 
-    return ReturnedMesh
+    return returned_mesh
     
 
-def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max=1, ElementShape = 'quad4', init_rep_loc = 0, ndim = None, ID = ""):  
+def grid_mesh_cylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max=1, ElementShape = 'quad4', init_rep_loc = 0, ndim = None, name = ""):  
     """
     Create a mesh as a regular grid in cylindrical coordinate
 
@@ -109,36 +110,38 @@ def GridMeshCylindric(Nr=11, Ntheta=11, r_min=0, r_max=1, theta_min=0, theta_max
         
     See Also
     --------
-    LineMesh : 1D mesh of a line    
-    RectangleMesh : Surface mesh of a rectangle
-    BoxMesh : Volume mesh of a box     
-    LineMeshCylindric : Line mesh in cylindrical coordinate    
+    line_mesh : 1D mesh of a line    
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box     
+    line_mesh_cylindric : Line mesh in cylindrical coordinate    
     """
     
     if theta_min<theta_max: 
-        m = RectangleMesh(Nr, Ntheta, r_min, r_max, theta_min, theta_max, ElementShape, ndim, ID)
+        m = rectangle_mesh(Nr, Ntheta, r_min, r_max, theta_min, theta_max, ElementShape, ndim, name)
     else: 
-        m = RectangleMesh(Nr, Ntheta, r_min, r_max, theta_max, theta_min, ElementShape, ndim, ID)
+        m = rectangle_mesh(Nr, Ntheta, r_min, r_max, theta_max, theta_min, ElementShape, ndim, name)
 
     r = m.nodes[:,0]
     theta = m.nodes[:,1]
     crd = np.c_[r*np.cos(theta) , r*np.sin(theta)] 
-    ReturnedMesh = Mesh(crd, m.elements, ElementShape, m.local_frame, ndim, ID)
+    returned_mesh = Mesh(crd, m.elements, ElementShape, ndim, name)
+    returned_mesh.local_frame = m.local_frame
 
     if theta_min<theta_max: 
-        ReturnedMesh.add_node_set(m.node_sets["left"], "bottom")
-        ReturnedMesh.add_node_set(m.node_sets["right"], "top")
-        ReturnedMesh.add_node_set(m.node_sets["bottom"], "left")
-        ReturnedMesh.add_node_set(m.node_sets["top"], "right")
+        returned_mesh.add_node_set(m.node_sets["left"], "bottom")
+        returned_mesh.add_node_set(m.node_sets["right"], "top")
+        returned_mesh.add_node_set(m.node_sets["bottom"], "left")
+        returned_mesh.add_node_set(m.node_sets["top"], "right")
     else: 
-        ReturnedMesh.add_node_set(m.node_sets["left"], "bottom")
-        ReturnedMesh.add_node_set(m.node_sets["right"], "top")
-        ReturnedMesh.add_node_set(m.node_sets["top"], "left")
-        ReturnedMesh.add_node_set(m.node_sets["bottom"], "right")
+        returned_mesh.add_node_set(m.node_sets["left"], "bottom")
+        returned_mesh.add_node_set(m.node_sets["right"], "top")
+        returned_mesh.add_node_set(m.node_sets["top"], "left")
+        returned_mesh.add_node_set(m.node_sets["bottom"], "right")
     
-    return ReturnedMesh
+    return returned_mesh
     
-def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):            
+
+def line_mesh_1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', name = ""):            
     """
     Create the Mesh of a straight line with corrdinates in 1D. 
 
@@ -162,11 +165,11 @@ def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
     
     See Also
     --------     
-    LineMesh : Mesh of a line whith choosen dimension
-    RectangleMesh : Surface mesh of a rectangle
-    BoxMesh : Volume mesh of a box 
-    GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
-    LineMeshCylindric : Line mesh in cylindrical coordinate
+    line_mesh : Mesh of a line whith choosen dimension
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box 
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate 
+    line_mesh_cylindric : Line mesh in cylindrical coordinate
     """
     if ElementShape == 'lin2': #1D element with 2 nodes
         crd = np.c_[np.linspace(x_min,x_max,N)] #Nodes coordinates 
@@ -180,13 +183,14 @@ def LineMesh1D(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ID = ""):
         crd = np.c_[np.linspace(x_min,x_max,N)] #Nodes coordinates
         elm = np.c_[np.arange(0,N-3,3), np.arange(1,N-2,3), np.arange(2,N-1,3), np.arange(3,N,3)] #Elements 
 
-    ReturnedMesh = Mesh(crd, elm, ElementShape, None, None, ID)
-    ReturnedMesh.add_node_set([0], "left")
-    ReturnedMesh.add_node_set([N-1], "right")
+    returned_mesh = Mesh(crd, elm, ElementShape, name=name)
+    returned_mesh.add_node_set([0], "left")
+    returned_mesh.add_node_set([N-1], "right")
     
-    return ReturnedMesh
+    return returned_mesh
 
-def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ndim = None, ID = ""):    
+
+def line_mesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ndim = None, name = ""):    
     """
     Create the Mesh of a straight line
 
@@ -209,32 +213,33 @@ def LineMesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ndim = None, ID = ""
         
     See Also
     --------     
-    RectangleMesh : Surface mesh of a rectangle
-    BoxMesh : Volume mesh of a box 
-    GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
-    LineMeshCylindric : Line mesh in cylindrical coordinate
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box 
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate 
+    line_mesh_cylindric : Line mesh in cylindrical coordinate
     """
     if np.isscalar(x_min):
-        m = LineMesh1D(N,x_min,x_max,ElementShape,ID)    
+        m = line_mesh_1D(N,x_min,x_max,ElementShape,name)    
         # if ModelingSpace.GetDimension() in ['2Dplane', '2Dstress'] : dim = 2
         # else: dim = 3
         crd = np.c_[m.nodes, np.zeros((N,ndim-1))]
         elm = m.elements
-        ReturnedMesh = Mesh(crd,elm,ElementShape, None, None, ID)
-        ReturnedMesh.add_node_set(m.node_sets["left"], "left")
-        ReturnedMesh.add_node_set(m.node_sets["right"], "right")
+        returned_mesh = Mesh(crd,elm,ElementShape, name = name)
+        returned_mesh.add_node_set(m.node_sets["left"], "left")
+        returned_mesh.add_node_set(m.node_sets["right"], "right")
     else: 
-        m = LineMesh1D(N,0.,1.,ElementShape,ID)    
+        m = line_mesh_1D(N,0.,1.,ElementShape,name)    
         crd = m.nodes
         crd = (np.array(x_max)-np.array(x_min))*crd+np.array(x_min)
         elm = m.elements
-        ReturnedMesh = Mesh(crd,elm,ElementShape, None, None, ID)
-        ReturnedMesh.add_node_set(m.node_sets["left"], "left")
-        ReturnedMesh.add_node_set(m.node_sets["right"], "right")
+        returned_mesh = Mesh(crd,elm,ElementShape, name = name)
+        returned_mesh.add_node_set(m.node_sets["left"], "left")
+        returned_mesh.add_node_set(m.node_sets["right"], "right")
         
-    return ReturnedMesh
+    return returned_mesh
     
-def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape = 'lin2', init_rep_loc = 0, ndim = None, ID = ""):
+
+def line_mesh_cylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape = 'lin2', init_rep_loc = 0, ndim = None, name = ""):
     """
     Create the mesh of a curved line based on cylindrical coordinates  
 
@@ -259,28 +264,30 @@ def LineMeshCylindric(Ntheta=11, r=1, theta_min=0, theta_max=3.14, ElementShape 
         
     See Also
     --------     
-    LineMesh : Mesh of a line whith choosen dimension
-    RectangleMesh : Surface mesh of a rectangle
-    BoxMesh : Volume mesh of a box 
-    GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
-    LineMeshCylindric : Line mesh in cylindrical coordinate
+    line_mesh : Mesh of a line whith choosen dimension
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box 
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate 
+    line_mesh_cylindric : Line mesh in cylindrical coordinate
     """
     # init_rep_loc = 1 si on veut initialiser le repère local (0 par défaut)
-    m = LineMesh1D(Ntheta,theta_min,theta_max,ElementShape,ID)       
+    m = line_mesh_1D(Ntheta,theta_min,theta_max,ElementShape,name)       
     theta = m.nodes[:,0]
-    elm = m.elements
-
-    LocalFrame = np.array( [ [[np.sin(t),-np.cos(t)],[np.cos(t),np.sin(t)]] for t in theta ] )
+    elm = m.elements  
 
     crd = np.c_[r*np.cos(theta), r*np.sin(theta)]
         
-    ReturnedMesh = Mesh(crd,elm,ElementShape, LocalFrame, ndim, ID)
-    ReturnedMesh.add_node_set(m.node_sets["left"], "left")
-    ReturnedMesh.add_node_set(m.node_sets["right"], "right")
+    returned_mesh = Mesh(crd,elm,ElementShape, ndim, name)
+    returned_mesh.add_node_set(m.node_sets["left"], "left")
+    returned_mesh.add_node_set(m.node_sets["right"], "right")
     
-    return ReturnedMesh
+    if init_rep_loc: 
+        local_frame = np.array( [ [[np.sin(t),-np.cos(t)],[np.cos(t),np.sin(t)]] for t in theta ] ) 
+    
+    return returned_mesh
 
-def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', ID = ""):      
+
+def box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = ""):      
     """
     Create the mesh of a box  
 
@@ -302,10 +309,10 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
     
     See Also
     --------
-    LineMesh : 1D mesh of a line    
-    RectangleMesh : Surface mesh of a rectangle
-    GridMeshCylindric : Surface mesh of a grid in cylindrical coodrinate 
-    LineMeshCylindric : Line mesh in cylindrical coord
+    line_mesh : 1D mesh of a line    
+    rectangle_mesh : Surface mesh of a rectangle
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate 
+    line_mesh_cylindric : Line mesh in cylindrical coord
     """
             
     Y,Z,X = np.meshgrid(np.linspace(y_min,y_max,Ny),np.linspace(z_min,z_max,Nz),np.linspace(x_min,x_max,Nx))    
@@ -351,21 +358,19 @@ def BoxMesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_
     N = np.shape(crd)[0]
     elm = np.array(elm)
     
-    ReturnedMesh = Mesh(crd, elm, ElementShape, None, None, ID)  
+    returned_mesh = Mesh(crd, elm, ElementShape, name = name)  
     for i, ndSet in enumerate([right, left, top, bottom, front, back]):
         ndSetId = ('right', 'left', 'top', 'bottom', 'front', 'back')[i]
-        ReturnedMesh.add_node_set(ndSet, ndSetId)
+        returned_mesh.add_node_set(ndSet, ndSetId)
                  
-    return ReturnedMesh
+    return returned_mesh
 
 
-
-
-def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4', ndim = None, ID =""):
+def structured_mesh_2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4', ndim = None, name =""):
 #     #Edge1 and Edge3 should have the same lenght 
 #     #Edge2 and Edge4 should have the same lenght
 #     #last node of Edge1 should be the first of Edge2 and so on...
-#     if no ID is defined, the ID is the same as crd
+#     if no name is defined, the name is the same as crd
     
     if hasattr(data,'elm_type'): #data is a mesh        
         if data.elements is None: elm = []
@@ -373,7 +378,7 @@ def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4
             elm = list(data.elements)
             ElementShape = data.elm_type
         crd = data.nodes
-        if ID == "": ID = data.GetID()
+        if name == "": name = data.name
     else: 
         elm = []
         crd = data
@@ -411,18 +416,16 @@ def GridStructuredMesh2D(data, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4
         raise NameError("'quad8' elements are not implemented")
     
     elm = np.array(elm, dtype=int)
-    return Mesh(np.array(new_crd), elm, ElementShape, None, ndim, ID)
+    return Mesh(np.array(new_crd), elm, ElementShape, ndim, name)
 
-# def EmptyMesh(ElementShape = 'quad4', ID=""):
-#     return Mesh(np.array([]), np.array([], dtype=int), ElementShape, None, ID)
 
-def GenerateNodes(mesh, N, data, typeGen = 'straight'):
+def generate_nodes(mesh, N, data, typeGen = 'straight'):
     #if typeGen == 'straight' -> data = (node1, node2)
     #if typeGen == 'circular' -> data = (node1, node2, (center_x, center_y))
     crd = mesh.nodes    
     if typeGen == 'straight':
         node1 = data[0] ; node2 = data[1]
-        listNodes = mesh.add_nodes(LineMesh(N, crd[node1], crd[node2]).nodes[1:-1])
+        listNodes = mesh.add_nodes(line_mesh(N, crd[node1], crd[node2]).nodes[1:-1])
         return np.array([node1]+list(listNodes)+[node2])
     if typeGen == 'circular':
         nd1 = data[0] ; nd2 = data[1] ; c = data[2]
@@ -432,11 +435,12 @@ def GenerateNodes(mesh, N, data, typeGen = 'straight'):
         (crd[nd1]-c)
         theta_min = np.arctan2(crd[nd1,1]-c[1],crd[nd1,0]-c[0])
         theta_max = np.arctan2(crd[nd2,1]-c[1],crd[nd2,0]-c[0])
-        m = LineMeshCylindric(N, R, theta_min, theta_max) #circular mesh
+        m = line_mesh_cylindric(N, R, theta_min, theta_max) #circular mesh
         listNodes = mesh.add_nodes(m.nodes[1:-1]+c)
         return np.array([nd1]+list(listNodes)+[nd2])
 
-def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sym= True, ndim = None, ID =""):
+
+def hole_plate_mesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sym= True, ndim = None, name =""):
     """
     Create a mesh of a 2D plate with a hole  
 
@@ -461,8 +465,8 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
     
     See Also
     --------
-    LineMesh : 1D mesh of a line    
-    RectangleMesh : Surface mesh of a rectangle
+    line_mesh : 1D mesh of a line    
+    rectangle_mesh : Surface mesh of a rectangle
     """   
 
     
@@ -470,43 +474,43 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
         L = Lx/2
         h = Ly/2
         m = Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
-        Edge1 = GenerateNodes(m,Nx,(0,1))
-        Edge2 = GenerateNodes(m,Ny,(1,2))
-        Edge3 = GenerateNodes(m,Nx,(2,5))
-        Edge4 = GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
+        Edge1 = generate_nodes(m,Nx,(0,1))
+        Edge2 = generate_nodes(m,Ny,(1,2))
+        Edge3 = generate_nodes(m,Nx,(2,5))
+        Edge4 = generate_nodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
         
-        Edge5 = GenerateNodes(m,Nx,(4,3))
-        Edge6 = GenerateNodes(m,Ny,(3,2))
-        Edge7 = GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
+        Edge5 = generate_nodes(m,Nx,(4,3))
+        Edge6 = generate_nodes(m,Ny,(3,2))
+        Edge7 = generate_nodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
         
-        m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
-        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, ID=ID)
+        m = structured_mesh_2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
+        m = structured_mesh_2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim, name=name)
     else: 
         L = Lx/2
         h = Ly/2
         m = Mesh(np.array([[R,0],[L,0],[L,h],[0,h],[0,R],[R*np.cos(np.pi/4),R*np.sin(np.pi/4)]]))
-        Edge1 = GenerateNodes(m,Nx,(0,1))
-        Edge2 = GenerateNodes(m,Ny,(1,2))
-        Edge3 = GenerateNodes(m,Nx,(2,5))
-        Edge4 = GenerateNodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
+        Edge1 = generate_nodes(m,Nx,(0,1))
+        Edge2 = generate_nodes(m,Ny,(1,2))
+        Edge3 = generate_nodes(m,Nx,(2,5))
+        Edge4 = generate_nodes(m,Ny,(5,0,(0,0)), typeGen = 'circular')
         
-        Edge5 = GenerateNodes(m,Nx,(4,3))
-        Edge6 = GenerateNodes(m,Ny,(3,2))
-        Edge7 = GenerateNodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
+        Edge5 = generate_nodes(m,Nx,(4,3))
+        Edge6 = generate_nodes(m,Ny,(3,2))
+        Edge7 = generate_nodes(m,Ny,(5,4,(0,0)), typeGen = 'circular')
         
-        m = GridStructuredMesh2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
-        m = GridStructuredMesh2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim)
+        m = structured_mesh_2D(m, Edge1, Edge2, Edge3, Edge4, ElementShape = 'quad4')
+        m = structured_mesh_2D(m, Edge5, Edge6, Edge3, Edge7, ElementShape = 'quad4', ndim = ndim)
         
         nnd = m.n_nodes
         crd = m.nodes.copy()
         crd[:,0] = -m.nodes[:,0]
         m2 = Mesh(crd, m.elements, m.elm_type)
-        m = Mesh.Stack(m,m2)
+        m = Mesh.stack(m,m2)
         
         crd = m.nodes.copy()
         crd[:,1] = -m.nodes[:,1]
         m2 = Mesh(crd, m.elements, m.elm_type)
-        m = Mesh.Stack(m,m2, ID=ID)
+        m = Mesh.stack(m,m2, name=name)
         
         node_to_merge = np.vstack((np.c_[Edge5, Edge5+nnd], 
                                    np.c_[Edge5+2*nnd, Edge5+3*nnd],
@@ -514,12 +518,13 @@ def HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, ElementShape = 'quad4', sy
                                    np.c_[Edge1+nnd, Edge1+3*nnd]))
                                    
         
-        m.MergeNodes(node_to_merge)
+        m.merge_nodes(node_to_merge)
         
     if ElementShape == 'quad4': return m
     elif ElementShape == 'tri3': return quad2tri(m)
     else: raise NameError('Non compatible element shape')
     
+
 def quad2tri(mesh):
     assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
     crd = mesh.nodes
@@ -528,8 +533,8 @@ def quad2tri(mesh):
                 
 if __name__=="__main__":
     import math
-    a = LineMeshCylindric(11, 1, 0, math.pi, 'lin2', init_rep_loc = 0)
-    b = LineMeshCylindric(11, 1, 0, math.pi, 'lin4', init_rep_loc = 1)
+    a = line_mesh_cylindric(11, 1, 0, math.pi, 'lin2', init_rep_loc = 0)
+    b = line_mesh_cylindric(11, 1, 0, math.pi, 'lin4', init_rep_loc = 1)
 
     print(b.nodes)
 

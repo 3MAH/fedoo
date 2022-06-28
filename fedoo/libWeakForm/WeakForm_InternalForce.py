@@ -22,7 +22,7 @@ class InternalForce(WeakForm):
     """
     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = 0, space = None):
         if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
+            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
         if ID == "":
             ID = CurrentConstitutiveLaw.GetID()
@@ -152,7 +152,7 @@ class InternalForce(WeakForm):
 #     """
 #     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False, space = None):
 #         if isinstance(CurrentConstitutiveLaw, str):
-#             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
+#             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
 #         if ID == "":
 #             ID = CurrentConstitutiveLaw.GetID()

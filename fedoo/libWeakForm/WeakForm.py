@@ -12,7 +12,7 @@ class WeakForm:
         if space is None: 
             space = ModelingSpace.GetActive()
         elif isinstance(space, str):
-            space = ModelingSpace.GetAll()[space]
+            space = ModelingSpace.get_all()[space]
         self.__space = space
         self.assembly_options = {}
         #possible options : 
@@ -75,7 +75,7 @@ class WeakForm:
         return self.__space
         
     @staticmethod
-    def GetAll():
+    def get_all():
         return WeakForm.__dic
     
 class WeakFormSum(WeakForm):
@@ -144,7 +144,7 @@ class WeakFormSum(WeakForm):
         
 
 
-def GetAll():
-    return WeakForm.GetAll()
+def get_all():
+    return WeakForm.get_all()
 
 

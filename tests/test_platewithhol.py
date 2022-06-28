@@ -5,7 +5,7 @@ import numpy as np
 Util.ProblemDimension("2Dstress") 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-meshObject = Mesh.HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \
+meshObject = Mesh.hole_plate_mesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \
 	ElementShape = 'quad4', ID ="Domain") 
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)

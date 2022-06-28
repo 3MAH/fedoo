@@ -4,7 +4,7 @@ from fedoo.libMesh.Mesh import Mesh
 class ExportData:
     def __init__(self, mesh, multiMesh = False):
         if isinstance(mesh, str):
-            mesh = Mesh.GetAll()[mesh]
+            mesh = Mesh.get_all()[mesh]
    
         self.mesh = mesh
         self.multi_mesh = multiMesh #True if all the mesh defined in mesh._elm and mesh._type are included

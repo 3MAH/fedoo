@@ -52,7 +52,7 @@ class AssemblyBase:
         return self.__space
 
     @staticmethod
-    def GetAll():
+    def get_all():
         return AssemblyBase.__dic
     
     @staticmethod
@@ -61,7 +61,7 @@ class AssemblyBase:
         Assemble the global matrix and global vector of the assembly ID
         ID is a str
         """
-        AssemblyBase.GetAll()[ID].ComputeGlobalMatrix()
+        AssemblyBase.get_all()[ID].ComputeGlobalMatrix()
 
 class AssemblySum(AssemblyBase):
     """
@@ -81,7 +81,7 @@ class AssemblySum(AssemblyBase):
     """
     def __init__(self, list_assembly, ID="", **kargs):        
         for i,assembly in enumerate(list_assembly):
-            if isinstance(assembly, str): list_assembly[i] = AssemblyBase.GetAll()[assembly]                                
+            if isinstance(assembly, str): list_assembly[i] = AssemblyBase.get_all()[assembly]                                
             
         assert len(set([a.space for a in list_assembly])) == 1, \
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
@@ -203,8 +203,8 @@ def Sum(*listAssembly, ID="", **kargs):
     """
     return AssemblySum(list(listAssembly), ID, **kargs)
             
-def GetAll():
-    return AssemblyBase.GetAll()
+def get_all():
+    return AssemblyBase.get_all()
 
 def Launch(ID):
-    AssemblyBase.GetAll()[ID].ComputeGlobalMatrix()    
+    AssemblyBase.get_all()[ID].ComputeGlobalMatrix()    

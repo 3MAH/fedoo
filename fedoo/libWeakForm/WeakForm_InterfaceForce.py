@@ -20,7 +20,7 @@ class InterfaceForce(WeakForm):
     """
     def __init__(self, CurrentConstitutiveLaw, ID = "", nlgeom = False):
         if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
+            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
         if ID == "":
             ID = CurrentConstitutiveLaw.GetID()

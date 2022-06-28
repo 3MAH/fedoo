@@ -155,7 +155,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)
             """
             if isinstance(Assembling,str):
-                Assembling = Assembly.GetAll()[Assembling]
+                Assembling = Assembly.get_all()[Assembling]
                 
             self.__Assembly = Assembling
             if update: self.Update()
@@ -323,7 +323,7 @@ def _GenerateClass_NonLinearStatic(libBase):
 
 def NonLinearStatic(Assembling, ID = "MainProblem"):
     if isinstance(Assembling,str):
-        Assembling = Assembly.GetAll()[Assembling]
+        Assembling = Assembly.get_all()[Assembling]
                
     if hasattr(Assembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem            

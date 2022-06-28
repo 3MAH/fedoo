@@ -6,13 +6,13 @@ import time
 
 t0 = time.time()
 Util.ProblemDimension("3D")
-Mesh.ImportFromFile('gyroid.msh', meshID = "Domain")
+Mesh.import_file('gyroid.msh', meshID = "Domain")
 meshID = "Domain"
 
-type_el = Mesh.GetAll()[meshID].elm_type
+type_el = Mesh.get_all()[meshID].elm_type
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.GetAll()[meshID]
+mesh = Mesh.get_all()[meshID]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
@@ -69,8 +69,8 @@ print(time.time()-t0)
 Problem.Solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
-TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain()
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
+TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
+TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 #------------------------------------------------------------------------------
 #Optional: Compute and write data in a vtk file (for visualization with paraview for instance)
@@ -86,19 +86,19 @@ if output_VTK == 1:
     TensorStressEl = Assembly.ConvertData(TensorStress, meshID, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
-    # TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrain)
+    # TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
+    # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
     
     # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
-    # TensorStressEl = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(TensorStrainEl)
+    # TensorStrainEl = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
+    # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
     
     # Get the principal directions (vectors on nodes)
     PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
     
     #Get the displacement vector on nodes for export to vtk
     U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-    N = Mesh.GetAll()[meshID].n_nodes
+    N = Mesh.get_all()[meshID].n_nodes
     # U = np.c_[U,np.zeros(N)]
     
     SetId = None

@@ -55,7 +55,7 @@ class ModelingSpace:
         return ModelingSpace.__active_space
     
     @staticmethod
-    def GetAll():
+    def get_all():
         return ModelingSpace.__dic
         
     def GetDimension(self):

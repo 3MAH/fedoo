@@ -7,7 +7,7 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 Util.ProblemDimension("3D")
 
-Mesh.ImportFromFile('octet_surf.msh', meshID = "Domain")
+Mesh.import_file('./meshes/octet_surf.msh', meshID = "Domain")
 
 meshID = "Domain2"
 

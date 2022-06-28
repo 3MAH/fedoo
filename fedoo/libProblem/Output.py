@@ -67,7 +67,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
         data_sav = {} #dict to keep data in memory that may be used more that one time
 
         if isinstance(assemb, str): 
-            assemb = AssemblyBase.GetAll()[assemb]  
+            assemb = AssemblyBase.get_all()[assemb]  
 
         if hasattr(assemb, 'list_assembly'): #AssemblySum object
             if assemb.assembly_output is None:
@@ -239,7 +239,7 @@ class _ProblemOutput:
                 print("Specified output ignored")
                 print("List of available output: ", _available_output)
         
-        if isinstance(assemb, str): assemb = AssemblyBase.GetAll()[assemb]     
+        if isinstance(assemb, str): assemb = AssemblyBase.get_all()[assemb]     
         
         new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)

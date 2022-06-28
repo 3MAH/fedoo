@@ -27,7 +27,7 @@ mat2 = ConstitutiveLaw.ElasticIsotrop(E/10, nu, ID = 'Mat2')
 # ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
 ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], ID = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
+mesh = Mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geomElementType, ID='plate', ndim = 3)
 
 nodes_left = mesh.node_sets['left']
 nodes_right = mesh.node_sets['right']
@@ -70,5 +70,5 @@ Problem.Solve()
 if saveResults == True: 
     Problem.SaveResults() #save in vtk
 
-z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(200)
+z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)
 plt.plot(StressDistribution[0], z)

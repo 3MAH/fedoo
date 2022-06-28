@@ -94,7 +94,7 @@ class CohesiveLaw(Spring):
 
     def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'):         
         if isinstance(CohesiveAssembly,str):
-            CohesiveAssembly = AssemblyBase.GetAll()[CohesiveAssembly]
+            CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
         
         OperatorDelta = CohesiveAssembly.space.op_disp()
         if typeData == 'Node':

@@ -29,7 +29,7 @@ class Beam(WeakForm):
         #k: shear shape factor
         
         if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
+            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
         if ID == "":
             ID = CurrentConstitutiveLaw.GetID()
@@ -108,7 +108,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
 # class BernoulliBeam(WeakForm):
 #     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, ID = ""):
 #         if isinstance(CurrentConstitutiveLaw, str):
-#             CurrentConstitutiveLaw = ConstitutiveLaw.GetAll()[CurrentConstitutiveLaw]
+#             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
 
 #         if ID == "":
 #             ID = CurrentConstitutiveLaw.GetID()

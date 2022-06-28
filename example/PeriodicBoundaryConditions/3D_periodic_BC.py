@@ -12,25 +12,25 @@ DataINP = Util.ReadINP('Job-1.inp')
 INP = Util.ReadINP('cell_taffetas.inp') #Warning: non periodic mesh -> dont work quite well
 INP.toMesh(meshID = "Domain")
 
-# data = Util.ExportData(Mesh.GetAll()['Domain'])
+# data = Util.ExportData(Mesh.get_all()['Domain'])
 # data.toVTK()
 
 #alternative mesh below (uncomment the line)
-# Mesh.BoxMesh(Nx=51, Ny=51, Nz=51, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
+# Mesh.box_mesh(Nx=51, Ny=51, Nz=51, x_min=-1, x_max=1, y_min=-1, y_max=1, z_min = -1, z_max = 1, ElementShape = 'hex8', ID ="Domain" )
     
-type_el = Mesh.GetAll()['Domain'].elm_type
+type_el = Mesh.get_all()['Domain'].elm_type
 
 meshID = "Domain"
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.GetAll()[meshID]
+mesh = Mesh.get_all()[meshID]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
 center = [np.linalg.norm(crd,axis=1).argmin()]
 
-StrainNodes = Mesh.GetAll()[meshID].add_nodes(np.zeros(crd.shape[1]),2) #add virtual nodes for macro strain
+StrainNodes = Mesh.get_all()[meshID].add_nodes(np.zeros(crd.shape[1]),2) #add virtual nodes for macro strain
 
 #Material definition
 material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, ID = 'ElasticLaw')
@@ -80,26 +80,26 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #Compute the mean stress and strain
 #Get the stress tensor (PG values)
-TensorStrain = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain() 
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress()
+TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain() 
+TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
-Volume_mesh = Assembly.GetAll()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
+Volume_mesh = Assembly.get_all()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
 
-MeanStress = [1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)] 
+MeanStress = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)] 
 
 MeanStrain = [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-2], Problem.GetDisp('DispZ')[-2], 
               Problem.GetDisp('DispX')[-1], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispZ')[-1]]
 # Other method: only work if volume with no void (Void=0)
 # Void = Volume-Volume_mesh 
-# MeanStrain = [1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
+# MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
 
 print('Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ' )
 print(MeanStrain)
 print('Stress tensor ([Sxx, Syy, Szz, Sxy, Sxz, Syz]): ' )
 print(MeanStress)
 
-# print(ConstitutiveLaw.GetAll()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
+# print(ConstitutiveLaw.get_all()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
 
 
 #------------------------------------------------------------------------------
@@ -123,7 +123,7 @@ if output_VTK == 1:
     
     #Get the displacement vector on nodes for export to vtk
     U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
-    N = Mesh.GetAll()[meshID].n_nodes
+    N = Mesh.get_all()[meshID].n_nodes
     # U = np.c_[U,np.zeros(N)]
     
     
@@ -133,8 +133,8 @@ if output_VTK == 1:
         OUT = Util.ExportData(meshID)
         ElSet = slice(None) #we keep all elements
     else:
-        Mesh.GetAll()[meshID].ExtractSetOfElements(SetId, ID="output")
-        ElSet = Mesh.GetAll()[meshID].element_sets[SetId] #keep only some elements    
+        Mesh.get_all()[meshID].extract_elements(SetId, ID="output")
+        ElSet = Mesh.get_all()[meshID].element_sets[SetId] #keep only some elements    
         OUT = Util.ExportData("output")
     
     #Write the vtk file                            

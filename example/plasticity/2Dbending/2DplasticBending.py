@@ -22,8 +22,8 @@ alpha = 1e-5 #???
 meshID = "Domain"
 uimp = -5
 
-Mesh.RectangleMesh(Nx=41, Ny=21, x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
-mesh = Mesh.GetAll()[meshID]
+Mesh.rectangle_mesh(Nx=41, Ny=21, x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
+mesh = Mesh.get_all()[meshID]
 
 crd = mesh.nodes 
 

@@ -21,10 +21,10 @@ class AssemblyPGD(AssemblyFEM):
         #mesh should be of type PGD.Mesh
 
         if isinstance(weakForm, str):            
-            weakForm = WeakForm.GetAll()[weakForm]
+            weakForm = WeakForm.get_all()[weakForm]
 
         if isinstance(mesh, str):
-            mesh = MeshFEM.GetAll()[mesh]
+            mesh = MeshFEM.get_all()[mesh]
                                 
         AssemblyBase.__init__(self, ID, weakForm.space)        
 
@@ -82,7 +82,7 @@ class AssemblyPGD(AssemblyFEM):
                 
                 
                 
-                # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                        
+                # if 'X' in subMesh.crd_name: #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                        
                 if wf.op_vir[ii].u in associatedVariables:                       
                     var_vir.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op_vir[ii].u][0]])                        
                     coef_vir.extend(associatedVariables[wf.op_vir[ii].u][1])                  
@@ -109,7 +109,7 @@ class AssemblyPGD(AssemblyFEM):
                     
                     
                     
-                    # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                    
+                    # if 'X' in subMesh.crd_name: #test if the subMesh is related to the spatial coordinates (Variable derivative are only for spatial derivative in beam or shell models)                    
                     if wf.op[ii].u in associatedVariables:                       
                         var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op[ii].u][0]])                        
                         coef.extend(associatedVariables[wf.op[ii].u][1])
@@ -171,7 +171,7 @@ class AssemblyPGD(AssemblyFEM):
             self.__listNumberOfGaussPoints = [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.__Mesh (default value)            
         else:
             for i,m in enumerate(listSubMesh):                
-                if isinstance(m, str): m = MeshFEM.GetAll()[m]
+                if isinstance(m, str): m = MeshFEM.get_all()[m]
                 dd = self.__Mesh.GetListMesh().index(m)
                 self.__listElementType[dd] = listElementType[i]
                 self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
@@ -201,7 +201,7 @@ class AssemblyPGD(AssemblyFEM):
             self.__listNumberOfGaussPoints = listNumberOfGaussPoints
         else:
             for i,m in enumerate(listSubMesh):                
-                if isinstance(m, str): m = Mesh.GetAll()[m]
+                if isinstance(m, str): m = Mesh.get_all()[m]
                 self.__listNumberOfGaussPoints[self.__Mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
         self.__listAssembly = [AssemblyFEM(self._weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
@@ -283,7 +283,7 @@ class AssemblyPGD(AssemblyFEM):
                 
                 
                                 
-                # if 'X' in subMesh.GetCoordinateID(): #test if the subMesh is related to the spatial coordinates                
+                # if 'X' in subMesh.crd_name: #test if the subMesh is related to the spatial coordinates                
                 associatedVariables = self._GetAssociatedVariables(dd)
     
                 if operator.op[ii].u in associatedVariables:                       
@@ -350,7 +350,7 @@ class AssemblyPGD(AssemblyFEM):
         S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
         """
         if isinstance(constitutiveLaw, str):
-            constitutiveLaw = ConstitutiveLaw.GetAll()[constitutiveLaw]
+            constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
         if IntegrationType == "Nodal":            
             return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_nodes) for e in constitutiveLaw.GetStress()]

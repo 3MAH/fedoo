@@ -21,9 +21,9 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         if not isinstance(ID, str): assert 0, "An ID must be a string"
         
         MeshBase.__init__(self, ID)
-        self.__ListMesh = [MeshBase.GetAll()[m] if isinstance(m,str) else m for m in args]
+        self.__ListMesh = [MeshBase.get_all()[m] if isinstance(m,str) else m for m in args]
         
-        listCrdID = [crdid for m in self.__ListMesh for crdid in m.GetCoordinateID() ]
+        listCrdID = [crdid for m in self.__ListMesh for crdid in m.crd_name ]
         if len(set(listCrdID)) != len(listCrdID): 
             print("Warning: some coordinate ID are defined in more than one mesh")
         
@@ -98,8 +98,8 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             listSubMesh = [i for i in range(len(self.__ListMesh)) if not(listNodeIndexes[i] is 'all' or listNodeIndexes[i] is 'ALL')]
             listNodeIndexes = [NodeIndexes for NodeIndexes in listNodeIndexes if not(NodeIndexes is 'all' or NodeIndexes is 'ALL')]
         else:
-            # listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
-            listSubMesh = [self.__ListMesh.index(MeshBase.GetAll()[m]) if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
+            # listSubMesh = [self.__ListMesh.index(MeshBase.get_all()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
+            listSubMesh = [self.__ListMesh.index(MeshBase.get_all()[m]) if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
             
         self.node_sets[ID] = [listSubMesh, listNodeIndexes]
         
@@ -120,7 +120,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             listSubMesh = [self.__ListMesh[i] for i in range(len(self.__ListMesh)) if listElementIndexes[i] not in ['all','ALL']]
             listElementIndexes = [ElmIndexes for ElmIndexes in listElementIndexes if ElmIndexes not in ['all','ALL']]
         else:
-            listSubMesh = [MeshBase.GetAll()[m] if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
+            listSubMesh = [MeshBase.get_all()[m] if isinstance(m,str) else m if isinstance(m, int) else self.__ListMesh.index(m) for m in listSubMesh]
         
         self.element_sets[ID] = [listSubMesh, listElementIndexes]
 
@@ -148,7 +148,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         Return the position of the mesh in the list MeshPGD.GetListMesh() or None if the coordinate is not found
         """
         for idmesh, mesh in enumerate(self.__ListMesh):
-            if crd in mesh.GetCoordinateID():
+            if crd in mesh.crd_name:
                 return idmesh
         return None    
     

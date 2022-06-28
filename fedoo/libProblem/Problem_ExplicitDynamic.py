@@ -11,13 +11,13 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
     """
         
     if isinstance(StiffnessAssembling,str):
-        StiffnessAssembling = Assembly.GetAll()[StiffnessAssembling]
+        StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
                 
     if isinstance(MassAssembling,str):
-        MassAssembling = Assembly.GetAll()[MassAssembling]
+        MassAssembling = Assembly.get_all()[MassAssembling]
         
     if isinstance(DampingAssembling,str):
-        DampingAssembling = Assembly.GetAll()[DampingAssembling]
+        DampingAssembling = Assembly.get_all()[DampingAssembling]
 
     if hasattr(StiffnessAssembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
@@ -50,7 +50,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
         def UpdateStiffness(StiffnessAssembling): #internal function to be used when modifying the siffness matrix
             if isinstance(StiffnessAssembling,str):
-                StiffnessAssembling = Assembly.GetAll()[StiffnessAssembling]
+                StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             
             self.__StiffMatrix = StiffnessAssembling.GetMatrix()
 

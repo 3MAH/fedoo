@@ -127,7 +127,7 @@ class CohesiveLaw_mod(Spring):
         # OperatorDelta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
         # OperatorDelta, U_vir = GetDispOperator()
         if isinstance(CohesiveAssembly,str):
-            CohesiveAssembly = AssemblyBase.GetAll()[CohesiveAssembly]
+            CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
         if typeData == 'Node':
             delta = [CohesiveAssembly.GetNodeResult(op, U) for op in OperatorDelta]            
         else: delta = [CohesiveAssembly.GetGaussPointResult(op, U) for op in OperatorDelta]            

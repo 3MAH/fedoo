@@ -25,7 +25,7 @@ reduced_integration = True #if true, use reduce integration for shear
 material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
 ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, ID='plate')
+mesh = Mesh.rectangle_mesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, ID='plate')
 
 nodes_left = mesh.node_sets['left']
 nodes_right = mesh.node_sets['right']
@@ -68,5 +68,5 @@ Problem.Solve()
 
 assert np.abs(Problem.GetDisp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
 
-# # z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(20)
+# # z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(20)
 # # plt.plot(StressDistribution[0], z)

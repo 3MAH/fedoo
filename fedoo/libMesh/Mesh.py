@@ -12,18 +12,37 @@ except:
     USE_PYVISTA = False
 
 
-# def Create(NodeCoordinates, ElementTable, ElementShape, local_frame=None, ndim =None, name = ""):        
-#     return Mesh(NodeCoordinates, ElementTable, ElementShape, local_frame, ndim, name)
 
-class Mesh(MeshBase):
-    def __init__(self, nodes, elements=None, elm_type=None, local_frame=None, ndim = None, name = ""):
+class Mesh(MeshBase):    
+    """
+    Fedoo Mesh object.
+    
+    Parameters
+    ----------
+    nodes: numpy array of float
+        List of nodes coordinates. nodes[i] is the coordinate of the ith node.
+    elements: numpy array of int
+        Elements table. elements[i] define the nodes associated to the ith element 
+    elm_type: str
+        Type of the element. The type of the element should be coherent with the shape of elements.
+    ndim:
+        Dimension of the mesh. By default, ndim is deduced from the nodes coordinates using ndim = nodes.shape[1]    
+    name: str
+        The name of the mesh
+    """
+    def __init__(self, nodes, elements=None, elm_type=None, ndim = None, name = ""):
         MeshBase.__init__(self, name)
-        self.nodes = nodes #node coordinates            
+        self.nodes = nodes #node coordinates     
+        """ List of nodes coordinates. nodes[i] is the coordinate of the ith node."""
         self.elements = elements #element table
+        """ List of nodes coordinates. nodes[i] is the coordinate of the ith node."""
         self.elm_type = elm_type
+        """Type of the element. The type of the element should be coherent with the shape of elements."""
         self.node_sets = {} #node on the boundary for instance
+        """Dict containing node sets associated to the mesh"""
         self.element_sets = {}
-        self.local_frame = local_frame #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
+        """Dict containing element sets associated to the mesh"""
+        self.local_frame = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
         if ndim is None: ndim = self.nodes.shape[1]
         elif ndim > self.nodes.shape[1]:
@@ -35,132 +54,39 @@ class Mesh(MeshBase):
                 local_frame_temp[:,2,2]   = 1
                 self.local_frame = local_frame_temp
         
-        if ndim == 1: self.__CoordinateID = ('X')
-        elif self.nodes.shape[1] == 2: self.__CoordinateID = ('X', 'Y')
-        # elif n == '2Dplane' or n == '2Dstress': self.__CoordinateID = ('X', 'Y')
-        else: self.__CoordinateID = ('X', 'Y', 'Z')
+        if ndim == 1: self.crd_name = ('X')
+        elif self.nodes.shape[1] == 2: self.crd_name = ('X', 'Y')
+        # elif n == '2Dplane' or n == '2Dstress': self.crd_name = ('X', 'Y')
+        else: self.crd_name = ('X', 'Y', 'Z')
+        
    
-    def add_node_set(self,NodeIndexes,SetOfId):
+    def add_node_set(self,node_indices,name):
         """        
         Add a set of nodes to the Mesh
         
         Parameters
         ----------
-        NodeIndexes : list or 1D numpy.array
-            A list of node indexes
-        SetOfId : str
+        node indices : list or 1D numpy.array
+            A list of node indices
+        name : str
             ID of the set of nodes            
         """
-        self.node_sets[SetOfId] = NodeIndexes
+        self.node_sets[name] = node_indices
         
-    def add_element_set(self,ElementIndexes,SetOfId):
+        
+    def add_element_set(self,element_indices,name):
         """        
         Add a set of elements to the Mesh
         
         Parameters
         ----------
-        ElementIndexes : list or 1D numpy.array
+        element_indices : list or 1D numpy.array
             A list of node indexes
-        SetOfId : str
+        name : str
             ID of the set of nodes            
         """
-        self.element_sets[SetOfId] = ElementIndexes
-
-    # def GetSetOfNodes(self,SetOfId):
-    #     """
-    #     Return the set of nodes whose ID is SetOfId
+        self.element_sets[name] = element_indices
         
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         ID of the set of nodes
-
-    #     Returns
-    #     -------
-    #     list or 1D numpy array containing node indexes
-    #     """
-    #     return self.node_sets[SetOfId]
-        
-    # def GetSetOfElements(self,SetOfId):
-    #     """
-    #     Return the set of elements whose ID is SetOfId
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         ID of the set of elements
-
-    #     Returns
-    #     -------
-    #     list or 1D numpy array containing element indexes
-    #     """
-    #     return self.element_sets[SetOfId]
-
-    # def RemoveSetOfNodes(self,SetOfId):
-    #     """
-    #     Remove the set of nodes whose ID is SetOfId from the Mesh
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         ID of the set of nodes
-    #     """
-    #     del self.node_sets[SetOfId]
-        
-    # def RemoveSetOfElements(self,SetOfId):
-    #     """
-    #     Remove the set of elements whose ID is SetOfId from the Mesh
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         ID of the set of elements
-    #     """
-    #     del self.element_sets[SetOfId]
-
-    # def ListSetOfNodes(self):
-    #     """
-    #     Return a list containing the ID (str) of all set of nodes defined in the Mesh.
-    #     """
-    #     return [key for key in self.node_sets]
-
-    # def ListSetOfElements(self):    
-    #     """
-    #     Return a list containing the ID (str) of all set of elements defined in the Mesh.
-    #     """
-    #     return [key for key in self.element_sets]
-                                
-    # def GetElementShape(self):
-    #     """
-    #     Return the element shape (ie, type of element) of the Mesh. 
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         ID of the set of nodes
-            
-    #     The element shape if defined as a str according the the list of available element shape.
-    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
-        
-    #     Remark
-    #     ----------
-    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
-    #     """
-    #     return self.elm_type
-    
-    # def SetElementShape(self, value):
-    #     """
-    #     Change the element shape (ie, type of element) of the Mesh.
-        
-        
-    #     The element shape if defined as a str according the the list of available element shape.
-    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
-        
-    #     Remark
-    #     ----------
-    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
-    #     """
-    #     self.elm_type = value
            
     def add_nodes(self, coordinates = None, nb_added = None):
         """
@@ -191,65 +117,62 @@ class Mesh(MeshBase):
 
         return np.arange(n_nodes_old,self.n_nodes)
 
-    def AddInternalNodes(self, numberOfInternalNodes):
-        newNodes = self.add_nodes(nb_added=self.n_elements*numberOfInternalNodes)
-        self.elements = np.c_[self.elements, newNodes]           
-    
-    def GetCoordinateID(self):
-        return self.__CoordinateID
-    
-    def SetCoordinateID(self,ListCoordinateID):        
-        self.__CoordinateID = ListCoordinateID
+    def add_internal_nodes(self, nb_added):
+        new_nodes = self.add_nodes(nb_added=self.n_elements*nb_added)
+        self.elements = np.c_[self.elements, new_nodes]       
+        
     
     # warning , this method must be static
     @staticmethod
-    def Stack(Mesh1,Mesh2, ID = ""):
+    def stack(mesh1,mesh2, ID = ""):       
         """
-        *Static method* - Make the spatial stack of two mesh objects which have the same element shape.        
-        
-        Same as the function Stack in the Mesh module.
-        
+        *Static method* - Make the spatial stack of two mesh objects which have the same element shape. 
+        This function doesn't merge coindicent Nodes. 
+        For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
+        on the resulting Mesh. 
+                
         Return 
         ---------
-        Mesh object with is the spacial stack of Mesh1 and Mesh2
+        Mesh object with is the spacial stack of mesh1 and mesh2
         """
-        if isinstance(Mesh1, str): Mesh1 = Mesh.GetAll()[Mesh1]
-        if isinstance(Mesh2, str): Mesh2 = Mesh.GetAll()[Mesh2]
+        if isinstance(mesh1, str): mesh1 = Mesh.get_all()[mesh1]
+        if isinstance(mesh2, str): mesh2 = Mesh.get_all()[mesh2]
         
-        if Mesh1.elm_type != Mesh2.elm_type:    
+        if mesh1.elm_type != mesh2.elm_type:    
             raise NameError("Can only stack meshes with the same element shape")
             
-        Nnd = Mesh1.n_nodes
-        Nel = Mesh1.n_elements
+        Nnd = mesh1.n_nodes
+        Nel = mesh1.n_elements
          
-        new_crd = np.r_[Mesh1.nodes , Mesh2.nodes]
-        new_elm = np.r_[Mesh1.elements , Mesh2.elements + Nnd]
+        new_crd = np.r_[mesh1.nodes , mesh2.nodes]
+        new_elm = np.r_[mesh1.elements , mesh2.elements + Nnd]
         
-        new_ndSets = dict(Mesh1.node_sets)
-        for key in Mesh2.node_sets:
-            if key in Mesh1.node_sets:
-                new_ndSets[key] = np.r_[Mesh1.node_sets[key], np.array(Mesh2.node_sets[key]) + Nnd]
+        new_ndSets = dict(mesh1.node_sets)
+        for key in mesh2.node_sets:
+            if key in mesh1.node_sets:
+                new_ndSets[key] = np.r_[mesh1.node_sets[key], np.array(mesh2.node_sets[key]) + Nnd]
             else:
-                new_ndSets[key] = np.array(Mesh2.node_sets[key]) + Nnd                                  
+                new_ndSets[key] = np.array(mesh2.node_sets[key]) + Nnd                                  
         
-        new_elSets = dict(Mesh1.element_sets)
-        for key in Mesh2.element_sets:
-            if key in Mesh1.element_sets:
-                new_elSets[key] = np.r_[Mesh1.element_sets[key], np.array(Mesh2.element_sets[key]) + Nel]
+        new_elSets = dict(mesh1.element_sets)
+        for key in mesh2.element_sets:
+            if key in mesh1.element_sets:
+                new_elSets[key] = np.r_[mesh1.element_sets[key], np.array(mesh2.element_sets[key]) + Nel]
             else:
-                new_elSets[key] = np.array(Mesh2.element_sets[key]) + Nel    
+                new_elSets[key] = np.array(mesh2.element_sets[key]) + Nel    
                    
-        Mesh3 = Mesh(new_crd, new_elm, Mesh1.elm_type, ID = ID)
-        Mesh3.node_sets = new_ndSets
-        Mesh3.element_sets = new_elSets
-        return Mesh3
+        mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, ID = ID)
+        mesh3.node_sets = new_ndSets
+        mesh3.element_sets = new_elSets
+        return mesh3
+    
 
-    def FindCoincidentNodes(self,tol=1e-8):
+    def find_coincident_nodes(self,tol=1e-8):
         """ 
         Find some nodes with the same position considering a tolerance given by the argument tol. 
-        return an array of shape (numberOfCoincidentNodes, 2) where each line is a pair of nodes that are at the same position.
+        return an array of shape (number_coincident_nodes, 2) where each line is a pair of nodes that are at the same position.
         These pairs of nodes can be merged using :
-            meshObject.MergeNodes(meshObject.findCoincidentNodes()) 
+            meshObject.merge_nodes(meshObject.find_coincident_nodes()) 
             
         where meshObject is the Mesh object containing merged coincidentNodes.
         """
@@ -262,14 +185,14 @@ class Mesh(MeshBase):
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident+1]]).T
  
     
-    def MergeNodes(self,IndexCouples):
+    def merge_nodes(self,node_couples):
         """ 
         Merge some nodes 
         The total number and the id of nodes are modified
         """
         n_nodes = self.n_nodes
-        nds_del = IndexCouples[:,1] #list des noeuds a supprimer
-        nds_kept = IndexCouples[:,0] #list des noeuds a conserver
+        nds_del = node_couples[:,1] #list des noeuds a supprimer
+        nds_kept = node_couples[:,0] #list des noeuds a conserver
          
         unique_nodes, ordre = np.unique(nds_del, return_index=True)
         assert len(unique_nodes) == len(nds_del), "A node can't be deleted 2 times"
@@ -279,11 +202,11 @@ class Mesh(MeshBase):
         for nd in range(n_nodes):    
             if j<len(nds_del) and nd==nds_del[ordre[j]]: 
                 #test if some nodes are equal to deleted node among the kept nodes. If required update the kept nodes values
-                indDelNodes = np.where(nds_kept == nds_del[ordre[j]])[0] #index of nodes to kept that are deleted and need to be updated to their new values
-                nds_kept[indDelNodes] = nds_kept[ordre[j]]
+                deleted_nodes = np.where(nds_kept == nds_del[ordre[j]])[0] #index of nodes to kept that are deleted and need to be updated to their new values
+                nds_kept[deleted_nodes] = nds_kept[ordre[j]]
                 j+=1
             else: new_num[nd] = nd-j           
-        new_num[nds_del] = new_num[IndexCouples[:,0]]        
+        new_num[nds_del] = new_num[node_couples[:,0]]        
         list_nd_new = [nd for nd in range(n_nodes) if not(nd in nds_del)]                                     
         self.elements = new_num[self.elements]
         for key in self.node_sets:
@@ -291,7 +214,7 @@ class Mesh(MeshBase):
         self.nodes = self.nodes[list_nd_new]  
     
 
-    def RemoveNodes(self, index_nodes):    
+    def remove_nodes(self, index_nodes):    
         """ 
         Remove some nodes and associated element.
         
@@ -309,9 +232,9 @@ class Mesh(MeshBase):
         #delete element associated with deleted nodes
         deleted_elm = np.where(np.isin(self.elements, nds_del))[0]        
         
-        Mask = np.ones(len(self.elements) , dtype=bool)
-        Mask[deleted_elm] = False
-        self.elements = self.elements[Mask]
+        mask = np.ones(len(self.elements) , dtype=bool)
+        mask[deleted_elm] = False
+        self.elements = self.elements[mask]
         
         self.elements = new_num[self.elements]
 
@@ -320,7 +243,8 @@ class Mesh(MeshBase):
             
         return new_num
     
-    def FindNonUsedNodes(self):  
+    
+    def find_isolated_nodes(self):  
         """ 
         Return the nodes that are not associated with any element. 
 
@@ -331,7 +255,8 @@ class Mesh(MeshBase):
         """
         return np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
     
-    def RemoveNonUsedNodes(self):  
+    
+    def remove_isolated_nodes(self):  
         """ 
         Remove the nodes that are not associated with any element. 
         
@@ -341,8 +266,9 @@ class Mesh(MeshBase):
             the number of removed nodes (int).         
         """
         index_non_used_nodes = np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
-        self.RemoveNodes(index_non_used_nodes)
+        self.remove_nodes(index_non_used_nodes)
         return len(index_non_used_nodes)
+    
         
     def translate(self,disp):
         """
@@ -350,8 +276,9 @@ class Mesh(MeshBase):
         The disp vector should be on the form [u, v, w]
         """
         self.nodes = self.nodes + disp.T        
+        
     
-    def ExtractSetOfElements(self,SetOfElementKey, ID=""):
+    def extract_elements(self,SetOfElementKey, ID=""):
         """
         Return a new mesh from the set of elements defined by SetOfElementKey
         """
@@ -363,60 +290,6 @@ class Mesh(MeshBase):
         subMesh = Mesh(self.nodes, self.elements[ListElm], self.elm_type, self.local_frame, ID=ID)                
         return subMesh    
        
-    #
-    # To be developed later
-    #
-    # def InititalizeLocalFrame(self):
-    #     """
-    #     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
-    #     """
-#        elmRef = self.elm_type(1)        
-#        rep_loc = np.zeros((self.__Nnd,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
-#        for e in self.elements:
-#            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
-#            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e]) 
-#
-#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__Nnd)])
-#        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
-#        self__.localBasis = rep_loc
-
-
-    #
-    # development
-    #
-#     def GetElementLocalFrame(self): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
-#         #initialisation
-#         elmRef = eval(self.elm_type)(1) #only 1 gauss point for returning one local Frame per element
-               
-#         elm = self.elements
-#         crd = self.nodes
-        
-# #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
-#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (Nel, nb_pg, nb of vectors in basis = dim, dim)
-
-
-    # def bounding_box(self, return_center = False):
-    #     """
-    #     Return the cordinate of the left/bottom/behind (Xmin) and the right/top/front (Xmax) corners
-
-    #     Parameters
-    #     ----------
-    #     return_center : bool, optional (default = False)
-    #         if return_center = True, also return the coordinate of the center of the bounding box
-
-    #     Returns
-    #     -------
-    #     - Xmin: numpy array of float containing the coordinates of the left/bottom/behind corner
-    #     - Xmax: numpy array of float containing the coordinates of the right/top/front corner
-    #     - Xcenter (if return_center = True): numpy array of float containing the coordinates of the center
-    #     """
-    #     Xmin = self.nodes.min(axis=0)
-    #     Xmax = self.nodes.max(axis=0)
-    #     if return_center == False: 
-    #         return Xmin, Xmax
-    #     else: 
-    #         return Xmin, Xmax, (Xmin+Xmax)/2
- 
     
     def nearest_node(self, X):
         """
@@ -432,6 +305,7 @@ class Mesh(MeshBase):
         The index of the nearest node to X 
         """
         return np.linalg.norm(self.nodes-X, axis=1).argmin()
+    
         
     def find_nodes(self, selection_criterion, value=0, tol=1e-6):
         """
@@ -541,6 +415,165 @@ class Mesh(MeshBase):
         return BoundingBox(self)
 
 
+    # def GetCoordinateID(self):
+    #     return self.crd_name
+    
+    # def SetCoordinateID(self,ListCoordinateID):        
+    #     self.crd_name = ListCoordinateID
+    
+    
+    #
+    # To be developed later
+    #
+    # def InititalizeLocalFrame(self):
+    #     """
+    #     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
+    #     """
+#        elmRef = self.elm_type(1)        
+#        rep_loc = np.zeros((self.__Nnd,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
+#        for e in self.elements:
+#            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
+#            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e]) 
+#
+#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__Nnd)])
+#        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
+#        self__.localBasis = rep_loc
+
+
+    #
+    # development
+    #
+#     def GetElementLocalFrame(self): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
+#         #initialisation
+#         elmRef = eval(self.elm_type)(1) #only 1 gauss point for returning one local Frame per element
+               
+#         elm = self.elements
+#         crd = self.nodes
+        
+# #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
+#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (Nel, nb_pg, nb of vectors in basis = dim, dim)
+
+
+    # def bounding_box(self, return_center = False):
+    #     """
+    #     Return the cordinate of the left/bottom/behind (Xmin) and the right/top/front (Xmax) corners
+
+    #     Parameters
+    #     ----------
+    #     return_center : bool, optional (default = False)
+    #         if return_center = True, also return the coordinate of the center of the bounding box
+
+    #     Returns
+    #     -------
+    #     - Xmin: numpy array of float containing the coordinates of the left/bottom/behind corner
+    #     - Xmax: numpy array of float containing the coordinates of the right/top/front corner
+    #     - Xcenter (if return_center = True): numpy array of float containing the coordinates of the center
+    #     """
+    #     Xmin = self.nodes.min(axis=0)
+    #     Xmax = self.nodes.max(axis=0)
+    #     if return_center == False: 
+    #         return Xmin, Xmax
+    #     else: 
+    #         return Xmin, Xmax, (Xmin+Xmax)/2
+    
+    
+    # def GetSetOfNodes(self,SetOfId):
+    #     """
+    #     Return the set of nodes whose ID is SetOfId
+        
+    #     Parameters
+    #     ----------
+    #     SetOfId : str
+    #         ID of the set of nodes
+
+    #     Returns
+    #     -------
+    #     list or 1D numpy array containing node indexes
+    #     """
+    #     return self.node_sets[SetOfId]
+        
+    # def GetSetOfElements(self,SetOfId):
+    #     """
+    #     Return the set of elements whose ID is SetOfId
+        
+    #     Parameters
+    #     ----------
+    #     SetOfId : str
+    #         ID of the set of elements
+
+    #     Returns
+    #     -------
+    #     list or 1D numpy array containing element indexes
+    #     """
+    #     return self.element_sets[SetOfId]
+
+    # def RemoveSetOfNodes(self,SetOfId):
+    #     """
+    #     Remove the set of nodes whose ID is SetOfId from the Mesh
+        
+    #     Parameters
+    #     ----------
+    #     SetOfId : str
+    #         ID of the set of nodes
+    #     """
+    #     del self.node_sets[SetOfId]
+        
+    # def RemoveSetOfElements(self,SetOfId):
+    #     """
+    #     Remove the set of elements whose ID is SetOfId from the Mesh
+        
+    #     Parameters
+    #     ----------
+    #     SetOfId : str
+    #         ID of the set of elements
+    #     """
+    #     del self.element_sets[SetOfId]
+
+    # def ListSetOfNodes(self):
+    #     """
+    #     Return a list containing the ID (str) of all set of nodes defined in the Mesh.
+    #     """
+    #     return [key for key in self.node_sets]
+
+    # def ListSetOfElements(self):    
+    #     """
+    #     Return a list containing the ID (str) of all set of elements defined in the Mesh.
+    #     """
+    #     return [key for key in self.element_sets]
+                                
+    # def GetElementShape(self):
+    #     """
+    #     Return the element shape (ie, type of element) of the Mesh. 
+        
+    #     Parameters
+    #     ----------
+    #     SetOfId : str
+    #         ID of the set of nodes
+            
+    #     The element shape if defined as a str according the the list of available element shape.
+    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
+        
+    #     Remark
+    #     ----------
+    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
+    #     """
+    #     return self.elm_type
+    
+    # def SetElementShape(self, value):
+    #     """
+    #     Change the element shape (ie, type of element) of the Mesh.
+        
+        
+    #     The element shape if defined as a str according the the list of available element shape.
+    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
+        
+    #     Remark
+    #     ----------
+    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
+    #     """
+    #     self.elm_type = value
+    
+
 class BoundingBox(list):
     def __init__(self, m):
         if isinstance(m, Mesh):
@@ -610,21 +643,21 @@ class BoundingBox(list):
         """
         return (self[1]-self[0]).prod()    
            
-def GetAll():
-    return Mesh.GetAll()
+def get_all():
+    return Mesh.get_all()
 
-def Stack(Mesh1,Mesh2, ID = ""):
+def stack(mesh1,mesh2, ID = ""):
         """
-        Make the spatial stack of two mesh objects which have the same element shape.        
+        Make the spatial stack of two mesh objects which have the same element shape. 
         This function doesn't merge coindicent Nodes. 
-        For that purpose, use the Mesh methods 'FindCoincidentNodes' and 'MergeNodes'
+        For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
         on the resulting Mesh. 
-        
+                
         Return 
         ---------
-        Mesh object with the spacial stack of Mesh1 and Mesh2
+        Mesh object with is the spacial stack of mesh1 and mesh2
         """
-        return Mesh.Stack(Mesh1,Mesh2,ID)
+        return Mesh.stack(mesh1,mesh2,ID)
 
 if __name__=="__main__":
     import scipy as sp

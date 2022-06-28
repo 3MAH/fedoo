@@ -16,7 +16,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
 
     #Definition of the set of nodes for boundary conditions
     if isinstance(assemb, str):
-        assemb = Assembly.GetAll()[assemb]
+        assemb = Assembly.get_all()[assemb]
     mesh = assemb.GetMesh()
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
@@ -50,10 +50,10 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
     
     C = GetTangentStiffness(pb,meshperio, **kargs)
     if remove_strain:
-       mesh.RemoveNodes(StrainNodes)
+       mesh.remove_nodes(StrainNodes)
        mesh.RemoveSetOfNodes('_StrainNodes')
        
-    del pb.GetAll()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
+    del pb.get_all()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
 
     return C
 
@@ -65,7 +65,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, ProblemID=None, **kargs):
     
     #Definition of the set of nodes for boundary conditions
     if isinstance(mesh, str):
-        mesh = Mesh.GetAll()[mesh]
+        mesh = Mesh.get_all()[mesh]
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
         crd = mesh.nodes[:-2]
@@ -172,7 +172,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     if pb is None: 
         pb = ProblemBase.GetActive()
     elif isinstance(pb, str):
-        pb = ProblemBase.GetAll()[pb]
+        pb = ProblemBase.get_all()[pb]
     mesh = pb.GetMesh()
     
     if '_StrainNodes' in mesh.ListSetOfNodes():
@@ -204,7 +204,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         A.resize(np.array(pb.GetA().shape)+6)
     # StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
     
-    if "_perturbation" not in pb.GetAll():
+    if "_perturbation" not in pb.get_all():
         #initialize perturbation problem 
         pb_post_tt = Problem(0,0,0, mesh, ID = "_perturbation")
         pb_post_tt.SetSolver('cg')
@@ -225,7 +225,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, ID = 'center')
         pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, ID = 'center')
     else: 
-        pb_post_tt = Problem.GetAll()["_perturbation"]
+        pb_post_tt = Problem.get_all()["_perturbation"]
     
     pb_post_tt.SetA(pb.GetA())
     
@@ -273,7 +273,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         C = np.array(DStress).T
                 
     if remove_strain:
-       mesh.RemoveNodes(StrainNodes)
+       mesh.remove_nodes(StrainNodes)
        mesh.RemoveSetOfNodes('_StrainNodes')
         
     return C
@@ -287,7 +287,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
 # MeanStress2 = (1/Volume)* D@Fext_b.ravel()
 
 # #Compute tangent matrix
-# K = Assembly.GetAll()['Assembling'].GetMatrix()    #Get global FE assembly matrix
+# K = Assembly.get_all()['Assembling'].GetMatrix()    #Get global FE assembly matrix
 
 
 # Kbb = K[dof_boundary][:,dof_boundary]

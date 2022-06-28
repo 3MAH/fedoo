@@ -46,7 +46,7 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     else: 
         color = plt.cm.hsv
     
-    if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+    if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
 
     crd = mesh.nodes
     elm = mesh.elements
@@ -114,7 +114,7 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
 def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
     if isinstance(assemb, str):
-        assemb = Assembly.GetAll()[assemb]
+        assemb = Assembly.get_all()[assemb]
     mesh = assemb.GetMesh()
     wf = assemb.GetWeakForm()
 
@@ -156,7 +156,7 @@ def fieldPlot2d(assemb, disp, dataID=None, component=0, data_min=None,data_max=N
 
     #compute tensorstrain and tensorstress
     # TensorStrain = assemb_visu.GetStrainTensor(U, "Nodal", nlgeom = False)       
-    # TensorStress = ConstitutiveLaw.GetAll()[MatID].GetStressFromStrain(TensorStrain)
+    # TensorStress = ConstitutiveLaw.get_all()[MatID].GetStressFromStrain(TensorStrain)
 
     TensorStrain = assemb_visu.GetStrainTensor(U, "GaussPoint", nlgeom = False)       
     TensorStress = wf.GetConstitutiveLaw().GetStressFromStrain(TensorStrain)

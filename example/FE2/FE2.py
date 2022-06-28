@@ -7,11 +7,11 @@ Util.ProblemDimension("2Dplane", 'macro_space')
 Util.ProblemDimension("3D", 'micro_space') 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-mesh_macro = Mesh.HolePlateMesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
+mesh_macro = Mesh.hole_plate_mesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
 	ElementShape = 'quad4', ID ="macro") 
     
-Mesh.ImportFromFile('octet_surf.msh', meshID = "micro")
-mesh_micro = Mesh.GetAll()['micro2']
+Mesh.import_file('octet_surf.msh', meshID = "micro")
+mesh_micro = Mesh.get_all()['micro2']
 
 # Util.meshPlot2d("macro")
 

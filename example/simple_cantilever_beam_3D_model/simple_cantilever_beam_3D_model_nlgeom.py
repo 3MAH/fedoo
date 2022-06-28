@@ -7,11 +7,11 @@ import time
 Util.ProblemDimension("3D")
 
 #Units: N, mm, MPa
-#Mesh.BoxMesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
-Mesh.BoxMesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
+#Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
+Mesh.box_mesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
 
 meshID = "Domain"
-#mesh = Mesh.GetAll()[meshID]
+#mesh = Mesh.get_all()[meshID]
 #crd = mesh.nodes 
 #xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 #mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmin)[0]), "left")
@@ -28,10 +28,10 @@ assemb = Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling")
 Problem.NonLinearStatic("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.GetAll()[meshID].node_sets["left"]
-nodes_right = Mesh.GetAll()[meshID].node_sets["right"]
-nodes_top = Mesh.GetAll()[meshID].node_sets["top"]
-nodes_bottom = Mesh.GetAll()[meshID].node_sets["bottom"]
+nodes_left = Mesh.get_all()[meshID].node_sets["left"]
+nodes_right = Mesh.get_all()[meshID].node_sets["right"]
+nodes_top = Mesh.get_all()[meshID].node_sets["top"]
+nodes_bottom = Mesh.get_all()[meshID].node_sets["bottom"]
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
 Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
@@ -54,8 +54,8 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDisp(),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = assemb.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')
-TensorStress = assemb.ConvertData(ConstitutiveLaw.GetAll()['ElasticLaw'].GetStress(), 'GaussPoint', 'Node')
+TensorStrain = assemb.ConvertData(ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')
+TensorStress = assemb.ConvertData(ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(), 'GaussPoint', 'Node')
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
                                                    

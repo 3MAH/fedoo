@@ -44,7 +44,7 @@ elif computeShear == 1:
     Element.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
     Assembly.Create("WFbeam", "beam", "beam", ID="beam")
 else:  #computeShear = 2
-    Mesh.GetAll()['beam'].AddInternalNodes(1) #adding one internal nodes per element (this node has no geometrical sense)
+    Mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, ID = "WFbeam")
     Assembly.Create("WFbeam", "beam", "beamFCQ", ID="beam")    
 
@@ -63,7 +63,7 @@ Problem.ApplyBoundaryCondition()
 Problem.Solve()
 
 #Post treatment               
-results = Assembly.GetAll()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
+results = Assembly.get_all()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
 
 print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
 print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -76,7 +76,7 @@ print('RX at the free extremity: ' + str(results[nodes_right[0]][0]))
 print('RZ at the free extremity: ' + str(results[nodes_right[0]][2]))
 
 #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-results = Assembly.GetAll()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
+results = Assembly.get_all()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
 IntMoment = results[:,3:]
 IntForce = results[:,0:3]
 
@@ -99,4 +99,4 @@ if computeShear != 0 and k != 0:
 print('Analytical deflection: ', sol)
 print(U[-1])
 
-M=Assembly.GetAll()['beam'].GetMatrix().todense()
+M=Assembly.get_all()['beam'].GetMatrix().todense()

@@ -573,10 +573,10 @@ class ProblemPGD(ProblemBase):
 #
 #
 
-# def GetXbc(): return ProblemPGD.GetAll()["MainProblem"].GetXbc() 
-# def ComputeResidualNorm(err_0=None): return ProblemPGD.GetAll()["MainProblem"].ComputeResidualNorm(err_0)
-# def GetResidual(): return ProblemPGD.GetAll()["MainProblem"].GetResidual()
-# def UpdatePGD(termToChange, ddcalc='all'): return ProblemPGD.GetAll()["MainProblem"].UpdatePGD(termToChange, ddcalc)
-# def UpdateAlpha(): return ProblemPGD.GetAll()["MainProblem"].UpdateAlpha()
-# def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemPGD.GetAll()["MainProblem"].AddNewTerm(numberOfTerm, value, variable)
+# def GetXbc(): return ProblemPGD.get_all()["MainProblem"].GetXbc() 
+# def ComputeResidualNorm(err_0=None): return ProblemPGD.get_all()["MainProblem"].ComputeResidualNorm(err_0)
+# def GetResidual(): return ProblemPGD.get_all()["MainProblem"].GetResidual()
+# def UpdatePGD(termToChange, ddcalc='all'): return ProblemPGD.get_all()["MainProblem"].UpdatePGD(termToChange, ddcalc)
+# def UpdateAlpha(): return ProblemPGD.get_all()["MainProblem"].UpdateAlpha()
+# def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemPGD.get_all()["MainProblem"].AddNewTerm(numberOfTerm, value, variable)
 

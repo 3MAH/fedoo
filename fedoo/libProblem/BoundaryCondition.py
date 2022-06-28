@@ -53,8 +53,8 @@ class UniqueBoundaryCondition() :
         """
         # if ProblemID is None: problem = ProblemBase.GetActive()
         # else: 
-        #     assert ProblemID in ProblemBase.GetAll(), "The problem " + ProblemID + " doesn't exit. Create the Problem before defining boundary conditions."
-        #     problem = ProblemBase.GetAll()['ProblemID']        
+        #     assert ProblemID in ProblemBase.get_all(), "The problem " + ProblemID + " doesn't exit. Create the Problem before defining boundary conditions."
+        #     problem = ProblemBase.get_all()['ProblemID']        
         
         assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
         
@@ -252,7 +252,7 @@ class UniqueBoundaryCondition() :
 #         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
 #         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
         
-#         for e in BoundaryCondition.GetAll(ProblemID):
+#         for e in BoundaryCondition.get_all(ProblemID):
 #             SetOfNodesForBC = meshPGD.node_sets[e.__SetOfID]            
 #             if isinstance(e.__Value, list): e.__Value = np.array(e.__Value)
             
@@ -438,7 +438,7 @@ class UniqueBoundaryCondition() :
     
     
     # def Remove(self, ProblemID = None):
-    #     BoundaryCondition.GetAll(ProblemID).remove(self)
+    #     BoundaryCondition.get_all(ProblemID).remove(self)
     #     del self
         
     

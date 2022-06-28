@@ -25,13 +25,13 @@ if USE_SIMCOON:
     def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, ProblemID = None, nNeighbours = 3, powInter = 1.0):
         
         if ProblemID is None: pb = ProblemBase.GetActive()
-        elif isinstance(ProblemID, str): pb = ProblemBase.GetAll()[ProblemID]
+        elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
         elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
         else: raise NameError('ProblemID not understood')
         
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
-            mesh = MeshBase.GetAll()[mesh]
+            mesh = MeshBase.get_all()[mesh]
     
         if isinstance(VarCD, str):
             VarCD = [pb.space.variable_rank(v) for v in VarCD]
@@ -78,14 +78,14 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
     if ProblemID is None: pb = ProblemBase.GetActive()
-    elif isinstance(ProblemID, str): pb = ProblemBase.GetAll()[ProblemID]
+    elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
     elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
     else: raise NameError('ProblemID not understood')
     
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3
         
-    if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
+    if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
     ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
 
     crd = mesh.nodes
@@ -395,14 +395,14 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
     if ProblemID is None: pb = ProblemBase.GetActive()
-    elif isinstance(ProblemID, str): pb = ProblemBase.GetAll()[ProblemID]
+    elif isinstance(ProblemID, str): pb = ProblemBase.get_all()[ProblemID]
     elif isinstance(ProblemID, ProblemBase): pb = ProblemID #assume ProblemID is a Problem Object
     else: raise NameError('ProblemID not understood')
         
     if dim in ['2D','2d']: dim = 2
     if dim in ['3D','3d']: dim = 3
 
-    if isinstance(mesh, str): mesh = MeshBase.GetAll()[mesh]
+    if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
     ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
 
     crd = mesh.nodes

@@ -40,7 +40,7 @@ if USE_SIMCOON:
     
         #Definition of the set of nodes for boundary conditions
         if isinstance(mesh, str):
-            mesh = Mesh.GetAll()[mesh]
+            mesh = Mesh.get_all()[mesh]
             
         crd = mesh.nodes
         type_el = mesh.elm_type
@@ -52,7 +52,7 @@ if USE_SIMCOON:
         crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2           
         Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
     
-        if '_StrainNodes' in mesh.ListSetOfNodes():
+        if '_StrainNodes' in mesh.node_sets:
             StrainNodes = mesh.node_sets['_StrainNodes']            
         else:
             StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
@@ -153,17 +153,17 @@ if USE_SIMCOON:
                     #--------------- Post-Treatment -----------------------------------------------
                     #Compute the mean stress and strain
                     #Get the stress tensor (PG values)
-                    # TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")
+                    # TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")
     
                     TensorStrain = material.GetStrain()
                     TensorStress = material.GetPKII()
                     
-                    MeanStress = np.array([1/Volume*Assembly.GetAll()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)])
+                    MeanStress = np.array([1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)])
     
                     MeanStrain = np.array([pb.GetDisp('DispX')[-2], pb.GetDisp('DispY')[-2], pb.GetDisp('DispZ')[-2],
                                  pb.GetDisp('DispX')[-1], pb.GetDisp('DispY')[-1], pb.GetDisp('DispZ')[-1]])
                     
-                    Wm_mean = (1/Volume) * Assembly.GetAll()['Assembling'].IntegrateField(material.Wm)
+                    Wm_mean = (1/Volume) * Assembly.get_all()['Assembling'].IntegrateField(material.Wm)
     
                     MeanStress_All.append(MeanStress)
                     MeanStrain_All.append(MeanStrain)

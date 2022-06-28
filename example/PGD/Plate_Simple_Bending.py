@@ -8,12 +8,12 @@ import time
 t0=time.time()
 Util.ProblemDimension("3D")
 
-Mesh.RectangleMesh(50, 50, -50, 50, -50, 50, 'quad4', ID="Midplane")
-Mesh.LineMesh1D(20, 0, 5, 'lin2', ID = "Thickness")
+Mesh.rectangle_mesh(50, 50, -50, 50, -50, 50, 'quad4', ID="Midplane")
+Mesh.line_mesh_1D(20, 0, 5, 'lin2', ID = "Thickness")
 
 #spécifique à la PGD
-Mesh.GetAll()['Midplane'].SetCoordinateID(('X','Y'))
-Mesh.GetAll()['Thickness'].SetCoordinateID(('Z'))
+Mesh.get_all()['Midplane'].SetCoordinateID(('X','Y'))
+Mesh.get_all()['Thickness'].SetCoordinateID(('Z'))
 
 PGD.Mesh.Create("Midplane", "Thickness", ID="Domain")
 
@@ -28,17 +28,17 @@ PGD.Assembly.Launch("Assembling")
 
 #PGD.Assembly.sum à définir
 
-nodes_left   = Mesh.GetAll()["Midplane"].node_sets["left"]
-nodes_right  = Mesh.GetAll()["Midplane"].node_sets["right"]
-nodes_top   = Mesh.GetAll()["Midplane"].node_sets["top"]
+nodes_left   = Mesh.get_all()["Midplane"].node_sets["left"]
+nodes_right  = Mesh.get_all()["Midplane"].node_sets["right"]
+nodes_top   = Mesh.get_all()["Midplane"].node_sets["top"]
 
-#nodes_all1d = Mesh.GetAll()["Thickness"].node_sets["all"]
+#nodes_all1d = Mesh.get_all()["Thickness"].node_sets["all"]
 
 #
 #nodes_face_left = nodes_left * nodes_all1d
 
-Mesh.GetAll()["Domain"].add_node_set([nodes_left ,"all"], ID = "faceLeft")
-Mesh.GetAll()["Domain"].add_node_set([nodes_right,"all"], ID = "faceRight")
+Mesh.get_all()["Domain"].add_node_set([nodes_left ,"all"], ID = "faceLeft")
+Mesh.get_all()["Domain"].add_node_set([nodes_right,"all"], ID = "faceRight")
 
 Problem.Static("Assembling")
 
@@ -66,14 +66,14 @@ for i in range(20):
     
 print('Temps de calcul : ', time.time()-t0)
 
-m = Mesh.GetAll()["Domain"].ExtractFullMesh(ID = 'FullMesh')
+m = Mesh.get_all()["Domain"].ExtractFullMesh(ID = 'FullMesh')
 U = [Problem.GetDoFSolution('DispX')[:,:].reshape(-1), \
      Problem.GetDoFSolution('DispY')[:,:].reshape(-1), \
      Problem.GetDoFSolution('DispZ')[:,:].reshape(-1) ]
 U = np.array(U).T
 
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution('all'), "Nodal")
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStressFromStrain(TensorStrain)
+TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution('all'), "Nodal")
+TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 TensorStrain = Util.listStrainTensor([s[:,:].reshape(-1) for s in TensorStrain])
 TensorStress = Util.listStressTensor([s[:,:].reshape(-1) for s in TensorStress])

@@ -53,7 +53,7 @@ class ProblemBase:
     
     @staticmethod
     def SetActive(ProblemID):
-        ProblemBase.__activeProblem = ProblemBase.GetAll()[ProblemID]
+        ProblemBase.__activeProblem = ProblemBase.get_all()[ProblemID]
     
     @staticmethod
     def GetActive():
@@ -86,7 +86,7 @@ class ProblemBase:
             return res
         
     @staticmethod
-    def GetAll():
+    def get_all():
         return ProblemBase.__dic
        
     ### Functions related to boundary contidions
@@ -272,8 +272,8 @@ class ProblemBase:
 # Functions that call methods of ProblemBase for the current active problem
 # =============================================================================
 
-def GetAll():
-    return ProblemBase.GetAll()
+def get_all():
+    return ProblemBase.get_all()
 def GetActive():
     return ProblemBase.GetActive()
 def SetActive(ProblemID):
@@ -287,7 +287,7 @@ def SetSolver(solver, tol=1e-5, precond=True):
 ## Functions related to boundary contidions
 def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, ID = "No ID", ProblemID = None):
     if ProblemID is None: problem = ProblemBase.GetActive()
-    else: problem = ProblemBase.GetAll()[ProblemID]
+    else: problem = ProblemBase.get_all()[ProblemID]
     problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, ID)
 
 def GetBC(): return ProblemBase.GetActive()._BoundaryConditions    

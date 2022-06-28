@@ -19,12 +19,12 @@ import time
 
 def Create(weakForm, mesh="", elementType="", ID="", **kargs): 
     if isinstance(weakForm, str):
-        weakForm = WeakForm.GetAll()[weakForm]
+        weakForm = WeakForm.get_all()[weakForm]
         
     if hasattr(weakForm, 'list_weakform') and weakForm.assembly_options is None: #WeakFormSum object
         list_weakform = weakForm.list_weakform
         
-        if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+        if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
         if elementType == "": elementType = mesh.elm_type
                 
         #get lists of some non compatible assembly_options items for each weakform in list_weakform
@@ -71,14 +71,14 @@ class Assembly(AssemblyBase):
     def __init__(self,weakForm, mesh="", elementType="", ID="", **kargs):                      
         
         if isinstance(weakForm, str):
-            weakForm = WeakForm.GetAll()[weakForm]
+            weakForm = WeakForm.get_all()[weakForm]
         
         if weakForm.assembly_options is None:
             #should be a non compatible WeakFormSum object
             raise NameError('Some Assembly associated to WeakFormSum object can only be created using the Create function')
 
         if isinstance(mesh, str):
-            mesh = Mesh.GetAll()[mesh]
+            mesh = Mesh.get_all()[mesh]
             
         if isinstance(weakForm, WeakForm):
             self._weakForm = weakForm
@@ -468,7 +468,7 @@ class Assembly(AssemblyBase):
     #        xi_nd = elmRefGeom.xi_nd
             xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, nNd_elm) #function to define
 
-            if 'X' in mesh.GetCoordinateID() and 'Y' in mesh.GetCoordinateID(): #if not in physical space, no change of variable                
+            if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
                 for nameVector in self.space.list_vector():
                     if computeMatrixChangeOfBasis == False:
                         range_nNd_elm = np.arange(nNd_elm) 
@@ -759,7 +759,7 @@ class Assembly(AssemblyBase):
             return data[0]
         
         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-        ListMeshCoordinateIDRank = [self.space.coordinate_rank(crdID) for crdID in mesh.GetCoordinateID() if crdID in self.space.list_coordinate()]
+        ListMeshCoordinateIDRank = [self.space.coordinate_rank(crdID) for crdID in mesh.crd_name if crdID in self.space.list_coordinate()]
         if deriv.x in ListMeshCoordinateIDRank: xx= ListMeshCoordinateIDRank.index(deriv.x)
         else: return data[0] #if the coordinate doesnt exist, return operator without derivation (for PGD)
                          
@@ -983,7 +983,7 @@ class Assembly(AssemblyBase):
     #     S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
     #     """
     #     if isinstance(constitutiveLaw, str):
-    #         constitutiveLaw = ConstitutiveLaw.GetAll()[constitutiveLaw]
+    #         constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
     #     if Type == "Nodal":
     #         return listStressTensor([self.GetNodeResult(e, U) if e!=0 else np.zeros(self.__Mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
@@ -1245,7 +1245,7 @@ def DeleteMemory():
 # def ConvertData(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, nb_pg =None):        
 #     if isinstance(data, Number): return data
     
-#     if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+#     if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
 #     if elmType is None: elmType = mesh.elm_type
 #     if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
     
@@ -1276,7 +1276,7 @@ def DeleteMemory():
 #     else: return data 
 
 def DetermineDataType(data, mesh, nb_pg):               
-        if isinstance(mesh, str): mesh = Mesh.GetAll()[mesh]
+        if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
         if nb_pg is None: nb_pg = GetDefaultNbPG(elmType, mesh)
  
         test = 0

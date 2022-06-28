@@ -10,13 +10,13 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     """
         
     if isinstance(StiffnessAssembling,str):
-        StiffnessAssembling = Assembly.GetAll()[StiffnessAssembling]
+        StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
                 
     if isinstance(MassAssembling,str):
-        MassAssembling = Assembly.GetAll()[MassAssembling]
+        MassAssembling = Assembly.get_all()[MassAssembling]
         
     if isinstance(DampingAssembling,str):
-        DampingAssembling = Assembly.GetAll()[DampingAssembling]
+        DampingAssembling = Assembly.get_all()[DampingAssembling]
 
     if hasattr(StiffnessAssembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
@@ -176,7 +176,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
         
         def UpdateStiffness(self, StiffnessAssembling):
             if isinstance(StiffnessAssembling,str):
-                StiffnessAssembling = Assembly.GetAll()[StiffnessAssembling]
+                StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             self.__StiffMatrix = StiffnessAssembling.GetMatrix()
             self.__UpdateA()
     

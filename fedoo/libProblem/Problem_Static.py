@@ -7,7 +7,7 @@ from fedoo.libProblem.ProblemPGD   import ProblemPGD
 #dynamical inheritance. The class is generated inside a function
 def Static(Assembling, ID = "MainProblem"):
     if isinstance(Assembling,str):
-        Assembling = Assembly.GetAll()[Assembling]
+        Assembling = Assembly.get_all()[Assembling]
                 
     if hasattr(Assembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
@@ -85,7 +85,7 @@ def Static(Assembling, ID = "MainProblem"):
             Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)
             """
             if isinstance(Assembling,str):
-                Assembling = Assembly.GetAll()[Assembling]
+                Assembling = Assembly.get_all()[Assembling]
                 
             self.__Assembly = Assembling
             if update: self.Update()        

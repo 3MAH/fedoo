@@ -74,7 +74,7 @@ class ParametricBeam(WeakForm):
                 self.space.new_coordinate(param)
                 id_mesh = mesh.FindCoordinateID(param)
                 mesh._SetSpecificVariableRank(id_mesh, 'default', 0) #all the variables use the same function for the submeshes related to parametric coordinates                              
-                col = mesh.GetListMesh()[id_mesh].GetCoordinateID().index(param)
+                col = mesh.GetListMesh()[id_mesh].crd_name.index(param)
 
                 if param == 'R':
                     E_S.data[id_mesh][:,0] = E_S.data[id_mesh][:,0] * (mesh.GetListMesh()[id_mesh].nodes[:,col] ** 2 *np.pi)
@@ -123,7 +123,7 @@ class ParametricBeam(WeakForm):
     def GetDifferentialOperator(self, mesh, localFrame=None):
         
         if isinstance(mesh, str):
-            mesh = MeshPGD.GetAll()[mesh]
+            mesh = MeshPGD.get_all()[mesh]
 
         Ke = self.__GetKe(mesh)            
         eps = self.space.op_beam_strain()

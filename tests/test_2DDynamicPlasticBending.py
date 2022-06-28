@@ -24,8 +24,8 @@ rho = 1600e-6
 meshID = "Domain"
 uimp = -0.5
 
-Mesh.RectangleMesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
-mesh = Mesh.GetAll()[meshID]
+Mesh.rectangle_mesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', ID = meshID)
+mesh = Mesh.get_all()[meshID]
 
 crd = mesh.nodes 
 

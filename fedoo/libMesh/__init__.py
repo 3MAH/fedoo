@@ -24,7 +24,7 @@ Mesh manipulation functions
 .. autosummary::
    :toctree: generated/
    
-   GetAll
+   get_all
    Stack
 
 Import/Export Fedoo Mesh object        
@@ -33,9 +33,9 @@ Import/Export Fedoo Mesh object
 .. autosummary::
    :toctree: generated/
 
-   ImportFromFile
-   ImportFromMSH
-   ImportFromVTK
+   import
+   import_msh
+   import_vtk
 
 
 Mesh Creation Functions
@@ -44,13 +44,13 @@ Mesh Creation Functions
 .. autosummary::
    :toctree: generated/
    
-   RectangleMesh 
-   GridMeshCylindric
-   LineMesh1D
-   LineMeshCylindric
-   BoxMesh
-   GridStructuredMesh2D
-   GenerateNodes          
+   rectangle_mesh 
+   grid_mesh_cylindric
+   line_mesh_1D
+   line_mesh_cylindric
+   box_mesh
+   structured_mesh_2D
+   generate_nodes          
 """
 
 # .. automodule:: fedoo.libMesh.MeshImport
