@@ -51,8 +51,26 @@ add_module_names = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinxdoc'
-html_logo = 'fedOOLogos.png'
+html_theme = 'sphinx_rtd_theme'
+# html_theme = 'sphinxdoc'
+html_logo = '_static/fedOOLogos_ss_fond.png'
+
+
+html_theme_options = {
+    # 'canonical_url': 'https://microgen.readthedocs.io/en/latest/',
+    # 'logo_only': False,
+    # 'display_version': True,
+    # 'prev_next_buttons_location': 'bottom',
+    'style_external_links': True,
+    # 'vcs_pageview_mode': '',
+    'style_nav_header_background': '#24445C',
+    # Toc options
+    'collapse_navigation': False,
+    # 'sticky_navigation': True,
+    # 'navigation_depth': 4,
+    # 'includehidden': True,
+    # 'titles_only': False
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

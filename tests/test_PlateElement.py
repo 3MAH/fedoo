@@ -7,7 +7,7 @@ import numpy as np
 # from matplotlib import pylab as plt
 # import os 
 
-Assembly.DeleteMemory()
+Assembly.delete_memory()
 
 Util.ProblemDimension("3D")
 E = 1e5 

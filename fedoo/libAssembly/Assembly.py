@@ -17,12 +17,12 @@ from copy import copy
 import time
 
 
-def Create(weakForm, mesh="", elementType="", name ="", **kargs): 
-    if isinstance(weakForm, str):
-        weakForm = WeakForm.get_all()[weakForm]
+def Create(weakform, mesh="", elementType="", name ="", **kargs): 
+    if isinstance(weakform, str):
+        weakform = WeakForm.get_all()[weakform]
         
-    if hasattr(weakForm, 'list_weakform') and weakForm.assembly_options is None: #WeakFormSum object
-        list_weakform = weakForm.list_weakform
+    if hasattr(weakform, 'list_weakform') and weakform.assembly_options is None: #WeakFormSum object
+        list_weakform = weakform.list_weakform
         
         if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
         if elementType == "": elementType = mesh.elm_type
@@ -36,9 +36,9 @@ def Create(weakForm, mesh="", elementType="", name ="", **kargs):
         if len(list_diff_prop) == 1: #only 1 assembly is required
             #update assembly_options
             prop = list_diff_prop[0]
-            weakForm.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
-            weakForm.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakForm.list_weakform]
-            return Assembly(weakForm, mesh, elementType, name, **kargs)
+            weakform.assembly_options = {'nb_pg': prop[0] , 'assume_sym': prop[1]}
+            weakform.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakform.list_weakform]
+            return Assembly(weakform, mesh, elementType, name, **kargs)
         
         else: #we need to create and sum several assemblies
             list_assembly = []
@@ -54,40 +54,40 @@ def Create(weakForm, mesh="", elementType="", name ="", **kargs):
                     wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
                 list_assembly.append(Assembly(wf, mesh, elementType, "", **kargs))
         
-        # list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakForm.list_weakform]
+        # list_assembly = [Assembly(wf, mesh, elementType, "", **kargs) for wf in weakform.list_weakform]
         kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
         return AssemblySum(list_assembly, name, **kargs)       
     
-    return Assembly(weakForm, mesh, elementType, name, **kargs)
+    return Assembly(weakform, mesh, elementType, name, **kargs)
                
 class Assembly(AssemblyBase):
-    __saveOperator = {} 
-    __saveMatrixChangeOfBasis = {}   
-    __saveMatGaussianQuadrature = {} 
-    __saveNodeToPGMatrix = {}
-    __savePGtoNodeMatrix = {}
-    __associatedVariables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
+    _saved_elementary_operator = {} 
+    _saved_change_of_basis_mat = {}   
+    _saved_gaussian_quadrature_mat = {} 
+    _saved_node2gausspoint_mat = {}
+    _saved_gausspoint2node_mat = {}
+    _saved_associated_variables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
            
-    def __init__(self,weakForm, mesh="", elementType="", name ="", **kargs):                      
+    def __init__(self,weakform, mesh="", elementType="", name ="", **kargs):                      
         
-        if isinstance(weakForm, str):
-            weakForm = WeakForm.get_all()[weakForm]
+        if isinstance(weakform, str):
+            weakform = WeakForm.get_all()[weakform]
         
-        if weakForm.assembly_options is None:
+        if weakform.assembly_options is None:
             #should be a non compatible WeakFormSum object
             raise NameError('Some Assembly associated to WeakFormSum object can only be created using the Create function')
 
         if isinstance(mesh, str):
             mesh = Mesh.get_all()[mesh]
             
-        if isinstance(weakForm, WeakForm):
-            self._weakForm = weakForm
-            AssemblyBase.__init__(self, name, weakForm.space)
-        else: #weakForm should be a ModelingSpace object
-            assert hasattr(weakForm, 'list_variable') and hasattr(weakForm, 'list_coordinate'),\
+        if isinstance(weakform, WeakForm):
+            self._weakform = weakform
+            AssemblyBase.__init__(self, name, weakform.space)
+        else: #weakform should be a ModelingSpace object
+            assert hasattr(weakform, 'list_variable') and hasattr(weakform, 'list_coordinate'),\
                 'WeakForm not understood'
-            self._weakForm = None
-            AssemblyBase.__init__(self, name, space = weakForm)
+            self._weakform = None
+            AssemblyBase.__init__(self, name, space = weakform)
         
         #attributes to set assembly related to current (deformed) configuration
         #used for update lagrangian method. 
@@ -101,14 +101,14 @@ class Assembly(AssemblyBase):
 
         self.__nb_pg = kargs.pop('nb_pg', None)
         if self.__nb_pg is None: 
-            self.__nb_pg = weakForm.assembly_options.get('nb_pg', GetDefaultNbPG(elementType, mesh))
+            self.__nb_pg = weakform.assembly_options.get('nb_pg', GetDefaultNbPG(elementType, mesh))
         
-        self.assume_sym = weakForm.assembly_options.get('assume_sym', False)
-        self.mat_lumping = weakForm.assembly_options.get('mat_lumping', False)
+        self.assume_sym = weakform.assembly_options.get('assume_sym', False)
+        self.mat_lumping = weakform.assembly_options.get('mat_lumping', False)
         
         self.__saveBlocStructure = None #use to save data about the sparse structure and avoid time consuming recomputation
         self.computeMatrixMethod = 'new' #computeMatrixMethod = 'old' and 'very_old' only used for debug purpose        
-        self.__factorizeOp = True #option for debug purpose (should be set to True for performance)        
+        self.__factorize_op = True #option for debug purpose (should be set to True for performance)        
 
 
     def ComputeGlobalMatrix(self, compute = 'all'):
@@ -129,15 +129,15 @@ class Assembly(AssemblyBase):
         mesh = self.__Mesh        
         
         if self.__MeshChange == True:             
-            if mesh in Assembly.__saveMatrixChangeOfBasis: del Assembly.__saveMatrixChangeOfBasis[mesh]            
+            if mesh in Assembly._saved_change_of_basis_mat: del Assembly._saved_change_of_basis_mat[mesh]            
             self.PreComputeElementaryOperators()
                  
         nvar = self.space.nvar
-        wf = self._weakForm.GetDifferentialOperator(mesh)      
+        wf = self._weakform.GetDifferentialOperator(mesh)      
         
-        MatGaussianQuadrature = self._GetGaussianQuadratureMatrix()        
-        MatrixChangeOfBasis = self.GetMatrixChangeOfBasis()        
-        associatedVariables = self._GetAssociatedVariables() #for element requiring many variable such as beam with disp and rot dof        
+        MatGaussianQuadrature = self._get_gaussian_quadrature_mat()        
+        MatrixChangeOfBasis = self.get_change_of_basis_mat()        
+        associatedVariables = self._get_associated_variables() #for element requiring many variable such as beam with disp and rot dof        
 
         if computeMatrixMethod == 'new': 
             
@@ -152,7 +152,7 @@ class Assembly(AssemblyBase):
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
                 self.__saveBlocStructure = 0 #don't save block structure for finite difference mesh
                     
-                Matvir = self._GetElementaryOp(wf.op_vir[0], nb_pg=0)[0].T #should be identity matrix restricted to nodes used in the finite difference mesh
+                Matvir = self._get_elementary_operator(wf.op_vir[0], nb_pg=0)[0].T #should be identity matrix restricted to nodes used in the finite difference mesh
                 
                 for ii in range(len(wf.op)):
                     if compute == 'matrix' and wf.op[ii] is 1: continue
@@ -176,7 +176,7 @@ class Assembly(AssemblyBase):
                         var = wf.op[ii].u   
                         if isinstance(coef_PG, Number): coef_PG = coef_PG * np.ones_like(MatGaussianQuadrature.data)
                         CoefMatrix = sparse.csr_matrix( (coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
-                        Mat    =  self._GetElementaryOp(wf.op[ii])[0]
+                        Mat    =  self._get_elementary_operator(wf.op[ii])[0]
                         
                         if blocks[var_vir][var] is None: 
                             blocks[var_vir][var] = Matvir @ CoefMatrix @ Mat
@@ -193,7 +193,7 @@ class Assembly(AssemblyBase):
                 
                 sum_coef = False #bool that indicate if operator are the same and can be sum
                 
-                if hasattr(self._weakForm, '_list_mat_lumping'):
+                if hasattr(self._weakform, '_list_mat_lumping'):
                     change_mat_lumping = True  #use different mat_lumping option for each operator                             
                 else:
                     change_mat_lumping = False
@@ -208,13 +208,13 @@ class Assembly(AssemblyBase):
                         continue                
                     
                     if change_mat_lumping:
-                        mat_lumping = self._weakForm._list_mat_lumping[sorted_indices[ii]]                        
+                        mat_lumping = self._weakform._list_mat_lumping[sorted_indices[ii]]                        
                     
                     if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
                         #if nb_pg == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii] 
                     else:
-                        coef_PG = self._ConvertToGaussPoints(wf.coef[ii][:])                                                 
+                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                                                 
                     
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     if sum_coef: #if same operator as previous with different coef, add the two coef
@@ -223,21 +223,21 @@ class Assembly(AssemblyBase):
                     else: coef_PG_sum = coef_PG   
                     
                     if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue
-                        if not(change_mat_lumping) or mat_lumping == self._weakForm._list_mat_lumping[sorted_indices[ii+1]]: 
+                        if not(change_mat_lumping) or mat_lumping == self._weakform._list_mat_lumping[sorted_indices[ii+1]]: 
                             sum_coef = True
                             continue
                                     
                     coef_PG = coef_PG_sum * MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
-    #                Matvir = (RowBlocMatrix(self._GetElementaryOp(wf.op_vir[ii]), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
+    #                Matvir = (RowBlocMatrix(self._get_elementary_operator(wf.op_vir[ii]), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
                     #check how it appens with change of variable and rotation dof
                     
-                    Matvir = self._GetElementaryOp(wf.op_vir[ii])
+                    Matvir = self._get_elementary_operator(wf.op_vir[ii])
                     
                     if listMatvir is not None: #factorization of real operator (sum of virtual operators)
                         listMatvir = [listMatvir[j]+[Matvir[j]] for j in range(len(Matvir))] 
                         listCoef_PG = listCoef_PG + [coef_PG]  
                         
-                    if ii < len(wf.op)-1 and wf.op[ii] != 1 and wf.op[ii+1] != 1 and self.__factorizeOp == True:
+                    if ii < len(wf.op)-1 and wf.op[ii] != 1 and wf.op[ii+1] != 1 and self.__factorize_op == True:
                         #if it possible, factorization of op to increase assembly performance (sum of several op_vir)                        
                         factWithNextOp = [wf.op[ii].u, wf.op[ii].x, wf.op[ii].ordre, wf.op_vir[ii].u] == [wf.op[ii+1].u, wf.op[ii+1].x, wf.op[ii+1].ordre, wf.op_vir[ii+1].u] #True if factorization is possible with next op                                            
                         if factWithNextOp:
@@ -263,8 +263,8 @@ class Assembly(AssemblyBase):
                             var.extend(associatedVariables[var[0]][0])
                             coef.extend(associatedVariables[var[0]][1])                                             
     
-    #                    Mat    =  RowBlocMatrix(self._GetElementaryOp(wf.op[ii]), nvar, var, coef)         * MatrixChangeOfBasis             
-                        Mat    =  self._GetElementaryOp(wf.op[ii])
+    #                    Mat    =  RowBlocMatrix(self._get_elementary_operator(wf.op[ii]), nvar, var, coef)         * MatrixChangeOfBasis             
+                        Mat    =  self._get_elementary_operator(wf.op[ii])
         
                         #Possibility to increase performance for multivariable case 
                         #the structure should be the same for derivative dof, so the blocs could be computed altogether
@@ -295,9 +295,9 @@ class Assembly(AssemblyBase):
         
             intRef = wf.sort() #intRef = list of integer for compareason (same int = same operator with different coef)            
             
-            if (mesh, self.__elmType, nb_pg) not in Assembly.__saveOperator:
-                Assembly.__saveOperator[(mesh, self.__elmType, nb_pg)] = {}
-            saveOperator = Assembly.__saveOperator[(mesh, self.__elmType, nb_pg)]
+            if (mesh, self.__elmType, nb_pg) not in Assembly._saved_elementary_operator:
+                Assembly._saved_elementary_operator[(mesh, self.__elmType, nb_pg)] = {}
+            saveOperator = Assembly._saved_elementary_operator[(mesh, self.__elmType, nb_pg)]
             
             #list_elementType contains the id of the element associated with every variable
             #list_elementType could be stored to avoid reevaluation 
@@ -329,7 +329,7 @@ class Assembly(AssemblyBase):
                 if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
                     coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
                 else:
-                    coef_PG = self._ConvertToGaussPoints(wf.coef[ii][:])                                                 
+                    coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                                                 
                 
                 if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     coef_PG_sum += coef_PG
@@ -348,7 +348,7 @@ class Assembly(AssemblyBase):
                                                  
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                                             
-                    Matvir = self._GetElementaryOp(wf.op_vir[ii])         
+                    Matvir = self._get_elementary_operator(wf.op_vir[ii])         
                     if VV is 0: VV = np.zeros((self.__Mesh.n_nodes * nvar))
                     for i in range(len(Matvir)):
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
@@ -365,8 +365,8 @@ class Assembly(AssemblyBase):
                     else: 
                         MatvirT_Mat = None
                         saveOperator[tuplename] = [[None for i in range(len(var))] for j in range(len(var_vir))]
-                        Matvir = self._GetElementaryOp(wf.op_vir[ii])         
-                        Mat = self._GetElementaryOp(wf.op[ii])
+                        Matvir = self._get_elementary_operator(wf.op_vir[ii])         
+                        Mat = self._get_elementary_operator(wf.op[ii])
 
                     for i in range(len(var)):
                         for j in range(len(var_vir)):
@@ -403,13 +403,13 @@ class Assembly(AssemblyBase):
                     var_vir.extend(associatedVariables[var_vir[0]][0])
                     coef_vir.extend(associatedVariables[var_vir[0]][1])     
                      
-                Matvir = (RowBlocMatrix(self._GetElementaryOp(wf.op_vir[ii]), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
+                Matvir = (RowBlocMatrix(self._get_elementary_operator(wf.op_vir[ii]), nvar, var_vir, coef_vir) * MatrixChangeOfBasis).T
     
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                     if isinstance(wf.coef[ii], Number): 
                         VV = VV - wf.coef[ii]*Matvir * MatGaussianQuadrature.data
                     else:
-                        coef_PG = self._ConvertToGaussPoints(wf.coef[ii][:])*MatGaussianQuadrature.data                             
+                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])*MatGaussianQuadrature.data                             
                         VV = VV - Matvir * (coef_PG)
                         
                 else: #virtual and real operators -> compute a matrix
@@ -418,12 +418,12 @@ class Assembly(AssemblyBase):
                         var.extend(associatedVariables[var[0]][0])
                         coef.extend(associatedVariables[var[0]][1])     
                                     
-                    Mat    =  RowBlocMatrix(self._GetElementaryOp(wf.op[ii]), nvar, var, coef)         * MatrixChangeOfBasis             
+                    Mat    =  RowBlocMatrix(self._get_elementary_operator(wf.op[ii]), nvar, var, coef)         * MatrixChangeOfBasis             
     
                     if isinstance(wf.coef[ii], Number): #and self.op_vir[ii] != 1: 
                         MM = MM + wf.coef[ii]*Matvir * MatGaussianQuadrature * Mat  
                     else:
-                        coef_PG = self._ConvertToGaussPoints(wf.coef[ii][:])                    
+                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                    
                         CoefMatrix = sparse.csr_matrix( (MatGaussianQuadrature.data*coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
                         MM = MM + Matvir * CoefMatrix * Mat                
 
@@ -441,16 +441,16 @@ class Assembly(AssemblyBase):
         return self.__Mesh
     
     def GetWeakForm(self):
-        return self._weakForm
+        return self._weakform
            
     def GetNumberOfGaussPoints(self):
         return self.__nb_pg
     
-    def GetMatrixChangeOfBasis(self):
+    def get_change_of_basis_mat(self):
         if self.__TypeOfCoordinateSystem == 'global': return 1
         
         mesh = self.__Mesh
-        if mesh not in Assembly.__saveMatrixChangeOfBasis:        
+        if mesh not in Assembly._saved_change_of_basis_mat:        
             ### change of basis treatment for beam or plate elements
             ### Compute the change of basis matrix for vector defined in self.space.list_vector()
             MatrixChangeOfBasis = 1
@@ -508,10 +508,10 @@ class Assembly(AssemblyBase):
                     
                     MatrixChangeOfBasis = MatrixChangeOfBasis.tocsr()                     
             
-            Assembly.__saveMatrixChangeOfBasis[mesh] = MatrixChangeOfBasis   
+            Assembly._saved_change_of_basis_mat[mesh] = MatrixChangeOfBasis   
             return MatrixChangeOfBasis
 
-        return Assembly.__saveMatrixChangeOfBasis[mesh]
+        return Assembly._saved_change_of_basis_mat[mesh]
 
 
     # def InitializeConstitutiveLaw(self, assembly, pb, initialTime=0.):
@@ -532,15 +532,15 @@ class Assembly(AssemblyBase):
         Parameters: 
             - initialTime: the initial time        
         """        
-        if self._weakForm.GetConstitutiveLaw() is not None:
-            if hasattr(self._weakForm,'nlgeom'): nlgeom = self._weakForm.nlgeom
+        if self._weakform.GetConstitutiveLaw() is not None:
+            if hasattr(self._weakform,'nlgeom'): nlgeom = self._weakform.nlgeom
             else: nlgeom=False
-            self._weakForm.GetConstitutiveLaw().Initialize(self, pb, initialTime, nlgeom)
+            self._weakform.GetConstitutiveLaw().Initialize(self, pb, initialTime, nlgeom)
         
-        self._weakForm.Initialize(self, pb, initialTime)
+        self._weakform.Initialize(self, pb, initialTime)
                 
     def InitTimeIncrement(self, pb, dtime):
-        self._weakForm.InitTimeIncrement(self, pb, dtime)
+        self._weakform.InitTimeIncrement(self, pb, dtime)
         self.ComputeGlobalMatrix() 
         #no need to compute vector if the previous iteration has converged and (dtime hasn't changed or dtime isn't used in the weakform)
         #in those cases, self.ComputeGlobalMatrix(compute = 'matrix') should be more efficient
@@ -552,9 +552,9 @@ class Assembly(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        if self._weakForm.GetConstitutiveLaw() is not None:
-            self._weakForm.GetConstitutiveLaw().Update(self, pb, dtime)
-        self._weakForm.Update(self, pb, dtime)
+        if self._weakform.GetConstitutiveLaw() is not None:
+            self._weakform.GetConstitutiveLaw().Update(self, pb, dtime)
+        self._weakform.Update(self, pb, dtime)
         self.current.ComputeGlobalMatrix(compute)
 
     def ResetTimeIncrement(self):
@@ -562,9 +562,9 @@ class Assembly(AssemblyBase):
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        if self._weakForm.GetConstitutiveLaw() is not None:
-            self._weakForm.GetConstitutiveLaw().ResetTimeIncrement()
-        self._weakForm.ResetTimeIncrement()
+        if self._weakform.GetConstitutiveLaw() is not None:
+            self._weakform.GetConstitutiveLaw().ResetTimeIncrement()
+        self._weakform.ResetTimeIncrement()
         # self.ComputeGlobalMatrix(compute='all')
 
     def NewTimeIncrement(self):
@@ -573,9 +573,9 @@ class Assembly(AssemblyBase):
         Generally used to increase non reversible internal variable
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        if self._weakForm.GetConstitutiveLaw() is not None:
-            self._weakForm.GetConstitutiveLaw().NewTimeIncrement()
-        self._weakForm.NewTimeIncrement() #should update GetH() method to return elastic rigidity matrix for prediction        
+        if self._weakform.GetConstitutiveLaw() is not None:
+            self._weakform.GetConstitutiveLaw().NewTimeIncrement()
+        self._weakform.NewTimeIncrement() #should update GetH() method to return elastic rigidity matrix for prediction        
         # self.ComputeGlobalMatrix(compute='matrix')
  
     def Reset(self):
@@ -584,13 +584,13 @@ class Assembly(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         and stored global matrix and vector are deleted
         """
-        if self._weakForm.GetConstitutiveLaw() is not None:
-            self._weakForm.GetConstitutiveLaw().Reset()
-        self._weakForm.Reset()    
+        if self._weakform.GetConstitutiveLaw() is not None:
+            self._weakform.GetConstitutiveLaw().Reset()
+        self._weakform.Reset()    
         self.deleteGlobalMatrix()
 
     @staticmethod
-    def DeleteMemory():
+    def delete_memory():
         """
         Static method of the Assembly class. 
         Erase all the static variables of the Assembly object. 
@@ -604,12 +604,12 @@ class Assembly(AssemblyBase):
         Remark : it the MeshChange argument is set to True when creating the Assembly object, the
         memory will be recomputed by default, which may cause a decrease in assembling performances
         """
-        Assembly.__saveOperator = {} 
-        Assembly.__saveMatrixChangeOfBasis = {}   
-        Assembly.__saveMatGaussianQuadrature = {} 
-        Assembly.__saveNodeToPGMatrix = {}
-        Assembly.__savePGtoNodeMatrix = {}
-        Assembly.__associatedVariables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
+        Assembly._saved_elementary_operator = {} 
+        Assembly._saved_change_of_basis_mat = {}   
+        Assembly._saved_gaussian_quadrature_mat = {} 
+        Assembly._saved_node2gausspoint_mat = {}
+        Assembly._saved_gausspoint2node_mat = {}
+        Assembly._saved_associated_variables = {} #dict containing all associated variables (rotational dof for C1 elements) for elementType
         
         
     def PreComputeElementaryOperators(self,nb_pg = None): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
@@ -634,11 +634,11 @@ class Assembly(AssemblyBase):
             # we compute the operators directly from the element library
             elmRef = eval(elementType)(NumberOfGaussPoint)
             OP = elmRef.computeOperator(crd,elm)
-            Assembly.__saveMatGaussianQuadrature[(mesh,NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
-            Assembly.__savePGtoNodeMatrix[(mesh, NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
-            Assembly.__saveNodeToPGMatrix[(mesh, NumberOfGaussPoint)] = 1                                    
-            Assembly.__saveMatrixChangeOfBasis[mesh] = 1 # No change of basis:  MatrixChangeOfBasis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
-            Assembly.__saveOperator[(mesh,elementType,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
+            Assembly._saved_gaussian_quadrature_mat[(mesh,NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
+            Assembly._saved_gausspoint2node_mat[(mesh, NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
+            Assembly._saved_node2gausspoint_mat[(mesh, NumberOfGaussPoint)] = 1                                    
+            Assembly._saved_change_of_basis_mat[mesh] = 1 # No change of basis:  MatrixChangeOfBasis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
+            Assembly._saved_elementary_operator[(mesh,elementType,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
             return                                
 
         #-------------------------------------------------------------------
@@ -658,13 +658,13 @@ class Assembly(AssemblyBase):
         # Compute the diag matrix used for the gaussian quadrature
         #-------------------------------------------------------------------  
         gaussianQuadrature = (elmRefGeom.detJ * elmRefGeom.w_pg).T.reshape(-1) 
-        Assembly.__saveMatGaussianQuadrature[(mesh,NumberOfGaussPoint)] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
+        Assembly._saved_gaussian_quadrature_mat[(mesh,NumberOfGaussPoint)] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
 
         #-------------------------------------------------------------------
         # Compute the array containing row and col indices used to assemble the sparse matrices
         #-------------------------------------------------------------------          
         range_nbPG = np.arange(NumberOfGaussPoint)                 
-        if self.GetMatrixChangeOfBasis() is 1: ChangeOfBasis = False
+        if self.get_change_of_basis_mat() is 1: ChangeOfBasis = False
         else: 
             ChangeOfBasis = True
             range_nNd_elm = np.arange(nNd_elm)
@@ -688,14 +688,14 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------                                
         PGtoNode = np.linalg.pinv(elmRefGeom.ShapeFunctionPG) #pseudo-inverse of NodeToPG
         dataPGtoNode = PGtoNode.T.reshape((1,NumberOfGaussPoint,nNd_elm_geom))/nb_elm_nd[elm_geom].reshape((Nel,1,nNd_elm_geom)) #shape = (Nel, NumberOfGaussPoint, nNd_elm)   
-        Assembly.__savePGtoNodeMatrix[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(Nnd,Nel*NumberOfGaussPoint) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
+        Assembly._saved_gausspoint2node_mat[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(Nnd,Nel*NumberOfGaussPoint) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
 
         #-------------------------------------------------------------------
         # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)    
         #-------------------------------------------------------------------             
         dataNodeToPG = np.empty((Nel, NumberOfGaussPoint, nNd_elm_geom))
         dataNodeToPG[:] = elmRefGeom.ShapeFunctionPG.reshape((1,NumberOfGaussPoint,nNd_elm_geom)) 
-        Assembly.__saveNodeToPGMatrix[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(Nel*NumberOfGaussPoint, Nnd) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
+        Assembly._saved_node2gausspoint_mat[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(Nel*NumberOfGaussPoint, Nnd) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
 
         #-------------------------------------------------------------------
         # Build the list of elementType to assemble (some beam element required several elementType in function of the variable)
@@ -729,12 +729,12 @@ class Assembly(AssemblyBase):
             op_dd = [ [sparse.coo_matrix((data[i][j].reshape(-1),(row,col)), shape=(Nel*NumberOfGaussPoint , Ncol) ).tocsr() for j in range(NbDoFperNode) ] for i in range(nop)]        
                 
             data = {0: op_dd[0]} #data is a dictionnary
-            for i in range(nb_dir_deriv): 
-                data[1, i] = op_dd[i+1]
+            for i in range(nb_dir_deriv):  
+                data[1, i] = op_dd[i+1] #as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
-            Assembly.__saveOperator[(mesh,elementType,NumberOfGaussPoint)] = data   
+            Assembly._saved_elementary_operator[(mesh,elementType,NumberOfGaussPoint)] = data   
     
-    def _GetElementaryOp(self, deriv, nb_pg=None): 
+    def _get_elementary_operator(self, deriv, nb_pg=None): 
         #Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
         #The list contains several element if the elementType include several variable (dof variable in beam element). In other case, the list contains only one matrix
         #The variables are not considered. For a global use, the resulting matrix should be assembled in a block matrix with the nodes values for all variables
@@ -749,10 +749,10 @@ class Assembly(AssemblyBase):
             if elementType is None: elementType = elementDict.get('__default')
             elementType = elementType[0]
             
-        if not((mesh,elementType,nb_pg) in Assembly.__saveOperator):
+        if not((mesh,elementType,nb_pg) in Assembly._saved_elementary_operator):
             self.PreComputeElementaryOperators(nb_pg)
         
-        data = Assembly.__saveOperator[(mesh,elementType,nb_pg)]
+        data = Assembly._saved_elementary_operator[(mesh,elementType,nb_pg)]
 
         if deriv.ordre == 0 and 0 in data:
             return data[0]
@@ -767,24 +767,24 @@ class Assembly(AssemblyBase):
         else: assert 0, "Operator unavailable"      
               
 
-    def _GetGaussianQuadratureMatrix(self): #calcul la discrétision relative à un seul opérateur dérivé   
+    def _get_gaussian_quadrature_mat(self): #calcul la discrétision relative à un seul opérateur dérivé   
         mesh = self.__Mesh
         nb_pg = self.__nb_pg
-        if not((mesh,nb_pg) in Assembly.__saveMatGaussianQuadrature):
+        if not((mesh,nb_pg) in Assembly._saved_gaussian_quadrature_mat):
             self.PreComputeElementaryOperators()
-        return Assembly.__saveMatGaussianQuadrature[(mesh,nb_pg)]
+        return Assembly._saved_gaussian_quadrature_mat[(mesh,nb_pg)]
 
-    def _GetAssociatedVariables(self): #associated variables (rotational dof for C1 elements) of elementType        
+    def _get_associated_variables(self): #associated variables (rotational dof for C1 elements) of elementType        
         elementType = self.__elmType
-        if elementType not in Assembly.__associatedVariables:
+        if elementType not in Assembly._saved_associated_variables:
             objElement = eval(elementType)
             if isinstance(objElement, dict):            
-                Assembly.__associatedVariables[elementType] = {self.space.variable_rank(key): 
+                Assembly._saved_associated_variables[elementType] = {self.space.variable_rank(key): 
                                        [[self.space.variable_rank(v) for v in val[1][1::2]],
                                         val[1][0::2]] for key,val in objElement.items() if len(val)>1 and key in self.space.list_variable()} 
                     # val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variable() and len(val)>1}
-            else: Assembly.__associatedVariables[elementType] = {}
-        return Assembly.__associatedVariables[elementType] 
+            else: Assembly._saved_associated_variables[elementType] = {}
+        return Assembly._saved_associated_variables[elementType] 
 
     def _GetTypeOfCoordinateSystem(self): 
         #determine the type of coordinate system used for vector of variables (displacement for instance). This type may be specified in element (under dict form only)        
@@ -795,20 +795,20 @@ class Assembly(AssemblyBase):
         else: 
             return 'global'
     
-    def _GetGaussianPointToNodeMatrix(self, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
+    def _get_gausspoint2node_mat(self, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
         if nb_pg is None: nb_pg = self.__nb_pg     
-        if not((self.__Mesh,nb_pg) in Assembly.__savePGtoNodeMatrix):
+        if not((self.__Mesh,nb_pg) in Assembly._saved_gausspoint2node_mat):
             self.PreComputeElementaryOperators(nb_pg)        
-        return Assembly.__savePGtoNodeMatrix[(self.__Mesh,nb_pg)]
+        return Assembly._saved_gausspoint2node_mat[(self.__Mesh,nb_pg)]
     
-    def __GetNodeToGaussianPointMatrix(self, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
+    def _get_node2gausspoint_mat(self, nb_pg=None): #calcul la discrétision relative à un seul opérateur dérivé   
         if nb_pg is None: nb_pg = self.__nb_pg     
-        if not((self.__Mesh,nb_pg) in Assembly.__saveNodeToPGMatrix):
+        if not((self.__Mesh,nb_pg) in Assembly._saved_node2gausspoint_mat):
             Assembly.PreComputeElementaryOperators(nb_pg)
         
-        return Assembly.__saveNodeToPGMatrix[(self.__Mesh,nb_pg)]
+        return Assembly._saved_node2gausspoint_mat[(self.__Mesh,nb_pg)]
     
-    def _ConvertToGaussPoints(self, data, nb_pg=None):         
+    def _convert_to_gausspoints(self, data, nb_pg=None):         
         """
         Convert an array of values related to a specific mesh (Nodal values, Element Values or Points of Gauss values) to the gauss points
         mesh: the considered Mesh object
@@ -819,7 +819,7 @@ class Assembly(AssemblyBase):
         dataType = DetermineDataType(data, self.__Mesh, nb_pg)       
 
         if dataType == 'Node': 
-            return self.__GetNodeToGaussianPointMatrix(nb_pg) * data
+            return self._get_node2gausspoint_mat(nb_pg) * data
         if dataType == 'Element':
             if len(np.shape(data)) == 1: return np.tile(data.copy(),nb_pg)
             else: return np.tile(data.copy(),[nb_pg,1])            
@@ -873,7 +873,7 @@ class Assembly(AssemblyBase):
         #TODO : can be accelerated by avoiding RowBlocMatrix (need to be checked) -> For each elementary 
         # 1 - at the very begining, compute Uloc = MatrixChangeOfBasis * U 
         # 2 - reshape Uloc to separate each var Uloc = Uloc.reshape(var, -1)
-        # 3 - in the loop : res += coef_PG * (Assembly._GetElementaryOp(mesh, operator.op[ii], elementType, nb_pg) , nvar, var, coef) * Uloc[var]
+        # 3 - in the loop : res += coef_PG * (Assembly._get_elementary_operator(mesh, operator.op[ii], elementType, nb_pg) , nvar, var, coef) * Uloc[var]
         
         res = 0
         nvar = self.space.nvar
@@ -882,8 +882,8 @@ class Assembly(AssemblyBase):
         elementType = self.__elmType
         if nb_pg is None: nb_pg = self.__nb_pg
         
-        MatrixChangeOfBasis = self.GetMatrixChangeOfBasis()
-        associatedVariables = self._GetAssociatedVariables()    
+        MatrixChangeOfBasis = self.get_change_of_basis_mat()
+        associatedVariables = self._get_associated_variables()    
         
         for ii in range(len(operator.op)):
             var = [operator.op[ii].u] ; coef = [1] 
@@ -895,9 +895,9 @@ class Assembly(AssemblyBase):
             assert operator.op_vir[ii]==1, "Operator virtual are only required to build FE operators, but not to get element results"
 
             if isinstance(operator.coef[ii], Number): coef_PG = operator.coef[ii]                 
-            else: coef_PG = Assembly._ConvertToGaussPoints(mesh, operator.coef[ii][:], elementType, nb_pg)
+            else: coef_PG = Assembly._convert_to_gausspoints(mesh, operator.coef[ii][:], elementType, nb_pg)
 
-            res += coef_PG * (RowBlocMatrix(self._GetElementaryOp(operator.op[ii], nb_pg) , nvar, var, coef) * MatrixChangeOfBasis * U)
+            res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], nb_pg) , nvar, var, coef) * MatrixChangeOfBasis * U)
         
         return res
         
@@ -924,7 +924,7 @@ class Assembly(AssemblyBase):
             The vector lenght is the number of nodes in the mesh  
         """
         
-        GaussianPointToNodeMatrix = self._GetGaussianPointToNodeMatrix()
+        GaussianPointToNodeMatrix = self._get_gausspoint2node_mat()
         res = self.GetGaussPointResult(operator, U)
         return GaussianPointToNodeMatrix * res        
                 
@@ -946,14 +946,14 @@ class Assembly(AssemblyBase):
         
         if convertFrom == convertTo: return data       
         if convertFrom == 'Node': 
-            data = self.__GetNodeToGaussianPointMatrix() * data
+            data = self._get_node2gausspoint_mat() * data
         elif convertFrom == 'Element':             
             if len(np.shape(data)) == 1: data = np.tile(data.copy(),nb_pg)
             else: data = np.tile(data.copy(),[nb_pg,1])
             
         # from here data should be defined at 'PG'
         if convertTo == 'Node': 
-            return self._GetGaussianPointToNodeMatrix() * data 
+            return self._get_gausspoint2node_mat() * data 
         elif convertTo == 'Element': 
             return np.sum(np.split(data, nb_pg),axis=0) / nb_pg
         else: return data 
@@ -962,7 +962,7 @@ class Assembly(AssemblyBase):
     def IntegrateField(self, Field, TypeField = 'GaussPoint'):
         assert TypeField in ['Node','GaussPoint','Element'], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"
         Field = self.ConvertData(Field, TypeField, 'GaussPoint')
-        return sum(self._GetGaussianQuadratureMatrix()@Field)
+        return sum(self._get_gaussian_quadrature_mat()@Field)
 
     # def GetStressTensor(self, U, constitutiveLaw, Type="Nodal"):
     #     """
@@ -991,7 +991,7 @@ class Assembly(AssemblyBase):
     #         return listStressTensor([self.GetElementResult(e, U) if e!=0 else np.zeros(self.__Mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "GaussPoint":
-    #         NumberOfGaussPointValues = self.__Mesh.n_elements * self.__nb_pg #Assembly.__saveOperator[(self.__Mesh, self.__elmType, self.__nb_pg)][0].shape[0]
+    #         NumberOfGaussPointValues = self.__Mesh.n_elements * self.__nb_pg #Assembly._saved_elementary_operator[(self.__Mesh, self.__elmType, self.__nb_pg)][0].shape[0]
     #         return listStressTensor([self.GetGaussPointResult(e, U) if e!=0 else np.zeros(NumberOfGaussPointValues) for e in constitutiveLaw.GetStressOperator()])
         
     #     else:
@@ -1029,7 +1029,7 @@ class Assembly(AssemblyBase):
         """        
 
         if nlgeom is None: 
-            if hasattr(self._weakForm, 'nlgeom'): nlgeom = self._weakForm.nlgeom
+            if hasattr(self._weakform, 'nlgeom'): nlgeom = self._weakform.nlgeom
             else: nlgeom = False
             
         GradValues = self.GetGradTensor(U, Type)
@@ -1064,7 +1064,7 @@ class Assembly(AssemblyBase):
             return [ [self.GetElementResult(op, U) if op!=0 else np.zeros(self.__Mesh.n_elements) for op in line_op] for line_op in grad_operator]        
         
         elif Type == "GaussPoint":
-            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.n_elements #Assembly.__saveMatGaussianQuadrature[(self.__Mesh, self.__nb_pg)].shape[0]
+            NumberOfGaussPointValues = self.__nb_pg * self.__Mesh.n_elements #Assembly._saved_gaussian_quadrature_mat[(self.__Mesh, self.__nb_pg)].shape[0]
             return [ [self.GetGaussPointResult(op, U) if op!=0 else np.zeros(NumberOfGaussPointValues) for op in line_op] for line_op in grad_operator]        
         else:
             assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
@@ -1102,8 +1102,8 @@ class Assembly(AssemblyBase):
 #                   if CoordinateSystem == 'global' the result is given in the global coordinate system (default)
 #        """
 #        
-##        operator = self._weakForm.GetDifferentialOperator(self.__Mesh)
-#        operator = self._weakForm.GetGeneralizedStress()
+##        operator = self._weakform.GetDifferentialOperator(self.__Mesh)
+#        operator = self._weakform.GetGeneralizedStress()
 #        res = [self.GetElementResult(operator[i], U) for i in range(5)]
 #        return res
 #        
@@ -1148,14 +1148,14 @@ class Assembly(AssemblyBase):
                    if CoordinateSystem == 'global' the result is given in the global coordinate system (default)
         """
         
-        operator = self._weakForm.GetDifferentialOperator(self.__Mesh)
+        operator = self._weakform.GetDifferentialOperator(self.__Mesh)
         mesh = self.__Mesh
         nvar = self.space.nvar
         dim = self.space.ndim
-        MatrixChangeOfBasis = self.GetMatrixChangeOfBasis()
+        MatrixChangeOfBasis = self.get_change_of_basis_mat()
 
-        MatGaussianQuadrature = self._GetGaussianQuadratureMatrix()
-        associatedVariables = self._GetAssociatedVariables()
+        MatGaussianQuadrature = self._get_gaussian_quadrature_mat()
+        associatedVariables = self._get_associated_variables()
         
         #TODO: use the computeGlobalMatrix() method to compute sum(operator.coef[ii]*Matvir * MatGaussianQuadrature * Mat)
         #add options in computeGlobalMatrix() to (i): dont save the computed matrix, (ii): neglect the ChangeOfBasis Matrix
@@ -1171,8 +1171,8 @@ class Assembly(AssemblyBase):
                 var_vir.extend(associatedVariables[var_vir[0]][0])
                 coef_vir.extend(associatedVariables[var_vir[0]][1])             
 
-            Mat    =  RowBlocMatrix(self._GetElementaryOp(operator.op[ii]), nvar, var, coef)        
-            Matvir =  RowBlocMatrix(self._GetElementaryOp(operator.op_vir[ii]), nvar, var_vir, coef_vir).T 
+            Mat    =  RowBlocMatrix(self._get_elementary_operator(operator.op[ii]), nvar, var, coef)        
+            Matvir =  RowBlocMatrix(self._get_elementary_operator(operator.op_vir[ii]), nvar, var_vir, coef_vir).T 
 
             if isinstance(operator.coef[ii], Number): #and self.op_vir[ii] != 1: 
                 res = res + operator.coef[ii]*Matvir * MatGaussianQuadrature * Mat * MatrixChangeOfBasis * U   
@@ -1229,7 +1229,7 @@ class Assembly(AssemblyBase):
         -------
         The copy of the assembly
         """
-        new_wf = self._weakForm.copy()
+        new_wf = self._weakform.copy()
         
         return Assembly(new_wf, self.__Mesh, self.__elmType, new_id)
     
@@ -1237,8 +1237,8 @@ class Assembly(AssemblyBase):
     def elm_type(self):
         return self.__elmType
     
-def DeleteMemory():
-    Assembly.DeleteMemory()
+def delete_memory():
+    Assembly.delete_memory()
     
 
 # def ConvertData(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, nb_pg =None):        
@@ -1260,7 +1260,7 @@ def DeleteMemory():
     
 #     if convertFrom == convertTo: return data       
 #     if convertFrom == 'Node': 
-#         data = Assembly._Assembly__GetNodeToGaussianPointMatrix(mesh, elmType, nb_pg) * data
+#         data = Assembly._Assembly_get_node2gausspoint_mat(mesh, elmType, nb_pg) * data
 #         convertFrom = 'GaussPoint'
 #     elif convertFrom == 'Element':             
 #         if len(np.shape(data)) == 1: data = np.tile(data.copy(),nb_pg)
@@ -1269,7 +1269,7 @@ def DeleteMemory():
         
 #     # from here convertFrom should be 'PG'
 #     if convertTo == 'Node': 
-#         return Assembly._Assembly_GetGaussianPointToNodeMatrix(mesh, elmType, nb_pg) * data 
+#         return Assembly._Assembly_get_gausspoint2node_mat(mesh, elmType, nb_pg) * data 
 #     elif convertTo == 'Element': 
 #         return np.sum(np.split(data, nb_pg),axis=0) / nb_pg
 #     else: return data 

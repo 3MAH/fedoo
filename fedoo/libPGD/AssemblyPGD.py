@@ -28,7 +28,7 @@ class AssemblyPGD(AssemblyFEM):
                                 
         AssemblyBase.__init__(self, name, weakForm.space)        
 
-        self._weakForm = weakForm
+        self._weakform = weakForm
         self.__Mesh = mesh #should be a MeshPGD object 
         self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.__Mesh
         self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
@@ -49,7 +49,7 @@ class AssemblyPGD(AssemblyFEM):
         mesh = self.__Mesh
         dim = mesh.GetDimension()
 
-        wf = self._weakForm.GetDifferentialOperator(mesh)  
+        wf = self._weakform.GetDifferentialOperator(mesh)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
         
         AA = []  
@@ -71,10 +71,10 @@ class AssemblyPGD(AssemblyFEM):
 
                 elmType= self.__listElementType[dd] 
                 nb_pg = self.__listNumberOfGaussPoints[dd]                
-                MatGaussianQuadrature = self._GetGaussianQuadratureMatrix(dd)   
+                MatGaussianQuadrature = self._get_gaussian_quadrature_mat(dd)   
                 TypeOfCoordinateSystem = self._GetTypeOfCoordinateSystem(dd)
-                MatrixChangeOfBasis = self.__listAssembly[dd].GetMatrixChangeOfBasis()                             
-                associatedVariables = self._GetAssociatedVariables(dd)
+                MatrixChangeOfBasis = self.__listAssembly[dd].get_change_of_basis_mat()                             
+                associatedVariables = self._get_associated_variables(dd)
                 
                 coef_vir = [1]                
                 var_vir = [mesh._GetSpecificVariableRank (dd, wf.op_vir[ii].u)] #list in case there is an angular variable
@@ -93,14 +93,14 @@ class AssemblyPGD(AssemblyFEM):
 
                     
                     
-                Matvir = (RowBlocMatrix(self.__listAssembly[dd]._GetElementaryOp(wf.op_vir[ii]), nvar[dd], var_vir, coef_vir ) * MatrixChangeOfBasis).T               
+                Matvir = (RowBlocMatrix(self.__listAssembly[dd]._get_elementary_operator(wf.op_vir[ii]), nvar[dd], var_vir, coef_vir ) * MatrixChangeOfBasis).T               
 
                 if wf.op[ii] == 1: #only virtual operator -> compute a separated array                                         
                     if isinstance(wf.coef[ii], (Number, np.floating)): #and self.op_vir[ii] != 1: 
                         if dd == 0: BBadd.append( wf.coef[ii]*Matvir * MatGaussianQuadrature.data.reshape(-1,1) )
                         else: BBadd.append( Matvir * MatGaussianQuadrature.data.reshape(-1,1) )                        
                     elif isinstance(wf.coef[ii], SeparatedArray):
-                        coef_PG = self.__listAssembly[dd]._ConvertToGaussPoints(wf.coef[ii].data[dd])                      
+                        coef_PG = self.__listAssembly[dd]._convert_to_gausspoints(wf.coef[ii].data[dd])                      
                         BBadd.append( Matvir * (MatGaussianQuadrature.data.reshape(-1,1) * coef_PG))                                              
                     
                 else: #virtual and real operators -> compute a separated operator 
@@ -120,14 +120,14 @@ class AssemblyPGD(AssemblyFEM):
                     
                     
                     
-                    Mat    =  RowBlocMatrix(self.__listAssembly[dd]._GetElementaryOp(wf.op[ii]), nvar[dd], var, coef)         * MatrixChangeOfBasis 
+                    Mat    =  RowBlocMatrix(self.__listAssembly[dd]._get_elementary_operator(wf.op[ii]), nvar[dd], var, coef)         * MatrixChangeOfBasis 
 
                                                                                                              
                     if isinstance(wf.coef[ii], (Number, np.floating)): #and self.op_vir[ii] != 1: 
                         if dd == 0: AA[-1].append( wf.coef[ii]*Matvir * MatGaussianQuadrature * Mat )
                         else: AA[-1].append( Matvir * MatGaussianQuadrature * Mat )
                     elif isinstance(wf.coef[ii], SeparatedArray):
-                        coef_PG = self.__listAssembly[dd]._ConvertToGaussPoints(wf.coef[ii].data[dd])
+                        coef_PG = self.__listAssembly[dd]._convert_to_gausspoints(wf.coef[ii].data[dd])
                         
                         for kk in range(nb_term_coef):
                             #CoefMatrix is a diag matrix that includes the gaussian quadrature coefficients and the value of wf.coef at gauss points                                
@@ -176,7 +176,7 @@ class AssemblyPGD(AssemblyFEM):
                 self.__listElementType[dd] = listElementType[i]
                 self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
         
-        self.__listAssembly = [AssemblyFEM(self._weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(self.__Mesh.GetListMesh())]
                 
     def SetNumberOfGaussPoints(self, listNumberOfGaussPoints, listSubMesh = None):
@@ -204,16 +204,16 @@ class AssemblyPGD(AssemblyFEM):
                 if isinstance(m, str): m = Mesh.get_all()[m]
                 self.__listNumberOfGaussPoints[self.__Mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
-        self.__listAssembly = [AssemblyFEM(self._weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
 
 
-    def _GetAssociatedVariables(self, idmesh):
-        return self.__listAssembly[idmesh]._GetAssociatedVariables()
+    def _get_associated_variables(self, idmesh):
+        return self.__listAssembly[idmesh]._get_associated_variables()
     
-    def _GetGaussianQuadratureMatrix(self, idmesh):
-        return self.__listAssembly[idmesh]._GetGaussianQuadratureMatrix()
+    def _get_gaussian_quadrature_mat(self, idmesh):
+        return self.__listAssembly[idmesh]._get_gaussian_quadrature_mat()
     
     def _GetTypeOfCoordinateSystem(self, idmesh):
         return self.__listAssembly[idmesh]._GetTypeOfCoordinateSystem()
@@ -284,7 +284,7 @@ class AssemblyPGD(AssemblyFEM):
                 
                                 
                 # if 'X' in subMesh.crd_name: #test if the subMesh is related to the spatial coordinates                
-                associatedVariables = self._GetAssociatedVariables(dd)
+                associatedVariables = self._get_associated_variables(dd)
     
                 if operator.op[ii].u in associatedVariables:                       
                     var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[operator.op[ii].u][0]])                        
@@ -298,11 +298,11 @@ class AssemblyPGD(AssemblyFEM):
                 assert operator.op_vir[ii]==1, "Operator virtual are only required to build FE operators, but not to get element results"
                 
                 if isinstance(coef_PG, list):
-                    coef_PG.append(self.__listAssembly[dd]._ConvertToGaussPoints(operator.coef[ii].data[dd]))
+                    coef_PG.append(self.__listAssembly[dd]._convert_to_gausspoints(operator.coef[ii].data[dd]))
                 
                 TypeOfCoordinateSystem = self._GetTypeOfCoordinateSystem(dd)
-                MatrixChangeOfBasis = self.__listAssembly[dd].GetMatrixChangeOfBasis()                                                           
-                res_add.append(RowBlocMatrix(self.__listAssembly[dd]._GetElementaryOp(operator.op[ii]) , nvar[dd], var, coef) * MatrixChangeOfBasis * U.data[dd])
+                MatrixChangeOfBasis = self.__listAssembly[dd].get_change_of_basis_mat()                                                           
+                res_add.append(RowBlocMatrix(self.__listAssembly[dd]._get_elementary_operator(operator.op[ii]) , nvar[dd], var, coef) * MatrixChangeOfBasis * U.data[dd])
             
             if isinstance(coef_PG, list): coef_PG = SeparatedArray(Coef_PG)
             res = res + coef_PG*SeparatedArray(res_add)
@@ -331,7 +331,7 @@ class AssemblyPGD(AssemblyFEM):
             After that, an arithmetic mean is used to compute a single node value from all adjacent elements.
             The vector lenght is the number of nodes in the mesh  
         """       
-        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._GetGaussianPointToNodeMatrix() for dd in range(len(self.__Mesh.GetListMesh()))]])
+        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._get_gausspoint2node_mat() for dd in range(len(self.__Mesh.GetListMesh()))]])
         res = self.GetGaussPointResult(operator, U)
         return GaussianPointToNodeMatrix * res 
 

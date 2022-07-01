@@ -6,9 +6,9 @@ class WeakForm:
 
     __dic = {}
 
-    def __init__(self, Clname = "", space=None):
-        assert isinstance(Clname, str) , "An name must be a string" 
-        self.__name = Clname
+    def __init__(self, name = "", space=None):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
         if space is None: 
             space = ModelingSpace.GetActive()
         elif isinstance(space, str):
@@ -20,12 +20,8 @@ class WeakForm:
         # * 'nb_pg' - set the default nb_pg
         # * 'mat_lumping' - matrix lumping if set to True
         
-        if Clname != "":WeakForm.__dic[self.__name] = self
+        if name != "":WeakForm.__dic[self.__name] = self
         
-
-    def name(self):
-        return self.__name
-
     def GetNumberOfVariables(self):
         return self.__space.nvar
         # return self.GetDifferentialOperator().nvar()
@@ -69,14 +65,18 @@ class WeakForm:
     def copy(self):
         #function to copy a weakform at the initial state
         raise NotImplementedError()
+      
+    @staticmethod
+    def get_all():
+        return WeakForm.__dic
 
     @property
     def space(self):
         return self.__space
-        
-    @staticmethod
-    def get_all():
-        return WeakForm.__dic
+    
+    @property
+    def name(self):
+        return self.__name
     
 class WeakFormSum(WeakForm):
     

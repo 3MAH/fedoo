@@ -1,7 +1,7 @@
 from fedoo import *
 import numpy as np
  
-Assembly.DeleteMemory()
+Assembly.delete_memory()
 
 #Define the Modeling Space - Here 3D problem 
 Util.ProblemDimension("3D")
