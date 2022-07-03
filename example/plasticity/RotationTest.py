@@ -23,16 +23,16 @@ alpha = 1e-5 #???
 meshname = "Domain"
 uimp = 2
 
-Mesh.box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+Mesh.box_mesh(Nx=5, Ny=5, Nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
 mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
-mat =0
+mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    Material.corate = 0
+    Material.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
     mask = [[3,4,5] for i in range(3)]
     mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
@@ -74,8 +74,8 @@ node_center = mesh.nearest_node([0.5,0.5,0.5])
 
 StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro strain
 
-# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_pg = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_pg = 8)     #uses MeshChange=True when the mesh change during the time
+# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 27)     #uses MeshChange=True when the mesh change during the time
+assemb = Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
@@ -99,7 +99,7 @@ Homogen.DefinePeriodicBoundaryConditionGrad(meshname,
 
 tmax = 1
 
-theta = 2*np.pi
+theta = 2*np.pi-0.01
 grad_u = np.array([[np.cos(theta)-1,-np.sin(theta),0], [np.sin(theta),np.cos(theta)-1,0], [0,0,0]])
 
 Problem.BoundaryCondition('Dirichlet','Disp',0,node_center)
@@ -115,7 +115,7 @@ Problem.BoundaryCondition('Dirichlet','DispZ', grad_u[2,2], [StrainNodes[2]]) #E
 
 # Problem.ApplyBoundaryCondition()
 
-Problem.NLSolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
+Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 # Problem.Solve()
 # Problem.SaveResults()
@@ -232,7 +232,8 @@ slider = pl.add_text_slider_widget(
 
 )
 
-cpos = pl.show(return_cpos = True)
+pl.show()
+# cpos = pl.show(return_cpos = True)
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
 

@@ -62,7 +62,7 @@ else:
 
 #Assembly
 WeakForm.InternalForce(material, name="wf")
-Assembly.Create("wf", mesh, type_el, name="Assembling", nb_pg = 1)
+Assembly.Create("wf", mesh, type_el, name="Assembling", nb_gp = 1)
 
 #Type of problem
 pb = Problem.NonLinearStatic("Assembling")
