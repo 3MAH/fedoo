@@ -72,9 +72,9 @@ class InternalForce(WeakForm):
         DiffOp = sum([0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)])
         
         if initial_stress is not 0:    
-            if self._nlgeom:  
-                DiffOp = DiffOp + sum([0 if self.__NonLinearStrainOperatorVirtual[i] is 0 else \
-                                    self.__NonLinearStrainOperatorVirtual[i] * initial_stress[i] for i in range(6)])
+            # if self._nlgeom:  #this term doesnt seem to improve convergence !
+            #     DiffOp = DiffOp + sum([0 if self.__NonLinearStrainOperatorVirtual[i] is 0 else \
+            #                         self.__NonLinearStrainOperatorVirtual[i] * initial_stress[i] for i in range(6)])
 
             DiffOp = DiffOp + sum([0 if eps[i] is 0 else \
                                     eps[i].virtual * initial_stress[i] for i in range(6)])

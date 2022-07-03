@@ -3,18 +3,18 @@ from scipy import sparse
 from fedoo.libElement.Element import *
 
 class FiniteDifference1D(element):
-    def __init__(self,nb_pg): #Points de gauss pour les éléments de référence 1D entre 0 et 1
-        if nb_pg != 0: #if nb_pg == 0, we take the position of the nodes            
+    def __init__(self,nb_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
+        if nb_gp != 0: #if nb_gp == 0, we take the position of the nodes            
             assert 0, "Number of gauss points for Finite Difference elements should be set to 0"  
-        self.nb_pg = 0
+        self.nb_gp = 0
                           
     def ShapeFunction(xi_pg):
         assert 0, "No Shape Function for Finite Difference Method. Use lin2 or lin3 element instead"
         
 class parameter(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)        
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)        
     
     def computeOperator(self, crd,elm):
         Nnd = np.shape(crd)[0]        
@@ -23,8 +23,8 @@ class parameter(FiniteDifference1D):
 class node(FiniteDifference1D):
     #Element to define a set of nodes
     #No integration and therefore nb_pb should be set to 0
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)        
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)        
     
     def computeOperator(self, crd,elm):
         #elm is a column vector (ie elm.shape = (Nel,1)) that contain the node numbers   
@@ -40,8 +40,8 @@ class node(FiniteDifference1D):
 class forwardFiniteDifference(FiniteDifference1D):
     #Only first order derivative
     #explicit method
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)
         
     def computeOperator(self, crd,elm):
         Nnd = np.shape(crd)[0]
@@ -52,8 +52,8 @@ class forwardFiniteDifference(FiniteDifference1D):
 
 class forwardFiniteDifferenceOrder2(FiniteDifference1D):
     #First order and 2nd order derivative
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)
         
     def computeOperator(self, crd,elm):
         Nnd = np.shape(crd)[0]
@@ -67,8 +67,8 @@ class forwardFiniteDifferenceOrder2(FiniteDifference1D):
 class backwardFiniteDifference(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
     #explicit method
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)
         
     def computeOperator(self, crd,elm):
         Nnd = np.shape(crd)[0]
@@ -80,8 +80,8 @@ class backwardFiniteDifference(FiniteDifference1D):
 class backwardFiniteDifferenceOrder2(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
     #explicit method
-    def __init__(self, nb_pg=0, **kargs):
-        FiniteDifference1D.__init__(self, nb_pg)
+    def __init__(self, nb_gp=0, **kargs):
+        FiniteDifference1D.__init__(self, nb_gp)
         
     def computeOperator(self, crd,elm):
         Nnd = np.shape(crd)[0]

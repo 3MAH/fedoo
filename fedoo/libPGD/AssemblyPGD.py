@@ -34,7 +34,7 @@ class AssemblyPGD(AssemblyFEM):
         self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
         # [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
-        self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
     def ComputeGlobalMatrix(self, compute = 'all'):
@@ -70,7 +70,7 @@ class AssemblyPGD(AssemblyFEM):
             for dd, subMesh in enumerate(mesh.GetListMesh()):
 
                 elmType= self.__listElementType[dd] 
-                nb_pg = self.__listNumberOfGaussPoints[dd]                
+                nb_gp = self.__listNumberOfGaussPoints[dd]                
                 MatGaussianQuadrature = self._get_gaussian_quadrature_mat(dd)   
                 TypeOfCoordinateSystem = self._GetTypeOfCoordinateSystem(dd)
                 MatrixChangeOfBasis = self.__listAssembly[dd].get_change_of_basis_mat()                             
@@ -176,7 +176,7 @@ class AssemblyPGD(AssemblyFEM):
                 self.__listElementType[dd] = listElementType[i]
                 self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
         
-        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(self.__Mesh.GetListMesh())]
                 
     def SetNumberOfGaussPoints(self, listNumberOfGaussPoints, listSubMesh = None):
@@ -204,7 +204,7 @@ class AssemblyPGD(AssemblyFEM):
                 if isinstance(m, str): m = Mesh.get_all()[m]
                 self.__listNumberOfGaussPoints[self.__Mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
-        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_pg = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
 
@@ -268,7 +268,7 @@ class AssemblyPGD(AssemblyFEM):
         """
         
         mesh = self.__Mesh        
-        list_nb_pg = self.__listNumberOfGaussPoints
+        list_nb_gp = self.__listNumberOfGaussPoints
         res = 0
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(mesh.GetDimension())]  
         

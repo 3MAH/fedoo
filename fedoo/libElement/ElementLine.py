@@ -3,10 +3,10 @@ from fedoo.libElement.Element import *
 
 
 class lin2(element1DGeom2,element1D):
-    def __init__(self, nb_pg=2, **kargs):
+    def __init__(self, nb_gp=2, **kargs):
         self.xi_nd = np.c_[[0., 1.]]                     
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne      
     def ShapeFunction(self,xi): 
@@ -22,10 +22,10 @@ class lin2Bubble(lin2):
 
 
 class lin3(element1D):
-    def __init__(self, nb_pg=3, **kargs):
+    def __init__(self, nb_gp=3, **kargs):
         self.xi_nd = np.c_[[0., 1., 0.5]]  
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)
             
     def ShapeFunction(self,xi):       
         return np.c_[2*xi**2-3*xi+1, xi*(2*xi-1), 4*xi*(1-xi)]
@@ -40,10 +40,10 @@ class lin3Bubble(lin3):
 
 #lin4 needs to modify the initial position of nodes for compatibility with other elements
 #class lin4(element1D): 
-#    def __init__(self, nb_pg=4, avec_bulle = 0, **kargs):
+#    def __init__(self, nb_gp=4, avec_bulle = 0, **kargs):
 #        self.xi_nd = np.c_[[-1., 1., -1./3, 1./3]]  
-#        self.nb_pg = nb_pg
-#        element1D.__init__(self, nb_pg)
+#        self.nb_gp = nb_gp
+#        element1D.__init__(self, nb_gp)
 #            
 #    def nn(self,xi):       
 #        return np.c_[-4.5*xi**3+9*xi**2-5.5*xi+1, 4.5*xi**3-4.5*xi**2+xi, 13.5*xi**3-22.5*xi**2+9*xi, -13.5*xi**3+18*xi**2-4.5*xi]
@@ -52,7 +52,7 @@ class lin3Bubble(lin3):
 
 
 # class lin2C1(element1D): #2 nodes with derivatative dof
-#     def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
+#     def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
 #         elmGeom = kargs.get('elmGeom', None)
 #         if elmGeom is not None:
 #             if not(isinstance(elmGeom,lin2)):
@@ -64,8 +64,8 @@ class lin3Bubble(lin3):
 #             self.L = 1
             
 #         self.xi_nd = np.c_[[0., 1.]]               
-#         self.nb_pg = nb_pg
-#         element1D.__init__(self, nb_pg)
+#         self.nb_gp = nb_gp
+#         element1D.__init__(self, nb_gp)
 #         self.ShapeFunctionSecondDerivativePG = self.ShapeFunctionSecondDerivative(self.xi_pg)
             
 #     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne

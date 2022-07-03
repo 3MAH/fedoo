@@ -357,10 +357,10 @@ class ExportData:
 #                   
 #        if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
 #        elif count==0:            
-#            mesh = Maillage_EF(crd, elm, type_elm, bord=[], rep_loc=None, structured_mesh = 0, nb_pg = None, geometricalEntity = GeometricalEntity)     
+#            mesh = Maillage_EF(crd, elm, type_elm, bord=[], rep_loc=None, structured_mesh = 0, nb_gp = None, geometricalEntity = GeometricalEntity)     
 #            count+=1
 #        else:
-#            mesh.addMesh(elm, type_elm, rep_loc=None, structured_mesh = 0, nb_pg = None, geometricalEntity = GeometricalEntity)
+#            mesh.addMesh(elm, type_elm, rep_loc=None, structured_mesh = 0, nb_gp = None, geometricalEntity = GeometricalEntity)
 #            count+=1
 #
 #    res= MeshData(mesh)
@@ -488,10 +488,10 @@ class ExportData:
 #                      #not implemented '13':wed6 - '14':pyr5
 #        if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #ignored
 #        elif count==0:            
-#            mesh = Maillage_EF(crd, elm, type_elm, bord=[], rep_loc=None, structured_mesh = 0, nb_pg = None)     
+#            mesh = Maillage_EF(crd, elm, type_elm, bord=[], rep_loc=None, structured_mesh = 0, nb_gp = None)     
 #            count+=1
 #        else:
-#            mesh.addMesh(elm, type_elm, rep_loc=None, structured_mesh = 0, nb_pg = None)
+#            mesh.addMesh(elm, type_elm, rep_loc=None, structured_mesh = 0, nb_gp = None)
 #            count+=1
 #
 #    res= MeshData(mesh)

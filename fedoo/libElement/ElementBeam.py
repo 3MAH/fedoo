@@ -5,7 +5,7 @@ from fedoo.libElement.Element import *
 #bernoulliBeam
 # --------------------------------------
 class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
             # if not(isinstance(elmGeom,lin2)):
@@ -17,8 +17,8 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
             self.L = 1
             
         self.xi_nd = np.c_[[0., 1.]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne
 
@@ -32,7 +32,7 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
         
    
 class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
             # if not(isinstance(elmGeom,lin2)):
@@ -44,8 +44,8 @@ class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
             self.L = 1
             
         self.xi_nd = np.c_[[0., 1.]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)
 
     def ShapeFunction(self,xi): 
         # [(tetai,tetaj,vi,vj)]
@@ -73,10 +73,10 @@ bernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 
 #Timoshenko FCQ beam 
 # --------------------------------------
 class beamFCQ_lin2(element1DGeom2,element1D):
-    def __init__(self, nb_pg=2, **kargs):
+    def __init__(self, nb_gp=2, **kargs):
         self.xi_nd = np.c_[[0., 1., 0.5]]                     
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne      
     def ShapeFunction(self,xi): 
@@ -86,7 +86,7 @@ class beamFCQ_lin2(element1DGeom2,element1D):
 
 class beamFCQ_rot(element1D): #2 nodes with derivatative dof
         
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         # elmGeom = kargs.get('elmGeom', None)
         # if elmGeom is not None:
             # if not(isinstance(elmGeom,lin2)):
@@ -98,8 +98,8 @@ class beamFCQ_rot(element1D): #2 nodes with derivatative dof
         #     self.L = np.array([1])
                 
         self.xi_nd = np.c_[[0., 1., 0.5]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)        
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -113,7 +113,7 @@ class beamFCQ_rot(element1D): #2 nodes with derivatative dof
         return np.transpose([6*xi-4, 6*xi-2, -8*xi+4], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=3)       
 
 class beamFCQ_disp(element1D): #2 nodes with derivatative dof
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
     #     elmGeom = kargs.get('elmGeom', None)
     #     if elmGeom is not None:
     #     #     if not(isinstance(elmGeom,lin2)):
@@ -125,8 +125,8 @@ class beamFCQ_disp(element1D): #2 nodes with derivatative dof
     #         self.L = np.array([1])
                     
         self.xi_nd = np.c_[[0., 1., 0.5]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)        
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -158,7 +158,7 @@ beamFCQ = {'DispX':['beamFCQ_lin2'],
 class beam_rotZ(element1D): #2 nodes with derivatative dof
     _L2phi = 0 #default value = no shear effect. Use SetProperties_Beam to include shear effect
         
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
             # if not(isinstance(elmGeom,lin2)):
@@ -173,8 +173,8 @@ class beam_rotZ(element1D): #2 nodes with derivatative dof
         self.phi = self._L2phi/self.L**2  
         
         self.xi_nd = np.c_[[0., 1.]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)        
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -194,7 +194,7 @@ class beam_rotZ(element1D): #2 nodes with derivatative dof
 class beam_dispY(element1D): #2 nodes with derivatative dof
     _L2phi = 0
     
-    def __init__(self, nb_pg=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
+    def __init__(self, nb_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
         #     if not(isinstance(elmGeom,lin2)):
@@ -208,8 +208,8 @@ class beam_dispY(element1D): #2 nodes with derivatative dof
         self.phi = self._L2phi/self.L**2  
         
         self.xi_nd = np.c_[[0., 1.]]               
-        self.nb_pg = nb_pg
-        element1D.__init__(self, nb_pg)        
+        self.nb_gp = nb_gp
+        element1D.__init__(self, nb_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
