@@ -99,7 +99,7 @@ Homogen.DefinePeriodicBoundaryConditionGrad(meshname,
 
 tmax = 1
 
-theta = 2*np.pi-0.01
+theta = np.pi/2
 grad_u = np.array([[np.cos(theta)-1,-np.sin(theta),0], [np.sin(theta),np.cos(theta)-1,0], [0,0,0]])
 
 Problem.BoundaryCondition('Dirichlet','Disp',0,node_center)

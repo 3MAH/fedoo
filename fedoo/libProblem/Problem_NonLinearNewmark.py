@@ -119,7 +119,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             if updateWeakForm == True:
                 self.__StiffnessAssembly.Update(self, dtime, compute)  
             else: 
-                self.__StiffnessAssembly.ComputeGlobalMatrix(compute)
+                self.__StiffnessAssembly.assemble_global_mat(compute)
 
         def Reset(self):
             self.__MassAssembly.Reset()
@@ -174,7 +174,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     self.__StiffnessAssembly.NewTimeIncrement()            
             
         #     #udpate the problem
-        #     self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
+        #     self.__StiffnessAssembly.assemble_global_mat(compute = 'matrix')
         #     self.__UpdateA()
 
         #     self.Solve()
@@ -269,7 +269,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
 #                     return 1, subiter, normRes
                 
 #                 #--------------- Solve --------------------------------------------------------        
-#                 self.__StiffnessAssembly.ComputeGlobalMatrix(compute = 'matrix')
+#                 self.__StiffnessAssembly.assemble_global_mat(compute = 'matrix')
 #                 # self.SetA(self.__StiffnessAssembly.GetMatrix())
 #                 self.__UpdateA()
 #                 self.NewtonRaphsonIncr()
@@ -357,7 +357,7 @@ def NonLinearNewmark(StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssem
     if isinstance(DampingAssembly,str):
         DampingAssembly = Assembly.get_all()[DampingAssembly]
 
-    if hasattr(StiffnessAssembly.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(StiffnessAssembly.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
 
     __Newmark = _GenerateClass_NonLinearNewmark(libBase)

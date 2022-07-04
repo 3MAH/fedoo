@@ -32,9 +32,9 @@ class FE2(Mechanical3D):
         
         if isinstance(assemb, list):
             self.__assembly = [Assembly.get_all()[a] if isinstance(a,str) else a for a in assemb]
-            self.__mesh = [a.GetMesh() for a in self.__assembly]
+            self.__mesh = [a.mesh for a in self.__assembly]
         else:
-            self.__mesh = assemb.GetMesh()
+            self.__mesh = assemb.mesh
             self.__assembly = assemb
             
         self.list_problem = None
@@ -105,7 +105,7 @@ class FE2(Mechanical3D):
     def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
         self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
-            nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().n_elements
+            nb_points = assembly.GetNumberOfGaussPoints() * assembly.mesh.n_elements
             
             #Definition of the set of nodes for boundary conditions
             if not(isinstance(self.__mesh, list)):            
@@ -194,7 +194,7 @@ class FE2(Mechanical3D):
         
         self.Lt[id_pb]= GetTangentStiffness(pb.name)
         
-        material = self.list_assembly[id_pb].GetWeakForm().GetConstitutiveLaw()
+        material = self.list_assembly[id_pb].weakform.GetConstitutiveLaw()
         stress_field = material.GetStress()
         self.__stress[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].IntegrateField(stress_field[i]) for i in range(6)])
     

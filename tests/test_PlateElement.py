@@ -47,7 +47,6 @@ else:
     Assembly.Sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'
 
-
 Problem.Static("plate")
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)

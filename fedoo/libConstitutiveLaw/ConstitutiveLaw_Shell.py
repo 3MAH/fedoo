@@ -41,7 +41,7 @@ class ShellBase(ConstitutiveLaw):
             self.__GeneralizedStrain = 0
             self.__GeneralizedStress = 0                        
         else:
-            GeneralizedStrainOp = assembly.GetWeakForm().GetGeneralizedStrainOperator()
+            GeneralizedStrainOp = assembly.weakform.GetGeneralizedStrainOperator()
             GeneralizedStrain = [0 if op is 0 else assembly.GetGaussPointResult(op, U) for op in GeneralizedStrainOp]
        
             H = self.GetShellRigidityMatrix()

@@ -10,17 +10,17 @@ class AssemblyBase:
 
         self.__GlobalMatrix = None
         self.__GlobalVector = None
-        self.__Mesh = None 
+        self.mesh = None 
         
         if name != "": AssemblyBase.__dic[self.__name] = self
         self.__space = space
 
     def GetMatrix(self):
-        if self.__GlobalMatrix is None: self.ComputeGlobalMatrix()        
+        if self.__GlobalMatrix is None: self.assemble_global_mat()        
         return self.__GlobalMatrix
 
     def GetVector(self):
-        if self.__GlobalVector is None: self.ComputeGlobalMatrix()        
+        if self.__GlobalVector is None: self.assemble_global_mat()        
         return self.__GlobalVector
 
     def SetVector(self, V):
@@ -32,7 +32,7 @@ class AssemblyBase:
     def AddMatrix(self, M):
         self.__GlobalMatrix += M
         
-    def computeGlobalMatrix(self):
+    def assemble_global_mat(self):
         #needs to be defined in inherited classes
         pass
 
@@ -58,7 +58,7 @@ class AssemblyBase:
         Assemble the global matrix and global vector of the assembly name
         name is a str
         """
-        AssemblyBase.get_all()[name].ComputeGlobalMatrix()
+        AssemblyBase.get_all()[name].assemble_global_mat()
     
     @property
     def name(self):
@@ -81,40 +81,40 @@ class AssemblySum(AssemblyBase):
     assembly_output: Assembly (optional keyword arg)
         Assembly object used to extract output values (using Problem.GetResults or Problem.SaveResults)
     """
-    def __init__(self, list_assembly, name ="", **kargs):        
+    def __init__(self, list_assembly, name ="", **kargs):      
+        AssemblyBase.__init__(self, name)  
+        
         for i,assembly in enumerate(list_assembly):
             if isinstance(assembly, str): list_assembly[i] = AssemblyBase.get_all()[assembly]                                
             
         assert len(set([a.space for a in list_assembly])) == 1, \
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
-        assert len(set([a.GetMesh().n_nodes for a in list_assembly])) == 1,\
+        assert len(set([a.mesh.n_nodes for a in list_assembly])) == 1,\
             "Sum of assembly are possible only if the two meshes have the same number of Nodes"
 
         self.__list_assembly = list_assembly
         self.__assembly_output = kargs.get('assembly_output', None)
                         
-        self.__Mesh = list_assembly[0].GetMesh()
+        self.mesh = list_assembly[0].mesh
 
         if name == "":
             name = '_'.join([assembly.name for assembly in list_assembly])    
             
         self.__reload = kargs.pop('reload', 'all')                      
-        
-        AssemblyBase.__init__(self, name)                       
 
-    def SetMesh(self, mesh):
-        self.__Mesh = mesh
+    # def SetMesh(self, mesh):
+    #     self.mesh = mesh
 
-    def GetMesh(self):
-        return self.__Mesh
+    # def GetMesh(self):
+    #     return self.mesh
 
-    def ComputeGlobalMatrix(self,compute='all'):
+    def assemble_global_mat(self,compute='all'):
         if self.__reload == 'all': 
             for assembly in self.__list_assembly:
-                assembly.ComputeGlobalMatrix(compute)
+                assembly.assemble_global_mat(compute)
         else:
             for numAssembly in self.__reload:
-                self.__list_assembly[numAssembly].ComputeGlobalMatrix(compute)
+                self.__list_assembly[numAssembly].assemble_global_mat(compute)
             
         if not(compute == 'vector'):         
             self.SetMatrix(sum([assembly.GetMatrix() for assembly in self.__list_assembly]))
@@ -209,4 +209,4 @@ def get_all():
     return AssemblyBase.get_all()
 
 def Launch(name):
-    AssemblyBase.get_all()[name].ComputeGlobalMatrix()    
+    AssemblyBase.get_all()[name].assemble_global_mat()    

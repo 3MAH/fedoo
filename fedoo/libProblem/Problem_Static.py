@@ -9,19 +9,19 @@ def Static(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                 
-    if hasattr(Assembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
     
     class __Static(libBase):
                 
-        def __init__(self, Assembling, name):   
-            Assembling.Initialize(self,0)                         
-            A = Assembling.GetMatrix()
+        def __init__(self, assembling, name):   
+            assembling.Initialize(self,0)                         
+            A = assembling.GetMatrix()
             B = 0             
-            D = Assembling.GetVector()     
+            D = assembling.GetVector()     
             self.__Assembly = Assembling
-            
-            libBase.__init__(self,A,B,D,Assembling.GetMesh(), name)
+                        
+            libBase.__init__(self,A,B,D,assembling.mesh, name)
     
         def GetElasticEnergy(self): #only work for classical FEM
             """

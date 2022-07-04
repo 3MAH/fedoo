@@ -19,7 +19,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
     if isinstance(DampingAssembling,str):
         DampingAssembling = Assembly.get_all()[DampingAssembling]
 
-    if hasattr(StiffnessAssembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(StiffnessAssembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
 
 
@@ -42,7 +42,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             if DampingAssembling == 0: self.__DampMatrix = 0
             else: self.__DampMatrix = DampingAssembling.GetMatrix()
             
-            libBase.__init__(self,A,B,D,StiffnessAssembling.GetMesh(),name)        
+            libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
 
         def __UpdateA(): #internal function to be used when modifying M
             # if MassLumping == True, A is a vector representing the diagonal value

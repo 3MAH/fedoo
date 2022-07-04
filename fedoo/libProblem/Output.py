@@ -75,7 +75,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
             else:
                 assemb = assemb.assembly_output
                 
-        material = assemb.GetWeakForm().GetConstitutiveLaw()
+        material = assemb.weakform.GetConstitutiveLaw()
         
         result = {}
                     
@@ -257,7 +257,7 @@ class _ProblemOutput:
             position = output['position']
             
             assemb = output['assembly']
-            # material = assemb.GetWeakForm().GetConstitutiveLaw()
+            # material = assemb.weakform.GetConstitutiveLaw()
             
             if comp_output is None:
                 filename_compl = ""
@@ -270,7 +270,7 @@ class _ProblemOutput:
                 if not(filename in list_filename): 
                     #if file name don't exist in the list we create it
                     list_filename.append(filename)
-                    if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.GetMesh().name)
+                    if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.mesh.name)
                     else: OUT = {} #empty dictionnary cotaining variable                        
                     list_ExportData.append(OUT)                        
                 else: 

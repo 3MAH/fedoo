@@ -23,7 +23,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__max_subiter = 5
 
             self.__Assembly = Assembling
-            libBase.__init__(self,A,B,D,Assembling.GetMesh(), name, Assembling.space)        
+            libBase.__init__(self,A,B,D,Assembling.mesh, name, Assembling.space)        
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
             self.__compteurOutput = 0
@@ -128,7 +128,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             if updateWeakForm == True:
                 self.__Assembly.Update(self, dtime, compute)
             else: 
-                self.__Assembly.current.ComputeGlobalMatrix(compute)
+                self.__Assembly.current.assemble_global_mat(compute)
 
         def Reset(self):
             self.__Assembly.Reset()
@@ -235,7 +235,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                     return 1, subiter, normRes
                 
                 #--------------- Solve --------------------------------------------------------        
-                # self.__Assembly.current.ComputeGlobalMatrix(compute = 'matrix')
+                # self.__Assembly.current.assemble_global_mat(compute = 'matrix')
                 # self.SetA(self.__Assembly.current.GetMatrix())
                 self.Update(dt, compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
                 self.UpdateA(dt)
@@ -325,7 +325,7 @@ def NonLinearStatic(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                
-    if hasattr(Assembling.GetMesh(), 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem            
 
     __NonLinearStatic = _GenerateClass_NonLinearStatic(libBase) 

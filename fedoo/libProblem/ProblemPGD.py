@@ -19,7 +19,7 @@ class ProblemPGD(ProblemBase):
         ProblemBase.__init__(self, name, space)
         
         nvar = self.space.nvar
-        self.__Mesh = Mesh
+        self.mesh = Mesh
         self.__NumberOfSubspace = Mesh.GetDimension()
         
         listNumberOfNodes = Mesh.n_nodes  #list of number of nodes for all submesh
@@ -176,9 +176,9 @@ class ProblemPGD(ProblemBase):
             return self.__X + self.__Xbc
         
         if self.__Xbc == 0:
-            return self.__X.GetVariable(self.space.variable_rank(name), self.__Mesh)
+            return self.__X.GetVariable(self.space.variable_rank(name), self.mesh)
         else:
-            return self.__X.GetVariable(self.space.variable_rank(name), self.__Mesh) + self.__Xbc.GetVariable(self.space.variable_rank(name), self.__Mesh)
+            return self.__X.GetVariable(self.space.variable_rank(name), self.mesh) + self.__Xbc.GetVariable(self.space.variable_rank(name), self.mesh)
 
     def SetDoFSolution(self,name,value):
         assert isinstance(name,str), 'argument error'
@@ -209,7 +209,7 @@ class ProblemPGD(ProblemBase):
         else: res = self.__B + self.__D - self.__A*(self.__Xbc+self.__X)  
         
         # CL à intégrer???
-        for dd in range(self.__Mesh.GetDimension()): 
+        for dd in range(self.mesh.GetDimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
         return res.norm(nbvar = self.space.nvar)/err_0
 
@@ -219,7 +219,7 @@ class ProblemPGD(ProblemBase):
         else: res = self.__B + self.__D - self.__A*(self.__Xbc+self.__X)  
         
         # CL à intégrer???
-        for dd in range(self.__Mesh.GetDimension()): 
+        for dd in range(self.mesh.GetDimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
         return res
 
@@ -227,7 +227,7 @@ class ProblemPGD(ProblemBase):
     def UpdatePGD(self,termToChange, ddcalc='all'): #extended PGD
         
         if ddcalc == 'all': 
-            for nMesh in range(self.__Mesh.GetDimension()):
+            for nMesh in range(self.mesh.GetDimension()):
                 self.UpdatePGD(termToChange, nMesh)
             return
         
@@ -265,7 +265,7 @@ class ProblemPGD(ProblemBase):
         elif isinstance(value, SeparatedArray): 
             for t in range(numberOfTerm): self.__X += value.getTerm(t%value.nbTerm())
         #for boundary conditions        
-        for dd in range(self.__Mesh.GetDimension()): self.__X.data[dd][self.__DofBlocked[dd]] = 0
+        for dd in range(self.mesh.GetDimension()): self.__X.data[dd][self.__DofBlocked[dd]] = 0
 
 
 #===============================================================================
@@ -276,7 +276,7 @@ class ProblemPGD(ProblemBase):
     # reprendre les conditions aux limites en incluant les méthodes de pénalités pour des conditions aux limites plus exotiques
     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):                  
-        meshPGD = self.__Mesh
+        meshPGD = self.mesh
         shapeX = self.__ProblemDimension
         X = self.__X
         Xbc = 0 #SeparatedZeros(shapeX)

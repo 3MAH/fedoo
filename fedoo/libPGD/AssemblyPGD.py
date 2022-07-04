@@ -28,16 +28,16 @@ class AssemblyPGD(AssemblyFEM):
                                 
         AssemblyBase.__init__(self, name, weakForm.space)        
 
-        self._weakform = weakForm
-        self.__Mesh = mesh #should be a MeshPGD object 
-        self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.__Mesh
-        self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.__Mesh (default value)
-        # [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
+        self.weakform = weakForm
+        self.mesh = mesh #should be a MeshPGD object 
+        self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.mesh
+        self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.mesh (default value)
+        # [GetDefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
         self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
-    def ComputeGlobalMatrix(self, compute = 'all'):
+    def assemble_global_mat(self, compute = 'all'):
         """
         Compute the global matrix and global vector using a separated representation
         if compute = 'all', compute the global matrix and vector
@@ -46,10 +46,10 @@ class AssemblyPGD(AssemblyFEM):
         """
         if compute == 'none': return
         
-        mesh = self.__Mesh
+        mesh = self.mesh
         dim = mesh.GetDimension()
 
-        wf = self._weakform.GetDifferentialOperator(mesh)  
+        wf = self.weakform.GetDifferentialOperator(mesh)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
         
         AA = []  
@@ -144,10 +144,10 @@ class AssemblyPGD(AssemblyFEM):
             self.SetVector(BB)             
                
     def SetMesh(self, mesh):
-        self.__Mesh = mesh
+        self.mesh = mesh
 
     def GetMesh(self):
-        return self.__Mesh
+        return self.mesh
     
     def SetElementType(self, listElementType, listSubMesh = None):
         """
@@ -165,19 +165,19 @@ class AssemblyPGD(AssemblyFEM):
         """ 
         
         if listSubMesh is None:
-            if len(listElementType) != len(self.__Mesh.GetListMesh()):
+            if len(listElementType) != len(self.mesh.GetListMesh()):
                 assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
             self.__listElementType = [ElementType for ElementType in listElementType]
-            self.__listNumberOfGaussPoints = [GetDefaultNbPG(self.__listElementType[dd], self.__Mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.__Mesh (default value)            
+            self.__listNumberOfGaussPoints = [GetDefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.mesh (default value)            
         else:
             for i,m in enumerate(listSubMesh):                
                 if isinstance(m, str): m = MeshFEM.get_all()[m]
-                dd = self.__Mesh.GetListMesh().index(m)
+                dd = self.mesh.GetListMesh().index(m)
                 self.__listElementType[dd] = listElementType[i]
                 self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
         
-        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
-                               for i, m in enumerate(self.__Mesh.GetListMesh())]
+        self.__listAssembly = [AssemblyFEM(self.weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
+                               for i, m in enumerate(self.mesh.GetListMesh())]
                 
     def SetNumberOfGaussPoints(self, listNumberOfGaussPoints, listSubMesh = None):
         """
@@ -196,15 +196,15 @@ class AssemblyPGD(AssemblyFEM):
         """ 
         
         if listSubMesh is None:
-            if len(listNumberOfGaussPoints) != len(self.__Mesh.GetListMesh()):
+            if len(listNumberOfGaussPoints) != len(self.mesh.GetListMesh()):
                 assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
             self.__listNumberOfGaussPoints = listNumberOfGaussPoints
         else:
             for i,m in enumerate(listSubMesh):                
                 if isinstance(m, str): m = Mesh.get_all()[m]
-                self.__listNumberOfGaussPoints[self.__Mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
+                self.__listNumberOfGaussPoints[self.mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
-        self.__listAssembly = [AssemblyFEM(self._weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
+        self.__listAssembly = [AssemblyFEM(self.weakform, m, self.__listElementType[i], nb_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
 
 
@@ -243,7 +243,7 @@ class AssemblyPGD(AssemblyFEM):
             The vector lenght is the number of element in the mesh              
         """
 
-        list_nb_elm = self.__Mesh.n_elements
+        list_nb_elm = self.mesh.n_elements
         res = self.GetGaussPointResult(operator, U)
         NumberOfGaussPoint = [res.data[dd].shape[0]//list_nb_elm[dd] for dd in range(len(res))]
                 
@@ -267,7 +267,7 @@ class AssemblyPGD(AssemblyFEM):
             The vector lenght is the number of element time the number of Gauss points per element
         """
         
-        mesh = self.__Mesh        
+        mesh = self.mesh        
         list_nb_gp = self.__listNumberOfGaussPoints
         res = 0
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(mesh.GetDimension())]  
@@ -331,7 +331,7 @@ class AssemblyPGD(AssemblyFEM):
             After that, an arithmetic mean is used to compute a single node value from all adjacent elements.
             The vector lenght is the number of nodes in the mesh  
         """       
-        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._get_gausspoint2node_mat() for dd in range(len(self.__Mesh.GetListMesh()))]])
+        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._get_gausspoint2node_mat() for dd in range(len(self.mesh.GetListMesh()))]])
         res = self.GetGaussPointResult(operator, U)
         return GaussianPointToNodeMatrix * res 
 
@@ -353,10 +353,10 @@ class AssemblyPGD(AssemblyFEM):
             constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
         if IntegrationType == "Nodal":            
-            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_nodes) for e in constitutiveLaw.GetStress()]
+            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStress()]
         
         elif IntegrationType == "Element":
-            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_elements) for e in constitutiveLaw.GetStress()]
+            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in constitutiveLaw.GetStress()]
         
         else:
             assert 0, "Wrong argument for IntegrationType"
@@ -376,10 +376,10 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_nodes) for e in self.space.op_strain()])
+            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
-            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.__Mesh.n_elements) for e in self.space.op_strain()])
+            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in self.space.op_strain()])
         
         else:
             assert 0, "Wrong argument for IntegrationType"
@@ -403,9 +403,9 @@ class AssemblyPGD(AssemblyFEM):
 
         ExtForce = self.GetMatrix() * U
         if NumberOfVariable is None:
-            return [ExtForce.GetVariable(var, self.__Mesh) for var in range(self.space.nvar)]
+            return [ExtForce.GetVariable(var, self.mesh) for var in range(self.space.nvar)]
         else:
-            return [ExtForce.GetVariable(var, self.__Mesh) for var in range(NumberOfVariable)]    
+            return [ExtForce.GetVariable(var, self.mesh) for var in range(NumberOfVariable)]    
     
     
     @staticmethod        

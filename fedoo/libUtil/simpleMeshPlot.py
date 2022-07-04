@@ -115,8 +115,8 @@ def fieldPlot2d(assemb, disp, dataname =None, component=0, data_min=None,data_ma
 
     if isinstance(assemb, str):
         assemb = Assembly.get_all()[assemb]
-    mesh = assemb.GetMesh()
-    wf = assemb.GetWeakForm()
+    mesh = assemb.mesh
+    wf = assemb.weakform
 
     #type_plot is "real" or "smooth"
     if dataname is None: # no data, just plot mesh

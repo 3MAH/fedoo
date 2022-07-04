@@ -17,7 +17,7 @@ def GetHomogenizedStiffness(assemb,meshperio=True, **kargs):
     #Definition of the set of nodes for boundary conditions
     if isinstance(assemb, str):
         assemb = Assembly.get_all()[assemb]
-    mesh = assemb.GetMesh()
+    mesh = assemb.mesh
 
     if '_StrainNodes' in mesh.ListSetOfNodes():
         crd = mesh.nodes[:-2]
@@ -173,7 +173,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         pb = ProblemBase.GetActive()
     elif isinstance(pb, str):
         pb = ProblemBase.get_all()[pb]
-    mesh = pb.GetMesh()
+    mesh = pb.mesh
     
     if '_StrainNodes' in mesh.ListSetOfNodes():
         crd = mesh.nodes[:-2]

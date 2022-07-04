@@ -325,7 +325,7 @@ def SetA(A): ProblemBase.GetActive().SetA(A)
 def GetA(): return ProblemBase.GetActive().GetA()
 def GetB(): return ProblemBase.GetActive().GetB()
 def GetD(): return ProblemBase.GetActive().GetD()
-def GetMesh(): return ProblemBase.GetActive().GetMesh()
+def GetMesh(): return ProblemBase.GetActive().mesh
 def SetD(D): ProblemBase.GetActive().SetD(D)
 def SetB(B): ProblemBase.GetActive().SetB(B)
 def Solve(**kargs): ProblemBase.GetActive().Solve(**kargs)

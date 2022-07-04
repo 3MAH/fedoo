@@ -160,7 +160,7 @@ if USE_SIMCOON:
                 self._dimension = assembly.space.GetDimension()
                 
             #if the number of material points is not defined (=0) we need to initialize statev
-            nb_points = assembly.GetNumberOfGaussPoints() * assembly.GetMesh().n_elements
+            nb_points = assembly.GetNumberOfGaussPoints() * assembly.mesh.n_elements
             if np.isscalar(self.__statev_initial): 
                 statev = np.zeros((nb_points, int(self.__statev_initial))).T
             else: 

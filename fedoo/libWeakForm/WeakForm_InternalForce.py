@@ -89,17 +89,17 @@ class InternalForce(WeakForm):
         if self._nlgeom == 2:
             # if updated lagragian method -> update the mesh and recompute elementary op
             assembly.set_disp(pb.GetDisp())               
-            # assembly.GetMesh().SetNodeCoordinates(self._crd_ini + pb.GetDisp().T)
-            if assembly.current.GetMesh() in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.GetMesh()]
+            # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.GetDisp().T)
+            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
             assembly.current.PreComputeElementaryOperators()        
                         
     def ResetTimeIncrement(self):    
         if self._nlgeom == 2:
             # if updated lagragian method -> reset the mesh to the begining of the increment
             self._assembly.set_disp(self._pb.GetDisp())               
-            if self._assembly.current.GetMesh() in self._assembly._saved_change_of_basis_mat:
-                del self._assembly._saved_change_of_basis_mat[self._assembly.current.GetMesh()]
+            if self._assembly.current.mesh in self._assembly._saved_change_of_basis_mat:
+                del self._assembly._saved_change_of_basis_mat[self._assembly.current.mesh]
             self._assembly.current.PreComputeElementaryOperators()            
 
     def GetConstitutiveLaw(self):
