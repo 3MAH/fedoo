@@ -148,17 +148,17 @@ def fieldPlot2d(assemb, disp, dataname =None, component=0, data_min=None,data_ma
         
         #reload the assembly with the new mesh
         assemb_visu = Assembly(wf, 'visu', type_el, name ="visu", MeshChange = True) 
-        assemb_visu.PreComputeElementaryOperators()
+        assemb_visu.compute_elementary_operators()
     else: 
         raise NameError("type_plot should be either 'real' or 'smooth'")
     
 
 
     #compute tensorstrain and tensorstress
-    # TensorStrain = assemb_visu.GetStrainTensor(U, "Nodal", nlgeom = False)       
+    # TensorStrain = assemb_visu.get_strain(U, "Nodal", nlgeom = False)       
     # TensorStress = ConstitutiveLaw.get_all()[Matname].GetStressFromStrain(TensorStrain)
 
-    TensorStrain = assemb_visu.GetStrainTensor(U, "GaussPoint", nlgeom = False)       
+    TensorStrain = assemb_visu.get_strain(U, "GaussPoint", nlgeom = False)       
     TensorStress = wf.GetConstitutiveLaw().GetStressFromStrain(TensorStrain)
     TensorStrain = TensorStrain.Convert(assemb_visu, ConvertTo = "Node")
     TensorStress = TensorStress.Convert(assemb_visu, ConvertTo = "Node")

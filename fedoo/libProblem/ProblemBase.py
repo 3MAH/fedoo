@@ -193,7 +193,7 @@ class ProblemBase:
     def GetTemp(self):
          raise NameError("The method 'GetTemp' is not defined for this kind of problem")
     
-    def Update(self,):
+    def update(self,):
         raise NameError("The method 'Update' is not defined for this kind of problem")    
         
     def ChangeAssembly(self,Assembling):
@@ -225,14 +225,14 @@ class ProblemBase:
     def NewtonRaphsonIncr(self):                   
         raise NameError("The method 'NewtonRaphsonIncr' is not defined for this kind of problem")            
         
-    def ResetTimeIncrement(self):
-        raise NameError("The method 'ResetTimeIncrement' is not defined for this kind of problem")    
+    def to_start(self):
+        raise NameError("The method 'to_start' is not defined for this kind of problem")    
     
-    def ResetLoadFactor(self):             
-        raise NameError("The method 'ResetLoadFactor' is not defined for this kind of problem")    
+    def resetLoadFactor(self):             
+        raise NameError("The method 'resetLoadFactor' is not defined for this kind of problem")    
     
-    def Reset(self):
-        raise NameError("The method 'Reset' is not defined for this kind of problem")    
+    def reset(self):
+        raise NameError("The method 'reset' is not defined for this kind of problem")    
         
     def GetElasticEnergy(self):
         raise NameError("The method 'GetElasticEnergy' is not defined for this kind of problem")    
@@ -240,8 +240,8 @@ class ProblemBase:
     def GetNodalElasticEnergy(self):
         raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
         
-    def GetExternalForces(self, name = 'all'):
-        raise NameError("The method 'GetExternalForces' is not defined for this kind of problem")    
+    def get_ext_forces(self, name = 'all'):
+        raise NameError("The method 'get_ext_forces' is not defined for this kind of problem")    
 
     def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
         raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
@@ -257,8 +257,8 @@ class ProblemBase:
     def GetXbc(self): raise NameError("Method only defined for PGD Problems") 
     def ComputeResidualNorm(self,err_0=None): raise NameError("Method only defined for PGD Problems") 
     def GetResidual(self): raise NameError("Method only defined for PGD Problems") 
-    def UpdatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
-    def UpdateAlpha(self): raise NameError("Method only defined for PGD Problems") 
+    def updatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
+    def updateAlpha(self): raise NameError("Method only defined for PGD Problems") 
     def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): raise NameError("Method only defined for PGD Problems") 
     
     @property
@@ -301,15 +301,15 @@ def PrintBC(): ProblemBase.GetActive().PrintBC()
 def GetDisp(name='Disp'): return ProblemBase.GetActive().GetDisp(name)
 def GetRot(name='all'): return ProblemBase.GetActive().GetRot(name)
 def GetTemp(): return ProblemBase.GetActive().GetTemp()
-def Update(**kargs): return ProblemBase.GetActive().Update(**kargs) 
+def update(**kargs): return ProblemBase.GetActive().update(**kargs) 
 def ChangeAssembly(Assembling): ProblemBase.GetActive().ChangeAssembly(Assembling)
 def SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None): ProblemBase.GetActive().SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol, max_subiter, err0)
 def NewtonRaphsonError(): return ProblemBase.GetActive().NewtonRaphsonError()
 def NewTimeIncrement(LoadFactor): ProblemBase.GetActive().NewTimeIncrement(LoadFactor)
 def NewtonRaphsonIncr(): ProblemBase.GetActive().NewtonRaphsonIncr()
-def ResetTimeIncrement(): ProblemBase.GetActive().ResetTimeIncrement()
-def Reset(): ProblemBase.GetActive().Reset()
-def ResetLoadFactor(): ProblemBase.GetActive().ResetLoadFactor()
+def to_start(): ProblemBase.GetActive().to_start()
+def reset(): ProblemBase.GetActive().reset()
+def resetLoadFactor(): ProblemBase.GetActive().resetLoadFactor()
 def NLSolve(**kargs): return ProblemBase.GetActive().NLSolve(**kargs)  
 def AddOutput(filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
     return ProblemBase.GetActive().AddOutput(filename, assemblyname, output_list, output_type, file_format, position)
@@ -386,8 +386,8 @@ def SetRayleighDamping(alpha, beta):
     """
     ProblemBase.GetActive().SetRayleighDamping(alpha, beta)
 
-def Initialize(t0 = 0.):
-    ProblemBase.GetActive().Initialize(t0)           
+def initialize(t0 = 0.):
+    ProblemBase.GetActive().initialize(t0)           
 
 def GetElasticEnergy():
     """
@@ -401,8 +401,8 @@ def GetNodalElasticEnergy():
     """
     return ProblemBase.GetActive().GetNodalElasticEnergy()
 
-def GetExternalForces(name='all'):
-    return ProblemBase.GetActive().GetExternalForces(name)
+def get_ext_forces(name='all'):
+    return ProblemBase.GetActive().get_ext_forces(name)
 
 
 def GetKineticEnergy():
@@ -419,8 +419,8 @@ def GetDampingPower():
     """        
     return ProblemBase.GetActive().GetDampingPower()
 
-def UpdateStiffness(StiffnessAssembling):
-    ProblemBase.GetActive().UpdateStiffness(StiffnessAssembling)
+def updateStiffness(StiffnessAssembling):
+    ProblemBase.GetActive().updateStiffness(StiffnessAssembling)
 
 
 
@@ -429,7 +429,7 @@ def UpdateStiffness(StiffnessAssembling):
 def GetXbc(): return ProblemBase.GetActive().GetXbc() 
 def ComputeResidualNorm(err_0=None): return ProblemBase.GetActive().ComputeResidualNorm(err_0)
 def GetResidual(): return ProblemBase.GetActive().GetResidual()
-def UpdatePGD(termToChange, ddcalc='all'): return ProblemBase.GetActive().UpdatePGD(termToChange, ddcalc)
-def UpdateAlpha(): return ProblemBase.GetActive().UpdateAlpha()
+def updatePGD(termToChange, ddcalc='all'): return ProblemBase.GetActive().updatePGD(termToChange, ddcalc)
+def updateAlpha(): return ProblemBase.GetActive().updateAlpha()
 def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemBase.GetActive().AddNewTerm(numberOfTerm, value, variable)
 

@@ -224,11 +224,11 @@ class ProblemPGD(ProblemBase):
         return res
 
 
-    def UpdatePGD(self,termToChange, ddcalc='all'): #extended PGD
+    def updatePGD(self,termToChange, ddcalc='all'): #extended PGD
         
         if ddcalc == 'all': 
             for nMesh in range(self.mesh.GetDimension()):
-                self.UpdatePGD(termToChange, nMesh)
+                self.updatePGD(termToChange, nMesh)
             return
         
         termToKeep = [t for t in range(self.__X.nbTerm()) if not t in termToChange]
@@ -251,7 +251,7 @@ class ProblemPGD(ProblemBase):
                 
     
 
-    def UpdateAlpha(self):
+    def updateAlpha(self):
         BB = SeparatedArray(self.__B + self.__D - self.__A*self.__Xbc)
         alpha = sp.c_[linalg.solve(self.calcMat_Alpha(self.__X), self.SecTerm_Alpha(self.__X, BB))] 
 #        alpha = self.solve_Alpha(self.__X,SeparatedArray(self.__B - self.__A*self.__Xbc))   
@@ -576,7 +576,7 @@ class ProblemPGD(ProblemBase):
 # def GetXbc(): return ProblemPGD.get_all()["MainProblem"].GetXbc() 
 # def ComputeResidualNorm(err_0=None): return ProblemPGD.get_all()["MainProblem"].ComputeResidualNorm(err_0)
 # def GetResidual(): return ProblemPGD.get_all()["MainProblem"].GetResidual()
-# def UpdatePGD(termToChange, ddcalc='all'): return ProblemPGD.get_all()["MainProblem"].UpdatePGD(termToChange, ddcalc)
-# def UpdateAlpha(): return ProblemPGD.get_all()["MainProblem"].UpdateAlpha()
+# def updatePGD(termToChange, ddcalc='all'): return ProblemPGD.get_all()["MainProblem"].updatePGD(termToChange, ddcalc)
+# def updateAlpha(): return ProblemPGD.get_all()["MainProblem"].updateAlpha()
 # def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemPGD.get_all()["MainProblem"].AddNewTerm(numberOfTerm, value, variable)
 

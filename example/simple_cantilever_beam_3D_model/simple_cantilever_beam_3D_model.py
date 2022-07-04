@@ -53,7 +53,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal")       
+TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "Nodal")       
 TensorStress = Problem.GetResults('Assembling', ['stress'], 'Node')['Stress']
 # ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 

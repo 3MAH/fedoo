@@ -51,7 +51,7 @@ Problem.AddOutput('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], 
 
 #output result for a random micro cell (here for the 5th integration point)
 #Warning : the results of micro_cells are automatically saved at each NR iteration (several iteration per time iteration)
-# Problem.Initialize(0) #to build prolems
+# Problem.initialize(0) #to build prolems
 # micro_cells.list_problem[5].AddOutput('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
 
 

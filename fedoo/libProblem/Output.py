@@ -131,7 +131,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
                 
             elif res == 'Fext':
                 if output_type == 'Node':                             
-                    data = assemb.GetExternalForces(pb.GetDoFSolution())
+                    data = assemb.get_ext_forces(pb.GetDoFSolution())
                 else: 
                     raise NameError("External_Force is only Node data and is incompatible with the specified output format")    
 
@@ -148,7 +148,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
                     elif res == 'Cauchy_vm':
                         data = material.GetCauchy()
 
-                    data = assemb.ConvertData(data, None, output_type)
+                    data = assemb.convert_data(data, None, output_type)
                     data_sav[res[:-3]] = data
                                             
                 data = data.vonMises()
@@ -195,19 +195,19 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
                     
             elif res == 'Statev':
                 data = material.GetStatev().T                    
-                data = assemb.ConvertData(data, None, output_type)
+                data = assemb.convert_data(data, None, output_type)
             
             elif res in ['Wm']:
                 data = material.GetWm().T                    
-                data = assemb.ConvertData(data, None, output_type)
+                data = assemb.convert_data(data, None, output_type)
             
             elif res == 'Fint':
-                data = assemb.GetInternalForces(pb.GetDoFSolution(), 'local')
-                data = assemb.ConvertData(data, None, output_type)
+                data = assemb.get_int_forces(pb.GetDoFSolution(), 'local')
+                data = assemb.convert_data(data, None, output_type)
                 
             elif res == 'Fint_global':
-                data = assemb.GetInternalForces(pb.GetDoFSolution(), 'global')
-                data = assemb.ConvertData(data, None, output_type)
+                data = assemb.get_int_forces(pb.GetDoFSolution(), 'global')
+                data = assemb.convert_data(data, None, output_type)
             
             result[res] = data
         

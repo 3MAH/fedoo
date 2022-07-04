@@ -79,27 +79,27 @@ class CohesiveLaw(Spring):
         Initialize the damage variable to a certain value: array for multi-point initialization or scalar.
         The damage is considered as irreversible by default.
         Use Irreversible = False for reversible damage.
-        The damage should be udpated with CohesiveLaw.UpdateDamageVariable 
+        The damage should be udpated with CohesiveLaw.updateDamageVariable 
         to determine if the crack is opening or closing. If not, no contact will be considered.
         """
         self.__DamageVariable = self.__DamageVariableOpening = value              
-        if Irreversible == True: self.UpdateIrreversibleDamage()            
+        if Irreversible == True: self.updateIrreversibleDamage()            
         
     def GetDamageVariable(self):
         return self.__DamageVariable
     
-    def UpdateIrreversibleDamage(self):
+    def updateIrreversibleDamage(self):
         if self.__DamageVariable is 0: self.__DamageVariableIrreversible = 0
         else: self.__DamageVariableIrreversible = self.__DamageVariable.copy()
 
-    def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'):         
+    def updateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'):         
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
         
         OperatorDelta = CohesiveAssembly.space.op_disp()
         if typeData == 'Node':
-            delta = [CohesiveAssembly.GetNodeResult(op, U) for op in OperatorDelta]            
-        else: delta = [CohesiveAssembly.GetGaussPointResult(op, U) for op in OperatorDelta]            
+            delta = [CohesiveAssembly.get_node_results(op, U) for op in OperatorDelta]            
+        else: delta = [CohesiveAssembly.get_gp_results(op, U) for op in OperatorDelta]            
         
         self.__UpdateDamageVariable(delta)
         
@@ -166,9 +166,9 @@ class CohesiveLaw(Spring):
             print ("Warning : the value of damage variable is incorrect")
 
 
-    def Reset(self): 
+    def reset(self): 
         """
-        Reset the constitutive law (time history)
+        reset the constitutive law (time history)
         """
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
@@ -176,19 +176,19 @@ class CohesiveLaw(Spring):
     
     def NewTimeIncrement(self):
         #Set Irreversible Damage
-        self.UpdateIrreversibleDamage()
+        self.updateIrreversibleDamage()
         
-    def ResetTimeIncrement(self):
+    def to_start(self):
         #Damage variable will be recompute. NPOthing to be done here (to be checked)
         pass    
         # self.__DamageVariable = self.__DamageVariableIrreversible.copy()       
         
         
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
        #nlgeom not implemented
        pass
 
-    def Update(self,assembly, pb, dtime):            
+    def update(self,assembly, pb, dtime):            
         #dtime not used for this law
 
         displacement = pb.GetDoFSolution()
@@ -197,7 +197,7 @@ class CohesiveLaw(Spring):
         else:
             #Delta is the relative displacement 
             op_delta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
-            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in op_delta]
+            self.__Delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
         
             self.__UpdateDamageVariable(self.__Delta)
 
@@ -318,14 +318,14 @@ class CohesiveLaw(Spring):
 #     for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
 #         delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
 #         sig.append(law.GetInterfaceStress(delta)[2])
-#         law.UpdateIrreversibleDamage()
+#         law.updateIrreversibleDamage()
 #         delta_plot.append(delta_z)
 #         # print(law.GetDamageVariable())
     
 #     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
 #     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
 #     #     sig.append(law.GetInterfaceStress(delta)[2])
-#     #     law.UpdateIrreversibleDamage()
+#     #     law.updateIrreversibleDamage()
 #     #     delta_plot.append(delta_z)
     
 #     import matplotlib.pyplot as plt

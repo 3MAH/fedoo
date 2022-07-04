@@ -136,8 +136,8 @@ class CompositeUD(ElasticAnisotropic):
         return H
         
        
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=True):
         pass
         # for key in self.__parameters:
-        #     self.__parameters['key'] = assemb.ConvertData(data) #convert to gauss point
+        #     self.__parameters['key'] = assemb.convert_data(data) #convert to gauss point
             

@@ -117,20 +117,20 @@ class CohesiveLaw_mod(Spring):
     def GetDamageVariable(self):
         return self.__DamageVariable
     
-    def UpdateIrreversibleDamage(self):
+    def updateIrreversibleDamage(self):
         if self.__DamageVariable is 0: self.__DamageVariableIrreversible = 0
         else: self.__DamageVariableIrreversible = self.__DamageVariable.copy()
 
     #### Not working, need update
-    def UpdateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
+    def updateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
         #Delta is the relative displacement 
         # OperatorDelta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
         # OperatorDelta, U_vir = GetDispOperator()
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
         if typeData == 'Node':
-            delta = [CohesiveAssembly.GetNodeResult(op, U) for op in OperatorDelta]            
-        else: delta = [CohesiveAssembly.GetGaussPointResult(op, U) for op in OperatorDelta]            
+            delta = [CohesiveAssembly.get_node_results(op, U) for op in OperatorDelta]            
+        else: delta = [CohesiveAssembly.get_gp_results(op, U) for op in OperatorDelta]            
         
         self.__UpdateDamageVariable(delta)
         
@@ -214,16 +214,16 @@ class CohesiveLaw_mod(Spring):
     
     def NewTimeIncrement(self):
         #Set Irreversible Damage
-        self.UpdateIrreversibleDamage()
+        self.updateIrreversibleDamage()
         self.__currentSigma = None
         
-    def ResetTimeIncrement(self):
+    def to_start(self):
         #Damage variable and currentInterfaceStress will be recomputed in the next call of GetInterfaceStress
         self.__currentInterfaceStress = None   
 
-    def Reset(self): 
+    def reset(self): 
         """
-        Reset the constitutive law (time history)
+        reset the constitutive law (time history)
         """
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
@@ -342,14 +342,14 @@ class CohesiveLaw_mod(Spring):
 #     for delta_z in np.arange(0,delta_I_max,delta_I_max/nb_iter):
 #         delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
 #         sig.append(law.GetInterfaceStress(delta)[2])
-#         law.UpdateIrreversibleDamage()
+#         law.updateIrreversibleDamage()
 #         delta_plot.append(delta_z)
 #         # print(law.GetDamageVariable())
     
 #     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
 #     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       
 #     #     sig.append(law.GetInterfaceStress(delta)[2])
-#     #     law.UpdateIrreversibleDamage()
+#     #     law.updateIrreversibleDamage()
 #     #     delta_plot.append(delta_z)
     
 #     import matplotlib.pyplot as plt

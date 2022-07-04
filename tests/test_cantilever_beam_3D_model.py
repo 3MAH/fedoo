@@ -46,7 +46,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal", nlgeom=False)       
+TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "Nodal", nlgeom=False)       
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 assert np.abs(TensorStress[5][-1] + 0.900798346778864) < 1e-15

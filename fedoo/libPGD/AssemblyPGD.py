@@ -218,7 +218,7 @@ class AssemblyPGD(AssemblyFEM):
     def _GetTypeOfCoordinateSystem(self, idmesh):
         return self.__listAssembly[idmesh]._GetTypeOfCoordinateSystem()
 
-    def GetElementResult(self, operator, U):
+    def get_element_results(self, operator, U):
         """
         Not a Static Method.
 
@@ -244,12 +244,12 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         list_nb_elm = self.mesh.n_elements
-        res = self.GetGaussPointResult(operator, U)
+        res = self.get_gp_results(operator, U)
         NumberOfGaussPoint = [res.data[dd].shape[0]//list_nb_elm[dd] for dd in range(len(res))]
                 
         return SeparatedArray([np.reshape(res.data[dd], (NumberOfGaussPoint[dd],list_nb_elm[dd],-1)).sum(0) / NumberOfGaussPoint[dd] for dd in range(len(res))])
 
-    def GetGaussPointResult(self, operator, U):
+    def get_gp_results(self, operator, U):
         """
         Return some results at element Gauss points based on the finite element discretization of 
         a differential operator on a mesh being given the dof results and the type of elements.
@@ -310,7 +310,7 @@ class AssemblyPGD(AssemblyFEM):
         return res
 
 
-    def GetNodeResult(self, operator, U):
+    def get_node_results(self, operator, U):
         """
         Not a Static Method.
 
@@ -332,7 +332,7 @@ class AssemblyPGD(AssemblyFEM):
             The vector lenght is the number of nodes in the mesh  
         """       
         GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._get_gausspoint2node_mat() for dd in range(len(self.mesh.GetListMesh()))]])
-        res = self.GetGaussPointResult(operator, U)
+        res = self.get_gp_results(operator, U)
         return GaussianPointToNodeMatrix * res 
 
 
@@ -341,7 +341,7 @@ class AssemblyPGD(AssemblyFEM):
         Not a static method.
         Return the Stress Tensor of an assembly using the Voigt notation as a python list. 
         The total displacement field and a ConstitutiveLaw have to be given.
-        see GetNodeResults and GetElementResults.
+        see get_node_resultss and get_element_resultss.
 
         Options : 
         - IntegrationType :"Nodal" or "Element" integration (default : "Nodal")
@@ -353,20 +353,20 @@ class AssemblyPGD(AssemblyFEM):
             constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
         if IntegrationType == "Nodal":            
-            return [self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStress()]
+            return [self.get_node_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStress()]
         
         elif IntegrationType == "Element":
-            return [self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in constitutiveLaw.GetStress()]
+            return [self.get_element_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in constitutiveLaw.GetStress()]
         
         else:
             assert 0, "Wrong argument for IntegrationType"
 
-    def GetStrainTensor(self, U, IntegrationType="Nodal"):
+    def get_strain(self, U, IntegrationType="Nodal"):
         """
         Not a static method.
         Return the Strain Tensor of an assembly using the Voigt notation as a python list. 
         The total displacement field and a ConstitutiveLaw have to be given.
-        see GetNodeResults and GetElementResults.
+        see get_node_resultss and get_element_resultss.
 
         Options : 
         - IntegrationType :"Nodal" or "Element" integration (default : "Nodal")
@@ -376,17 +376,17 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return listStrainTensor([self.GetNodeResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in self.space.op_strain()])
+            return listStrainTensor([self.get_node_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
-            return listStrainTensor([self.GetElementResult(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in self.space.op_strain()])
+            return listStrainTensor([self.get_element_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in self.space.op_strain()])
         
         else:
             assert 0, "Wrong argument for IntegrationType"
 
 
 
-    def GetExternalForces(self, U, NumberOfVariable=None):
+    def get_ext_forces(self, U, NumberOfVariable=None):
         """
         Not a static method.
         Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U

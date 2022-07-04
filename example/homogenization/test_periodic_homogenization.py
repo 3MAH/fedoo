@@ -336,7 +336,7 @@ ax.elev = 30
 
 
 
-#Volume_mesh = Assembly.get_all()['Assembling'].IntegrateField(np.ones_like(TensorStress[0]))
+#Volume_mesh = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(TensorStress[0]))
 
 
 

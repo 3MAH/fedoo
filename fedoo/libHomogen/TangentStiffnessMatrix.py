@@ -283,7 +283,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
 # # ############# CONDENSATION METHOD -> a tester si besoin ##################
 # Compute the stress
 
-# Fext_b = Problem.GetExternalForces('Disp')[:,boundary_nodes] #Get the external reaction on boundary nodes
+# Fext_b = Problem.get_ext_forces('Disp')[:,boundary_nodes] #Get the external reaction on boundary nodes
 # MeanStress2 = (1/Volume)* D@Fext_b.ravel()
 
 # #Compute tangent matrix

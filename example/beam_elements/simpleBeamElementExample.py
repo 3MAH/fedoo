@@ -63,7 +63,7 @@ Problem.ApplyBoundaryCondition()
 Problem.Solve()
 
 #Post treatment               
-results = Assembly.get_all()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
+results = Assembly.get_all()['beam'].get_ext_forces(Problem.GetDoFSolution('all'))
 
 print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
 print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -76,7 +76,7 @@ print('RX at the free extremity: ' + str(results[nodes_right[0]][0]))
 print('RZ at the free extremity: ' + str(results[nodes_right[0]][2]))
 
 #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-results = Assembly.get_all()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
+results = Assembly.get_all()['beam'].get_int_forces(Problem.GetDoFSolution('all'), 'local')
 IntMoment = results[:,3:]
 IntForce = results[:,0:3]
 

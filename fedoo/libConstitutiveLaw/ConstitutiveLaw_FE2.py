@@ -85,14 +85,14 @@ class FE2(Mechanical3D):
         self.Lt = self.L.copy()
 
     
-    def ResetTimeIncrement(self):
+    def to_start(self):
         # self.to_start()         
         self.__currentGradDisp = self.__initialGradDisp  
         self.Lt = self.L.copy()
     
-    def Reset(self):
+    def reset(self):
         """
-        Reset the constitutive law (time history)
+        reset the constitutive law (time history)
         """
         #a modifier
         self.__currentGradDisp = self.__initialGradDisp = 0
@@ -102,10 +102,10 @@ class FE2(Mechanical3D):
         # self.__F0 = None
 
     
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
         self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
-            nb_points = assembly.GetNumberOfGaussPoints() * assembly.mesh.n_elements
+            nb_points = assembly.nb_gp * assembly.mesh.n_elements
             
             #Definition of the set of nodes for boundary conditions
             if not(isinstance(self.__mesh, list)):            
@@ -196,20 +196,20 @@ class FE2(Mechanical3D):
         
         material = self.list_assembly[id_pb].weakform.GetConstitutiveLaw()
         stress_field = material.GetStress()
-        self.__stress[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].IntegrateField(stress_field[i]) for i in range(6)])
+        self.__stress[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].integrate_field(stress_field[i]) for i in range(6)])
     
         Wm_field = material.Wm
-        self.__Wm[:,id_pb] = (1/self._list_volume[id_pb]) * self.list_assembly[id_pb].IntegrateField(Wm_field)
+        self.__Wm[:,id_pb] = (1/self._list_volume[id_pb]) * self.list_assembly[id_pb].integrate_field(Wm_field)
 
 
-    def Update(self,assembly, pb, dtime):   
+    def update(self,assembly, pb, dtime):   
         displacement = pb.GetDoFSolution()
 
         if displacement is 0: 
             self.__currentGradDisp = 0
             self.__currentSigma = 0                        
         else:
-            self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
+            self.__currentGradDisp = assembly.get_grad_disp(displacement, "GaussPoint")
 
             grad_values = self.__currentGradDisp
             if self.nlgeom == False:
@@ -246,7 +246,7 @@ class FE2(Mechanical3D):
        
             # H = self.GetH()
         
-            # self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.ConvertData(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+            # self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
 
         
 

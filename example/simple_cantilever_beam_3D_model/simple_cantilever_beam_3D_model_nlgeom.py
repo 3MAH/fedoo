@@ -54,8 +54,8 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(Problem.GetDisp(),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = assemb.ConvertData(ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')
-TensorStress = assemb.ConvertData(ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(), 'GaussPoint', 'Node')
+TensorStrain = assemb.convert_data(ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')
+TensorStress = assemb.convert_data(ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(), 'GaussPoint', 'Node')
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
                                                    

@@ -105,9 +105,9 @@ print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.GetDisp('DispX')[-2], Proble
 TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
-# Surf = Assembly.get_all()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #surface of domain without the void (hole)
+# Surf = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(TensorStress[0])) #surface of domain without the void (hole)
 Surf = (xmax-xmin)*(ymax-ymin) #total surface of the domain
-MeanStress = [1/Surf*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in [0,1,5]]
+MeanStress = [1/Surf*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in [0,1,5]]
 
 print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 
@@ -118,11 +118,11 @@ print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 #------------------------------------------------------------------------------
 
 # #Get the stress tensor (nodal values)
-# TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
+# TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Nodal")       
 # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
 
 # #Get the stress tensor (element values)
-# TensorStrainEl = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
+# TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Element")       
 # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
 
 # # Get the principal directions (vectors on nodes)

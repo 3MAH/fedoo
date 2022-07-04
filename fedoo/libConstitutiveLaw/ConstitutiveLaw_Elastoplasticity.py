@@ -175,7 +175,7 @@ class ElastoPlasticity(Mechanical3D):
             self.__PlasticStrainTensor = self.__currentPlasticStrainTensor.copy()        
         self.__TangeantModuli = self.GetHelas()
         
-    def ResetTimeIncrement(self):
+    def to_start(self):
         if self.__P is None: 
             self.__currentP = None
             self.__currentPlasticStrainTensor = None
@@ -184,9 +184,9 @@ class ElastoPlasticity(Mechanical3D):
             self.__currentPlasticStrainTensor = self.__PlasticStrainTensor.copy()            
         self.__TangeantModuli = self.GetHelas()
     
-    def Reset(self): 
+    def reset(self): 
         """
-        Reset the constitutive law (time history)
+        reset the constitutive law (time history)
         """
         self.__P = None #irrevesrible plasticity
         self.__currentP = None #current iteration plasticity (reversible)
@@ -195,21 +195,21 @@ class ElastoPlasticity(Mechanical3D):
         self.__currentSigma = 0 #lissStressTensor object describing the last computed stress (GetStress method)
         self.__TangeantModuli = self.GetHelas()
 
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
         if self._dimension is None:
             self._dimension = assembly.space.GetDimension()     
         self.NewTimeIncrement()
         self.nlgeom = nlgeom
 
     
-    def Update(self,assembly, pb, time):
+    def update(self,assembly, pb, time):
         displacement = pb.GetDoFSolution()
         
         if displacement is 0: 
             self.__currentGradDisp = 0
             self.__currentSigma = 0                        
         else:
-            self.__currentGradDisp = assembly.GetGradTensor(displacement, "GaussPoint")
+            self.__currentGradDisp = assembly.get_grad_disp(displacement, "GaussPoint")
             GradValues = self.__currentGradDisp
             if self.nlgeom == False:
                 Strain  = [GradValues[i][i] for i in range(3)] 

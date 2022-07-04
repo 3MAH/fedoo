@@ -223,7 +223,7 @@ class Problem(ProblemBase):
     def SetInitialBCToCurrent(self):
         ### is used only for incremental problems
         U = self.GetDoFSolution() 
-        F = self.GetExternalForces()
+        F = self.get_ext_forces()
         Nnodes = self.mesh.n_nodes
         for e in self._BoundaryConditions:            
             if e.DefaultInitialValue is None:

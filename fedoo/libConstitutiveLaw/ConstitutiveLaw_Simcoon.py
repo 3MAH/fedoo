@@ -90,7 +90,7 @@ if USE_SIMCOON:
                     statev = np.atleast_2d(self.__statev_initial).T.astype(float)
                     if len(statev) == 1: statev = statev.copy().T
                     else: assert 0, "Initialize simcoon constitutive law first"
-                    # else: #statev = assembly.ConvertData(statev).T
+                    # else: #statev = assembly.convert_data(statev).T
                 
                 sim.Umat_fedoo.Initialize(self, 0., statev, False)
                     
@@ -113,9 +113,11 @@ if USE_SIMCOON:
     
         #     return sigma # list de 6 objets de type OpDiff
         
-        def NewTimeIncrement(self):
-            self.set_start() #in set_start -> set tangeant matrix to elastic
+        def set_start(self):
             
+            # if self.__currentGradDisp is not 0:
+            sim.Umat_fedoo.set_start(self) #in set_start -> set tangeant matrix to elastic
+        
             #save variable at the begining of the Time increment
             self.__initialGradDisp = self.__currentGradDisp
     
@@ -139,13 +141,13 @@ if USE_SIMCOON:
             self.__mask = mask
 
         
-        def ResetTimeIncrement(self):
-            self.to_start()         
+        def to_start(self):
+            sim.Umat_fedoo.to_start(self)         
             self.__currentGradDisp = self.__initialGradDisp    
         
-        def Reset(self):
+        def reset(self):
             """
-            Reset the constitutive law (time history)
+            reset the constitutive law (time history)
             """
             #a modifier (créer une fonction reset dans l'umat simcoon)
             self.__currentGradDisp = self.__initialGradDisp = 0
@@ -154,25 +156,25 @@ if USE_SIMCOON:
             # self.__F0 = None
     
         
-        def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):      
+        def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):      
             
             if  self._dimension is None:
                 self._dimension = assembly.space.GetDimension()
                 
             #if the number of material points is not defined (=0) we need to initialize statev
-            nb_points = assembly.GetNumberOfGaussPoints() * assembly.mesh.n_elements
+            nb_points = assembly.nb_gp * assembly.mesh.n_elements
             if np.isscalar(self.__statev_initial): 
                 statev = np.zeros((nb_points, int(self.__statev_initial))).T
             else: 
                 statev = np.atleast_2d(self.__statev_initial).T.astype(float)
                 if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1]).T
-                else: statev = assembly.ConvertData(statev).T
+                else: statev = assembly.convert_data(statev).T
             
             sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
             self.Run(0.) #Launch the UMAT to compute the elastic matrix                 
             if self.use_elastic_lt: self.elastic_Lt = self.Lt.copy() ### debut only ####
     
-        def Update(self,assembly, pb, dtime):   
+        def update(self,assembly, pb, dtime):   
             displacement = pb.GetDoFSolution()
 
             #tranpose for compatibility with simcoon
@@ -181,7 +183,7 @@ if USE_SIMCOON:
                 F1 = np.multiply(np.eye(3).reshape(3,3,1) , np.ones((1,1,self.nb_points)), order='F').transpose(2,0,1)
                 # self.__F1 = np.eye(3).T.reshape(1,3,3)
             else:   
-                self.__currentGradDisp = np.array(assembly.GetGradTensor(displacement, "GaussPoint"))            
+                self.__currentGradDisp = np.array(assembly.get_grad_disp(displacement, "GaussPoint"))            
 
                 #F0.strides and F1.strides should be [n_cols*n_rows*8, 8, n_rows*8] for compatibiliy with the sim.RunUmat_fedoo function
                 F1 = np.add(np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
@@ -189,7 +191,7 @@ if USE_SIMCOON:
             self.compute_Detot(dtime, F1)  
             
             
-            # test = np.array(assembly.GetStrainTensor(pb.GetDoFSolution(), "GaussPoint", False)).T #linearized strain tensor
+            # test = np.array(assembly.get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T #linearized strain tensor
             # print( (self.etot+self.Detot - test).max() )
             
 

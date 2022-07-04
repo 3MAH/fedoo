@@ -72,7 +72,7 @@ U = [Problem.GetDoFSolution('DispX')[:,:].reshape(-1), \
      Problem.GetDoFSolution('DispZ')[:,:].reshape(-1) ]
 U = np.array(U).T
 
-TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution('all'), "Nodal")
+TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution('all'), "Nodal")
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 TensorStrain = Util.listStrainTensor([s[:,:].reshape(-1) for s in TensorStrain])

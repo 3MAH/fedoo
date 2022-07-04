@@ -48,7 +48,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             # if MassLumping == True, A is a vector representing the diagonal value
             self.SetA(  self.__MassMatrix         / (self.__TimeStep**2))
 
-        def UpdateStiffness(StiffnessAssembling): #internal function to be used when modifying the siffness matrix
+        def updateStiffness(StiffnessAssembling): #internal function to be used when modifying the siffness matrix
             if isinstance(StiffnessAssembling,str):
                 StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             
@@ -105,7 +105,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
                 self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix    
             self.__UpdateA()
 
-        def Initialize():        
+        def initialize():        
             D = 1/(self.__TimeStep**2) * self.__MassMatrix * \
                   (self.__Xold + self.__TimeStep * self.__Xdot) \
                 - self.__StiffMatrix * self.__Xold        
@@ -114,10 +114,10 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
             self.SetD(D)                        
 
-        def Update():       
+        def update():       
             self.__Xdot = (Problem.GetDoFSolution('all') - self.__Xold)/self.__TimeStep
             self.__Xold[:] = Problem.GetDoFSolution('all')
-            self.Initialize()
+            self.initialize()
             
         def GetElasticEnergy(self):
             """

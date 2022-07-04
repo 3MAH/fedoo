@@ -33,7 +33,7 @@ class ShellBase(ConstitutiveLaw):
     def GetShellRigidityMatrix_FI(self):
         raise NameError('"GetShellRigidityMatrix_FI" not implemented, contact developer.')
 
-    def Update(self,assembly, pb, dtime):
+    def update(self,assembly, pb, dtime):
         # disp = pb.GetDisp()
         # rot = pb.GetRot()
         U = pb.GetDoFSolution()
@@ -42,11 +42,11 @@ class ShellBase(ConstitutiveLaw):
             self.__GeneralizedStress = 0                        
         else:
             GeneralizedStrainOp = assembly.weakform.GetGeneralizedStrainOperator()
-            GeneralizedStrain = [0 if op is 0 else assembly.GetGaussPointResult(op, U) for op in GeneralizedStrainOp]
+            GeneralizedStrain = [0 if op is 0 else assembly.get_gp_results(op, U) for op in GeneralizedStrainOp]
        
             H = self.GetShellRigidityMatrix()
         
-            self.__GeneralizedStress = [sum([GeneralizedStrain[j]*assembly.ConvertData(H[i][j]) for j in range(8)]) for i in range(8)] #H[i][j] are converted to gauss point excepted if scalar
+            self.__GeneralizedStress = [sum([GeneralizedStrain[j]*assembly.convert_data(H[i][j]) for j in range(8)]) for i in range(8)] #H[i][j] are converted to gauss point excepted if scalar
             self.__GeneralizedStrain = GeneralizedStrain
     
     def GetGeneralizedStrain(self):

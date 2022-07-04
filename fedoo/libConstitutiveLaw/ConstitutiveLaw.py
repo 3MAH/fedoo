@@ -20,7 +20,7 @@ class ConstitutiveLaw:
     def GetLocalFrame(self):
         return self.__localFrame 
     
-    def Reset(self): 
+    def reset(self): 
         #function called to restart a problem (reset all internal variables)
         pass
     
@@ -28,15 +28,15 @@ class ConstitutiveLaw:
         #function called when the time is increased. Not used for elastic laws
         pass
     
-    def ResetTimeIncrement(self):
+    def to_start(self):
         #function called if the time step is reinitialized. Not used for elastic laws
         pass
 
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
         #function called to initialize the constutive law 
         pass
     
-    def Update(self,assembly, pb, dtime):
+    def update(self,assembly, pb, dtime):
         #function called to update the state of constitutive law 
         pass
     
@@ -56,7 +56,7 @@ class ConstitutiveLaw:
         new_cl = deepcopy(self)        
         new_cl._ConstitutiveLaw__name = new_id
         self.__dic[new_id] = new_cl
-        new_cl.Reset()
+        new_cl.reset()
         return new_cl
    
     @staticmethod
@@ -148,36 +148,36 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         
         self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
-    def Initialize(self, assembly, pb, initialTime=0., nlgeom=False):
+    def initialize(self, assembly, pb, initialTime=0., nlgeom=False):
         for cl in self.__list_constitutivelaw:
-            cl.Initialize(assembly, pb, initialTime)
+            cl.initialize(assembly, pb, initialTime)
 
     def InitTimeIncrement(self, assembly, pb, dtime):
         for cl in self.__list_constitutivelaw:
             cl.InitTimeIncrement(assembly, pb, dtime)
     
-    def Update(self, assembly, pb, dtime):        
+    def update(self, assembly, pb, dtime):        
         for cl in self.__list_constitutivelaw:
-            cl.Update(assembly, pb, dtime)
+            cl.update(assembly, pb, dtime)
     
     def NewTimeIncrement(self):  
         for cl in self.__list_constitutivelaw:
             cl.NewTimeIncrement()
     
-    def ResetTimeIncrement(self):
+    def to_start(self):
         for cl in self.__list_constitutivelaw:
-            cl.ResetTimeIncrement()
+            cl.to_start()
 
-    def Reset(self):
+    def reset(self):
         for cl in self.__list_constitutivelaw:
-            cl.Reset()
+            cl.reset()
     
     def copy(self):
         #function to copy a weakform at the initial state
         raise NotImplementedError()
 
         
-    # def InitializeConstitutiveLaw(self, assembly, pb, initialTime=0.):
+    # def initializeConstitutiveLaw(self, assembly, pb, initialTime=0.):
     #     if hasattr(self,'nlgeom'): nlgeom = self.nlgeom
     #     else: nlgeom=False
     #     constitutivelaw = self.GetConstitutiveLaw()
@@ -185,11 +185,11 @@ class ListConstitutiveLaw(ConstitutiveLaw):
     #     if constitutivelaw is not None:
     #         if isinstance(constitutivelaw, list):
     #             for cl in constitutivelaw:
-    #                 cl.Initialize(assembly, pb, initialTime, nlgeom)
+    #                 cl.initialize(assembly, pb, initialTime, nlgeom)
     #         else:
-    #             constitutivelaw.Initialize(assembly, pb, initialTime, nlgeom)
+    #             constitutivelaw.initialize(assembly, pb, initialTime, nlgeom)
     
-    # def UpdateConstitutiveLaw(self,assembly, pb, dtime):   
+    # def updateConstitutiveLaw(self,assembly, pb, dtime):   
     #     if hasattr(self,'nlgeom'): nlgeom = self.nlgeom
     #     else: nlgeom=False
     #     constitutivelaw = self.GetConstitutiveLaw()
@@ -197,22 +197,22 @@ class ListConstitutiveLaw(ConstitutiveLaw):
     #     if constitutivelaw is not None:
     #         if isinstance(constitutivelaw, list):
     #             for cl in constitutivelaw:
-    #                 cl.Update(assembly, pb, dtime, nlgeom)
+    #                 cl.update(assembly, pb, dtime, nlgeom)
     #         else:
-    #             constitutivelaw.Update(assembly, pb, dtime, nlgeom)
+    #             constitutivelaw.update(assembly, pb, dtime, nlgeom)
 
     # def NewTimeIncrementConstitutiveLaw(self):
         
 
-    # def ResetConstitutiveLaw(self):
+    # def resetConstitutiveLaw(self):
     #     constitutivelaw = self.GetConstitutiveLaw()
         
     #     if constitutivelaw is not None:
     #         if isinstance(constitutivelaw, list):
     #             for cl in constitutivelaw:
-    #                 cl.Reset()
+    #                 cl.reset()
     #         else:
-    #             constitutivelaw.Reset()
+    #             constitutivelaw.reset()
 
 
 class ThermalProperties(ConstitutiveLaw):  

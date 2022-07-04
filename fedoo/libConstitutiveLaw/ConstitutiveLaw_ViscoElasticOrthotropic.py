@@ -51,7 +51,7 @@ class ViscoElasticComposites(Mechanical3D):
 
         return sigma # list de 6 objets de type OpDiff
        
-    def UpdateDamage(self):
+    def updateDamage(self):
         for key in self.__parameters: exec(key + '= self.__parameters["' +key+'"]' )
         return NotImplemented
         

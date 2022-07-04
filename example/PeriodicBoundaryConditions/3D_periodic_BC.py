@@ -84,15 +84,15 @@ TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
-Volume_mesh = Assembly.get_all()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
+Volume_mesh = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
 
-MeanStress = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)] 
+MeanStress = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)] 
 
 MeanStrain = [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-2], Problem.GetDisp('DispZ')[-2], 
               Problem.GetDisp('DispX')[-1], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispZ')[-1]]
 # Other method: only work if volume with no void (Void=0)
 # Void = Volume-Volume_mesh 
-# MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
+# MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStrain[i]) for i in range(6)] 
 
 print('Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ' )
 print(MeanStrain)

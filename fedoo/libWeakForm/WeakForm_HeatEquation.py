@@ -52,21 +52,21 @@ class SteadyHeatEquation(WeakForm):
                         
         # self.__nlgeom = nlgeom #geometric non linearities
         
-    def Initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, initialTime = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
             self.__grad_temp = [0 if operator is 0 else 
-                                assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
+                                assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
         else: 
             self.__grad_temp = [0 for operator in self.__op_grad_temp]
 
-    def Update(self, assembly, pb, dtime):
+    def update(self, assembly, pb, dtime):
         self.__grad_temp = [0 if operator is 0 else 
-                    assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]   
+                    assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]   
 
-    def Reset(self): #to update
+    def reset(self): #to update
         pass
 
-    def ResetTimeIncrement(self): #to update
+    def to_start(self): #to update
         pass       
         
     def GetDifferentialOperator(self, mesh=None, localFrame = None):      
@@ -131,37 +131,34 @@ class TemperatureTimeDerivative(WeakForm):
         
         # self.__nlgeom = nlgeom #geometric non linearities
         
-    # def UpdateInitialStress(self,InitialStressTensor):                                                
+    # def updateInitialStress(self,InitialStressTensor):                                                
     #     self.__InitialStressTensor = InitialStressTensor       
 
     # def GetInitialStress(self):                                                
     #     return self.__InitialStressTensor 
         
-    def Initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, initialTime = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
-            self.__temp_start = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+            self.__temp_start = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
             self.__temp = self.__temp_start
         else: 
             self.__temp_start = self.__temp = 0
 
-    def Update(self, assembly, pb, dtime):
-        self.__temp = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+    def update(self, assembly, pb, dtime):
+        self.__temp = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
         
-    def Reset(self):
+    def reset(self):
         pass
-    #     self.__ConstitutiveLaw.Reset()
+    #     self.__ConstitutiveLaw.reset()
     #     self.__InitialStressTensor = 0
     #     self.__InitialGradDispTensor = None
 
-    def ResetTimeIncrement(self):
+    def to_start(self):
         pass
            
-    def InitTimeIncrement(self, assembly, pb, dtime):
+    def set_start(self, assembly, pb, dtime):
         self.__dtime = dtime        
-                    
-    def NewTimeIncrement(self):
-        self.__temp_start = self.__temp
-        
+        self.__temp_start = self.__temp                                  
         #no need to update Initial Stress because the last computed stress remained unchanged
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):      
@@ -240,34 +237,34 @@ def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = N
         
 #         # self.__nlgeom = nlgeom #geometric non linearities
         
-#     # def UpdateInitialStress(self,InitialStressTensor):                                                
+#     # def updateInitialStress(self,InitialStressTensor):                                                
 #     #     self.__InitialStressTensor = InitialStressTensor       
 
 #     # def GetInitialStress(self):                                                
 #     #     return self.__InitialStressTensor 
         
-#     def Initialize(self, assembly, pb, initialTime = 0.):
+#     def initialize(self, assembly, pb, initialTime = 0.):
 #         if not(np.isscalar(pb.GetDoFSolution())):
-#             self.__temp_start = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+#             self.__temp_start = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
 #             self.__temp = self.__temp_start
 #             self.__grad_temp = [0 if operator is 0 else 
-#                                 assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
+#                                 assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
 #         else: 
 #             self.__temp_start = self.__temp = 0
 #             self.__grad_temp = [0 for operator in self.__op_grad_temp]
         
-#         # self.__ConstitutiveLaw.Initialize(assembly, pb, initialTime, self.__nlgeom)
+#         # self.__ConstitutiveLaw.initialize(assembly, pb, initialTime, self.__nlgeom)
         
 
-#     def Update(self, assembly, pb, dtime):
-#         self.__temp = assembly.ConvertData(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+#     def update(self, assembly, pb, dtime):
+#         self.__temp = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
 #         self.__grad_temp = [0 if operator is 0 else 
-#                     assembly.GetGaussPointResult(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
+#                     assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
                                
         
 #         #Doit être adapté à chaque fois ? -> je pense que oui !
-#         # self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
-#         # self.UpdateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
+#         # self.updateInitialStress(self.__ConstitutiveLaw.GetPKII())
+#         # self.updateInitialStress(self.__ConstitutiveLaw.GetKirchhoff())
         
 #         # if self.__nlgeom:
 #         #     if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
@@ -276,17 +273,17 @@ def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = N
             
 
 
-#     def Reset(self):
+#     def reset(self):
 #         pass
-#     #     self.__ConstitutiveLaw.Reset()
+#     #     self.__ConstitutiveLaw.reset()
 #     #     self.__InitialStressTensor = 0
 #     #     self.__InitialGradDispTensor = None
 
-#     def ResetTimeIncrement(self):
+#     def to_start(self):
 #         pass
-#     #     self.__ConstitutiveLaw.ResetTimeIncrement()
+#     #     self.__ConstitutiveLaw.to_start()
         
-#     #     self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
+#     #     self.updateInitialStress(self.__ConstitutiveLaw.GetPKII())
 #     #     if self.__nlgeom:
 #     #         if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
 #     #             raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            

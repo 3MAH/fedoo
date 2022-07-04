@@ -42,14 +42,14 @@ class InterfaceForce(WeakForm):
             raise NameError('nlgeom non implemented for Interface force')
         self.__nlgeom = nlgeom
 
-    def UpdateInitialStress(self,InitialStressVector):                                                
+    def updateInitialStress(self,InitialStressVector):                                                
         self.__InitialStressVector = InitialStressVector
 
-    def Update(self, assembly, pb, dtime):
+    def update(self, assembly, pb, dtime):
         #function called when the problem is updated (NR loop or time increment)
         #- No nlgeom effect for now
         #- Change in constitutive law (internal variable)
-        self.UpdateInitialStress(self.__ConstitutiveLaw.GetInterfaceStress())
+        self.updateInitialStress(self.__ConstitutiveLaw.GetInterfaceStress())
         
         if self.__nlgeom: #need to be modifed for nlgeom
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
@@ -57,14 +57,14 @@ class InterfaceForce(WeakForm):
             self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
         
 
-    def ResetTimeIncrement(self):
-        self.__ConstitutiveLaw.ResetTimeIncrement()
+    def to_start(self):
+        self.__ConstitutiveLaw.to_start()
 
     def NewTimeIncrement(self):
         self.__ConstitutiveLaw.NewTimeIncrement()
 
-    def Reset(self):
-        self.__ConstitutiveLaw.Reset()
+    def reset(self):
+        self.__ConstitutiveLaw.reset()
         self.__InitialStressVector = 0
 
     def GetDifferentialOperator(self, mesh=None, localFrame = None):

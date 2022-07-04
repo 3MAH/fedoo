@@ -15,7 +15,7 @@ def Static(Assembling, name = "MainProblem"):
     class __Static(libBase):
                 
         def __init__(self, assembling, name):   
-            assembling.Initialize(self,0)                         
+            assembling.initialize(self,0)                         
             A = assembling.GetMatrix()
             B = 0             
             D = assembling.GetVector()     
@@ -41,8 +41,8 @@ def Static(Assembling, name = "MainProblem"):
 
             return E
         
-        def Reset(self):
-            self.__Assembly.Reset()
+        def reset(self):
+            self.__Assembly.reset()
             
             self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
             self.SetD(self.__Assembly.GetVector())            
@@ -50,7 +50,7 @@ def Static(Assembling, name = "MainProblem"):
             self.ApplyBoundaryCondition()
 
         
-        def Update(self, dtime=1, compute = 'all'):   
+        def update(self, dtime=1, compute = 'all'):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -59,12 +59,12 @@ def Static(Assembling, name = "MainProblem"):
                 - Change in constitutive law (internal variable)
             Update the problem with the new assembled global matrix and global vector
             """
-#            self.__Assembly.Update(self.GetD())
-#            self.__Assembly.Update(self)
+#            self.__Assembly.update(self.GetD())
+#            self.__Assembly.update(self)
 #            self.SetA(Assembling.GetMatrix())
 #            self.SetD(Assembling.GetVector())
 #            
-            outValues = self.__Assembly.Update(self, dtime, compute)  
+            outValues = self.__Assembly.update(self, dtime, compute)  
             self.SetA(Assembling.GetMatrix())
             self.SetD(Assembling.GetVector())
             return outValues 
@@ -75,20 +75,20 @@ def Static(Assembling, name = "MainProblem"):
             updateWF = kargs.pop('updateWF', True)
             libBase.Solve(self)
             if updateWF == True:
-                self.Update(compute = 'none')
+                self.update(compute = 'none')
             
         def GetAssembly(self):
             return self.__Assembly
         
         def ChangeAssembly(self,Assembling, update = True):
             """
-            Modify the assembly associated to the problem and update the problem (see Assembly.Update for more information)
+            Modify the assembly associated to the problem and update the problem (see Assembly.update for more information)
             """
             if isinstance(Assembling,str):
                 Assembling = Assembly.get_all()[Assembling]
                 
             self.__Assembly = Assembling
-            if update: self.Update()        
+            if update: self.update()        
         
         def GetDisp(self,name='all'):    
             if name == 'all': name = 'Disp'

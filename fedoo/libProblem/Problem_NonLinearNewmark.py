@@ -32,7 +32,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__Velocity = 0
             self.__Acceleration = 0        
                         
-        def UpdateA(self, dt): #internal function to be used when modifying M, K or C
+        def updateA(self, dt): #internal function to be used when modifying M, K or C
             if self.__DampingAssembly is 0:
                 self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix())
             else:
@@ -43,7 +43,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
 
                 self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
         
-        def UpdateD(self, dt, start=False):
+        def updateD(self, dt, start=False):
             #start = True if begining of a new time increment (ie  DispOld-DispStart = 0)
             if start:
                 DeltaDisp = 0 #DeltaDisp = Disp-DispStart = 0 for the 1st increment              
@@ -75,13 +75,13 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.SetD(D)       
         
         
-        def Initialize(self, initialTime):   
+        def initialize(self, initialTime):   
             """
             """
-            self.__MassAssembly.Initialize(self,initialTime)
-            self.__StiffnessAssembly.Initialize(self,initialTime)
+            self.__MassAssembly.initialize(self,initialTime)
+            self.__StiffnessAssembly.initialize(self,initialTime)
             if self.__DampingAssembly is not 0 and self.__RayleighDamping is None:
-                self.__DampingAssembly.Initialize(self,initialTime)       
+                self.__DampingAssembly.initialize(self,initialTime)       
         
         def NewTimeIncrement(self, dt):         
             ### dt is the time step of the previous increment            
@@ -99,15 +99,15 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self._NonLinearStatic__DU = 0
 
             
-        def ResetTimeIncrement(self):     
+        def to_start(self):     
             self._NonLinearStatic__DU = 0
             
-            self.__MassAssembly.ResetTimeIncrement()
-            self.__StiffnessAssembly.ResetTimeIncrement()
+            self.__MassAssembly.to_start()
+            self.__StiffnessAssembly.to_start()
             if self.__DampingAssembly is not 0:
-                self.__DampingAssembly.ResetTimeIncrement()                                
+                self.__DampingAssembly.to_start()                                
         
-        def Update(self, dtime=None, compute = 'all', updateWeakForm = True):   
+        def update(self, dtime=None, compute = 'all', updateWeakForm = True):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -117,15 +117,15 @@ def _GenerateClass_NonLinearNewmark(libBase):
             Update the problem with the new assembled global matrix and global vector
             """
             if updateWeakForm == True:
-                self.__StiffnessAssembly.Update(self, dtime, compute)  
+                self.__StiffnessAssembly.update(self, dtime, compute)  
             else: 
                 self.__StiffnessAssembly.assemble_global_mat(compute)
 
-        def Reset(self):
-            self.__MassAssembly.Reset()
-            self.__StiffnessAssembly.Reset()
+        def reset(self):
+            self.__MassAssembly.reset()
+            self.__StiffnessAssembly.reset()
             if self.__DampingAssembly is not 0:
-                self.__DampingAssembly.Reset()            
+                self.__DampingAssembly.reset()            
             self.SetA(0) #tangent stiffness 
             self.SetD(0)                 
             # self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
@@ -153,7 +153,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     LoadFactor = (time-self.t0)/(self.tmax-self.t0) #linear ramp
         #     # LoadFactor = 1
 
-        #    # def Update(self):
+        #    # def update(self):
         #    #old update function to integrate in NewTimeIncrement
             
         #     self.__DisplacementStart = self.__Displacement.copy()            
@@ -190,11 +190,11 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     self.__Velocity += self.dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
         #     self.__Acceleration = NewAcceleration
         
-        # def ResetTimeIncrement(self, update = True):                              
+        # def to_start(self, update = True):                              
         #     self.__Displacement = self.__DisplacementStart
         #     self.__LoadFactor = self.__LoadFactorIni
-        #     self.__StiffnessAssembly.ResetTimeIncrement()
-        #     if update: self.Update()
+        #     self.__StiffnessAssembly.to_start()
+        #     if update: self.update()
       
         # def NewtonRaphsonIncr(self):          
         #     try:
@@ -259,8 +259,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
         
 #             for subiter in range(max_subiter): #newton-raphson iterations                
 #                 #update Stress and initial displacement and Update stiffness matrix
-#                 self.Update(time, compute = 'vector')   
-# #                TotalStrain, TotalPKStress = self.Update()   
+#                 self.update(time, compute = 'vector')   
+# #                TotalStrain, TotalPKStress = self.update()   
                         
 #                 #Check convergence     
 #                 normRes = self.NewtonRaphsonError()       
@@ -334,7 +334,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     C = self.__DampMatrix
         #     return np.sum((K*self.GetX() + C*self.GetXdot() + M*self.GetXdotdot())*(self.GetX()-self.__Xold))
         
-        # def UpdateStiffness(self, StiffnessAssembling):
+        # def updateStiffness(self, StiffnessAssembling):
         #     if isinstance(StiffnessAssembling,str):
         #         StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
         #     self.__StiffMatrix = StiffnessAssembling.GetMatrix()

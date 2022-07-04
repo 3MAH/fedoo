@@ -66,18 +66,18 @@ class Spring(ConstitutiveLaw):
             
         return K
 
-    def Initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
        #nlgeom not implemented
        pass
 
-    def Update(self,assembly, pb, dtime):            
+    def update(self,assembly, pb, dtime):            
         #dtime not used for this law
         
         displacement = pb.GetDoFSolution()
         if displacement is 0: self._InterfaceStress = self.__Delta = 0
         else:
             op_delta = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
-            self.__Delta = [assembly.GetGaussPointResult(op, displacement) for op in op_delta]
+            self.__Delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
         
             self.ComputeInterfaceStress(self.__Delta)        
 

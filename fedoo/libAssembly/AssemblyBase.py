@@ -121,7 +121,7 @@ class AssemblySum(AssemblyBase):
         if not(compute == 'matrix'):
             self.SetVector(sum([assembly.GetVector() for assembly in self.__list_assembly]))
     
-    def Update(self, pb, dtime=None, compute = 'all'):
+    def update(self, pb, dtime=None, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
         Parameters: 
@@ -130,10 +130,10 @@ class AssemblySum(AssemblyBase):
         """
         if self.__reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
             for assembly in self.__list_assembly:
-                assembly.Update(pb,dtime,compute)           
+                assembly.update(pb,dtime,compute)           
         else:
             for numAssembly in self.__reload:
-                self.__list_assembly[numAssembly].Update(pb,dtime,compute)
+                self.__list_assembly[numAssembly].update(pb,dtime,compute)
                     
         if not(compute == 'vector'):         
             self.SetMatrix( sum([assembly.GetMatrix() for assembly in self.__list_assembly]) )
@@ -147,21 +147,21 @@ class AssemblySum(AssemblyBase):
         for assembly in self.__list_assembly:
             assembly.InitTimeIncrement(pb, dtime)   
 
-    def Initialize(self, pb, initialTime=0.):
+    def initialize(self, pb, initialTime=0.):
         """
-        Reset the current time increment (internal variable in the constitutive equation)
+        reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         for assembly in self.__list_assembly:
-            assembly.Initialize(pb, initialTime=0.)   
+            assembly.initialize(pb, initialTime=0.)   
 
-    def ResetTimeIncrement(self):
+    def to_start(self):
         """
-        Reset the current time increment (internal variable in the constitutive equation)
+        reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         for assembly in self.__list_assembly:
-            assembly.ResetTimeIncrement()        
+            assembly.to_start()        
 
     def NewTimeIncrement(self):
         """
@@ -172,14 +172,14 @@ class AssemblySum(AssemblyBase):
         for assembly in self.__list_assembly:
             assembly.NewTimeIncrement()        
 
-    def Reset(self):
+    def reset(self):
         """
-        Reset the assembly to it's initial state.
+        reset the assembly to it's initial state.
         Internal variable in the constitutive equation are reinitialized 
         And stored global matrix and vector are deleted
         """
         for assembly in self.__list_assembly:
-            assembly.Reset() 
+            assembly.reset() 
         self.deleteGlobalMatrix()
 
     @property

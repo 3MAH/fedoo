@@ -81,26 +81,26 @@ class InternalForce(WeakForm):
 
         return DiffOp
 
-    def Initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, initialTime = 0.):
         self._assembly = assembly
         self._pb = pb
 
-    def Update(self, assembly, pb, dtime):
+    def update(self, assembly, pb, dtime):
         if self._nlgeom == 2:
             # if updated lagragian method -> update the mesh and recompute elementary op
             assembly.set_disp(pb.GetDisp())               
             # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.GetDisp().T)
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
                 del assembly._saved_change_of_basis_mat[assembly.current.mesh]
-            assembly.current.PreComputeElementaryOperators()        
+            assembly.current.compute_elementary_operators()        
                         
-    def ResetTimeIncrement(self):    
+    def to_start(self):    
         if self._nlgeom == 2:
             # if updated lagragian method -> reset the mesh to the begining of the increment
             self._assembly.set_disp(self._pb.GetDisp())               
             if self._assembly.current.mesh in self._assembly._saved_change_of_basis_mat:
                 del self._assembly._saved_change_of_basis_mat[self._assembly.current.mesh]
-            self._assembly.current.PreComputeElementaryOperators()            
+            self._assembly.current.compute_elementary_operators()            
 
     def GetConstitutiveLaw(self):
         return self.__ConstitutiveLaw
@@ -189,14 +189,14 @@ class InternalForce(WeakForm):
             
 #         else: self.__NonLinearStrainOperatorVirtual = 0                     
         
-#     def UpdateInitialStress(self,InitialStressTensor):                                                
+#     def updateInitialStress(self,InitialStressTensor):                                                
 #         self.__InitialStressTensor = InitialStressTensor
 
 #     def GetInitialStress(self):                                                
 #         return self.__InitialStressTensor 
 
-#     def Update(self, assembly, pb, dtime):
-#         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
+#     def update(self, assembly, pb, dtime):
+#         self.updateInitialStress(self.__ConstitutiveLaw.GetPKII())
                         
 #         if self.__nlgeom:
 #             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
@@ -205,12 +205,12 @@ class InternalForce(WeakForm):
             
 
 
-#     def Reset(self):
+#     def reset(self):
 #         self.__InitialStressTensor = 0
 #         self.__InitialGradDispTensor = None
 
-#     def ResetTimeIncrement(self):       
-#         self.UpdateInitialStress(self.__ConstitutiveLaw.GetPKII())
+#     def to_start(self):       
+#         self.updateInitialStress(self.__ConstitutiveLaw.GetPKII())
 #         if self.__nlgeom:
 #             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
 #                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            

@@ -153,17 +153,17 @@ if USE_SIMCOON:
                     #--------------- Post-Treatment -----------------------------------------------
                     #Compute the mean stress and strain
                     #Get the stress tensor (PG values)
-                    # TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "GaussPoint")
+                    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint")
     
                     TensorStrain = material.GetStrain()
                     TensorStress = material.GetPKII()
                     
-                    MeanStress = np.array([1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)])
+                    MeanStress = np.array([1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)])
     
                     MeanStrain = np.array([pb.GetDisp('DispX')[-2], pb.GetDisp('DispY')[-2], pb.GetDisp('DispZ')[-2],
                                  pb.GetDisp('DispX')[-1], pb.GetDisp('DispY')[-1], pb.GetDisp('DispZ')[-1]])
                     
-                    Wm_mean = (1/Volume) * Assembly.get_all()['Assembling'].IntegrateField(material.Wm)
+                    Wm_mean = (1/Volume) * Assembly.get_all()['Assembling'].integrate_field(material.Wm)
     
                     MeanStress_All.append(MeanStress)
                     MeanStrain_All.append(MeanStrain)

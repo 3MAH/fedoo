@@ -78,19 +78,19 @@ TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
-    TensorStrainNd = Assembly.ConvertData(TensorStrain, meshname, convertTo = "Node")
-    TensorStressNd = Assembly.ConvertData(TensorStress, meshname, convertTo = "Node")
+    TensorStrainNd = Assembly.convert_data(TensorStrain, meshname, convertTo = "Node")
+    TensorStressNd = Assembly.convert_data(TensorStress, meshname, convertTo = "Node")
     
     #Get the stress tensor (element values)
-    TensorStrainEl = Assembly.ConvertData(TensorStrain, meshname, convertTo = "Element")       
-    TensorStressEl = Assembly.ConvertData(TensorStress, meshname, convertTo = "Element")
+    TensorStrainEl = Assembly.convert_data(TensorStrain, meshname, convertTo = "Element")       
+    TensorStressEl = Assembly.convert_data(TensorStress, meshname, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Nodal")       
+    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Nodal")       
     # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
     
     # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.get_all()['Assembling'].GetStrainTensor(Problem.GetDisp(), "Element")       
+    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Element")       
     # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
     
     # Get the principal directions (vectors on nodes)

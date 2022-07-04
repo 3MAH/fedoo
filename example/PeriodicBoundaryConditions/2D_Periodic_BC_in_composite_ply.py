@@ -126,13 +126,13 @@ TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 Volume = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
-Volume_mesh = Assembly.get_all()['Assembling'].IntegrateField(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
+Volume_mesh = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(TensorStress[0])) #volume of domain without the void (hole)
 
-MeanStress = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStress[i]) for i in range(6)] 
+MeanStress = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)] 
 
 # MeanStrain only work if volume with no void
 # Void = Volume-Volume_mesh 
-MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].IntegrateField(TensorStrain[i]) for i in range(6)] 
+MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStrain[i]) for i in range(6)] 
 # print(ConstitutiveLaw.get_all()['ElasticLaw'].GetH()@np.array(MeanStrain)) #should be the same as MeanStress if homogeneous material and no void
 
 print('Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ', MeanStrain)
@@ -145,16 +145,16 @@ print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
 #------------------------------------------------------------------------------
 
 #Get the stress tensor (nodal values converted from PG values)
-TensorStrainNd = Assembly.get_all()['Assembling'].ConvertData(TensorStrain, convertTo = "Node")
-TensorStressNd = Assembly.get_all()['Assembling'].ConvertData(TensorStress, convertTo = "Node")
+TensorStrainNd = Assembly.get_all()['Assembling'].convert_data(TensorStrain, convertTo = "Node")
+TensorStressNd = Assembly.get_all()['Assembling'].convert_data(TensorStress, convertTo = "Node")
 # Or using the GetResults function
 # res = Problem.GetResults("Assembling", ["stress", "strain"], 'node')
 # TensorStrainNd = res['Strain']
 # TensorStressNd = res['Stress']
 
 #Get the stress tensor (element values)
-TensorStrainEl = Assembly.get_all()['Assembling'].ConvertData(TensorStrain, convertTo = "Element")       
-TensorStressEl = Assembly.get_all()['Assembling'].ConvertData(TensorStress, convertTo = "Element")
+TensorStrainEl = Assembly.get_all()['Assembling'].convert_data(TensorStrain, convertTo = "Element")       
+TensorStressEl = Assembly.get_all()['Assembling'].convert_data(TensorStress, convertTo = "Element")
 
 # Get the principal directions (vectors on nodes)
 PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()

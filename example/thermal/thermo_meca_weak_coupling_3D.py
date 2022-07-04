@@ -22,7 +22,7 @@ mesh = Mesh.get_all()[meshname]
 crd = mesh.nodes 
 
 #note set for boundary conditions
-Xmin, Xmax = mesh.bounding_box()
+Xmin, Xmax = mesh.bounding_box
 left = mesh.find_nodes('X', Xmin[0])
 right = mesh.find_nodes('X', Xmax[0])
 bottom = mesh.find_nodes('Y', Xmin[1])
@@ -112,8 +112,8 @@ nb_iter = 100
 tmax = 30
 dt = tmax/nb_iter
    
-pb_th.Initialize()
-pb_m.Initialize()
+pb_th.initialize()
+pb_m.initialize()
 
 pb_th.tmax = tmax
 pb_m.tmax = tmax
@@ -126,7 +126,7 @@ for i in range(nb_iter):
     pb_th.SaveResults(i)
     
     print('Iter {} - Therm - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
-    temp = assemb.ConvertData(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+    temp = assemb.convert_data(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
     mechancial_law.set_T(temp)
     
     convergence, nbNRiter, normRes = pb_m.SolveTimeIncrement(time, dt)
@@ -154,7 +154,7 @@ for i in range(nb_iter, 2*nb_iter):
     pb_th.SaveResults(i)
     
     print('Iter {} - Therm - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
-    temp = assemb.ConvertData(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+    temp = assemb.convert_data(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
     mechancial_law.set_T(temp)
     
     convergence, nbNRiter, normRes = pb_m.SolveTimeIncrement(time, dt)

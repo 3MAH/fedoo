@@ -63,7 +63,7 @@ for computeShear in range(3):
     Problem.Solve()
     
     #Post treatment               
-    results = Assembly.get_all()['beam'].GetExternalForces(Problem.GetDoFSolution('all'))
+    results = Assembly.get_all()['beam'].get_ext_forces(Problem.GetDoFSolution('all'))
     
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -79,7 +79,7 @@ for computeShear in range(3):
     assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = Assembly.get_all()['beam'].GetInternalForces(Problem.GetDoFSolution('all'), 'local')
+    results = Assembly.get_all()['beam'].get_int_forces(Problem.GetDoFSolution('all'), 'local')
     IntMoment = results[:,3:]
     IntForce = results[:,0:3]    
     

@@ -49,7 +49,7 @@ class InitialStress(WeakForm):
         self.__typeOperator = TypeOperator
         
 
-    def UpdateInitialStress(self,InitialStressTensor):
+    def updateInitialStress(self,InitialStressTensor):
         self.__InitialStressTensor = InitialStressTensor
         
         

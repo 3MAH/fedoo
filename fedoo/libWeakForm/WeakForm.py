@@ -33,16 +33,16 @@ class WeakForm:
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
         pass
             
-    def Initialize(self, assembly, pb, initialTime=0.):
+    def initialize(self, assembly, pb, initialTime=0.):
         #function called at the very begining of the resolution
         pass
 
-    def InitTimeIncrement(self, assembly, pb, dtime):
+    def set_start(self, assembly, pb, dt):
         #function called at the begining of a new time increment
         #For now, used only to inform the weak form the the time step for the next increment.
         pass
 
-    def Update(self, assembly, pb, dtime):
+    def update(self, assembly, pb, dtime):
         #function called when the problem is updated (NR loop or time increment)
         #- New initial Stress
         #- New initial Displacement
@@ -50,15 +50,11 @@ class WeakForm:
         #- Change in constitutive law (internal variable)
         pass
     
-    def NewTimeIncrement(self):  
-        #function called at the end of a time increment. Used to update variables to the new time.
-        pass
-    
-    def ResetTimeIncrement(self):
+    def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
         pass
 
-    def Reset(self):
+    def reset(self):
         #function called if all the problem history is reseted.
         pass           
     
@@ -108,31 +104,27 @@ class WeakFormSum(WeakForm):
             Diff += Diff_wf            
         return Diff
     
-    def Initialize(self, assembly, pb, initialTime=0.):
+    def initialize(self, assembly, pb, initialTime=0.):
         for wf in self.__list_weakform:
-            wf.Initialize(assembly, pb, initialTime)
+            wf.initialize(assembly, pb, initialTime)
 
-    def InitTimeIncrement(self, assembly, pb, dtime):
+    def set_start(self, assembly, pb, dt):
         for wf in self.__list_weakform:
-            wf.InitTimeIncrement(assembly, pb, dtime)
+            wf.set_start(assembly, pb, dt)
     
-    def Update(self, assembly, pb, dtime):        
+    def update(self, assembly, pb, dtime):        
         for wf in self.__list_weakform:
-            wf.Update(assembly, pb, dtime)
+            wf.update(assembly, pb, dtime)
     
-    def NewTimeIncrement(self):  
-        for wf in self.__list_weakform:
-            wf.NewTimeIncrement()
-    
-    def ResetTimeIncrement(self):
+    def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
         for wf in self.__list_weakform:
-            wf.ResetTimeIncrement()
+            wf.to_start()
 
-    def Reset(self):
+    def reset(self):
         #function called if all the problem history is reseted.
         for wf in self.__list_weakform:
-            wf.Reset()
+            wf.reset()
     
     def copy(self):
         #function to copy a weakform at the initial state

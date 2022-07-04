@@ -108,7 +108,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix    
             self.__UpdateA()
     
-        def Initialize(self, t0=0.):
+        def initialize(self, t0=0.):
             D = self.__MassMatrix * ( \
                     (1/(self.__Beta*self.__TimeStep**2))*self.__Xold +   \
                     (1/(self.__Beta*self.__TimeStep))   *self.__Xdot +   \
@@ -120,13 +120,13 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
                     (0.5*self.__TimeStep * (self.__Gamma/self.__Beta - 2)) *self.__Xdotdot)                                                                                      
             self.SetD(D)                        
     
-        def Update(self):
+        def update(self):
            
             NewXdotdot = (1/self.__Beta/(self.__TimeStep**2)) * (self.GetDoFSolution('all') - self.__Xold - self.__TimeStep*self.__Xdot) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Xdotdot
             self.__Xdot += self.__TimeStep * ( (1-self.__Gamma)*self.__Xdotdot + self.__Gamma*NewXdotdot)
             self.__Xdotdot = NewXdotdot
             self.__Xold[:] = self.GetDoFSolution('all')
-            self.Initialize()
+            self.initialize()
     #        self.SetD(self.__MassMatrix * ( (1/self.__Beta/(self.__TimeStep**2))*self.__Xold + (1/self.__Beta/self.__TimeStep)*self.__Xdot + (1/2/self.__Beta -1)*self.__Xdotdot) )
             
         def GetElasticEnergy(self):
@@ -174,7 +174,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             C = self.__DampMatrix
             return np.sum((K*self.GetX() + C*self.GetXdot() + M*self.GetXdotdot())*(self.GetX()-self.__Xold))
         
-        def UpdateStiffness(self, StiffnessAssembling):
+        def updateStiffness(self, StiffnessAssembling):
             if isinstance(StiffnessAssembling,str):
                 StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             self.__StiffMatrix = StiffnessAssembling.GetMatrix()
