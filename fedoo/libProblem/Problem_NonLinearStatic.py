@@ -108,15 +108,16 @@ def _GenerateClass_NonLinearStatic(libBase):
             
         def set_start(self,dt, save_results):
             #dt not used for static problem
-            self.__Utot += self.__DU
-            self.__DU = 0
-            self.__Assembly.set_start(self,dt)    
-            self.__err0 = self.__default_err0 #initial error for NR error estimation
-            
-            #Save results            
-            if save_results: 
-                self.SaveResults(self.__compteurOutput)                              
-                self.__compteurOutput += 1     
+            if self.__DU is not 0: 
+                self.__Utot += self.__DU
+                self.__DU = 0
+                self.__Assembly.set_start(self,dt)    
+                self.__err0 = self.__default_err0 #initial error for NR error estimation
+                
+                #Save results            
+                if save_results: 
+                    self.SaveResults(self.__compteurOutput)                              
+                    self.__compteurOutput += 1     
             
             
         def to_start(self):   

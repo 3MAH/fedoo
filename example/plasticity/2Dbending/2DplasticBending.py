@@ -60,7 +60,7 @@ else:
     nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-Assembly.Create("ConstitutiveLaw", meshname, 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+Assembly.create("ConstitutiveLaw", meshname, 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
 

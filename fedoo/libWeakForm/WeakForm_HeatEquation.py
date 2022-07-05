@@ -52,7 +52,7 @@ class SteadyHeatEquation(WeakForm):
                         
         # self.__nlgeom = nlgeom #geometric non linearities
         
-    def initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, t0 = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
             self.__grad_temp = [0 if operator is 0 else 
                                 assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
@@ -137,7 +137,7 @@ class TemperatureTimeDerivative(WeakForm):
     # def GetInitialStress(self):                                                
     #     return self.__InitialStressTensor 
         
-    def initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, t0 = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
             self.__temp_start = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
             self.__temp = self.__temp_start
@@ -243,7 +243,7 @@ def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = N
 #     # def GetInitialStress(self):                                                
 #     #     return self.__InitialStressTensor 
         
-#     def initialize(self, assembly, pb, initialTime = 0.):
+#     def initialize(self, assembly, pb, t0 = 0.):
 #         if not(np.isscalar(pb.GetDoFSolution())):
 #             self.__temp_start = assembly.convert_data(pb.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
 #             self.__temp = self.__temp_start
@@ -253,7 +253,7 @@ def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = N
 #             self.__temp_start = self.__temp = 0
 #             self.__grad_temp = [0 for operator in self.__op_grad_temp]
         
-#         # self.__ConstitutiveLaw.initialize(assembly, pb, initialTime, self.__nlgeom)
+#         # self.__ConstitutiveLaw.initialize(assembly, pb, t0, self.__nlgeom)
         
 
 #     def update(self, assembly, pb, dtime):

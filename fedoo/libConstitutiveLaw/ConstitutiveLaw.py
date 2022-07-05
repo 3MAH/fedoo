@@ -32,7 +32,7 @@ class ConstitutiveLaw:
         #function called if the time step is reinitialized. Not used for elastic laws
         pass
 
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
         #function called to initialize the constutive law 
         pass
     
@@ -148,9 +148,9 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         
         self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
-    def initialize(self, assembly, pb, initialTime=0., nlgeom=False):
+    def initialize(self, assembly, pb, t0=0., nlgeom=False):
         for cl in self.__list_constitutivelaw:
-            cl.initialize(assembly, pb, initialTime)
+            cl.initialize(assembly, pb, t0)
 
     def InitTimeIncrement(self, assembly, pb, dtime):
         for cl in self.__list_constitutivelaw:
@@ -177,7 +177,7 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         raise NotImplementedError()
 
         
-    # def initializeConstitutiveLaw(self, assembly, pb, initialTime=0.):
+    # def initializeConstitutiveLaw(self, assembly, pb, t0=0.):
     #     if hasattr(self,'nlgeom'): nlgeom = self.nlgeom
     #     else: nlgeom=False
     #     constitutivelaw = self.GetConstitutiveLaw()
@@ -185,9 +185,9 @@ class ListConstitutiveLaw(ConstitutiveLaw):
     #     if constitutivelaw is not None:
     #         if isinstance(constitutivelaw, list):
     #             for cl in constitutivelaw:
-    #                 cl.initialize(assembly, pb, initialTime, nlgeom)
+    #                 cl.initialize(assembly, pb, t0, nlgeom)
     #         else:
-    #             constitutivelaw.initialize(assembly, pb, initialTime, nlgeom)
+    #             constitutivelaw.initialize(assembly, pb, t0, nlgeom)
     
     # def updateConstitutiveLaw(self,assembly, pb, dtime):   
     #     if hasattr(self,'nlgeom'): nlgeom = self.nlgeom

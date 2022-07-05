@@ -27,7 +27,7 @@ material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.Create("ElasticLaw", meshname, type_el, name="Assembling") 
+Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #Type of problem 
 Problem.Static("Assembling")

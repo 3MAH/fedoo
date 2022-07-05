@@ -156,7 +156,7 @@ if USE_SIMCOON:
             # self.__F0 = None
     
         
-        def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):      
+        def initialize(self, assembly, pb, t0 = 0., nlgeom=False):      
             
             if  self._dimension is None:
                 self._dimension = assembly.space.GetDimension()
@@ -170,7 +170,7 @@ if USE_SIMCOON:
                 if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1]).T
                 else: statev = assembly.convert_data(statev).T
             
-            sim.Umat_fedoo.Initialize(self, initialTime, statev, nlgeom)
+            sim.Umat_fedoo.Initialize(self, t0, statev, nlgeom)
             self.Run(0.) #Launch the UMAT to compute the elastic matrix                 
             if self.use_elastic_lt: self.elastic_Lt = self.Lt.copy() ### debut only ####
     

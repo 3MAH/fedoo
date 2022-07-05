@@ -38,15 +38,15 @@ computeShear = 1
 
 if computeShear == 0:
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFbeam", "beam", "bernoulliBeam", name="beam")    
+    Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam")    
 elif computeShear == 1:
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
     Element.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
-    Assembly.Create("WFbeam", "beam", "beam", name="beam")
+    Assembly.create("WFbeam", "beam", "beam", name="beam")
 else:  #computeShear = 2
     Mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
     WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
-    Assembly.Create("WFbeam", "beam", "beamFCQ", name="beam")    
+    Assembly.create("WFbeam", "beam", "beamFCQ", name="beam")    
 
 Problem.Static("beam")
 
@@ -99,4 +99,4 @@ if computeShear != 0 and k != 0:
 print('Analytical deflection: ', sol)
 print(U[-1])
 
-M=Assembly.get_all()['beam'].GetMatrix().todense()
+M=Assembly.get_all()['beam'].global_matrix().todense()

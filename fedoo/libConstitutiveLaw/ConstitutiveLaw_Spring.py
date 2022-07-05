@@ -66,7 +66,7 @@ class Spring(ConstitutiveLaw):
             
         return K
 
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
        #nlgeom not implemented
        pass
 

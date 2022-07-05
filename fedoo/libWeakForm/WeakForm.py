@@ -30,7 +30,7 @@ class WeakForm:
     def GetDifferentialOperator(self, mesh=None, localFrame = None):
         pass
             
-    def initialize(self, assembly, pb, initialTime=0.):
+    def initialize(self, assembly, pb, t0=0.):
         #function called at the very begining of the resolution
         pass
 
@@ -105,9 +105,9 @@ class WeakFormSum(WeakForm):
             Diff += Diff_wf            
         return Diff
     
-    def initialize(self, assembly, pb, initialTime=0.):
+    def initialize(self, assembly, pb, t0=0.):
         for wf in self.__list_weakform:
-            wf.initialize(assembly, pb, initialTime)
+            wf.initialize(assembly, pb, t0)
 
     def set_start(self, assembly, pb, dt):
         for wf in self.__list_weakform:

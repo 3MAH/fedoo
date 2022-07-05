@@ -22,7 +22,7 @@ ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw", nlgeom = True)
 
 #Assembly (print the time required for assembling)
-assemb = Assembly.Create("ElasticLaw", meshname, 'hex8', name="Assembling") 
+assemb = Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
 
 #Type of problem 
 Problem.NonLinearStatic("Assembling")

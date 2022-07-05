@@ -34,7 +34,7 @@ Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 wf = WeakForm.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
 
 # Assembly
-assemb = Assembly.Create("WeakForm", "Domain2", 'tet4', name="Assembly")
+assemb = Assembly.create("WeakForm", "Domain2", 'tet4', name="Assembly")
 
 # Type of problem
 Problem.NonLinearStatic("Assembly")

@@ -123,12 +123,12 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #             Variable("RotX") #torsion rotation   
 #             Variable("RotY") #flexion   
 #             Variable("RotZ") #flexion   
-#             Variable.SetVector('Disp' , ('DispX', 'DispY', 'DispZ') , 'global')
-#             Variable.SetVector('Rot' , ('RotX', 'RotY', 'RotZ') , 'global')
+#             Variable.global_vector = 'Disp' , ('DispX', 'DispY', 'DispZ' , 'global')
+#             Variable.global_vector = 'Rot' , ('RotX', 'RotY', 'RotZ' , 'global')
 #         elif GetDimension() == '2Dplane':
 #             Variable("RotZ")
 #             # Variable.SetDerivative('DispY', 'RotZ') #only valid with Bernoulli model       
-#             Variable.SetVector('Disp' , ('DispX', 'DispY') )            
+#             Variable.global_vector = 'Disp' , ('DispX', 'DispY' )            
 #         elif GetDimension() == '2Dstress':
 #             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                   

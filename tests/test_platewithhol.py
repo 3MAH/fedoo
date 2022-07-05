@@ -15,7 +15,7 @@ ConstitutiveLaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.Create("WeakForm", "Domain", name="Assembly", MeshChange = True) 
+Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
 Problem.Static("Assembly")

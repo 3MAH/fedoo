@@ -81,7 +81,7 @@ class InternalForce(WeakForm):
 
         return DiffOp
 
-    def initialize(self, assembly, pb, initialTime = 0.):
+    def initialize(self, assembly, pb, t0 = 0.):
         self._assembly = assembly
         self._pb = pb
 

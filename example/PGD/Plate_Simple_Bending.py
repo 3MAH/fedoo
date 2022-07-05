@@ -20,7 +20,7 @@ PGD.Mesh.Create("Midplane", "Thickness", name="Domain")
 ConstitutiveLaw.ElasticIsotrop(130e6, 0.3, name = 'ElasticLaw')
 WeakForm.InternalForce("ElasticLaw")
 
-PGD.Assembly.Create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
+PGD.Assembly.create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
 
 #PGD.Assembly.SetIntegrationElement("Midplane","quad8") # to be developped
 #PGD.Assembly.SetNumber(OfGaussPoint("Midplane",7)

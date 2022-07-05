@@ -56,7 +56,7 @@ class ElasticAnisotropic(Mechanical3D):
     def GetCurrentGradDisp(self):
         return self._grad_disp          
     
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
         if self._dimension is None:   
             self._dimension = assembly.space.GetDimension()
         self.nlgeom = nlgeom

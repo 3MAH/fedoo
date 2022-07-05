@@ -52,11 +52,11 @@ nodes_bottomRight = np.where((crd[:,0]==L) * (crd[:,1]==0))[0]
 nodes_top1 = np.where((crd[:,0]==L/4) * (crd[:,1]==h))[0]
 nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
 
-Assembly.Create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+Assembly.create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 #Mass matrix
 WeakForm.Inertia(rho,"Inertia")
-Assembly.Create("Inertia", "Domain", "quad4", name="MassAssembling")
+Assembly.create("Inertia", "Domain", "quad4", name="MassAssembling")
 
 Problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 

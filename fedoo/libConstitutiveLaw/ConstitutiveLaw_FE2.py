@@ -102,7 +102,7 @@ class FE2(Mechanical3D):
         # self.__F0 = None
 
     
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):  
         self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
             nb_points = assembly.n_elm_gp * assembly.mesh.n_elements

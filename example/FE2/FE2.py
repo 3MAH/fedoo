@@ -30,7 +30,7 @@ Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
 WeakForm.InternalForce("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
 
-micro_assembly = Assembly.Create('micro_wf', mesh_micro)
+micro_assembly = Assembly.create('micro_wf', mesh_micro)
 
 micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
 
@@ -38,7 +38,7 @@ micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
 WeakForm.InternalForce("FEM", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.Create("WeakForm", "macro", name="Assembly", MeshChange = True) 
+Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
 Problem.NonLinearStatic("Assembly")

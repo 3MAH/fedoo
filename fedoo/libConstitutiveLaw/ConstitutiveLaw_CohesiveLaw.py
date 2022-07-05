@@ -184,7 +184,7 @@ class CohesiveLaw(Spring):
         # self.__DamageVariable = self.__DamageVariableIrreversible.copy()       
         
         
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
        #nlgeom not implemented
        pass
 

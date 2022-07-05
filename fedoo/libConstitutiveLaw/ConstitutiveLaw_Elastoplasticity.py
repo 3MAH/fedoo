@@ -195,7 +195,7 @@ class ElastoPlasticity(Mechanical3D):
         self.__currentSigma = 0 #lissStressTensor object describing the last computed stress (GetStress method)
         self.__TangeantModuli = self.GetHelas()
 
-    def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
         if self._dimension is None:
             self._dimension = assembly.space.GetDimension()     
         self.NewTimeIncrement()

@@ -43,7 +43,7 @@ c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
 thermal_law = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf_th = WeakForm.HeatEquation("ThermalLaw", space = thermal_space)
-assemb = Assembly.Create("ThermalLaw", meshname, name="Assembling_T")    
+assemb = Assembly.create("ThermalLaw", meshname, name="Assembling_T")    
 
 pb_th = Problem.NonLinearStatic("Assembling_T")
 
@@ -79,7 +79,7 @@ else:
 
 WeakForm.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
 
-Assembly.Create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
+Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
 pb_m = Problem.NonLinearStatic("Assembling_M")
 # pb_m.SetSolver('cg', precond = True)

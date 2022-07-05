@@ -55,7 +55,7 @@ if method == 0:
     wf = WeakForm.InternalForce("ElasticLaw", name = "WeakForm", nlgeom=False)
 
     # Assembly
-    assemb = Assembly.Create("WeakForm", meshname, mesh.elm_type, name="Assembly")
+    assemb = Assembly.create("WeakForm", meshname, mesh.elm_type, name="Assembly")
 
     if '_perturbation' in Problem.get_all(): 
         del Problem.get_all()['_perturbation']
@@ -87,7 +87,7 @@ else:
         
     #Assembly
     WeakForm.InternalForce("ElasticLaw")
-    assemb = Assembly.Create("ElasticLaw", mesh, type_el, name="Assembling")
+    assemb = Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
     
     #Type of problem
     pb = Problem.Static("Assembling")
@@ -156,8 +156,8 @@ else:
 
         X = pb.GetX()  # alias
         if dim == 3: 
-            DStrain.append(np.array([pb._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                      pb._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
+            DStrain.append(np.array([pb._global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
+                                      pb._global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb._global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
     
             F = MatCB.T @ pb.GetA() @ MatCB @ X[DofFree]
         
@@ -166,8 +166,8 @@ else:
         
             DStress.append(stress)
         elif dim == 2:
-            DStrain.append(np.array([pb._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb._GetVectorComponent(X, 'DispY')[StrainNodes[0]], 0,
-                                     pb._GetVectorComponent(X, 'DispX')[StrainNodes[1]], 0, 0]))        
+            DStrain.append(np.array([pb._global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[0]], 0,
+                                     pb._global_vectorComponent(X, 'DispX')[StrainNodes[1]], 0, 0]))        
     
             F = MatCB.T @ pb.GetA() @ MatCB @ X[DofFree]
         

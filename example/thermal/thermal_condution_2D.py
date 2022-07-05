@@ -29,7 +29,7 @@ c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
 Material = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf = WeakForm.HeatEquation("ThermalLaw")
-assemb = Assembly.Create("ThermalLaw", meshname, name="Assembling")    
+assemb = Assembly.create("ThermalLaw", meshname, name="Assembling")    
 
 left = mesh.find_nodes('X', 0)
 right = mesh.find_nodes('X', L)

@@ -75,13 +75,13 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.SetD(D)       
         
         
-        def initialize(self, initialTime):   
+        def initialize(self, t0):   
             """
             """
-            self.__MassAssembly.initialize(self,initialTime)
-            self.__StiffnessAssembly.initialize(self,initialTime)
+            self.__MassAssembly.initialize(self,t0)
+            self.__StiffnessAssembly.initialize(self,t0)
             if self.__DampingAssembly is not 0 and self.__RayleighDamping is None:
-                self.__DampingAssembly.initialize(self,initialTime)       
+                self.__DampingAssembly.initialize(self,t0)       
         
         def NewTimeIncrement(self, dt):         
             ### dt is the time step of the previous increment            

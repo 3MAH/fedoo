@@ -22,15 +22,6 @@ class AssemblyBase:
     def get_global_vector(self):
         if self.global_vector is None: self.assemble_global_mat()        
         return self.global_vector
-
-    # def SetVector(self, V):
-    #     self.global_vector = V 
-
-    # def SetMatrix(self, M):
-    #     self.global_matrix = M
-    
-    # def AddMatrix(self, M):
-    #     self.global_matrix += M
         
     def assemble_global_mat(self):
         #needs to be defined in inherited classes
@@ -118,9 +109,9 @@ class AssemblySum(AssemblyBase):
                 self.__list_assembly[numAssembly].assemble_global_mat(compute)
             
         if not(compute == 'vector'):         
-            self.SetMatrix(sum([assembly.get_global_matrix() for assembly in self.__list_assembly]))
+            self.global_matrix = sum([assembly.get_global_matrix() for assembly in self.__list_assembly])
         if not(compute == 'matrix'):
-            self.SetVector(sum([assembly.get_global_vector() for assembly in self.__list_assembly]))
+            self.global_vector = sum([assembly.get_global_vector() for assembly in self.__list_assembly])
     
     def update(self, pb, dtime=None, compute = 'all'):
         """
@@ -137,9 +128,9 @@ class AssemblySum(AssemblyBase):
                 self.__list_assembly[numAssembly].update(pb,dtime,compute)
                     
         if not(compute == 'vector'):         
-            self.SetMatrix( sum([assembly.get_global_matrix() for assembly in self.__list_assembly]) )
+            self.global_matrix =  sum([assembly.get_global_matrix() for assembly in self.__list_assembly])
         if not(compute == 'matrix'):
-            self.SetVector( sum([assembly.get_global_vector() for assembly in self.__list_assembly]) )
+            self.global_vector =  sum([assembly.get_global_vector() for assembly in self.__list_assembly]) 
 
 
     def set_start(self, pb, dt):
@@ -152,13 +143,13 @@ class AssemblySum(AssemblyBase):
             assembly.set_start(pb, dt)   
                 
 
-    def initialize(self, pb, initialTime=0.):
+    def initialize(self, pb, t0=0.):
         """
         reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         for assembly in self.__list_assembly:
-            assembly.initialize(pb, initialTime=0.)   
+            assembly.initialize(pb, t0=0.)   
 
     def to_start(self):
         """
@@ -204,5 +195,5 @@ def Sum(*listAssembly, name ="", **kargs):
 def get_all():
     return AssemblyBase.get_all()
 
-def Launch(name):
-    AssemblyBase.get_all()[name].assemble_global_mat()    
+# def Launch(name):
+#     AssemblyBase.get_all()[name].assemble_global_mat()    

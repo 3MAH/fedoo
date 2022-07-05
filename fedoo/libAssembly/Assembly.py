@@ -17,7 +17,7 @@ from copy import copy
 import time
 
 
-def Create(weakform, mesh="", elm_type="", name ="", **kargs): 
+def create(weakform, mesh="", elm_type="", name ="", **kargs): 
     if isinstance(weakform, str):
         weakform = WeakForm.get_all()[weakform]
         
@@ -80,6 +80,12 @@ class Assembly(AssemblyBase):
     n_elm_gp: number of gauss points per element for the numerical integration. 
         To use with caution. By default, this value is set automatically for each element type. 
         A non default number of integration points may be forced using this argument. 
+        
+    
+    Notes
+    ----------
+    To launch the assembling, use the method "assemble_global_mat()"
+    Then, the assembled global matrix and global vector are stored in the attributes "global_matrix" and "global_vector"    
     """
     
     _saved_elementary_operators = {} 
@@ -301,13 +307,13 @@ class Assembly(AssemblyBase):
                         
             if compute != 'vector':
                 if mat_change_of_basis is 1: 
-                    self.SetMatrix(MM.tocsr()) #format csr         
+                    self.global_matrix = MM.tocsr() #format csr         
                 else: 
-                    self.SetMatrix(mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis) #format csr         
+                    self.global_matrix = mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis #format csr         
             if compute != 'matrix': 
-                if VV is 0: self.SetVector(0)
-                elif mat_change_of_basis is 1: self.SetVector(VV) #numpy array
-                else: self.SetVector(mat_change_of_basis.T * VV)                     
+                if VV is 0: self.global_vector = 0
+                elif mat_change_of_basis is 1: self.global_vector = VV #numpy array
+                else: self.global_vector = mat_change_of_basis.T * VV                     
                         
             if self._saved_bloc_structure is None: self._saved_bloc_structure = MM.GetBlocStructure()        
 
@@ -401,13 +407,13 @@ class Assembly(AssemblyBase):
                                
             if compute != 'vector': 
                 if mat_change_of_basis is 1: 
-                    self.SetMatrix(MM.toCSR()) #format csr         
+                    self.global_matrix = MM.toCSR() #format csr         
                 else: 
-                    self.SetMatrix(mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis) #format csr         
+                    self.global_matrix = mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis #format csr         
             if compute != 'matrix': 
-                if VV is 0: self.SetVector(0)
-                elif mat_change_of_basis is 1: self.SetVector(VV) #numpy array
-                else: self.SetVector(mat_change_of_basis.T * VV)         
+                if VV is 0: self.global_vector = 0
+                elif mat_change_of_basis is 1: self.global_vector = VV #numpy array
+                else: self.global_vector = mat_change_of_basis.T * VV         
         
         
         elif _assembly_method == 'very_old':
@@ -449,8 +455,8 @@ class Assembly(AssemblyBase):
 
 #            MM = MM.tocsr()
 #            MM.eliminate_zeros()
-            if compute != 'vector': self.SetMatrix(MM) #format csr         
-            if compute != 'matrix': self.SetVector(VV) #numpy array
+            if compute != 'vector': self.global_matrix = MM #format csr         
+            if compute != 'matrix': self.global_vector = VV #numpy array
             
         # print('temps : ', print(compute), ' - ', time.time()- t0)
     
@@ -523,18 +529,18 @@ class Assembly(AssemblyBase):
         return Assembly._saved_change_of_basis_mat[mesh]
 
  
-    def initialize(self, pb, initialTime=0.):
+    def initialize(self, pb, t0=0.):
         """
         Initialize the associated weak form and assemble the global matrix with the elastic matrix
         Parameters: 
-            - initialTime: the initial time        
+            - t0: the initial time        
         """        
         if self.weakform.GetConstitutiveLaw() is not None:
             if hasattr(self.weakform,'nlgeom'): nlgeom = self.weakform.nlgeom
             else: nlgeom=False
-            self.weakform.GetConstitutiveLaw().initialize(self, pb, initialTime, nlgeom)
+            self.weakform.GetConstitutiveLaw().initialize(self, pb, t0, nlgeom)
         
-        self.weakform.initialize(self, pb, initialTime)
+        self.weakform.initialize(self, pb, t0)
                 
 
     def set_start(self, pb, dt):

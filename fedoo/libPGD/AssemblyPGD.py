@@ -137,10 +137,10 @@ class AssemblyPGD(AssemblyFEM):
                 BB = BB - SeparatedArray(BBadd)
         
         if compute != 'vector': 
-            if AA == []: self.SetMatrix(0)
-            else: self.SetMatrix(SeparatedOperator(AA))        
+            if AA == []: self.global_matrix = 0
+            else: self.global_matrix = SeparatedOperator(AA)        
         if compute != 'matrix': 
-            self.SetVector(BB)             
+            self.global_vector = BB             
 
     
     def SetElementType(self, listElementType, listSubMesh = None):

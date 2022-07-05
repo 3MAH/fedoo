@@ -35,14 +35,14 @@ node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 if reduced_integration == False:
     WeakForm.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate", "plate", plateElementType, name="plate")    
+    Assembly.create("WFplate", "plate", plateElementType, name="plate")    
     post_tt_assembly = 'plate'
 else:    
     WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
+    Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
     WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
+    Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
     Assembly.Sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'

@@ -79,7 +79,7 @@ WeakForm.InternalForce("ElasticLaw")
 #------------------------------------------------------------------------------
 #Global Matrix assembly
 #------------------------------------------------------------------------------
-Assembly.Create("ElasticLaw", meshname, type_el, name="Assembling") 
+Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #------------------------------------------------------------------------------
 #Static problem based on the just defined assembly
