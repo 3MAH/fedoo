@@ -16,9 +16,9 @@ def Static(Assembling, name = "MainProblem"):
                 
         def __init__(self, assembling, name):   
             assembling.initialize(self,0)                         
-            A = assembling.GetMatrix()
+            A = assembling.get_global_matrix()
             B = 0             
-            D = assembling.GetVector()     
+            D = assembling.get_global_vector()     
             self.__Assembly = Assembling
                         
             libBase.__init__(self,A,B,D,assembling.mesh, name)
@@ -44,8 +44,8 @@ def Static(Assembling, name = "MainProblem"):
         def reset(self):
             self.__Assembly.reset()
             
-            self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
-            self.SetD(self.__Assembly.GetVector())            
+            self.SetA(self.__Assembly.get_global_matrix()) #tangent stiffness 
+            self.SetD(self.__Assembly.get_global_vector())            
             B = 0            
             self.ApplyBoundaryCondition()
 
@@ -61,12 +61,12 @@ def Static(Assembling, name = "MainProblem"):
             """
 #            self.__Assembly.update(self.GetD())
 #            self.__Assembly.update(self)
-#            self.SetA(Assembling.GetMatrix())
-#            self.SetD(Assembling.GetVector())
+#            self.SetA(Assembling.get_global_matrix())
+#            self.SetD(Assembling.get_global_vector())
 #            
             outValues = self.__Assembly.update(self, dtime, compute)  
-            self.SetA(Assembling.GetMatrix())
-            self.SetD(Assembling.GetVector())
+            self.SetA(Assembling.get_global_matrix())
+            self.SetD(Assembling.get_global_vector())
             return outValues 
         
         def Solve(self, **kargs):

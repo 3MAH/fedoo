@@ -27,7 +27,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
         
         def __init__(self, StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling, name):  
 
-            A = 1/(TimeStep**2)*MassAssembling.GetMatrix()   
+            A = 1/(TimeStep**2)*MassAssembling.get_global_matrix()   
             B = 0 ; D = 0
             
             self.__Xold    = self._InitializeVector(A) #displacement at the previous time step        
@@ -37,10 +37,10 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             self.__TimeStep   = TimeStep
             self.__MassLuming = False
             
-            self.__MassMatrix  = MassAssembling.GetMatrix()
-            self.__StiffMatrix = StiffnessAssembling.GetMatrix()
+            self.__MassMatrix  = MassAssembling.get_global_matrix()
+            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
             if DampingAssembling == 0: self.__DampMatrix = 0
-            else: self.__DampMatrix = DampingAssembling.GetMatrix()
+            else: self.__DampMatrix = DampingAssembling.get_global_matrix()
             
             libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
 
@@ -52,7 +52,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             if isinstance(StiffnessAssembling,str):
                 StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             
-            self.__StiffMatrix = StiffnessAssembling.GetMatrix()
+            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
 
         def MassLumping(): #internal function to be used when modifying M
             self.__MassLuming = True

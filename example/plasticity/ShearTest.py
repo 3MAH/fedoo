@@ -31,7 +31,7 @@ mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
-mat =1
+mat =0
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')

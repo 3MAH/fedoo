@@ -22,10 +22,7 @@ class WeakForm:
         
         if name != "":WeakForm.__dic[self.__name] = self
         
-    def GetNumberOfVariables(self):
-        return self.__space.nvar
-        # return self.GetDifferentialOperator().nvar()
-
+        
     def GetConstitutiveLaw(self):
         #no constitutive law by default
         pass
@@ -62,6 +59,10 @@ class WeakForm:
         #function to copy a weakform at the initial state
         raise NotImplementedError()
       
+    @staticmethod
+    def nvar(self):
+        return self.__space.nvar
+
     @staticmethod
     def get_all():
         return WeakForm.__dic

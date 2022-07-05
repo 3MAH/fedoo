@@ -146,8 +146,8 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
         pb_post_tt.Solve()
                 
         X = pb_post_tt.GetX()  # alias
-        DStrain.append(np.array([pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))
+        DStrain.append(np.array([pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
+                                  pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))
 
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)
@@ -255,8 +255,8 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     
         pb_post_tt.Solve()
         X = pb_post_tt.GetX()  # alias    
-        DStrain.append(np.array([pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._GetVectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._GetVectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
+        DStrain.append(np.array([pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
+                                  pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
         
         pb_post_tt.RemoveBC("_Strain")
     
@@ -287,7 +287,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
 # MeanStress2 = (1/Volume)* D@Fext_b.ravel()
 
 # #Compute tangent matrix
-# K = Assembly.get_all()['Assembling'].GetMatrix()    #Get global FE assembly matrix
+# K = Assembly.get_all()['Assembling'].get_global_matrix()    #Get global FE assembly matrix
 
 
 # Kbb = K[dof_boundary][:,dof_boundary]

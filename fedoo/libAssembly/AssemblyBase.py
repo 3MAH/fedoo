@@ -8,58 +8,59 @@ class AssemblyBase:
         assert isinstance(name, str) , "An name must be a string" 
         self.__name = name
 
-        self.__GlobalMatrix = None
-        self.__GlobalVector = None
+        self.global_matrix = None
+        self.global_vector = None
         self.mesh = None 
         
         if name != "": AssemblyBase.__dic[self.__name] = self
         self.__space = space
 
-    def GetMatrix(self):
-        if self.__GlobalMatrix is None: self.assemble_global_mat()        
-        return self.__GlobalMatrix
+    def get_global_matrix(self):
+        if self.global_matrix is None: self.assemble_global_mat()        
+        return self.global_matrix
 
-    def GetVector(self):
-        if self.__GlobalVector is None: self.assemble_global_mat()        
-        return self.__GlobalVector
+    def get_global_vector(self):
+        if self.global_vector is None: self.assemble_global_mat()        
+        return self.global_vector
 
-    def SetVector(self, V):
-        self.__GlobalVector = V 
+    # def SetVector(self, V):
+    #     self.global_vector = V 
 
-    def SetMatrix(self, M):
-        self.__GlobalMatrix = M
+    # def SetMatrix(self, M):
+    #     self.global_matrix = M
     
-    def AddMatrix(self, M):
-        self.__GlobalMatrix += M
+    # def AddMatrix(self, M):
+    #     self.global_matrix += M
         
     def assemble_global_mat(self):
         #needs to be defined in inherited classes
         pass
 
-    def deleteGlobalMatrix(self):
+    def delete_global_mat(self):
         """
         Delete Global Matrix and Global Vector related to the assembly. 
         This method allow to force a new assembly
         """
-        self.__GlobalMatrix = None
-        self.__GlobalVector = None
+        self.global_matrix = None
+        self.global_vector = None
     
-    @property
-    def space(self):
-        return self.__space
-
+    
     @staticmethod
     def get_all():
         return AssemblyBase.__dic
     
-    @staticmethod
-    def Launch(name):
-        """
-        Assemble the global matrix and global vector of the assembly name
-        name is a str
-        """
-        AssemblyBase.get_all()[name].assemble_global_mat()
+    # @staticmethod
+    # def Launch(name):
+    #     """
+    #     Assemble the global matrix and global vector of the assembly name
+    #     name is a str
+    #     """
+    #     AssemblyBase.get_all()[name].assemble_global_mat()    
     
+    @property
+    def space(self):
+        return self.__space
+   
     @property
     def name(self):
         return self.__name
@@ -117,9 +118,9 @@ class AssemblySum(AssemblyBase):
                 self.__list_assembly[numAssembly].assemble_global_mat(compute)
             
         if not(compute == 'vector'):         
-            self.SetMatrix(sum([assembly.GetMatrix() for assembly in self.__list_assembly]))
+            self.SetMatrix(sum([assembly.get_global_matrix() for assembly in self.__list_assembly]))
         if not(compute == 'matrix'):
-            self.SetVector(sum([assembly.GetVector() for assembly in self.__list_assembly]))
+            self.SetVector(sum([assembly.get_global_vector() for assembly in self.__list_assembly]))
     
     def update(self, pb, dtime=None, compute = 'all'):
         """
@@ -136,16 +137,20 @@ class AssemblySum(AssemblyBase):
                 self.__list_assembly[numAssembly].update(pb,dtime,compute)
                     
         if not(compute == 'vector'):         
-            self.SetMatrix( sum([assembly.GetMatrix() for assembly in self.__list_assembly]) )
+            self.SetMatrix( sum([assembly.get_global_matrix() for assembly in self.__list_assembly]) )
         if not(compute == 'matrix'):
-            self.SetVector( sum([assembly.GetVector() for assembly in self.__list_assembly]) )
+            self.SetVector( sum([assembly.get_global_vector() for assembly in self.__list_assembly]) )
 
-    def InitTimeIncrement(self, pb, dtime=None):
+
+    def set_start(self, pb, dt):
         """
-        May be used if required to initialize a new time increment 
+        Apply the modification to the constitutive equation required at each new time increment. 
+        Generally used to increase non reversible internal variable
+        Assemble the new global matrix. 
         """
         for assembly in self.__list_assembly:
-            assembly.InitTimeIncrement(pb, dtime)   
+            assembly.set_start(pb, dt)   
+                
 
     def initialize(self, pb, initialTime=0.):
         """
@@ -157,20 +162,11 @@ class AssemblySum(AssemblyBase):
 
     def to_start(self):
         """
-        reset the current time increment (internal variable in the constitutive equation)
+        Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         for assembly in self.__list_assembly:
-            assembly.to_start()        
-
-    def NewTimeIncrement(self):
-        """
-        Apply the modification to the constitutive equation required at each change of time increment. 
-        Generally used to increase non reversible internal variable
-        Doesn't assemble the new global matrix. Use the Update method for that purpose.
-        """
-        for assembly in self.__list_assembly:
-            assembly.NewTimeIncrement()        
+            assembly.to_start()         
 
     def reset(self):
         """
@@ -180,7 +176,7 @@ class AssemblySum(AssemblyBase):
         """
         for assembly in self.__list_assembly:
             assembly.reset() 
-        self.deleteGlobalMatrix()
+        self.delete_global_mat()
 
     @property
     def list_assembly(self):

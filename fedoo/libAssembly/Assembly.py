@@ -582,7 +582,7 @@ class Assembly(AssemblyBase):
         if self.weakform.GetConstitutiveLaw() is not None:
             self.weakform.GetConstitutiveLaw().reset()
         self.weakform.reset()    
-        self.deleteGlobalMatrix()
+        self.delete_global_mat()
 
     @staticmethod
     def delete_memory():
@@ -1082,8 +1082,8 @@ class Assembly(AssemblyBase):
         an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !
         """
         if nvar is None: nvar = self.space.nvar
-        return np.reshape(self.GetMatrix() * U - self.GetVector(), (nvar,-1)).T                        
-#        return np.reshape(self.GetMatrix() * U, (Nvar,-1)).T                        
+        return np.reshape(self.get_global_matrix() * U - self.get_global_vector(), (nvar,-1)).T                        
+#        return np.reshape(self.get_global_matrix() * U, (Nvar,-1)).T                        
 
         
 

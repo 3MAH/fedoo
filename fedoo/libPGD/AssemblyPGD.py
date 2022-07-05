@@ -394,7 +394,7 @@ class AssemblyPGD(AssemblyFEM):
         S = SpecificAssembly.GetNodalForces(PGD.Problem.GetDoFSolution('all'))
         """
 
-        ExtForce = self.GetMatrix() * U
+        ExtForce = self.get_global_matrix() * U
         if NumberOfVariable is None:
             return [ExtForce.GetVariable(var, self.mesh) for var in range(self.space.nvar)]
         else:

@@ -13,9 +13,9 @@ def _GenerateClass_NonLinearNewmark(libBase):
             NLStaticClass.__init__(self, StiffnessAssembly, name)  
             
             # if DampingAssembly is 0:
-            #     A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() #tangent matrix
+            #     A = StiffnessAssembly.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembly.get_global_matrix() #tangent matrix
             # else:
-            #     A = StiffnessAssembly.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembly.GetMatrix() + Gamma/(Beta*TimeStep)*DampingAssembly.GetMatrix()
+            #     A = StiffnessAssembly.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembly.get_global_matrix() + Gamma/(Beta*TimeStep)*DampingAssembly.get_global_matrix()
                 
             # B = 0 ; D = 0
                        
@@ -34,14 +34,14 @@ def _GenerateClass_NonLinearNewmark(libBase):
                         
         def updateA(self, dt): #internal function to be used when modifying M, K or C
             if self.__DampingAssembly is 0:
-                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix())
+                self.SetA(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix())
             else:
                 if self.__RayleighDamping is not None:
                     #In this case, self.__RayleighDamping = [alpha, beta]
-                    DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.GetMatrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.GetMatrix() 
-                else: DampMatrix = self.__DampingAssembly.GetMatrix()
+                    DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.get_global_matrix() 
+                else: DampMatrix = self.__DampingAssembly.get_global_matrix()
 
-                self.SetA(self.__StiffnessAssembly.GetMatrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.GetMatrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
+                self.SetA(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
         
         def updateD(self, dt, start=False):
             #start = True if begining of a new time increment (ie  DispOld-DispStart = 0)
@@ -54,18 +54,18 @@ def _GenerateClass_NonLinearNewmark(libBase):
                 # DeltaDisp = self._NonLinearStatic__TotalDisplacementOld - self._NonLinearStatic__TotalDisplacementStart
                 DeltaDisp = self._NonLinearStatic__DU
             
-            D = self.__MassAssembly.GetMatrix() * ( \
+            D = self.__MassAssembly.get_global_matrix() * ( \
                     (1/(self.__Beta*dt**2))*DeltaDisp +   \
                     (1/(self.__Beta*dt))   *self.__Velocity +   \
                     (0.5/self.__Beta - 1)               *self.__Acceleration) \
-                    + self.__StiffnessAssembly.GetVector()
+                    + self.__StiffnessAssembly.get_global_vector()
             if self.__DampingAssembly is not 0:
                 assert 0, "Non linear Dynamic problem with damping needs to be checked"
                 #need to be cheched
                 if self.__RayleighDamping is not None:
                     #In this case, self.__RayleighDamping = [alpha, beta]
-                    DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.GetMatrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.GetMatrix() 
-                else: DampMatrix = self.__DampingAssembly.GetMatrix()
+                    DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.get_global_matrix() 
+                else: DampMatrix = self.__DampingAssembly.get_global_matrix()
                 
                 D += DampMatrix * ( \
                     (self.__Gamma/(self.__Beta*dt))*DisplacementStart +   \
@@ -128,8 +128,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
                 self.__DampingAssembly.reset()            
             self.SetA(0) #tangent stiffness 
             self.SetD(0)                 
-            # self.SetA(self.__Assembly.GetMatrix()) #tangent stiffness 
-            # self.SetD(self.__Assembly.GetVector())            
+            # self.SetA(self.__Assembly.get_global_matrix()) #tangent stiffness 
+            # self.SetD(self.__Assembly.get_global_vector())            
 
             B = 0
             self._NonLinearStatic__Utot = 0
@@ -208,7 +208,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     self.__Displacement += self.GetX()   
 
         # def GetDisp(self,name='all'):
-        #     # return self._GetVectorComponent(self.__Displacement, name)
+        #     # return self._get_global_vectorComponent(self.__Displacement, name)
                
         def GetVelocity(self):
             return self.__Velocity
@@ -270,7 +270,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
                 
 #                 #--------------- Solve --------------------------------------------------------        
 #                 self.__StiffnessAssembly.assemble_global_mat(compute = 'matrix')
-#                 # self.SetA(self.__StiffnessAssembly.GetMatrix())
+#                 # self.SetA(self.__StiffnessAssembly.get_global_matrix())
 #                 self.__UpdateA()
 #                 self.NewtonRaphsonIncr()
             
@@ -337,7 +337,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         # def updateStiffness(self, StiffnessAssembling):
         #     if isinstance(StiffnessAssembling,str):
         #         StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
-        #     self.__StiffMatrix = StiffnessAssembling.GetMatrix()
+        #     self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
         #     self.__UpdateA()
     
     return __Newmark

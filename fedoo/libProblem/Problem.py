@@ -53,7 +53,7 @@ class Problem(ProblemBase):
             n = self.mesh.n_nodes
             vector[i*n : (i+1)*n] = value      
 
-    def _GetVectorComponent(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
+    def _get_global_vectorComponent(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all':                             
@@ -134,7 +134,7 @@ class Problem(ProblemBase):
         return self.__X
     
     def GetDoFSolution(self,name='all'): #solution of the problem (same as GetX for linear problems if name=='all')
-        return self._GetVectorComponent(self.__X, name) 
+        return self._get_global_vectorComponent(self.__X, name) 
 
     def SetDoFSolution(self,name,value):
         self._SetVectorComponent(self.__X, name, value)          

@@ -8,10 +8,10 @@ def _GenerateClass_NonLinearStatic(libBase):
     class __NonLinearStatic(libBase):
         
         def __init__(self, Assembling, name):                                  
-            #A = Assembling.current.GetMatrix() #tangent stiffness matrix
+            #A = Assembling.current.get_global_matrix() #tangent stiffness matrix
             A = 0 #tangent stiffness matrix - will be initialized only when required
             B = 0             
-            #D = Assembling.GetVector() #initial stress vector
+            #D = Assembling.get_global_vector() #initial stress vector
             D = 0 #initial stress vector #will be initialized later
             self.print_info = 1 #print info of NR convergence during solve
             self.__Utot = 0 #displacement at the end of the previous converged increment
@@ -34,41 +34,41 @@ def _GenerateClass_NonLinearStatic(libBase):
         
         #Return the displacement components
         def GetDisp(self,name='Disp'):    
-            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
-            return self._GetVectorComponent(self.__Utot + self.__DU, name)    
+            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
+            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)    
         
         #Return the rotation components
         def GetRot(self,name='Rot'):    
-            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
-            return self._GetVectorComponent(self.__Utot + self.__DU, name)    
+            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
+            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)    
 
         #Return the Temperature
         def GetTemp(self):    
-            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, 'Temp')
-            return self._GetVectorComponent(self.__Utot + self.__DU, 'Temp')    
+            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, 'Temp')
+            return self._get_global_vectorComponent(self.__Utot + self.__DU, 'Temp')    
         
         #Return all the dof for every variable under a vector form
         def GetDoFSolution(self,name='all'):
-            if self.__DU is 0: return self._GetVectorComponent(self.__Utot, name)
-            return self._GetVectorComponent(self.__Utot + self.__DU, name)        
+            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
+            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)        
         
         def get_ext_forces(self, name = 'all'):
-            return self._GetVectorComponent(-self.GetD(), name)        
+            return self._get_global_vectorComponent(-self.GetD(), name)        
         
         def updateA(self, dt = None):
             #dt not used for static problem
-            self.SetA(self.__Assembly.current.GetMatrix())
+            self.SetA(self.__Assembly.current.get_global_matrix())
         
         def updateD(self,dt=None, start=False):            
             #dt and start not used for static problem
-            self.SetD(self.__Assembly.current.GetVector()) 
+            self.SetD(self.__Assembly.current.get_global_vector()) 
         
         def initialize(self, t0=0.):   
             """
             """
             self.__Assembly.initialize(self,t0)
-            # self.SetA(self.__Assembly.current.GetMatrix())
-            # self.SetD(self.__Assembly.current.GetVector())
+            # self.SetA(self.__Assembly.current.get_global_matrix())
+            # self.SetD(self.__Assembly.current.get_global_vector())
         
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
@@ -150,8 +150,8 @@ def _GenerateClass_NonLinearStatic(libBase):
             
             self.SetA(0) #tangent stiffness 
             self.SetD(0)                 
-            # self.SetA(self.__Assembly.current.GetMatrix()) #tangent stiffness 
-            # self.SetD(self.__Assembly.current.GetVector())            
+            # self.SetA(self.__Assembly.current.get_global_matrix()) #tangent stiffness 
+            # self.SetD(self.__Assembly.current.get_global_vector())            
 
             B = 0
             self.__Utot = 0
@@ -250,7 +250,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 
                 #--------------- Solve --------------------------------------------------------        
                 # self.__Assembly.current.assemble_global_mat(compute = 'matrix')
-                # self.SetA(self.__Assembly.current.GetMatrix())
+                # self.SetA(self.__Assembly.current.get_global_matrix())
                 self.update(dt, compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
                 self.updateA(dt)
 

@@ -63,7 +63,7 @@ class ProblemPGD(ProblemBase):
 #
 #            NewmarkPGD.__Xdotdot[i*n : (i+1)*n] = value            
     
-    def _GetVectorComponent(self, vector, name):
+    def _get_global_vectorComponent(self, vector, name):
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 

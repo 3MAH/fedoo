@@ -334,7 +334,7 @@ def ApplyBoundaryCondition(): ProblemBase.GetActive().ApplyBoundaryCondition()
 def GetDoFSolution(name='all'): return ProblemBase.GetActive().GetDoFSolution(name)
 def SetDoFSolution(name,value): ProblemBase.GetActive().SetDoFSolution(name,value)
 def SetInitialBCToCurrent(): ProblemBase.GetActive().SetInitialBCToCurrent()
-def GetVectorComponent(vector, name='all'): return ProblemBase.GetActive()._GetVectorComponent(vector, name)
+def get_global_vectorComponent(vector, name='all'): return ProblemBase.GetActive()._get_global_vectorComponent(vector, name)
 
 #functions only defined for Newmark problem 
 def GetXdot():

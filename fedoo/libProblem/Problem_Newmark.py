@@ -26,9 +26,9 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
         def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name):
                     
             if DampingAssembling is 0:
-                A = StiffnessAssembling.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembling.GetMatrix()
+                A = StiffnessAssembling.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembling.get_global_matrix()
             else:
-                A = StiffnessAssembling.GetMatrix() + 1/(Beta*(TimeStep**2))*MassAssembling.GetMatrix() + Gamma/(Beta*TimeStep)*DampingAssembling.GetMatrix()
+                A = StiffnessAssembling.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembling.get_global_matrix() + Gamma/(Beta*TimeStep)*DampingAssembling.get_global_matrix()
                 
             B = 0 ; D = 0
             
@@ -40,10 +40,10 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             self.__Gamma      = Gamma
             self.__TimeStep   = TimeStep
             
-            self.__MassMatrix  = MassAssembling.GetMatrix()
-            self.__StiffMatrix = StiffnessAssembling.GetMatrix()
+            self.__MassMatrix  = MassAssembling.get_global_matrix()
+            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
             if DampingAssembling == 0: self.__DampMatrix = 0
-            else: self.__DampMatrix = DampingAssembling.GetMatrix()
+            else: self.__DampMatrix = DampingAssembling.get_global_matrix()
             
             libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
     
@@ -177,7 +177,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
         def updateStiffness(self, StiffnessAssembling):
             if isinstance(StiffnessAssembling,str):
                 StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
-            self.__StiffMatrix = StiffnessAssembling.GetMatrix()
+            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
             self.__UpdateA()
     
     return __Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name)
