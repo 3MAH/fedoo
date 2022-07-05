@@ -73,7 +73,7 @@ WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 nodes_bottom = mesh.find_nodes('Y',0)
 nodes_top = mesh.find_nodes('Y',1)
 
-# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 27)     #uses MeshChange=True when the mesh change during the time
+# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 Assembly.Create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")

@@ -4,8 +4,8 @@ from fedoo.libElement.Element import *
 from fedoo.libElement.ElementQuadrangle import *
 
 class cohesive1D(element):
-    def __init__(self, nb_gp=1, **kargs):
-        self.nb_gp = 1 #pas de point de gauss pour les éléments cohésifs car pas de point d'intégration
+    def __init__(self, n_elm_gp=1, **kargs):
+        self.n_elm_gp = 1 #pas de point de gauss pour les éléments cohésifs car pas de point d'intégration
         self.xi_pg = np.c_[[0.]] ; self.xi_nd = np.c_[[0., 0.]] #The values are arbitrary, only the size is important
         self.w_pg = np.array([1.]) 
     
@@ -21,16 +21,16 @@ class cohesive1D(element):
 #        return 0.5*np.array([[1., 1.] for x in xi])
     
 class cohesive2D(element1DGeom2, element1D):
-    def __init__(self,nb_gp=2, **kargs):
+    def __init__(self,n_elm_gp=2, **kargs):
         """
         An element is defined with 4 nodes [0, 1, 2, 3]
         [0, 1] is a lin2 defining the face on the negative side of the cohesive zone
         [2, 3] is a lin2 defining the face on the positive side of the cohesive zone
         Node 0 is in front of node 2 and node 1 is in front of node 3
         """
-        element1D.__init__(self, nb_gp)
+        element1D.__init__(self, n_elm_gp)
         self.xi_nd = np.c_[[0., 1.]]              
-        self.nb_gp = nb_gp
+        self.n_elm_gp = n_elm_gp
         
     def ShapeFunction(self,xi): 
         return np.c_[-xi, -1+xi, xi, 1-xi]
@@ -41,13 +41,13 @@ class cohesive2D(element1DGeom2, element1D):
 
 class cohesive3D(quad4): # à vérifier
 
-    def __init__(self,nb_gp=4, **kargs):
+    def __init__(self,n_elm_gp=4, **kargs):
         """
         An element is defined with 8 nodes [0, 1, 2, 3, 4, 5, 6, 7]
         [0, 1, 2, 3] is a quad4 defining the face on the negative side of the cohesive zone
         [4, 5, 6, 7] is a quad4 defining the face on the positive side of the cohesive zone
         """
-        quad4.__init__(self, nb_gp, **kargs)
+        quad4.__init__(self, n_elm_gp, **kargs)
                         
     #Dans les fonctions suivantes vec_xi contient une liste de points dans le repère de référence (xi, eta)
     #vec_xi[:,0] -> liste des valeurs de xi pour chaque point (points de gauss en général)

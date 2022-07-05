@@ -74,8 +74,8 @@ node_center = mesh.nearest_node([0.5,0.5,0.5])
 
 StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro strain
 
-# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 8)     #uses MeshChange=True when the mesh change during the time
+# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+assemb = Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)

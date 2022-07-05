@@ -39,7 +39,7 @@ if reduced_integration == False:
     post_tt_assembly = 'plate'
 else:    
     WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_RI", "plate", plateElementType, name="plate_RI", nb_gp = 1)    
+    Assembly.Create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
     WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
     Assembly.Create("WFplate_FI", "plate", plateElementType, name="plate_FI") 

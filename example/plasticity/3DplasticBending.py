@@ -77,8 +77,8 @@ else:
     nodes_top2 = mesh.find_nodes('XY',(3*L/4,h))
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 27)     #uses MeshChange=True when the mesh change during the time
-Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, nb_gp = 8)     #uses MeshChange=True when the mesh change during the time
+# Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+Assembly.Create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)

@@ -16,7 +16,7 @@ class element:
         Calcul également le déterminant du jacobien pour le kième point de gauss de l'élément el dans self.detJ[el,k]
         """
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)
-        self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=nb_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
         
         if self.JacobianMatrix.shape[-2] == self.JacobianMatrix.shape[-1]:
 #            self.detJ = [abs(linalg.det(J)) for J in self.JacobianMatrix]
@@ -47,7 +47,7 @@ class element:
 #            self.inverseJacobian = [linalg.inv(J) for J in self.JacobianMatrix]
         else: #l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence   
             J = self.JacobianMatrix ; JT = np.swapaxes(self.JacobianMatrix,2,3)                
-            self.inverseJacobian = np.matmul(JT , linalg.inv(np.matmul(J,JT)))    #inverseJacobian.shape = (Nel,len(vec_xi)=nb_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])            
+            self.inverseJacobian = np.matmul(JT , linalg.inv(np.matmul(J,JT)))    #inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])            
 #            self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]                    
         
     def interpolateLocalFrame(self, rep_loc, vec_xi=None): # to do: vectorization #on interpole le repère local aux points de gauss    
@@ -65,17 +65,17 @@ class element:
         return self.repLocFromJac(rep_loc, vec_xi)            
     
 class element1D(element):
-    def __init__(self,nb_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
-        if nb_gp == 1:
+    def __init__(self,n_elm_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
+        if n_elm_gp == 1:
             self.xi_pg = np.c_[[1./2]]
             self.w_pg = np.array([1.])
-        elif nb_gp == 2: #ordre exacte 2
+        elif n_elm_gp == 2: #ordre exacte 2
             self.xi_pg = np.c_[[1./2 - np.sqrt(3)/6 , 1./2 + np.sqrt(3)/6 ]]
             self.w_pg = np.array([1./2 , 1./2])
-        elif nb_gp == 3: #ordre exacte 3
+        elif n_elm_gp == 3: #ordre exacte 3
             self.xi_pg = np.c_[[1./2-np.sqrt(0.15) , 1./2 , 1./2 + np.sqrt(0.15)]]
             self.w_pg = np.array([5./18, 8./18, 5./18])
-        elif nb_gp == 4:
+        elif n_elm_gp == 4:
             w_1  =   0.5 + 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
             w_2  =   0.5 - 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
             a_1  = 0.5*(1 + np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
@@ -84,10 +84,10 @@ class element1D(element):
             b_2  = 0.5*(1 - np.sqrt((3.0 + 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
             self.xi_pg   = np.c_[[b_2,b_1,a_1,a_2]]
             self.w_pg= np.array([w_2/2, w_1/2, w_1/2, w_2/2])
-        elif nb_gp == 0: #if nb_gp == 0, we take the position of the nodes            
+        elif n_elm_gp == 0: #if n_elm_gp == 0, we take the position of the nodes            
             self.xi_pg = self.xi_nd
         else:
-            assert 0, "Number of gauss points "+str(nb_gp)+" unavailable for 1D element"                                                     
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for 1D element"                                                     
                           
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
         
@@ -96,7 +96,7 @@ class element1D(element):
         
     def ComputeDetJacobian(self,vec_x, vec_xi):
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)
-        self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=nb_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
                 
 #        np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0)
 #        self.JacobianMatrix = [linalg.norm(np.dot(dnn,vec_x)) for dnn in dnn_xi] #dx_dxi avec x tangeant à l'élément (repère local élémentaire)
@@ -183,7 +183,7 @@ class element1DGeom2(element1D): #élément 1D à géométrie affine (interpolé
         vec_xi est un tableau dont les lignes donnent les coordonnées dans le repère de référence où on souhaite avoir le jacobien (en général pg)
         """                
         x1 = vec_x[:,0] ; x2 = vec_x[:,1] 
-        self.JacobianMatrix = linalg.norm(x2-x1, axis=1) #longueur de l'élément réel car la longueur de élément de référence = 1      #shape = (vec_x.shape[0] = Nel, len(vec_xi)=nb_gp, nb_dir_derivative, vec_x.shape[2] = dim)                  
+        self.JacobianMatrix = linalg.norm(x2-x1, axis=1) #longueur de l'élément réel car la longueur de élément de référence = 1      #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)                  
         self.detJ = self.JacobianMatrix.reshape(-1,1) * np.ones(len(vec_xi))  #detJ est constant sur l'élément
         #        self.detJ = self.JacobianMatrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar   
 
@@ -192,7 +192,7 @@ class element1DGeom2(element1D): #élément 1D à géométrie affine (interpolé
         #rep_loc inutile ici : le repère local élémentaire est utilisé (x : tangeante à l'élément)
         if vec_xi is None: vec_xi = self.xi_pg
         self.ComputeDetJacobian(vec_x, vec_xi)
-        self.inverseJacobian = (1./self.JacobianMatrix).reshape(-1,1,1,1) #dxi/dx -> scalar #shape = (vec_x.shape[0] = Nel, len(vec_xi)=nb_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        self.inverseJacobian = (1./self.JacobianMatrix).reshape(-1,1,1,1) #dxi/dx -> scalar #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 #        self.derivativePG = self.inverseJacobian.reshape(-1,1,1,1) * np.array(self.ShapeFunctionDerivativePG).reshape(1,len(vec_xi),1,-1)
 #        self.inverseJacobian = [np.array([qq]) for xi in vec_xi] #qq est constant sur l'élément
 #        self.derivativePG = np.array([self.inverseJacobian[k] * self.ShapeFunctionDerivativePG[k] for k in range(len(vec_xi))])
@@ -223,7 +223,7 @@ class element2D(element):
         else: #l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence   
             if rep_loc is None:
                 J = self.JacobianMatrix ; JT = np.swapaxes(self.JacobianMatrix,2,3)                
-                self.inverseJacobian = np.matmul(JT , linalg.inv(np.matmul(J,JT)))    #inverseJacobian.shape = (Nel,len(vec_xi)=nb_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
+                self.inverseJacobian = np.matmul(JT , linalg.inv(np.matmul(J,JT)))    #inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
 #                self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]   #this line may have a high computational cost
                 return                            
             else:

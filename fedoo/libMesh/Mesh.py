@@ -422,6 +422,9 @@ class Mesh(MeshBase):
     #     self.crd_name = ListCoordinatename
     
     
+    
+    
+    
     #
     # To be developed later
     #
@@ -451,7 +454,7 @@ class Mesh(MeshBase):
 #         crd = self.nodes
         
 # #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
-#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (Nel, nb_gp, nb of vectors in basis = dim, dim)
+#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (Nel, n_elm_gp, nb of vectors in basis = dim, dim)
 
 
     # def bounding_box(self, return_center = False):

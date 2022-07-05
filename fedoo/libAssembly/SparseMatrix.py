@@ -63,7 +63,7 @@ class _BlocSparse():
             #if self.__assume_sym, only compute bloc belonging to inf triangular matrix
             return
         
-        nb_gp = self.nbpg
+        n_elm_gp = self.nbpg
         NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B        
             
         if not isinstance(A, list):
@@ -74,7 +74,7 @@ class _BlocSparse():
             if self.nbpg is None:
                 new_data = (coef * A.data.reshape(-1,NnzColPerRowA,1)) @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
             else:
-                new_data = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+                new_data = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
             
             if mat_lumping: 
                 if self.data[rowBloc][colBloc] is 0:    
@@ -107,7 +107,7 @@ class _BlocSparse():
             if self.nbpg is None:
                 new_data = coef_A_data @ (B.data.reshape(-1,1,NnzColPerRowB)) #at each PG we build a nbNode x nbNode matrix
             else:
-                new_data = coef_A_data.reshape(nb_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+                new_data = coef_A_data.reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
 
             if mat_lumping: #only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
                 if self.data[rowBloc][colBloc] is 0:    
@@ -243,11 +243,11 @@ class _BlocSparseOld():
         if not(isinstance(coef, Number)): coef = coef.reshape(-1,1,1)
         
         if self.data[rowBloc][colBloc] is 0:             
-            # self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
+            # self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
             temp = A.data.reshape(-1,NnzColPerRowA,1) @ B.data.reshape(-1,1,NnzColPerRowB) #at each PG we build a nbNode x nbNode matrix               
             self.data[rowBloc][colBloc] = coef * temp
         else:
-            # self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(nb_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(nb_gp,-1,NnzColPerRowB).transpose(1,0,2) #at element PG we build a nbNode x nbNode matrix
+            # self.data[rowBloc][colBloc] += (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at element PG we build a nbNode x nbNode matrix
             temp = A.data.reshape(-1,NnzColPerRowA,1) @ B.data.reshape(-1,1,NnzColPerRowB) #at each PG we build a nbNode x nbNode matrix
             self.data[rowBloc][colBloc] += coef * temp
         
@@ -261,7 +261,7 @@ class _BlocSparseOld():
         return temp             
            
     def addToBloc(self, Arr, coef, rowBloc, colBloc):
-        #Arr should be an array of size (totalNbPG = nb_gp*Nel, NndPerEl, NndPerEl)
+        #Arr should be an array of size (totalNbPG = n_elm_gp*Nel, NndPerEl, NndPerEl)
         #This Arr gives the local assembled matrix associated to each PG 
         #It should be multiplied by the factor coefficient associated to each PG
         #The global assembly is performed using a coo matrix format with self.row ans self.col vector previously computed by addToBlocATB

@@ -105,7 +105,7 @@ class FE2(Mechanical3D):
     def initialize(self, assembly, pb, initialTime = 0., nlgeom=False):  
         self.nlgeom = nlgeom            
         if self.list_problem is None:  #only initialize once
-            nb_points = assembly.nb_gp * assembly.mesh.n_elements
+            nb_points = assembly.n_elm_gp * assembly.mesh.n_elements
             
             #Definition of the set of nodes for boundary conditions
             if not(isinstance(self.__mesh, list)):            

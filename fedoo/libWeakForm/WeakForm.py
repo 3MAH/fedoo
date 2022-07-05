@@ -17,7 +17,7 @@ class WeakForm:
         self.assembly_options = {}
         #possible options : 
         # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
-        # * 'nb_gp' - set the default nb_gp
+        # * 'n_elm_gp' - set the default n_elm_gp
         # * 'mat_lumping' - matrix lumping if set to True
         
         if name != "":WeakForm.__dic[self.__name] = self
