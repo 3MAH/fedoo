@@ -69,8 +69,8 @@ Problem.NLSolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
 # --------------- Post-Treatment -----------------------------------------------
 # Get the stress and strain tensor (PG values)
 res = Problem.GetResults('Assembly', ['Strain','Stress'], 'GaussPoint') 
-TensorStrain = res['Strain']
-TensorStress = res['Stress']
+TensorStrain = res.gausspoint_data['Strain']
+TensorStress = res.gausspoint_data['Stress']
 
 assert np.abs(TensorStress[4][222]-72.37808598199845) <1e-15
 assert np.abs(TensorStrain[2][876]-0.030469198588675583) <1e-15

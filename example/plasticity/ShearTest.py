@@ -31,7 +31,7 @@ mesh = Mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
-mat =0
+mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
@@ -76,9 +76,9 @@ nodes_top = mesh.find_nodes('Y',1)
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
-Problem.NonLinearStatic("Assembling")
+pb = Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
-Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-4, max_subiter = 5)
+Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -86,7 +86,7 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-4, max
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+results = Problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
@@ -112,55 +112,33 @@ E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(
 
 print(time()-start)
 
-### plot with pyvista
 
 
+# =============================================================
+# Example of plots with pyvista - uncomment the desired plot
+# =============================================================
 
-res_name = res_dir+filename
+# ------------------------------------
+# Simple plot with default options
+# ------------------------------------
+results.plot('Cauchy_vm', component = 0, show = True)
 
-res = np.load(res_name+'_{}.npz'.format(18))
+# ------------------------------------
+# Write movie with default options
+# ------------------------------------
+results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
 
-meshplot = mesh.to_pyvista()
+# ------------------------------------
+# Save pdf plot
+# ------------------------------------
+pl = results.plot(scalars = 'Cauchy_vm', show = False)
+pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
-# for item in res:
-#     if item[-4:] == 'Node':
-#         if len(res[item]) == len(crd):
-#             meshplot.point_data[item[:-5]] = res[item]
-#         else:
-#             meshplot.point_data[item[:-5]] = res[item].T
-#     else:
-#         meshplot.cell_data[item] = res[item].T
 
-meshplot.point_data['Disp'] = res['Disp_Node'].T
-
-pl = pv.Plotter()
-# pl = pv.Plotter()
-pl.set_background('White')
-
-sargs = dict(
-    interactive=True,
-    title_font_size=20,
-    label_font_size=16,
-    color='Black',
-    # n_colors= 10
-)
-
-# cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-#         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-#         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# pl.camera_position = cpos
-
-# pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-pl.subplot(0,0)
-meshplot.point_data['Disp'] = res['Disp_Node'].T
-pl.add_mesh(meshplot.warp_by_vector('Disp', factor = 1), scalars = res['Cauchy_vm_Node'].T, component = 3, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-pl.add_axes(color='Black', interactive = True)
-
-cpos = pl.show(return_cpos = True)         
-# cpos = pl.show(interactive = False, auto_close=False, return_cpos = True)
-# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
+# ------------------------------------
+# Plot the automatically saved mesh
+# ------------------------------------
+pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
 
 
 

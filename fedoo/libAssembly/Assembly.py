@@ -550,8 +550,8 @@ class Assembly(AssemblyBase):
         Assemble the new global matrix. 
         """
         if self.weakform.GetConstitutiveLaw() is not None:
-            self.weakform.GetConstitutiveLaw().set_start()
-        self.weakform.set_start(self, pb, dt) #should update GetH() method to return elastic rigidity matrix for prediction   
+            self.weakform.GetConstitutiveLaw().set_start() #should update GetH() method to return elastic rigidity matrix for prediction   
+        self.weakform.set_start(self, pb, dt) 
         self.assemble_global_mat()  
         #no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
         #in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
@@ -1237,7 +1237,15 @@ class Assembly(AssemblyBase):
     
     @property
     def n_gauss_points(self):
-        return self.mesh.n_nodes * self.n_elm_gp
+        """
+        Returns
+        -------
+        int
+            The total number of integration points (ie Gauss points) associated to the assembly.
+            n_gauss_points is the total number of Gauss points whereas n_elm_gp gives only he numbre of gauss points per element:
+            n_gauss_points = mesh.n_elements + assembly.n_elm_gp.
+        """
+        return self.mesh.n_elements * self.n_elm_gp
     
 def delete_memory():
     Assembly.delete_memory()

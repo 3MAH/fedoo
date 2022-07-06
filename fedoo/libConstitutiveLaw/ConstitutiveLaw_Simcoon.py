@@ -114,11 +114,12 @@ if USE_SIMCOON:
         #     return sigma # list de 6 objets de type OpDiff
         
         def set_start(self):
+            #save variables at the begining of the Time increment            
+            if self.__currentGradDisp is not 0:
+                #not usefull at 1st iteration. Everything should have already been initialized at start value with the initialize func.
+                sim.Umat_fedoo.set_start(self) #in set_start -> set tangeant matrix to elastic
             
-            # if self.__currentGradDisp is not 0:
-            sim.Umat_fedoo.set_start(self) #in set_start -> set tangeant matrix to elastic
-        
-            #save variable at the begining of the Time increment
+
             self.__initialGradDisp = self.__currentGradDisp
     
          
@@ -161,13 +162,12 @@ if USE_SIMCOON:
             if  self._dimension is None:
                 self._dimension = assembly.space.GetDimension()
                 
-            #if the number of material points is not defined (=0) we need to initialize statev
-            nb_points = assembly.n_elm_gp * assembly.mesh.n_elements
+            #if the number of material points is not defined (=0) we need to initialize statev            
             if np.isscalar(self.__statev_initial): 
-                statev = np.zeros((nb_points, int(self.__statev_initial))).T
+                statev = np.zeros((assembly.n_gauss_points, int(self.__statev_initial))).T
             else: 
                 statev = np.atleast_2d(self.__statev_initial).T.astype(float)
-                if len(statev) == 1: statev = np.tile(statev.copy(),[nb_points,1]).T
+                if len(statev) == 1: statev = np.tile(statev.copy(),[assembly.n_gauss_points,1]).T
                 else: statev = assembly.convert_data(statev).T
             
             sim.Umat_fedoo.Initialize(self, t0, statev, nlgeom)
@@ -180,7 +180,7 @@ if USE_SIMCOON:
             #tranpose for compatibility with simcoon
             if displacement is 0: 
                 self.__currentGradDisp = 0
-                F1 = np.multiply(np.eye(3).reshape(3,3,1) , np.ones((1,1,self.nb_points)), order='F').transpose(2,0,1)
+                F1 = np.multiply(np.eye(3).reshape(3,3,1) , np.ones((1,1,assembly.n_gauss_points)), order='F').transpose(2,0,1)
                 # self.__F1 = np.eye(3).T.reshape(1,3,3)
             else:   
                 self.__currentGradDisp = np.array(assembly.get_grad_disp(displacement, "GaussPoint"))            

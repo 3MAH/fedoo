@@ -245,15 +245,15 @@ class ExportData:
         f.close()
 
 
-    def plot_msh(self):            
-        from subprocess import Popen
-        self.toMSH()
-        Popen("gmsh test.msh", stdin=None, stdout=None, stderr=None)
+    # def plot_msh(self):            
+    #     from subprocess import Popen
+    #     self.toMSH()
+    #     Popen("gmsh test.msh", stdin=None, stdout=None, stderr=None)
     
-    def plot_vtk(self):
-        from subprocess import Popen        
-        self.toVTK()
-        Popen('"C:\\Program Files\\ParaView 5.2.0-RC2-Qt4-OpenGL2-Windows-64bit\\bin\\paraview" test.vtk', stdin=None, stdout=None, stderr=None)
+    # def plot_vtk(self):
+    #     from subprocess import Popen        
+    #     self.toVTK()
+    #     Popen('"C:\\Program Files\\ParaView 5.2.0-RC2-Qt4-OpenGL2-Windows-64bit\\bin\\paraview" test.vtk', stdin=None, stdout=None, stderr=None)
     
     
 #def ImportMSH(filename):

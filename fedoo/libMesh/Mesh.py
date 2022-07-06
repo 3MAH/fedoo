@@ -4,9 +4,10 @@ import numpy as np
 # from fedoo.libUtil.Coordinate import Coordinate
 from fedoo.libMesh.MeshBase import MeshBase
 from fedoo.libElement import *
+from os.path import splitext
 try:
     import pyvista as pv
-    import vtk
+    # import vtk
     USE_PYVISTA = True
 except:
     USE_PYVISTA = False
@@ -388,7 +389,25 @@ class Mesh(MeshBase):
         else:
             raise NameError('Pyvista not installed.')
             
-    
+
+    def save(self, filename, binary=True):
+        """        
+        Save the mesh object to file. This function use the save function of the pyvista UnstructuredGrid object
+        
+        Parameters
+        ----------
+        filename : str
+            Filename of output file including the path. Writer type is inferred from the extension of the filename. If no extension is set, 'vtk' is assumed. 
+        binary : bool, optional
+            If True, write as binary. Otherwise, write as ASCII.
+        """
+        extension = splitext(filename)[1]
+        if extension == '': 
+            filename = filename + '.vtk'
+
+        self.to_pyvista().save(filename, binary)
+        
+        
     @property
     def n_nodes(self):
         """

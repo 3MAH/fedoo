@@ -7,18 +7,9 @@ Created on Thu Dec 16 17:54:05 2021
 import numpy as np
 from fedoo.libMesh.Mesh import *
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
-from fedoo.libUtil.ExportData import ExportData
-
-
-
-# _available_output = ['pkii',   'pk2',   'kirchoff',   'kirchhoff',   'cauchy',
-#                      'pkii_vm','pk2_vm','krichoff_vm','kirchhoff_vm','cauchy_vm',
-#                      'pkii_pc', 'pk2_pc', 'kirchoff_pc', 'kirchhoff_pc', 'cauchy_pc', 'stress_pc',
-#                      'pkii_pdir1', 'pk2_pdir1', 'kirchoff_pdir1', 'kirchhoff_pdir1', 'cauchy_pdir1', 'stress_pdir1',
-#                      'pkii_pdir2', 'pk2_pdir2', 'kirchoff_pdir2', 'kirchhoff_pdir2', 'cauchy_pdir2', 'stress_pdir2',
-#                      'pkii_pdir3', 'pk2_pdir3', 'kirchoff_pdir3', 'kirchhoff_pdir3', 'cauchy_pdir3', 'stress_pdir3',
-#                      'disp', 'rot', 'temp', 'strain', 'statev', 'stress', 'stress_vm', 'fext', 
-#                      'wm', 'fint', 'fint_global']
+from fedoo.libUtil.ExportData import ExportData 
+from fedoo.libUtil.DataSet import MultiFrameDataSet
+import os
 
 _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
                      'PKII_vm','PK2_vm','Krichoff_vm','Kirchhoff_vm','Cauchy_vm',
@@ -41,6 +32,8 @@ _label_dict = {'pkii':'PKII',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhof
                 'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global' 
 }
 
+#dict to get the str used in variable name for each output_type
+_output_type_str = {'Node': 'nd', 'Element':'el', 'GaussPoint':'gp'}
 
 #  {'pkii':'PKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
 # 'stress':'Stress', 'strain':'Strain', 'disp':'Disp', 'rot':'Rot'} #use to get label associated with some outputs
@@ -60,9 +53,6 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
                 print("WARNING: '", res, "' doens't match to any available output")
                 print("Specified output ignored")
                 print("List of available output: ", _available_output)
-                
-        list_filename = []
-        list_ExportData = []            
         
         data_sav = {} #dict to keep data in memory that may be used more that one time
 
@@ -219,18 +209,31 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1, res_f
 class _ProblemOutput:
     def __init__(self):
         self.__list_output = [] #a list containint dictionnary with defined output
+        self.data_sets = {}
                 
-    def AddOutput(self, filename, assemb, output_list, output_type='Node', file_format ='vtk', position = 1):
-        if output_type.lower() == 'node': output_type = 'Node'
-        elif output_type.lower() == 'element': output_type = 'Element'
-        elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
-        else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
+    def AddOutput(self, filename, assemb, output_list, output_type='Node', file_format = 'npz', position = 1, save_mesh = True):
         
-        file_format = file_format.lower()
+        dirname = os.path.dirname(filename)        
+        # filename = os.path.basename(filename)
+        extension = os.path.splitext(filename)[1]
+        if extension == '': 
+            #if no extention -> create a new dir using filename as dirname
+            dirname = filename+'/'
+            filename = dirname+os.path.basename(filename)
+            file_format = file_format.lower()
+        else: 
+            #use extension as file format
+            file_format = extension[1:].lower()
+            filename = os.path.splitext(filename)[0] #remove extension for the base name
+             
+        
         if file_format not in _available_format:
             print("WARNING: '", file_format, "' doens't match to any available file format")
             print("Specified output ignored")
             print("List of available file format: ", _available_format)
+        
+        if output_type.lower() not in ['node', 'element', 'gausspoint']:
+            raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
                 
         for i,res in enumerate(output_list):
             output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
@@ -241,20 +244,35 @@ class _ProblemOutput:
         
         if isinstance(assemb, str): assemb = AssemblyBase.get_all()[assemb]     
         
+        if not(os.path.isdir(dirname)): os.mkdir(dirname)
+                
         new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)
+        
+        if save_mesh:
+            assemb.mesh.save(filename)
+        
+        if file_format in ['npz', 'npz_compressed']:
+            if not(filename in self.data_sets):
+                res = MultiFrameDataSet(assemb.mesh, [])
+                self.data_sets[filename] = res
+            else:
+                res = self.data_sets[filename]
+            return res
 
     def SaveResults(self, pb, comp_output=None):
         
         list_filename = []
-        list_ExportData = []            
+        list_full_filename = []
+        list_file_format = []
+        list_data = []            
         
         for output in self.__list_output:
             
             filename = output['filename']
             file_format = output['file_format'].lower()
             output_type = output['type'] #'Node', 'Element' or 'GaussPoint'
-            position = output['position']
+            position = output['position']                              
             
             assemb = output['assembly']
             # material = assemb.weakform.GetConstitutiveLaw()
@@ -265,18 +283,21 @@ class _ProblemOutput:
                 filename_compl = '_' + str(comp_output)
             
             if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:                
-                filename = filename + filename_compl + '.' + file_format[0:3]
+                # filename = filename + filename_compl + '.' + file_format[0:3]
+                full_filename = filename + filename_compl + '.' + file_format #filename including iter number and file format
                 
-                if not(filename in list_filename): 
-                    #if file name don't exist in the list we create it
+                if not(full_filename in list_full_filename): 
+                    #if filename don't exist in the list we create it
                     list_filename.append(filename)
+                    list_full_filename.append(full_filename)
+                    list_file_format.append(file_format)
                     if file_format in ['vtk', 'msh']: OUT = ExportData(assemb.mesh.name)
-                    else: OUT = {} #empty dictionnary cotaining variable                        
-                    list_ExportData.append(OUT)                        
+                    else: OUT = {} #empty dictionnary containing variable                        
+                    list_data.append(OUT)                        
                 else: 
                     #else, the same file is used   
-                    if file_format in ['vtk', 'msh']: 
-                        OUT = list_ExportData[list_filename.index(filename)]                                                                             
+                    # if file_format in ['vtk', 'msh']: 
+                    OUT = list_data[list_full_filename.index(full_filename)]                                                                             
             
             #compute the results
             res = _GetResults(pb, assemb, output['list'],output_type,position, file_format)                        
@@ -292,22 +313,33 @@ class _ProblemOutput:
                         
                 elif file_format == 'txt':
                     #save array in txt file using numpy.savetxt
-                    fname = filename + '_' + label_data + '_' + output_type + filename_compl + '.txt'
+                    fname = filename + '_' + label_data + '_' + _output_type_str[output_type] + filename_compl + '.txt'
                     np.savetxt(fname, data)
 
                 elif file_format == 'npy':
                     #save array in npy file (binary file generated by numpy) using numpy.save
-                    fname = filename + '_' + label_data + '_' + output_type + filename_compl + '.npy'
+                    fname = filename + '_' + label_data + '_' + _output_type_str[output_type] + filename_compl + '.npy'
                     np.save(fname, data)
 
                 elif file_format in ['npz', 'npz_compressed']:
                     #save all arrays for one iteration in a npz file (binary file generated by numpy) using numpy.savez
-                    var_name = label_data + '_' + output_type                    
+                    var_name = label_data + '_' + _output_type_str[output_type]                    
                     OUT[var_name] = data
         
-            if file_format in ['vtk', 'msh', 'npz', 'npz_compressed']:    
-                for i, OUT in enumerate(list_ExportData):                
-                    if file_format == 'vtk': OUT.toVTK(list_filename[i])
-                    elif file_format == 'msh': OUT.toMSH(list_filename[i])
-                    elif file_format == 'npz': np.savez(list_filename[i], **OUT)
-                    elif file_format == 'npz_compressed': np.savez_compressed(list_filename[i], **OUT)
+        for i, OUT in enumerate(list_data): 
+            file_format = list_file_format[i]               
+            if file_format == 'vtk': OUT.toVTK(list_full_filename[i])
+            elif file_format == 'msh': OUT.toMSH(list_full_filename[i])
+            elif file_format == 'npz': 
+                np.savez(list_full_filename[i], **OUT)
+                self.data_sets[list_filename[i]].list_data.append(list_full_filename[i])
+                
+            elif file_format == 'npz_compressed': 
+                np.savez_compressed(list_filename[i], **OUT)
+                i = self.data_sets.data_file.index(list_filename[i])
+                self.data_sets[list_filename[i]].list_data.append(list_full_filename[i])                
+                
+            
+           # if output_type.lower() == 'node': output_type = 'nd'
+           # elif output_type.lower() == 'element': output_type = 'el'
+           # elif output_type.lower() == 'gausspoint': output_type = 'gp'             

@@ -6,6 +6,7 @@ import scipy.sparse.linalg
 from fedoo.libProblem.ProblemBase import ProblemBase
 from fedoo.libAssembly.Assembly  import *
 from fedoo.libProblem.Output import _ProblemOutput, _GetResults
+from fedoo.libUtil.DataSet import DataSet
 
 import time 
 
@@ -74,13 +75,13 @@ class Problem(ProblemBase):
             return vector[i*n : (i+1)*n]   
 
     def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 1):
-        self.__ProblemOutput.AddOutput(filename, assemblyname, output_list, output_type, file_format, position)            
+        return self.__ProblemOutput.AddOutput(filename, assemblyname, output_list, output_type, file_format, position)            
 
     def SaveResults(self, iterOutput=None):
-        self.__ProblemOutput.SaveResults(self, iterOutput)                                
+        self.__ProblemOutput.SaveResults(self, iterOutput)
 
-    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
-        return _GetResults(self, assemb, output_list, output_type, position, res_format)        
+    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):        
+        return DataSet(self.mesh, _GetResults(self, assemb, output_list, output_type, position, res_format), output_type)
 
     def SetA(self,A):
         self.__A = A     
@@ -233,5 +234,8 @@ class Problem(ProblemBase):
                 elif e.BoundaryType == 'Neumann':
                     if F is not 0:
                         e.ChangeInitialValue(F[e.Variable*Nnodes + e.Index])
-                
+    
+    @property
+    def results(self):
+        return self.__ProblemOutput.data_sets
       
