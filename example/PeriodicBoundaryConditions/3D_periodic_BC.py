@@ -5,7 +5,7 @@ import time
 #--------------- Pre-Treatment --------------------------------------------------------
 
 t0 = time.time()
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 DataINP = Util.ReadINP('Job-1.inp')
 

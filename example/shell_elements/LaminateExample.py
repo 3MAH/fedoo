@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib import pylab as plt
 import os 
 
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
 

@@ -35,7 +35,7 @@ front = mesh.find_nodes('Z', Xmax[2])
 boundary = np.unique(np.hstack((bottom,top,left,right, back, front)))
 
 # -------------------- Thermal Problem ------------------------------
-thermal_space = Util.ProblemDimension("3D")
+thermal_space = ModelingSpace("3D")
 
 
 K = 500 # K = 18 #W/K/m
@@ -51,7 +51,7 @@ pb_th = Problem.NonLinearStatic("Assembling_T")
 pb_th.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 # -------------------- Mechanical Problem ------------------------------
-mech_space = Util.ProblemDimension("3D")
+mech_space = ModelingSpace("3D")
 
 E = 200e3
 nu=0.3

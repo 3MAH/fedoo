@@ -1,5 +1,5 @@
 # base class
-from fedoo.libUtil.ModelingSpace import ModelingSpace
+from fedoo.utilities.modelingspace import ModelingSpace
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ListConstitutiveLaw
 
 class WeakForm:

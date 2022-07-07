@@ -4,7 +4,7 @@ import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
 
-fd.Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 
 #Units: N, mm, MPa
 #Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')

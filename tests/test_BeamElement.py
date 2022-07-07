@@ -5,7 +5,7 @@
 import fedoo as fd
 import numpy as np
 
-fd.Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
 fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')

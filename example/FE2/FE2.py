@@ -3,8 +3,8 @@ import numpy as np
 import os
 
 #Define the Modeling Space - Here 2D problem with plane stress assumption.
-Util.ProblemDimension("2Dplane", 'macro_space') 
-Util.ProblemDimension("3D", 'micro_space') 
+ModelingSpace("2Dplane", 'macro_space') 
+ModelingSpace("3D", 'micro_space') 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
 mesh_macro = Mesh.hole_plate_mesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \

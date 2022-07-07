@@ -13,7 +13,7 @@ if USE_SIMCOON:
 
 if USE_SIMCOON:    
     from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-    from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
+    from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
     import numpy as np
     
     class Simcoon(Mechanical3D, sim.Umat_fedoo):

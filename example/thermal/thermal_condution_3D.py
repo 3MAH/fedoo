@@ -8,7 +8,7 @@ from numpy import linalg
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 meshname = "Domain"
 nb_iter = 100

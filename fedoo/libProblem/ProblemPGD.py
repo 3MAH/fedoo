@@ -23,9 +23,9 @@ class ProblemPGD(ProblemBase):
         self.__NumberOfSubspace = Mesh.GetDimension()
         
         listNumberOfNodes = Mesh.n_nodes  #list of number of nodes for all submesh
-        #self.__ProblemDimension is a list of number of DoF for each subspace
-        self.__ProblemDimension = [Mesh._GetSpecificNumberOfVariables(idmesh, nvar)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
-        #self.__ProblemDimension = self.__A.GetShape()
+        #self.__ModelingSpace is a list of number of DoF for each subspace
+        self.__ModelingSpace = [Mesh._GetSpecificNumberOfVariables(idmesh, nvar)*listNumberOfNodes[idmesh] for idmesh in range(self.__NumberOfSubspace)]                   
+        #self.__ModelingSpace = self.__A.GetShape()
 
         self.__A = A 
         #if self.__A != 0: self.__A.tocsr() #just in case A is in another format as csr
@@ -46,7 +46,7 @@ class ProblemPGD(ProblemBase):
     # Internal Functions
     #===============================================================================
     def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
-        return SeparatedZeros(self.__ProblemDimension)  
+        return SeparatedZeros(self.__ModelingSpace)  
     
     def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
 
@@ -255,13 +255,13 @@ class ProblemPGD(ProblemBase):
         BB = SeparatedArray(self.__B + self.__D - self.__A*self.__Xbc)
         alpha = sp.c_[linalg.solve(self.calcMat_Alpha(self.__X), self.SecTerm_Alpha(self.__X, BB))] 
 #        alpha = self.solve_Alpha(self.__X,SeparatedArray(self.__B - self.__A*self.__Xbc))   
-        self.__X.data[0] = sp.tile(alpha.T, (self.__ProblemDimension[0],1) )*self.__X.data[0]  
+        self.__X.data[0] = sp.tile(alpha.T, (self.__ModelingSpace[0],1) )*self.__X.data[0]  
                        
 
     def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): 
         if variable != 'all': return NotImplemented    
-        if value == None: self.__X += SeparatedArray([np.random.random((nn,numberOfTerm)) for nn in self.__ProblemDimension])    
-        elif isinstance(value, (int,float)): self.__X += value * SeparatedOnes(self.__ProblemDimension, numberOfTerm)
+        if value == None: self.__X += SeparatedArray([np.random.random((nn,numberOfTerm)) for nn in self.__ModelingSpace])    
+        elif isinstance(value, (int,float)): self.__X += value * SeparatedOnes(self.__ModelingSpace, numberOfTerm)
         elif isinstance(value, SeparatedArray): 
             for t in range(numberOfTerm): self.__X += value.getTerm(t%value.nbTerm())
         #for boundary conditions        
@@ -277,19 +277,19 @@ class ProblemPGD(ProblemBase):
     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
     def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):                  
         meshPGD = self.mesh
-        shapeX = self.__ProblemDimension
+        shapeX = self.__ModelingSpace
         X = self.__X
         Xbc = 0 #SeparatedZeros(shapeX)
         F = 0 
         nvar = self.space.nvar
         
-        DofB = [np.array([]) for i in self.__ProblemDimension] 
+        DofB = [np.array([]) for i in self.__ModelingSpace] 
         dimBC = None #dimension requiring a modification of Xbc - dimBC = None if Xbc is never modified, dimBC = dd if only the dimension dd is modified, dimBC = 'many' if there is more than one dimension
                 
         MPC = False
-        data = [[] for i in self.__ProblemDimension] 
-        row = [[] for i in self.__ProblemDimension] 
-        col = [[] for i in self.__ProblemDimension] 
+        data = [[] for i in self.__ModelingSpace] 
+        row = [[] for i in self.__ModelingSpace] 
+        col = [[] for i in self.__ModelingSpace] 
         
         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.GetDimension())]

@@ -331,7 +331,7 @@ class CohesiveLaw_mod(Spring):
 
 
 # if __name__=="__main__":
-#     ProblemDimension("3D")
+#     ModelingSpace("3D")
 #     GIc = 0.3 ; SImax = 60
 #     # delta_I_max = 2*GIc/SImax
 #     delta_I_max = 0.04

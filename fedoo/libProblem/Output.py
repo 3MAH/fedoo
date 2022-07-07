@@ -7,8 +7,8 @@ Created on Thu Dec 16 17:54:05 2021
 import numpy as np
 from fedoo.mesh.fedoo_mesh import *
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
-from fedoo.libUtil.ExportData import ExportData 
-from fedoo.libUtil.DataSet import MultiFrameDataSet
+from fedoo.utilities.ExportData import ExportData 
+from fedoo.utilities.dataset import MultiFrameDataSet
 import os
 
 _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',

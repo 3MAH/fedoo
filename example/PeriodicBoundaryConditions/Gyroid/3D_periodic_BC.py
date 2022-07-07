@@ -5,7 +5,7 @@ import time
 #--------------- Pre-Treatment --------------------------------------------------------
 
 t0 = time.time()
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 Mesh.import_file('gyroid.msh', meshname = "Domain")
 meshname = "Domain"
 

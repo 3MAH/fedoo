@@ -6,7 +6,7 @@ import scipy.sparse.linalg
 from fedoo.libProblem.ProblemBase import ProblemBase
 from fedoo.libAssembly.Assembly  import *
 from fedoo.libProblem.Output import _ProblemOutput, _GetResults
-from fedoo.libUtil.DataSet import DataSet
+from fedoo.utilities.dataset import DataSet
 
 import time 
 
@@ -18,8 +18,8 @@ class Problem(ProblemBase):
         
         ProblemBase.__init__(self, name, space)
 
-        #self.__ProblemDimension = A.shape[0]
-        self.__ProblemDimension = mesh.n_nodes * self.space.nvar
+        #self.__ModelingSpace = A.shape[0]
+        self.__ModelingSpace = mesh.n_nodes * self.space.nvar
 
         self.__A = A
 
@@ -32,7 +32,7 @@ class Problem(ProblemBase):
 
         self.mesh = mesh   
 
-        self.__X = np.ndarray( self.__ProblemDimension )
+        self.__X = np.ndarray( self.__ModelingSpace )
         self.__Xbc = 0
 
         self.__DofBlocked = np.array([])
@@ -42,7 +42,7 @@ class Problem(ProblemBase):
         self.__ProblemOutput = _ProblemOutput()        
 
     def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
-        return np.zeros(self.__ProblemDimension)     
+        return np.zeros(self.__ModelingSpace)     
 
     def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
         assert isinstance(name,str), 'argument error'

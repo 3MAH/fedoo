@@ -2,7 +2,7 @@ import fedoo as fd
 import numpy as np
 
 #Define the Modeling Space - Here 2D problem with plane stress assumption.
-fd.Util.ProblemDimension("2Dstress") 
+fd.ModelingSpace("2Dstress") 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
 meshObject = fd.mesh.hole_plate_mesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \

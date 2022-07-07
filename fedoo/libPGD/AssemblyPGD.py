@@ -1,9 +1,9 @@
 from fedoo.libAssembly.AssemblyBase import AssemblyBase
 from fedoo.libAssembly.Assembly import Assembly as AssemblyFEM
 from fedoo.libAssembly.Assembly import RowBlocMatrix
-# from fedoo.libUtil.Variable import Variable
-# from fedoo.libUtil.StrainOperator import GetStrainOperator
-from fedoo.libUtil.PostTreatement import listStrainTensor
+# from fedoo.utilities.Variable import Variable
+# from fedoo.utilities.StrainOperator import GetStrainOperator
+from fedoo.utilities.PostTreatement import listStrainTensor
 from fedoo.mesh.fedoo_mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import GetDefaultNbPG
 from fedoo.libWeakForm.WeakForm import WeakForm

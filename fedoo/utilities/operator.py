@@ -2,7 +2,7 @@
 # Derivative and Differential operator
 #===============================================================================
 #from fedoo.libPGD.SeparatedArray import *
-# from fedoo.libUtil.ModelingSpace  import ModelingSpace
+# from fedoo.utilities.modelingspace  import ModelingSpace
 import numpy as np
 
 from numbers import Number #classe de base qui permet de tester si un type est numérique

@@ -5,7 +5,7 @@ from simcoon import simmit as sim
 import os
 
 #--------------- Pre-Treatment --------------------------------------------------------
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 meshname = "Domain2"
 

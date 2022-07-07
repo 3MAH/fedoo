@@ -10,7 +10,7 @@ from pyvistaqt import BackgroundPlotter
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 NLGEOM = 2
 #Units: N, mm, MPa

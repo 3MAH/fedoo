@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 
-from fedoo.libUtil.ModelingSpace import ModelingSpace
+from fedoo.utilities.modelingspace import ModelingSpace
 from fedoo.libPGD.SeparatedArray import *
 
 class UniqueBoundaryCondition() :

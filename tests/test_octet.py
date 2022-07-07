@@ -4,7 +4,7 @@ import numpy as np
 fd.Assembly.delete_memory()
 
 #Define the Modeling Space - Here 3D problem 
-fd.Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 
 #Import the mesh generated with Microgen
 fd.mesh.import_file('data/MeshPeriodic.msh', meshname = "Domain")

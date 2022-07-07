@@ -10,7 +10,7 @@ import pyvista as pv
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-fd.Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 
 NLGEOM = 2
 #Units: N, mm, MPa

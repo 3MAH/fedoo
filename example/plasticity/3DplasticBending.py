@@ -8,7 +8,7 @@ from numpy import linalg
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 NLGEOM = 2
 typeBending = '3nodes' #'3nodes' or '4nodes'

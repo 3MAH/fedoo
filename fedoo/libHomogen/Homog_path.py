@@ -176,7 +176,7 @@ if USE_SIMCOON:
                         
                     ###DEBUG ONLY####
                     # print(TangentMatrix)
-                    # from fedoo.libUtil import arrayStressTensor                     
+                    # from fedoo.utilities import arrayStressTensor                     
                     # print(arrayStressTensor(TensorStress).vonMises().max())                    
                     # # print(arrayStressTensor(MeanStress).vonMises())                  
                     ######

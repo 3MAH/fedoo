@@ -1,8 +1,8 @@
 from fedoo.libWeakForm.WeakForm   import *
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-# from fedoo.libUtil.StrainOperator import GetStrainOperator
-# from fedoo.libUtil.ModelingSpace import Variable, Vector, GetDimension
-from fedoo.libUtil.Operator  import OpDiff
+# from fedoo.utilities.StrainOperator import GetStrainOperator
+# from fedoo.utilities.modelingspace import Variable, Vector, GetDimension
+from fedoo.utilities.operator  import OpDiff
 
 class Plate(WeakForm):
     """

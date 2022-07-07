@@ -2,7 +2,6 @@
 import numpy as np
 
 
-#simcoon compatible
 class arrayStressTensor(np.ndarray):
 
     def __new__(cls, input_array):
@@ -19,7 +18,7 @@ class arrayStressTensor(np.ndarray):
     def vtkFormat(self):
         """
         Return a array adapted to export symetric tensor data in a vtk file
-        See the Util.ExportData class for more details
+        See the utilities.ExportData class for more details
         """
         return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float).T 
     
@@ -39,7 +38,6 @@ class arrayStressTensor(np.ndarray):
     #     if obj is None: return
     #     self.info = getattr(obj, 'info', None)
 
-#simcoon compatible
 class listStressTensor(list):
     
     def __init__(self, l):
@@ -49,7 +47,7 @@ class listStressTensor(list):
     def vtkFormat(self):
         """
         Return a array adapted to export symetric tensor data in a vtk file
-        See the Util.ExportData class for more details
+        See the utilities.ExportData class for more details
         """
         try: 
             return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float).T 
@@ -126,7 +124,6 @@ class listStressTensor(list):
     def Convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
         return listStressTensor([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])
 
-#simcoon compatible    
 class listStrainTensor(list):
     
     def __init__(self, l):
@@ -136,7 +133,7 @@ class listStrainTensor(list):
     def vtkFormat(self):
         """
         Return a array adapted to export symetric tensor data in a vtk file
-        See the Util.ExportData class for more details
+        See the utilities.ExportData class for more details
         """
 
         try: 

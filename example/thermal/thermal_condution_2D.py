@@ -8,7 +8,7 @@ from numpy import linalg
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("2Dplane")
+ModelingSpace("2Dplane")
 
 #Units: N, mm, MPa
 h = 2

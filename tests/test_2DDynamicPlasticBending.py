@@ -10,7 +10,7 @@ from simcoon import simmit as sim
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-fd.Util.ProblemDimension("2Dplane")
+fd.ModelingSpace("2Dplane")
 
 NLGEOM = True
 #Units: N, mm, MPa

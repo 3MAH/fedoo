@@ -8,7 +8,7 @@ method_output = 1
 # method_output = 2 to write the vtk file at the end 
 # method_output = 3 to save the results (disp, stress, strain) in a dict
 
-Util.ProblemDimension("2Dstress")
+ModelingSpace("2Dstress")
 
 Mesh.import_file('plate_with_hole.msh', meshname = "Domain")
 

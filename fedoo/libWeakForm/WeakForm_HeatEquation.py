@@ -7,7 +7,7 @@
 
 from fedoo.libWeakForm.WeakForm   import WeakForm, WeakFormSum
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-# from fedoo.libUtil.Operator  import OpDiff
+# from fedoo.utilities.operator  import OpDiff
 import numpy as np
 
 class SteadyHeatEquation(WeakForm):

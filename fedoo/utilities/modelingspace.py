@@ -1,4 +1,4 @@
-from fedoo.libUtil.Operator  import OpDiff
+from fedoo.utilities.operator  import OpDiff
 
 
 class ModelingSpace:
@@ -8,8 +8,9 @@ class ModelingSpace:
 
     def __init__(self, dimension, name ="Main"):
         # assert name not in ModelingSpace.__dic, str(name) + " already exist. Delete it first."
-        assert isinstance(dimension,str) , "The dimension value must be a string"
-        assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '3D', '2Dplane' or '2Dstress'"        
+        assert isinstance(dimension,str) , "The dimension value must be a string: '2D', '3D', '2Dplane' or '2Dstress'."
+        if dimension == "2D": dimension = "2Dplane"
+        assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '2D', '3D', 2Dplane' or '2Dstress'"        
         
         #Static attributs 
         ModelingSpace.__active_space = self
@@ -54,7 +55,7 @@ class ModelingSpace:
     
     @staticmethod    
     def GetActive():
-        assert ModelingSpace.__active_space is not None, "You must define a dimension for your problem"
+        assert ModelingSpace.__active_space is not None, "You must define a ModelingSpace for your problem."
         return ModelingSpace.__active_space
     
     @staticmethod
@@ -207,9 +208,7 @@ class ModelingSpace:
             gammaZ = self.opdiff('DispZ', 'X', 1) + self.opdiff('RotY') #shear/Z
         
             eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
-            
-        # eps_vir = [e.virtual if e != 0 else 0 for e in eps ]
-            
+                        
         return eps
     
     def op_disp(self):
@@ -236,46 +235,12 @@ class ModelingSpace:
             
     #     return eps 
 
-
-
-    
-def ProblemDimension(value, modelingSpacename = "Main"):
-    """
-    Create a new modeling space with the specified problem dimension
-    value must be '3D', '2Dplane' or '2Dstress'
-    """
-    ModelingSpace(value, modelingSpacename)
-    
-# def new_coordinate(name):
-#     #     """
-#     #     Create a new coordinate in the active Modeling Space
-#     #     """
-#     ModelingSpace.GetActive().new_coordinate(name)    
-
-# def new_variable(name):
-#     #     """
-#     #     Create a new variable in the active Modeling Space
-#     #     """
-#     ModelingSpace.GetActive().new_variable(name)    
         
-# def new_vector(name, listOfVariables):
-#     """
-#     Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
-#     In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
-#     """      
-#     ModelingSpace.GetActive().new_vector(name, listOfVariables)    
+if __name__=="__main__":
+    space = ModelingSpace("3D", name = "my space")
+    print(ModelingSpace.GetActive().name)
+    another_space = ModelingSpace("2Dplane")
+    print(ModelingSpace.get_all())
+    print(ModelingSpace.GetActive().ndim)
+    print(ModelingSpace.get_all()['my space'].ndim)
 
-# def GetNumberOfDimensions():
-#     return ModelingSpace.GetDoF()
-
-# def GetDimension():
-#     return ModelingSpace.GetDimension()
-        
-
-# if __name__=="__main__":
-#     ProblemDimension("3D")
-#     print(ProblemDimension.Get())
-#     ProblemDimension("2Dplane")
-#     print(ProblemDimension.Get())
-#     ProblemDimension(3)
-#     ProblemDimension("ee")

@@ -15,9 +15,9 @@ meshperio = True
 method = 3
 
 if dim == 2: 
-    Util.ProblemDimension("2Dplane")
+    ModelingSpace("2Dplane")
 else: 
-    Util.ProblemDimension("3D")
+    ModelingSpace("3D")
 
 if dim == 3: 
     # Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")

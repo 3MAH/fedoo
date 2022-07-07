@@ -1,5 +1,5 @@
 from fedoo.mesh.fedoo_mesh import Mesh
-from fedoo.libUtil.ModelingSpace import ModelingSpace
+from fedoo.utilities.modelingspace import ModelingSpace
 import itertools
 
 # import scipy as sp

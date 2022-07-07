@@ -6,7 +6,7 @@ import time
 # with simple bending load
 
 t0=time.time()
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
 Mesh.rectangle_mesh(50, 50, -50, 50, -50, 50, 'quad4', name="Midplane")
 Mesh.line_mesh_1D(20, 0, 5, 'lin2', name = "Thickness")

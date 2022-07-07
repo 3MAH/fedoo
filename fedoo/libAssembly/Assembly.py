@@ -1,7 +1,7 @@
 #simcoon compatible
 
 from fedoo.libAssembly.AssemblyBase import AssemblyBase, AssemblySum
-from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.mesh.fedoo_mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.libWeakForm.WeakForm import WeakForm
