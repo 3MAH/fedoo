@@ -3,7 +3,7 @@ import numpy as np
 
 # from fedoo.libUtil.Coordinate import Coordinate
 from fedoo.libMesh.MeshBase import MeshBase
-from fedoo.libElement import *
+# from fedoo.libElement import *
 from os.path import splitext
 try:
     import pyvista as pv

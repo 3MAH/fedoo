@@ -3,7 +3,7 @@
 from fedoo.libAssembly.AssemblyBase import AssemblyBase, AssemblySum
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.libMesh.Mesh import Mesh
-from fedoo.libElement import *
+from fedoo.lib_elements.element_list import * 
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libAssembly.SparseMatrix import _BlocSparse as BlocSparse
@@ -327,8 +327,8 @@ class Assembly(AssemblyBase):
             
             #list_elm_type contains the id of the element associated with every variable
             #list_elm_type could be stored to avoid reevaluation 
-            if isinstance(eval(self.elm_type), dict):
-                elementDict = eval(self.elm_type)
+            if isinstance(get_element(self.elm_type), dict):
+                elementDict = get_element(self.elm_type)
                 list_elm_type = [elementDict.get(self.space.variable_name(i))[0] for i in range(nvar)]
                 list_elm_type = [elementDict.get('__default') if elmtype is None else elmtype for elmtype in list_elm_type]
             else: list_elm_type = [self.elm_type for i in range(nvar)]
@@ -478,7 +478,7 @@ class Assembly(AssemblyBase):
             crd = mesh.nodes
             dim = self.space.ndim
             localFrame = mesh.local_frame
-            elmRefGeom = eval(mesh.elm_type)(mesh=mesh)
+            elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
     #        xi_nd = elmRefGeom.xi_nd
             xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, nNd_elm) #function to define
 
@@ -633,7 +633,7 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------        
         if NumberOfGaussPoint == 0: # in this case, it is a finite difference mesh
             # we compute the operators directly from the element library
-            elmRef = eval(elm_type)(NumberOfGaussPoint)
+            elmRef = get_element(elm_type)(NumberOfGaussPoint)
             OP = elmRef.computeOperator(crd,elm)
             Assembly._saved_gaussian_quadrature_mat[(mesh,NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
             Assembly._saved_gausspoint2node_mat[(mesh, NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
@@ -645,7 +645,7 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------
         #Initialise the geometrical interpolation
         #-------------------------------------------------------------------   
-        elmRefGeom = eval(mesh.elm_type)(NumberOfGaussPoint, mesh=mesh) #initialise element
+        elmRefGeom = get_element(mesh.elm_type)(NumberOfGaussPoint, mesh=mesh) #initialise element
         nNd_elm_geom = len(elmRefGeom.xi_nd) #number of dof used in the geometrical interpolation
         elm_geom = elm[:,:nNd_elm_geom] 
 
@@ -701,7 +701,7 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------
         # Build the list of elm_type to assemble (some beam element required several elm_type in function of the variable)
         #-------------------------------------------------------------------        
-        objElement = eval(elm_type)
+        objElement = get_element(elm_type)
         if isinstance(objElement, dict):
             list_elm_type = set([objElement[key][0] for key in objElement.keys() if key[:2]!='__' or key == '__default'])               
         else: 
@@ -711,7 +711,7 @@ class Assembly(AssemblyBase):
         # Assembly of the elementary operators for each elm_type 
         #-------------------------------------------------------------------      
         for elm_type in list_elm_type: 
-            elmRef = eval(elm_type)(NumberOfGaussPoint, mesh = mesh, elmGeom = elmRefGeom)
+            elmRef = get_element(elm_type)(NumberOfGaussPoint, mesh = mesh, elmGeom = elmRefGeom)
             nb_dir_deriv = 0
             if hasattr(elmRef,'ShapeFunctionDerivativePG'):
                 derivativePG = elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG #derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
@@ -744,8 +744,8 @@ class Assembly(AssemblyBase):
         elm_type = self.elm_type
         mesh = self.mesh
         
-        if isinstance(eval(elm_type), dict):
-            elementDict = eval(elm_type)
+        if isinstance(get_element(elm_type), dict):
+            elementDict = get_element(elm_type)
             elm_type = elementDict.get(self.space.variable_name(deriv.u))
             if elm_type is None: elm_type = elementDict.get('__default')
             elm_type = elm_type[0]
@@ -778,7 +778,7 @@ class Assembly(AssemblyBase):
     def _get_associated_variables(self): #associated variables (rotational dof for C1 elements) of elm_type        
         elm_type = self.elm_type
         if elm_type not in Assembly._saved_associated_variables:
-            objElement = eval(elm_type)
+            objElement = get_element(elm_type)
             if isinstance(objElement, dict):            
                 Assembly._saved_associated_variables[elm_type] = {self.space.variable_rank(key): 
                                        [[self.space.variable_rank(v) for v in val[1][1::2]],
@@ -792,8 +792,8 @@ class Assembly(AssemblyBase):
         #determine the type of coordinate system used for vector of variables (displacement for instance). This type may be specified in element (under dict form only with elm_dict['__local_csys'] = True)        
         #return True if the variables are defined in a local coordinate system, or False if global variables are used. If local variables are used, a change of variable is required
         #If '__local_csys' is not specified in the element, 'global' value (no change of basis) is considered by default
-        if isinstance(eval(self.elm_type), dict):
-            return eval(self.elm_type).get('__local_csys', False)                
+        if isinstance(get_element(self.elm_type), dict):
+            return get_element(self.elm_type).get('__local_csys', False)                
         else: 
             return False 
     
@@ -1122,7 +1122,7 @@ class Assembly(AssemblyBase):
 #        elif CoordinateSystem == 'global': 
 #            #require a transformation between local and global coordinates on element
 #            #classical mat_change_of_basis transform only toward nodal values
-#            elmRef = eval(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element
+#            elmRef = get_element(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element
 #            vec = [0,1,2] ; dim = 3
 #       
 #            #Data to build mat_change_of_basis_el with coo sparse format
@@ -1196,7 +1196,7 @@ class Assembly(AssemblyBase):
         elif CoordinateSystem == 'global': 
             #require a transformation between local and global coordinates on element
             #classical mat_change_of_basis transform only toward nodal values
-            elmRef = eval(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element            
+            elmRef = get_element(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element            
             if dim == 3: vec = [0,1,2] 
             else: vec = [0,1]
        

@@ -1,11 +1,30 @@
 import numpy as np
 from numpy import linalg
+from fedoo.lib_elements.beam import *
+from fedoo.lib_elements.cohesive import *
+from fedoo.lib_elements.hexahedron import *
+from fedoo.lib_elements.line import *
+from fedoo.lib_elements.plate import *
+from fedoo.lib_elements.tetrahedron import *
+from fedoo.lib_elements.triangle import *
+from fedoo.lib_elements.quadrangle import *
+from fedoo.lib_elements.finite_difference_1d import *
 
 
+def get_element(element_str):
+    list_element = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
+            'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
+            'tri3':Tri3,'tri6':Tri6,'tri3Bubble':Tri3Bubble,
+            'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
+            'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
+            'beam':Beam, 'beamFCQ':BeamFCQ, 'bernoullibeam':BernoulliBeam,
+            'parameter':Parameter, 'node':Node        
+    }
+    return list_element[element_str.lower()]
 
 def GetNodePositionInElementCoordinates(element, nNd_elm=None):
     #return xi_nd ie the position of nodes in the element local coordinate
-    if element in ['lin2', 'lin3', 'lin2C1', 'lin2Bubble', 'lin3Bubble','cohesive2D']:
+    if element in ['lin2', 'lin3', 'lin2Bubble', 'lin3Bubble','cohesive2D']:
         if nNd_elm == 2: return np.c_[[0., 1.]]
         elif nNd_elm == 3: return np.c_[[0., 1., 0.5]]
     elif element in ['tri3','tri6','tri3Bubble']:
@@ -65,3 +84,4 @@ def GetDefaultNbPG(element, mesh=None, raiseError=True):
         
     if mesh is not None: 
         return GetDefaultNbPG(mesh.elm_type)
+

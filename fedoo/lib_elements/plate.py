@@ -1,5 +1,4 @@
 import numpy as np
-from fedoo.libElement.Element import *   
 
 # --------------------------------------
 #Reissner-Mindlin plate elements

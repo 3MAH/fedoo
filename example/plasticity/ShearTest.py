@@ -131,14 +131,14 @@ results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, qua
 # ------------------------------------
 # Save pdf plot
 # ------------------------------------
-pl = results.plot(scalars = 'Cauchy_vm', show = False)
-pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
+# pl = results.plot(scalars = 'Cauchy_vm', show = False)
+# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
 
 # ------------------------------------
 # Plot the automatically saved mesh
 # ------------------------------------
-pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
+# pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
 
 
 

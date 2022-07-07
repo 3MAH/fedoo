@@ -5,10 +5,11 @@ from fedoo.libAssembly.Assembly import RowBlocMatrix
 # from fedoo.libUtil.StrainOperator import GetStrainOperator
 from fedoo.libUtil.PostTreatement import listStrainTensor
 from fedoo.libMesh.Mesh import Mesh as MeshFEM
-from fedoo.libElement import *
+from fedoo.lib_elements.element_list import GetDefaultNbPG
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libPGD.SeparatedOperator import SeparatedOperator
-from fedoo.libPGD.SeparatedArray import SeparatedArray
+from fedoo.libPGD.SeparatedArray import SeparatedArray, SeparatedZeros
+from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
 
 from scipy import sparse
 import numpy as np
@@ -195,11 +196,11 @@ class AssemblyPGD(AssemblyFEM):
             self.__listNumberOfGaussPoints = listNumberOfGaussPoints
         else:
             for i,m in enumerate(listSubMesh):                
-                if isinstance(m, str): m = Mesh.get_all()[m]
+                if isinstance(m, str): m = MeshFEM.get_all()[m]
                 self.__listNumberOfGaussPoints[self.mesh.GetListMesh().index(m)] = listNumberOfGaussPoints[i] 
                 
         self.__listAssembly = [AssemblyFEM(self.weakform, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
-                               for i, m in enumerate(mesh.GetListMesh())]
+                               for i, m in enumerate(self.mesh.GetListMesh())]
 
 
 
@@ -297,7 +298,7 @@ class AssemblyPGD(AssemblyFEM):
                 MatrixChangeOfBasis = self.__listAssembly[dd].get_change_of_basis_mat()                                                           
                 res_add.append(RowBlocMatrix(self.__listAssembly[dd]._get_elementary_operator(operator.op[ii]) , nvar[dd], var, coef) * MatrixChangeOfBasis * U.data[dd])
             
-            if isinstance(coef_PG, list): coef_PG = SeparatedArray(Coef_PG)
+            if isinstance(coef_PG, list): coef_PG = SeparatedArray(coef_PG)
             res = res + coef_PG*SeparatedArray(res_add)
                                         
         return res
@@ -329,7 +330,7 @@ class AssemblyPGD(AssemblyFEM):
         return GaussianPointToNodeMatrix * res 
 
 
-    def GetStressTensor(self, U, constitutiveLaw, IntegrationType="Nodal"):
+    def GetStressTensor(self, U, constitutivelaw, IntegrationType="Nodal"):
         """
         Not a static method.
         Return the Stress Tensor of an assembly using the Voigt notation as a python list. 
@@ -342,14 +343,14 @@ class AssemblyPGD(AssemblyFEM):
         example : 
         S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
         """
-        if isinstance(constitutiveLaw, str):
-            constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
+        if isinstance(constitutivelaw, str):
+            constitutivelaw = ConstitutiveLaw.get_all()[constitutivelaw]
 
         if IntegrationType == "Nodal":            
-            return [self.get_node_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStress()]
+            return [self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in constitutivelaw.GetStress()]
         
         elif IntegrationType == "Element":
-            return [self.get_element_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in constitutiveLaw.GetStress()]
+            return [self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in constitutivelaw.GetStress()]
         
         else:
             assert 0, "Wrong argument for IntegrationType"
@@ -369,10 +370,10 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return listStrainTensor([self.get_node_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_nodes) for e in self.space.op_strain()])
+            return listStrainTensor([self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
-            return listStrainTensor([self.get_element_results(e, U) if e!=0 else Separatedzeros(self.mesh.n_elements) for e in self.space.op_strain()])
+            return listStrainTensor([self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in self.space.op_strain()])
         
         else:
             assert 0, "Wrong argument for IntegrationType"

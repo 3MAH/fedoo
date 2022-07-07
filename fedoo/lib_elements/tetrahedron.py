@@ -1,7 +1,7 @@
 import numpy as np
-from fedoo.libElement.Element import *
+from fedoo.lib_elements.element_base import *
 
-class elementTetrahedron(element):
+class ElementTetrahedron(Element):
     def __init__(self,n_elm_gp):                 
         #initialize the gauss points and the associated weight           
         if n_elm_gp == 1:
@@ -32,13 +32,13 @@ class elementTetrahedron(element):
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
 
-class tet4(elementTetrahedron):
+class Tet4(ElementTetrahedron):
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd = np.c_[[0. , 0. , 0. , 1.],\
                            [1. , 0. , 0. , 0.],\
                            [0. , 1. , 0. , 0.]]
         self.n_elm_gp = n_elm_gp
-        elementTetrahedron.__init__(self,n_elm_gp)
+        ElementTetrahedron.__init__(self,n_elm_gp)
             
     def ShapeFunction(self, vec_xi):
         xi = vec_xi[:,0] ; eta = vec_xi[:,1]; zeta = vec_xi[:,2]
@@ -48,13 +48,13 @@ class tet4(elementTetrahedron):
                          [1. , 0. , -1. , 0.] , \
                          [0. , 1. , -1. , 0.] ]) for xi in vec_xi]   
                          
-class tet10(elementTetrahedron):
+class Tet10(ElementTetrahedron):
     def __init__(self, n_elm_gp=15, **kargs):
         self.xi_nd = np.c_[[0. , 0. , 0. , 1. , 0. , 0. , 0. , 0.5 , 0.5 , 0.5],\
                            [1. , 0. , 0. , 0. , 0.5 , 0. , 0.5 , 0.5 , 0. , 0.],\
                            [0. , 1. , 0. , 0. , 0.5 , 0.5 , 0. , 0. , 0.5 , 0.]]
         self.n_elm_gp = n_elm_gp
-        elementTetrahedron.__init__(self,n_elm_gp)
+        ElementTetrahedron.__init__(self,n_elm_gp)
             
     def ShapeFunction(self, vec_xi):
         xi = vec_xi[:,0] ; eta = vec_xi[:,1]; zeta = vec_xi[:,2]

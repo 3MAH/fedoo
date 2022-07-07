@@ -1,10 +1,10 @@
 import numpy as np
-from fedoo.libElement.Element import *   
+from fedoo.lib_elements.element_base import *
 
 # --------------------------------------
 #bernoulliBeam
 # --------------------------------------
-class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
+class BernoulliBeam_disp(Element1D): #2 nodes with derivatative dof
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
@@ -18,7 +18,7 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
             
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)
+        Element1D.__init__(self, n_elm_gp)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne
 
@@ -31,7 +31,7 @@ class bernoulliBeam_disp(element1D): #2 nodes with derivatative dof
             return np.transpose([(1-3*xi**2+2*xi**3) +0*L, (3*xi**2-2*xi**3) +0*L, (xi-2*xi**2+xi**3)*L, (-xi**2+xi**3)*L], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)     
         
    
-class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
+class BernoulliBeam_rot(Element1D): #2 nodes with derivatative dof
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
@@ -45,7 +45,7 @@ class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
             
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)
+        Element1D.__init__(self, n_elm_gp)
 
     def ShapeFunction(self,xi): 
         # [(tetai,tetaj,vi,vj)]
@@ -65,18 +65,18 @@ class bernoulliBeam_rot(element1D): #2 nodes with derivatative dof
         # return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
     
 
-bernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['bernoulliBeam_disp', (-1, 'RotY')], 
+BernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['bernoulliBeam_disp', (-1, 'RotY')], 
         'RotX':['lin2'], 'RotY':['bernoulliBeam_rot', (-1, 'DispZ')], 'RotZ':['bernoulliBeam_rot', (1, 'DispY')],
         '__default':['lin2'], '__local_csys':True}  
 
 # --------------------------------------
 #Timoshenko FCQ beam 
 # --------------------------------------
-class beamFCQ_lin2(element1DGeom2,element1D):
+class BeamFCQ_lin2(Element1DGeom2,Element1D):
     def __init__(self, n_elm_gp=2, **kargs):
         self.xi_nd = np.c_[[0., 1., 0.5]]                     
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)
+        Element1D.__init__(self, n_elm_gp)
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne      
     def ShapeFunction(self,xi): 
@@ -84,7 +84,7 @@ class beamFCQ_lin2(element1DGeom2,element1D):
     def ShapeFunctionDerivative(self,xi):               
         return [np.array([[-1., 1., 0]]) for x in xi]
 
-class beamFCQ_rot(element1D): #2 nodes with derivatative dof
+class BeamFCQ_rot(Element1D): #2 nodes with derivatative dof
         
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         # elmGeom = kargs.get('elmGeom', None)
@@ -99,7 +99,7 @@ class beamFCQ_rot(element1D): #2 nodes with derivatative dof
                 
         self.xi_nd = np.c_[[0., 1., 0.5]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)        
+        Element1D.__init__(self, n_elm_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -112,7 +112,7 @@ class beamFCQ_rot(element1D): #2 nodes with derivatative dof
     def ShapeFunctionDerivative(self,xi):  
         return np.transpose([6*xi-4, 6*xi-2, -8*xi+4], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=3)       
 
-class beamFCQ_disp(element1D): #2 nodes with derivatative dof
+class BeamFCQ_disp(Element1D): #2 nodes with derivatative dof
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
     #     elmGeom = kargs.get('elmGeom', None)
     #     if elmGeom is not None:
@@ -126,7 +126,7 @@ class beamFCQ_disp(element1D): #2 nodes with derivatative dof
                     
         self.xi_nd = np.c_[[0., 1., 0.5]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)        
+        Element1D.__init__(self, n_elm_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -140,7 +140,7 @@ class beamFCQ_disp(element1D): #2 nodes with derivatative dof
     def ShapeFunctionDerivative(self,xi):          
         return np.transpose([6*xi**2-6*xi, -6*xi**2+6*xi, 3*xi**2-4*xi+1, 0*xi, 0*xi, 3*xi**2-2*xi], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=6)          
 
-beamFCQ = {'DispX':['beamFCQ_lin2'],             
+BeamFCQ = {'DispX':['beamFCQ_lin2'],             
             'DispY':['beamFCQ_disp',(1, 'DispX')], 
             'DispZ':['beamFCQ_disp', (1, 'RotX')],            
             'RotX':['beamFCQ_lin2'], 
@@ -155,7 +155,7 @@ beamFCQ = {'DispX':['beamFCQ_lin2'],
 # Timoshenko FCQM beam 
 #see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
 # --------------------------------------
-class beam_rotZ(element1D): #2 nodes with derivatative dof
+class Beam_rotZ(Element1D): #2 nodes with derivatative dof
     _L2phi = 0 #default value = no shear effect. Use SetProperties_Beam to include shear effect
         
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
@@ -174,7 +174,7 @@ class beam_rotZ(element1D): #2 nodes with derivatative dof
         
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)        
+        Element1D.__init__(self, n_elm_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -191,7 +191,7 @@ class beam_rotZ(element1D): #2 nodes with derivatative dof
         Nvprime = (6*C/L) * (2*xi-1)
         return np.transpose([C*(6*xi-(4+phi)), C*(6*xi-(2-phi)), Nvprime , -Nvprime], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)     
 
-class beam_dispY(element1D): #2 nodes with derivatative dof
+class Beam_dispY(Element1D): #2 nodes with derivatative dof
     _L2phi = 0
     
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
@@ -209,7 +209,7 @@ class beam_dispY(element1D): #2 nodes with derivatative dof
         
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
-        element1D.__init__(self, n_elm_gp)        
+        Element1D.__init__(self, n_elm_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
@@ -233,13 +233,13 @@ class beam_dispY(element1D): #2 nodes with derivatative dof
         return np.transpose([Nv1prime , Nv2prime, Nth1prime, Nth2prime], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)     
 
 
-class beam_rotY(beam_rotZ):
+class Beam_rotY(Beam_rotZ):
     _L2phi = 0
-class beam_dispZ(beam_dispY):    
+class Beam_dispZ(Beam_dispY):    
     _L2phi = 0
 
 
-beam = {'DispX':['lin2'],             
+Beam = {'DispX':['lin2'],             
         'DispY':['beam_dispY', (1, 'RotZ')], 
         'DispZ':['beam_dispZ', (-1, 'RotY')],            
         'RotX':['lin2'], 

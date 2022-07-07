@@ -1,9 +1,9 @@
 import numpy as np
 from numpy import linalg
-from fedoo.libElement.Element import *
-from fedoo.libElement.ElementQuadrangle import *
+from fedoo.lib_elements.element_base import Element, Element1DGeom2, Element1D
+from fedoo.lib_elements.quadrangle import Quad4
 
-class cohesive1D(element):
+class Cohesive1D(Element):
     def __init__(self, n_elm_gp=1, **kargs):
         self.n_elm_gp = 1 #pas de point de gauss pour les éléments cohésifs car pas de point d'intégration
         self.xi_pg = np.c_[[0.]] ; self.xi_nd = np.c_[[0., 0.]] #The values are arbitrary, only the size is important
@@ -20,7 +20,7 @@ class cohesive1D(element):
 #    def GeometricalShapeFunction(self,xi): 
 #        return 0.5*np.array([[1., 1.] for x in xi])
     
-class cohesive2D(element1DGeom2, element1D):
+class Cohesive2D(Element1DGeom2, Element1D):
     def __init__(self,n_elm_gp=2, **kargs):
         """
         An element is defined with 4 nodes [0, 1, 2, 3]
@@ -28,7 +28,7 @@ class cohesive2D(element1DGeom2, element1D):
         [2, 3] is a lin2 defining the face on the positive side of the cohesive zone
         Node 0 is in front of node 2 and node 1 is in front of node 3
         """
-        element1D.__init__(self, n_elm_gp)
+        Element1D.__init__(self, n_elm_gp)
         self.xi_nd = np.c_[[0., 1.]]              
         self.n_elm_gp = n_elm_gp
         
@@ -39,7 +39,7 @@ class cohesive2D(element1DGeom2, element1D):
 #    def GeometricalShapeFunction(self,xi): 
 #        return 0.5*np.c_[xi, 1-xi, xi, 1-xi]
 
-class cohesive3D(quad4): # à vérifier
+class Cohesive3D(Quad4): # à vérifier
 
     def __init__(self,n_elm_gp=4, **kargs):
         """

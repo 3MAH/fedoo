@@ -1,8 +1,8 @@
 import numpy as np
 from scipy import sparse
-from fedoo.libElement.Element import *
+from fedoo.lib_elements.element_base import *
 
-class FiniteDifference1D(element):
+class FiniteDifference1D(Element):
     def __init__(self,n_elm_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
         if n_elm_gp != 0: #if n_elm_gp == 0, we take the position of the nodes            
             assert 0, "Number of gauss points for Finite Difference elements should be set to 0"  
@@ -11,7 +11,7 @@ class FiniteDifference1D(element):
     def ShapeFunction(xi_pg):
         assert 0, "No Shape Function for Finite Difference Method. Use lin2 or lin3 element instead"
         
-class parameter(FiniteDifference1D):
+class Parameter(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
     def __init__(self, n_elm_gp=0, **kargs):
         FiniteDifference1D.__init__(self, n_elm_gp)        
@@ -20,7 +20,7 @@ class parameter(FiniteDifference1D):
         Nnd = np.shape(crd)[0]        
         return {0: [sparse.identity(Nnd, 'd', 'csr')]} #dictionnary     
 
-class node(FiniteDifference1D):
+class Node(FiniteDifference1D):
     #Element to define a set of nodes
     #No integration and therefore nb_pb should be set to 0
     def __init__(self, n_elm_gp=0, **kargs):
@@ -37,7 +37,7 @@ class node(FiniteDifference1D):
 #        return {0: [sparse.spdiags([diag], [0], Nnd, Nnd, 'csr' )]} #dictionnary     
 
 
-class forwardFiniteDifference(FiniteDifference1D):
+class ForwardFiniteDifference(FiniteDifference1D):
     #Only first order derivative
     #explicit method
     def __init__(self, n_elm_gp=0, **kargs):
@@ -50,7 +50,7 @@ class forwardFiniteDifference(FiniteDifference1D):
         data[1,0] = [sparse.spdiags([-invLenght,invLenght], [0,1], Nnd, Nnd, 'csr' )]  
         return data #dictionnary     
 
-class forwardFiniteDifferenceOrder2(FiniteDifference1D):
+class ForwardFiniteDifferenceOrder2(FiniteDifference1D):
     #First order and 2nd order derivative
     def __init__(self, n_elm_gp=0, **kargs):
         FiniteDifference1D.__init__(self, n_elm_gp)
@@ -64,7 +64,7 @@ class forwardFiniteDifferenceOrder2(FiniteDifference1D):
         data[2,0] = [sparse.spdiags( [invLenghtSquare,-2*invLenghtSquare, invLenghtSquare], [-1,0,1], Nnd, Nnd, 'csr')]
         return data #dictionnary     
 
-class backwardFiniteDifference(FiniteDifference1D):
+class BackwardFiniteDifference(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
     #explicit method
     def __init__(self, n_elm_gp=0, **kargs):
@@ -77,7 +77,7 @@ class backwardFiniteDifference(FiniteDifference1D):
         data[1,0] = [sparse.spdiags([-invLenght,invLenght], [-1,0], Nnd, Nnd, 'csr' )]
         return data #dictionnary     
 
-class backwardFiniteDifferenceOrder2(FiniteDifference1D):
+class BackwardFiniteDifferenceOrder2(FiniteDifference1D):
     #This finite difference element doesnt support any derivative
     #explicit method
     def __init__(self, n_elm_gp=0, **kargs):

@@ -1,7 +1,7 @@
 import numpy as np
-from fedoo.libElement.Element import *
+from fedoo.lib_elements.element_base import *
 
-class elementQuadrangle(element2D):
+class ElementQuadrangle(Element2D):
     def __init__(self,n_elm_gp): 
         #initialize the gauss points and the associated weight
         if n_elm_gp == 1: #ordre exact 1
@@ -32,12 +32,12 @@ class elementQuadrangle(element2D):
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
     
 
-class quad4(elementQuadrangle):
+class Quad4(ElementQuadrangle):
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd =  np.c_[[-1. , 1., 1., -1.],\
                             [-1. , -1., 1., 1.]]
         self.n_elm_gp = n_elm_gp
-        elementQuadrangle.__init__(self, n_elm_gp)
+        ElementQuadrangle.__init__(self, n_elm_gp)
             
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
@@ -48,12 +48,12 @@ class quad4(elementQuadrangle):
     def ShapeFunctionDerivative(self, vec_xi): 
         return [ np.array([ [0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) for xi in vec_xi]        
 
-class quad8(elementQuadrangle):
+class Quad8(ElementQuadrangle):
     def __init__(self, n_elm_gp=9, **kargs):
         self.xi_nd = np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1.],\
                            [-1. , -1., 1., 1. ,-1., 0., 1., 0.]]
         self.n_elm_gp = n_elm_gp
-        elementQuadrangle.__init__(self, n_elm_gp)
+        ElementQuadrangle.__init__(self, n_elm_gp)
             
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
@@ -66,12 +66,12 @@ class quad8(elementQuadrangle):
                          [0.25*(1-xi[0])*(2*xi[1]+xi[0]), 0.25*(-1-xi[0])*(xi[0]-2*xi[1]), 0.25*(1+xi[0])*(2*xi[1]+xi[0]), 0.25*( 1-xi[0])*(-xi[0]+2*xi[1]), -0.5*(1-xi[0]**2), -xi[1]*(1+xi[0]), 0.5*(1-xi[0]**2), -xi[1]*(1-xi[0]) ] ]) for xi in vec_xi]        
 
 
-class quad9(elementQuadrangle):
+class Quad9(ElementQuadrangle):
     def __init__(self, n_elm_gp=9, **kargs):
         self.xi_nd =  np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1., 0.],\
                             [-1. , -1., 1., 1. ,-1., 0., 1., 0., 0.]]
         self.n_elm_gp = n_elm_gp
-        elementQuadrangle.__init__(self, n_elm_gp)
+        ElementQuadrangle.__init__(self, n_elm_gp)
         
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)

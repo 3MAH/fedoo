@@ -1,7 +1,7 @@
 import numpy as np
-from fedoo.libElement.Element import *
+from fedoo.lib_elements.element_base import *
 
-class elementTriangle(element2D):
+class ElementTriangle(Element2D):
     def __init__(self,n_elm_gp): 
         #initialize the gauss points and the associated weight
         if n_elm_gp == 1:
@@ -42,12 +42,12 @@ class elementTriangle(element2D):
         
     
 
-class tri3(elementTriangle):
+class Tri3(ElementTriangle):
     def __init__(self, n_elm_gp=3, **kargs):        
         self.xi_nd = np.c_[[0. , 1., 0.],\
                            [0. , 0., 1.]]
         self.n_elm_gp = n_elm_gp
-        elementTriangle.__init__(self,n_elm_gp)     
+        ElementTriangle.__init__(self,n_elm_gp)     
             
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
@@ -58,18 +58,18 @@ class tri3(elementTriangle):
     def ShapeFunctionDerivative(self, xi): 
         return [ np.array([[-1.,1.,0.],[-1.,0.,1.]]) for x in xi]        
     
-class tri3Bubble(tri3):    
+class Tri3Bubble(Tri3):    
     def ShapeFunction(self, xi):    
         return np.c_[1-xi[:,0]-xi[:,1], xi[:,0], xi[:,1], (1-xi[:,0]-xi[:,1])*xi[:,0]*xi[:,1]] 
     def ShapeFunctionDerivative(self, xi):
         return [np.array([ [-1.,1.,0.,x[1]*(1-2*x[0]-x[1])] , [-1.,0.,1.,x[0]*(1-2*x[1]-x[0])] ]) for x in xi]                
 
-class tri6(elementTriangle):
+class Tri6(ElementTriangle):
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd =  np.c_[[0. , 1., 0., 0.5, 0.5, 0. ],\
                             [0. , 0., 1., 0. , 0.5, 0.5]]  
         self.n_elm_gp = n_elm_gp
-        elementTriangle.__init__(self,n_elm_gp)     
+        ElementTriangle.__init__(self,n_elm_gp)     
             
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)

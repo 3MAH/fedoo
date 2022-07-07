@@ -1,7 +1,7 @@
 import numpy as np
-from fedoo.libElement.Element import *
+from fedoo.lib_elements.element_base import *
 
-class elementHexahedron(element):
+class ElementHexahedron(Element):
     def __init__(self,n_elm_gp):                 
         #initialize the gauss points and the associated weight           
         if n_elm_gp == 1:
@@ -27,13 +27,13 @@ class elementHexahedron(element):
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
 
-class hex8(elementHexahedron):
+class Hex8(ElementHexahedron):
     def __init__(self, n_elm_gp=8, **kargs):
         self.xi_nd = np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1.],\
                            [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1.],\
                            [-1. , -1. , -1., -1. ,  1.,  1. , 1. , 1.]]
         self.n_elm_gp = n_elm_gp
-        elementHexahedron.__init__(self,n_elm_gp)
+        ElementHexahedron.__init__(self,n_elm_gp)
      
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta, zeta)
     #vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
@@ -47,13 +47,13 @@ class hex8(elementHexahedron):
                          [-0.125*(1-xi[0])*(1-xi[2]) , -0.125*(1+xi[0])*(1-xi[2]), 0.125*(1+xi[0])*(1-xi[2]), 0.125*(1-xi[0])*(1-xi[2]), -0.125*(1-xi[0])*(1+xi[2]) , -0.125*(1+xi[0])*(1+xi[2]) , 0.125*(1+xi[0])*(1+xi[2]), 0.125*(1-xi[0])*(1+xi[2]) ] , \
                          [-0.125*(1-xi[0])*(1-xi[1]) , -0.125*(1+xi[0])*(1-xi[1]), -0.125*(1+xi[0])*(1+xi[1]), -0.125*(1-xi[0])*(1+xi[1]), 0.125*(1-xi[0])*(1-xi[1]) , 0.125*(1+xi[0])*(1-xi[1]) , 0.125*(1+xi[0])*(1+xi[1]), 0.125*(1-xi[0])*(1+xi[1]) ] ]) for xi in vec_xi]      
 
-class hex20(elementHexahedron):
+class Hex20(ElementHexahedron):
     def __init__(self, n_elm_gp=27, **kargs):
         self.xi_nd = np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1. , 0. ,  1. , 0. , -1. , -1.,  1. , 1. ,-1. , 0.,  1. , 0. ,-1.],\
                            [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1. , -1. , 0. , 1. ,  0. , -1., -1. , 1. , 1. , -1.,  0. , 1. ,0.],\
                            [-1. , -1. , -1., -1. ,  1.,  1. , 1. , 1. , -1. , -1. , -1., -1. ,  0.,  0. , 0. , 0. , 1.,  1. , 1. ,1.]]
         self.n_elm_gp = n_elm_gp 
-        elementHexahedron.__init__(self,n_elm_gp)
+        ElementHexahedron.__init__(self,n_elm_gp)
 
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta, zeta)
     #vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)

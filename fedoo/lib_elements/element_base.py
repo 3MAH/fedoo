@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import linalg
 
-class element:              
+class Element:              
     #Lines of xi should contains the coordinates of each point to consider
     def ShapeFunction(self,xi): pass #à définir dans les classes héritées
     #return an array whose lines are the values of the form functions (one line per point defined in xi)
@@ -64,7 +64,7 @@ class element:
         self.ComputeDetJacobian(vec_x, vec_xi)
         return self.repLocFromJac(rep_loc, vec_xi)            
     
-class element1D(element):
+class Element1D(Element):
     def __init__(self,n_elm_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
         if n_elm_gp == 1:
             self.xi_pg = np.c_[[1./2]]
@@ -175,7 +175,7 @@ class element1D(element):
             rep_pg = self.interpolateLocalFrame(localFrame, vec_xi) #interpolation du repère local aux points de gauss                  
             return np.moveaxis(self.__GetLocalFrameFromX(listX, rep_pg) , 2,0)      #shape = (Nel, len(listX), dim:listvec, dim:coordinates)                      
             
-class element1DGeom2(element1D): #élément 1D à géométrie affine (interpolée par 2 noeuds)         
+class Element1DGeom2(Element1D): #élément 1D à géométrie affine (interpolée par 2 noeuds)         
     def ComputeDetJacobian(self, vec_x, vec_xi):
         """
         Calcul le Jacobien aux points de gauss
@@ -203,12 +203,12 @@ class element1DGeom2(element1D): #élément 1D à géométrie affine (interpolé
         lastAxis = len(listX[0].shape)-1
         listX = [X/linalg.norm(X,axis = lastAxis).reshape(-1,1) for X in listX]
         
-        if localFrame is None: return np.moveaxis(self._element1D__GetLocalFrameFromX(listX, None), 2,0)
+        if localFrame is None: return np.moveaxis(self._Element1D__GetLocalFrameFromX(listX, None), 2,0)
         else:
             rep_pg = self.interpolateLocalFrame(localFrame, vec_xi) #interpolation du repère local aux points de gauss                  
-            return np.moveaxis([self._element1D__GetLocalFrameFromX(listX, rep_pg)[0] for xi in vec_xi], 2,0)  #shape = (Nel, len(listX), dim:listvec, dim:coordinates)
+            return np.moveaxis([self._Element1D__GetLocalFrameFromX(listX, rep_pg)[0] for xi in vec_xi], 2,0)  #shape = (Nel, len(listX), dim:listvec, dim:coordinates)
 
-class element2D(element):  
+class Element2D(Element):  
 
     def ComputeJacobianMatrix(self, vec_x, vec_xi = None, rep_loc = None): 
         if vec_xi is None: vec_xi == self.xi_pg
