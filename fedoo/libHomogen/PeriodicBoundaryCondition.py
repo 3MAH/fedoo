@@ -8,7 +8,7 @@ Created on Thu Jan 23 15:27:43 2020
 import numpy as np
 from fedoo.libProblem.ProblemBase import BoundaryCondition
 from fedoo.libProblem.ProblemBase import ProblemBase
-from fedoo.libMesh.Mesh import MeshBase
+from fedoo.mesh.fedoo_mesh import MeshBase
 
 USE_SIMCOON = True
 

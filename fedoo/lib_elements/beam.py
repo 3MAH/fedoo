@@ -251,15 +251,15 @@ Beam = {'DispX':['lin2'],
 def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
     if np.isscalar(k) and k==0: 
         #no shear effect
-        beam_rotZ._L2phi = beam_dispY._L2phi = 0
-        beam_rotY._L2phi = beam_dispZ._L2phi = 0
+        Beam_rotZ._L2phi = Beam_dispY._L2phi = 0
+        Beam_rotY._L2phi = Beam_dispZ._L2phi = 0
     elif nu is None:
         if G is None or E is None: raise NameError('Missing property')
-        beam_rotZ._L2phi = beam_dispY._L2phi = 12*E*Izz/(k*G*A)    
-        beam_rotY._L2phi = beam_dispZ._L2phi = 12*E*Iyy/(k*G*A)    
+        Beam_rotZ._L2phi = Beam_dispY._L2phi = 12*E*Izz/(k*G*A)    
+        Beam_rotY._L2phi = Beam_dispZ._L2phi = 12*E*Iyy/(k*G*A)    
     else:
-        beam_rotZ._L2phi = beam_dispY._L2phi = 24*Izz*(1+nu)/(k*A)
-        beam_rotY._L2phi = beam_dispZ._L2phi = 24*Iyy*(1+nu)/(k*A)  
+        Beam_rotZ._L2phi = Beam_dispY._L2phi = 24*Izz*(1+nu)/(k*A)
+        Beam_rotY._L2phi = Beam_dispZ._L2phi = 24*Iyy*(1+nu)/(k*A)  
        
 
 

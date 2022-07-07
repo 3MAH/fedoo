@@ -10,7 +10,7 @@ from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 
 import numpy as np
-from fedoo.libMesh import Mesh
+from fedoo.mesh.fedoo_mesh import Mesh
 from fedoo.libAssembly import Assembly
 from fedoo.libConstitutiveLaw import ConstitutiveLaw
 

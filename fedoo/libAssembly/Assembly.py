@@ -2,7 +2,7 @@
 
 from fedoo.libAssembly.AssemblyBase import AssemblyBase, AssemblySum
 from fedoo.libUtil.PostTreatement import listStressTensor, listStrainTensor
-from fedoo.libMesh.Mesh import Mesh
+from fedoo.mesh.fedoo_mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw

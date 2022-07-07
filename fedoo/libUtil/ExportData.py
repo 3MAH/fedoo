@@ -1,5 +1,5 @@
 import numpy as np
-from fedoo.libMesh.Mesh import Mesh
+from fedoo.mesh.fedoo_mesh import Mesh
 
 class ExportData:
     def __init__(self, mesh, multiMesh = False):

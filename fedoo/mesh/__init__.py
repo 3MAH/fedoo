@@ -1,9 +1,9 @@
 """
 ===========================================
-Geometry and Mesh (:mod:`fedoo.libMesh`)
+Geometry and Mesh (:mod:`fedoo.mesh`)
 ===========================================
 
-.. currentmodule:: fedoo.libMesh.Mesh
+.. currentmodule:: fedoo.mesh.fedoo_mesh
 
 Class Mesh
 ====================
@@ -16,7 +16,7 @@ Class Mesh
 
 
 
-.. currentmodule:: fedoo.libMesh
+.. currentmodule:: fedoo.mesh
 
 Mesh manipulation functions
 ==================================

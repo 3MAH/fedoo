@@ -17,8 +17,13 @@ def get_element(element_str):
             'tri3':Tri3,'tri6':Tri6,'tri3Bubble':Tri3Bubble,
             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
             'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
-            'beam':Beam, 'beamFCQ':BeamFCQ, 'bernoullibeam':BernoulliBeam,
-            'parameter':Parameter, 'node':Node        
+            'beam':Beam, 'beamfcq':BeamFCQ, 'bernoullibeam':BernoulliBeam,
+            'parameter':Parameter, 'node':Node,
+            'pquad4':pquad4, 'ptri3':ptri3, 'pquad8':pquad8, 'ptri6':ptri6, 'pquad9':pquad9,
+            'bernoullibeam_rot': BernoulliBeam_rot, 'bernoullibeam_disp': BernoulliBeam_disp,
+            'beamfcq_lin2':BeamFCQ_lin2, 'beamfcq_rot':BeamFCQ_rot,'beamfcq_disp':BeamFCQ_disp,
+            'beam_dispy':Beam_dispY,'beam_dispz':Beam_dispZ,
+            'beam_rotz':Beam_rotZ, 'beam_roty':Beam_rotY
     }
     return list_element[element_str.lower()]
 

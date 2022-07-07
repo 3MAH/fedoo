@@ -2,7 +2,7 @@
 import numpy as np
 
 # from fedoo.libUtil.Coordinate import Coordinate
-from fedoo.libMesh.MeshBase import MeshBase
+from fedoo.mesh.mesh_base import MeshBase
 # from fedoo.libElement import *
 from os.path import splitext
 try:
@@ -357,7 +357,7 @@ class Mesh(MeshBase):
         else:
             raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
 
-    def copy():
+    def copy(self):
         return Mesh(self.nodes.copy(),self.elements.copy(), self.elm_type)
     
     def to_pyvista(self):
@@ -663,23 +663,7 @@ class BoundingBox(list):
         """
         return the volume of the bounding box
         """
-        return (self[1]-self[0]).prod()    
-           
-def get_all():
-    return Mesh.get_all()
-
-def stack(mesh1,mesh2, name = ""):
-        """
-        Make the spatial stack of two mesh objects which have the same element shape. 
-        This function doesn't merge coindicent Nodes. 
-        For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
-        on the resulting Mesh. 
-                
-        Return 
-        ---------
-        Mesh object with is the spacial stack of mesh1 and mesh2
-        """
-        return Mesh.stack(mesh1,mesh2,name)
+        return (self[1]-self[0]).prod()               
 
 if __name__=="__main__":
     import scipy as sp

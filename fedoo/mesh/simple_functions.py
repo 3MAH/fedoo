@@ -1,4 +1,4 @@
-from fedoo.libMesh.Mesh import Mesh
+from fedoo.mesh.fedoo_mesh import Mesh
 from fedoo.libUtil.ModelingSpace import ModelingSpace
 import itertools
 
@@ -7,6 +7,24 @@ import numpy as np
 
 # utility fuctions
 # Only Functions are declared here !!
+
+
+def get_all():
+    return Mesh.get_all()
+
+
+def stack(mesh1,mesh2, name = ""):
+        """
+        Make the spatial stack of two mesh objects which have the same element shape. 
+        This function doesn't merge coindicent Nodes. 
+        For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
+        on the resulting Mesh. 
+                
+        Return 
+        ---------
+        Mesh object with is the spacial stack of mesh1 and mesh2
+        """
+        return Mesh.stack(mesh1,mesh2,name)
 
 
 def rectangle_mesh(Nx=11, Ny=11, x_min=0, x_max=1, y_min=0, y_max=1, ElementShape = 'quad4', ndim = None, name =""):

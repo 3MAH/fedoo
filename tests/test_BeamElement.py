@@ -2,13 +2,13 @@
 # Simple canteleaver beam using different kind of elements
 #
 
-from fedoo import *
+import fedoo as fd
 import numpy as np
 
-Util.ProblemDimension("3D")
+fd.Util.ProblemDimension("3D")
 E = 1e5 
 nu = 0.3
-ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
+fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 
 #circular section 
 R = 1
@@ -27,7 +27,7 @@ crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[1,0,0]])
 # crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[0,0,1]]) #beam oriented in the Z axis 
 elm = np.c_[np.arange(0,Nb_elm), np.arange(1,Nb_elm+1)]
 
-Mesh.Mesh(crd,elm,'lin2',name='beam')
+fd.mesh.Mesh(crd,elm,'lin2',name='beam')
 nodes_left = [0]
 nodes_right = [Nb_elm]
 
@@ -37,33 +37,33 @@ nodes_right = [Nb_elm]
 for computeShear in range(3):
     
     if computeShear == 0:
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
-        Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam", MeshChange = True)    
+        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
+        fd.Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam", MeshChange = True)    
     elif computeShear == 1:
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
-        Element.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
-        Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
+        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
+        fd.lib_elements.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
+        fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
-        Mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
-        WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
-        Assembly.create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
+        fd.mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
+        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
+        fd.Assembly.create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
     
-    Problem.Static("beam")
+    pb = fd.Problem.Static("beam")
     
-    Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
+    pb.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
     
-    Problem.BoundaryCondition('Neumann','DispY',F,nodes_right)
+    pb.BoundaryCondition('Neumann','DispY',F,nodes_right)
     
-    Problem.ApplyBoundaryCondition()
-    Problem.Solve()
+    pb.ApplyBoundaryCondition()
+    pb.Solve()
     
     #Post treatment               
-    results = Assembly.get_all()['beam'].get_ext_forces(Problem.GetDoFSolution('all'))
+    results = fd.Assembly.get_all()['beam'].get_ext_forces(pb.GetDoFSolution('all'))
     
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -79,11 +79,11 @@ for computeShear in range(3):
     assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = Assembly.get_all()['beam'].get_int_forces(Problem.GetDoFSolution('all'), 'local')
+    results = fd.Assembly.get_all()['beam'].get_int_forces(pb.GetDoFSolution('all'), 'local')
     IntMoment = results[:,3:]
     IntForce = results[:,0:3]    
     
-    U = np.reshape(Problem.GetDoFSolution('all'),(6,-1)).T
+    U = np.reshape(pb.GetDoFSolution('all'),(6,-1)).T
     Theta = U[:nodes_right[0]+1,3:]              
     U = U[:nodes_right[0]+1,0:3]
     

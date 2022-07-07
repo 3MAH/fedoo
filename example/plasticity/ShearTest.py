@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 from time import time
 import os
@@ -10,7 +10,7 @@ import pyvista as pv
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("3D")
+fd.Util.ProblemDimension("3D")
 
 NLGEOM = 2
 #Units: N, mm, MPa
@@ -26,16 +26,16 @@ uimp = 1
 filename = 'sheartest_ref'
 res_dir = 'results/'
 
-Mesh.box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
-mesh = Mesh.get_all()[meshname]
+fd.mesh.box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+mesh = fd.mesh.get_all()[meshname]
 
 crd = mesh.nodes 
 
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    Material.corate = 2
+    material = fd.ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    material.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
@@ -46,8 +46,8 @@ elif mat == 1 or mat == 2:
     m=0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
-        Material.corate = 2
+        material = fd.ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+        material.corate = 2
         # Material.SetMaskH([[] for i in range(6)])
     
         # mask = [[3,4,5] for i in range(3)]
@@ -55,16 +55,16 @@ elif mat == 1 or mat == 2:
         # Material.SetMaskH(mask)
 
     elif mat == 2:
-        Material = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
-        Material.SetHardeningFunction('power', H=k, beta=m)
+        material = fd.ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
+        material.SetHardeningFunction('power', H=k, beta=m)
 else:
-    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
 
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # WeakForm.InternalForceUL("ConstitutiveLaw")
 
 
@@ -74,11 +74,11 @@ nodes_bottom = mesh.find_nodes('Y',0)
 nodes_top = mesh.find_nodes('Y',1)
 
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
-pb = Problem.NonLinearStatic("Assembling")
+pb = fd.Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
-Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
+fd.Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -86,21 +86,21 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = Problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+results = fd.Problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
 tmax = 1
-Problem.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
-Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
-Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
-Problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
+fd.Problem.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
+fd.Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
+fd.Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
+fd.Problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
 
-Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+fd.Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 
-E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(fd.Problem.GetDoFSolution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

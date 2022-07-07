@@ -7,7 +7,7 @@ Created on Thu Jan 23 15:27:43 2020
 # from fedoo.libProblem.ProblemBase   import ProblemBase 
 from fedoo.libProblem.ProblemBase import BoundaryCondition
 import numpy as np
-from fedoo.libMesh.Mesh import MeshBase
+from fedoo.mesh.fedoo_mesh import MeshBase
 from fedoo.libUtil.ModelingSpace import ModelingSpace
 
 # def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = 'MainProblem'):

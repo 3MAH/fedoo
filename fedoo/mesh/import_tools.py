@@ -1,4 +1,4 @@
-from fedoo.libMesh.Mesh import Mesh
+from fedoo.mesh.fedoo_mesh import Mesh
 import numpy as np
 
 def import_file(filename, meshname = None):
