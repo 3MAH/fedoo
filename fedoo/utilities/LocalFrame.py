@@ -1,6 +1,6 @@
-from fedoo.libPGD.SeparatedArray import SeparatedArray
+from fedoo.pgd.SeparatedArray import SeparatedArray
 from fedoo.mesh.mesh import Mesh as MeshFEM
-#from fedoo.libPGD.MeshPGD import MeshPGD
+#from fedoo.pgd.MeshPGD import MeshPGD
 import numpy as np
 
 

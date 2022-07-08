@@ -1,9 +1,9 @@
-from . import constitutivelaw as ConstitutiveLaw
+from . import constitutivelaw 
 from . import weakform as WeakForm
-# from . import assembly as Assembly
-from . import libProblem as Problem
+from . import assembly as Assembly
+from . import problem as Problem
 from . import homogen as Homogen
-from . import libPGD as PGD
+from . import pgd as PGD
 
 # from . import utilities
 from .mesh.mesh import Mesh

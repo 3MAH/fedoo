@@ -3,9 +3,9 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.libProblem.ProblemBase import ProblemBase
+from fedoo.problem.ProblemBase import ProblemBase
 from fedoo.assembly.assembly  import Assembly
-from fedoo.libProblem.Output import _ProblemOutput, _GetResults
+from fedoo.problem.Output import _ProblemOutput, _GetResults
 from fedoo.utilities.dataset import DataSet
 
 import time 

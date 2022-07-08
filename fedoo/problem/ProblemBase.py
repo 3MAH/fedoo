@@ -2,7 +2,7 @@
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 import numpy as np
-from fedoo.libProblem.BoundaryCondition import UniqueBoundaryCondition
+from fedoo.problem.BoundaryCondition import UniqueBoundaryCondition
 from fedoo.utilities.modelingspace  import ModelingSpace
 
 try: 

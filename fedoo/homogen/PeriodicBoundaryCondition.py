@@ -4,10 +4,10 @@ Created on Thu Jan 23 15:27:43 2020
 
 @author: Etienne
 """
-# from fedoo.libProblem.ProblemBase   import ProblemBase 
+# from fedoo.problem.ProblemBase   import ProblemBase 
 import numpy as np
-from fedoo.libProblem.ProblemBase import BoundaryCondition
-from fedoo.libProblem.ProblemBase import ProblemBase
+from fedoo.problem.ProblemBase import BoundaryCondition
+from fedoo.problem.ProblemBase import ProblemBase
 from fedoo.mesh.mesh import MeshBase
 
 USE_SIMCOON = True

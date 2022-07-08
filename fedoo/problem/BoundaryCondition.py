@@ -2,7 +2,7 @@ import numpy as np
 from scipy import sparse
 
 from fedoo.utilities.modelingspace import ModelingSpace
-from fedoo.libPGD.SeparatedArray import *
+from fedoo.pgd.SeparatedArray import *
 
 class UniqueBoundaryCondition() :
     """

@@ -4,7 +4,7 @@ from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 class Inertia(WeakForm):
     """
     Weak formulation related to the inertia effect into dynamical simulation.
-    Should be used in :mod:`fedoo.libProblem.Newmark`,  :mod:`fedoo.libProblem.NonLinearNewmark` or :mod:`fedoo.libProblem.ExplicitDynamic`
+    Should be used in :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark` or :mod:`fedoo.problem.ExplicitDynamic`
             
     Parameters
     ----------

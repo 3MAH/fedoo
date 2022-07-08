@@ -18,7 +18,7 @@ class InternalForce(WeakForm):
         name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-        such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
+        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
     """
     def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = 0, space = None):
         if isinstance(CurrentConstitutiveLaw, str):

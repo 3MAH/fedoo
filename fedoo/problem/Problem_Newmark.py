@@ -1,6 +1,6 @@
 import numpy as np
 from fedoo.assembly.assembly import Assembly
-from fedoo.libProblem.Problem   import *
+from fedoo.problem.Problem   import *
 
 #dynamical inheritance. The class is generated inside a function
 def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling = 0, name = "MainProblem"):

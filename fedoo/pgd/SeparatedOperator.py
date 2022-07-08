@@ -1,4 +1,4 @@
-from fedoo.libPGD.SeparatedArray import SeparatedArray
+from fedoo.pgd.SeparatedArray import SeparatedArray
 import scipy as sp
 from scipy import linalg
 from numbers import Number 

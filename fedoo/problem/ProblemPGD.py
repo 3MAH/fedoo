@@ -2,10 +2,10 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.libPGD.SeparatedArray import *
-from fedoo.libPGD.SeparatedOperator import *
-#from fedoo.libPGD.libProblemPGD.BoundaryConditionPGD import *
-from fedoo.libProblem import ProblemBase, BoundaryCondition
+from fedoo.pgd.SeparatedArray import *
+from fedoo.pgd.SeparatedOperator import *
+#from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
+from fedoo.problem import ProblemBase, BoundaryCondition
 
 #===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)

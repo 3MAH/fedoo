@@ -1,7 +1,7 @@
 #===============================================================================
 # Derivative and Differential operator
 #===============================================================================
-#from fedoo.libPGD.SeparatedArray import *
+#from fedoo.pgd.SeparatedArray import *
 # from fedoo.utilities.modelingspace  import ModelingSpace
 import numpy as np
 

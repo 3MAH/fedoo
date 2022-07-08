@@ -1,6 +1,6 @@
 """
 =============================================
-Problem (:mod:`fedoo.libProblem`)
+Problem (:mod:`fedoo.problem`)
 =============================================
 
 Fedoo allow to solve several kinds of Problems that are defined in the Problem library. 
@@ -20,7 +20,7 @@ To create a new Problem, use one of the following function:
 Each of these functions creates an object that is derived from a base class "ProblemBase".
 The ProblemBase Class contains all the methods that may be used depending on the kind of Problems.
 
-.. currentmodule:: fedoo.libProblem.ProblemBase
+.. currentmodule:: fedoo.problem.ProblemBase
 
 .. autosummary::   
    :toctree: generated/

@@ -7,8 +7,8 @@ from fedoo.utilities.PostTreatement import listStrainTensor
 from fedoo.mesh.mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import GetDefaultNbPG
 from fedoo.weakform.WeakForm import WeakForm
-from fedoo.libPGD.SeparatedOperator import SeparatedOperator
-from fedoo.libPGD.SeparatedArray import SeparatedArray, SeparatedZeros
+from fedoo.pgd.SeparatedOperator import SeparatedOperator
+from fedoo.pgd.SeparatedArray import SeparatedArray, SeparatedZeros
 from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 
 from scipy import sparse

@@ -27,7 +27,7 @@ class SteadyHeatEquation(WeakForm):
         name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-        such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
+        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
     """
     def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
@@ -110,7 +110,7 @@ class TemperatureTimeDerivative(WeakForm):
         name of the WeakForm     
     nlgeom: bool (default = False)
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-        such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
+        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
     """
     def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
@@ -208,7 +208,7 @@ def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = N
 #         name of the WeakForm     
 #     nlgeom: bool (default = False)
 #         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-#         such as :mod:`fedoo.libProblem.NonLinearStatic` or :mod:`fedoo.libProblem.NonLinearNewmark`
+#         such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
 #     """
 #     def __init__(self, thermal_constitutivelaw, name = "", nlgeom = False, space = None):
 #         if isinstance(thermal_constitutivelaw, str):
