@@ -4,7 +4,7 @@ from fedoo.libAssembly.Assembly import RowBlocMatrix
 # from fedoo.utilities.Variable import Variable
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 from fedoo.utilities.PostTreatement import listStrainTensor
-from fedoo.mesh.fedoo_mesh import Mesh as MeshFEM
+from fedoo.mesh.mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import GetDefaultNbPG
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libPGD.SeparatedOperator import SeparatedOperator

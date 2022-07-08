@@ -3,7 +3,7 @@
 Geometry and Mesh (:mod:`fedoo.mesh`)
 ===========================================
 
-.. currentmodule:: fedoo.mesh.fedoo_mesh
+.. currentmodule:: fedoo.mesh.mesh
 
 Class Mesh
 ====================
@@ -54,10 +54,18 @@ Mesh Creation Functions
 """
 
 
-import pkgutil
+# import pkgutil
 
-for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
-    module = loader.find_module(module_name).load_module(module_name)
-    exec('from .'+module_name+' import *')
+# for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
+#     module = loader.find_module(module_name).load_module(module_name)
+#     exec('from .'+module_name+' import *')
+  
+from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
+                    line_mesh, line_mesh_cylindric, box_mesh, structured_mesh_2D, \
+                    generate_nodes, hole_plate_mesh, quad2tri
     
-    
+from .importmesh import import_file, import_vtk, import_msh
+
+from ._base import get_all
+
+from .mesh import Mesh

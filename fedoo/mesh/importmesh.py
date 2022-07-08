@@ -1,4 +1,6 @@
-from fedoo.mesh.fedoo_mesh import Mesh
+"""This module contains functions to import fedoo mesh from files"""
+
+from fedoo.mesh.mesh import Mesh
 import numpy as np
 
 def import_file(filename, meshname = None):

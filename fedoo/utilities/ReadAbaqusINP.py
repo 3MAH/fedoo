@@ -1,4 +1,4 @@
-from fedoo.mesh.fedoo_mesh import Mesh
+from fedoo.mesh.mesh import Mesh
 from fedoo.libProblem.ProblemBase import BoundaryCondition
 import numpy as np
 

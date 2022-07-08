@@ -1,8 +1,9 @@
-#import scipy as sp
+"""Fedoo Mesh object"""
+
 import numpy as np
 
 # from fedoo.utilities.Coordinate import Coordinate
-from fedoo.mesh.mesh_base import MeshBase
+from fedoo.mesh._base import MeshBase
 # from fedoo.libElement import *
 from os.path import splitext
 try:

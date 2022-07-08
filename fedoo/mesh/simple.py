@@ -1,4 +1,6 @@
-from fedoo.mesh.fedoo_mesh import Mesh
+"""This module contains functions to generate simple meshes"""
+
+from fedoo.mesh.mesh import Mesh
 from fedoo.utilities.modelingspace import ModelingSpace
 import itertools
 
@@ -7,12 +9,6 @@ import numpy as np
 
 # utility fuctions
 # Only Functions are declared here !!
-
-
-def get_all():
-    return Mesh.get_all()
-
-
 def stack(mesh1,mesh2, name = ""):
         """
         Make the spatial stack of two mesh objects which have the same element shape. 

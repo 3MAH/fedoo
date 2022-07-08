@@ -1,3 +1,4 @@
+"""Base class of mesh objects."""
 #baseclass
 
 class MeshBase:

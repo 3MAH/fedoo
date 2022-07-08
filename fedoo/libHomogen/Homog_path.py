@@ -12,7 +12,7 @@ if USE_SIMCOON:
         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
-    from fedoo.mesh.mesh_base import MeshBase as Mesh
+    from fedoo.mesh._base import MeshBase as Mesh
     from fedoo.libConstitutiveLaw.ConstitutiveLaw_Simcoon import Simcoon
     from fedoo.libWeakForm.WeakForm_InternalForce import InternalForce
     from fedoo.libAssembly.Assembly import Assembly
