@@ -11,14 +11,14 @@ fd.ModelingSpace("3D")
 mesh = fd.mesh.box_mesh(Nx=11, Ny=5, Nz=5, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
 
 #Material definition
-fd.ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-fd.WeakForm.InternalForce("ElasticLaw")
+fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
+fd.weakform.InternalForce("ElasticLaw")
 
 #Assembly (print the time required for assembling)
 fd.Assembly.create("ElasticLaw", 'Domain', 'hex8', name="Assembling") 
 
 #Type of problem 
-pb = fd.Problem.Static("Assembling")
+pb = fd.problem.Static("Assembling")
 
 #Boundary conditions
 nodes_left = mesh.node_sets["left"]
@@ -46,7 +46,7 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 U = np.reshape(pb.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(), "Nodal", nlgeom=False)       
-TensorStress = fd.ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
+TensorStrain = fd.assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(), "Nodal", nlgeom=False)       
+TensorStress = fd.constitutivelaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 assert np.abs(TensorStress[5][-1] + 0.900798346778864) < 1e-15

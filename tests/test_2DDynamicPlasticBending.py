@@ -31,19 +31,19 @@ crd = mesh.nodes
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    material = fd.ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
     material.corate = 0
 elif mat == 1:
     Re = 300
     k=1000
     m=0.25
     props = np.array([[E, nu, alpha, Re,k,m]])
-    material = fd.ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
     material.corate = 0
 else:
-    material = fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-fd.WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 
 #note set for boundary conditions
 nodes_bottomLeft = np.where((crd[:,0]==0) * (crd[:,1]==0))[0]
@@ -55,10 +55,10 @@ nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
 fd.Assembly.create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 #Mass matrix
-fd.WeakForm.Inertia(rho,"Inertia")
+fd.weakform.Inertia(rho,"Inertia")
 fd.Assembly.create("Inertia", "Domain", "quad4", name="MassAssembling")
 
-pb = fd.Problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
+pb = fd.problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 
 # Problem.SetSolver('cg', precond = True)
 

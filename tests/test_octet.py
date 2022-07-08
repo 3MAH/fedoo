@@ -28,16 +28,16 @@ k = 1000
 m = 0.25
 alpha = 1e-5
 props = np.array([[1e5, 0.3, alpha, Re, k, m]])
-Material = fd.ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+Material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
 #Create the weak formulation of the mechanical equilibrium equation
-wf = fd.WeakForm.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
+wf = fd.weakform.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
 
 # Assembly
 assemb = fd.Assembly.create("WeakForm", "Domain2", 'tet4', name="Assembly")
 
 # Type of problem
-pb = fd.Problem.NonLinearStatic("Assembly")
+pb = fd.problem.NonLinearStatic("Assembly")
 pb.SetNewtonRaphsonErrorCriterion("Work")
 
 # Set the desired ouputs at each time step
@@ -46,7 +46,7 @@ pb.SetNewtonRaphsonErrorCriterion("Work")
 # Boundary conditions for the linearized strain tensor
 E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
-fd.Homogen.DefinePeriodicBoundaryCondition('Domain2',
+fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')

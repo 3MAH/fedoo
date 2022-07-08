@@ -34,7 +34,7 @@ crd = mesh.nodes
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    material = fd.ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
     material.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
@@ -46,7 +46,7 @@ elif mat == 1 or mat == 2:
     m=0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        material = fd.ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+        material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
         material.corate = 2
         # Material.SetMaskH([[] for i in range(6)])
     
@@ -55,16 +55,16 @@ elif mat == 1 or mat == 2:
         # Material.SetMaskH(mask)
 
     elif mat == 2:
-        material = fd.ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
+        material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
         material.SetHardeningFunction('power', H=k, beta=m)
 else:
-    material = fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
 
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # WeakForm.InternalForceUL("ConstitutiveLaw")
 
 
@@ -76,9 +76,9 @@ nodes_top = mesh.find_nodes('Y',1)
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
-pb = fd.Problem.NonLinearStatic("Assembling")
+pb = fd.problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
-fd.Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
+fd.problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -86,21 +86,21 @@ fd.Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, 
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = fd.Problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+results = fd.problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
 tmax = 1
-fd.Problem.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
-fd.Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
-fd.Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
-fd.Problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
+fd.problem.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
+fd.problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
+fd.problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
+fd.problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
 
-fd.Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+fd.problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 
-E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(fd.Problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.assembly.get_all()['Assembling'].get_strain(fd.problem.GetDoFSolution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

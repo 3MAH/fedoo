@@ -9,16 +9,16 @@ meshObject = fd.mesh.hole_plate_mesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \
 	ElementShape = 'quad4', name ="Domain") 
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
-fd.ConstitutiveLaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
+fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
 
 #Create the weak formulation of the mechanical equilibrium equation
-fd.WeakForm.InternalForce("ElasticLaw", name = "WeakForm") 
+fd.weakform.InternalForce("ElasticLaw", name = "WeakForm") 
 
 #Create a global assembly
 fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-pb = fd.Problem.Static("Assembly")
+pb = fd.problem.Static("Assembly")
 
 #Definition of the set of nodes for boundary conditions
 crd = meshObject.nodes

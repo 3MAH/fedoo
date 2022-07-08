@@ -22,11 +22,11 @@ geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
 reduced_integration = True #if true, use reduce integration for shear 
 
-mat1 = fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'Mat1')
-mat2 = fd.ConstitutiveLaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
+mat1 = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Mat1')
+mat2 = fd.constitutivelaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
 
 # ConstitutiveLaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
-fd.ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], name = 'PlateSection')
+fd.constitutivelaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], name = 'PlateSection')
 
 mesh = fd.mesh.rectangle_mesh(21,5,0,L,-h/2,h/2, geomElementType, ndim = 3, name='plate')
 
@@ -37,21 +37,21 @@ node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
 if reduced_integration == False:
-    fd.WeakForm.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
     post_tt_assembly = 'plate'
 else:    
-    fd.WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    fd.WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'
 
 
-pb = fd.Problem.Static("plate")
+pb = fd.problem.Static("plate")
 
 #create a 'result' folder and set the desired ouputs
 # if not(os.path.isdir('results')): os.mkdir('results')

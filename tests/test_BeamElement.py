@@ -8,7 +8,7 @@ import numpy as np
 fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
-fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
+fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 
 #circular section 
 R = 1
@@ -37,18 +37,18 @@ nodes_right = [Nb_elm]
 for computeShear in range(3):
     
     if computeShear == 0:
-        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
+        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
         fd.Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam", MeshChange = True)    
     elif computeShear == 1:
-        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
+        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
         fd.lib_elements.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
         fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
         fd.mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
-        fd.WeakForm.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
+        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
         fd.Assembly.create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
     
-    pb = fd.Problem.Static("beam")
+    pb = fd.problem.Static("beam")
     
     pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
     pb.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
@@ -63,7 +63,7 @@ for computeShear in range(3):
     pb.Solve()
     
     #Post treatment               
-    results = fd.Assembly.get_all()['beam'].get_ext_forces(pb.GetDoFSolution('all'))
+    results = fd.assembly.get_all()['beam'].get_ext_forces(pb.GetDoFSolution('all'))
     
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -79,7 +79,7 @@ for computeShear in range(3):
     assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = fd.Assembly.get_all()['beam'].get_int_forces(pb.GetDoFSolution('all'), 'local')
+    results = fd.assembly.get_all()['beam'].get_int_forces(pb.GetDoFSolution('all'), 'local')
     IntMoment = results[:,3:]
     IntForce = results[:,0:3]    
     

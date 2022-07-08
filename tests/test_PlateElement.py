@@ -22,8 +22,8 @@ geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
 reduced_integration = True #if true, use reduce integration for shear 
 
-material = fd.ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'Material')
-fd.ConstitutiveLaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
+material = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Material')
+fd.constitutivelaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
 
 mesh = fd.mesh.rectangle_mesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, name='plate')
 
@@ -34,20 +34,20 @@ node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
 if reduced_integration == False:
-    fd.WeakForm.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
     post_tt_assembly = 'plate'
 else:    
-    fd.WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    fd.WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+    fd.weakform.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'
 
-pb = fd.Problem.Static("plate")
+pb = fd.problem.Static("plate")
 
 pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
 pb.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
