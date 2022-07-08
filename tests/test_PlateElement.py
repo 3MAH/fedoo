@@ -44,7 +44,7 @@ else:
     fd.WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    fd.Assembly.Sum("plate_RI", "plate_FI", name = "plate")
+    fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'
 
 pb = fd.Problem.Static("plate")
