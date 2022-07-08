@@ -7,7 +7,7 @@ from . import libPGD as PGD
 
 # from . import utilities
 from .mesh.mesh import Mesh
-from .assembly.Assembly import Assembly
+from .assembly.assembly import Assembly
 
 # from . import mesh
 # from . import lib_elements

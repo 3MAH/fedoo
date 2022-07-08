@@ -1,6 +1,6 @@
 from fedoo.assembly.base import AssemblyBase
-from fedoo.assembly.Assembly import Assembly as AssemblyFEM
-from fedoo.assembly.Assembly import RowBlocMatrix
+from fedoo.assembly.assembly import Assembly as AssemblyFEM
+from fedoo.assembly._sparsematrix import RowBlocMatrix
 # from fedoo.utilities.Variable import Variable
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 from fedoo.utilities.PostTreatement import listStrainTensor

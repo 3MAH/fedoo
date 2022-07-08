@@ -1,5 +1,5 @@
 # import numpy as np
-from fedoo.assembly.Assembly import Assembly
+from fedoo.assembly.assembly import Assembly
 from fedoo.libProblem.Problem   import *
 from fedoo.libProblem.ProblemPGD   import ProblemPGD
 
