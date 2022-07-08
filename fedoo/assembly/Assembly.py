@@ -1,14 +1,14 @@
 #simcoon compatible
 
-from fedoo.assembly.AssemblyBase import AssemblyBase, AssemblySum
+from fedoo.assembly.base import AssemblyBase, AssemblySum
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.mesh.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.assembly.SparseMatrix import _BlocSparse as BlocSparse
-from fedoo.assembly.SparseMatrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
-from fedoo.assembly.SparseMatrix import RowBlocMatrix
+from fedoo.assembly._sparsematrix import _BlocSparse as BlocSparse
+from fedoo.assembly._sparsematrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
+from fedoo.assembly._sparsematrix import RowBlocMatrix
 
 from scipy import sparse
 import numpy as np

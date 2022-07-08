@@ -1,4 +1,4 @@
-from fedoo.assembly.AssemblyBase import AssemblyBase
+from fedoo.assembly.base import AssemblyBase
 from fedoo.assembly.Assembly import Assembly as AssemblyFEM
 from fedoo.assembly.Assembly import RowBlocMatrix
 # from fedoo.utilities.Variable import Variable
