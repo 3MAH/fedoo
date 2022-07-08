@@ -1,5 +1,5 @@
 """
-Weak Formulation (:mod:`fedoo.libWeakForm`)
+Weak Formulation (:mod:`fedoo.weakform`)
 =============================================
 
 In fedoo, the differential equations related to the problem to solve are written 

@@ -1,5 +1,5 @@
-from fedoo.libWeakForm.WeakForm   import *
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm   import *
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.libPGD.MeshPGD import MeshPGD
 from fedoo.libPGD.SeparatedArray import SeparatedOnes
 

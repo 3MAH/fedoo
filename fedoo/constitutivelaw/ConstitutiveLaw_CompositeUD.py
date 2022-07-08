@@ -1,8 +1,8 @@
 #derive de ConstitutiveLaw
 #compatible simcoon
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
+from fedoo.constitutivelaw.ConstitutiveLaw import Mechanical3D
+from fedoo.constitutivelaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
 
 import numpy as np
 
@@ -13,7 +13,7 @@ class CompositeUD(ElasticAnisotropic):
     """
     Linear Orthotropic constitutive law defined from composites phase parameters, assuming uniform unidirectional fibers.
     The fiber are assumed in the X direction. Use Change of basis to rotate the material.        
-    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`    
     
     Parameters
     ----------

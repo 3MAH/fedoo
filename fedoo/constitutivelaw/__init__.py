@@ -1,9 +1,9 @@
 """
 =========================================================
-Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+Constitutive Law (:mod:`fedoo.constitutivelaw`)
 =========================================================
 
-.. currentmodule:: fedoo.libConstitutiveLaw
+.. currentmodule:: fedoo.constitutivelaw
 
 The constitutive law module inclued several classical mechancical classical 
 constitutive laws. This laws are required to create some weak formulations. 

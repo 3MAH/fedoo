@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #The elastoplastic law should be used with an InternalForce WeakForm
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
+from fedoo.constitutivelaw.ConstitutiveLaw import Mechanical3D
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -11,7 +11,7 @@ class ElastoPlasticity(Mechanical3D):
     Elasto-Plastic constitutive law. 
     This law is based on the assumption of isotropic hardening with the Von-Mises plasticity criterion. 
     After creating an ElastoPlasticity object, the hardening function must be set with the Method 'SetHardeningFunction'
-    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    This constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`    
     
     Parameters
     ----------

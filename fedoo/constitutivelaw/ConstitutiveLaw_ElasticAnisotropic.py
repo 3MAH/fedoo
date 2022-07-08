@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #compatible with the simcoon strain and stress notation
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
+from fedoo.constitutivelaw.ConstitutiveLaw import Mechanical3D
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
@@ -10,7 +10,7 @@ class ElasticAnisotropic(Mechanical3D):
     """
     Linear full Anistropic constitutive law defined from the rigidity matrix H.
 
-    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`    
     
     Parameters
     ----------

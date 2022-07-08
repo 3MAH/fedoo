@@ -1,5 +1,5 @@
-from fedoo.libWeakForm.WeakForm import WeakForm
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm import WeakForm
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 
 class Beam(WeakForm):
     """
@@ -11,7 +11,7 @@ class Beam(WeakForm):
     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law used to get the young modulus and poisson ratio
         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
-        (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
+        (as :mod:`fedoo.constitutivelaw.ElasticIsotrop`)        
     Section: scalar or arrays of gauss point values
         Beam section area
     Jx: scalar or arrays of gauss point values
@@ -83,14 +83,14 @@ class Beam(WeakForm):
 def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
     """
     Weak formulation of the mechanical equilibrium equation for beam model base on the Bernoulli hypothesis (no shear strain)   
-    This weak formulation is an alias for :mod:`fedoo.libWeakForm.Beam` with k=0
+    This weak formulation is an alias for :mod:`fedoo.weakform.Beam` with k=0
     
     Parameters
     ----------
     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law used to get the young modulus and poisson ratio
         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
-        (as :mod:`fedoo.libConstitutiveLaw.ElasticIsotrop`)        
+        (as :mod:`fedoo.constitutivelaw.ElasticIsotrop`)        
     Section: scalar or arrays of gauss point values
         Beam section area
     Jx: scalar or arrays of gauss point values

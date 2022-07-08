@@ -1,8 +1,8 @@
-from . import libConstitutiveLaw as ConstitutiveLaw
-from . import libWeakForm as WeakForm
+from . import constitutivelaw as ConstitutiveLaw
+from . import weakform as WeakForm
 # from . import assembly as Assembly
 from . import libProblem as Problem
-from . import libHomogen as Homogen
+from . import homogen as Homogen
 from . import libPGD as PGD
 
 # from . import utilities

@@ -1,5 +1,5 @@
-from fedoo.libWeakForm.WeakForm   import *
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm   import *
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 # from fedoo.utilities.modelingspace import Variable, Vector, GetDimension
 from fedoo.utilities.operator  import OpDiff
@@ -8,13 +8,13 @@ class Plate(WeakForm):
     """
     Weak formulation of the mechanical equilibrium equation for plate models.
     This weak form has to be used in combination with a Shell Constitutive Law
-    like :mod:`fedoo.libConstitutiveLaw.ShellHomogeneous` or `fedoo.libConstitutiveLaw.ShellLaminate`.
+    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or `fedoo.constitutivelaw.ShellLaminate`.
     Geometrical non linearities not implemented for now.
     
     Parameters
     ----------
     PlateConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Shell Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+        Shell Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
     """

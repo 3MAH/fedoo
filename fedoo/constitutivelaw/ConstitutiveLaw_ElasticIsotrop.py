@@ -1,8 +1,8 @@
 #derive de ConstitutiveLaw
 #simcoon compatible
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import Mechanical3D
-from fedoo.libConstitutiveLaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
+from fedoo.constitutivelaw.ConstitutiveLaw import Mechanical3D
+from fedoo.constitutivelaw.ConstitutiveLaw_ElasticAnisotropic import ElasticAnisotropic
 
 import numpy as np
 
@@ -10,7 +10,7 @@ class ElasticIsotrop(ElasticAnisotropic):
     """
     A simple linear elastic isotropic constitutive law defined from a Yound Modulus and a Poisson Ratio.
      
-    The constitutive Law should be associated with :mod:`fedoo.libWeakForm.InternalForce`    
+    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`    
     
     Parameters
     ----------

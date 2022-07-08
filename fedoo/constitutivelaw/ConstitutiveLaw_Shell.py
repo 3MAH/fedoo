@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #compatible with the simcoon strain and stress notation
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np

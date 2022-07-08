@@ -1,17 +1,17 @@
-from fedoo.libWeakForm.WeakForm   import *
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm   import *
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 
 class InterfaceForce(WeakForm):
     """
     Weak formulation of the interface equilibrium equation.
     
-    * Require an interface constitutive law such as :mod:`fedoo.libConstitutiveLaw.CohesiveLaw` or :mod:`fedoo.libConstitutiveLaw.Spring`
+    * Require an interface constitutive law such as :mod:`fedoo.constitutivelaw.CohesiveLaw` or :mod:`fedoo.constitutivelaw.Spring`
     * Geometrical non linearities not implemented
     
     Parameters
     ----------
     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+        Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
     nlgeom: bool (default = False)

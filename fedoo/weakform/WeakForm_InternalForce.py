@@ -1,5 +1,5 @@
-from fedoo.libWeakForm.WeakForm import WeakForm
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm import WeakForm
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 
 class InternalForce(WeakForm):
     """
@@ -8,12 +8,12 @@ class InternalForce(WeakForm):
     * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
     * May include initial stress depending on the ConstitutiveLaw.
     * This weak form accepts geometrical non linearities (with nlgeom = True). In this case the initial displacement is also considered. 
-    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.libConstitutiveLaw.Simcoon` Constitutive Law
+    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.constitutivelaw.Simcoon` Constitutive Law
     
     Parameters
     ----------
     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Material Constitutive Law (:mod:`fedoo.libConstitutiveLaw`)
+        Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
     nlgeom: bool (default = False)

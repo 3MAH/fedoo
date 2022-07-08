@@ -1,8 +1,8 @@
 #derive de ConstitutiveLaw 
 #Not working law
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.ConstitutiveLaw_Spring import Spring
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.assembly.base import AssemblyBase
 import numpy as np
 from numpy import linalg

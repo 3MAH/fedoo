@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.ConstitutiveLaw_Spring import Spring
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.assembly.base import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -11,7 +11,7 @@ class CohesiveLaw(Spring):
     """
     Bilinear cohesive Law based on the Crisfield model
 
-    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InterfaceForce`    
+    This constitutive Law should be associated with :mod:`fedoo.weakform.InterfaceForce`    
 
     Parameters
     ----------

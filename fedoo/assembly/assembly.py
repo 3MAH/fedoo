@@ -4,8 +4,8 @@ from fedoo.assembly.base import AssemblyBase, AssemblySum
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.mesh.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
-from fedoo.libWeakForm.WeakForm import WeakForm
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.weakform.WeakForm import WeakForm
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.assembly._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.assembly._sparsematrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
 from fedoo.assembly._sparsematrix import RowBlocMatrix

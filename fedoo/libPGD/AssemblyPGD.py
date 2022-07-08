@@ -6,10 +6,10 @@ from fedoo.assembly._sparsematrix import RowBlocMatrix
 from fedoo.utilities.PostTreatement import listStrainTensor
 from fedoo.mesh.mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import GetDefaultNbPG
-from fedoo.libWeakForm.WeakForm import WeakForm
+from fedoo.weakform.WeakForm import WeakForm
 from fedoo.libPGD.SeparatedOperator import SeparatedOperator
 from fedoo.libPGD.SeparatedArray import SeparatedArray, SeparatedZeros
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 
 from scipy import sparse
 import numpy as np

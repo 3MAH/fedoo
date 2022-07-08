@@ -2,12 +2,12 @@
 #This law should be used with an InternalForce WeakForm
 
 from fedoo.mesh.base import MeshBase as Mesh
-from fedoo.libConstitutiveLaw import ElasticAnisotropic, ConstitutiveLaw
-from fedoo.libWeakForm.WeakForm_InternalForce import InternalForce
+from fedoo.constitutivelaw import ElasticAnisotropic, ConstitutiveLaw
+from fedoo.weakform.WeakForm_InternalForce import InternalForce
 from fedoo.assembly.assembly import Assembly
 from fedoo.libProblem import Problem, Static, BoundaryCondition
 from fedoo.libProblem import ProblemBase
-from fedoo.libHomogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
+from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 import numpy as np
 import os
 import time

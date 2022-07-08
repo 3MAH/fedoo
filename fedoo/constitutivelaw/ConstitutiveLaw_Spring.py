@@ -1,6 +1,6 @@
 #derive de ConstitutiveLaw
 
-from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
 from fedoo.assembly.base import AssemblyBase
 import numpy as np
 from numpy import linalg
@@ -10,7 +10,7 @@ class Spring(ConstitutiveLaw):
     """
     Simple directional spring connector between nodes or surfaces
 
-    This constitutive Law should be associated with :mod:`fedoo.libWeakForm.InterfaceForce`    
+    This constitutive Law should be associated with :mod:`fedoo.weakform.InterfaceForce`    
 
     Parameters
     ----------
