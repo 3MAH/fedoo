@@ -5,7 +5,7 @@
 
 
 
-from fedoo.weakform.WeakForm   import WeakForm, WeakFormSum
+from fedoo.weakform.weakform   import WeakForm, WeakFormSum
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 # from fedoo.utilities.operator  import OpDiff
 import numpy as np

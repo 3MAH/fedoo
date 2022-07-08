@@ -1,4 +1,4 @@
-from fedoo.weakform.WeakForm import WeakForm
+from fedoo.weakform.weakform import WeakForm
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 
 class Beam(WeakForm):

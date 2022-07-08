@@ -1,4 +1,4 @@
-from fedoo.weakform.WeakForm   import *
+from fedoo.weakform.weakform   import WeakForm
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 # from fedoo.utilities.modelingspace import Variable, Vector, GetDimension
