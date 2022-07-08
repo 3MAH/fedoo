@@ -1,5 +1,5 @@
 from fedoo.weakform.WeakForm   import *
-from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 # from fedoo.utilities.modelingspace import Variable, Vector, GetDimension
 from fedoo.utilities.operator  import OpDiff

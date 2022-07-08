@@ -13,7 +13,7 @@ if USE_SIMCOON:
 
 if USE_SIMCOON:    
     from fedoo.mesh.base import MeshBase as Mesh
-    from fedoo.constitutivelaw.ConstitutiveLaw_Simcoon import Simcoon
+    from fedoo.constitutivelaw.umat_simcoon import Simcoon
     from fedoo.weakform.WeakForm_InternalForce import InternalForce
     from fedoo.assembly.assembly import Assembly
     from fedoo.problem import NonLinearStatic, BoundaryCondition

@@ -24,7 +24,7 @@ class ConstitutiveLaw:
         #function called to restart a problem (reset all internal variables)
         pass
     
-    def NewTimeIncrement(self):  
+    def set_start(self):  
         #function called when the time is increased. Not used for elastic laws
         pass
     
@@ -160,9 +160,9 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         for cl in self.__list_constitutivelaw:
             cl.update(assembly, pb, dtime)
     
-    def NewTimeIncrement(self):  
+    def set_start(self):  
         for cl in self.__list_constitutivelaw:
-            cl.NewTimeIncrement()
+            cl.set_start()
     
     def to_start(self):
         for cl in self.__list_constitutivelaw:
@@ -201,7 +201,6 @@ class ListConstitutiveLaw(ConstitutiveLaw):
     #         else:
     #             constitutivelaw.update(assembly, pb, dtime, nlgeom)
 
-    # def NewTimeIncrementConstitutiveLaw(self):
         
 
     # def resetConstitutiveLaw(self):

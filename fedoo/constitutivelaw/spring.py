@@ -1,6 +1,6 @@
 #derive de ConstitutiveLaw
 
-from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
+from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 from fedoo.assembly.base import AssemblyBase
 import numpy as np
 from numpy import linalg
