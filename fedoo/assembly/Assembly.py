@@ -1,14 +1,14 @@
 #simcoon compatible
 
-from fedoo.libAssembly.AssemblyBase import AssemblyBase, AssemblySum
+from fedoo.assembly.AssemblyBase import AssemblyBase, AssemblySum
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.mesh.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.libWeakForm.WeakForm import WeakForm
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libAssembly.SparseMatrix import _BlocSparse as BlocSparse
-from fedoo.libAssembly.SparseMatrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
-from fedoo.libAssembly.SparseMatrix import RowBlocMatrix
+from fedoo.assembly.SparseMatrix import _BlocSparse as BlocSparse
+from fedoo.assembly.SparseMatrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
+from fedoo.assembly.SparseMatrix import RowBlocMatrix
 
 from scipy import sparse
 import numpy as np
@@ -17,49 +17,51 @@ from copy import copy
 import time
 
 
-def create(weakform, mesh="", elm_type="", name ="", **kargs): 
-    if isinstance(weakform, str):
-        weakform = WeakForm.get_all()[weakform]
+# def create(weakform, mesh="", elm_type="", name ="", **kargs): 
+#     return Assembly.create(weakform, mesh, elm_type, name, **kargs)
+#     if isinstance(weakform, str):
+#         weakform = WeakForm.get_all()[weakform]
         
-    if hasattr(weakform, 'list_weakform') and weakform.assembly_options is None: #WeakFormSum object
-        list_weakform = weakform.list_weakform
+#     if hasattr(weakform, 'list_weakform') and weakform.assembly_options is None: #WeakFormSum object
+#         list_weakform = weakform.list_weakform
         
-        if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
-        if elm_type == "": elm_type = mesh.elm_type
+#         if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
+#         if elm_type == "": elm_type = mesh.elm_type
                 
-        #get lists of some non compatible assembly_options items for each weakform in list_weakform
-        list_n_elm_gp = [wf.assembly_options.get('n_elm_gp', GetDefaultNbPG(elm_type, mesh)) for wf in list_weakform]
-        list_assume_sym = [wf.assembly_options.get('assume_sym', False) for wf in list_weakform]
-        list_prop = list(zip(list_n_elm_gp, list_assume_sym))
-        list_diff_prop = list(set(list_prop)) #list of different non compatible properties that required separated assembly
+#         #get lists of some non compatible assembly_options items for each weakform in list_weakform
+#         list_n_elm_gp = [wf.assembly_options.get('n_elm_gp', GetDefaultNbPG(elm_type, mesh)) for wf in list_weakform]
+#         list_assume_sym = [wf.assembly_options.get('assume_sym', False) for wf in list_weakform]
+#         list_prop = list(zip(list_n_elm_gp, list_assume_sym))
+#         list_diff_prop = list(set(list_prop)) #list of different non compatible properties that required separated assembly
         
-        if len(list_diff_prop) == 1: #only 1 assembly is required
-            #update assembly_options
-            prop = list_diff_prop[0]
-            weakform.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
-            weakform.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakform.list_weakform]
-            return Assembly(weakform, mesh, elm_type, name, **kargs)
+#         if len(list_diff_prop) == 1: #only 1 assembly is required
+#             #update assembly_options
+#             prop = list_diff_prop[0]
+#             weakform.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
+#             weakform.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakform.list_weakform]
+#             return Assembly(weakform, mesh, elm_type, name, **kargs)
         
-        else: #we need to create and sum several assemblies
-            list_assembly = []
-            for prop in list_diff_prop:
-                l_wf = [list_weakform[i] for i,p in enumerate(list_prop) if p == prop] #list_weakform with compatible properties
-                if len(l_wf) == 1:
-                    wf = l_wf[0] #standard weakform. No WeakFormSum required
-                else:
-                    #create a new WeakFormSum object
-                    wf = WeakFormSum(l_wf) #to modify : add automatic name
-                    #define the assembly_options dict of the new weakform
-                    wf.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
-                    wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
-                list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
+#         else: #we need to create and sum several assemblies
+#             list_assembly = []
+#             for prop in list_diff_prop:
+#                 l_wf = [list_weakform[i] for i,p in enumerate(list_prop) if p == prop] #list_weakform with compatible properties
+#                 if len(l_wf) == 1:
+#                     wf = l_wf[0] #standard weakform. No WeakFormSum required
+#                 else:
+#                     #create a new WeakFormSum object
+#                     wf = WeakFormSum(l_wf) #to modify : add automatic name
+#                     #define the assembly_options dict of the new weakform
+#                     wf.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
+#                     wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
+#                 list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
         
-        # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
-        kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
-        return AssemblySum(list_assembly, name, **kargs)       
+#         # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
+#         kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
+#         return AssemblySum(list_assembly, name, **kargs)       
     
-    return Assembly(weakform, mesh, elm_type, name, **kargs)
-               
+#     return Assembly(weakform, mesh, elm_type, name, **kargs)
+       
+        
 class Assembly(AssemblyBase):
     """
     Fedoo Assembly object.
@@ -1246,6 +1248,65 @@ class Assembly(AssemblyBase):
             n_gauss_points = mesh.n_elements + assembly.n_elm_gp.
         """
         return self.mesh.n_elements * self.n_elm_gp
+    
+    
+    @staticmethod
+    def sum(*listAssembly, name ="", **kargs):
+        """
+        Return a new assembly which is a sum of N assembly. 
+        Assembly.sum(assembly1, assembly2, ..., assemblyN, name ="", reload = [1,4] )
+        
+        The N first arguments are the assembly to be summed.
+        name is the name of the created assembly:
+        reload: a list of indices for subassembly that are recomputed at each time the summed assembly
+        is Launched. Default is 'all' (equivalent to all indices).     
+        """
+        return AssemblySum(list(listAssembly), name, **kargs)
+    
+    @staticmethod
+    def create(weakform, mesh="", elm_type="", name ="", **kargs): 
+        if isinstance(weakform, str):
+            weakform = WeakForm.get_all()[weakform]
+            
+        if hasattr(weakform, 'list_weakform') and weakform.assembly_options is None: #WeakFormSum object
+            list_weakform = weakform.list_weakform
+            
+            if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
+            if elm_type == "": elm_type = mesh.elm_type
+                    
+            #get lists of some non compatible assembly_options items for each weakform in list_weakform
+            list_n_elm_gp = [wf.assembly_options.get('n_elm_gp', GetDefaultNbPG(elm_type, mesh)) for wf in list_weakform]
+            list_assume_sym = [wf.assembly_options.get('assume_sym', False) for wf in list_weakform]
+            list_prop = list(zip(list_n_elm_gp, list_assume_sym))
+            list_diff_prop = list(set(list_prop)) #list of different non compatible properties that required separated assembly
+            
+            if len(list_diff_prop) == 1: #only 1 assembly is required
+                #update assembly_options
+                prop = list_diff_prop[0]
+                weakform.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
+                weakform.assembly_options['mat_lumping'] = [wf.assembly_options.get('mat_lumping',False) for wf in weakform.list_weakform]
+                return Assembly(weakform, mesh, elm_type, name, **kargs)
+            
+            else: #we need to create and sum several assemblies
+                list_assembly = []
+                for prop in list_diff_prop:
+                    l_wf = [list_weakform[i] for i,p in enumerate(list_prop) if p == prop] #list_weakform with compatible properties
+                    if len(l_wf) == 1:
+                        wf = l_wf[0] #standard weakform. No WeakFormSum required
+                    else:
+                        #create a new WeakFormSum object
+                        wf = WeakFormSum(l_wf) #to modify : add automatic name
+                        #define the assembly_options dict of the new weakform
+                        wf.assembly_options = {'n_elm_gp': prop[0] , 'assume_sym': prop[1]}
+                        wf.assembly_options['assume_sym'] = [w.assembly_options['assume_sym'] for w in l_wf]
+                    list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
+            
+            # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
+            kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
+            return AssemblySum(list_assembly, name, **kargs)       
+        
+        return Assembly(weakform, mesh, elm_type, name, **kargs)
+
     
 def delete_memory():
     Assembly.delete_memory()

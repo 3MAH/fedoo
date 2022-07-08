@@ -66,6 +66,6 @@ from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
     
 from .importmesh import import_file, import_vtk, import_msh
 
-from ._base import get_all
+from .base import get_all
 
 from .mesh import Mesh

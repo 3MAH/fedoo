@@ -2,7 +2,7 @@
 
 from fedoo.libConstitutiveLaw.ConstitutiveLaw_Spring import Spring
 from fedoo.libConstitutiveLaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.libAssembly import AssemblyBase
+from fedoo.assembly import AssemblyBase
 import numpy as np
 from numpy import linalg
 

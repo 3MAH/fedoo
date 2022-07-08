@@ -1,4 +1,4 @@
-from fedoo.mesh._base import MeshBase
+from fedoo.mesh.base import MeshBase
 from fedoo.mesh.mesh import Mesh as MeshFEM
 import numpy as np
 

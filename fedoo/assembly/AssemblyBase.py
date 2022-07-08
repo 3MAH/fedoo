@@ -180,17 +180,17 @@ class AssemblySum(AssemblyBase):
 
 
 
-def Sum(*listAssembly, name ="", **kargs):
-    """
-    Return a new assembly which is a sum of N assembly. 
-    Assembly.Sum(assembly1, assembly2, ..., assemblyN, name ="", reload = [1,4] )
+# def Sum(*listAssembly, name ="", **kargs):
+#     """
+#     Return a new assembly which is a sum of N assembly. 
+#     Assembly.Sum(assembly1, assembly2, ..., assemblyN, name ="", reload = [1,4] )
     
-    The N first arguments are the assembly to be summed.
-    name is the name of the created assembly:
-    reload: a list of indices for subassembly that are recomputed at each time the summed assembly
-    is Launched. Default is 'all' (equivalent to all indices).     
-    """
-    return AssemblySum(list(listAssembly), name, **kargs)
+#     The N first arguments are the assembly to be summed.
+#     name is the name of the created assembly:
+#     reload: a list of indices for subassembly that are recomputed at each time the summed assembly
+#     is Launched. Default is 'all' (equivalent to all indices).     
+#     """
+#     return AssemblySum(list(listAssembly), name, **kargs)
             
 def get_all():
     return AssemblyBase.get_all()

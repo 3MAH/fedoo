@@ -4,7 +4,7 @@ import scipy.sparse as sparse
 import scipy.sparse.linalg
 
 from fedoo.libProblem.ProblemBase import ProblemBase
-from fedoo.libAssembly.Assembly  import *
+from fedoo.assembly.Assembly  import *
 from fedoo.libProblem.Output import _ProblemOutput, _GetResults
 from fedoo.utilities.dataset import DataSet
 
