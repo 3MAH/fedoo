@@ -3,8 +3,8 @@
 
 from fedoo.mesh.base import MeshBase as Mesh
 from fedoo.constitutivelaw import ElasticAnisotropic, ConstitutiveLaw
-from fedoo.weakform.internal_force import InternalForce
-from fedoo.assembly.assembly import Assembly
+from fedoo.weakform.WeakForm_InternalForce import InternalForce
+from fedoo.core.assembly import Assembly
 from fedoo.problem import Problem, Static, BoundaryCondition
 from fedoo.problem import ProblemBase
 from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh

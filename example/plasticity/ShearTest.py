@@ -100,7 +100,7 @@ fd.problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
 fd.problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 
-E = np.array(fd.assembly.get_all()['Assembling'].get_strain(fd.problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(fd.Problem.GetDoFSolution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

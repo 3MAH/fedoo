@@ -1,5 +1,5 @@
 import numpy as np
-from fedoo.assembly.assembly import Assembly
+from fedoo.core.assembly import Assembly
 from fedoo.problem.Problem   import *
 import scipy.sparse as sparse
 

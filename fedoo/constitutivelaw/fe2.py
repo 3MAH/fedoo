@@ -3,8 +3,8 @@
 
 
 from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
-from fedoo.weakform.internal_force import InternalForce
-from fedoo.assembly.assembly import Assembly
+from fedoo.weakform.WeakForm_InternalForce import InternalForce
+from fedoo.core.assembly import Assembly
 from fedoo.problem.Problem_NonLinearStatic import NonLinearStatic
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh

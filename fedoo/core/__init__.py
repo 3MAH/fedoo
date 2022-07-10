@@ -4,5 +4,4 @@
 #     module = loader.find_module(module_name).load_module(module_name)
 #     exec('from .'+module_name+' import *')
 
-from .base import get_all
 # from .assembly import Assembly #<- generate an error ????
