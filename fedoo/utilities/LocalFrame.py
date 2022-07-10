@@ -1,5 +1,5 @@
 from fedoo.pgd.SeparatedArray import SeparatedArray
-from fedoo.mesh.mesh import Mesh as MeshFEM
+from fedoo.core.mesh import Mesh as MeshFEM
 #from fedoo.pgd.MeshPGD import MeshPGD
 import numpy as np
 

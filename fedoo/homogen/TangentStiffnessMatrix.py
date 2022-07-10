@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #This law should be used with an InternalForce WeakForm
 
-from fedoo.mesh.base import MeshBase as Mesh
+from fedoo.core.base import MeshBase as Mesh
 from fedoo.constitutivelaw import ElasticAnisotropic, ConstitutiveLaw
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly

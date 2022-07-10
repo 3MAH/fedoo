@@ -3,7 +3,7 @@
 Geometry and Mesh (:mod:`fedoo.mesh`)
 ===========================================
 
-.. currentmodule:: fedoo.mesh.mesh
+.. currentmodule:: fedoo.core.mesh
 
 Class Mesh
 ====================
@@ -65,7 +65,3 @@ from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
                     generate_nodes, hole_plate_mesh, quad2tri
     
 from .importmesh import import_file, import_vtk, import_msh
-
-from .base import get_all
-
-from .mesh import Mesh

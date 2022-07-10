@@ -27,7 +27,7 @@ filename = 'sheartest_ref'
 res_dir = 'results/'
 
 fd.mesh.box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
-mesh = fd.mesh.get_all()[meshname]
+mesh = fd.Mesh[meshname]
 
 crd = mesh.nodes 
 

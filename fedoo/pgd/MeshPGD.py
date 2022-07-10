@@ -1,5 +1,5 @@
-from fedoo.mesh.base import MeshBase
-from fedoo.mesh.mesh import Mesh as MeshFEM
+from fedoo.core.base import MeshBase
+from fedoo.core.mesh import Mesh as MeshFEM
 import numpy as np
 
 class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparées

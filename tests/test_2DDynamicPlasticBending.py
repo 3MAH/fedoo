@@ -24,7 +24,7 @@ rho = 1600e-6
 uimp = -0.5
 
 fd.mesh.rectangle_mesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', name = "Domain")
-mesh = fd.mesh.get_all()["Domain"]
+mesh = fd.Mesh["Domain"]
 
 crd = mesh.nodes 
 

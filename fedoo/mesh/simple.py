@@ -1,6 +1,6 @@
 """This module contains functions to generate simple meshes"""
 
-from fedoo.mesh.mesh import Mesh
+from fedoo.core.mesh import Mesh
 from fedoo.utilities.modelingspace import ModelingSpace
 import itertools
 

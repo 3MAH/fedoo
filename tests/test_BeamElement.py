@@ -27,7 +27,7 @@ crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[1,0,0]])
 # crd = np.linspace(0,L,Nb_elm+1).reshape(-1,1)* np.array([[0,0,1]]) #beam oriented in the Z axis 
 elm = np.c_[np.arange(0,Nb_elm), np.arange(1,Nb_elm+1)]
 
-fd.mesh.Mesh(crd,elm,'lin2',name='beam')
+fd.Mesh(crd,elm,'lin2',name='beam')
 nodes_left = [0]
 nodes_right = [Nb_elm]
 
@@ -44,7 +44,7 @@ for computeShear in range(3):
         fd.lib_elements.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
         fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
-        fd.mesh.get_all()['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
+        fd.Mesh['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
         fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
         fd.Assembly.create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
     

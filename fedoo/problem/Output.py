@@ -5,7 +5,7 @@ Created on Thu Dec 16 17:54:05 2021
 """
 
 import numpy as np
-from fedoo.mesh.mesh import *
+from fedoo.core.mesh import *
 from fedoo.core.base import AssemblyBase
 from fedoo.utilities.ExportData import ExportData 
 from fedoo.utilities.dataset import MultiFrameDataSet

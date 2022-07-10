@@ -1,4 +1,28 @@
-#baseclass
+"""Base classes for principles objects."""
+
+
+class MeshBase:
+
+    __dic = {}
+
+    def __init__(self, name = ""):
+        assert isinstance(name, str) , "name must be a string" 
+        self.__name = name
+        
+        if name != "":
+            MeshBase.__dic[self.__name] = self
+
+    def __class_getitem__(cls, item):
+        return cls.__dic[item]
+
+    @property
+    def name(self):
+        return self.__name
+
+    @staticmethod
+    def get_all():
+        return MeshBase.__dic
+    
 
 class AssemblyBase:
 

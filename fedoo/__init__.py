@@ -4,9 +4,10 @@ from . import weakform as WeakForm
 from . import problem as Problem
 from . import homogen as Homogen
 from . import pgd as PGD
+from . import mesh
 
 # from . import utilities
-from .mesh.mesh import Mesh
+from .core.mesh import Mesh
 from .core.assembly import Assembly
 
 # from . import mesh

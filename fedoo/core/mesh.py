@@ -3,7 +3,7 @@
 import numpy as np
 
 # from fedoo.utilities.Coordinate import Coordinate
-from fedoo.mesh.base import MeshBase
+from fedoo.core.base import MeshBase
 # from fedoo.libElement import *
 from os.path import splitext
 try:
@@ -12,7 +12,6 @@ try:
     USE_PYVISTA = True
 except:
     USE_PYVISTA = False
-
 
 
 class Mesh(MeshBase):    
