@@ -3,7 +3,7 @@ import scipy.sparse.linalg
 import scipy.sparse as sparse
 import numpy as np
 from fedoo.problem.BoundaryCondition import UniqueBoundaryCondition
-from fedoo.utilities.modelingspace  import ModelingSpace
+from fedoo.core.modelingspace  import ModelingSpace
 
 try: 
     from pypardiso import spsolve
@@ -36,7 +36,7 @@ class ProblemBase:
         ProblemBase.__dic[self.__name] = self
         
         if space is None: 
-            space = ModelingSpace.GetActive()
+            space = ModelingSpace.get_active()
         self.__space = space
         
         self.MakeActive()
@@ -56,7 +56,7 @@ class ProblemBase:
         ProblemBase.__activeProblem = ProblemBase.get_all()[Problemname]
     
     @staticmethod
-    def GetActive():
+    def get_active():
         return ProblemBase.__activeProblem
         
     
@@ -132,7 +132,7 @@ class ProblemBase:
         -------
         To define many MPC in one operation, use array where each line define a single MPC        
         """
-        if isinstance(Var, str) and Var not in self.space.list_variable():
+        if isinstance(Var, str) and Var not in self.space.list_variables():
             #we assume that Var is a Vector
             try: 
                 Var = [self.space.variable_name(var_rank) for var_rank in self.space.get_vector(Var)]
@@ -275,80 +275,80 @@ class ProblemBase:
 def get_all():
     return ProblemBase.get_all()
 def GetActive():
-    return ProblemBase.GetActive()
+    return ProblemBase.get_active()
 def SetActive(Problemname):
     ProblemBase.SetActive(Problemname)
 
 
 
 def SetSolver(solver, tol=1e-5, precond=True):
-    ProblemBase.GetActive().SetSolver(solver,tol,precond)
+    ProblemBase.get_active().SetSolver(solver,tol,precond)
 
 ## Functions related to boundary contidions
 def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", Problemname = None):
-    if Problemname is None: problem = ProblemBase.GetActive()
+    if Problemname is None: problem = ProblemBase.get_active()
     else: problem = ProblemBase.get_all()[Problemname]
     problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name)
 
-def GetBC(): return ProblemBase.GetActive()._BoundaryConditions    
-def RemoveBC(name =None): ProblemBase.GetActive().RemoveBC(name)    
-def PrintBC(): ProblemBase.GetActive().PrintBC()    
+def GetBC(): return ProblemBase.get_active()._BoundaryConditions    
+def RemoveBC(name =None): ProblemBase.get_active().RemoveBC(name)    
+def PrintBC(): ProblemBase.get_active().PrintBC()    
  
 
 
 
 ### Functions that may be defined depending on the type of problem
-def GetDisp(name='Disp'): return ProblemBase.GetActive().GetDisp(name)
-def GetRot(name='all'): return ProblemBase.GetActive().GetRot(name)
-def GetTemp(): return ProblemBase.GetActive().GetTemp()
-def update(**kargs): return ProblemBase.GetActive().update(**kargs) 
-def ChangeAssembly(Assembling): ProblemBase.GetActive().ChangeAssembly(Assembling)
-def SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None): ProblemBase.GetActive().SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol, max_subiter, err0)
-def NewtonRaphsonError(): return ProblemBase.GetActive().NewtonRaphsonError()
-def NewTimeIncrement(LoadFactor): ProblemBase.GetActive().NewTimeIncrement(LoadFactor)
-def NewtonRaphsonIncr(): ProblemBase.GetActive().NewtonRaphsonIncr()
-def to_start(): ProblemBase.GetActive().to_start()
-def reset(): ProblemBase.GetActive().reset()
-def resetLoadFactor(): ProblemBase.GetActive().resetLoadFactor()
-def NLSolve(**kargs): return ProblemBase.GetActive().NLSolve(**kargs)  
+def GetDisp(name='Disp'): return ProblemBase.get_active().GetDisp(name)
+def GetRot(name='all'): return ProblemBase.get_active().GetRot(name)
+def GetTemp(): return ProblemBase.get_active().GetTemp()
+def update(**kargs): return ProblemBase.get_active().update(**kargs) 
+def ChangeAssembly(Assembling): ProblemBase.get_active().ChangeAssembly(Assembling)
+def SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None): ProblemBase.get_active().SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol, max_subiter, err0)
+def NewtonRaphsonError(): return ProblemBase.get_active().NewtonRaphsonError()
+def NewTimeIncrement(LoadFactor): ProblemBase.get_active().NewTimeIncrement(LoadFactor)
+def NewtonRaphsonIncr(): ProblemBase.get_active().NewtonRaphsonIncr()
+def to_start(): ProblemBase.get_active().to_start()
+def reset(): ProblemBase.get_active().reset()
+def resetLoadFactor(): ProblemBase.get_active().resetLoadFactor()
+def NLSolve(**kargs): return ProblemBase.get_active().NLSolve(**kargs)  
 def AddOutput(filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
-    return ProblemBase.GetActive().AddOutput(filename, assemblyname, output_list, output_type, file_format, position)
+    return ProblemBase.get_active().AddOutput(filename, assemblyname, output_list, output_type, file_format, position)
 def SaveResults(iterOutput=None):        
-    return ProblemBase.GetActive().SaveResults(iterOutput)
+    return ProblemBase.get_active().SaveResults(iterOutput)
 def GetResults(assemb, output_list, output_type='Node', position = 1, res_format = None):
-    return ProblemBase.GetActive().GetResults(assemb, output_list, output_type, position, res_format)
+    return ProblemBase.get_active().GetResults(assemb, output_list, output_type, position, res_format)
 
 
 
 #functions that should be define in the Problem and in the ProblemPGD classes
-def SetA(A): ProblemBase.GetActive().SetA(A)
-def GetA(): return ProblemBase.GetActive().GetA()
-def GetB(): return ProblemBase.GetActive().GetB()
-def GetD(): return ProblemBase.GetActive().GetD()
-def GetMesh(): return ProblemBase.GetActive().mesh
-def SetD(D): ProblemBase.GetActive().SetD(D)
-def SetB(B): ProblemBase.GetActive().SetB(B)
-def Solve(**kargs): ProblemBase.GetActive().Solve(**kargs)
-def GetX(): return ProblemBase.GetActive().GetX()
-def ApplyBoundaryCondition(): ProblemBase.GetActive().ApplyBoundaryCondition()
-def GetDoFSolution(name='all'): return ProblemBase.GetActive().GetDoFSolution(name)
-def SetDoFSolution(name,value): ProblemBase.GetActive().SetDoFSolution(name,value)
-def SetInitialBCToCurrent(): ProblemBase.GetActive().SetInitialBCToCurrent()
-def get_global_vectorComponent(vector, name='all'): return ProblemBase.GetActive()._get_global_vectorComponent(vector, name)
+def SetA(A): ProblemBase.get_active().SetA(A)
+def GetA(): return ProblemBase.get_active().GetA()
+def GetB(): return ProblemBase.get_active().GetB()
+def GetD(): return ProblemBase.get_active().GetD()
+def GetMesh(): return ProblemBase.get_active().mesh
+def SetD(D): ProblemBase.get_active().SetD(D)
+def SetB(B): ProblemBase.get_active().SetB(B)
+def Solve(**kargs): ProblemBase.get_active().Solve(**kargs)
+def GetX(): return ProblemBase.get_active().GetX()
+def ApplyBoundaryCondition(): ProblemBase.get_active().ApplyBoundaryCondition()
+def GetDoFSolution(name='all'): return ProblemBase.get_active().GetDoFSolution(name)
+def SetDoFSolution(name,value): ProblemBase.get_active().SetDoFSolution(name,value)
+def SetInitialBCToCurrent(): ProblemBase.get_active().SetInitialBCToCurrent()
+def get_global_vectorComponent(vector, name='all'): return ProblemBase.get_active()._get_global_vectorComponent(vector, name)
 
 #functions only defined for Newmark problem 
 def GetXdot():
-    return ProblemBase.GetActive().GetXdot()
+    return ProblemBase.get_active().GetXdot()
 
 def GetXdotdot():
-    return ProblemBase.GetActive().GetXdotdot()
+    return ProblemBase.get_active().GetXdotdot()
 
   
 def GetVelocity():
-    return ProblemBase.GetActive().GetVelocity()
+    return ProblemBase.get_active().GetVelocity()
 
 def GetAcceleration():
-    return ProblemBase.GetActive().GetAcceleration()
+    return ProblemBase.get_active().GetAcceleration()
 
 
 def SetInitialDisplacement(name,value):
@@ -356,14 +356,14 @@ def SetInitialDisplacement(name,value):
     name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
     value is an array containing the initial displacement of each nodes
     """
-    ProblemBase.GetActive().SetInitialDisplacement(name,value)          
+    ProblemBase.get_active().SetInitialDisplacement(name,value)          
 
 def SetInitialVelocity(name,value):
     """
     name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
     value is an array containing the initial velocity of each nodes        
     """
-    ProblemBase.GetActive().SetInitialVelocity(name,value)          
+    ProblemBase.get_active().SetInitialVelocity(name,value)          
       
 
 def SetInitialAcceleration(name,value):
@@ -371,7 +371,7 @@ def SetInitialAcceleration(name,value):
     name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
     value is an array containing the initial acceleration of each nodes        
     """
-    ProblemBase.GetActive().SetInitialAcceleration(name,value)           
+    ProblemBase.get_active().SetInitialAcceleration(name,value)           
     
 
 def SetRayleighDamping(alpha, beta):        
@@ -384,32 +384,32 @@ def SetRayleighDamping(alpha, beta):
     
     Warning: the damping matrix is not automatically updated when mass and stiffness matrix are modified.        
     """
-    ProblemBase.GetActive().SetRayleighDamping(alpha, beta)
+    ProblemBase.get_active().SetRayleighDamping(alpha, beta)
 
 def initialize(t0 = 0.):
-    ProblemBase.GetActive().initialize(t0)           
+    ProblemBase.get_active().initialize(t0)           
 
 def GetElasticEnergy():
     """
     returns : sum(0.5 * U.transposed * K * U)
     """
-    return ProblemBase.GetActive().GetElasticEnergy()
+    return ProblemBase.get_active().GetElasticEnergy()
     
 def GetNodalElasticEnergy():
     """
     returns : 0.5 * U.transposed * K * U
     """
-    return ProblemBase.GetActive().GetNodalElasticEnergy()
+    return ProblemBase.get_active().GetNodalElasticEnergy()
 
 def get_ext_forces(name='all'):
-    return ProblemBase.GetActive().get_ext_forces(name)
+    return ProblemBase.get_active().get_ext_forces(name)
 
 
 def GetKineticEnergy():
     """
     returns : 0.5 * Udot.transposed * M * Udot
     """
-    return ProblemBase.GetActive().GetKineticEnergy()
+    return ProblemBase.get_active().GetKineticEnergy()
 
 def GetDampingPower():
     """
@@ -417,19 +417,19 @@ def GetDampingPower():
     The damping disspated energy can be approximated by:
             Edis = cumtrapz(DampingPower * TimeStep)
     """        
-    return ProblemBase.GetActive().GetDampingPower()
+    return ProblemBase.get_active().GetDampingPower()
 
 def updateStiffness(StiffnessAssembling):
-    ProblemBase.GetActive().updateStiffness(StiffnessAssembling)
+    ProblemBase.get_active().updateStiffness(StiffnessAssembling)
 
 
 
 
 #functions only used define in the ProblemPGD subclasses
-def GetXbc(): return ProblemBase.GetActive().GetXbc() 
-def ComputeResidualNorm(err_0=None): return ProblemBase.GetActive().ComputeResidualNorm(err_0)
-def GetResidual(): return ProblemBase.GetActive().GetResidual()
-def updatePGD(termToChange, ddcalc='all'): return ProblemBase.GetActive().updatePGD(termToChange, ddcalc)
-def updateAlpha(): return ProblemBase.GetActive().updateAlpha()
-def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemBase.GetActive().AddNewTerm(numberOfTerm, value, variable)
+def GetXbc(): return ProblemBase.get_active().GetXbc() 
+def ComputeResidualNorm(err_0=None): return ProblemBase.get_active().ComputeResidualNorm(err_0)
+def GetResidual(): return ProblemBase.get_active().GetResidual()
+def updatePGD(termToChange, ddcalc='all'): return ProblemBase.get_active().updatePGD(termToChange, ddcalc)
+def updateAlpha(): return ProblemBase.get_active().updateAlpha()
+def AddNewTerm(numberOfTerm = 1, value = None, variable = 'all'): return ProblemBase.get_active().AddNewTerm(numberOfTerm, value, variable)
 

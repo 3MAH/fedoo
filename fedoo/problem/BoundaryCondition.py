@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 
-from fedoo.utilities.modelingspace import ModelingSpace
+from fedoo.core.modelingspace import ModelingSpace
 from fedoo.pgd.SeparatedArray import *
 
 class UniqueBoundaryCondition() :
@@ -51,7 +51,7 @@ class UniqueBoundaryCondition() :
         -------
         To define many MPC in one operation, use array where each line define a single MPC        
         """
-        # if Problemname is None: problem = ProblemBase.GetActive()
+        # if Problemname is None: problem = ProblemBase.get_active()
         # else: 
         #     assert Problemname in ProblemBase.get_all(), "The problem " + Problemname + " doesn't exit. Create the Problem before defining boundary conditions."
         #     problem = ProblemBase.get_all()['Problemname']        
@@ -67,7 +67,7 @@ class UniqueBoundaryCondition() :
         
         self.__DefaultInitialValue = self.__initialValue = initialValue # can be a float or an array or None ! if DefaultInitialValue is None, initialValue can be modified by the Problem
         
-        if space is None: space = ModelingSpace.GetActive()
+        if space is None: space = ModelingSpace.get_active()
         
         self.__BoundaryType = BoundaryType
         if isinstance(Var, str): 
@@ -241,16 +241,16 @@ class UniqueBoundaryCondition() :
 #         Xbc = 0 #SeparatedZeros(shapeX)
 #         F = 0 
 
-#         DofB = [np.array([]) for i in range(meshPGD.GetDimension())] 
+#         DofB = [np.array([]) for i in range(meshPGD.get_dimension())] 
 #         dimBC = None #dimension requiring a modification of Xbc - dimBC = None if Xbc is never modified, dimBC = dd if only the dimension dd is modified, dimBC = 'many' if there is more than one dimension
         
 #         MPC = False
-#         data = [[] for i in range(meshPGD.GetDimension())] 
-#         row = [[] for i in range(meshPGD.GetDimension())] 
-#         col = [[] for i in range(meshPGD.GetDimension())] 
+#         data = [[] for i in range(meshPGD.get_dimension())] 
+#         row = [[] for i in range(meshPGD.get_dimension())] 
+#         col = [[] for i in range(meshPGD.get_dimension())] 
         
-#         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
-#         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.GetDimension())]
+#         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.get_dimension())] #number of nodes in each dimensions
+#         Nvar = [meshPGD._GetSpecificNumberOfVariables(d) for d in range(meshPGD.get_dimension())]
         
 #         for e in BoundaryCondition.get_all(Problemname):
 #             SetOfNodesForBC = meshPGD.node_sets[e.__SetOfname]            
@@ -261,17 +261,17 @@ class UniqueBoundaryCondition() :
 #                 if Value == 0: continue #dans ce cas, pas de force à ajouter
 # #                dd = SetOfNodesForBC[0][0]
 # #                index = SetOfNodesForBC[1][0]
-#                 var = [meshPGD._GetSpecificVariableRank (d, e.__Var) for d in range(meshPGD.GetDimension())] #specific variable rank related to the submesh dd
+#                 var = [meshPGD._GetSpecificVariableRank (d, e.__Var) for d in range(meshPGD.get_dimension())] #specific variable rank related to the submesh dd
                 
 #                 #item = the index of nodes in each subspace (slice if all nodes are included)
-#                 item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.GetDimension())]                
+#                 item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.get_dimension())]                
 #                 for i, d in enumerate(SetOfNodesForBC[0]):
 #                     index = np.array(SetOfNodesForBC[1][i], dtype = int)
 #                     item[d] = var[d]*Nnd[d] + index
                 
 #                 if isinstance(e.__Value, np.ndarray): e.__Value = SeparatedArray([e.__Value.reshape(-1,1)])
 #                 if isinstance(e.__Value, SeparatedArray): 
-#                     if len(e.__Value) != meshPGD.GetDimension():
+#                     if len(e.__Value) != meshPGD.get_dimension():
 #                         if len(e.__Value) ==  len(SetOfNodesForBC[1]):                            
 #                             nbt = e.__Value.nbTerm()
 #                             e.__Value = SeparatedArray( [ e.__Value.data[SetOfNodesForBC[0].index(d)] if d in SetOfNodesForBC[0] \
@@ -281,13 +281,13 @@ class UniqueBoundaryCondition() :
 #                 if F is 0: 
 #                     if isinstance(Value, (float, int, np.floating)):
 #                         Fadd = SeparatedZeros(shapeX)
-#                         # for d in range(meshPGD.GetDimension()): Fadd.data[d][item[d]] = Value
+#                         # for d in range(meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value
 #                         Fadd.data[0][item[0]] = Value
-#                         for d in range(1,meshPGD.GetDimension()): Fadd.data[d][item[d]] = 1.
+#                         for d in range(1,meshPGD.get_dimension()): Fadd.data[d][item[d]] = 1.
 #                     else: 
 #                         Fadd = SeparatedZeros(shapeX, nbTerm = Value.nbTerm())
 #                         Fadd.data[0][item[0]] = Value.data[d]
-#                         for d in range(1,meshPGD.GetDimension()): Fadd.data[d][item[d]] = Value.data[d]
+#                         for d in range(1,meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value.data[d]
 #                     F = F+Fadd                    
 #                 else: F.__setitem__(tuple(item), Value)                        
 
@@ -382,10 +382,10 @@ class UniqueBoundaryCondition() :
 # #        if F == 0: F = SeparatedZeros(shapeX)              
             
 #         DofB = [np.unique(dofb).astype(int) for dofb in DofB] #bloqued DoF for all the submeshes
-#         DofL = [np.setdiff1d(range(shapeX[d]),DofB[d]).astype(int) for d in range(meshPGD.GetDimension())] #free dof for all the submeshes
+#         DofL = [np.setdiff1d(range(shapeX[d]),DofB[d]).astype(int) for d in range(meshPGD.get_dimension())] #free dof for all the submeshes
     
 #         if X!=0: 
-#             for d in range(meshPGD.GetDimension()): 
+#             for d in range(meshPGD.get_dimension()): 
 #                 X.data[dd][DofB[d]] = 0
 
 #          #build matrix MPC
@@ -398,9 +398,9 @@ class UniqueBoundaryCondition() :
 #                 (np.hstack(data[d]), (np.hstack(row[d]),np.hstack(col[d]))), 
 #                 shape=(Nvar[d]*Nnd[d],Nvar[d]*Nnd[d])) if len(data[d])>0 else 
 #                 sparse.coo_matrix( (Nvar[d]*Nnd[d],Nvar[d]*Nnd[d]))
-#                 for d in range(meshPGD.GetDimension())]
+#                 for d in range(meshPGD.get_dimension())]
 
-#             Xbc = SeparatedArray([Xbc.data[d] + listM[d]@Xbc.data[d] for d in range(meshPGD.GetDimension())])                                           
+#             Xbc = SeparatedArray([Xbc.data[d] + listM[d]@Xbc.data[d] for d in range(meshPGD.get_dimension())])                                           
 #             listM = [(M+M@M).tocoo() for M in listM]
             
                                     
@@ -409,7 +409,7 @@ class UniqueBoundaryCondition() :
 #             col  = [M.col  for M in listM]
 
 #             #modification col numbering from DofL to np.arange(len(DofL))
-#             for d in range(meshPGD.GetDimension()):
+#             for d in range(meshPGD.get_dimension()):
 #                 if len(DofB[d])>0: #no change if there is no blocked dof
 #                     changeInd = np.full(Nvar[d]*Nnd[d],np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
 #                     changeInd[DofL[d]] = np.arange(len(DofL[d]))
@@ -420,12 +420,12 @@ class UniqueBoundaryCondition() :
 
 
 #         # #adding identity for free nodes
-#         col  = [np.hstack((col[d],np.arange(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
-#         row  = [np.hstack((row[d],DofL[d])) for d in range(meshPGD.GetDimension())]
+#         col  = [np.hstack((col[d],np.arange(len(DofL[d])))) for d in range(meshPGD.get_dimension())]
+#         row  = [np.hstack((row[d],DofL[d])) for d in range(meshPGD.get_dimension())]
             
-#         data = [np.hstack((data[d], np.ones(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
+#         data = [np.hstack((data[d], np.ones(len(DofL[d])))) for d in range(meshPGD.get_dimension())]
         
-#         MatCB = [sparse.coo_matrix( (data[d],(row[d],col[d])), shape=(Nvar[d]*Nnd[d],len(DofL[d]))).tocsr() for d in range(meshPGD.GetDimension())]
+#         MatCB = [sparse.coo_matrix( (data[d],(row[d],col[d])), shape=(Nvar[d]*Nnd[d],len(DofL[d]))).tocsr() for d in range(meshPGD.get_dimension())]
 
 
 #         return X, Xbc, F, DofB, DofL, MatCB

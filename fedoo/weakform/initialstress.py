@@ -1,7 +1,7 @@
 from fedoo.weakform.weakform   import WeakForm
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 # from fedoo.utilities.StrainOperator import GetStrainOperator, OpDiff
-# from fedoo.utilities.modelingspace import Variable, Vector, GetDimension
+# from fedoo.core.modelingspace import Variable, Vector, GetDimension
 
 class InitialStress(WeakForm):
     def __init__(self, InitialStressTensor = 0, name = "", space = None):

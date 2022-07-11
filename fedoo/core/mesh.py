@@ -17,20 +17,31 @@ except:
 class Mesh(MeshBase):    
     """
     Fedoo Mesh object.
-    
+        
     Parameters
     ----------
     nodes: numpy array of float
         List of nodes coordinates. nodes[i] is the coordinate of the ith node.
     elements: numpy array of int
-        Elements table. elements[i] define the nodes associated to the ith element 
+        Elements table. elements[i] define the nodes associated to the ith element.
     elm_type: str
         Type of the element. The type of the element should be coherent with the shape of elements.
     ndim:
         Dimension of the mesh. By default, ndim is deduced from the nodes coordinates using ndim = nodes.shape[1]    
     name: str
         The name of the mesh
+        
+    Example
+    --------
+    Create a one element mesh from a 2d mesh in a 3d space
+    >>> import fedoo as fd
+    >>> import numpy as np      
+    >>> nodes = np.array([[0,0],[1,0],[1,1],[0,1]])    
+    >>> elm = np.array([0,1,2,3])
+    >>> mesh = fd.Mesh(nodes, elm, 'quad4', ndim = 3, name = 'unit square mesh')
     """
+    
+    
     def __init__(self, nodes, elements=None, elm_type=None, ndim = None, name = ""):
         MeshBase.__init__(self, name)
         self.nodes = nodes #node coordinates     

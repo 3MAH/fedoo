@@ -58,7 +58,7 @@ class ElasticAnisotropic(Mechanical3D):
     
     def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
         if self._dimension is None:   
-            self._dimension = assembly.space.GetDimension()
+            self._dimension = assembly.space.get_dimension()
         self.nlgeom = nlgeom
     
     def update(self,assembly, pb, dtime):

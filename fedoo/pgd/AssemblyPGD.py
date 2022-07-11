@@ -48,7 +48,7 @@ class AssemblyPGD(AssemblyFEM):
         if compute == 'none': return
         
         mesh = self.mesh
-        dim = mesh.GetDimension()
+        dim = mesh.get_dimension()
 
         wf = self.weakform.GetDifferentialOperator(mesh)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
@@ -265,7 +265,7 @@ class AssemblyPGD(AssemblyFEM):
         mesh = self.mesh        
         list_n_elm_gp = self.__listNumberOfGaussPoints
         res = 0
-        nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(mesh.GetDimension())]  
+        nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(mesh.get_dimension())]  
         
         for ii in range(len(operator.op)):
             if isinstance(operator.coef[ii], Number): coef_PG = operator.coef[ii]

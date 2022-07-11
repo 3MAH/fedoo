@@ -24,7 +24,7 @@ if USE_SIMCOON:
     
     def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = None, nNeighbours = 3, powInter = 1.0):
         
-        if Problemname is None: pb = ProblemBase.GetActive()
+        if Problemname is None: pb = ProblemBase.get_active()
         elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
         elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
         else: raise NameError('Problemname not understood')
@@ -77,7 +77,7 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     """    
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
-    if Problemname is None: pb = ProblemBase.GetActive()
+    if Problemname is None: pb = ProblemBase.get_active()
     elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
     elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
     else: raise NameError('Problemname not understood')
@@ -86,7 +86,7 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
     if dim in ['3D','3d']: dim = 3
         
     if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
-    ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
+    ListVar = pb.space.list_variables() #list of variable id defined in the active modeling space
 
     crd = mesh.nodes
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
@@ -394,7 +394,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     """
     #TODO: add set to the mesh and don't compute the set if the set are already present
     
-    if Problemname is None: pb = ProblemBase.GetActive()
+    if Problemname is None: pb = ProblemBase.get_active()
     elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
     elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
     else: raise NameError('Problemname not understood')
@@ -403,7 +403,7 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
     if dim in ['3D','3d']: dim = 3
 
     if isinstance(mesh, str): mesh = MeshBase.get_all()[mesh]
-    ListVar = pb.space.list_variable() #list of variable id defined in the active modeling space
+    ListVar = pb.space.list_variables() #list of variable id defined in the active modeling space
 
     crd = mesh.nodes
     xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])

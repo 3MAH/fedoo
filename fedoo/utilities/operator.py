@@ -2,7 +2,7 @@
 # Derivative and Differential operator
 #===============================================================================
 #from fedoo.pgd.SeparatedArray import *
-# from fedoo.utilities.modelingspace  import ModelingSpace
+# from fedoo.core.modelingspace  import ModelingSpace
 import numpy as np
 
 from numbers import Number #classe de base qui permet de tester si un type est numérique
@@ -34,7 +34,7 @@ class OpDiff:
        
         self.mesh = None
         
-        # mod_space = ModelingSpace.GetActive()
+        # mod_space = ModelingSpace.get_active()
 
         # if isinstance(u,str):
         #     u = mod_space.GetVariableRank(u)

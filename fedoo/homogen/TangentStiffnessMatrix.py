@@ -170,7 +170,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     solver = kargs.get('solver', 'direct')
     
     if pb is None: 
-        pb = ProblemBase.GetActive()
+        pb = ProblemBase.get_active()
     elif isinstance(pb, str):
         pb = ProblemBase.get_all()[pb]
     mesh = pb.mesh

@@ -3,17 +3,40 @@ from fedoo.utilities.operator  import OpDiff
 
 class ModelingSpace:
     #__ModelingSpace = {"Main"}      
-    __active_space = None
+    _active = None
     __dic = {} #dic containing all the modeling spaces
 
     def __init__(self, dimension, name ="Main"):
+        """
+        Space in which are defined the coordinates and variables (ie functions over coordinates).        
+        A modeling space is required to be able to define weak equations.
+                    
+        Parameters
+        ----------
+        dimension: str in ['2D', '3D', '2Dplane' or '2Dstress']
+            Type of modeling space. 
+            * '2D' or '2Dplane': general 2D problems, with default coordinates 'X' and 'Y' and plane strain assumption
+            * '3D' for 3D problems with default coordinates 'X', 'Y' and 'Z'
+            * '2Dstress': same as '2D' but using plane stress assumption for mechanical problems
+        name: str, default = 'Main'
+            The name of the modeling space
+            
+        Example
+        --------
+        Create a new empty 2D modeling space with plane stress assumption
+        >>> import fedoo as fd             
+        >>> fd.ModelingSpace('2Dstress')   
+        >>> print(fd.ModelingSpace['Main'].ndim)
+        """
+        
+        
         # assert name not in ModelingSpace.__dic, str(name) + " already exist. Delete it first."
         assert isinstance(dimension,str) , "The dimension value must be a string: '2D', '3D', '2Dplane' or '2Dstress'."
         if dimension == "2D": dimension = "2Dplane"
         assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '2D', '3D', 2Dplane' or '2Dstress'"        
         
         #Static attributs 
-        ModelingSpace.__active_space = self
+        ModelingSpace._active = self
         ModelingSpace.__dic[name] = self
         
         self.__name = name
@@ -41,73 +64,110 @@ class ModelingSpace:
             self.__ndim = 2                    
        
 
-    def MakeActive(self):
-        ModelingSpace.__active_space = self
+    def __class_getitem__(cls, item):
+        return cls.__dic[item]
+    
+
+    def make_active(self):
+        """Define the modeling space as the active ModelingSpace."""
+        ModelingSpace._active = self
     
    
-    def GetDimension(self):
+    def get_dimension(self):
+        """
+        Return an str that define the dimension of the ModelingSpace:
+        * '2Dplane': general 2D problems, with default coordinates 'X' and 'Y' and plane strain assumption.
+        * '3D' for 3D problems with default coordinates 'X', 'Y' and 'Z'.
+        * '2Dstress': same as '2D' but using plane stress assumption for mechanical problems.
+        """
         return self._dimension
 
-
+        
     @staticmethod
-    def SetActive(name):
-        ModelingSpace.__active_space = ModelingSpace.__dic[name]
+    def set_active(name):
+        """
+        Static method.
+        Define the active ModelingSpace from its name.
+        """
+        if isinstance(name, ModelingSpace): ModelingSpace._active = name
+        elif name in ModelingSpace.__dic: ModelingSpace._active = ModelingSpace.__dic[name]
+        else: raise NameError("{} is not a valid ModelingSpace".format(name))
+
     
     @staticmethod    
-    def GetActive():
-        assert ModelingSpace.__active_space is not None, "You must define a ModelingSpace for your problem."
-        return ModelingSpace.__active_space
+    def get_active():
+        """Return the active ModelingSpace."""
+        assert ModelingSpace._active is not None, "You must define a ModelingSpace for your problem."
+        return ModelingSpace._active
+
     
     @staticmethod
     def get_all():
+        """Return a dict containing all the defined ModelingSpace"""
         return ModelingSpace.__dic
+
             
     @property
     def ndim(self):
+        """Return the number of dimensions."""
         return self.__ndim
+
 
     @property
     def name(self):
+        """Return the name of the ModelingSpace."""
         return self.__name
 
+
+    #===================================================
     #Methods related to Coordinates
+    #===================================================
     def new_coordinate(self,name): 
-        """
-        Create a new coordinate
-        """
+        """Create a new coordinate with the given name."""        
         assert isinstance(name,str) , "The coordinte name must be a string"
 
         if name not in self._coordinate.keys():
             self._coordinate[name] = self._ncrd
             self._ncrd +=1
+
     
     def coordinate_rank(self,name): 
+        """Return the rank (int id) of the coordinate name"""
         if name not in self._coordinate.keys():
             assert 0, "the coordinate name " + str(name) + " does not exist" 
         return self._coordinate[name]
+
     
     def coordinate_name(self,rank):
         """
-        Return the name of the variable associated to a given rank
+        Return the rank (int) of a coordinate associated to a given name (str)
         """
         return list(self._coordinate.keys())[list(self._variable.values()).index(rank)]
 
-    def list_coordinate(self):
+
+    def list_coordinates(self):
+        """return a list containing all the coordinates name"""
         return self._coordinate.keys()  
+
 
     @property
     def ncrd(self):
+        """Return the number of coordinates defined in the ModelingSpace"""
         return self._ncrd      
 
+
+    #===================================================
     #Methods related to Varibale
+    #===================================================
     def new_variable(self, name):
+        """Create a new variable with the given name."""
         assert isinstance(name,str) , "The variable must be a string"
         assert name[:2] != '__', "Names of variable should not begin by '__'"
         
-        self = ModelingSpace.__active_space
         if name not in self._variable.keys():
             self._variable[name] = self._nvar
             self._nvar +=1
+
 
     def variable_rank(self,name):
         """
@@ -117,11 +177,13 @@ class ModelingSpace:
             assert 0, "the variable " +str(name)+ " does not exist" 
         return self._variable[name]
 
+
     def variable_name(self,rank):
         """
         Return the name of the variable associated to a given rank
         """
         return list(self._variable.keys())[list(self._variable.values()).index(rank)]
+
 
     def new_vector(self, name, list_variables):
         """
@@ -130,18 +192,27 @@ class ModelingSpace:
         """     
         self._vector[name] = [self.variable_rank(var) for var in list_variables]
 
+
     def get_vector(self,name):
+        """Return the vector (list of ndim variable ranks) associated with the given name."""
         return self._vector[name]            
+
 
     @property
     def nvar(self):
+        """Return the number of variables defined in the ModelingSpace"""
         return self._nvar
 
-    def list_variable(self):
+
+    def list_variables(self):
+        """return a list containing all the variables name"""
         return self._variable.keys()
-  
-    def list_vector(self):
+
+    
+    def list_vectors(self):
+        """return a list containing all the vectors name"""
         return self._vector.keys()
+    
     
     def opdiff(self, u, x=0, ordre=0, decentrement=0, vir=0):
         if isinstance(u,str):
@@ -150,7 +221,10 @@ class ModelingSpace:
             x = self.coordinate_rank(x)
         return OpDiff(u, x, ordre, decentrement, vir)
     
+    
+    #===================================================
     #build usefull list of operators 
+    #===================================================
     def op_grad_u(self):
        if self.ndim == 3:        
            return [[self.opdiff(namevar, namecoord,1) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
@@ -194,6 +268,7 @@ class ModelingSpace:
             
         return eps
     
+    
     def op_beam_strain(self):
         epsX = self.opdiff('DispX',  'X', 1) # dérivée en repère locale
         xsiZ = self.opdiff('RotZ',  'X', 1) # flexion autour de Z
@@ -210,6 +285,7 @@ class ModelingSpace:
             eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
                         
         return eps
+    
     
     def op_disp(self):
         if self.__ndim == 2:
@@ -238,9 +314,9 @@ class ModelingSpace:
         
 if __name__=="__main__":
     space = ModelingSpace("3D", name = "my space")
-    print(ModelingSpace.GetActive().name)
+    print(ModelingSpace.get_active().name)
     another_space = ModelingSpace("2Dplane")
     print(ModelingSpace.get_all())
-    print(ModelingSpace.GetActive().ndim)
-    print(ModelingSpace.get_all()['my space'].ndim)
+    print(ModelingSpace.get_active().ndim)
+    print(ModelingSpace['my space'].ndim)
 

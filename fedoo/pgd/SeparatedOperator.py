@@ -98,12 +98,12 @@ class SeparatedOperator: #Opérateur discret avec galerkin
     def dot(self, FF):
         if self.data == []: return 0
         if isinstance(FF, SeparatedArray):
-            if FF.dim == self.GetDimension(): 
+            if FF.dim == self.get_dimension(): 
                 ntA = self.NumberOfOperators() ; nf = FF.nbTerm() 
-                CC = [ sp.c_[sp.zeros((self.GetShapeRow(dd), ntA*nf))] for dd in range(self.GetDimension()) ] 
+                CC = [ sp.c_[sp.zeros((self.GetShapeRow(dd), ntA*nf))] for dd in range(self.get_dimension()) ] 
                 colone = 0 
                 for kk in range(ntA):
-                    for dd in range(self.GetDimension()):
+                    for dd in range(self.get_dimension()):
                         CC[dd][:,colone:colone+nf] = self.data[kk][dd]*FF.data[dd] 
                     colone += nf
             else: raise NameError('Dimensions doesnt match')
@@ -166,7 +166,7 @@ class SeparatedOperator: #Opérateur discret avec galerkin
         that are in the data attribute        
         (see the scipy documentation for more informations)
         """
-        for dd in range(self.GetDimension()):
+        for dd in range(self.get_dimension()):
             for kk in range(self.NumberOfOperators()):
                 self.data[kk][dd] = self.data[kk][dd].tocsr()
     
@@ -176,7 +176,7 @@ class SeparatedOperator: #Opérateur discret avec galerkin
         that are in the data attribute        
         (see the scipy documentation for more informations)
         """
-        for dd in range(self.GetDimension()):
+        for dd in range(self.get_dimension()):
             for kk in range(self.NumberOfOperators()):
                 self.data[kk][dd] = self.data[kk][dd].tolil()
                 

@@ -1,7 +1,7 @@
 """This module contains functions to generate simple meshes"""
 
 from fedoo.core.mesh import Mesh
-from fedoo.utilities.modelingspace import ModelingSpace
+from fedoo.core.modelingspace import ModelingSpace
 import itertools
 
 # import scipy as sp
@@ -234,7 +234,7 @@ def line_mesh(N=11, x_min=0, x_max=1, ElementShape = 'lin2', ndim = None, name =
     """
     if np.isscalar(x_min):
         m = line_mesh_1D(N,x_min,x_max,ElementShape,name)    
-        # if ModelingSpace.GetDimension() in ['2Dplane', '2Dstress'] : dim = 2
+        # if ModelingSpace.get_dimension() in ['2Dplane', '2Dstress'] : dim = 2
         # else: dim = 3
         crd = np.c_[m.nodes, np.zeros((N,ndim-1))]
         elm = m.elements

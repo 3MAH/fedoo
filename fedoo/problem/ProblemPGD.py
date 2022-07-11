@@ -20,7 +20,7 @@ class ProblemPGD(ProblemBase):
         
         nvar = self.space.nvar
         self.mesh = Mesh
-        self.__NumberOfSubspace = Mesh.GetDimension()
+        self.__NumberOfSubspace = Mesh.get_dimension()
         
         listNumberOfNodes = Mesh.n_nodes  #list of number of nodes for all submesh
         #self.__ModelingSpace is a list of number of DoF for each subspace
@@ -100,7 +100,7 @@ class ProblemPGD(ProblemBase):
             Mat_K  = sparse.csr_matrix((N_d1 , N_d1))
             for kk in range(self.__A.NumberOfOperators()):
                 prod_aux = 1
-                for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
+                for d2 in list(range(d1))+list(range(d1+1,self.__A.get_dimension())):
                     prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])
                 Mat_K = Mat_K + self.__A.data[kk][d1] * float(prod_aux)
             return MatCB.T @ Mat_K @ MatCB      
@@ -109,7 +109,7 @@ class ProblemPGD(ProblemBase):
             Mat_K  = [[sparse.csr_matrix((N_d1 , N_d1)) for j in range(nbTerm)] for i in range(nbTerm)]
             for kk in range(self.__A.NumberOfOperators()):
                 prod_aux = 1
-                for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
+                for d2 in list(range(d1))+list(range(d1+1,self.__A.get_dimension())):
                     prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])                   
                 Mat_K = [[Mat_K[i][j] + self.__A.data[kk][d1] * prod_aux[i,j] for j in range(nbTerm)] for i in range(nbTerm)]
             
@@ -120,7 +120,7 @@ class ProblemPGD(ProblemBase):
             # Mat_K  = sparse.csr_matrix((R.nbTerm()*N_d1 , R.nbTerm()*N_d1))
             # for kk in range(self.__A.NumberOfOperators()):
             #     prod_aux = 1
-            #     for d2 in list(range(d1))+list(range(d1+1,self.__A.GetDimension())):
+            #     for d2 in list(range(d1))+list(range(d1+1,self.__A.get_dimension())):
             #         prod_aux = prod_aux * sp.dot(R.data[d2].T,self.__A.data[kk][d2]*R.data[d2])                   
             #     Mat_K = Mat_K + sparse.bmat([[self.__A.data[kk][d1] * prod_aux[i,j] for j in range(R.nbTerm())] for i in range(R.nbTerm())])
             # return Mat_K  
@@ -152,7 +152,7 @@ class ProblemPGD(ProblemBase):
             Mat_K = 0
             for Op in self.__A.data: 
                 M=1
-                for dd in range(self.__A.GetDimension()):
+                for dd in range(self.__A.get_dimension()):
                     M = M*sp.dot(FF.data[dd].T , Op[dd]*FF.data[dd])
                 Mat_K +=M    
             return Mat_K       
@@ -209,7 +209,7 @@ class ProblemPGD(ProblemBase):
         else: res = self.__B + self.__D - self.__A*(self.__Xbc+self.__X)  
         
         # CL à intégrer???
-        for dd in range(self.mesh.GetDimension()): 
+        for dd in range(self.mesh.get_dimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
         return res.norm(nbvar = self.space.nvar)/err_0
 
@@ -219,7 +219,7 @@ class ProblemPGD(ProblemBase):
         else: res = self.__B + self.__D - self.__A*(self.__Xbc+self.__X)  
         
         # CL à intégrer???
-        for dd in range(self.mesh.GetDimension()): 
+        for dd in range(self.mesh.get_dimension()): 
             res.data[dd][self.__DofBlocked[dd]] =  0  
         return res
 
@@ -227,7 +227,7 @@ class ProblemPGD(ProblemBase):
     def updatePGD(self,termToChange, ddcalc='all'): #extended PGD
         
         if ddcalc == 'all': 
-            for nMesh in range(self.mesh.GetDimension()):
+            for nMesh in range(self.mesh.get_dimension()):
                 self.updatePGD(termToChange, nMesh)
             return
         
@@ -265,7 +265,7 @@ class ProblemPGD(ProblemBase):
         elif isinstance(value, SeparatedArray): 
             for t in range(numberOfTerm): self.__X += value.getTerm(t%value.nbTerm())
         #for boundary conditions        
-        for dd in range(self.mesh.GetDimension()): self.__X.data[dd][self.__DofBlocked[dd]] = 0
+        for dd in range(self.mesh.get_dimension()): self.__X.data[dd][self.__DofBlocked[dd]] = 0
 
 
 #===============================================================================
@@ -291,8 +291,8 @@ class ProblemPGD(ProblemBase):
         row = [[] for i in self.__ModelingSpace] 
         col = [[] for i in self.__ModelingSpace] 
         
-        Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.GetDimension())] #number of nodes in each dimensions
-        Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.GetDimension())]
+        Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.get_dimension())] #number of nodes in each dimensions
+        Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.get_dimension())]
         
         for e in self._BoundaryConditions:
             SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]            
@@ -303,17 +303,17 @@ class ProblemPGD(ProblemBase):
                 if Value == 0: continue #dans ce cas, pas de force à ajouter
 #                dd = SetOfNodesForBC[0][0]
 #                index = SetOfNodesForBC[1][0]
-                var = [meshPGD._GetSpecificVariableRank (d, e.Variable) for d in range(meshPGD.GetDimension())] #specific variable rank related to the submesh dd
+                var = [meshPGD._GetSpecificVariableRank (d, e.Variable) for d in range(meshPGD.get_dimension())] #specific variable rank related to the submesh dd
                 
                 #item = the index of nodes in each subspace (slice if all nodes are included)
-                item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.GetDimension())]                
+                item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.get_dimension())]                
                 for i, d in enumerate(SetOfNodesForBC[0]):
                     index = np.array(SetOfNodesForBC[1][i], dtype = int)
                     item[d] = var[d]*Nnd[d] + index
                 
                 if isinstance(Value, np.ndarray): Value = SeparatedArray([Value.reshape(-1,1)])
                 if isinstance(Value, SeparatedArray): 
-                    if len(Value) != meshPGD.GetDimension():
+                    if len(Value) != meshPGD.get_dimension():
                         if len(Value) ==  len(SetOfNodesForBC[1]):                            
                             nbt = Value.nbTerm()
                             Value = SeparatedArray( [ Value.data[SetOfNodesForBC[0].index(d)] if d in SetOfNodesForBC[0] \
@@ -323,13 +323,13 @@ class ProblemPGD(ProblemBase):
                 if F is 0: 
                     if isinstance(Value, (float, int, np.floating)):
                         Fadd = SeparatedZeros(shapeX)
-                        # for d in range(meshPGD.GetDimension()): Fadd.data[d][item[d]] = Value
+                        # for d in range(meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value
                         Fadd.data[0][item[0]] = Value
-                        for d in range(1,meshPGD.GetDimension()): Fadd.data[d][item[d]] = 1.
+                        for d in range(1,meshPGD.get_dimension()): Fadd.data[d][item[d]] = 1.
                     else: 
                         Fadd = SeparatedZeros(shapeX, nbTerm = Value.nbTerm())
                         Fadd.data[0][item[0]] = Value.data[d]
-                        for d in range(1,meshPGD.GetDimension()): Fadd.data[d][item[d]] = Value.data[d]
+                        for d in range(1,meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value.data[d]
                     F = F+Fadd                    
                 else: F.__setitem__(tuple(item), Value)                        
 
@@ -424,10 +424,10 @@ class ProblemPGD(ProblemBase):
 #        if F == 0: F = SeparatedZeros(shapeX)              
             
         DofB = [np.unique(dofb).astype(int) for dofb in DofB] #bloqued DoF for all the submeshes
-        DofL = [np.setdiff1d(range(shapeX[d]),DofB[d]).astype(int) for d in range(meshPGD.GetDimension())] #free dof for all the submeshes
+        DofL = [np.setdiff1d(range(shapeX[d]),DofB[d]).astype(int) for d in range(meshPGD.get_dimension())] #free dof for all the submeshes
     
         if X!=0: 
-            for d in range(meshPGD.GetDimension()): 
+            for d in range(meshPGD.get_dimension()): 
                 X.data[dd][DofB[d]] = 0
 
           #build matrix MPC
@@ -440,9 +440,9 @@ class ProblemPGD(ProblemBase):
                 (np.hstack(data[d]), (np.hstack(row[d]),np.hstack(col[d]))), 
                 shape=(Nvar[d]*Nnd[d],Nvar[d]*Nnd[d])) if len(data[d])>0 else 
                 sparse.coo_matrix( (Nvar[d]*Nnd[d],Nvar[d]*Nnd[d]))
-                for d in range(meshPGD.GetDimension())]
+                for d in range(meshPGD.get_dimension())]
 
-            Xbc = SeparatedArray([Xbc.data[d] + listM[d]@Xbc.data[d] for d in range(meshPGD.GetDimension())])                                           
+            Xbc = SeparatedArray([Xbc.data[d] + listM[d]@Xbc.data[d] for d in range(meshPGD.get_dimension())])                                           
             listM = [(M+M@M).tocoo() for M in listM]
             
                                     
@@ -451,7 +451,7 @@ class ProblemPGD(ProblemBase):
             col  = [M.col  for M in listM]
 
             #modification col numbering from DofL to np.arange(len(DofL))
-            for d in range(meshPGD.GetDimension()):
+            for d in range(meshPGD.get_dimension()):
                 if len(DofB[d])>0: #no change if there is no blocked dof
                     changeInd = np.full(Nvar[d]*Nnd[d],np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
                     changeInd[DofL[d]] = np.arange(len(DofL[d]))
@@ -462,12 +462,12 @@ class ProblemPGD(ProblemBase):
 
 
         # #adding identity for free nodes
-        col  = [np.hstack((col[d],np.arange(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
-        row  = [np.hstack((row[d],DofL[d])) for d in range(meshPGD.GetDimension())]
+        col  = [np.hstack((col[d],np.arange(len(DofL[d])))) for d in range(meshPGD.get_dimension())]
+        row  = [np.hstack((row[d],DofL[d])) for d in range(meshPGD.get_dimension())]
             
-        data = [np.hstack((data[d], np.ones(len(DofL[d])))) for d in range(meshPGD.GetDimension())]
+        data = [np.hstack((data[d], np.ones(len(DofL[d])))) for d in range(meshPGD.get_dimension())]
         
-        MatCB = [sparse.coo_matrix( (data[d],(row[d],col[d])), shape=(Nvar[d]*Nnd[d],len(DofL[d]))).tocsr() for d in range(meshPGD.GetDimension())]
+        MatCB = [sparse.coo_matrix( (data[d],(row[d],col[d])), shape=(Nvar[d]*Nnd[d],len(DofL[d]))).tocsr() for d in range(meshPGD.get_dimension())]
        
         self.__X = X
         self.__Xbc = Xbc

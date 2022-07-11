@@ -62,7 +62,7 @@ class Problem(ProblemBase):
 
         n = self.mesh.n_nodes
         
-        if name in self.space.list_vector():
+        if name in self.space.list_vectors():
             vec = self.space.get_vector(name)
             i = vec[0] #rank of the 1rst variable of the vector
             dim = len(vec)

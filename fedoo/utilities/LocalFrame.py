@@ -112,7 +112,7 @@ def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
 
     for j in range(dim):
         for i in range(dim):                        
-            newLocalFrame[i,id_crd[j]] = SeparatedArray([np.c_[localFrame[:,i,j]] if k==idmesh else np.array([[1.]]) for k in range(mesh.GetDimension())])
+            newLocalFrame[i,id_crd[j]] = SeparatedArray([np.c_[localFrame[:,i,j]] if k==idmesh else np.array([[1.]]) for k in range(mesh.get_dimension())])
     return newLocalFrame
     
     
@@ -124,12 +124,12 @@ def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
 #            idmesh = mesh.FindCoordinatename(namecrd)     
 #            subMesh = mesh.GetListMesh()[idmesh]
 #            crd = subMesh.nodes[:, subMesh.crd_name.index(namecrd)]
-#            crd_all.append(SeparatedArray([np.c_[crd] if i == idmesh else np.array([[1.]]) for i in range(mesh.GetDimension())]))
+#            crd_all.append(SeparatedArray([np.c_[crd] if i == idmesh else np.array([[1.]]) for i in range(mesh.get_dimension())]))
 #            
 #        localFrame = np.zeros((dim, dim), dtype =object)
 #        
 #        plane = [0,1,2] ; plane.pop(axis)
-#        localFrame[2, axis] =  SeparatedArray([np.array([[1.]]) for i in range(mesh.GetDimension())])#ez
+#        localFrame[2, axis] =  SeparatedArray([np.array([[1.]]) for i in range(mesh.get_dimension())])#ez
 #            
 #        crd_all[0] = crd_all[0] - origin[0] #changement of origin
 #        crd_all[1] = crd_all[1] - origin[1] #changement of origin

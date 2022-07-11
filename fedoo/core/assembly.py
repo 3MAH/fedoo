@@ -470,7 +470,7 @@ class Assembly(AssemblyBase):
         mesh = self.mesh
         if mesh not in Assembly._saved_change_of_basis_mat:        
             ### change of basis treatment for beam or plate elements
-            ### Compute the change of basis matrix for vector defined in self.space.list_vector()
+            ### Compute the change of basis matrix for vector defined in self.space.list_vectors()
             mat_change_of_basis = 1
             compute_mat_change_of_basis = False
 
@@ -486,7 +486,7 @@ class Assembly(AssemblyBase):
             xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, nNd_elm) #function to define
 
             if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
-                for nameVector in self.space.list_vector():
+                for nameVector in self.space.list_vectors():
                     if compute_mat_change_of_basis == False:
                         range_nNd_elm = np.arange(nNd_elm) 
                         compute_mat_change_of_basis = True
@@ -762,7 +762,7 @@ class Assembly(AssemblyBase):
             return data[0]
         
         #extract the mesh coordinate that corespond to coordinate rank given in deriv.x     
-        ListMeshCoordinatenameRank = [self.space.coordinate_rank(crdname) for crdname in mesh.crd_name if crdname in self.space.list_coordinate()]
+        ListMeshCoordinatenameRank = [self.space.coordinate_rank(crdname) for crdname in mesh.crd_name if crdname in self.space.list_coordinates()]
         if deriv.x in ListMeshCoordinatenameRank: xx= ListMeshCoordinatenameRank.index(deriv.x)
         else: return data[0] #if the coordinate doesnt exist, return operator without derivation (for PGD)
                          
@@ -785,8 +785,8 @@ class Assembly(AssemblyBase):
             if isinstance(objElement, dict):            
                 Assembly._saved_associated_variables[elm_type] = {self.space.variable_rank(key): 
                                        [[self.space.variable_rank(v) for v in val[1][1::2]],
-                                        val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variable() and len(val)>1} 
-                    # val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variable() and len(val)>1}
+                                        val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1} 
+                    # val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1}
             else: Assembly._saved_associated_variables[elm_type] = {}
         return Assembly._saved_associated_variables[elm_type]     
     

@@ -1,5 +1,5 @@
 # base class
-from fedoo.utilities.modelingspace import ModelingSpace
+from fedoo.core.modelingspace import ModelingSpace
 from fedoo.constitutivelaw.constitutivelaw import ListConstitutiveLaw
 
 class WeakForm:
@@ -10,7 +10,7 @@ class WeakForm:
         assert isinstance(name, str) , "An name must be a string" 
         self.__name = name
         if space is None: 
-            space = ModelingSpace.GetActive()
+            space = ModelingSpace.get_active()
         elif isinstance(space, str):
             space = ModelingSpace.get_all()[space]
         self.__space = space
