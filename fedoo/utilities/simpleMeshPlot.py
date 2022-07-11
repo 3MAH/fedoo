@@ -12,7 +12,7 @@ from matplotlib.collections import PatchCollection
 import numpy as np
 from fedoo.core.mesh import Mesh
 from fedoo.core.assembly import Assembly
-from fedoo.constitutivelaw import ConstitutiveLaw
+from fedoo.core.base import ConstitutiveLaw
 
 
 

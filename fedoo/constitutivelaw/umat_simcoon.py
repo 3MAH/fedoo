@@ -12,7 +12,7 @@ if USE_SIMCOON:
         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
 
 if USE_SIMCOON:    
-    from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
+    from fedoo.core.mechanical3d import Mechanical3D
     from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
     import numpy as np
     

@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 ####WARNING: not working constitutive law
 
-from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
+from fedoo.core.mechanical3d import Mechanical3D
 import scipy as sp
 
 class ViscoElasticComposites(Mechanical3D):

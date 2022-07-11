@@ -1,5 +1,5 @@
 from fedoo.weakform.weakform   import WeakForm
-from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
+from fedoo.core.base import ConstitutiveLaw
 
 class Inertia(WeakForm):
     """

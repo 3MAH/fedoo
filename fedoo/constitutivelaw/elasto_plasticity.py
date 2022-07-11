@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #The elastoplastic law should be used with an InternalForce WeakForm
 
-from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
+from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np

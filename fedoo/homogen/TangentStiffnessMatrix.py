@@ -2,7 +2,8 @@
 #This law should be used with an InternalForce WeakForm
 
 from fedoo.core.base import MeshBase as Mesh
-from fedoo.constitutivelaw import ElasticAnisotropic, ConstitutiveLaw
+from fedoo.constitutivelaw import ElasticAnisotropic
+from fedoo.core.base import ConstitutiveLaw
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
 from fedoo.problem import Problem, Static, BoundaryCondition

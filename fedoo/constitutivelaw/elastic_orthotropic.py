@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #simcoon compatible
 
-from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
+from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.constitutivelaw.elastic_anisotropic import ElasticAnisotropic
 
 import scipy as sp

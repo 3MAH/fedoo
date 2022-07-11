@@ -2,7 +2,7 @@
 #This law should be used with an InternalForce WeakForm
 
 
-from fedoo.constitutivelaw.constitutivelaw import Mechanical3D
+from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
 from fedoo.problem.Problem_NonLinearStatic import NonLinearStatic

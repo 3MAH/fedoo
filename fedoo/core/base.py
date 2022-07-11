@@ -1,9 +1,13 @@
 """Base classes for principles objects.
 Should not be used, excepted to create inherited classes.
 """
+from copy import deepcopy
 
-
+#=============================================================
+# Base class for Mesh object
+#=============================================================
 class MeshBase:
+    """Base class for Mesh object."""
 
     __dic = {}
 
@@ -26,7 +30,11 @@ class MeshBase:
         return MeshBase.__dic
     
 
+#=============================================================
+# Base class for Assembly object
+#=============================================================
 class AssemblyBase:
+    """Base class for Assembly object."""
 
     __dic = {}
 
@@ -84,4 +92,131 @@ class AssemblyBase:
     @property
     def name(self):
         return self.__name
+
+
+#=============================================================
+# Base class for constitutive laws (cf constitutive law lib)
+#=============================================================
+class ConstitutiveLaw:
+    """Base class for constitutive laws (cf constitutive law lib)."""
+
+    __dic = {}
+
+    def __init__(self, name = ""):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
+        self.__localFrame = None
+        self._dimension = None #str or None to specify a space and associated model (for instance "2Dstress" for plane stress)
+
+        ConstitutiveLaw.__dic[self.__name] = self        
+
+
+    def __class_getitem__(cls, item):
+        return cls.__dic[item]
+
+
+    def SetLocalFrame(self, localFrame):
+        self.__localFrame = localFrame
+
+
+    def GetLocalFrame(self):
+        return self.__localFrame 
+
+    
+    def reset(self): 
+        #function called to restart a problem (reset all internal variables)
+        pass
+
+    
+    def set_start(self):  
+        #function called when the time is increased. Not used for elastic laws
+        pass
+
+    
+    def to_start(self):
+        #function called if the time step is reinitialized. Not used for elastic laws
+        pass
+
+
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
+        #function called to initialize the constutive law 
+        pass
+
+    
+    def update(self,assembly, pb, dtime):
+        #function called to update the state of constitutive law 
+        pass
+
+    
+    def copy(self, new_id = ""):
+        """
+        Return a raw copy of the constitutive law without keeping current internal variables.
+
+        Parameters
+        ----------
+        new_id : TYPE, optional
+            The name of the created constitutive law. The default is "".
+
+        Returns
+        -------
+        The copy of the constitutive law
+        """
+        new_cl = deepcopy(self)        
+        new_cl._ConstitutiveLaw__name = new_id
+        self.__dic[new_id] = new_cl
+        new_cl.reset()
+        return new_cl
+
+    
+    @staticmethod
+    def get_all():
+        return ConstitutiveLaw.__dic
+    
+    
+    @property
+    def name(self):
+        return self.__name
+
+
+#=============================================================
+# simple class to update several constitutive laws at once
+#=============================================================
+class ListConstitutiveLaw(ConstitutiveLaw):
+    """Simple class to update several constitutive laws at once."""
+    
+    def __init__(self, list_constitutivelaw, name =""):    
+        ConstitutiveLaw.__init__(self,name)   
+        
+        self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
+    
+    
+    def initialize(self, assembly, pb, t0=0., nlgeom=False):
+        for cl in self.__list_constitutivelaw:
+            cl.initialize(assembly, pb, t0)
+
+    
+    def update(self, assembly, pb, dtime):        
+        for cl in self.__list_constitutivelaw:
+            cl.update(assembly, pb, dtime)
+    
+    
+    def set_start(self):  
+        for cl in self.__list_constitutivelaw:
+            cl.set_start()
+    
+    
+    def to_start(self):
+        for cl in self.__list_constitutivelaw:
+            cl.to_start()
+
+
+    def reset(self):
+        for cl in self.__list_constitutivelaw:
+            cl.reset()
+    
+    
+    def copy(self):
+        #function to copy a weakform at the initial state
+        raise NotImplementedError()
+
 
