@@ -1,14 +1,38 @@
-#derive de ConstitutiveLaw 
-#Not working law
+#derive de ConstitutiveLaw
 
-from fedoo.constitutivelaw.ConstitutiveLaw_Spring import Spring
-from fedoo.constitutivelaw.ConstitutiveLaw import ConstitutiveLaw
-from fedoo.assembly.base import AssemblyBase
+from fedoo.constitutivelaw.spring import Spring
+from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.base import AssemblyBase
 import numpy as np
 from numpy import linalg
 
 
-class CohesiveLaw_mod(Spring):
+class CohesiveLaw(Spring):
+    """
+    Bilinear cohesive Law based on the Crisfield model
+
+    This constitutive Law should be associated with :mod:`fedoo.weakform.InterfaceForce`    
+
+    Parameters
+    ----------
+    GIc: scalar
+        Toughness in Mode-I 
+    SImax: scalar
+        Maximal failure stress in Mode-I 
+    KI: scalar
+        Initial interface rigidity before damage
+    GIIc: scalar
+        Toughness in Mode-II
+    SIImax: scalar
+        Maximal failure stress in Mode-II
+    KII: scalar
+        Initial interface rigidity before damage
+    axis: int
+        axis should be eiter 0,1 or 2 (default). It define the normal direction to the failure plane the is used for mode identification. The axis is defined in local coordinate system.
+    name: str, optional
+        The name of the constitutive law
+    """
+    
     #Use with WeakForm.InterfaceForce
     def __init__(self, GIc=0.3, SImax = 60, KI = 1e4, GIIc = 1.6, SIImax=None, KII=5e4, axis = 2, name =""):
         # GIc la ténacité (l'énergie à la rupture = l'aire sous la courbe du modèle en N/mm)
@@ -28,12 +52,10 @@ class CohesiveLaw_mod(Spring):
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 
-        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}             
-        self.__currentInterfaceStress = None
+        self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}                          
+        self._InterfaceStress = 0
     
-    
-    def GetKelas(self): #Get elastic rigidity in local coordinates
-    
+    def GetTangentMatrix(self):
         Umd = 1 - self.__DamageVariable
         UmdI = 1 - self.__DamageVariableOpening 
 
@@ -42,8 +64,9 @@ class CohesiveLaw_mod(Spring):
         Kt = Umd*self.__parameters['KII']
         Kn = UmdI*self.__parameters['KI']
         Kdiag = [Kt if i != axis else Kn for i in range(3)] 
-        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]] 
-    
+        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
+                
+        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
         #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
         #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
@@ -51,68 +74,16 @@ class CohesiveLaw_mod(Spring):
         #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
         #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
-    
-    
-    
-    
-    
-    
-    def GetTangentMatrix(self): #Get tangent moduli
-        if self.__currentInterfaceStress is None:
-            return self.GetKelas()
-
-        Umd = 1 - self.__DamageVariable
-        UmdI = 1 - self.__DamageVariableOpening 
-
-        KIelas  = UmdI*self.__parameters['KI'] 
-        KIIelas = Umd *self.__parameters['KII'] 
-        
-        
-        ### Cohesive Zones Data
-        # mode I
-        delta_0_I = self.__parameters['SImax'] / self.__parameters['KI']   # critical relative displacement (begining of the damage)
-        delta_m_I =  2*self.__parameters['GIc'] / self.__parameters['SImax']   # maximal relative displacement (total failure)
-        
-        # mode II 
-        SIImax = self.__parameters['SIImax']
-        if SIImax == None: SIImax = self.__parameters['SImax'] * np.sqrt(self.__parameters['GIIc'] / self.__parameters['GIc'])   #value by default used mainly to treat mode I dominant problems
-        delta_0_II = SIImax / self.__parameters['KII']
-        delta_m_II =  2*self.__parameters['GIIc'] / SIImax                
-
-        # KItangent = -self.__parameters['SImax']/(delta_m_I-delta_0_I)
-        # KIItangent = -SIImax/(delta_m_II-delta_0_II)
-        KItangent = 0
-        KIItangent = 0
-        
-        
-        # modeI : 
-        test = (self.__DamageVariableOpening - self.__DamageVariableIrreversible) > 0         
-        test2 = np.logical_not(test)
-        test = np.logical_and(test, self.__DamageVariableOpening != 1)        
-        #test2 = (self.__DamageVariable == 1)
-        KI =  KIelas*test2 + KItangent*test
-        
-        # modeII : 
-        test = (self.__DamageVariable - self.__DamageVariableIrreversible) > 0         
-        test2 = np.logical_not(test)
-        test = np.logical_and(test, self.__DamageVariable != 1)        
-        KII = KIIelas*test2 + KIItangent*test
-
-        
-        axis = self.__parameters['axis']      
-        
-        Kdiag = [KII if i != axis else KI for i in range(3)] 
-        return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        
-        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
-        #     Kdiag = [KII if i != axis else KI for i in range(3)] 
-        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        # else:
-        #     Kdiag = [KII if i != axis else KI for i in range(2)] 
-        #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
-
-    def SetDamageVariable(self, value):
-        self.__DamageVariable = value
+    def SetDamageVariable(self, value, Irreversible = True):
+        """
+        Initialize the damage variable to a certain value: array for multi-point initialization or scalar.
+        The damage is considered as irreversible by default.
+        Use Irreversible = False for reversible damage.
+        The damage should be udpated with CohesiveLaw.updateDamageVariable 
+        to determine if the crack is opening or closing. If not, no contact will be considered.
+        """
+        self.__DamageVariable = self.__DamageVariableOpening = value              
+        if Irreversible == True: self.updateIrreversibleDamage()            
         
     def GetDamageVariable(self):
         return self.__DamageVariable
@@ -121,13 +92,11 @@ class CohesiveLaw_mod(Spring):
         if self.__DamageVariable is 0: self.__DamageVariableIrreversible = 0
         else: self.__DamageVariableIrreversible = self.__DamageVariable.copy()
 
-    #### Not working, need update
-    def updateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
-        #Delta is the relative displacement 
-        # OperatorDelta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
-        # OperatorDelta, U_vir = GetDispOperator()
+    def updateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'):         
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
+        
+        OperatorDelta = CohesiveAssembly.space.op_disp()
         if typeData == 'Node':
             delta = [CohesiveAssembly.get_node_results(op, U) for op in OperatorDelta]            
         else: delta = [CohesiveAssembly.get_gp_results(op, U) for op in OperatorDelta]            
@@ -142,24 +111,13 @@ class CohesiveLaw_mod(Spring):
         if self.__DamageVariable is 0: self.__DamageVariable = 0*delta[0]
         if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
         
-        # delta_n = delta.pop(self.__parameters['axis'])        
-        # if GetDimension() == "3D":
-        #     delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
-        # else: delta_t = delta[0]
-        
         delta_n = delta[self.__parameters['axis']]        
         delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-        
         if len(delta_t) == 1: 
             delta_t = delta_t[0]            
         else: 
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
-
-        if GetDimension() == "3D":
-            delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
-        else: delta_t = delta_t[0]                
-            
-        ### Cohesive Zones Data
+        
         # mode I
         delta_0_I = self.__parameters['SImax'] / self.__parameters['KI']   # critical relative displacement (begining of the damage)
         delta_m_I =  2*self.__parameters['GIc'] / self.__parameters['SImax']   # maximal relative displacement (total failure)
@@ -170,14 +128,11 @@ class CohesiveLaw_mod(Spring):
         delta_0_II = SIImax / self.__parameters['KII']
         delta_m_II =  2*self.__parameters['GIIc'] / SIImax                
     
-
-        #Compute mixed mode relative displacement (actual values and limit values)
+        t0 = 0.*delta_n ; tm = 0.*delta_n ; dta = 0.*delta_n
         
         test = delta_n > 0 #test if traction loading (opening mode)
         ind_traction = np.nonzero(test)[0] #indice of value where delta_n > 0 ie traction loading        
         ind_compr    = np.nonzero(test-1)[0] 
-        
-        t0 = 0.*delta_n ; tm = 0.*delta_n ; dta = 0.*delta_n
         
 #        beta = 0*delta_n
         beta = delta_t[ind_traction] / delta_n[ind_traction] # le rapport de mixité de mode
@@ -211,16 +166,6 @@ class CohesiveLaw_mod(Spring):
             print ("Warning : the value of damage variable is incorrect")
 
 
-    
-    def NewTimeIncrement(self):
-        #Set Irreversible Damage
-        self.updateIrreversibleDamage()
-        self.__currentSigma = None
-        
-    def to_start(self):
-        #Damage variable and currentInterfaceStress will be recomputed in the next call of GetInterfaceStress
-        self.__currentInterfaceStress = None   
-
     def reset(self): 
         """
         reset the constitutive law (time history)
@@ -228,13 +173,43 @@ class CohesiveLaw_mod(Spring):
         self.__DamageVariable = 0 #damage variable
         self.__DamageVariableOpening = 0 # DamageVariableOpening is used for the opening mode (mode I). It is equal to DamageVariable in traction and equal to 0 in compression (soft contact law)    
         self.__DamageVariableIrreversible = 0 #irreversible damage variable used for time evolution 
+    
+    def NewTimeIncrement(self):
+        #Set Irreversible Damage
+        self.updateIrreversibleDamage()
+        
+    def to_start(self):
+        #Damage variable will be recompute. NPOthing to be done here (to be checked)
+        pass    
+        # self.__DamageVariable = self.__DamageVariableIrreversible.copy()       
+        
+        
+    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
+       #nlgeom not implemented
+       pass
 
+    def update(self,assembly, pb, dtime):            
+        #dtime not used for this law
 
-    def GetInterfaceStress(self, Delta, time = None): 
-        #Delta is the relative displacement vector
-        self.__UpdateDamageVariable(Delta)
-        self.__currentInterfaceStress = Spring.GetInterfaceStress(self, Delta, time)
-        return self.__currentInterfaceStress 
+        displacement = pb.GetDoFSolution()
+        
+        if displacement is 0: self._InterfaceStress = self.__Delta = 0
+        else:
+            #Delta is the relative displacement 
+            op_delta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
+            self.__Delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
+        
+            self.__UpdateDamageVariable(self.__Delta)
+
+            self.ComputeInterfaceStress(self.__Delta)        
+
+            # K = self.__ChangeBasisK(self.GetK())
+            # self._InterfaceStress = [sum([self.__Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects in 3D  
+
+    # def GetInterfaceStress(self, Delta, time = None): 
+    #     #Delta is the relative displacement vector
+    #     self.__UpdateDamageVariable(Delta)
+    #     return Spring.GetInterfaceStress(self, Delta, time)
     
 
 
@@ -270,9 +245,10 @@ class CohesiveLaw_mod(Spring):
     #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
     #     delta_n = delta[self.__parameters['axis']]        
     #     delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-    #     if GetDimension() == "3D":
+    #     if len(delta_t) == 1:
+    #         delta_t = delta_t[0]         
+    #     else: 
     #         delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
-    #     else: delta_t = delta_t[0]
         
     #     # mode I
     #     delta_0_I = self.__parameters['SImax'] / self.__parameters['KI']   # critical relative displacement (begining of the damage)
