@@ -5,7 +5,7 @@ from fedoo.core.assembly_sum import AssemblySum
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.core.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
-from fedoo.weakform.weakform import WeakForm
+from fedoo.core.base import WeakForm
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core._sparsematrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method

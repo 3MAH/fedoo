@@ -2,6 +2,8 @@
 Should not be used, excepted to create inherited classes.
 """
 from copy import deepcopy
+from fedoo.core.modelingspace import ModelingSpace
+
 
 #=============================================================
 # Base class for Mesh object
@@ -179,44 +181,97 @@ class ConstitutiveLaw:
 
 
 #=============================================================
-# simple class to update several constitutive laws at once
+# Base class for weakforms (cf weakforms lib)
 #=============================================================
-class ListConstitutiveLaw(ConstitutiveLaw):
-    """Simple class to update several constitutive laws at once."""
-    
-    def __init__(self, list_constitutivelaw, name =""):    
-        ConstitutiveLaw.__init__(self,name)   
+class WeakForm:
+    """Base class for weakforms (cf weakforms lib)."""
+
+    __dic = {}
+
+    def __init__(self, name = "", space=None):
+        assert isinstance(name, str) , "An name must be a string" 
+        self.__name = name
+        if space is None: 
+            space = ModelingSpace.get_active()
+        elif isinstance(space, str):
+            space = ModelingSpace[space]
+        self.__space = space
+        self.assembly_options = {}
+        #possible options : 
+        # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
+        # * 'n_elm_gp' - set the default n_elm_gp
+        # * 'mat_lumping' - matrix lumping if set to True
         
-        self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
+        if name != "":WeakForm.__dic[self.__name] = self
+        
     
-    
-    def initialize(self, assembly, pb, t0=0., nlgeom=False):
-        for cl in self.__list_constitutivelaw:
-            cl.initialize(assembly, pb, t0)
+    def __class_getitem__(cls, item):
+        return cls.__dic[item]
 
     
-    def update(self, assembly, pb, dtime):        
-        for cl in self.__list_constitutivelaw:
-            cl.update(assembly, pb, dtime)
+    def GetConstitutiveLaw(self):
+        #no constitutive law by default
+        pass
     
     
-    def set_start(self):  
-        for cl in self.__list_constitutivelaw:
-            cl.set_start()
+    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+        pass
+            
+    
+    def initialize(self, assembly, pb, t0=0.):
+        #function called at the very begining of the resolution
+        pass
+
+
+    def set_start(self, assembly, pb, dt):
+        #function called at the begining of a new time increment
+        #For now, used only to inform the weak form the the time step for the next increment.
+        pass
+    
+
+    def update(self, assembly, pb, dtime):
+        #function called when the problem is updated (NR loop or time increment)
+        #- New initial Stress
+        #- New initial Displacement
+        #- Possible modification of the mesh
+        #- Change in constitutive law (internal variable)
+        pass
     
     
     def to_start(self):
-        for cl in self.__list_constitutivelaw:
-            cl.to_start()
-
+        #function called if the time step is reinitialized. Used to reset variables to the begining of the step
+        pass
+    
 
     def reset(self):
-        for cl in self.__list_constitutivelaw:
-            cl.reset()
-    
+        #function called if all the problem history is reseted.
+        pass     
+      
     
     def copy(self):
         #function to copy a weakform at the initial state
         raise NotImplementedError()
+      
+        
+    @staticmethod
+    def nvar(self):
+        return self.__space.nvar
+
+
+    @staticmethod
+    def get_all():
+        return WeakForm.__dic
+
+
+    @property
+    def space(self):
+        return self.__space
+    
+    
+    @property
+    def name(self):
+        return self.__name
+    
+
 
 

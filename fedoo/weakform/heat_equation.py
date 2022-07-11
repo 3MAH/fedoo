@@ -1,14 +1,7 @@
-####
-#### EN DEVELOPPEMENT 
-####
-
-
-
-
-from fedoo.weakform.weakform   import WeakForm, WeakFormSum
-from fedoo.core.base import ConstitutiveLaw
-# from fedoo.utilities.operator  import DiffOp
+from fedoo.core.base import ConstitutiveLaw, WeakForm
+from fedoo.core.assembly_sum import WeakFormSum
 import numpy as np
+
 
 class SteadyHeatEquation(WeakForm):
     """

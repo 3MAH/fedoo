@@ -1,4 +1,4 @@
-from fedoo.weakform.weakform import WeakForm
+from fedoo.core.base import WeakForm
 from fedoo.core.base import ConstitutiveLaw
 
 class InternalForce(WeakForm):
