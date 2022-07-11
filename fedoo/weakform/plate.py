@@ -2,7 +2,6 @@ from fedoo.weakform.weakform   import WeakForm
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
 # from fedoo.utilities.StrainOperator import GetStrainOperator
 # from fedoo.core.modelingspace import Variable, Vector, GetDimension
-from fedoo.utilities.operator  import DiffOp
 
 class Plate(WeakForm):
     """
@@ -44,18 +43,18 @@ class Plate(WeakForm):
         
     def GetGeneralizedStrainOperator(self):
         #membrane strain
-        EpsX = self.space.opdiff('DispX', 'X', 1)
-        EpsY = self.space.opdiff('DispY', 'Y', 1)
-        GammaXY = self.space.opdiff('DispX', 'Y', 1)+self.space.opdiff('DispY', 'X', 1)
+        EpsX = self.space.derivative('DispX', 'X')
+        EpsY = self.space.derivative('DispY', 'Y')
+        GammaXY = self.space.derivative('DispX', 'Y')+self.space.derivative('DispY', 'X')
         
         #bending curvature
-        XsiX = -self.space.opdiff('RotY', 'X', 1) # flexion autour de Y -> courbure suivant x
-        XsiY =  self.space.opdiff('RotX',  'Y', 1) # flexion autour de X -> courbure suivant y #ok
-        XsiXY = self.space.opdiff('RotX',  'X', 1) - self.space.opdiff('RotY',  'Y', 1)
+        XsiX = -self.space.derivative('RotY', 'X') # flexion autour de Y -> courbure suivant x
+        XsiY =  self.space.derivative('RotX',  'Y') # flexion autour de X -> courbure suivant y #ok
+        XsiXY = self.space.derivative('RotX',  'X') - self.space.derivative('RotY',  'Y')
         
         #shear
-        GammaXZ = self.space.opdiff('DispZ', 'X', 1) + self.space.opdiff('RotY')
-        GammaYZ = self.space.opdiff('DispZ', 'Y', 1) - self.space.opdiff('RotX') 
+        GammaXZ = self.space.derivative('DispZ', 'X') + self.space.variable('RotY')
+        GammaYZ = self.space.derivative('DispZ', 'Y') - self.space.variable('RotX') 
         
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
@@ -65,13 +64,13 @@ class Plate(WeakForm):
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(8)]) for i in range(8)]
         
-        DiffOp = sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(8)])
+        diffop = sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(8)])
         
         #penalty for RotZ
         penalty = 1e-6
-        DiffOp += self.space.opdiff('RotZ').virtual*self.space.opdiff('RotZ')*penalty
+        diffop += self.space.variable('RotZ').virtual*self.space.variable('RotZ')*penalty
         
-        return DiffOp        
+        return diffop
       
     def GetConstitutiveLaw(self):
         return self.__ShellConstitutiveLaw
@@ -86,8 +85,8 @@ class Plate_RI(Plate):
         #shear
         H = self._Plate__ShellConstitutiveLaw.GetShellRigidityMatrix_RI()
                 
-        GammaXZ = self.space.opdiff('DispZ', 'X', 1) + self.space.opdiff('RotY')
-        GammaYZ = self.space.opdiff('DispZ', 'Y', 1) - self.space.opdiff('RotX') 
+        GammaXZ = self.space.derivative('DispZ', 'X') + self.space.variable('RotY')
+        GammaYZ = self.space.derivative('DispZ', 'Y') - self.space.variable('RotX') 
         
         GeneralizedStrain = [GammaXZ, GammaYZ]
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(2)]) for i in range(2)]
@@ -103,13 +102,13 @@ class Plate_FI(Plate):
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                       
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(6)]) for i in range(6)]
         
-        DiffOp = sum([GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(6)])
+        diffop = sum([GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(6)])
         
         #penalty for RotZ
         penalty = 1e-6
-        DiffOp += self.space.opdiff('RotZ').virtual*self.space.opdiff('RotZ')*penalty
+        diffop += self.space.variable('RotZ').virtual*self.space.variable('RotZ')*penalty
         
-        return DiffOp
+        return diffop
 
     
 

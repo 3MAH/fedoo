@@ -1,4 +1,6 @@
-"""Base classes for principles objects."""
+"""Base classes for principles objects.
+Should not be used, excepted to create inherited classes.
+"""
 
 
 class MeshBase:

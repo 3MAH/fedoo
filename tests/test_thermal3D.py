@@ -1,22 +1,18 @@
 import fedoo as fd
 import numpy as np
-from time import time
 import os
-import pylab as plt
-from numpy import linalg
 
-start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
 fd.ModelingSpace("3D")
 
 meshname = "Domain"
-nb_iter = 100
+nb_iter = 3
 
 # Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
 # Mesh.import_file('octet_surf.msh', meshname = "Domain")
 # Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-fd.mesh.import_file('../../util/meshes/gyroid.msh', meshname = "Domain")
+fd.mesh.import_file('../util/meshes/gyroid.msh', meshname = "Domain")
 
 mesh = fd.Mesh[meshname]
 
@@ -41,8 +37,6 @@ fd.Problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
 
 fd.Problem.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
-
-#create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
 results = fd.Problem.AddOutput('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
 # Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
@@ -54,7 +48,7 @@ def timeEvolution(timeFactor):
     else: return 1
 
 # Problem.BoundaryCondition('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
-fd.Problem.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution)
+fd.Problem.BoundaryCondition('Dirichlet','Temp',3,right, timeEvolution=timeEvolution)
 # Problem.BoundaryCondition('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
 
 
@@ -64,13 +58,7 @@ fd.Problem.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvo
 
 fd.Problem.NLSolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 
-cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
-        (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),
-        (0.42357673667356105, -0.37693638734293083, 0.8237121512068624)]
 
-results.load(43)
-pl = results.plot('Temp', show = False)
-pl.camera_position = cpos
-pl.show()
+results.load()
+assert np.abs(results.node_data['Temp'][8712]-2.679360557129252) < 1e-15
 
-# results.write_movie('Temp')

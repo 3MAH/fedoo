@@ -1,4 +1,4 @@
-from fedoo.utilities.operator  import DiffOp
+from fedoo.core.diffop  import DiffOp
 
 
 class ModelingSpace:
@@ -233,7 +233,7 @@ class ModelingSpace:
     #===================================================
     #build usefull list of operators 
     #===================================================
-    def op_grad_u(self):
+    def op_grad_u(self):        
        if self.ndim == 3:        
            return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
        else:
