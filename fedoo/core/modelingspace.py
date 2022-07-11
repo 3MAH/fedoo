@@ -1,4 +1,4 @@
-from fedoo.utilities.operator  import OpDiff
+from fedoo.utilities.operator  import DiffOp
 
 
 class ModelingSpace:
@@ -214,42 +214,50 @@ class ModelingSpace:
         return self._vector.keys()
     
     
-    def opdiff(self, u, x=0, ordre=0, decentrement=0, vir=0):
+    def derivative(self, u, x=0, ordre=1, decentrement=0, vir=0):
+        """Return a simple DiffOp containing only a derivative."""
         if isinstance(u,str):
             u = self.variable_rank(u)
         if isinstance(x,str):
             x = self.coordinate_rank(x)
-        return OpDiff(u, x, ordre, decentrement, vir)
+        return DiffOp(u, x, ordre, decentrement, vir)
     
+    
+    def variable(self, u):
+        """Return a simple DiffOp containing only the given variable."""
+        if isinstance(u,str): u = self.variable_rank(u)
+        return DiffOp(u)
+        
+        
     
     #===================================================
     #build usefull list of operators 
     #===================================================
     def op_grad_u(self):
        if self.ndim == 3:        
-           return [[self.opdiff(namevar, namecoord,1) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
+           return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
        else:
-           return [[self.opdiff(namevar, namecoord,1) for namecoord in ['X','Y']] + [0] for namevar in ['DispX','DispY']] + [[0,0,0]]
+           return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y']] + [0] for namevar in ['DispX','DispY']] + [[0,0,0]]
        
                    
     def op_strain(self, InitialGradDisp = None):
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 
         if (InitialGradDisp is None) or (InitialGradDisp is 0):
-            du_dx = self.opdiff('DispX', 'X', 1)
-            dv_dy = self.opdiff('DispY', 'Y', 1)
-            du_dy = self.opdiff('DispX', 'Y', 1)
-            dv_dx = self.opdiff('DispY', 'X', 1)
+            du_dx = self.derivative('DispX', 'X')
+            dv_dy = self.derivative('DispY', 'Y')
+            du_dy = self.derivative('DispX', 'Y')
+            dv_dx = self.derivative('DispY', 'X')
         
             if self.ndim == 2:
                 eps = [du_dx, dv_dy, 0, du_dy+dv_dx, 0, 0]
         
             else: #assume ndim == 3
-                dw_dz = self.opdiff('DispZ', 'Z', 1)
-                du_dz = self.opdiff('DispX', 'Z', 1)
-                dv_dz = self.opdiff('DispY', 'Z', 1)
-                dw_dx = self.opdiff('DispZ', 'X', 1)
-                dw_dy = self.opdiff('DispZ', 'Y', 1)
+                dw_dz = self.derivative('DispZ', 'Z')
+                du_dz = self.derivative('DispX', 'Z')
+                dv_dz = self.derivative('DispY', 'Z')
+                dw_dx = self.derivative('DispZ', 'X')
+                dw_dy = self.derivative('DispZ', 'Y')
                 eps = [du_dx, dv_dy, dw_dz, du_dy+dv_dx, du_dz+dw_dx, dv_dz+dw_dy]
           
         else:
@@ -270,17 +278,17 @@ class ModelingSpace:
     
     
     def op_beam_strain(self):
-        epsX = self.opdiff('DispX',  'X', 1) # dérivée en repère locale
-        xsiZ = self.opdiff('RotZ',  'X', 1) # flexion autour de Z
-        gammaY = self.opdiff('DispY', 'X', 1) - self.opdiff('RotZ') #shear/Y
+        epsX = self.derivative('DispX',  'X') # dérivée en repère locale
+        xsiZ = self.derivative('RotZ',  'X') # flexion autour de Z
+        gammaY = self.derivative('DispY', 'X') - self.variable('RotZ') #shear/Y
         
         if self.__ndim == 2:
             eps = [epsX, gammaY, 0, 0, 0, xsiZ]
 
         else: #assume ndim == 3
-            xsiX = self.opdiff('RotX', 'X', 1) # torsion autour de X
-            xsiY = self.opdiff('RotY',  'X', 1) # flexion autour de Y
-            gammaZ = self.opdiff('DispZ', 'X', 1) + self.opdiff('RotY') #shear/Z
+            xsiX = self.derivative('RotX', 'X') # torsion autour de X
+            xsiY = self.derivative('RotY',  'X') # flexion autour de Y
+            gammaZ = self.derivative('DispZ', 'X') + self.variable('RotY') #shear/Z
         
             eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
                         
@@ -289,22 +297,22 @@ class ModelingSpace:
     
     def op_disp(self):
         if self.__ndim == 2:
-            return [self.opdiff('DispX'), self.opdiff('DispY')]
+            return [self.variable('DispX'), self.variable('DispY')]
         else:
-            return [self.opdiff('DispX'), self.opdiff('DispY'), self.opdiff('DispZ')]
+            return [self.variable('DispX'), self.variable('DispY'), self.variable('DispZ')]
             
         
 
     # def op_beam_strain_bernoulli(self):
-    #     epsX = self.opdiff('DispX',  'X', 1) # dérivée en repère locale
-    #     xsiZ = self.opdiff('RotZ',  'X', 1) # flexion autour de Z
+    #     epsX = self.derivative('DispX',  'X') # dérivée en repère locale
+    #     xsiZ = self.derivative('RotZ',  'X') # flexion autour de Z
 
     #     if self.__ndim == 2:
     #         eps = [epsX, 0, 0, 0, 0, xsiZ]
 
     #     else: #assume ndim == 3
-    #         xsiX = self.opdiff('RotX', 'X', 1) # torsion autour de X
-    #         xsiY = self.opdiff('RotY',  'X', 1) # flexion autour de Y
+    #         xsiX = self.derivative('RotX', 'X') # torsion autour de X
+    #         xsiY = self.derivative('RotY',  'X') # flexion autour de Y
     #         eps = [epsX, 0, 0, xsiX, xsiY, xsiZ]
             
     #     # eps_vir = [e.virtual if e != 0 else 0 for e in eps ]

@@ -166,7 +166,7 @@ class ElastoPlasticity(Mechanical3D):
     #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)         
     #     sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
-    #     return sigma # list de 6 objets de type OpDiff
+    #     return sigma # list de 6 objets de type DiffOp
     
     def NewTimeIncrement(self):
         #Set Irreversible Plasticity

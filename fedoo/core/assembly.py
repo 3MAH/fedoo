@@ -841,7 +841,7 @@ class Assembly(AssemblyBase):
             If mesh is a string, it should be a meshname.
             Define the mesh to get the results from
             
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray
@@ -864,7 +864,7 @@ class Assembly(AssemblyBase):
         
         Parameters
         ----------           
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray
@@ -916,7 +916,7 @@ class Assembly(AssemblyBase):
         
         Parameters
         ----------
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray

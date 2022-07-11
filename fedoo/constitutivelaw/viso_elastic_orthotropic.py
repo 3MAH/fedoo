@@ -49,7 +49,7 @@ class ViscoElasticComposites(Mechanical3D):
         # eps, eps_vir = GetStrainOperator()            
         sigma = [sum([eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
 
-        return sigma # list de 6 objets de type OpDiff
+        return sigma # list de 6 objets de type DiffOp
        
     def updateDamage(self):
         for key in self.__parameters: exec(key + '= self.__parameters["' +key+'"]' )

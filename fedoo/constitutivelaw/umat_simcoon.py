@@ -111,7 +111,7 @@ if USE_SIMCOON:
         #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
         #     sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
     
-        #     return sigma # list de 6 objets de type OpDiff
+        #     return sigma # list de 6 objets de type DiffOp
         
         def set_start(self):
             #save variables at the begining of the Time increment            

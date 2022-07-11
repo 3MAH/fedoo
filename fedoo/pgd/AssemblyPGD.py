@@ -226,7 +226,7 @@ class AssemblyPGD(AssemblyFEM):
             If mesh is a string, it should be a meshname.
             Define the mesh to get the results from
             
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray
@@ -251,7 +251,7 @@ class AssemblyPGD(AssemblyFEM):
         
         Parameters
         ----------           
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray
@@ -313,7 +313,7 @@ class AssemblyPGD(AssemblyFEM):
         
         Parameters
         ----------
-        operator: OpDiff
+        operator: DiffOp
             Differential operator defining the required results
          
         U: numpy.ndarray

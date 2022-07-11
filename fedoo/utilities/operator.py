@@ -7,10 +7,10 @@ import numpy as np
 
 from numbers import Number #classe de base qui permet de tester si un type est numérique
 
-class OpDerive: #derivative operator used in OpDiff
-    """
-    Define a derivative operator.
-    OpDerive(u,x,ordre,decentrement)
+class _Derivative: #derivative operator used in DiffOp
+    """    
+    Define a derivative operator. 
+    _Derivative(u,x,ordre,decentrement)
 
     Parameters
     ----------
@@ -29,7 +29,7 @@ class OpDerive: #derivative operator used in OpDiff
         self.decentrement = decentrement #décentrement des dériviées pour différences finies uniquement
 
 
-class OpDiff: 
+class DiffOp: 
     def __init__(self, u, x=0, ordre=0, decentrement=0, vir=0):
        
         self.mesh = None
@@ -44,9 +44,9 @@ class OpDiff:
         if isinstance(u,int):
             self.coef = [1]
             if vir == 0:
-                self.op = [OpDerive(u,x,ordre,decentrement)] ; self.op_vir = [1]
+                self.op = [_Derivative(u,x,ordre,decentrement)] ; self.op_vir = [1]
             else:
-                self.op_vir = [OpDerive(u,x,ordre,decentrement)] ; self.op = [1]
+                self.op_vir = [_Derivative(u,x,ordre,decentrement)] ; self.op = [1]
         elif isinstance(u,list) and isinstance(x,list) and isinstance(ordre,list) : 
             self.op = u
             self.op_vir = x
@@ -54,12 +54,12 @@ class OpDiff:
         else: raise NameError('Argument error')
             
     def __add__(self, A):
-        if isinstance(A, OpDiff): return OpDiff(self.op+A.op, self.op_vir+A.op_vir, self.coef+A.coef)
+        if isinstance(A, DiffOp): return DiffOp(self.op+A.op, self.op_vir+A.op_vir, self.coef+A.coef)
         elif A == 0: return self
         else: return NotImplemented
 
     def __sub__(self, A):  
-        if isinstance(A, OpDiff): return OpDiff(self.op+A.op, self.op_vir+A.op_vir, self.coef+(-A).coef)
+        if isinstance(A, DiffOp): return DiffOp(self.op+A.op, self.op_vir+A.op_vir, self.coef+(-A).coef)
         elif A == 0: return self
         else: return NotImplemented
 
@@ -68,18 +68,18 @@ class OpDiff:
         else: return NotImplemented
         
     def __neg__(self):    
-        return(OpDiff(self.op,self.op_vir, [-cc for cc in self.coef]))
+        return(DiffOp(self.op,self.op_vir, [-cc for cc in self.coef]))
         
     def __mul__(self, A): 
 #        if isinstance(A, SeparatedArray) and A.norm() == 0: return 0           
-        if isinstance(A, OpDiff): 
-            res = OpDiff([],[],[])
+        if isinstance(A, DiffOp): 
+            res = DiffOp([],[],[])
             for ii in range(len(A.op)):
                 for jj in range(len(self.op)):
                     if (A.op[ii] != 1 and self.op[jj] == 1): #si A contient un opérateur réel et self un virtuel
-                            res += OpDiff( [A.op[ii]], [self.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
+                            res += DiffOp( [A.op[ii]], [self.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
                     elif (A.op[ii] == 1 and self.op[jj] != 1): #si c'est l'inverse
-                            res += OpDiff( [self.op[ii]], [A.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
+                            res += DiffOp( [self.op[ii]], [A.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
                     else: raise NameError('Impossible operation')
             return res
         else:  #isinstance(A, (Number, SeparatedArray)):        
@@ -87,8 +87,8 @@ class OpDiff:
                 if A == 0: return 0
                 if A == 1: return self
             
-            return OpDiff(self.op, self.op_vir, [A*cc for cc in self.coef])
-            # return OpDiff(self.op, self.op_vir, [A if (np.isscalar(cc) and cc == 1) else A*cc for cc in self.coef]) #should improve time but doesn't work. I don't know why
+            return DiffOp(self.op, self.op_vir, [A*cc for cc in self.coef])
+            # return DiffOp(self.op, self.op_vir, [A if (np.isscalar(cc) and cc == 1) else A*cc for cc in self.coef]) #should improve time but doesn't work. I don't know why
 #        else: 
 #            return NotImplemented
                     
@@ -155,5 +155,5 @@ class OpDiff:
 
     @property
     def virtual(self): #retourne l'opérateur virtuel
-        return OpDiff(self.op_vir, self.op, self.coef)    
+        return DiffOp(self.op_vir, self.op, self.coef)    
         

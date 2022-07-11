@@ -1,6 +1,6 @@
 from fedoo.weakform.weakform   import WeakForm
 from fedoo.constitutivelaw.constitutivelaw import ConstitutiveLaw
-# from fedoo.utilities.StrainOperator import GetStrainOperator, OpDiff
+# from fedoo.utilities.StrainOperator import GetStrainOperator, DiffOp
 # from fedoo.core.modelingspace import Variable, Vector, GetDimension
 
 class InitialStress(WeakForm):
@@ -21,14 +21,14 @@ class InitialStress(WeakForm):
             self.space.vector('Disp' , ('DispX', 'DispY'))
         
         if self.space.ndim:        
-            GradOperator = [[OpDiff(namevar, namecoord,1) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
+            GradOperator = [[DiffOp(namevar, namecoord,1) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
             #NonLinearStrainOperatorVirtual = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
             NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual*GradOperator[k][i] for k in range(3)]) for i in range(3)] 
             NonLinearStrainOperatorVirtual += [sum([GradOperator[k][1].virtual*GradOperator[k][2] + GradOperator[k][2].virtual*GradOperator[k][1] for k in range(3)])]
             NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][2] + GradOperator[k][2].virtual*GradOperator[k][0] for k in range(3)])]
             NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][1] + GradOperator[k][1].virtual*GradOperator[k][0] for k in range(3)])]  
         else:
-            GradOperator = [[Util.OpDiff(namevar, namecoord,1) for namecoord in ['X','Y']] for namevar in ['DispX','DispY']]
+            GradOperator = [[Util.DiffOp(namevar, namecoord,1) for namecoord in ['X','Y']] for namevar in ['DispX','DispY']]
             NonLinearStrainOperatorVirtual = [sum([GradOperator[k][i].virtual*GradOperator[k][i] for k in range(2)]) for i in range(2)] + [0,0,0]            
             NonLinearStrainOperatorVirtual += [sum([GradOperator[k][0].virtual*GradOperator[k][1] + GradOperator[k][1].virtual*GradOperator[k][0] for k in range(2)])]  
                 
