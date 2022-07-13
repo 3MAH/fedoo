@@ -186,9 +186,9 @@ if USE_SIMCOON:
         else: 
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All
     
-    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = 'MainProblem'):
+    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio=True, ProblemID = 'MainProblem'):
         
-        SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, ProblemID = ProblemID)
+        Res = SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio, ProblemID = ProblemID)
             
         content = Read_outputfile(path_data,outputdat_file)
         
