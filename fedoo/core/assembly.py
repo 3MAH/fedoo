@@ -2,7 +2,7 @@
 
 from fedoo.core.base import AssemblyBase
 from fedoo.core.assembly_sum import AssemblySum
-from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.core.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.core.base import WeakForm

@@ -2,7 +2,7 @@
 #compatible with the simcoon strain and stress notation
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
 
 import numpy as np
 

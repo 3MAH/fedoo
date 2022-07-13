@@ -2,7 +2,7 @@
 
 import numpy as np
 
-# from fedoo.utilities.Coordinate import Coordinate
+# from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
 # from fedoo.libElement import *
 from os.path import splitext
