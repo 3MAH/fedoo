@@ -146,6 +146,9 @@ if USE_SIMCOON:
                     pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], ID = 'Strain') #EpsXZ
                     pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], ID = 'Strain') #EpsYZ
                     
+                    pb.AddOutput('results/field', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
+                    pb.AddOutput('results/field', 'Assembling', ['Cauchy', 'Strain', 'Cauchy_vm', 'Statev'], output_type='Element', file_format ='vtk')
+
                     #pb.ApplyBoundaryCondition()
                     pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
                     # print('TIME: ', time)
