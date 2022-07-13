@@ -78,7 +78,7 @@ fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses Mes
 
 pb = fd.problem.NonLinearStatic("Assembling")
 # Problem.SetSolver('cg', precond = True)
-fd.problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
+pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -86,21 +86,21 @@ fd.problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, 
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = fd.problem.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
 tmax = 1
-fd.problem.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
-fd.problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
-fd.problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
-fd.problem.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
+pb.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
+pb.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
+pb.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
+pb.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
 
-fd.problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 
-E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(fd.Problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

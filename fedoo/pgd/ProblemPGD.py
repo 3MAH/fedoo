@@ -5,7 +5,8 @@ import scipy.sparse.linalg
 from fedoo.pgd.SeparatedArray import *
 from fedoo.pgd.SeparatedOperator import *
 #from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
-from fedoo.problem import ProblemBase, BoundaryCondition
+from fedoo.core.base import ProblemBase
+# from fedoo.core.base import BoundaryCondition
 
 #===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)

@@ -66,12 +66,7 @@ class ModelingSpace:
 
     def __class_getitem__(cls, item):
         return cls.__dic[item]
-    
-
-    def make_active(self):
-        """Define the modeling space as the active ModelingSpace."""
-        ModelingSpace._active = self
-    
+      
    
     def get_dimension(self):
         """
@@ -82,7 +77,12 @@ class ModelingSpace:
         """
         return self._dimension
 
-        
+    
+    def make_active(self):
+        """Define the modeling space as the active ModelingSpace."""
+        ModelingSpace._active = self
+
+    
     @staticmethod
     def set_active(name):
         """

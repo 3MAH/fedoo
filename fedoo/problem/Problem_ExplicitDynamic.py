@@ -1,6 +1,6 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
-from fedoo.problem.Problem   import *
+from fedoo.problem.Problem   import Problem
 import scipy.sparse as sparse
 
 def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling = 0, name = "MainProblem"):

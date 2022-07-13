@@ -8,19 +8,19 @@ import time
 t0=time.time()
 ModelingSpace("3D")
 
-Mesh.rectangle_mesh(50, 50, -50, 50, -50, 50, 'quad4', name="Midplane")
-Mesh.line_mesh_1D(20, 0, 5, 'lin2', name = "Thickness")
+mesh.rectangle_mesh(50, 50, -50, 50, -50, 50, 'quad4', name="Midplane")
+mesh.line_mesh_1D(20, 0, 5, 'lin2', name = "Thickness")
 
 #spécifique à la PGD
-Mesh.get_all()['Midplane'].SetCoordinatename(('X','Y'))
-Mesh.get_all()['Thickness'].SetCoordinatename(('Z'))
+Mesh['Midplane'].crd_name = ('X','Y')
+Mesh['Thickness'].crd_name = ('Z')
 
-PGD.Mesh.Create("Midplane", "Thickness", name="Domain")
+pgd.Mesh.Create("Midplane", "Thickness", name="Domain")
 
-ConstitutiveLaw.ElasticIsotrop(130e6, 0.3, name = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+constitutivelaw.ElasticIsotrop(130e6, 0.3, name = 'ElasticLaw')
+weakform.InternalForce("ElasticLaw")
 
-PGD.Assembly.create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
+pgd.Assembly.create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
 
 #PGD.Assembly.SetIntegrationElement("Midplane","quad8") # to be developped
 #PGD.Assembly.SetNumber(OfGaussPoint("Midplane",7)

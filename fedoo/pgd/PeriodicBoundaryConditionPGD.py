@@ -4,8 +4,8 @@ Created on Thu Jan 23 15:27:43 2020
 
 @author: Etienne
 """
-# from fedoo.problem.ProblemBase   import ProblemBase 
-from fedoo.problem.ProblemBase import BoundaryCondition
+# from fedoo.core.base   import ProblemBase 
+from fedoo.core.base import BoundaryCondition
 import numpy as np
 from fedoo.core.mesh import MeshBase
 from fedoo.core.modelingspace import ModelingSpace

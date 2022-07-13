@@ -1,7 +1,7 @@
-# import numpy as np
+import numpy as np
 from fedoo.core.assembly import Assembly
-from fedoo.problem.Problem   import *
-from fedoo.problem.ProblemPGD   import ProblemPGD
+from fedoo.problem.Problem import Problem
+from fedoo.pgd.ProblemPGD import ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
 def _GenerateClass_NonLinearStatic(libBase):

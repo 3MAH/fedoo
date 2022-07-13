@@ -1,5 +1,5 @@
 from fedoo.core.mesh import Mesh
-from fedoo.problem.ProblemBase import BoundaryCondition
+# from fedoo.core.base import BoundaryCondition
 import numpy as np
 
 class ReadINP:
@@ -166,10 +166,10 @@ class ReadINP:
                 Temp = ConvertElement(ElementIndexes)                
                 Mesh.get_all()[importedMeshName].add_element_set(Temp[Temp != None].astype(int),SetOfId)                    
 
-    def applyBoundaryCondition(self, Problemname = "MainProblem"):
-        for listVar in self.__Equation:
-            eq = np.array(self.__Equation[listVar])
-            BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), Problemname = Problemname)
+    # def applyBoundaryCondition(self, Problemname = "MainProblem"):
+    #     for listVar in self.__Equation:
+    #         eq = np.array(self.__Equation[listVar])
+    #         BoundaryCondition('MPC', listVar, eq[:,2::3], eq[:,0::3].astype(int), Problemname = Problemname)
 
             
     

@@ -16,7 +16,8 @@ if USE_SIMCOON:
     from fedoo.constitutivelaw.umat_simcoon import Simcoon
     from fedoo.weakform.internal_force import InternalForce
     from fedoo.core.assembly import Assembly
-    from fedoo.problem import NonLinearStatic, BoundaryCondition
+    from fedoo.problem.Problem_NonLinearStatic import NonLinearStatic
+    # from fedoo.core.base import BoundaryCondition
     from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
     from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness
     import numpy as np

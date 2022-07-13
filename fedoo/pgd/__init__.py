@@ -1,12 +1,12 @@
-import pkgutil
+# import pkgutil
 
-#from .AssemblyPGDtest import AssemblyPGDtest as Assembly
-from .AssemblyPGD import AssemblyPGD as Assembly
-from .MeshPGD import MeshPGD as Mesh
-from .SeparatedArray import SeparatedArray, ConvertArraytoSeparatedArray, SeparatedOnes, SeparatedZeros, MergeSeparatedArray
-from .SeparatedOperator import SeparatedOperator 
-from .UsualFunctions import inv, sqrt, exp, power, divide
-from .PeriodicBoundaryConditionPGD import DefinePeriodicBoundaryCondition
+# #from .AssemblyPGDtest import AssemblyPGDtest as Assembly
+# from .AssemblyPGD import AssemblyPGD as Assembly
+# from .MeshPGD import MeshPGD as Mesh
+# from .SeparatedArray import SeparatedArray, ConvertArraytoSeparatedArray, SeparatedOnes, SeparatedZeros, MergeSeparatedArray
+# from .SeparatedOperator import SeparatedOperator 
+# from .UsualFunctions import inv, sqrt, exp, power, divide
+# from .PeriodicBoundaryConditionPGD import DefinePeriodicBoundaryCondition
 
 
 

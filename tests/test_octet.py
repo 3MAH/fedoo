@@ -63,7 +63,7 @@ pb.BoundaryCondition('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
 pb.ApplyBoundaryCondition()
 
 # ---------------  Non linear solver--------------------------------------------
-pb.SetSolver('CG') #conjugate gradient solver
+pb.set_solver('CG') #conjugate gradient solver
 pb.NLSolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
 
 # --------------- Post-Treatment -----------------------------------------------

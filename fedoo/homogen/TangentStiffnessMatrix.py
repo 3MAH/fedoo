@@ -6,8 +6,10 @@ from fedoo.constitutivelaw import ElasticAnisotropic
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
-from fedoo.problem import Problem, Static, BoundaryCondition
-from fedoo.problem import ProblemBase
+from fedoo.problem.Problem import Problem
+from fedoo.problem.Problem_Static import Static
+# from fedoo.core.base import BoundaryCondition
+from fedoo.core.base import ProblemBase
 from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 import numpy as np
 import os
