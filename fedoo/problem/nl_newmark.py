@@ -1,7 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
-from fedoo.problem.Problem   import Problem
-from fedoo.problem.Problem_NonLinearStatic import _GenerateClass_NonLinearStatic
+from fedoo.core.problem import Problem
+from fedoo.problem.nl_static import _GenerateClass_NonLinearStatic
 
 #dynamical inheritance. The class is generated inside a function
 def _GenerateClass_NonLinearNewmark(libBase):

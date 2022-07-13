@@ -8,7 +8,7 @@
 #Loading_type
 1
 #Control_type(NLGEOM)
-1
+0
 #Repeat
 1
 #Steps
@@ -22,7 +22,7 @@
 #time
 1
 #Consigne
-S 0.02
+E 0.02
 S 0 S 0
 S 0 S 0 S 0
 #Consigne_T

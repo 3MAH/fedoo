@@ -16,7 +16,7 @@ if USE_SIMCOON:
     from fedoo.constitutivelaw.umat_simcoon import Simcoon
     from fedoo.weakform.internal_force import InternalForce
     from fedoo.core.assembly import Assembly
-    from fedoo.problem.Problem_NonLinearStatic import NonLinearStatic
+    from fedoo.problem.nl_static import NonLinearStatic
     # from fedoo.core.base import BoundaryCondition
     from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
     from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness
@@ -187,9 +187,9 @@ if USE_SIMCOON:
         else: 
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All
     
-    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, Problemname = 'MainProblem'):
+    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file,meshperio=True, Problemname = 'MainProblem'):
         
-        SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, Problemname = Problemname)
+        Res = SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio, Problemname = Problemname)
             
         content = Read_outputfile(path_data,outputdat_file)
         

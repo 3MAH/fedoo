@@ -1,6 +1,6 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
-from fedoo.problem.Problem   import Problem
+from fedoo.core.problem import Problem
 import scipy.sparse as sparse
 
 def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling = 0, name = "MainProblem"):
@@ -44,26 +44,26 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             
             libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
 
-        def __UpdateA(): #internal function to be used when modifying M
+        def __UpdateA(self): #internal function to be used when modifying M
             # if MassLumping == True, A is a vector representing the diagonal value
             self.SetA(  self.__MassMatrix         / (self.__TimeStep**2))
 
-        def updateStiffness(StiffnessAssembling): #internal function to be used when modifying the siffness matrix
+        def updateStiffness(self,StiffnessAssembling): #internal function to be used when modifying the siffness matrix
             if isinstance(StiffnessAssembling,str):
                 StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
             
             self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
 
-        def MassLumping(): #internal function to be used when modifying M
+        def MassLumping(self): #internal function to be used when modifying M
             self.__MassLuming = True
             if len(self.__MassMatrix.shape) == 2:
                 self.__MassMatrix = np.array(self.__MassMatrix.sum(1))[:,0]
                 self.__UpdateA()
                
-        def GetX():
+        def GetX(self):
             return self.GetDoFSolution('all')
         
-        def GetXdot():
+        def GetXdot(self):
             return self.__Xdot
     
         def SetInitialDisplacement(self, name,value):
@@ -89,7 +89,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             self._SetVectorComponent(self.__Xdotdot, name, value) 
                      
     
-        def SetRayleighDamping(alpha, beta):        
+        def SetRayleighDamping(self, alpha, beta):        
             """
             Compute the damping matrix from the Rayleigh's model:
             [C] = alpha*[M] + beta*[K]         
@@ -105,7 +105,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
                 self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix    
             self.__UpdateA()
 
-        def initialize():        
+        def initialize(self):        
             D = 1/(self.__TimeStep**2) * self.__MassMatrix * \
                   (self.__Xold + self.__TimeStep * self.__Xdot) \
                 - self.__StiffMatrix * self.__Xold        
@@ -114,7 +114,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
             self.SetD(D)                        
 
-        def update():       
+        def update(self):       
             self.__Xdot = (Problem.GetDoFSolution('all') - self.__Xold)/self.__TimeStep
             self.__Xold[:] = Problem.GetDoFSolution('all')
             self.initialize()
@@ -141,8 +141,8 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             """        
             return np.dot(self.__Xdot , self.__DampMatrix*self.__Xdot)
 
-        def SetStiffnessMatrix(e):
+        def SetStiffnessMatrix(self,e):
             self.__StiffMatrix = e
 
-        def SetMassMatrix(e):
+        def SetMassMatrix(self,e):
             self.__MassMatrix = e

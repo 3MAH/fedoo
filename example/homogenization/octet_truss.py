@@ -7,7 +7,7 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 ModelingSpace("3D")
 
-Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")
+mesh.import_file('../../util/meshes/octet_surf.msh', meshname = "Domain")
 
 meshname = "Domain2"
 
@@ -28,4 +28,4 @@ path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
 outputdatfile = 'output.dat'
 
-Homogen.SolverUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
+homogen.GetResultsUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile)

@@ -11,9 +11,10 @@ from .core.assembly import Assembly
 from .core.base import ConstitutiveLaw
 from .core.base import WeakForm
 from .core.modelingspace import ModelingSpace
-from .problem.Problem import Problem
+from .core.problem import Problem
 
 
 # from . import mesh
 # from . import lib_elements
 
+ 

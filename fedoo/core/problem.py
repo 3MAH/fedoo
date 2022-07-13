@@ -5,8 +5,8 @@ import scipy.sparse.linalg
 
 from fedoo.core.assembly  import Assembly
 from fedoo.core.base import ProblemBase
-from fedoo.problem.BoundaryCondition import UniqueBoundaryCondition
-from fedoo.problem.Output import _ProblemOutput, _GetResults
+from fedoo.core.boundary_conditions import UniqueBoundaryCondition
+from fedoo.core.output import _ProblemOutput, _GetResults
 from fedoo.utilities.dataset import DataSet
 
 import time 

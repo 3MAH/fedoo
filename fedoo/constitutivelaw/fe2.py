@@ -5,7 +5,7 @@
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
-from fedoo.problem.Problem_NonLinearStatic import NonLinearStatic
+from fedoo.problem.nl_static import NonLinearStatic
 from fedoo.utilities.PostTreatement import listStressTensor, listStrainTensor
 from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness, GetHomogenizedStiffness
