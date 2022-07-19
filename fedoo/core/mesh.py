@@ -31,6 +31,14 @@ class Mesh(MeshBase):
     name: str
         The name of the mesh
         
+    
+    Alternative constructor
+    --------------------------
+    It is possible to build a mesh using the following static methods:
+    * Mesh.read(filename, name) to load a mesh from a file 
+    * Mesh.from_pyvista(pvmesh, name) to build a mesh from pyvista UnstructuredGrid object 
+    
+    
     Example
     --------
     Create a one element mesh from a 2d mesh in a 3d space
@@ -71,7 +79,54 @@ class Mesh(MeshBase):
         # elif n == '2Dplane' or n == '2Dstress': self.crd_name = ('X', 'Y')
         else: self.crd_name = ('X', 'Y', 'Z')
         
-   
+    
+    @staticmethod
+    def from_pyvista(pvmesh, name = ""):
+        """Build a Mesh from a pyvista UnstructuredGrid mesh. 
+        Node and element data are not copied.
+        For now, only mesh with single element type may be imported.
+        Multi-element meshes will be integrated later. """        
+        if USE_PYVISTA:     
+            if len(pvmesh.cells_dict) != 1: return NotImplemented
+            
+            elm_type =  {3:'lin2',
+                         5:'tri3',
+                         9:'quad4',
+                         10:'tet4',
+                         12:'hex8',
+                         13:'wed6',
+                         14:'pyr5',
+                         21:'lin3',
+                         22:'tri6',
+                         23:'quad8', 
+                         24:'tet10',
+                         25:'hex20'
+                         }.get(pvmesh.celltypes[0], None)
+                                   
+            if elm_type is None: raise NameError('Element Type '+ str(elm_type) + ' not available in pyvista')            
+            
+            elm = list(pvmesh.cells_dict.values())[0]
+            # elm = pvmesh.cells.reshape(-1,pvmesh.cells[0]+1)[1:]            
+            
+            return Mesh(pvmesh.points, elm, elm_type, name=name)
+        else:
+            raise NameError('Pyvista not installed.')
+            
+    
+    @staticmethod
+    def read(filename, name = ""):
+        """Build a Mesh from a mesh. This function use the pyvista load method. 
+        The file type is inferred from the file name.
+        For now, only mesh with single element type may be imported.
+        Multi-element meshes will be integrated later. """     
+        if USE_PYVISTA:   
+            mesh = Mesh.from_pyvista(pv.read(filename), name=name)
+            return mesh
+        else:
+            raise NameError('Pyvista not installed.')
+
+        
+    
     def add_node_set(self,node_indices,name):
         """        
         Add a set of nodes to the Mesh
@@ -417,7 +472,15 @@ class Mesh(MeshBase):
             filename = filename + '.vtk'
 
         self.to_pyvista().save(filename, binary)
-        
+    
+    
+    def plot(self,show_edges=True):
+        """Simple plot function using pyvista"""
+        if USE_PYVISTA:            
+            self.to_pyvista().plot(show_edges=show_edges)
+        else:
+            raise NameError('Pyvista not installed.')
+
         
     @property
     def n_nodes(self):

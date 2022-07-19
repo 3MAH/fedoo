@@ -5,11 +5,19 @@ Created on Tue Jul  5 10:55:37 2022
 @author: Etienne
 """
 import numpy as np
+from os.path import splitext
+
 try: 
     import pyvista as pv
     USE_PYVISTA = True
 except:
     USE_PYVISTA = False
+    
+try:
+    import pandas
+    USE_PANDA = True
+except:
+    USE_PANDA = False
 
 class DataSet():
     
@@ -37,7 +45,18 @@ class DataSet():
         self.meshplot = None
         self.meshplot_gp = None #a mesh with discontinuity between each element to plot gauss points field
         
-        
+    
+    def add_data(self, data_set):
+        """
+        Update the DataSet object including all the node, element and gausspoint
+        data from antoher DataSet object data_set. The associated mesh is not 
+        modified. 
+        """
+        self.node_data.update(data_set.node_data)
+        self.element_data.update(data_set.element_data)
+        self.gausspoint_data.update(data_set.gausspoint_data)
+                            
+    
     def plot(self, field = None, **kargs):
         
         if self.mesh is None: 
@@ -83,7 +102,7 @@ class DataSet():
         # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
 
         if 'Disp' in self.node_data:
-            self.meshplot.point_data['Disp'] = self.node_data['Disp'].T       
+            self.meshplot.point_data['Disp'] = self.node_data['Disp'].T  
             pl.add_mesh(meshplot.warp_by_vector('Disp', factor = scale), scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
         else: 
             pl.add_mesh(meshplot, scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
@@ -117,7 +136,245 @@ class DataSet():
             data = self.gausspoint_data[scalars]  
         
         return data, scalar_type
+  
+    
+    def save(self, filename, save_mesh = False):        
+        """Save data to a file. 
+        File type is inferred from the extension of the filename.                
         
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.         
+        save_mesh : bool (default = False)
+            If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
+            For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
+        """
+        name, ext = splitext(filename)
+        ext = ext.lower()
+        if ext == '.vtk': 
+            self.to_vtk(filename)
+        elif ext == '.msh':
+            self.to_msh(filename)
+        else:
+            if ext == '.npz':
+                self.savez(filename,save_mesh)
+            elif ext == '.npz_compressed':
+                self.savez_compressed(filename, save_mesh)
+            elif ext == '.csv':
+                self.to_csv(filename, save_mesh)              
+            elif ext == '.xlsx':
+                self.to_excel(filename, save_mesh)  
+            if save_mesh: 
+                self.save_mesh(filename)
+                
+                    
+    def save_mesh(self, filename):
+        """Save the mesh using a vtk file. The extension of filename is ignored and modified to '.vtk'."""
+        name, ext = splitext(filename)
+        self.mesh.save(name)
+        
+   
+    
+    def load(self, data, load_mesh = False):
+        """Load data from a data object. 
+        The old data are erased.
+                
+        Parameters
+        ----------
+        data : 
+        * if type(data) is dict: 
+            load data using the load_dict method
+        * if type(data) is DataSet:             
+            load data from another DataSet object without copy 
+        * if type(data) is pyvista.UnstructuredGrid
+            load data from a pyvista UnstructuredGrid object without copy 
+        * if type(data) is str
+            load data from a file. Available extention are 'vtk', 'msh', 'npz' and
+            'npz_compressed'            
+        load_mesh : bool (default = False)
+            If True, the mesh is loaded from the file (if the file contans a mesh). 
+            If False, only the data are loaded.
+        """
+        if isinstance(data, dict):
+            self.load_dict(data)
+        elif isinstance(data, DataSet):
+            self.node_data = data.node_data
+            self.element_data = data.element_data
+            self.gausspoint_data = data.gausspoint_data
+            if load_mesh: self.mesh = data.mesh            
+        elif isinstance(data, pv.UnstructuredGrid):
+            self.meshplot = data
+            self.node_data = data.point_data
+            self.element_data = data.cell_data  
+            if load_mesh: return NotImplemented
+        elif isinstance(data, str):
+            #load from a file
+            filename = data
+            name, ext = splitext(filename)
+            ext = ext.lower()
+            if ext == '.vtk': 
+                #load_mesh ignored because the mesh already in the vtk file
+                DataSet.load(self,pv.read(filename))              
+            elif ext == '.msh':
+                return NotImplemented
+            elif ext in ['.npz', '.npz_compressed']:
+                if load_mesh: 
+                    return NotImplemented 
+                data = np.load(filename)
+                
+                self.load_dict(data)
+            elif ext == '.csv':
+                return NotImplemented
+            elif ext == '.xlsx':
+                return NotImplemented     
+
+            else:
+               raise NameError("Can't load data -> Data not understood")                 
+        else:
+            raise NameError("Can't load data -> Data not understood")
+
+
+    def load_dict(self, data):
+        """Load data from a dict generated with the to_dict method.
+        The old data are erased."""
+        self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
+        self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
+        self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}       
+            
+                
+    def to_pandas(self):
+        if USE_PANDA:
+            out = {}
+            n_data_type = (self.node_data != {}) + (self.element_data != {}) + \
+                          (self.gausspoint_data != {})
+            if n_data_type > 1: 
+                raise NameError("Can't convert to pandas DataSet with with several different data type.")                        
+            
+            for k, v in self.node_data.items():
+                if len(v.shape)==1:
+                    out[k] = v
+                elif len(v.shape)==2:
+                    out.update({k+'_'+str(i):v[i] for i in range(v.shape[0])})                
+                else: 
+                    return NotImplemented
+
+            for k, v in self.element_data.items():
+                if len(v.shape)==1:
+                    out[k] = v
+                elif len(v.shape)==2:
+                    out.update({k+'_'+str(i):v[i] for i in range(v.shape[0])})                
+                else: 
+                    return NotImplemented
+                
+            for k, v in self.element_data.items():
+                if len(v.shape)==1:
+                    out[k] = v
+                elif len(v.shape)==2:
+                    out.update({k+'_'+str(i):v[i] for i in range(v.shape[0])})                
+                else: 
+                    return NotImplemented
+                
+            return pandas.DataFrame.from_dict(out)
+        else: 
+            raise NameError('Pandas lib is not installed.')        
+        
+    
+    def to_csv(self, filename, save_mesh = False):
+        """Write data in a csv file. 
+        This method require the installation of pandas library 
+        and is available only if 1 type of data (node, element, gausspoint) is defined. 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        save_mesh : bool (default = False)
+            If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
+        """
+        self.to_pandas().to_csv(filename)    
+        if save_mesh: self.save_mesh(filename)      
+
+
+    def to_excel(self, filename, save_mesh = False):
+        """Write data in a xlsx file (excel format). 
+        This method require the installation of pandas and openpyxl libraries
+        and is available only if 1 type of data (node, element, gausspoint) is defined. 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        save_mesh : bool (default = False)
+            If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
+        """
+        self.to_pandas().to_excel(filename)          
+        if save_mesh: self.save_mesh(filename)      
+
+        
+    def to_vtk(self, filename):
+        """Write vtk file with the mesh and associated data (gausspoint data not included). 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        """
+        from fedoo.util.mesh_writer import write_vtk
+        write_vtk(self, filename)
+
+        
+    def to_msh(self, filename):
+        """Write a msh (gmsh format) file with the mesh and associated data 
+        (gausspoint data not included). 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        """
+        from fedoo.util.mesh_writer import write_msh
+        write_msh(self, filename)
+        
+    
+    def to_dict(self):
+        """Return a dict with all the node, element and gausspoint data."""
+        out = {k+'_nd':v for k,v in self.node_data.items()}
+        out.update({k+'_el':v for k,v in self.element_data.items()})
+        out.update({k+'_gp':v for k,v in self.gausspoint_data.items()})
+        return out
+
+
+    def savez(self, filename, save_mesh = False): 
+        """Write a npz file using the numpy savez function. 
+                
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        save_mesh : bool (default = False)
+            If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
+        """
+        np.savez(filename, **self.to_dict())
+            
+        if save_mesh: self.save_mesh(filename)
+        
+        
+    def savez_compressed(self, filename, save_mesh = False):  
+        """Write a compressed npz file using the numpy savez_compressed function. 
+                
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        save_mesh : bool (default = False)
+            If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
+        """
+        np.savez_compressed(filename, **self.to_dict())
+        
+        if save_mesh: self.save_mesh(filename)       
+        
+
 class MultiFrameDataSet(DataSet):
     
     def __init__(self, mesh = None, list_data = []):
@@ -136,20 +393,8 @@ class MultiFrameDataSet(DataSet):
             return
         if iteration > len(self.list_data): 
             raise NameError("Number of iteration exeed the total number of registered data ({})".format(len(self.list_data)))
-        if isinstance(self.list_data[iteration], dict):
-            data = self.list_data[iteration]
-        elif isinstance(self.list_data[iteration], str):
-            filename = self.list_data[iteration]
-            if filename[-4:].lower() == '.npz' or filename[-15:].lower() == '.npz_compressed':
-                data = np.load(filename)
-            else: 
-                raise NameError("Can't load data -> Data not understood")
-        else:
-            raise NameError("Can't load data -> Data not understood")
-            
-        self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
-        self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
-        self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}
+        
+        DataSet.load(self, self.list_data[iteration])
         self.loaded_iter = iteration
 
     

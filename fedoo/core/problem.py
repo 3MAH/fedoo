@@ -81,8 +81,8 @@ class Problem(ProblemBase):
     def SaveResults(self, iterOutput=None):
         self.__ProblemOutput.SaveResults(self, iterOutput)
 
-    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):        
-        return DataSet(self.mesh, _GetResults(self, assemb, output_list, output_type, position, res_format), output_type)
+    def GetResults(self, assemb, output_list, output_type='Node', position = 1):        
+        return _GetResults(self, assemb, output_list, output_type, position)
 
     def SetA(self,A):
         self.__A = A     
