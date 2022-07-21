@@ -22,7 +22,7 @@ class Element:
 #            self.detJ = [abs(linalg.det(J)) for J in self.JacobianMatrix]
             self.detJ = abs(linalg.det(self.JacobianMatrix)) 
         else: #l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence       
-            if np.shape(self.JacobianMatrix)[-2] == 1: self.detJ = linalg.norm(JacobianMatrix, axis = 3) 
+            if np.shape(self.JacobianMatrix)[-2] == 1: self.detJ = linalg.norm(self.JacobianMatrix, axis = 3) 
             else: #On doit avoir np.shape(JacobianMatrix)[-2]=2 (l'elm de ref est défini en 2D) et np.shape(JacobianMatrix)[-1]=3  (l'espace réel est 3D)
                 J = self.JacobianMatrix
                 self.detJ = np.sqrt(abs(J[...,0,1]*J[...,1,2]-J[...,0,2]*J[...,1,1])**2 +\

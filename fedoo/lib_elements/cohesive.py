@@ -47,7 +47,7 @@ class Cohesive3D(Quad4): # à vérifier
         [0, 1, 2, 3] is a quad4 defining the face on the negative side of the cohesive zone
         [4, 5, 6, 7] is a quad4 defining the face on the positive side of the cohesive zone
         """
-        quad4.__init__(self, n_elm_gp, **kargs)
+        Quad4.__init__(self, n_elm_gp, **kargs)
                         
     #Dans les fonctions suivantes vec_xi contient une liste de points dans le repère de référence (xi, eta)
     #vec_xi[:,0] -> liste des valeurs de xi pour chaque point (points de gauss en général)

@@ -65,8 +65,8 @@ class BernoulliBeam_rot(Element1D): #2 nodes with derivatative dof
         # return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
     
 
-BernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['bernoulliBeam_disp', (-1, 'RotY')], 
-        'RotX':['lin2'], 'RotY':['bernoulliBeam_rot', (-1, 'DispZ')], 'RotZ':['bernoulliBeam_rot', (1, 'DispY')],
+BernoulliBeam = {'DispX':['lin2'], 'DispY':['BernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['BernoulliBeam_disp', (-1, 'RotY')], 
+        'RotX':['lin2'], 'RotY':['BernoulliBeam_rot', (-1, 'DispZ')], 'RotZ':['BernoulliBeam_rot', (1, 'DispY')],
         '__default':['lin2'], '__local_csys':True}  
 
 # --------------------------------------

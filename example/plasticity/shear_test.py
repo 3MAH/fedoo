@@ -86,7 +86,8 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subi
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')
+results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
+results = pb.AddOutput(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 

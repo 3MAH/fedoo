@@ -7,7 +7,7 @@ from fedoo.core.assembly  import Assembly
 from fedoo.core.base import ProblemBase
 from fedoo.core.boundary_conditions import UniqueBoundaryCondition
 from fedoo.core.output import _ProblemOutput, _GetResults
-from fedoo.util.dataset import DataSet
+from fedoo.core.dataset import DataSet
 
 import time 
 

@@ -121,7 +121,7 @@ class listStressTensor(list):
                 self[i] = np.zeros(N)
             
 
-    def Convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
+    def convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
         return listStressTensor([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])
 
 class listStrainTensor(list):
@@ -179,5 +179,5 @@ class listStrainTensor(list):
             if self[i] is 0:
                 self[i] = np.zeros(N)
 
-    def Convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
+    def convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
         return listStrainTensor([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])

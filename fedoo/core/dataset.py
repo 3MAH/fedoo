@@ -74,13 +74,32 @@ class DataSet():
         sargs=kargs.pop('scalar_bar_args', None) 
         
         if scalar_type == 'gp':
-            return NotImplemented
+            if self.meshplot_gp is None:
+                #define a new mesh for the plot
+                crd = self.mesh.nodes
+                elm = self.mesh.elements
+                nodes_gp = crd[elm.ravel()]
+                element_gp = np.arange(elm.shape[0]*elm.shape[1]).reshape(-1,elm.shape[1])
+                self.mesh_gp = self.mesh.__class__(nodes_gp, element_gp, self.mesh.elm_type)
+                meshplot = self.meshplot_gp = self.mesh_gp.to_pyvista()                                                                          
+            else: 
+                meshplot = self.meshplot_gp
+                
+            scalars = self.mesh_gp.convert_data(scalars.T, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(scalars.T)//self.mesh.n_elements).T
+            if 'Disp' in self.node_data:
+                ndim = self.mesh.ndim
+                U = ((self.node_data['Disp'].reshape(ndim,-1).T[elm.ravel()]).T).T ###U need to be corrected
+                meshplot.point_data['Disp'] = U  
+                                                                    
         elif scalars is not None:
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
-                meshplot = self.meshplot            
-       
+                meshplot = self.meshplot                        
+            if 'Disp' in self.node_data:
+                meshplot.point_data['Disp'] = self.node_data['Disp'].T  
+                
+                
         pl = pv.Plotter()
         # pl = pv.Plotter()
         pl.set_background('White')
@@ -101,8 +120,7 @@ class DataSet():
         
         # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
 
-        if 'Disp' in self.node_data:
-            self.meshplot.point_data['Disp'] = self.node_data['Disp'].T  
+        if 'Disp' in meshplot.point_data:           
             pl.add_mesh(meshplot.warp_by_vector('Disp', factor = scale), scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
         else: 
             pl.add_mesh(meshplot, scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)

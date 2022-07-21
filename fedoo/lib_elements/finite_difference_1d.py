@@ -22,7 +22,7 @@ class Parameter(FiniteDifference1D):
 
 class Node(FiniteDifference1D):
     #Element to define a set of nodes
-    #No integration and therefore nb_pb should be set to 0
+    #No integration and therefore n_elm_gp should be set to 0
     def __init__(self, n_elm_gp=0, **kargs):
         FiniteDifference1D.__init__(self, n_elm_gp)        
     

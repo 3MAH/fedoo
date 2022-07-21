@@ -13,7 +13,6 @@ from fedoo.core._sparsematrix import RowBlocMatrix
 
 from scipy import sparse
 import numpy as np
-from numbers import Number 
 from copy import copy
 import time
 
@@ -75,7 +74,7 @@ class Assembly(AssemblyBase):
     weakform: WeakForm instance
         weakform associated to the assembly
     mesh: Mesh instance
-        domain over which the weakform should be assembled
+        domain over which the weakform should be integrated
     elm_type: str
         Type of the element used for the field interpolation. This element may be different that the one used for the geometrical interpolation defined in mesh.elm_type.            
     name: str
@@ -93,9 +92,8 @@ class Assembly(AssemblyBase):
     
     _saved_elementary_operators = {} 
     _saved_change_of_basis_mat = {}   
-    _saved_gaussian_quadrature_mat = {} 
-    _saved_node2gausspoint_mat = {}
-    _saved_gausspoint2node_mat = {}
+    # _saved_node2gausspoint_mat = {}
+    # _saved_gausspoint2node_mat = {}
     _saved_associated_variables = {} #dict containing all associated variables (rotational dof for C1 elements) for elm_type
            
     def __init__(self,weakform, mesh="", elm_type="", name ="", **kargs):                      
@@ -157,7 +155,7 @@ class Assembly(AssemblyBase):
         
         n_elm_gp = self.n_elm_gp
         
-        if self.meshChange == True:             
+        if self.meshChange == True: #only node position change is considered here. For change of sparsity, use also, self.mesh.init_interpolation            
             if self.mesh in Assembly._saved_change_of_basis_mat: del Assembly._saved_change_of_basis_mat[self.mesh]            
             self.compute_elementary_operators()
                  
@@ -203,7 +201,7 @@ class Assembly(AssemblyBase):
                             
                     else: #virtual and real operators -> compute a matrix
                         var = wf.op[ii].u   
-                        if isinstance(coef_PG, Number): coef_PG = coef_PG * np.ones_like(MatGaussianQuadrature.data)
+                        if np.isscalar(coef_PG): coef_PG = coef_PG * np.ones_like(MatGaussianQuadrature.data)
                         CoefMatrix = sparse.csr_matrix( (coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
                         Mat    =  self._get_elementary_operator(wf.op[ii])[0]
                         
@@ -239,11 +237,11 @@ class Assembly(AssemblyBase):
                     if change_mat_lumping:
                         mat_lumping = self.weakform._list_mat_lumping[sorted_indices[ii]]                        
                     
-                    if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
+                    if np.isscalar(wf.coef[ii]) or len(wf.coef[ii])==1: 
                         #if n_elm_gp == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii] 
                     else:
-                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                                                 
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)                                                 
                     
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     if sum_coef: #if same operator as previous with different coef, add the two coef
@@ -355,10 +353,10 @@ class Assembly(AssemblyBase):
                 if compute == 'matrix' and wf.op[ii] is 1: continue
                 if compute == 'vector' and wf.op[ii] is not 1: continue
             
-                if isinstance(wf.coef[ii], Number) or len(wf.coef[ii])==1: 
+                if np.isscalar(wf.coef[ii]) or len(wf.coef[ii])==1: 
                     coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
                 else:
-                    coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                                                 
+                    coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)                                                 
                 
                 if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     coef_PG_sum += coef_PG
@@ -435,10 +433,10 @@ class Assembly(AssemblyBase):
                 Matvir = (RowBlocMatrix(self._get_elementary_operator(wf.op_vir[ii]), nvar, var_vir, coef_vir) * mat_change_of_basis).T
     
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
-                    if isinstance(wf.coef[ii], Number): 
+                    if np.isscalar(wf.coef[ii]): 
                         VV = VV - wf.coef[ii]*Matvir * MatGaussianQuadrature.data
                     else:
-                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])*MatGaussianQuadrature.data                             
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)*MatGaussianQuadrature.data                             
                         VV = VV - Matvir * (coef_PG)
                         
                 else: #virtual and real operators -> compute a matrix
@@ -449,10 +447,10 @@ class Assembly(AssemblyBase):
                                     
                     Mat    =  RowBlocMatrix(self._get_elementary_operator(wf.op[ii]), nvar, var, coef)         * mat_change_of_basis             
     
-                    if isinstance(wf.coef[ii], Number): #and self.op_vir[ii] != 1: 
+                    if np.isscalar(wf.coef[ii]): #and self.op_vir[ii] != 1: 
                         MM = MM + wf.coef[ii]*Matvir * MatGaussianQuadrature * Mat  
                     else:
-                        coef_PG = self._convert_to_gausspoints(wf.coef[ii][:])                    
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)                    
                         CoefMatrix = sparse.csr_matrix( (MatGaussianQuadrature.data*coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
                         MM = MM + Matvir * CoefMatrix * Mat                
 
@@ -474,55 +472,55 @@ class Assembly(AssemblyBase):
             mat_change_of_basis = 1
             compute_mat_change_of_basis = False
 
-            Nnd = mesh.n_nodes
-            Nel = mesh.n_elements
+            n_nd = mesh.n_nodes
+            n_el = mesh.n_elements
             elm = mesh.elements
-            nNd_elm = np.shape(elm)[1]            
+            n_elm_nodes = np.shape(elm)[1]            
             crd = mesh.nodes
             dim = self.space.ndim
-            localFrame = mesh.local_frame
+            local_frame = mesh.local_frame
             elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
     #        xi_nd = elmRefGeom.xi_nd
-            xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, nNd_elm) #function to define
+            xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, n_elm_nodes) 
 
             if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
                 for nameVector in self.space.list_vectors():
                     if compute_mat_change_of_basis == False:
-                        range_nNd_elm = np.arange(nNd_elm) 
+                        range_n_elm_nodes = np.arange(n_elm_nodes) 
                         compute_mat_change_of_basis = True
                         nvar = self.space.nvar
                         listGlobalVector = []  ; listScalarVariable = list(range(nvar))
-#                        mat_change_of_basis = sparse.lil_matrix((nvar*Nel*nNd_elm, nvar*Nnd)) #lil is very slow because it change the sparcity of the structure
+#                        mat_change_of_basis = sparse.lil_matrix((nvar*n_el*n_elm_nodes, nvar*n_nd)) #lil is very slow because it change the sparcity of the structure
                     listGlobalVector.append(self.space.get_vector(nameVector)) #vector that need to be change in local coordinate            
                     listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
                 #Data to build mat_change_of_basis with coo sparse format
                 if compute_mat_change_of_basis:
-                    rowMCB = np.empty((len(listGlobalVector)*Nel, nNd_elm, dim,dim))
-                    colMCB = np.empty((len(listGlobalVector)*Nel, nNd_elm, dim,dim))
-                    dataMCB = np.empty((len(listGlobalVector)*Nel, nNd_elm, dim,dim))
-                    LocalFrameEl = elmRefGeom.GetLocalFrame(crd[elm], xi_nd, localFrame) #array of shape (Nel, nb_nd, nb of vectors in basis = dim, dim)
+                    rowMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                    colMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                    dataMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                    local_frame_el = elmRefGeom.GetLocalFrame(crd[elm], xi_nd, local_frame) #array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
                     for ivec, vec in enumerate(listGlobalVector):
-                        # dataMCB[ivec*Nel:(ivec+1)*Nel] = LocalFrameEl[:,:,:dim,:dim]                  
-                        dataMCB[ivec*Nel:(ivec+1)*Nel] = LocalFrameEl                  
-                        rowMCB[ivec*Nel:(ivec+1)*Nel] = np.arange(Nel).reshape(-1,1,1,1) + range_nNd_elm.reshape(1,-1,1,1)*Nel + np.array(vec).reshape(1,1,-1,1)*(Nel*nNd_elm)
-                        colMCB[ivec*Nel:(ivec+1)*Nel] = elm.reshape(Nel,nNd_elm,1,1) + np.array(vec).reshape(1,1,1,-1)*Nnd        
+                        # dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el[:,:,:dim,:dim]                  
+                        dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el                  
+                        rowMCB[ivec*n_el:(ivec+1)*n_el] = np.arange(n_el).reshape(-1,1,1,1) + range_n_elm_nodes.reshape(1,-1,1,1)*n_el + np.array(vec).reshape(1,1,-1,1)*(n_el*n_elm_nodes)
+                        colMCB[ivec*n_el:(ivec+1)*n_el] = elm.reshape(n_el,n_elm_nodes,1,1) + np.array(vec).reshape(1,1,1,-1)*n_nd        
     
                     if len(listScalarVariable) > 0:
                         #add the component from scalar variables (ie variable not requiring a change of basis)
-                        dataMCB = np.hstack( (dataMCB.reshape(-1), np.ones(len(listScalarVariable)*Nel*nNd_elm) )) #no change of variable so only one value adding in dataMCB
+                        dataMCB = np.hstack( (dataMCB.reshape(-1), np.ones(len(listScalarVariable)*n_el*n_elm_nodes) )) #no change of variable so only one value adding in dataMCB
 
-                        rowMCB_loc = np.empty((len(listScalarVariable)*Nel, nNd_elm))
-                        colMCB_loc = np.empty((len(listScalarVariable)*Nel, nNd_elm))
+                        rowMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
+                        colMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
                         for ivar, var in enumerate(listScalarVariable):
-                            rowMCB_loc[ivar*Nel:(ivar+1)*Nel] = np.arange(Nel).reshape(-1,1) + range_nNd_elm.reshape(1,-1)*Nel + var*(Nel*nNd_elm)
-                            colMCB_loc[ivar*Nel:(ivar+1)*Nel] = elm + var*Nnd        
+                            rowMCB_loc[ivar*n_el:(ivar+1)*n_el] = np.arange(n_el).reshape(-1,1) + range_n_elm_nodes.reshape(1,-1)*n_el + var*(n_el*n_elm_nodes)
+                            colMCB_loc[ivar*n_el:(ivar+1)*n_el] = elm + var*n_nd        
                         
                         rowMCB = np.hstack( (rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
                         colMCB = np.hstack( (colMCB.reshape(-1), colMCB_loc.reshape(-1)))
                         
-                        mat_change_of_basis = sparse.coo_matrix((dataMCB,(rowMCB,colMCB)), shape=(Nel*nNd_elm*nvar, Nnd*nvar))                   
+                        mat_change_of_basis = sparse.coo_matrix((dataMCB,(rowMCB,colMCB)), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))                   
                     else:
-                        mat_change_of_basis = sparse.coo_matrix((dataMCB.reshape(-1),(rowMCB.reshape(-1),colMCB.reshape(-1))), shape=(Nel*nNd_elm*nvar, Nnd*nvar))
+                        mat_change_of_basis = sparse.coo_matrix((dataMCB.reshape(-1),(rowMCB.reshape(-1),colMCB.reshape(-1))), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))
                     
                     mat_change_of_basis = mat_change_of_basis.tocsr()                     
             
@@ -610,9 +608,9 @@ class Assembly(AssemblyBase):
         """
         Assembly._saved_elementary_operators = {} 
         Assembly._saved_change_of_basis_mat = {}   
-        Assembly._saved_gaussian_quadrature_mat = {} 
-        Assembly._saved_node2gausspoint_mat = {}
-        Assembly._saved_gausspoint2node_mat = {}
+        # Assembly._saved_gaussian_quadrature_mat = {} 
+        # Assembly._saved_node2gausspoint_mat = {}
+        # Assembly._saved_gausspoint2node_mat = {}
         Assembly._saved_associated_variables = {} #dict containing all associated variables (rotational dof for C1 elements) for elm_type
         
         
@@ -622,84 +620,56 @@ class Assembly(AssemblyBase):
         #-------------------------------------------------------------------
         mesh = self.mesh
         elm_type = self.elm_type
-        if n_elm_gp is None: NumberOfGaussPoint = self.n_elm_gp
-        else: NumberOfGaussPoint = n_elm_gp
-                  
-        Nnd = mesh.n_nodes
-        Nel = mesh.n_elements
-        elm = mesh.elements
-        nNd_elm = np.shape(elm)[1]
-        crd = mesh.nodes
+        if n_elm_gp is None: n_elm_gp = self.n_elm_gp
+                 
+        n_elements = mesh.n_elements
+        elements = mesh.elements
+        nodes = mesh.nodes
+        n_elm_nodes = mesh.n_elm_nodes #number of nodes associated to each element
+
         
         #-------------------------------------------------------------------
         #Case of finite difference mesh    
         #-------------------------------------------------------------------        
-        if NumberOfGaussPoint == 0: # in this case, it is a finite difference mesh
+        if n_elm_gp == 0: # in this case, it is a finite difference mesh
             # we compute the operators directly from the element library
-            elmRef = get_element(elm_type)(NumberOfGaussPoint)
-            OP = elmRef.computeOperator(crd,elm)
-            Assembly._saved_gaussian_quadrature_mat[(mesh,NumberOfGaussPoint)] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
-            Assembly._saved_gausspoint2node_mat[(mesh, NumberOfGaussPoint)] = 1  #no need to translate between pg and nodes because no pg 
-            Assembly._saved_node2gausspoint_mat[(mesh, NumberOfGaussPoint)] = 1                                    
+            elmRef = get_element(elm_type)(n_elm_gp)
+            OP = elmRef.computeOperator(nodes,elements)
+            mesh._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.identity(OP[0][0].shape[0], 'd', format= 'csr') #No gaussian quadrature in this case : nodal identity matrix
+            mesh._saved_gausspoint2node_mat[n_elm_gp] = 1  #no need to translate between pg and nodes because no pg 
+            mesh._saved_node2gausspoint_mat[n_elm_gp] = 1                                    
             Assembly._saved_change_of_basis_mat[mesh] = 1 # No change of basis:  mat_change_of_basis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
-            Assembly._saved_elementary_operators[(mesh,elm_type,NumberOfGaussPoint)] = OP #elmRef.computeOperator(crd,elm)
+            Assembly._saved_elementary_operators[(mesh,elm_type,n_elm_gp)] = OP #elmRef.computeOperator(nodes,elements)
             return                                
-
-        #-------------------------------------------------------------------
-        #Initialise the geometrical interpolation
-        #-------------------------------------------------------------------   
-        elmRefGeom = get_element(mesh.elm_type)(NumberOfGaussPoint, mesh=mesh) #initialise element
-        nNd_elm_geom = len(elmRefGeom.xi_nd) #number of dof used in the geometrical interpolation
-        elm_geom = elm[:,:nNd_elm_geom] 
-
-        localFrame = mesh.local_frame
-        nb_elm_nd = np.bincount(elm_geom.reshape(-1)) #len(nb_elm_nd) = Nnd #number of element connected to each node        
-        vec_xi = elmRefGeom.xi_pg #coordinate of points of gauss in element coordinate (xi)
         
-        elmRefGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #compute elmRefGeom.JacobianMatrix, elmRefGeom.detJ and elmRefGeom.inverseJacobian
-
+        
         #-------------------------------------------------------------------
-        # Compute the diag matrix used for the gaussian quadrature
-        #-------------------------------------------------------------------  
-        gaussianQuadrature = (elmRefGeom.detJ * elmRefGeom.w_pg).T.reshape(-1) 
-        Assembly._saved_gaussian_quadrature_mat[(mesh,NumberOfGaussPoint)] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
-
+        # Initialize the geometrical interpolation (gaussian quadrature, jacobian matrix, ...)
+        #-------------------------------------------------------------------        
+        if n_elm_gp not in mesh._elm_interpolation:
+            mesh.init_interpolation(n_elm_gp)
+        
+        mesh._compute_gaussian_quadrature_mat(n_elm_gp) 
+        elmRefGeom = mesh._elm_interpolation[n_elm_gp]                 
+        
+        
         #-------------------------------------------------------------------
         # Compute the array containing row and col indices used to assemble the sparse matrices
-        #-------------------------------------------------------------------          
-        range_nbPG = np.arange(NumberOfGaussPoint)                 
-        if self.get_change_of_basis_mat() is 1: ChangeOfBasis = False
-        else: 
-            ChangeOfBasis = True
-            range_nNd_elm = np.arange(nNd_elm)
+        #-------------------------------------------------------------------        
+        row, col = mesh._sparse_structure[n_elm_gp] #row and col have been computed in the mesh.init_interpolation method
         
-        row = np.empty((Nel, NumberOfGaussPoint, nNd_elm)) ; col = np.empty((Nel, NumberOfGaussPoint, nNd_elm))                
-        row[:] = np.arange(Nel).reshape((-1,1,1)) + range_nbPG.reshape(1,-1,1)*Nel 
-        col[:] = elm.reshape((Nel,1,nNd_elm))
-        #row_geom/col_geom: row and col indices using only the dof used in the geometrical interpolation (col = col_geom if geometrical and variable interpolation are the same)
-        row_geom = np.reshape(row[...,:nNd_elm_geom], -1) ; col_geom = np.reshape(col[...,:nNd_elm_geom], -1)
-        
-        if ChangeOfBasis: 
-            col = np.empty((Nel, NumberOfGaussPoint, nNd_elm))
-            col[:] = np.arange(Nel).reshape((-1,1,1)) + range_nNd_elm.reshape((1,1,-1))*Nel 
-            Ncol = Nel * nNd_elm
+        if self.get_change_of_basis_mat() is 1: 
+            #ChangeOfBasis = False
+            n_col = mesh.n_nodes
         else: 
-            Ncol = Nnd                      
-        row = np.reshape(row,-1) ; col = np.reshape(col,-1)  
+            #ChangeOfBasis = True -> modify col vector
+            col = np.empty((n_elements, n_elm_gp, n_elm_nodes))
+            col[:] = np.arange(n_elements).reshape((-1,1,1)) + np.arange(n_elm_nodes).reshape((1,1,-1))*n_elements 
+            col = col.reshape(-1)  
+            n_col = n_elements * n_elm_nodes
+                      
 
-        #-------------------------------------------------------------------
-        # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)    
-        #-------------------------------------------------------------------                                
-        PGtoNode = np.linalg.pinv(elmRefGeom.ShapeFunctionPG) #pseudo-inverse of NodeToPG
-        dataPGtoNode = PGtoNode.T.reshape((1,NumberOfGaussPoint,nNd_elm_geom))/nb_elm_nd[elm_geom].reshape((Nel,1,nNd_elm_geom)) #shape = (Nel, NumberOfGaussPoint, nNd_elm)   
-        Assembly._saved_gausspoint2node_mat[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(Nnd,Nel*NumberOfGaussPoint) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
 
-        #-------------------------------------------------------------------
-        # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)    
-        #-------------------------------------------------------------------             
-        dataNodeToPG = np.empty((Nel, NumberOfGaussPoint, nNd_elm_geom))
-        dataNodeToPG[:] = elmRefGeom.ShapeFunctionPG.reshape((1,NumberOfGaussPoint,nNd_elm_geom)) 
-        Assembly._saved_node2gausspoint_mat[(mesh, NumberOfGaussPoint)] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(Nel*NumberOfGaussPoint, Nnd) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
 
         #-------------------------------------------------------------------
         # Build the list of elm_type to assemble (some beam element required several elm_type in function of the variable)
@@ -709,34 +679,36 @@ class Assembly(AssemblyBase):
             list_elm_type = set([objElement[key][0] for key in objElement.keys() if key[:2]!='__' or key == '__default'])               
         else: 
             list_elm_type =  [elm_type]
+  
         
         #-------------------------------------------------------------------
         # Assembly of the elementary operators for each elm_type 
         #-------------------------------------------------------------------      
         for elm_type in list_elm_type: 
-            elmRef = get_element(elm_type)(NumberOfGaussPoint, mesh = mesh, elmGeom = elmRefGeom)
+            elmRef = get_element(elm_type)(n_elm_gp, mesh = mesh, elmGeom = elmRefGeom)
             nb_dir_deriv = 0
             if hasattr(elmRef,'ShapeFunctionDerivativePG'):
                 derivativePG = elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG #derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2] 
             nop = nb_dir_deriv+1 #nombre d'opérateur à discrétiser
     
-            NbDoFperNode = np.shape(elmRef.ShapeFunctionPG)[-1]//nNd_elm
+            NbDoFperNode = np.shape(elmRef.ShapeFunctionPG)[-1]//n_elm_nodes
             
-            data = [[np.empty((Nel, NumberOfGaussPoint, nNd_elm)) for j in range(NbDoFperNode)] for i in range(nop)] 
+            data = [[np.empty((n_elements, n_elm_gp, n_elm_nodes)) for j in range(NbDoFperNode)] for i in range(nop)] 
     
             for j in range(0,NbDoFperNode):
-                data[0][j][:] = elmRef.ShapeFunctionPG[...,j*nNd_elm:(j+1)*nNd_elm].reshape((-1,NumberOfGaussPoint,nNd_elm)) #same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
+                data[0][j][:] = elmRef.ShapeFunctionPG[...,j*n_elm_nodes:(j+1)*n_elm_nodes].reshape((-1,n_elm_gp,n_elm_nodes)) #same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv+1][j][:] = derivativePG[...,dir_deriv, j*nNd_elm:(j+1)*nNd_elm]
-                        
-            op_dd = [ [sparse.coo_matrix((data[i][j].reshape(-1),(row,col)), shape=(Nel*NumberOfGaussPoint , Ncol) ).tocsr() for j in range(NbDoFperNode) ] for i in range(nop)]        
+                    data[dir_deriv+1][j][:] = derivativePG[...,dir_deriv, j*n_elm_nodes:(j+1)*n_elm_nodes]
+            
+            op_dd = [ [sparse.coo_matrix((data[i][j].reshape(-1),(row,col)), shape=(n_elements*n_elm_gp , n_col) ).tocsr() for j in range(NbDoFperNode) ] for i in range(nop)]        
                 
             data = {0: op_dd[0]} #data is a dictionnary
             for i in range(nb_dir_deriv):  
                 data[1, i] = op_dd[i+1] #as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
-            Assembly._saved_elementary_operators[(mesh,elm_type,NumberOfGaussPoint)] = data   
+            Assembly._saved_elementary_operators[(mesh,elm_type,n_elm_gp)] = data   
+    
     
     def _get_elementary_operator(self, deriv, n_elm_gp=None): 
         #Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
@@ -772,11 +744,10 @@ class Assembly(AssemblyBase):
               
 
     def _get_gaussian_quadrature_mat(self): #calcul la discrétision relative à un seul opérateur dérivé   
-        mesh = self.mesh
-        n_elm_gp = self.n_elm_gp
-        if not((mesh,n_elm_gp) in Assembly._saved_gaussian_quadrature_mat):
+        if not(self.n_elm_gp in self.mesh._saved_gaussian_quadrature_mat):
             self.compute_elementary_operators()
-        return Assembly._saved_gaussian_quadrature_mat[(mesh,n_elm_gp)]
+        return self.mesh._saved_gaussian_quadrature_mat[self.n_elm_gp]
+
 
     def _get_associated_variables(self): #associated variables (rotational dof for C1 elements) of elm_type        
         elm_type = self.elm_type
@@ -798,37 +769,8 @@ class Assembly(AssemblyBase):
         if isinstance(get_element(self.elm_type), dict):
             return get_element(self.elm_type).get('__local_csys', False)                
         else: 
-            return False 
-    
-    def _get_gausspoint2node_mat(self, n_elm_gp=None): #calcul la discrétision relative à un seul opérateur dérivé   
-        if n_elm_gp is None: n_elm_gp = self.n_elm_gp     
-        if not((self.mesh,n_elm_gp) in Assembly._saved_gausspoint2node_mat):
-            self.compute_elementary_operators(n_elm_gp)        
-        return Assembly._saved_gausspoint2node_mat[(self.mesh,n_elm_gp)]
-    
-    def _get_node2gausspoint_mat(self, n_elm_gp=None): #calcul la discrétision relative à un seul opérateur dérivé   
-        if n_elm_gp is None: n_elm_gp = self.n_elm_gp     
-        if not((self.mesh,n_elm_gp) in Assembly._saved_node2gausspoint_mat):
-            Assembly.compute_elementary_operators(n_elm_gp)
-        
-        return Assembly._saved_node2gausspoint_mat[(self.mesh,n_elm_gp)]
-    
-    def _convert_to_gausspoints(self, data, n_elm_gp=None):         
-        """
-        Convert an array of values related to a specific mesh (Nodal values, Element Values or Points of Gauss values) to the gauss points
-        mesh: the considered Mesh object
-        data: array containing the values (nodal or element value)
-        The shape of the array is tested.
-        """               
-        if n_elm_gp is None: n_elm_gp = self.n_elm_gp            
-        dataType = determine_data_type(data, self.mesh, n_elm_gp)       
+            return False   
 
-        if dataType == 'Node': 
-            return self._get_node2gausspoint_mat(n_elm_gp) * data
-        if dataType == 'Element':
-            if len(np.shape(data)) == 1: return np.tile(data.copy(),n_elm_gp)
-            else: return np.tile(data.copy(),[n_elm_gp,1])            
-        return data #in case data contains already PG values
                 
     def get_element_results(self, operator, U):
         """
@@ -854,8 +796,8 @@ class Assembly(AssemblyBase):
         """
                 
         res = self.get_gp_results(operator, U)
-        NumberOfGaussPoint = res.shape[0]//self.mesh.n_elements
-        return np.reshape(res, (NumberOfGaussPoint,-1)).sum(0) / NumberOfGaussPoint
+        n_elm_gp = res.shape[0]//self.mesh.n_elements
+        return np.reshape(res, (n_elm_gp,-1)).sum(0) / n_elm_gp
 
     def get_gp_results(self, operator, U, n_elm_gp = None):
         """
@@ -899,8 +841,8 @@ class Assembly(AssemblyBase):
     
             assert operator.op_vir[ii]==1, "Operator virtual are only required to build FE operators, but not to get element results"
 
-            if isinstance(operator.coef[ii], Number): coef_PG = operator.coef[ii]                 
-            else: coef_PG = Assembly._convert_to_gausspoints(mesh, operator.coef[ii][:], elm_type, n_elm_gp)
+            if np.isscalar(operator.coef[ii]): coef_PG = operator.coef[ii]                 
+            else: coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
 
             res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) * mat_change_of_basis * U)
         
@@ -928,46 +870,22 @@ class Assembly(AssemblyBase):
             After that, an arithmetic mean is used to compute a single node value from all adjacent elements.
             The vector lenght is the number of nodes in the mesh  
         """
-        
-        GaussianPointToNodeMatrix = self._get_gausspoint2node_mat()
-        res = self.get_gp_results(operator, U)
-        return GaussianPointToNodeMatrix * res        
                 
-    def convert_data(self, data, convertFrom=None, convertTo='GaussPoint'):
-        
-        if isinstance(data, Number): return data
-        
-        n_elm_gp = self.n_elm_gp        
-        
+        res = self.get_gp_results(operator, U)
+        return self.mesh._get_gausspoint2node_mat(self.n_elm_gp) @ res     
+    
+                
+    def convert_data(self, data, convert_from=None, convert_to='GaussPoint'):        
         if isinstance(data, (listStrainTensor, listStressTensor)):        
-            try:
-                return type(data)(self.convert_data(data.asarray().T, convertFrom, convertTo).T)
-            except:
-                NotImplemented
+            return data.convert(self, convert_from, convert_to)
         
-        if convertFrom is None: convertFrom = determine_data_type(data, self.mesh, n_elm_gp)
-            
-        assert (convertFrom in ['Node','GaussPoint','Element']) and (convertTo in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
-        
-        if convertFrom == convertTo: return data       
-        if convertFrom == 'Node': 
-            data = self._get_node2gausspoint_mat() * data
-        elif convertFrom == 'Element':             
-            if len(np.shape(data)) == 1: data = np.tile(data.copy(),n_elm_gp)
-            else: data = np.tile(data.copy(),[n_elm_gp,1])
-            
-        # from here data should be defined at 'PG'
-        if convertTo == 'Node': 
-            return self._get_gausspoint2node_mat() * data 
-        elif convertTo == 'Element': 
-            return np.sum(np.split(data, n_elm_gp),axis=0) / n_elm_gp
-        else: return data 
+        return self.mesh.convert_data(data, convert_from, convert_to, self.n_elm_gp)
         
             
-    def integrate_field(self, Field, TypeField = 'GaussPoint'):
-        assert TypeField in ['Node','GaussPoint','Element'], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"
-        Field = self.convert_data(Field, TypeField, 'GaussPoint')
-        return sum(self._get_gaussian_quadrature_mat()@Field)
+    def integrate_field(self, field, type_field = None):
+        return self.mesh.inegrate_field(field, type_field, self.n_elm_gp)
+
+
 
     # def GetStressTensor(self, U, constitutiveLaw, Type="Nodal"):
     #     """
@@ -996,8 +914,7 @@ class Assembly(AssemblyBase):
     #         return listStressTensor([self.get_element_results(e, U) if e!=0 else np.zeros(self.mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "GaussPoint":
-    #         NumberOfGaussPointValues = self.mesh.n_elements * self.n_elm_gp #Assembly._saved_elementary_operators[(self.mesh, self.elm_type, self.n_elm_gp)][0].shape[0]
-    #         return listStressTensor([self.get_gp_results(e, U) if e!=0 else np.zeros(NumberOfGaussPointValues) for e in constitutiveLaw.GetStressOperator()])
+    #         return listStressTensor([self.get_gp_results(e, U) if e!=0 else np.zeros(self.n_gauss_points) for e in constitutiveLaw.GetStressOperator()])
         
     #     else:
     #         assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
@@ -1022,7 +939,7 @@ class Assembly(AssemblyBase):
         Not a static method.
         Return the Green Lagrange Strain Tensor of an assembly using the Voigt notation as a python list. 
         The total displacement field has to be given.
-        see get_node_resultss and get_element_resultss
+        see get_node_results and get_element_results
 
         Options : 
         - Type :"Nodal", "Element" or "GaussPoint" integration (default : "Nodal")
@@ -1069,8 +986,7 @@ class Assembly(AssemblyBase):
             return [ [self.get_element_results(op, U) if op!=0 else np.zeros(self.mesh.n_elements) for op in line_op] for line_op in grad_operator]        
         
         elif Type == "GaussPoint":
-            NumberOfGaussPointValues = self.n_elm_gp * self.mesh.n_elements #Assembly._saved_gaussian_quadrature_mat[(self.mesh, self.n_elm_gp)].shape[0]
-            return [ [self.get_gp_results(op, U) if op!=0 else np.zeros(NumberOfGaussPointValues) for op in line_op] for line_op in grad_operator]        
+            return [ [self.get_gp_results(op, U) if op!=0 else np.zeros(self.n_gauss_points) for op in line_op] for line_op in grad_operator]        
         else:
             assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
 
@@ -1116,8 +1032,8 @@ class Assembly(AssemblyBase):
                  
         
 #        res = np.reshape(res,(6,-1)).T
-#        Nel = mesh.n_elements
-#        res = (res[Nel:,:]-res[0:Nel:,:])/2
+#        n_el = mesh.n_elements
+#        res = (res[n_el:,:]-res[0:n_el:,:])/2
 #        res = res[:, [self.space.variable_rank('DispX'), self.space.variable_rank('DispY'), self.space.variable_rank('DispZ'), \
 #                              self.space.variable_rank('ThetaX'), self.space.variable_rank('ThetaY'), self.space.variable_rank('ThetaZ')]]         
 #        
@@ -1130,13 +1046,13 @@ class Assembly(AssemblyBase):
 #       
 #            #Data to build mat_change_of_basis_el with coo sparse format
 #            crd = mesh.nodes ; elm = mesh.elements
-#            rowMCB = np.empty((Nel, 1, dim,dim))
-#            colMCB = np.empty((Nel, 1, dim,dim))            
-#            rowMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*Nel # [[id_el + var*Nel] for var in vec]    
-#            colMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*Nel # [id_el+Nel*var for var in vec]
-#            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (Nel, n_elm_gp=1, nb of vectors in basis = dim, dim)                        
+#            rowMCB = np.empty((n_el, 1, dim,dim))
+#            colMCB = np.empty((n_el, 1, dim,dim))            
+#            rowMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*n_el # [[id_el + var*n_el] for var in vec]    
+#            colMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*n_el # [id_el+n_el*var for var in vec]
+#            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (n_el, n_elm_gp=1, nb of vectors in basis = dim, dim)                        
 #
-#            mat_change_of_basisElement = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*Nel, dim*Nel)).tocsr()
+#            mat_change_of_basisElement = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*n_el, dim*n_el)).tocsr()
 #            
 #            F = np.reshape( mat_change_of_basis_el.T * np.reshape(res[:,0:3].T, -1)  ,  (3,-1) ).T
 #            C = np.reshape( mat_change_of_basis_el.T * np.reshape(res[:,3:6].T, -1)  ,  (3,-1) ).T
@@ -1179,15 +1095,15 @@ class Assembly(AssemblyBase):
             Mat    =  RowBlocMatrix(self._get_elementary_operator(operator.op[ii]), nvar, var, coef)        
             Matvir =  RowBlocMatrix(self._get_elementary_operator(operator.op_vir[ii]), nvar, var_vir, coef_vir).T 
 
-            if isinstance(operator.coef[ii], Number): #and self.op_vir[ii] != 1: 
+            if np.isscalar(operator.coef[ii]): #and self.op_vir[ii] != 1: 
                 res = res + operator.coef[ii]*Matvir * MatGaussianQuadrature * Mat * mat_change_of_basis * U   
             else:
                 return NotImplemented                      
         
         res = np.reshape(res,(nvar,-1)).T
         
-        Nel = mesh.n_elements
-        res = (res[Nel:2*Nel,:]-res[0:Nel:,:])/2
+        n_el = mesh.n_elements
+        res = (res[n_el:2*n_el,:]-res[0:n_el:,:])/2
         
         # if dim == 3:
         #     res = res[:, [self.space.variable_rank('DispX'), self.space.variable_rank('DispY'), self.space.variable_rank('DispZ'), \
@@ -1205,13 +1121,13 @@ class Assembly(AssemblyBase):
        
             #Data to build mat_change_of_basis_el with coo sparse format
             crd = mesh.nodes ; elm = mesh.elements
-            rowMCB = np.empty((Nel, 1, dim,dim))
-            colMCB = np.empty((Nel, 1, dim,dim))            
-            rowMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*Nel # [[id_el + var*Nel] for var in vec]    
-            colMCB[:] = np.arange(Nel).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*Nel # [id_el+Nel*var for var in vec]
-            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (Nel, n_elm_gp=1, nb of vectors in basis = dim, dim)                        
+            rowMCB = np.empty((n_el, 1, dim,dim))
+            colMCB = np.empty((n_el, 1, dim,dim))            
+            rowMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*n_el # [[id_el + var*n_el] for var in vec]    
+            colMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*n_el # [id_el+n_el*var for var in vec]
+            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (n_el, n_elm_gp=1, nb of vectors in basis = dim, dim)                        
 
-            mat_change_of_basis_el = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*Nel, dim*Nel)).tocsr()
+            mat_change_of_basis_el = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*n_el, dim*n_el)).tocsr()
             
             F = np.reshape( mat_change_of_basis_el.T * np.reshape(res[:,0:dim].T, -1)  ,  (dim,-1) ).T
             if dim == 3: 
@@ -1312,54 +1228,3 @@ class Assembly(AssemblyBase):
 def delete_memory():
     Assembly.delete_memory()
     
-
-# def convert_data(data, mesh, convertFrom=None, convertTo='GaussPoint', elmType=None, n_elm_gp =None):        
-#     if isinstance(data, Number): return data
-    
-#     if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
-#     if elmType is None: elmType = mesh.elm_type
-#     if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(elmType, mesh)
-    
-#     if isinstance(data, (listStrainTensor, listStressTensor)):        
-#         try:
-#             return type(data)(convert_data(data.asarray().T, mesh, convertFrom, convertTo, elmType, n_elm_gp).T)
-#         except:
-#             NotImplemented
-    
-#     if convertFrom is None: convertFrom = determine_data_type(data, mesh, n_elm_gp)
-        
-#     assert (convertFrom in ['Node','GaussPoint','Element']) and (convertTo in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
-    
-#     if convertFrom == convertTo: return data       
-#     if convertFrom == 'Node': 
-#         data = Assembly._Assembly_get_node2gausspoint_mat(mesh, elmType, n_elm_gp) * data
-#         convertFrom = 'GaussPoint'
-#     elif convertFrom == 'Element':             
-#         if len(np.shape(data)) == 1: data = np.tile(data.copy(),n_elm_gp)
-#         else: data = np.tile(data.copy(),[n_elm_gp,1])
-#         convertFrom = 'GaussPoint'
-        
-#     # from here convertFrom should be 'PG'
-#     if convertTo == 'Node': 
-#         return Assembly._Assembly_get_gausspoint2node_mat(mesh, elmType, n_elm_gp) * data 
-#     elif convertTo == 'Element': 
-#         return np.sum(np.split(data, n_elm_gp),axis=0) / n_elm_gp
-#     else: return data 
-
-def determine_data_type(data, mesh, n_elm_gp):               
-        if isinstance(mesh, str): mesh = Mesh.get_all()[mesh]
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(elmType, mesh)
- 
-        test = 0
-        if len(data) == mesh.n_nodes: 
-            dataType = 'Node' #fonction définie aux noeuds   
-            test+=1               
-        if len(data) == mesh.n_elements: 
-            dataType = 'Element' #fonction définie aux éléments
-            test += 1
-        if len(data) == n_elm_gp*mesh.n_elements:
-            dataType = 'GaussPoint'
-            test += 1
-        assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
-        if test>1: "Warning: kind of data is confusing. " + dataType +" values choosen."
-        return dataType        

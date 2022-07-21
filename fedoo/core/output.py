@@ -8,7 +8,7 @@ import numpy as np
 # from fedoo.core.mesh import *
 from fedoo.core.base import AssemblyBase
 # from fedoo.util.ExportData import ExportData 
-from fedoo.util.dataset import DataSet, MultiFrameDataSet
+from fedoo.core.dataset import DataSet, MultiFrameDataSet
 import os
 
 _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
@@ -85,7 +85,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                     elif res == 'Strain':
                         data = material.GetStrain(position = position)                                                
                     
-                    data = data.Convert(assemb, None, output_type)
+                    data = data.convert(assemb, None, output_type)
                     
                     #keep data in memory in case it may be used later for vm, pc or pdir stress computation
                     data_sav[res] = data
@@ -160,7 +160,7 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                     elif measure_type == 'Cauchy':
                         data = material.GetCauchy()
                     
-                    data = data.Convert(assemb, None, output_type)            
+                    data = data.convert(assemb, None, output_type)            
                     data_sav[measure_type] = data                        
                     data = data.GetPrincipalStress()
                     data_sav[measure_type+'_pc'] = data

@@ -4,7 +4,9 @@ import numpy as np
 
 # from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
-# from fedoo.libElement import *
+from fedoo.lib_elements.element_list import GetDefaultNbPG, get_element
+from scipy import sparse
+
 from os.path import splitext
 try:
     import pyvista as pv
@@ -78,6 +80,12 @@ class Mesh(MeshBase):
         elif self.nodes.shape[1] == 2: self.crd_name = ('X', 'Y')
         # elif n == '2Dplane' or n == '2Dstress': self.crd_name = ('X', 'Y')
         else: self.crd_name = ('X', 'Y', 'Z')
+        
+        self._saved_gausspoint2node_mat = {}
+        self._saved_node2gausspoint_mat = {}
+        self._saved_gaussian_quadrature_mat = {}
+        self._elm_interpolation = {}
+        self._sparse_structure = {}
         
     
     @staticmethod
@@ -186,7 +194,8 @@ class Mesh(MeshBase):
 
     def add_internal_nodes(self, nb_added):
         new_nodes = self.add_nodes(nb_added=self.n_elements*nb_added)
-        self.elements = np.c_[self.elements, new_nodes]       
+        self.elements = np.c_[self.elements, new_nodes]
+        self.reset_interpolation()
         
     
     # warning , this method must be static
@@ -208,25 +217,25 @@ class Mesh(MeshBase):
         if mesh1.elm_type != mesh2.elm_type:    
             raise NameError("Can only stack meshes with the same element shape")
             
-        Nnd = mesh1.n_nodes
-        Nel = mesh1.n_elements
+        n_nodes = mesh1.n_nodes
+        n_elements = mesh1.n_elements
          
         new_crd = np.r_[mesh1.nodes , mesh2.nodes]
-        new_elm = np.r_[mesh1.elements , mesh2.elements + Nnd]
+        new_elm = np.r_[mesh1.elements , mesh2.elements + n_nodes]
         
         new_ndSets = dict(mesh1.node_sets)
         for key in mesh2.node_sets:
             if key in mesh1.node_sets:
-                new_ndSets[key] = np.r_[mesh1.node_sets[key], np.array(mesh2.node_sets[key]) + Nnd]
+                new_ndSets[key] = np.r_[mesh1.node_sets[key], np.array(mesh2.node_sets[key]) + n_nodes]
             else:
-                new_ndSets[key] = np.array(mesh2.node_sets[key]) + Nnd                                  
+                new_ndSets[key] = np.array(mesh2.node_sets[key]) + n_nodes                                  
         
         new_elSets = dict(mesh1.element_sets)
         for key in mesh2.element_sets:
             if key in mesh1.element_sets:
-                new_elSets[key] = np.r_[mesh1.element_sets[key], np.array(mesh2.element_sets[key]) + Nel]
+                new_elSets[key] = np.r_[mesh1.element_sets[key], np.array(mesh2.element_sets[key]) + n_elements]
             else:
-                new_elSets[key] = np.array(mesh2.element_sets[key]) + Nel    
+                new_elSets[key] = np.array(mesh2.element_sets[key]) + n_elements    
                    
         mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, name = name)
         mesh3.node_sets = new_ndSets
@@ -243,7 +252,7 @@ class Mesh(MeshBase):
             
         where meshObject is the Mesh object containing merged coincidentNodes.
         """
-        Nnd = self.n_nodes
+        n_nodes = self.n_nodes
         decimal_round = int(-np.log10(tol)-1)
         crd = self.nodes.round(decimal_round) #round coordinates to match tolerance
         ind_sorted   = np.lexsort((crd[:  ,2], crd[:  ,1], crd[:  ,0]))
@@ -279,6 +288,7 @@ class Mesh(MeshBase):
         for key in self.node_sets:
             self.node_sets[key] = new_num[self.node_sets[key]]         
         self.nodes = self.nodes[list_nd_new]  
+        self.reset_interpolation()
     
 
     def remove_nodes(self, index_nodes):    
@@ -307,7 +317,8 @@ class Mesh(MeshBase):
 
         for key in self.node_sets:
             self.node_sets[key] = new_num[self.node_sets[key]]
-            
+        
+        self.reset_interpolation()
         return new_num
     
     
@@ -334,6 +345,7 @@ class Mesh(MeshBase):
         """
         index_non_used_nodes = np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
         self.remove_nodes(index_non_used_nodes)
+        self.reset_interpolation()
         return len(index_non_used_nodes)
     
         
@@ -481,7 +493,170 @@ class Mesh(MeshBase):
         else:
             raise NameError('Pyvista not installed.')
 
+
+    def init_interpolation(self,n_elm_gp = None):
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
         
+        n_nodes = self.n_nodes        
+        n_elements = self.n_elements                                         
+        n_elm_nd = self.n_elm_nodes #number of nodes associated to each element
+        
+        #-------------------------------------------------------------------
+        #Initialise the geometrical interpolation
+        #-------------------------------------------------------------------   
+        # elm_interpol = get_element(self.elm_type)(n_elm_gp, mesh=self) #initialise element interpolation
+        elm_interpol = get_element(self.elm_type)(n_elm_gp) #initialise element interpolation
+        n_elm_dof = len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_elm_dof = n_elm_nd
+
+        elm_geom = self.elements[:,:n_elm_dof] #element table restrictied to geometrical dof
+
+        n_elm_with_nd = np.bincount(elm_geom.reshape(-1)) #len(n_elm_with_nd) = n_nodes #number of elements connected to each node        
+                
+        #-------------------------------------------------------------------
+        # Compute the array containing row and col indices used to assemble the sparse matrices
+        #-------------------------------------------------------------------          
+        row = np.empty((n_elements, n_elm_gp, n_elm_nd)) ; col = np.empty((n_elements, n_elm_gp, n_elm_nd))                
+        row[:] = np.arange(n_elements).reshape((-1,1,1)) + np.arange(n_elm_gp).reshape(1,-1,1)*n_elements 
+        col[:] = self.elements.reshape((n_elements,1,n_elm_nd))
+        #row_geom/col_geom: row and col indices using only the dof used in the geometrical interpolation (col = col_geom if geometrical and variable interpolation are the same)
+        row_geom = np.reshape(row[...,:n_elm_dof], -1) ; col_geom = np.reshape(col[...,:n_elm_dof], -1)
+        
+        #-------------------------------------------------------------------
+        # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)    
+        #-------------------------------------------------------------------                                
+        PGtoNode = np.linalg.pinv(elm_interpol.ShapeFunctionPG) #pseudo-inverse of NodeToPG
+        dataPGtoNode = PGtoNode.T.reshape((1,n_elm_gp,n_elm_dof))/n_elm_with_nd[elm_geom].reshape((n_elements,1,n_elm_dof)) #shape = (n_elements, n_elm_gp, n_elm_nd)   
+        self._saved_gausspoint2node_mat[n_elm_gp] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(n_nodes,n_elements*n_elm_gp) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
+
+        #-------------------------------------------------------------------
+        # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)    
+        #-------------------------------------------------------------------             
+        dataNodeToPG = np.empty((n_elements, n_elm_gp, n_elm_dof))
+        dataNodeToPG[:] = elm_interpol.ShapeFunctionPG.reshape((1,n_elm_gp,n_elm_dof)) 
+        self._saved_node2gausspoint_mat[n_elm_gp] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(n_elements*n_elm_gp, n_nodes) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
+        
+        # save some data related to interpolation for potentiel future use
+        self._elm_interpolation[n_elm_gp] = elm_interpol       
+        self._sparse_structure[n_elm_gp] = (row.reshape(-1), col.reshape(-1))
+        self._elements_geom = elm_geom #dont depend on n_elm_gp
+        
+    
+    def _compute_gaussian_quadrature_mat(self, n_elm_gp = None):        
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp not in self._saved_gaussian_quadrature_mat:
+            self.init_interpolation(n_elm_gp)        
+                
+        elm_interpol = self._elm_interpolation[n_elm_gp]
+        vec_xi = elm_interpol.xi_pg #coordinate of points of gauss in element coordinate (xi)        
+        elm_interpol.ComputeJacobianMatrix(self.nodes[self._elements_geom], vec_xi, self.local_frame) #compute elm_interpol.JacobianMatrix, elm_interpol.detJ and elm_interpol.inverseJacobian
+
+        #-------------------------------------------------------------------
+        # Compute the diag matrix used for the gaussian quadrature
+        #-------------------------------------------------------------------  
+        gaussianQuadrature = (elm_interpol.detJ * elm_interpol.w_pg).T.reshape(-1) 
+        self._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.diags(gaussianQuadrature, 0, format='csr') #matrix to get the gaussian quadrature (integration over each element)        
+
+    
+    def _get_gausspoint2node_mat(self, n_elm_gp=None): 
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if not(n_elm_gp in self._saved_gausspoint2node_mat):
+            self.init_interpolation(n_elm_gp)        
+        return self._saved_gausspoint2node_mat[n_elm_gp]
+    
+    
+    def _get_node2gausspoint_mat(self, n_elm_gp=None): 
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)   
+        if not(n_elm_gp in self._saved_node2gausspoint_mat):
+            self.init_interpolation(n_elm_gp)                
+        return self._saved_node2gausspoint_mat[n_elm_gp]
+
+
+    def _get_gaussian_quadrature_mat(self, n_elm_gp=None): 
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if not(n_elm_gp in self._saved_gaussian_quadrature_mat):
+            self._compute_gaussian_quadrature_mat(n_elm_gp)
+        return self._saved_gaussian_quadrature_mat[n_elm_gp]
+
+
+    def determine_data_type(self, data, n_elm_gp=None):                       
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+ 
+        test = 0
+        if len(data) == self.n_nodes: 
+            data_type = 'Node' #fonction définie aux noeuds   
+            test+=1               
+        if len(data) == self.n_elements: 
+            data_type = 'Element' #fonction définie aux éléments
+            test += 1
+        if len(data) == n_elm_gp*self.n_elements:
+            data_type = 'GaussPoint'
+            test += 1
+        assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
+        if test>1: "Warning: kind of data is confusing. " + data_type +" values choosen."
+        return data_type  
+
+
+    def data_to_gausspoint(self, data, n_elm_gp=None):         
+        """
+        Convert a field array (node values or element values) to gauss points.
+        data: array containing the field (node or element values)
+        return: array containing the gausspoint field 
+        The shape of the array is tested.
+        """               
+        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)           
+        data_type = self.determine_data_type(data, n_elm_gp)       
+
+        if data_type == 'Node': 
+            return self._get_node2gausspoint_mat(n_elm_gp) @ data
+        if data_type == 'Element':
+            if len(np.shape(data)) == 1: return np.tile(data.copy(),n_elm_gp) #why use copy here ?
+            else: return np.tile(data.copy(),[n_elm_gp,1])            
+        return data #in case data contains already PG values
+
+
+    def convert_data(self, data, convert_from=None, convert_to='GaussPoint', n_elm_gp=None):
+       if np.isscalar(data): return data
+
+       if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+       
+       if convert_from is None: convert_from = self.determine_data_type(data, n_elm_gp)
+           
+       assert (convert_from in ['Node','GaussPoint','Element']) and (convert_to in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
+       
+       if convert_from == convert_to: return data       
+       if convert_from == 'Node': 
+           data = self._get_node2gausspoint_mat(n_elm_gp) * data
+       elif convert_from == 'Element':             
+           if len(np.shape(data)) == 1: data = np.tile(data.copy(),n_elm_gp)
+           else: data = np.tile(data.copy(),[n_elm_gp,1])
+           
+       # from here data should be defined at 'PG'
+       if convert_to == 'Node': 
+           return self._get_gausspoint2node_mat(n_elm_gp) * data 
+       elif convert_to == 'Element': 
+           return np.sum(np.split(data, n_elm_gp),axis=0) / n_elm_gp
+       else: return data 
+
+
+    def integrate_field(self, field, type_field = None, n_elm_gp = None):        
+        assert type_field in ['Node','GaussPoint','Element', None], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"        
+        if n_elm_gp is None: 
+            if type_field == 'GaussPoint': n_elm_gp = len(field)//self.n_elements
+            else: n_elm_gp = GetDefaultNbPG(self.elm_type)               
+                            
+        return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
+
+
+    def reset_interpolation(self):
+        """Remove all the saved data related to field interpolation. 
+        This method should be used when modifying the element table or when removing or adding nodes.
+        """
+        self._saved_gausspoint2node_mat = {}
+        self._saved_node2gausspoint_mat = {}
+        self._saved_gaussian_quadrature_mat = {}
+        self._elm_interpolation = {}
+        self._sparse_structure = {}
+
     @property
     def n_nodes(self):
         """
@@ -495,6 +670,15 @@ class Mesh(MeshBase):
         Total number of elements in the Mesh        
         """
         return len(self.elements)
+
+
+    @property
+    def n_elm_nodes(self):
+        """
+        Number of nodes associated to each element 
+        """
+        return self.elements.shape[1]
+    
 
     @property
     def ndim(self):
@@ -526,12 +710,12 @@ class Mesh(MeshBase):
     #     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
     #     """
 #        elmRef = self.elm_type(1)        
-#        rep_loc = np.zeros((self.__Nnd,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
+#        rep_loc = np.zeros((self.__n_nodes,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
 #        for e in self.elements:
 #            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
 #            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e]) 
 #
-#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__Nnd)])
+#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__n_nodes)])
 #        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
 #        self__.localBasis = rep_loc
 
@@ -547,7 +731,7 @@ class Mesh(MeshBase):
 #         crd = self.nodes
         
 # #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
-#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (Nel, n_elm_gp, nb of vectors in basis = dim, dim)
+#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (n_elements, n_elm_gp, nb of vectors in basis = dim, dim)
 
 
     # def bounding_box(self, return_center = False):
@@ -743,4 +927,6 @@ if __name__=="__main__":
     import scipy as sp
     a = Mesh(sp.array([[0,0,0],[1,0,0]]), sp.array([[0,1]]),'lin2')
     print(a.nodes)
+
+
 
