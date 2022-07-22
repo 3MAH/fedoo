@@ -2,7 +2,7 @@
 
 from fedoo.core.base import AssemblyBase
 from fedoo.core.assembly_sum import AssemblySum
-from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.core.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
 from fedoo.core.base import WeakForm
@@ -876,7 +876,7 @@ class Assembly(AssemblyBase):
     
                 
     def convert_data(self, data, convert_from=None, convert_to='GaussPoint'):        
-        if isinstance(data, (listStrainTensor, listStressTensor)):        
+        if isinstance(data, (StrainTensorList, StressTensorList)):        
             return data.convert(self, convert_from, convert_to)
         
         return self.mesh.convert_data(data, convert_from, convert_to, self.n_elm_gp)
@@ -908,13 +908,13 @@ class Assembly(AssemblyBase):
     #         constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
     #     if Type == "Nodal":
-    #         return listStressTensor([self.get_node_results(e, U) if e!=0 else np.zeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
+    #         return StressTensorList([self.get_node_results(e, U) if e!=0 else np.zeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "Element":
-    #         return listStressTensor([self.get_element_results(e, U) if e!=0 else np.zeros(self.mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
+    #         return StressTensorList([self.get_element_results(e, U) if e!=0 else np.zeros(self.mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "GaussPoint":
-    #         return listStressTensor([self.get_gp_results(e, U) if e!=0 else np.zeros(self.n_gauss_points) for e in constitutiveLaw.GetStressOperator()])
+    #         return StressTensorList([self.get_gp_results(e, U) if e!=0 else np.zeros(self.n_gauss_points) for e in constitutiveLaw.GetStressOperator()])
         
     #     else:
     #         assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
@@ -965,7 +965,7 @@ class Assembly(AssemblyBase):
             Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
             Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
         
-        return listStrainTensor(Strain)
+        return StrainTensorList(Strain)
     
     def get_grad_disp(self, U, Type = "Nodal"):
         """

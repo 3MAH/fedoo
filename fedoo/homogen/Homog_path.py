@@ -177,9 +177,9 @@ if USE_SIMCOON:
                         
                     ###DEBUG ONLY####
                     # print(TangentMatrix)
-                    # from fedoo.utilities import arrayStressTensor                     
-                    # print(arrayStressTensor(TensorStress).vonMises().max())                    
-                    # # print(arrayStressTensor(MeanStress).vonMises())                  
+                    # from fedoo.utilities import StressTensorArray                     
+                    # print(StressTensorArray(TensorStress).vonMises().max())                    
+                    # # print(StressTensorArray(MeanStress).vonMises())                  
                     ######
         
         if Tangent_bool:

@@ -2,7 +2,7 @@
 #compatible with the simcoon strain and stress notation
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 import numpy as np
 
@@ -79,18 +79,18 @@ class ElasticAnisotropic(Mechanical3D):
                 Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
                 Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
                 Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
-            TotalStrain = listStrainTensor(Strain)
+            TotalStrain = StrainTensorList(Strain)
                 
             self.__currentStrain = TotalStrain                            
        
             H = self.GetH()
         
-            self._stress = listStressTensor([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+            self._stress = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
        
     def GetStressFromStrain(self, StrainTensor):     
         H = self.GetH()
         
-        sigma = listStressTensor([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
+        sigma = StressTensorList([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
 
         return sigma # list of 6 objets 
     

@@ -6,7 +6,7 @@ from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
 from fedoo.problem.nl_static import NonLinearStatic
-from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
 from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness, GetHomogenizedStiffness
 import numpy as np
@@ -42,22 +42,22 @@ class FE2(Mechanical3D):
         # self.__currentGradDisp = self.__initialGradDisp = 0        
             
     def GetPKII(self):
-        return listStressTensor(self.__stress)
+        return StressTensorList(self.__stress)
     
     # def GetKirchhoff(self):
-    #     return listStressTensor(self.Kirchhoff.T)        
+    #     return StressTensorList(self.Kirchhoff.T)        
     
     # def GetCauchy(self):
-    #     return listStressTensor(self.Cauchy.T)        
+    #     return StressTensorList(self.Cauchy.T)        
     
     def GetStrain(self, **kargs):
-        return listStrainTensor(self.__strain)
+        return StrainTensorList(self.__strain)
            
     # def GetStatev(self):
     #     return self.statev.T
 
     def GetStress(self, **kargs): #same as GetPKII (used for small def)
-        return listStressTensor(self.__stress)
+        return StressTensorList(self.__stress)
     
     # def GetHelas (self):
     #     # if self.__L is None:                
@@ -237,8 +237,8 @@ class FE2(Mechanical3D):
             self._update_pb(id_pb)
 
         self.__strain = strain
-        # self.__strain = listStrainTensor(strain)
-        # self.__stress = listStressTensor([stress[i] for i in range(6)])        
+        # self.__strain = StrainTensorList(strain)
+        # self.__stress = StressTensorList([stress[i] for i in range(6)])        
         # self.__Wm = Wm
         
         print('')
@@ -246,7 +246,7 @@ class FE2(Mechanical3D):
        
             # H = self.GetH()
         
-            # self.__currentSigma = listStressTensor([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+            # self.__currentSigma = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
 
         
 

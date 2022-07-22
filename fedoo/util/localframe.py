@@ -61,7 +61,7 @@ class LocalFrame(np.ndarray):
         else: return np.asarray(new)
                
         
-def GlobalLocalFrame(NumberOfPoints):    
+def global_local_frame(NumberOfPoints):    
     return LocalFrame([np.eye(3) for i in range(NumberOfPoints)])
 
 def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
@@ -88,7 +88,7 @@ def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
         localFrame[:, 1, 1] = localFrame[:,0, 0]
     return localFrame.view(LocalFrame)
     
-def SeparatedLocalFrame(localFrame, mesh, dimensions = ('X','Y','Z')):
+def separated_local_frame(localFrame, mesh, dimensions = ('X','Y','Z')):
     """
     Permit to automatically assign the localFrame to the appropriate submesh of the mesh object
     Generate a local frame under the form of the (3,3) shaped array dedicated of SeparatedArray objects

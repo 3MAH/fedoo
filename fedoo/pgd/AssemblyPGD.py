@@ -3,7 +3,7 @@ from fedoo.core.assembly import Assembly as AssemblyFEM
 from fedoo.core._sparsematrix import RowBlocMatrix
 # from fedoo.util.Variable import Variable
 # from fedoo.util.StrainOperator import GetStrainOperator
-from fedoo.util.PostTreatement import listStrainTensor
+from fedoo.util.voigt_tensors import StrainTensorList
 from fedoo.core.mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import GetDefaultNbPG
 from fedoo.core.base import WeakForm
@@ -370,10 +370,10 @@ class AssemblyPGD(AssemblyFEM):
         """
 
         if IntegrationType == "Nodal":
-            return listStrainTensor([self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in self.space.op_strain()])
+            return StrainTensorList([self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
-            return listStrainTensor([self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in self.space.op_strain()])
+            return StrainTensorList([self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in self.space.op_strain()])
         
         else:
             assert 0, "Wrong argument for IntegrationType"

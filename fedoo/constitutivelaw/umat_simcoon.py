@@ -13,7 +13,7 @@ if USE_SIMCOON:
 
 if USE_SIMCOON:    
     from fedoo.core.mechanical3d import Mechanical3D
-    from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+    from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
     import numpy as np
     
     class Simcoon(Mechanical3D, sim.Umat_fedoo):
@@ -43,16 +43,16 @@ if USE_SIMCOON:
             self.use_elastic_lt = False #mainly for debug purpose
                 
         def GetPKII(self):
-            return listStressTensor(self.PKII.T)
+            return StressTensorList(self.PKII.T)
         
         def GetKirchhoff(self):
-            return listStressTensor(self.Kirchhoff.T)        
+            return StressTensorList(self.Kirchhoff.T)        
         
         def GetCauchy(self):
-            return listStressTensor(self.Cauchy.T)        
+            return StressTensorList(self.Cauchy.T)        
         
         def GetStrain(self, **kargs):
-            return listStrainTensor(self.etot.T)
+            return StrainTensorList(self.etot.T)
                
         def GetStatev(self):
             return self.statev.T
@@ -62,10 +62,10 @@ if USE_SIMCOON:
         
         def GetCurrentStress(self): #same as GetPKII (used for small def)
             print('Warning : GetCurrentStress will be removed in future versions. Use GetStress instead')
-            return listStressTensor(self.PKII.T)
+            return StressTensorList(self.PKII.T)
 
         def GetStress(self, **kargs): #same as GetPKII (used for small def)
-            return listStressTensor(self.PKII.T)
+            return StressTensorList(self.PKII.T)
         
         # def GetHelas (self):
         #     # if self.__L is None:                

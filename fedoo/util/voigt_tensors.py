@@ -2,12 +2,12 @@
 import numpy as np
 
 
-class arrayStressTensor(np.ndarray):
+class StressTensorArray(np.ndarray):
 
     def __new__(cls, input_array):
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
-        if len(input_array) != 6: raise NameError('lenght for arrayStressTensor object must be 6')
+        if len(input_array) != 6: raise NameError('lenght for StressTensorArray object must be 6')
         obj = np.asarray(input_array).view(cls)
         
         # # add the new attribute to the created instance
@@ -38,10 +38,10 @@ class arrayStressTensor(np.ndarray):
     #     if obj is None: return
     #     self.info = getattr(obj, 'info', None)
 
-class listStressTensor(list):
+class StressTensorList(list):
     
     def __init__(self, l):
-        if len(l) != 6: raise NameError('list lenght for listStressTensor object must be 6')
+        if len(l) != 6: raise NameError('list lenght for StressTensorList object must be 6')
         list.__init__(self,l)
     
     def vtkFormat(self):
@@ -69,7 +69,7 @@ class listStressTensor(list):
         DetGradX = np.linalg.det(GradX)
     
         CauchyStress =  (1/DetGradX).reshape(-1,1,1)*np.matmul(GradX,np.matmul(PiolaKStress,GradX.transpose(0,2,1)))
-        return listStressTensor([CauchyStress[:,0,0],CauchyStress[:,1,1],CauchyStress[:,2,2],CauchyStress[:,0,1],CauchyStress[:,0,2],CauchyStress[:,1,2]])
+        return StressTensorList([CauchyStress[:,0,0],CauchyStress[:,1,1],CauchyStress[:,2,2],CauchyStress[:,0,1],CauchyStress[:,0,2],CauchyStress[:,1,2]])
 
     def vonMises(self):
         """
@@ -81,7 +81,7 @@ class listStressTensor(list):
         """
         Return the deviatoric part of the Stress Tensor using void form
         """
-        return listStressTensor([ 2/3*self[0]-1/3*self[1]-1/3*self[2], \
+        return StressTensorList([ 2/3*self[0]-1/3*self[1]-1/3*self[2], \
                                  -1/3*self[0]+2/3*self[1]-1/3*self[2], \
                                  -1/3*self[0]-1/3*self[1]+2/3*self[2], \
                                   self[3], self[4], self[5]])
@@ -91,7 +91,7 @@ class listStressTensor(list):
         Return the hydrostatic part of the Stress Tensor using void form
         """
         traceStress = (1/3)*(self[0]+self[1]+self[2])
-        return listStressTensor([traceStress, traceStress, traceStress, 0, 0, 0])
+        return StressTensorList([traceStress, traceStress, traceStress, 0, 0, 0])
 
     def GetPrincipalStress(self): 
         """
@@ -106,7 +106,7 @@ class listStressTensor(list):
         return PrincipalStress, PrincipalDirection.transpose(2,0,1)
 
     def toStrain(self):
-        return listStrainTensor(self[:3] + [self[i]*2 for i in [3,4,5]])
+        return StrainTensorList(self[:3] + [self[i]*2 for i in [3,4,5]])
         
     def toStress(self):
         return self
@@ -122,12 +122,12 @@ class listStressTensor(list):
             
 
     def convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
-        return listStressTensor([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])
+        return StressTensorList([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])
 
-class listStrainTensor(list):
+class StrainTensorList(list):
     
     def __init__(self, l):
-        if len(l) != 6: raise NameError('list lenght for listStrainTensor object must be 6')
+        if len(l) != 6: raise NameError('list lenght for StrainTensorList object must be 6')
         list.__init__(self,l)
     
     def vtkFormat(self):
@@ -165,7 +165,7 @@ class listStrainTensor(list):
         return PrincipalStrain, PrincipalDirection.transpose(2,0,1)
     
     def toStress(self):
-        return listStrainTensor(self[:3] + [self[i]/2 for i in [3,4,5]])
+        return StrainTensorList(self[:3] + [self[i]/2 for i in [3,4,5]])
         
     def toStrain(self):
         return self
@@ -180,4 +180,4 @@ class listStrainTensor(list):
                 self[i] = np.zeros(N)
 
     def convert(self,assemb, ConvertFrom=None, ConvertTo='GaussPoint'):
-        return listStrainTensor([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])
+        return StrainTensorList([assemb.convert_data(S, ConvertFrom, ConvertTo) for S in self])

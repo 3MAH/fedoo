@@ -2,7 +2,7 @@
 #The elastoplastic law should be used with an InternalForce WeakForm
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 import numpy as np
 
@@ -131,9 +131,9 @@ class ElastoPlasticity(Mechanical3D):
     def YieldFunctionDerivativeSigma(self, sigma):
         """
         Derivative of the Yield Function with respect to the stress tensor defined in sigma
-        sigma should be a listStressTensor object
+        sigma should be a StressTensorList object
         """
-        return listStressTensor((3/2)*np.array(sigma.deviatoric())/sigma.vonMises()).toStrain()
+        return StressTensorList((3/2)*np.array(sigma.deviatoric())/sigma.vonMises()).toStrain()
     
     def GetPlasticity(self):
         return self.__currentP
@@ -220,7 +220,7 @@ class ElastoPlasticity(Mechanical3D):
                 Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
                 Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
         
-            TotalStrain = listStrainTensor(Strain)
+            TotalStrain = StrainTensorList(Strain)
             self.ComputeStress(TotalStrain, time) #compute the total stress in self.__currentSigma
             
             # print(self.__currentP)
@@ -248,11 +248,11 @@ class ElastoPlasticity(Mechanical3D):
             self.__P = np.zeros(len(StrainTensor[0]))
             self.__currentP = np.zeros(len(StrainTensor[0]))
         if self.__PlasticStrainTensor is None: 
-            self.__PlasticStrainTensor = listStrainTensor(np.zeros((6,len(StrainTensor[0]))))
-            self.__currentPlasticStrainTensor = listStrainTensor(np.zeros((6,len(StrainTensor[0]))))
+            self.__PlasticStrainTensor = StrainTensorList(np.zeros((6,len(StrainTensor[0]))))
+            self.__currentPlasticStrainTensor = StrainTensorList(np.zeros((6,len(StrainTensor[0]))))
             
         H = self.GetHelas() #no change of basis because only isotropic behavior are considered            
-        sigma = listStressTensor([sum([(StrainTensor[j]-self.__PlasticStrainTensor[j])*H[i][j] for j in range(6)]) for i in range(6)])
+        sigma = StressTensorList([sum([(StrainTensor[j]-self.__PlasticStrainTensor[j])*H[i][j] for j in range(6)]) for i in range(6)])
         test = self.YieldFunction(sigma, self.__P) > self.__tol
 #        print(sum(test)/len(test)*100)
 
@@ -262,7 +262,7 @@ class ElastoPlasticity(Mechanical3D):
         
         for pg in range(len(sigmaFull)):
             if test[pg] > 0:                 
-                sigma = listStressTensor(sigmaFull[pg])
+                sigma = StressTensorList(sigmaFull[pg])
                 p = self.__P[pg]               
                 iter = 0
                 while abs(self.YieldFunction(sigma, p)) > self.__tol:                       
@@ -275,12 +275,12 @@ class ElastoPlasticity(Mechanical3D):
                     dp = self.YieldFunction(sigma,p)/(B-dphi_dp)
                     p += dp
                     Ep[pg] += Lambda * dp
-                    sigma = listStressTensor([sum([(StrainTensor[j][pg]-Ep[pg][j])*H[i][j] for j in range(6)]) for i in range(6)])                                
+                    sigma = StressTensorList([sum([(StrainTensor[j][pg]-Ep[pg][j])*H[i][j] for j in range(6)]) for i in range(6)])                                
                 self.__currentP[pg] = p
                 sigmaFull[pg] = sigma                                                  
                 
-        self.__currentPlasticStrainTensor = listStrainTensor(Ep.T)
-        self.__currentSigma = listStressTensor(sigmaFull.T) # list of 6 objets 
+        self.__currentPlasticStrainTensor = StrainTensorList(Ep.T)
+        self.__currentSigma = StressTensorList(sigmaFull.T) # list of 6 objets 
         
         return self.__currentSigma 
     

@@ -2,7 +2,7 @@
 #compatible with the simcoon strain and stress notation
 
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.util.PostTreatement import listStressTensor, listStrainTensor
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 import numpy as np
 
@@ -70,12 +70,12 @@ class ShellBase(ConstitutiveLaw):
 
         Returns
         -------
-        listStrainTensor object containing the strain at integration point
+        StrainTensorList object containing the strain at integration point
         """        
         position = kargs.get('position', 1)
         z = position*self.GetThickness()/2
         
-        Strain = listStrainTensor([0 for i in range(6)])
+        Strain = StrainTensorList([0 for i in range(6)])
         Strain[0] = self.__GeneralizedStrain[0] + z*self.__GeneralizedStrain[4] #epsXX -> membrane and bending
         Strain[1] = self.__GeneralizedStrain[1] - z*self.__GeneralizedStrain[3] #epsYY -> membrane and bending
         Strain[3] = self.__GeneralizedStrain[2] #2epsXY
@@ -141,13 +141,13 @@ class ShellHomogeneous(ShellBase):
         Hshear = self.__material.GetH()                       
         Stress += [sum([0 if Strain[j] is 0 else Strain[j]*Hshear[i][j] for j in [4,5]]) for i in [4,5]] #SXX, SYY, SXY (SZZ should be = 0)
         
-        return listStressTensor(Stress)
+        return StressTensorList(Stress)
     
     def GetStressDistribution(self, pg, resolution = 100):
         h = self.GetThickness()
         z = np.arange(-h/2,h/2, h/resolution)        
         
-        Strain = listStrainTensor([0 for i in range(6)])
+        Strain = StrainTensorList([0 for i in range(6)])
         Strain[0] = self.GetGeneralizedStrain()[0][pg] + z*self.GetGeneralizedStrain()[4][pg] #epsXX -> membrane and bending
         Strain[1] = self.GetGeneralizedStrain()[1][pg] - z*self.GetGeneralizedStrain()[3][pg] #epsYY -> membrane and bending
         Strain[3] = self.GetGeneralizedStrain()[2][pg] * np.ones_like(z) #2epsXY
@@ -225,13 +225,13 @@ class ShellLaminate(ShellBase):
         Hshear = self.__listMat[layer].GetH()                       
         Stress += [sum([0 if Strain[j] is 0 else Strain[j]*Hshear[i][j] for j in [4,5]]) for i in [4,5]] #SXX, SYY, SXY (SZZ should be = 0)
         
-        return listStressTensor(Stress)
+        return StressTensorList(Stress)
     
     def GetStressDistribution(self, pg, resolution = 100):
         h = self.GetThickness()
         z = np.linspace(-h/2,h/2, resolution)        
         
-        Strain = listStrainTensor([0 for i in range(6)])
+        Strain = StrainTensorList([0 for i in range(6)])
         Strain[0] = self.GetGeneralizedStrain()[0][pg] + z*self.GetGeneralizedStrain()[4][pg] #epsXX -> membrane and bending
         Strain[1] = self.GetGeneralizedStrain()[1][pg] - z*self.GetGeneralizedStrain()[3][pg] #epsYY -> membrane and bending
         Strain[3] = self.GetGeneralizedStrain()[2][pg] * np.ones_like(z) #2epsXY
