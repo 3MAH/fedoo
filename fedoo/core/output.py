@@ -32,20 +32,18 @@ _label_dict = {'pkii':'PKII',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhof
                 'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global' 
 }
 
-#dict to get the str used in variable name for each output_type
-_output_type_str = {'Node': 'nd', 'Element':'el', 'GaussPoint':'gp'}
-
 #  {'pkii':', save_mesh = FalsePKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
 # 'stress':'Stress', 'strain':'Strain', 'disp':'Disp', 'rot':'Rot'} #use to get label associated with some outputs
 
-def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
+def _GetResults(pb, assemb, output_list, output_type=None, position = 1):
         
         if isinstance(output_list, str): output_list = [output_list]                
 
-        if output_type.lower() == 'node': output_type = 'Node'
-        elif output_type.lower() == 'element': output_type = 'Element'
-        elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
-        else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
+        if output_type is not None: 
+            if output_type.lower() == 'node': output_type = 'Node'
+            elif output_type.lower() == 'element': output_type = 'Element'
+            elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
+            else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
                 
         for i,res in enumerate(output_list):
             output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
@@ -66,10 +64,26 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                 
         material = assemb.weakform.GetConstitutiveLaw()
         
-        result = {}
+        result = DataSet(assemb.mesh)
                     
-        for res in output_list:                                
-            if res in ['PKII', 'PK2', 'Kirchhoff', 'Cauchy','Strain', 'Stress']:
+        for res in output_list:   
+            if res == 'Disp':
+                data = pb.GetDisp()
+                data_type = 'Node'                               
+            
+            elif res == 'Rot':            
+                data = pb.GetRot()
+                data_type = 'Node'                               
+                            
+            elif res == 'Temp':            
+                data = pb.GetTemp()
+                data_type = 'Node'
+                
+            elif res == 'Fext':
+                data = assemb.get_ext_forces(pb.GetDoFSolution())
+                data_type = 'Node'
+                                                
+            elif res in ['PKII', 'PK2', 'Kirchhoff', 'Cauchy','Strain', 'Stress']:
                 if res in data_sav: 
                     data = data_sav[res] #avoid a new data conversion
                 else:
@@ -84,38 +98,18 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                         data = material.GetCauchy()
                     elif res == 'Strain':
                         data = material.GetStrain(position = position)                                                
-                    
-                    data = data.convert(assemb, None, output_type)
-                    
+                                                            
                     #keep data in memory in case it may be used later for vm, pc or pdir stress computation
                     data_sav[res] = data
+                    
+                    if output_type is not None and output_type != 'GaussPoint':
+                        data = data.convert(assemb, None, output_type)
+                        data_type = output_type
+                    else: 
+                        data_type = 'GaussPoint'
                 
-                data = np.array(data)
+                data = np.array(data)                
                                         
-            elif res == 'Disp':
-                if output_type == 'Node':
-                    data = pb.GetDisp()
-                else: 
-                    raise NameError("Displacement is only a Node data and is incompatible with the output format specified")                    
-
-            elif res == 'Rot':
-                if output_type == 'Node': 
-                    data = pb.GetRot()
-                else: 
-                    raise NameError("Displacement is only a Node data and is incompatible with the output format specified")                    
-            
-            elif res == 'Temp':
-                if output_type == 'Node': 
-                    data = pb.GetTemp()
-                else: 
-                    raise NameError("Temperature is only a Node data and is incompatible with the output format specified")                    
-                
-            elif res == 'Fext':
-                if output_type == 'Node':                             
-                    data = assemb.get_ext_forces(pb.GetDoFSolution())
-                else: 
-                    raise NameError("External_Force is only Node data and is incompatible with the specified output format")    
-
             elif res in ['PKII_vm', 'PK2_vm', 'Kirchhoff_vm', 'Cauchy_vm', 'Stress_vm']:
                 if res[:-3] in data_sav: 
                     data=data_sav[res[:-3]]
@@ -129,10 +123,10 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                     elif res == 'Cauchy_vm':
                         data = material.GetCauchy()
 
-                    data = assemb.convert_data(data, None, output_type)
                     data_sav[res[:-3]] = data
                                             
                 data = data.vonMises()
+                data_type = 'GaussPoint'
                     
             elif res in ['PKII_pc', 'PK2_pc', 'Kirchhoff_pc', 'Cauchy_pc', 'Stress_pc', 
                          'PKII_pdir1', 'PK2_pdir1', 'Kirchhoff_pdir1', 'Cauchy_pdir1', 'Stress_pdir1',
@@ -160,7 +154,6 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                     elif measure_type == 'Cauchy':
                         data = material.GetCauchy()
                     
-                    data = data.convert(assemb, None, output_type)            
                     data_sav[measure_type] = data                        
                     data = data.GetPrincipalStress()
                     data_sav[measure_type+'_pc'] = data
@@ -172,29 +165,42 @@ def _GetResults(pb, assemb, output_list, output_type='Node', position = 1):
                 elif res[-6:] == '_pdir2': #2nd principal direction    
                     data = data[1][1]                    
                 elif res[-6:] == '_pdir3': #3rd principal direction    
-                    data = data[1][2]                    
+                    data = data[1][2]    
+                
+                data_type = 'GaussPoint'
                     
             elif res == 'Statev':
-                data = material.GetStatev().T
-                data = assemb.convert_data(data, None, output_type).T
+                data = material.GetStatev()
+                # data = assemb.convert_data(data, None, output_type).T
+                data_type = 'GaussPoint'
             
             elif res in ['Wm']:
-                data = material.GetWm().T
-                data = assemb.convert_data(data, None, output_type).T
+                data = material.GetWm()
+                # data = assemb.convert_data(data, None, output_type).T
+                data_type = 'GaussPoint'
             
             elif res == 'Fint':
                 data = assemb.get_int_forces(pb.GetDoFSolution(), 'local')
-                data = assemb.convert_data(data, None, output_type)
+                # data = assemb.convert_data(data, None, output_type)
+                data_type = 'GaussPoint' #or 'Element' ? 
                 
             elif res == 'Fint_global':
                 data = assemb.get_int_forces(pb.GetDoFSolution(), 'global')
-                data = assemb.convert_data(data, None, output_type)
+                # data = assemb.convert_data(data, None, output_type)
+                data_type = 'GaussPoint' #or 'Element' ? 
             
-            result[res] = data
-        
-        return DataSet(assemb.mesh, result, output_type)
-        
-
+            if output_type is not None and output_type != data_type:
+                data = assemb.convert_data(data, data_type, output_type)
+                data_type = output_type
+            
+            if data_type == 'Node':
+                result.node_data[res] = data
+            elif data_type == 'Element':
+                result.element_data[res] = data
+            elif data_type == 'GaussPoint':
+                result.gausspoint_data[res] = data
+                    
+        return result
 
 
 class _ProblemOutput:
@@ -202,7 +208,7 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.data_sets = {}
                 
-    def AddOutput(self, filename, assemb, output_list, output_type='Node', file_format = 'npz', position = 1, save_mesh = True):
+    def AddOutput(self, filename, assemb, output_list, output_type=None, file_format = 'npz', position = 1, save_mesh = True):
         
         dirname = os.path.dirname(filename)        
         # filename = os.path.basename(filename)
@@ -223,7 +229,7 @@ class _ProblemOutput:
             print("Specified output ignored")
             print("List of available file format: ", _available_format)
         
-        if output_type.lower() not in ['node', 'element', 'gausspoint']:
+        if output_type is not None and output_type.lower() not in ['node', 'element', 'gausspoint']:
             raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
                 
         for i,res in enumerate(output_list):

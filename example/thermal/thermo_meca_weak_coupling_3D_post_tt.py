@@ -30,7 +30,7 @@ clim = [0,100]
 crd = mesh.nodes 
 
 # #note set for boundary conditions
-Xmin, Xmax, center = mesh.bounding_box(return_center=True)
+Xmin, Xmax, center = mesh.bounding_box.center
 
 
 

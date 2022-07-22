@@ -75,13 +75,13 @@ class Problem(ProblemBase):
         
             return vector[i*n : (i+1)*n]   
 
-    def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 1):
+    def AddOutput(self, filename, assemblyname, output_list, output_type=None, file_format ='npz', position = 1):
         return self.__ProblemOutput.AddOutput(filename, assemblyname, output_list, output_type, file_format, position)            
 
     def SaveResults(self, iterOutput=None):
         self.__ProblemOutput.SaveResults(self, iterOutput)
 
-    def GetResults(self, assemb, output_list, output_type='Node', position = 1):        
+    def GetResults(self, assemb, output_list, output_type=None, position = 1):        
         return _GetResults(self, assemb, output_list, output_type, position)
 
     def SetA(self,A):

@@ -86,8 +86,10 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subi
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
-results = pb.AddOutput(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
+# results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
+# results = pb.AddOutput(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
+
+results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
 
 # Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
@@ -114,7 +116,6 @@ E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(),
 print(time()-start)
 
 
-
 # =============================================================
 # Example of plots with pyvista - uncomment the desired plot
 # =============================================================
@@ -127,7 +128,7 @@ results.plot('Cauchy_vm', component = 0, show = True)
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
+# results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
 
 # ------------------------------------
 # Save pdf plot
@@ -135,16 +136,15 @@ results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, qua
 # pl = results.plot(scalars = 'Cauchy_vm', show = False)
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
-
 # ------------------------------------
 # Plot the automatically saved mesh
 # ------------------------------------
 # pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
 
-
-
-
-
+# ------------------------------------
+# Write movie with moving camera
+# ------------------------------------
+# results.write_movie(res_dir+filename, 'Cauchy_vm', framerate = 5, quality = 5, rot_azimuth = 3, rot_elevation = 0.5)
 
 
 
@@ -250,8 +250,8 @@ results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, qua
    
 
     
-    
-    
+# a = res_dir+filename
+# test = fd.core.dataset.read_data(a)
     
 
 

@@ -582,19 +582,19 @@ class Mesh(MeshBase):
         if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
  
         test = 0
-        if len(data) == self.n_nodes: 
+        if data.shape[-1] == self.n_nodes: 
             data_type = 'Node' #fonction définie aux noeuds   
             test+=1               
-        if len(data) == self.n_elements: 
+        if data.shape[-1]  == self.n_elements: 
             data_type = 'Element' #fonction définie aux éléments
             test += 1
-        if len(data) == n_elm_gp*self.n_elements:
+        if data.shape[-1] == n_elm_gp*self.n_elements:
             data_type = 'GaussPoint'
             test += 1
         assert test, "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
         if test>1: "Warning: kind of data is confusing. " + data_type +" values choosen."
         return data_type  
-
+    
 
     def data_to_gausspoint(self, data, n_elm_gp=None):         
         """
@@ -623,19 +623,21 @@ class Mesh(MeshBase):
            
        assert (convert_from in ['Node','GaussPoint','Element']) and (convert_to in ['Node','GaussPoint','Element']), "only possible to convert 'Node', 'Element' and 'GaussPoint' values"
        
-       if convert_from == convert_to: return data       
+       if convert_from == convert_to: return data    
+       
+       data = data.T
        if convert_from == 'Node': 
-           data = self._get_node2gausspoint_mat(n_elm_gp) * data
+           data = self._get_node2gausspoint_mat(n_elm_gp) @ data
        elif convert_from == 'Element':             
            if len(np.shape(data)) == 1: data = np.tile(data.copy(),n_elm_gp)
            else: data = np.tile(data.copy(),[n_elm_gp,1])
            
        # from here data should be defined at 'PG'
        if convert_to == 'Node': 
-           return self._get_gausspoint2node_mat(n_elm_gp) * data 
+           return (self._get_gausspoint2node_mat(n_elm_gp) @ data).T
        elif convert_to == 'Element': 
-           return np.sum(np.split(data, n_elm_gp),axis=0) / n_elm_gp
-       else: return data 
+           return (np.sum(np.split(data, n_elm_gp),axis=0) / n_elm_gp).T
+       else: return data.T
 
 
     def integrate_field(self, field, type_field = None, n_elm_gp = None):        
