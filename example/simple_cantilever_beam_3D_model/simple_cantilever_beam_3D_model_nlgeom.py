@@ -39,19 +39,19 @@ Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
 
 Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-Problem.SetSolver('cg')
+Problem.set_solver('cg')
 print('Solving...')
-Problem.NLSolve(dt=1) 
-#Problem.Solve() 
+Problem.nlsolve(dt=1) 
+#Problem.solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
 #Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDisp(),(3,-1)).T
+U = np.reshape(Problem.get_disp(),(3,-1)).T
 
 #Get the stress tensor (nodal values)
 TensorStrain = assemb.convert_data(ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain(), 'GaussPoint', 'Node')

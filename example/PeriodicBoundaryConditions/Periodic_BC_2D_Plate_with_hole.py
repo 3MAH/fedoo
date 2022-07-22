@@ -84,13 +84,13 @@ Problem.BoundaryCondition('Dirichlet','DispY', Eyy, [StrainNodes[1]]) #EpsYY
 Problem.BoundaryCondition('Dirichlet','DispX', 0, center)
 Problem.BoundaryCondition('Dirichlet','DispY', 0, center)
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #------------------------------------------------------------------------------
 #Solve
 #------------------------------------------------------------------------------
-Problem.SetSolver('CG') #Preconditioned Conjugate Gradient
-Problem.Solve()
+Problem.set_solver('CG') #Preconditioned Conjugate Gradient
+Problem.solve()
 
 #------------------------------------------------------------------------------
 # Post-treatment
@@ -99,7 +99,7 @@ Problem.Solve()
 Util.fieldPlot2d("Assembling", disp = Problem.GetDoFSolution(), dataname = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
 
 # print the macroscopic strain tensor and stress tensor
-print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispY')[-2]])
+print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.get_disp('DispX')[-2], Problem.get_disp('DispY')[-1], Problem.get_disp('DispY')[-2]])
 #Compute the mean stress 
 #Get the stress tensor (PG values)
 TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
@@ -118,11 +118,11 @@ print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 #------------------------------------------------------------------------------
 
 # #Get the stress tensor (nodal values)
-# TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Nodal")       
+# TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Nodal")       
 # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
 
 # #Get the stress tensor (element values)
-# TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Element")       
+# TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Element")       
 # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
 
 # # Get the principal directions (vectors on nodes)

@@ -108,13 +108,13 @@ Problem.BoundaryCondition('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
 Problem.BoundaryCondition('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
 Problem.BoundaryCondition('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsXY
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #------------------------------------------------------------------------------
 #Solve
 #------------------------------------------------------------------------------
-Problem.SetSolver('CG') #Preconditioned Conjugate Gradient
-Problem.Solve()
+Problem.set_solver('CG') #Preconditioned Conjugate Gradient
+Problem.solve()
 
 #------------------------------------------------------------------------------
 # Post-treatment
@@ -147,8 +147,8 @@ print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
 #Get the stress tensor (nodal values converted from PG values)
 TensorStrainNd = Assembly.get_all()['Assembling'].convert_data(TensorStrain, convertTo = "Node")
 TensorStressNd = Assembly.get_all()['Assembling'].convert_data(TensorStress, convertTo = "Node")
-# Or using the GetResults function
-# res = Problem.GetResults("Assembling", ["stress", "strain"], 'node')
+# Or using the get_results function
+# res = Problem.get_results("Assembling", ["stress", "strain"], 'node')
 # TensorStrainNd = res['Strain']
 # TensorStressNd = res['Stress']
 

@@ -52,7 +52,7 @@ Problem.Static("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/simplePlate', 'plate', ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
+Problem.add_output('results/simplePlate', 'plate', ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
 Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
@@ -64,11 +64,11 @@ Problem.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
 
 Problem.BoundaryCondition('Neumann','DispZ',F,node_right_center)
 
-Problem.ApplyBoundaryCondition()
-Problem.Solve()
+Problem.apply_boundary_conditions()
+Problem.solve()
 
 if saveResults == True: 
-    Problem.SaveResults() #save in vtk
+    Problem.save_results() #save in vtk
 
 z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)
 plt.plot(StressDistribution[0], z)

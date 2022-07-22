@@ -147,8 +147,8 @@ if USE_SIMCOON:
                     pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], name = 'Strain') #EpsXZ
                     pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], name = 'Strain') #EpsYZ
                     
-                    #pb.ApplyBoundaryCondition()
-                    pb.NLSolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
+                    #pb.apply_boundary_conditions()
+                    pb.nlsolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = True, ToleranceNR = 0.05, intervalOutput = 2.0*dt)
                     # print('TIME: ', time)
                     
                     #--------------- Post-Treatment -----------------------------------------------
@@ -161,8 +161,8 @@ if USE_SIMCOON:
                     
                     MeanStress = np.array([1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)])
     
-                    MeanStrain = np.array([pb.GetDisp('DispX')[-2], pb.GetDisp('DispY')[-2], pb.GetDisp('DispZ')[-2],
-                                 pb.GetDisp('DispX')[-1], pb.GetDisp('DispY')[-1], pb.GetDisp('DispZ')[-1]])
+                    MeanStrain = np.array([pb.get_disp('DispX')[-2], pb.get_disp('DispY')[-2], pb.get_disp('DispZ')[-2],
+                                 pb.get_disp('DispX')[-1], pb.get_disp('DispY')[-1], pb.get_disp('DispZ')[-1]])
                     
                     Wm_mean = (1/Volume) * Assembly.get_all()['Assembling'].integrate_field(material.Wm)
     
@@ -187,7 +187,7 @@ if USE_SIMCOON:
         else: 
             return BlocksCyclesSteps,MeanStrain_All,MeanStress_All,MeanWm_All
     
-    def GetResultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file,meshperio=True, Problemname = 'MainProblem'):
+    def get_resultsUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file,meshperio=True, Problemname = 'MainProblem'):
         
         Res = SolverUnitCell(mesh, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdat_file, meshperio, Problemname = Problemname)
             

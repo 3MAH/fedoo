@@ -47,7 +47,7 @@ pb.BoundaryCondition('Dirichlet','DispY',0,"faceLeft")
 pb.BoundaryCondition('Dirichlet','DispZ',0,"faceLeft")
 pb.BoundaryCondition('Dirichlet','DispZ',-5e-3,"faceRight")
 
-pb.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 # err0 = Problem.ComputeResidualNorm()
 err0 = 1

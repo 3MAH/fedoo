@@ -6,7 +6,7 @@ import scipy.sparse.linalg
 from fedoo.core.assembly  import Assembly
 from fedoo.core.base import ProblemBase
 from fedoo.core.boundary_conditions import UniqueBoundaryCondition
-from fedoo.core.output import _ProblemOutput, _GetResults
+from fedoo.core.output import _ProblemOutput, _get_results
 from fedoo.core.dataset import DataSet
 
 import time 
@@ -18,22 +18,19 @@ class Problem(ProblemBase):
         # the problem is AX = B + D
         
         ProblemBase.__init__(self, name, space)
-
-        #self.__ModelingSpace = A.shape[0]
-        self.__ModelingSpace = mesh.n_nodes * self.space.nvar
+        self.mesh = mesh   
 
         self.__A = A
 
         if B is 0:
-            self.__B = self._InitializeVector()
+            self.__B = self._new_vect_dof()
         else:
             self.__B = B
         
         self.__D = D
 
-        self.mesh = mesh   
 
-        self.__X = np.ndarray( self.__ModelingSpace )
+        self.__X = np.ndarray( self.n_dof ) #empty array
         self.__Xbc = 0
 
         self.__DofBlocked = np.array([])
@@ -42,10 +39,10 @@ class Problem(ProblemBase):
         #prepering output demand to export results
         self.__ProblemOutput = _ProblemOutput()        
 
-    def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
-        return np.zeros(self.__ModelingSpace)     
+    def _new_vect_dof(self): #initialize a vector (force vector for instance) whose size is n_dof
+        return np.zeros(self.n_dof)     
 
-    def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
+    def _set_vect_component(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 
@@ -55,7 +52,7 @@ class Problem(ProblemBase):
             n = self.mesh.n_nodes
             vector[i*n : (i+1)*n] = value      
 
-    def _get_global_vectorComponent(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
+    def _get_vect_component(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all':                             
@@ -72,17 +69,16 @@ class Problem(ProblemBase):
         else:             
             #vector component are assumed defined as an increment sequence (i, i+1, i+2)
             i = self.space.variable_rank(name)
-        
             return vector[i*n : (i+1)*n]   
 
-    def AddOutput(self, filename, assemblyname, output_list, output_type=None, file_format ='npz', position = 1):
-        return self.__ProblemOutput.AddOutput(filename, assemblyname, output_list, output_type, file_format, position)            
+    def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='npz', position = 1):
+        return self.__ProblemOutput.add_output(filename, assemblyname, output_list, output_type, file_format, position)            
 
-    def SaveResults(self, iterOutput=None):
-        self.__ProblemOutput.SaveResults(self, iterOutput)
+    def save_results(self, iterOutput=None):
+        self.__ProblemOutput.save_results(self, iterOutput)
 
-    def GetResults(self, assemb, output_list, output_type=None, position = 1):        
-        return _GetResults(self, assemb, output_list, output_type, position)
+    def get_results(self, assemb, output_list, output_type=None, position = 1):        
+        return _get_results(self, assemb, output_list, output_type, position)
 
     def SetA(self,A):
         self.__A = A     
@@ -95,9 +91,6 @@ class Problem(ProblemBase):
     
     def GetD(self):
         return self.__D 
- 
-    def GetMesh(self):
-        return self.mesh
     
     def SetB(self,B):
         self.__B = B    
@@ -105,9 +98,9 @@ class Problem(ProblemBase):
     def SetD(self,D):
         self.__D = D        
 
-    def Solve(self, **kargs):
+    def solve(self, **kargs):
         if len(self.__A.shape) == 2: #A is a matrix        
-            if len(self.__DofBlocked) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.ApplyBoundaryCondition()" is probably missing')          
+            if len(self.__DofBlocked) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
              # to delete after a careful validation of the other case
             # self.__X[self.__DofBlocked] = self.__Xbc[self.__DofBlocked]
             
@@ -136,13 +129,13 @@ class Problem(ProblemBase):
         return self.__X
     
     def GetDoFSolution(self,name='all'): #solution of the problem (same as GetX for linear problems if name=='all')
-        return self._get_global_vectorComponent(self.__X, name) 
+        return self._get_vect_component(self.__X, name) 
 
     def SetDoFSolution(self,name,value):
-        self._SetVectorComponent(self.__X, name, value)          
+        self._set_vect_component(self.__X, name, value)          
        
 
-    def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):
+    def apply_boundary_conditions(self, timeFactor=1, timeFactorOld=None):
                 
         n = self.mesh.n_nodes
         nvar = self.space.nvar
@@ -299,4 +292,7 @@ class Problem(ProblemBase):
     @property
     def results(self):
         return self.__ProblemOutput.data_sets
-      
+
+    @property
+    def n_dof(self):
+        return self.mesh.n_nodes * self.space.nvar    

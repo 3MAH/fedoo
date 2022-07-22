@@ -67,13 +67,13 @@ Problem.BoundaryCondition('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
 Problem.BoundaryCondition('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
 Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
-Problem.SetSolver('CG')
+Problem.set_solver('CG')
 print('Solving...')
 print(time.time()-t0)
-Problem.Solve()
+Problem.solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
@@ -88,8 +88,8 @@ Volume_mesh = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(Tens
 
 MeanStress = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)] 
 
-MeanStrain = [Problem.GetDisp('DispX')[-2], Problem.GetDisp('DispY')[-2], Problem.GetDisp('DispZ')[-2], 
-              Problem.GetDisp('DispX')[-1], Problem.GetDisp('DispY')[-1], Problem.GetDisp('DispZ')[-1]]
+MeanStrain = [Problem.get_disp('DispX')[-2], Problem.get_disp('DispY')[-2], Problem.get_disp('DispZ')[-2], 
+              Problem.get_disp('DispX')[-1], Problem.get_disp('DispY')[-1], Problem.get_disp('DispZ')[-1]]
 # Other method: only work if volume with no void (Void=0)
 # Void = Volume-Volume_mesh 
 # MeanStrain = [1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStrain[i]) for i in range(6)] 
@@ -109,12 +109,12 @@ output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
     
-    res = Problem.GetResults("Assembling", ["stress", "strain"], 'node')
+    res = Problem.get_results("Assembling", ["stress", "strain"], 'node')
     TensorStrainNd = res['Strain']
     TensorStressNd = res['Stress']
     
     #Get the stress tensor (element values)
-    res = Problem.GetResults("Assembling", ["stress", "strain"], 'element')
+    res = Problem.get_results("Assembling", ["stress", "strain"], 'element')
     TensorStrainEl = res['Strain']
     TensorStressEl = res['Stress']    
     

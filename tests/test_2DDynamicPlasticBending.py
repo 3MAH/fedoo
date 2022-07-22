@@ -60,7 +60,7 @@ fd.Assembly.create("Inertia", "Domain", "quad4", name="MassAssembling")
 
 pb = fd.problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 
 pb.SetNewtonRaphsonErrorCriterion("Displacement")
 # pb.SetNewtonRaphsonErrorCriterion("Work")
@@ -68,8 +68,8 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 # if not(os.path.isdir('results')): os.mkdir('results')
-# pb.AddOutput('results/bendingPlasticDyna', 'Assembling', ['disp', 'kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')    
-# pb.AddOutput('results/bendingPlasticDyna', 'Assembling', ['kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+# pb.add_output('results/bendingPlasticDyna', 'Assembling', ['disp', 'kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')    
+# pb.add_output('results/bendingPlasticDyna', 'Assembling', ['kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
@@ -81,7 +81,7 @@ bc1 = pb.BoundaryCondition('Dirichlet','DispY', uimp, nodes_top1)
 bc2 = pb.BoundaryCondition('Dirichlet','DispY', uimp, nodes_top2)
 
 
-pb.NLSolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
+pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 
 
 ################### step 2 ################################
@@ -91,12 +91,12 @@ pb.NLSolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 # F_app = Problem.GetExternalForce('DispY')[nodes_topCenter]
 # bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-# pb.NLSolve(t0 = 1, tmax = 2, dt = 1., update_dt = True, ToleranceNR = 0.01)
+# pb.nlsolve(t0 = 1, tmax = 2, dt = 1., update_dt = True, ToleranceNR = 0.01)
 
 
 # print(time()-start)
 
-res = pb.GetResults('Assembling', ['Strain','Stress'], 'Node') 
+res = pb.get_results('Assembling', ['Strain','Stress'], 'Node') 
 assert np.abs(res.node_data['Strain'][0][941]+0.0195533914469858) < 1e-8
 assert np.abs(res.node_data['Stress'][3][234]+3.0035364261379316) < 1e-4
 # assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4# assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4

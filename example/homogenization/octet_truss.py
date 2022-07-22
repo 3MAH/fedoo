@@ -28,4 +28,4 @@ path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
 outputdatfile = 'output.dat'
 
-homogen.GetResultsUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile)
+homogen.get_resultsUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile)

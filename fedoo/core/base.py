@@ -285,16 +285,7 @@ class WeakForm:
 
 #=============================================================
 # Base class for problems (cf problems lib)
-#=============================================================
-import numpy as np
-import scipy.sparse.linalg
-import scipy.sparse as sparse
-try: 
-    from pypardiso import spsolve
-    USE_PYPARDISO = True
-except: 
-    USE_PYPARDISO = False
-    
+#=============================================================   
 # from fedoo.problem.BoundaryCondition import UniqueBoundaryCondition
 
 class ProblemBase:
@@ -488,13 +479,13 @@ class ProblemBase:
 
     
     ### Functions that may be defined depending on the type of problem
-    def GetDisp(self,name='all'):
+    def get_disp(self,name='all'):
          raise NameError("The method 'GetDisp' is not defined for this kind of problem")
 
-    def GetRot(self,name='all'):
+    def get_rot(self,name='all'):
          raise NameError("The method 'GetRot' is not defined for this kind of problem")
 
-    def GetTemp(self):
+    def get_temp(self):
          raise NameError("The method 'GetTemp' is not defined for this kind of problem")
     
     def update(self,):
@@ -547,14 +538,14 @@ class ProblemBase:
     def get_ext_forces(self, name = 'all'):
         raise NameError("The method 'get_ext_forces' is not defined for this kind of problem")    
 
-    def AddOutput(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
-        raise NameError("The method 'AddOutput' is not defined for this kind of problem")    
+    def add_output(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+        raise NameError("The method 'add_output' is not defined for this kind of problem")    
         
-    def SaveResults(self, iterOutput=None):        
-        raise NameError("The method 'SaveResults' is not defined for this kind of problem")
+    def save_results(self, iterOutput=None):        
+        raise NameError("The method 'save_results' is not defined for this kind of problem")
     
-    def GetResults(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
-        raise NameError("The method 'GetResults' is not defined for this kind of problem")        
+    def get_results(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
+        raise NameError("The method 'get_results' is not defined for this kind of problem")        
 
     #defined in the ProblemPGD classes
     def GetX(self): raise NameError("Method only defined for PGD Problems") 
@@ -568,6 +559,7 @@ class ProblemBase:
     @property
     def solver(self):
         return self.__solver[0]
+    
 
 
 # =============================================================================
@@ -601,9 +593,9 @@ class ProblemBase:
 
 
 # ### Functions that may be defined depending on the type of problem
-# def GetDisp(name='Disp'): return ProblemBase.get_active().GetDisp(name)
-# def GetRot(name='all'): return ProblemBase.get_active().GetRot(name)
-# def GetTemp(): return ProblemBase.get_active().GetTemp()
+# def get_disp(name='Disp'): return ProblemBase.get_active().get_disp(name)
+# def get_rot(name='all'): return ProblemBase.get_active().get_rot(name)
+# def get_temp(): return ProblemBase.get_active().get_temp()
 # def update(**kargs): return ProblemBase.get_active().update(**kargs) 
 # def ChangeAssembly(Assembling): ProblemBase.get_active().ChangeAssembly(Assembling)
 # def SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None): ProblemBase.get_active().SetNewtonRaphsonErrorCriterion(ErrorCriterion, tol, max_subiter, err0)
@@ -613,13 +605,13 @@ class ProblemBase:
 # def to_start(): ProblemBase.get_active().to_start()
 # def reset(): ProblemBase.get_active().reset()
 # def resetLoadFactor(): ProblemBase.get_active().resetLoadFactor()
-# def NLSolve(**kargs): return ProblemBase.get_active().NLSolve(**kargs)  
-# def AddOutput(filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
-#     return ProblemBase.get_active().AddOutput(filename, assemblyname, output_list, output_type, file_format, position)
-# def SaveResults(iterOutput=None):        
-#     return ProblemBase.get_active().SaveResults(iterOutput)
-# def GetResults(assemb, output_list, output_type='Node', position = 1, res_format = None):
-#     return ProblemBase.get_active().GetResults(assemb, output_list, output_type, position, res_format)
+# def NLSolve(**kargs): return ProblemBase.get_active().nlsolve(**kargs)  
+# def add_output(filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+#     return ProblemBase.get_active().add_output(filename, assemblyname, output_list, output_type, file_format, position)
+# def save_results(iterOutput=None):        
+#     return ProblemBase.get_active().save_results(iterOutput)
+# def get_results(assemb, output_list, output_type='Node', position = 1, res_format = None):
+#     return ProblemBase.get_active().get_results(assemb, output_list, output_type, position, res_format)
 
 
 
@@ -631,13 +623,13 @@ class ProblemBase:
 # def GetMesh(): return ProblemBase.get_active().mesh
 # def SetD(D): ProblemBase.get_active().SetD(D)
 # def SetB(B): ProblemBase.get_active().SetB(B)
-# def Solve(**kargs): ProblemBase.get_active().Solve(**kargs)
+# def Solve(**kargs): ProblemBase.get_active().solve(**kargs)
 # def GetX(): return ProblemBase.get_active().GetX()
-# def ApplyBoundaryCondition(): ProblemBase.get_active().ApplyBoundaryCondition()
+# def apply_boundary_conditions(): ProblemBase.get_active().apply_boundary_conditions()
 # def GetDoFSolution(name='all'): return ProblemBase.get_active().GetDoFSolution(name)
 # def SetDoFSolution(name,value): ProblemBase.get_active().SetDoFSolution(name,value)
 # def SetInitialBCToCurrent(): ProblemBase.get_active().SetInitialBCToCurrent()
-# def get_global_vectorComponent(vector, name='all'): return ProblemBase.get_active()._get_global_vectorComponent(vector, name)
+# def get_global_vectorComponent(vector, name='all'): return ProblemBase.get_active()._get_vect_component(vector, name)
 
 # #functions only defined for Newmark problem 
 # def GetXdot():

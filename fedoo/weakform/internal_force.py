@@ -88,8 +88,8 @@ class InternalForce(WeakForm):
     def update(self, assembly, pb, dtime):
         if self._nlgeom == 2:
             # if updated lagragian method -> update the mesh and recompute elementary op
-            assembly.set_disp(pb.GetDisp())               
-            # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.GetDisp().T)
+            assembly.set_disp(pb.get_disp())               
+            # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.get_disp().T)
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
                 del assembly._saved_change_of_basis_mat[assembly.current.mesh]
             assembly.current.compute_elementary_operators()        
@@ -97,7 +97,7 @@ class InternalForce(WeakForm):
     def to_start(self):    
         if self._nlgeom == 2:
             # if updated lagragian method -> reset the mesh to the begining of the increment
-            self._assembly.set_disp(self._pb.GetDisp())               
+            self._assembly.set_disp(self._pb.get_disp())               
             if self._assembly.current.mesh in self._assembly._saved_change_of_basis_mat:
                 del self._assembly._saved_change_of_basis_mat[self._assembly.current.mesh]
             self._assembly.current.compute_elementary_operators()            

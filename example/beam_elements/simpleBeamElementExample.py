@@ -59,8 +59,8 @@ Problem.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
 
 Problem.BoundaryCondition('Neumann','DispY',F,nodes_right)
 
-Problem.ApplyBoundaryCondition()
-Problem.Solve()
+Problem.apply_boundary_conditions()
+Problem.solve()
 
 #Post treatment               
 results = Assembly.get_all()['beam'].get_ext_forces(Problem.GetDoFSolution('all'))

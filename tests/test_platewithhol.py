@@ -34,19 +34,20 @@ pb.BoundaryCondition('Dirichlet','DispY',    0  , bottom)
 #displacement on right (ux=0.1mm)
 pb.BoundaryCondition('Dirichlet','DispX', 0.1, right) 
 
-pb.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 #Solve problem
-pb.Solve()
+pb.solve()
 
 #---------- Post-Treatment ----------
 #Get the stress tensor, strain tensor, and displacement (nodal values)
-res = pb.GetResults("Assembly", ['Stress_vm','Strain'], 'Node')
-U = pb.GetDisp()
+res = pb.get_results("Assembly", ['Stress_vm','Strain'], 'Node')
+
+U = pb.get_disp()
 
 assert U[0,22] == 0.1
 assert np.abs(U[1,22] +0.010440829731661383) < 1e-15
 assert np.abs(res.node_data['Stress_vm'][53]-350.1929992233047) < 1e-15
 
-# Util.fieldPlot2d("Assembly", disp = pb.GetDisp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
-# Util.fieldPlot2d("Assembly", disp = pb.GetDisp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")
+# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
+# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")

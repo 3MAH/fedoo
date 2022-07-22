@@ -32,9 +32,9 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
                 
             B = 0 ; D = 0
             
-            self.__Xold    = self._InitializeVector(A) #displacement at the previous time step        
-            self.__Xdot    = self._InitializeVector(A)
-            self.__Xdotdot = self._InitializeVector(A)
+            self.__Xold    = self._new_vect_dof(A) #displacement at the previous time step        
+            self.__Xdot    = self._new_vect_dof(A)
+            self.__Xdotdot = self._new_vect_dof(A)
             
             self.__Beta       = Beta
             self.__Gamma      = Gamma
@@ -62,7 +62,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
         def GetXdotdot(self):
             return self.__Xdotdot
     
-        def GetDisp(self, name = 'all'): #same as GetX
+        def get_disp(self, name = 'all'): #same as GetX
             return self.GetDoFSolution(name)        
                
         def GetVelocity(self): #same as GetXdot
@@ -76,14 +76,14 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial displacement of each nodes
             """        
-            self._SetVectorComponent(self.__Xold, name, value)          
+            self._set_vect_component(self.__Xold, name, value)          
         
         def SetInitialVelocity(self, name,value):
             """
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial velocity of each nodes        
             """
-            self._SetVectorComponent(self.__Xdot, name, value) 
+            self._set_vect_component(self.__Xdot, name, value) 
     
     
         def SetInitialAcceleration(self, name,value):
@@ -91,7 +91,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial acceleration of each nodes        
             """
-            self._SetVectorComponent(self.__Xdotdot, name, value) 
+            self._set_vect_component(self.__Xdotdot, name, value) 
     
         
         def SetRayleighDamping(self, alpha, beta):        

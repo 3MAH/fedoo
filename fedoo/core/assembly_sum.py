@@ -23,7 +23,7 @@ class AssemblySum(AssemblyBase):
     name: str
         name of the Assembly             
     assembly_output: Assembly (optional keyword arg)
-        Assembly object used to extract output values (using Problem.GetResults or Problem.SaveResults)
+        Assembly object used to extract output values (using Problem.get_results or Problem.save_results)
     """
     def __init__(self, list_assembly, name ="", **kargs):      
         AssemblyBase.__init__(self, name)  

@@ -58,14 +58,14 @@ pb.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
 
 pb.BoundaryCondition('Neumann','DispZ',F,node_right_center)
 
-pb.ApplyBoundaryCondition()
-pb.Solve()
+pb.apply_boundary_conditions()
+pb.solve()
 
 # I = h*thickness**3/12
 # # print('Beam analitical deflection: ', F*L**3/(3*E*I))
-# # print('Numerical deflection: ', pb.GetDisp('DispZ')[node_right_center])
+# # print('Numerical deflection: ', pb.get_disp('DispZ')[node_right_center])
 
-assert np.abs(pb.GetDisp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
 
 # # z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(20)
 # # plt.plot(StressDistribution[0], z)

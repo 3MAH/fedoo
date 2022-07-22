@@ -190,7 +190,7 @@ class FE2(Mechanical3D):
         pb.BoundaryCondition('Dirichlet','DispZ', strain[5][id_pb], [strain_nodes[1]], initialValue = self.__strain[5][id_pb], name = 'Strain') #EpsYZ
         
         
-        pb.NLSolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
+        pb.nlsolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
         
         self.Lt[id_pb]= GetTangentStiffness(pb.name)
         

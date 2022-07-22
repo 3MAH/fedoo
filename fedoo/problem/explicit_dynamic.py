@@ -30,9 +30,9 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             A = 1/(TimeStep**2)*MassAssembling.get_global_matrix()   
             B = 0 ; D = 0
             
-            self.__Xold    = self._InitializeVector(A) #displacement at the previous time step        
-            self.__Xdot    = self._InitializeVector(A)
-            self.__Xdotdot = self._InitializeVector(A)
+            self.__Xold    = self._new_vect_dof(A) #displacement at the previous time step        
+            self.__Xdot    = self._new_vect_dof(A)
+            self.__Xdotdot = self._new_vect_dof(A)
 
             self.__TimeStep   = TimeStep
             self.__MassLuming = False
@@ -71,14 +71,14 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial displacement of each nodes
             """        
-            self._SetVectorComponent(self.__Xold, name, value)          
+            self._set_vect_component(self.__Xold, name, value)          
         
         def SetInitialVelocity(self, name,value):
             """
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial velocity of each nodes        
             """
-            self._SetVectorComponent(self.__Xdot, name, value) 
+            self._set_vect_component(self.__Xdot, name, value) 
     
     
         def SetInitialAcceleration(self, name,value):
@@ -86,7 +86,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial acceleration of each nodes        
             """
-            self._SetVectorComponent(self.__Xdotdot, name, value) 
+            self._set_vect_component(self.__Xdotdot, name, value) 
                      
     
         def SetRayleighDamping(self, alpha, beta):        

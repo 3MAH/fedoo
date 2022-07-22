@@ -33,27 +33,27 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.err_num= 1e-8 #numerical error
         
         #Return the displacement components
-        def GetDisp(self,name='Disp'):    
-            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
-            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)    
+        def get_disp(self,name='Disp'):    
+            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
+            return self._get_vect_component(self.__Utot + self.__DU, name)    
         
         #Return the rotation components
-        def GetRot(self,name='Rot'):    
-            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
-            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)    
+        def get_rot(self,name='Rot'):    
+            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
+            return self._get_vect_component(self.__Utot + self.__DU, name)    
 
         #Return the Temperature
-        def GetTemp(self):    
-            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, 'Temp')
-            return self._get_global_vectorComponent(self.__Utot + self.__DU, 'Temp')    
+        def get_temp(self):    
+            if self.__DU is 0: return self._get_vect_component(self.__Utot, 'Temp')
+            return self._get_vect_component(self.__Utot + self.__DU, 'Temp')    
         
         #Return all the dof for every variable under a vector form
         def GetDoFSolution(self,name='all'):
-            if self.__DU is 0: return self._get_global_vectorComponent(self.__Utot, name)
-            return self._get_global_vectorComponent(self.__Utot + self.__DU, name)        
+            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
+            return self._get_vect_component(self.__Utot + self.__DU, name)        
         
         def get_ext_forces(self, name = 'all'):
-            return self._get_global_vectorComponent(-self.GetD(), name)        
+            return self._get_vect_component(-self.GetD(), name)        
         
         def updateA(self, dt = None):
             #dt not used for static problem
@@ -76,12 +76,12 @@ def _GenerateClass_NonLinearStatic(libBase):
             timeFactor    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
             timeFactorOld = (timeStart-self.t0)/(self.tmax-self.t0)
 
-            self.ApplyBoundaryCondition(timeFactor, timeFactorOld)
+            self.apply_boundary_conditions(timeFactor, timeFactorOld)
             
             #build and solve the linearized system with elastic rigidty matrix           
             self.updateA(dt) #should be the elastic rigidity matrix
             self.updateD(dt, start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
-            self.Solve()        
+            self.solve()        
 
             #set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
             try:
@@ -116,7 +116,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 
                 #Save results            
                 if save_results: 
-                    self.SaveResults(self.__compteurOutput)                              
+                    self.save_results(self.__compteurOutput)                              
                     self.__compteurOutput += 1     
             else:
                 self.__err0 = self.__default_err0 #initial error for NR error estimation
@@ -131,7 +131,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                               
         def NewtonRaphsonIncrement(self):                                      
             #solve and update total displacement. A and D should up to date
-            self.Solve()
+            self.solve()
             self.__DU += self.GetX()
             # print(self.__DU)
         
@@ -164,7 +164,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__err0 = self.__default_err0 #initial error for NR error estimation   
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
-            self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
+            self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
         def GetAssembly(self):
             return self.__Assembly
@@ -263,7 +263,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             return 0, subiter, normRes
 
 
-        def NLSolve(self, **kargs):              
+        def nlsolve(self, **kargs):              
             #parameters
             self.print_info = kargs.get('print_info',self.print_info)
             max_subiter = kargs.get('max_subiter',self.__max_subiter)

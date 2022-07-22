@@ -78,7 +78,7 @@ StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro st
 assemb = Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
 Problem.NonLinearStatic("Assembling")
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
@@ -87,8 +87,8 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/rot_test', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
-# Problem.AddOutput('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+Problem.add_output('results/rot_test', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 Homogen.DefinePeriodicBoundaryConditionGrad(meshname,
@@ -113,12 +113,12 @@ Problem.BoundaryCondition('Dirichlet','DispX', grad_u[2,0], [StrainNodes[2]]) #E
 Problem.BoundaryCondition('Dirichlet','DispY', grad_u[2,1], [StrainNodes[2]]) #EpsYY
 Problem.BoundaryCondition('Dirichlet','DispZ', grad_u[2,2], [StrainNodes[2]]) #EpsZZ
 
-# Problem.ApplyBoundaryCondition()
+# Problem.apply_boundary_conditions()
 
-Problem.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+Problem.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
-# Problem.Solve()
-# Problem.SaveResults()
+# Problem.solve()
+# Problem.save_results()
 
 
 E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint", False)).T
@@ -129,7 +129,7 @@ E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(
 # F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
 # bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-# Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
+# Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 
 print(time()-start)
 

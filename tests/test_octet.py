@@ -41,7 +41,7 @@ pb = fd.problem.NonLinearStatic("Assembly")
 pb.SetNewtonRaphsonErrorCriterion("Work")
 
 # Set the desired ouputs at each time step
-# Problem.AddOutput('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
+# Problem.add_output('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
 
 # Boundary conditions for the linearized strain tensor
 E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
@@ -60,15 +60,15 @@ pb.BoundaryCondition('Dirichlet', 'Disp', [E[0], E[1], E[2]], [
 pb.BoundaryCondition('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
                            StrainNodes[1]])  # EpsXY, EpsXZ, EpsYZ
 
-pb.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 # ---------------  Non linear solver--------------------------------------------
 pb.set_solver('CG') #conjugate gradient solver
-pb.NLSolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
+pb.nlsolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
 
 # --------------- Post-Treatment -----------------------------------------------
 # Get the stress and strain tensor (PG values)
-res = pb.GetResults('Assembly', ['Strain','Stress'], 'GaussPoint') 
+res = pb.get_results('Assembly', ['Strain','Stress'], 'GaussPoint') 
 TensorStrain = res.gausspoint_data['Strain']
 TensorStress = res.gausspoint_data['Stress']
 

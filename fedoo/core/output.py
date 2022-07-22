@@ -35,7 +35,7 @@ _label_dict = {'pkii':'PKII',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhof
 #  {'pkii':', save_mesh = FalsePKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
 # 'stress':'Stress', 'strain':'Strain', 'disp':'Disp', 'rot':'Rot'} #use to get label associated with some outputs
 
-def _GetResults(pb, assemb, output_list, output_type=None, position = 1):
+def _get_results(pb, assemb, output_list, output_type=None, position = 1):
         
         if isinstance(output_list, str): output_list = [output_list]                
 
@@ -68,15 +68,15 @@ def _GetResults(pb, assemb, output_list, output_type=None, position = 1):
                     
         for res in output_list:   
             if res == 'Disp':
-                data = pb.GetDisp()
+                data = pb.get_disp()
                 data_type = 'Node'                               
             
             elif res == 'Rot':            
-                data = pb.GetRot()
+                data = pb.get_rot()
                 data_type = 'Node'                               
                             
             elif res == 'Temp':            
-                data = pb.GetTemp()
+                data = pb.get_temp()
                 data_type = 'Node'
                 
             elif res == 'Fext':
@@ -123,8 +123,8 @@ def _GetResults(pb, assemb, output_list, output_type=None, position = 1):
                     elif res == 'Cauchy_vm':
                         data = material.GetCauchy()
 
-                    data_sav[res[:-3]] = data
-                                            
+                    data_sav[res[:-3]] = data                                                     
+
                 data = data.vonMises()
                 data_type = 'GaussPoint'
                     
@@ -208,7 +208,7 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.data_sets = {}
                 
-    def AddOutput(self, filename, assemb, output_list, output_type=None, file_format = 'npz', position = 1, save_mesh = True):
+    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'npz', position = 1, save_mesh = True):
         
         dirname = os.path.dirname(filename)        
         # filename = os.path.basename(filename)
@@ -258,7 +258,7 @@ class _ProblemOutput:
         return res
 
 
-    def SaveResults(self, pb, comp_output=None):
+    def save_results(self, pb, comp_output=None):
         
         list_filename = []
         list_full_filename = []
@@ -296,7 +296,7 @@ class _ProblemOutput:
                     out = list_data[list_full_filename.index(full_filename)]                                                                             
             
             #compute the results
-            res = _GetResults(pb, assemb, output['list'],output_type,position)#, file_format)                        
+            res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)                        
             out.add_data(res)            
         
         for i, out in enumerate(list_data): 

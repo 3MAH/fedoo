@@ -46,13 +46,13 @@ Problem.NonLinearStatic("Assembly")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
-Problem.AddOutput('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
+Problem.add_output('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
+Problem.add_output('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
 
 #output result for a random micro cell (here for the 5th integration point)
 #Warning : the results of micro_cells are automatically saved at each NR iteration (several iteration per time iteration)
 # Problem.initialize(0) #to build prolems
-# micro_cells.list_problem[5].AddOutput('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
+# micro_cells.list_problem[5].add_output('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
 
 
 #Definition of the set of nodes for boundary conditions
@@ -69,12 +69,12 @@ Problem.BoundaryCondition('Dirichlet','DispY',    0  , bottom)
 #displacement on right (ux=0.1mm)
 Problem.BoundaryCondition('Dirichlet','DispX', 0.1, right) 
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #Solve problem
-Problem.NLSolve()
+Problem.nlsolve()
 
 #---------- Post-Treatment ----------
 #Get the stress tensor, strain tensor, and displacement (nodal values)
-res_nd = Problem.GetResults("Assembly", ['Stress_VM','Strain'], 'Node')
-U = Problem.GetDisp()
+res_nd = Problem.get_results("Assembly", ['Stress_VM','Strain'], 'Node')
+U = Problem.get_disp()

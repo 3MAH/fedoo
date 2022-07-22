@@ -32,13 +32,13 @@ pb.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
 
 pb.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
 
-pb.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-# Problem.SetSolver('cg') #uncomment for conjugate gradient solver
+# Problem.set_solver('cg') #uncomment for conjugate gradient solver
 print('Solving...')
-pb.Solve() 
+pb.solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------

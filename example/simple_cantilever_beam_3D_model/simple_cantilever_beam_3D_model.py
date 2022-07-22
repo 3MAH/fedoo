@@ -39,13 +39,13 @@ Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
 
 Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-# Problem.SetSolver('cg') #uncomment for conjugate gradient solver
+# Problem.set_solver('cg') #uncomment for conjugate gradient solver
 print('Solving...')
-Problem.Solve() 
+Problem.solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
@@ -54,7 +54,7 @@ U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
 TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "Nodal")       
-TensorStress = Problem.GetResults('Assembling', ['stress'], 'Node')['Stress']
+TensorStress = Problem.get_results('Assembling', ['stress'], 'Node')['Stress']
 # ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()

@@ -60,13 +60,13 @@ Problem.BoundaryCondition('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
 Problem.BoundaryCondition('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
 Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #lv--------------- Soe --------------------------------------------------------
-Problem.SetSolver('CG')
+Problem.set_solver('CG')
 print('Solving...')
 print(time.time()-t0)
-Problem.Solve()
+Problem.solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
@@ -86,11 +86,11 @@ if output_VTK == 1:
     TensorStressEl = Assembly.convert_data(TensorStress, meshname, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Nodal")       
+    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Nodal")       
     # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
     
     # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.GetDisp(), "Element")       
+    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Element")       
     # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
     
     # Get the principal directions (vectors on nodes)

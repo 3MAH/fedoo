@@ -31,7 +31,7 @@ class ProblemPGD(ProblemBase):
         self.__A = A 
         #if self.__A != 0: self.__A.tocsr() #just in case A is in another format as csr
         
-        if B is 0: self.__B = self._InitializeVector()
+        if B is 0: self.__B = self._new_vect_dof()
         else: self.__B = B        
             
         self.__D = D
@@ -46,10 +46,10 @@ class ProblemPGD(ProblemBase):
     #===============================================================================
     # Internal Functions
     #===============================================================================
-    def _InitializeVector(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
+    def _new_vect_dof(self): #initialize a vector (force vector for instance) being giving the stiffness matrix
         return SeparatedZeros(self.__ModelingSpace)  
     
-    def _SetVectorComponent(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
+    def _set_vect_component(self, vector, name, value): #initialize a vector (force vector for instance) being giving the stiffness matrix
 
         assert isinstance(name,str), 'argument error'
         
@@ -64,7 +64,7 @@ class ProblemPGD(ProblemBase):
 #
 #            NewmarkPGD.__Xdotdot[i*n : (i+1)*n] = value            
     
-    def _get_global_vectorComponent(self, vector, name):
+    def _get_vect_component(self, vector, name):
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 
@@ -276,7 +276,7 @@ class ProblemPGD(ProblemBase):
     # verifier l'utlisation de var dans boundary conditions PGD
     # reprendre les conditions aux limites en incluant les méthodes de pénalités pour des conditions aux limites plus exotiques
     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
-    def ApplyBoundaryCondition(self, timeFactor=1, timeFactorOld=None):                  
+    def apply_boundary_conditions(self, timeFactor=1, timeFactorOld=None):                  
         meshPGD = self.mesh
         shapeX = self.__ModelingSpace
         X = self.__X

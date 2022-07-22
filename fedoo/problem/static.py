@@ -47,7 +47,7 @@ def Static(Assembling, name = "MainProblem"):
             self.SetA(self.__Assembly.get_global_matrix()) #tangent stiffness 
             self.SetD(self.__Assembly.get_global_vector())            
             B = 0            
-            self.ApplyBoundaryCondition()
+            self.apply_boundary_conditions()
 
         
         def update(self, dtime=1, compute = 'all'):   
@@ -69,11 +69,11 @@ def Static(Assembling, name = "MainProblem"):
             self.SetD(Assembling.get_global_vector())
             return outValues 
         
-        def Solve(self, **kargs):
+        def solve(self, **kargs):
             #Solve and update weakform (compute stress for instance) without updating global matrix
             #to avoid update weakform, use updateWF = True
             updateWF = kargs.pop('updateWF', True)
-            libBase.Solve(self)
+            libBase.solve(self)
             if updateWF == True:
                 self.update(compute = 'none')
             
@@ -90,11 +90,11 @@ def Static(Assembling, name = "MainProblem"):
             self.__Assembly = Assembling
             if update: self.update()        
         
-        def GetDisp(self,name='all'):    
+        def get_disp(self,name='all'):    
             if name == 'all': name = 'Disp'
             return self.GetDoFSolution(name)
         
-        def GetRot(self,name='all'):    
+        def get_rot(self,name='all'):    
             if name == 'all': name = 'Rot'
             return self.GetDoFSolution(name)
         

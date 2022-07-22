@@ -34,12 +34,12 @@ right = mesh.find_nodes('X', Xmax[2])
 
 pb = fd.problem.NonLinearStatic("Assembling")
 
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 
 pb.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 if not(os.path.isdir('results')): os.mkdir('results')
-results = pb.AddOutput('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
-# Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+results = pb.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
+# Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 10
 # Problem.BoundaryCondition('Dirichlet','Temp',0,bottom)
@@ -56,7 +56,7 @@ pb.BoundaryCondition('Dirichlet','Temp',3,right, timeEvolution=timeEvolution)
 # Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
 # bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
 
-pb.NLSolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
+pb.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 
 
 results.load()

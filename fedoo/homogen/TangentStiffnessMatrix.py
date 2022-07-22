@@ -122,7 +122,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispY', 0, center, name = 'center')
     pb_post_tt.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
 
-    pb_post_tt.ApplyBoundaryCondition()
+    pb_post_tt.apply_boundary_conditions()
 
     DofFree = pb_post_tt._Problem__DofFree
     MatCB = pb_post_tt._Problem__MatCB
@@ -144,13 +144,13 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         
-        pb_post_tt.ApplyBoundaryCondition()
+        pb_post_tt.apply_boundary_conditions()
 
-        pb_post_tt.Solve()
+        pb_post_tt.solve()
                 
         X = pb_post_tt.GetX()  # alias
-        DStrain.append(np.array([pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))
+        DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
+                                  pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))
 
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)
@@ -235,7 +235,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     # typeBC = 'Dirichlet' #doesn't work with meshperio = False
     typeBC = 'Neumann'
     
-    pb_post_tt.ApplyBoundaryCondition()
+    pb_post_tt.apply_boundary_conditions()
     
     DofFree = pb_post_tt._Problem__DofFree
     MatCB = pb_post_tt._Problem__MatCB
@@ -254,12 +254,12 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         pb_post_tt.BoundaryCondition(typeBC, 'DispZ',
               BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         
-        pb_post_tt.ApplyBoundaryCondition()
+        pb_post_tt.apply_boundary_conditions()
     
-        pb_post_tt.Solve()
+        pb_post_tt.solve()
         X = pb_post_tt.GetX()  # alias    
-        DStrain.append(np.array([pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._get_global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
+        DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
+                                  pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
         
         pb_post_tt.RemoveBC("_Strain")
     

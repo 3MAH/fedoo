@@ -55,7 +55,7 @@ pb = fd.problem.Static("plate")
 
 #create a 'result' folder and set the desired ouputs
 # if not(os.path.isdir('results')): os.mkdir('results')
-# Problem.AddOutput('results/simplePlate', post_tt_assembly, ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
+# Problem.add_output('results/simplePlate', post_tt_assembly, ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
 pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
@@ -67,10 +67,10 @@ pb.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
 
 pb.BoundaryCondition('Neumann','DispZ',F,node_right_center)
 
-pb.ApplyBoundaryCondition()
-pb.Solve()
+pb.apply_boundary_conditions()
+pb.solve()
 
-assert np.abs(pb.GetDisp('DispZ')[node_right_center]+25.768895223177235) < 1e-15
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.768895223177235) < 1e-15
 
 
 # z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)

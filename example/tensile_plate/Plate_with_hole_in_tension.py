@@ -40,31 +40,31 @@ Problem.BoundaryCondition('Dirichlet','DispX',-5e-1,mesh.node_sets["left"])
 Problem.BoundaryCondition('Dirichlet','DispX', 5e-1,mesh.node_sets["right"])
 Problem.BoundaryCondition('Dirichlet','DispY',0,[0])
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 if method_output == 1:
     #Method 1: use the automatic result output    
-    Problem.AddOutput('plate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
-    Problem.AddOutput('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
+    Problem.add_output('plate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
+    Problem.add_output('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
 
 
-Problem.SetSolver('CG')
+Problem.set_solver('CG')
 t0 = time.time() 
 print('Solving...')
-Problem.Solve()
+Problem.solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
 
 
 if method_output == 1:
-    Problem.SaveResults()
+    Problem.save_results()
     
 elif method_output == 2:
     #Method 2: write the vtk output file by hand
     #Get the nodal values of stress tensor, strain tensor, stress principal component ('Stress_PC') and stress principal directions ('Stress_PDir1', 'Stress_PDir2')
-    res = Problem.GetResults("Assembling", ['Stress','Strain', 'Stress_PC', 'Stress_PDir1', 'Stress_PDir2'], 'Node')    
+    res = Problem.get_results("Assembling", ['Stress','Strain', 'Stress_PC', 'Stress_PDir1', 'Stress_PDir2'], 'Node')    
     TensorStrain = res['Strain']
     TensorStress = res['Stress']
     # Get the principal directions (vectors on nodes)
@@ -73,12 +73,12 @@ elif method_output == 2:
     PrincipalDirection2 = res['Stress_PrincipalDir2']    
     
     #Get the stress tensor (element values)
-    res = Problem.GetResults("Assembling", ['Stress','Strain'], 'Element')
+    res = Problem.get_results("Assembling", ['Stress','Strain'], 'Element')
     TensorStrainEl = res['Strain']
     TensorStressEl = res['Stress']
         
     #Get the displacement vector on nodes for export to vtk
-    U = Problem.GetDisp().T #transpose for comatibility to vtk export
+    U = Problem.get_disp().T #transpose for comatibility to vtk export
     
     #Write the vtk file                            
     OUT = Util.ExportData(meshname)
@@ -100,4 +100,4 @@ elif method_output == 2:
     print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
 
 elif method_output == 3:
-    res = Problem.GetResults("Assembling", ['disp', 'Stress','Strain'], 'Node')
+    res = Problem.get_results("Assembling", ['disp', 'Stress','Strain'], 'Node')

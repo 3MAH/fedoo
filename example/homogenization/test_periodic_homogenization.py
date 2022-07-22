@@ -113,8 +113,8 @@ else:
     
     #create a 'result' folder and set the desired ouputs
     if not(os.path.isdir('results')): os.mkdir('results')
-    pb.AddOutput('results/test', 'Assembling', ['Disp', 'Stress', 'Strain'], output_type='Node', file_format ='vtk')    
-    pb.AddOutput('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
+    pb.add_output('results/test', 'Assembling', ['Disp', 'Stress', 'Strain'], output_type='Node', file_format ='vtk')    
+    pb.add_output('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
 
     
     pb.BoundaryCondition('Dirichlet', 'DispX', 0, center, name = 'center')
@@ -122,7 +122,7 @@ else:
     if dim ==3:
         pb.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
     
-    pb.ApplyBoundaryCondition()
+    pb.apply_boundary_conditions()
     
     DofFree = pb._Problem__DofFree
     MatCB = pb._Problem__MatCB
@@ -149,10 +149,10 @@ else:
             pb.BoundaryCondition('Dirichlet', 'DispY', 0, StrainNodes[1], name = '_Strain')
 
         
-        pb.ApplyBoundaryCondition()
+        pb.apply_boundary_conditions()
     
-        pb.Solve()
-        pb.SaveResults(i)
+        pb.solve()
+        pb.save_results(i)
 
         X = pb.GetX()  # alias
         if dim == 3: 

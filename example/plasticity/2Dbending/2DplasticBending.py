@@ -64,7 +64,7 @@ Assembly.create("ConstitutiveLaw", meshname, 'quad4', name="Assembling", MeshCha
 
 Problem.NonLinearStatic("Assembling")
 
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 
 Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -72,8 +72,8 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
-Problem.AddOutput('results/bendingPlastic', 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev'], output_type='Element', file_format ='vtk')    
+Problem.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
+Problem.add_output('results/bendingPlastic', 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
@@ -83,7 +83,7 @@ Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
 Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
 Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter, name = "disp")
 
-Problem.NLSolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.05)
+Problem.nlsolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.05)
 
 ################### step 2 ################################
 Problem.RemoveBC("disp")
@@ -91,7 +91,7 @@ Problem.RemoveBC("disp")
 F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
 Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.05)
+Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.05)
 
 print(time()-start)
 

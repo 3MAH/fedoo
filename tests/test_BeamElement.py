@@ -58,8 +58,8 @@ for computeShear in range(3):
     
     pb.BoundaryCondition('Neumann','DispY',F,nodes_right)
     
-    pb.ApplyBoundaryCondition()
-    pb.Solve()
+    pb.apply_boundary_conditions()
+    pb.solve()
     
     #Post treatment               
     results = fd.Assembly['beam'].get_ext_forces(pb.GetDoFSolution('all'))

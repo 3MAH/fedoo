@@ -34,8 +34,8 @@ class ShellBase(ConstitutiveLaw):
         raise NameError('"GetShellRigidityMatrix_FI" not implemented, contact developer.')
 
     def update(self,assembly, pb, dtime):
-        # disp = pb.GetDisp()
-        # rot = pb.GetRot()
+        # disp = pb.get_disp()
+        # rot = pb.get_rot()
         U = pb.GetDoFSolution()
         if U is 0: 
             self.__GeneralizedStrain = 0

@@ -47,7 +47,7 @@ assemb = Assembly.create("ThermalLaw", meshname, name="Assembling_T")
 
 pb_th = Problem.NonLinearStatic("Assembling_T")
 
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 pb_th.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 # -------------------- Mechanical Problem ------------------------------
@@ -82,15 +82,15 @@ WeakForm.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
 Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
 pb_m = Problem.NonLinearStatic("Assembling_M")
-# pb_m.SetSolver('cg', precond = True)
+# pb_m.set_solver('cg', precond = True)
 pb_m.SetNewtonRaphsonErrorCriterion("Displacement", tol = 1e-2, err0 = 1)
 
 # -------------------- Set output ------------------------------
 #create a 'result' folder and set the desired ouputs
-pb_m.AddOutput(filename_res+'_me', 'Assembling_M', ['disp', 'cauchy', 'strain', 'cauchy_vm', 'statev', 'wm'], output_type='Node', file_format ='npz')    
+pb_m.add_output(filename_res+'_me', 'Assembling_M', ['disp', 'cauchy', 'strain', 'cauchy_vm', 'statev', 'wm'], output_type='Node', file_format ='npz')    
 
-pb_th.AddOutput(filename_res+'_th', 'Assembling_T', ['temp'], output_type='Node', file_format ='npz')    
-# # Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+pb_th.add_output(filename_res+'_th', 'Assembling_T', ['temp'], output_type='Node', file_format ='npz')    
+# # Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 # -------------------- Boundary Conditions ------------------------------
 # def timeEvolution(timeFactor): 
@@ -123,15 +123,15 @@ for i in range(nb_iter):
     convergence, nbNRiter, normRes = pb_th.SolveTimeIncrement(time, dt)
     # assert convergence, 'thermal problem has not converged'
     if not(convergence): print('WARNING: iteration', i, 'has not converged: err =', normRes)
-    pb_th.SaveResults(i)
+    pb_th.save_results(i)
     
     print('Iter {} - Therm - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
-    temp = assemb.convert_data(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+    temp = assemb.convert_data(pb_th.get_temp(), convertFrom='Node', convertTo='GaussPoint')
     mechancial_law.set_T(temp)
     
     convergence, nbNRiter, normRes = pb_m.SolveTimeIncrement(time, dt)
     assert convergence, 'mechanical problem has not converged'
-    pb_m.SaveResults(i)
+    pb_m.save_results(i)
     
     print('Iter {} - Mech - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
 
@@ -139,7 +139,7 @@ for i in range(nb_iter):
 # pb_th.RemoveBC('temp')
 # pb_th.BoundaryCondition('Dirichlet','Temp',0,right, timeEvolution=timeEvolution, initialValue = 100, name='temp')
 pb_th.GetBC('temp')[0].ChangeValue(0, initialValue = 'Current')
-# pb_th.ApplyBoundaryCondition()
+# pb_th.apply_boundary_conditions()
 
 pb_th.t0 = tmax
 pb_th.tmax = 2*tmax
@@ -151,15 +151,15 @@ for i in range(nb_iter, 2*nb_iter):
     convergence, nbNRiter, normRes = pb_th.SolveTimeIncrement(time, dt)
     # assert convergence, 'thermal problem has not converged'
     if not(convergence): print('WARNING: iteration', i, 'has not converged: err =', normRes)
-    pb_th.SaveResults(i)
+    pb_th.save_results(i)
     
     print('Iter {} - Therm - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
-    temp = assemb.convert_data(pb_th.GetTemp(), convertFrom='Node', convertTo='GaussPoint')
+    temp = assemb.convert_data(pb_th.get_temp(), convertFrom='Node', convertTo='GaussPoint')
     mechancial_law.set_T(temp)
     
     convergence, nbNRiter, normRes = pb_m.SolveTimeIncrement(time, dt)
     assert convergence, 'mechanical problem has not converged'
-    pb_m.SaveResults(i)
+    pb_m.save_results(i)
     
     print('Iter {} - Mech - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
 

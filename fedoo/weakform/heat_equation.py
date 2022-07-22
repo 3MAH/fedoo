@@ -132,13 +132,13 @@ class TemperatureTimeDerivative(WeakForm):
         
     def initialize(self, assembly, pb, t0 = 0.):
         if not(np.isscalar(pb.GetDoFSolution())):
-            self.__temp_start = assembly.convert_data(pb.GetTemp(), convert_from='Node', convert_to='GaussPoint')
+            self.__temp_start = assembly.convert_data(pb.get_temp(), convert_from='Node', convert_to='GaussPoint')
             self.__temp = self.__temp_start
         else: 
             self.__temp_start = self.__temp = 0
 
     def update(self, assembly, pb, dtime):
-        self.__temp = assembly.convert_data(pb.GetTemp(), convert_from='Node', convert_to='GaussPoint')
+        self.__temp = assembly.convert_data(pb.get_temp(), convert_from='Node', convert_to='GaussPoint')
         
     def reset(self):
         pass

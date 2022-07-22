@@ -73,11 +73,11 @@ fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 nodes_bottom = mesh.find_nodes('Y',0)
 nodes_top = mesh.find_nodes('Y',1)
 
-# Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinearStatic("Assembling")
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
@@ -86,12 +86,12 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subi
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-# results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
-# results = pb.AddOutput(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
+# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
+# results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
-results = pb.AddOutput(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
+results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
 
-# Problem.AddOutput(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+# Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
@@ -101,7 +101,7 @@ pb.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
 pb.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
 pb.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
 
-pb.NLSolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T
 
@@ -111,7 +111,7 @@ E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(),
 # F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
 # bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-# Problem.NLSolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
+# Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 
 print(time()-start)
 

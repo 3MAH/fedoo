@@ -27,8 +27,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__DampingAssembly = DampingAssembly
             self.__RayleighDamping = None
 
-            # self.__Displacement = self._InitializeVector(A)
-            # self.__DisplacementStart = self._InitializeVector(A) #displacement at the previous time iteration
+            # self.__Displacement = self._new_vect_dof(A)
+            # self.__DisplacementStart = self._new_vect_dof(A) #displacement at the previous time iteration
             self.__Velocity = 0
             self.__Acceleration = 0        
                         
@@ -141,7 +141,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__Err0 = None #initial error for NR error estimation   
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
-            self.ApplyBoundaryCondition() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
+            self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
         def GetAssembly(self):
             return self.__StiffnessAssembly
@@ -160,7 +160,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     self.__DisplacementOld = self.__Displacement.copy()
         #     self.__UpdateD()
 
-        #     self.ApplyBoundaryCondition()
+        #     self.apply_boundary_conditions()
         #     try:
         #         self._Problem__Xbc[self._Problem__DofBlocked] *= (LoadFactor-self.__LoadFactor)
         #         self._Problem__B *= LoadFactor
@@ -177,7 +177,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     self.__StiffnessAssembly.assemble_global_mat(compute = 'matrix')
         #     self.__UpdateA()
 
-        #     self.Solve()
+        #     self.solve()
                         
         #     #update total displacement            
         #     # self.__DisplacementOld = self.__Displacement
@@ -203,12 +203,12 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #         self._ProblemPGD__Xbc = 0
                     
         #     #update total displacement
-        #     self.Solve()
+        #     self.solve()
         #     self.__DisplacementOld = self.__Displacement
         #     self.__Displacement += self.GetX()   
 
-        # def GetDisp(self,name='all'):
-        #     # return self._get_global_vectorComponent(self.__Displacement, name)
+        # def get_disp(self,name='all'):
+        #     # return self._get_vect_component(self.__Displacement, name)
                
         def GetVelocity(self):
             return self.__Velocity
@@ -221,14 +221,14 @@ def _GenerateClass_NonLinearNewmark(libBase):
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial displacement of each nodes
             """        
-            self._SetVectorComponent(self.__Xold, name, value)          
+            self._set_vect_component(self.__Xold, name, value)          
         
         def SetInitialVelocity(self, name,value):
             """
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial velocity of each nodes        
             """
-            self._SetVectorComponent(self.__Velocity, name, value) 
+            self._set_vect_component(self.__Velocity, name, value) 
     
     
         def SetInitialAcceleration(self, name,value):
@@ -236,7 +236,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')    
             value is an array containing the initial acceleration of each nodes        
             """
-            self._SetVectorComponent(self.__Acceleration, name, value) 
+            self._set_vect_component(self.__Acceleration, name, value) 
     
         
         def SetRayleighDamping(self, alpha, beta):        

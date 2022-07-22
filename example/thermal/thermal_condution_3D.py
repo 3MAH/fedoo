@@ -26,8 +26,8 @@ K = 500 # K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
 material = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
-wf = fd.WeakForm.HeatEquation("ThermalLaw")
-assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")    
+wf = fd.weakform.HeatEquation("ThermalLaw")
+assemb = fd.assembly.create("ThermalLaw", meshname, name="Assembling")    
 
 #note set for boundary conditions
 Xmin, Xmax = mesh.bounding_box
@@ -36,16 +36,16 @@ top = mesh.find_nodes('Z', Xmax[2])
 left = mesh.find_nodes('X', Xmin[2])
 right = mesh.find_nodes('X', Xmax[2])
 
-fd.Problem.NonLinearStatic("Assembling")
+fd.problem.NonLinearStatic("Assembling")
 
-# Problem.SetSolver('cg', precond = True)
+# Problem.set_solver('cg', precond = True)
 
-fd.Problem.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
+fd.problem.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = fd.Problem.AddOutput('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
-# Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+results = fd.problem.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
+# Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 10
 # Problem.BoundaryCondition('Dirichlet','Temp',0,bottom)
@@ -54,7 +54,7 @@ def timeEvolution(timeFactor):
     else: return 1
 
 # Problem.BoundaryCondition('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
-fd.Problem.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution)
+fd.problem.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution)
 # Problem.BoundaryCondition('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
 
 
@@ -62,7 +62,7 @@ fd.Problem.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvo
 # Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
 # bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
 
-fd.Problem.NLSolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
+fd.problem.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 
 cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
         (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),
