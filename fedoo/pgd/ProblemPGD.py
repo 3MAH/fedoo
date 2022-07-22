@@ -6,7 +6,7 @@ from fedoo.pgd.SeparatedArray import *
 from fedoo.pgd.SeparatedOperator import *
 #from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
 from fedoo.core.base import ProblemBase
-# from fedoo.core.base import BoundaryCondition
+from fedoo.core.boundary_conditions import UniqueBoundaryCondition
 
 #===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)
@@ -225,7 +225,7 @@ class ProblemPGD(ProblemBase):
         return res
 
 
-    def updatePGD(self,termToChange, ddcalc='all'): #extended PGD
+    def update_pgd(self,termToChange, ddcalc='all'): #extended PGD
         
         if ddcalc == 'all': 
             for nMesh in range(self.mesh.get_dimension()):
@@ -247,12 +247,12 @@ class ProblemPGD(ProblemBase):
         NbDoF = self.__C.shape[ddcalc]
         DofFree = np.hstack([self.__DofFree[ddcalc] + i*NbDoF for i in range(len(termToChange))])
         
-        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(M, V) , (len(termToChange), -1)).T
+        self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._solve(M, V) , (len(termToChange), -1)).T
         # self.__X.data[ddcalc][self.__DofFree[ddcalc].reshape(-1,1),termToChange]  = np.reshape(self._ProblemBase__Solve(M[DofFree.reshape(-1,1),DofFree], V[DofFree] ) , (len(termToChange), -1)).T
                 
     
 
-    def updateAlpha(self):
+    def update_alpha(self):
         BB = SeparatedArray(self.__B + self.__D - self.__A*self.__Xbc)
         alpha = sp.c_[linalg.solve(self.calcMat_Alpha(self.__X), self.SecTerm_Alpha(self.__X, BB))] 
 #        alpha = self.solve_Alpha(self.__X,SeparatedArray(self.__B - self.__A*self.__Xbc))   

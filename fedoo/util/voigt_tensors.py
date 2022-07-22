@@ -20,7 +20,7 @@ class StressTensorArray(np.ndarray):
         Return a array adapted to export symetric tensor data in a vtk file
         See the utilities.ExportData class for more details
         """
-        return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float).T 
+        return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float)
     
     def GetFullTensor(self): 
         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
@@ -50,10 +50,10 @@ class StressTensorList(list):
         See the utilities.ExportData class for more details
         """
         try: 
-            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float).T 
+            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float) 
         except:
             self.fill_zeros()
-            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float).T 
+            return np.vstack([self[i] for i in [0,1,2,3,5,4] ]).astype(float) 
         
     def GetFullTensor(self): 
         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
@@ -137,10 +137,10 @@ class StrainTensorList(list):
         """
 
         try: 
-            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
+            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float)
         except:
             self.fill_zeros()
-            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float).T
+            return np.vstack(self[:3] + [self[i]/2 for i in [3,5,4]]).astype(float)
         
     def asarray(self):
         try:

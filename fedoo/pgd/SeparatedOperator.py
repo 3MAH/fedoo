@@ -132,7 +132,7 @@ class SeparatedOperator: #Opérateur discret avec galerkin
         """
         return len(self.data)
     
-    def GetDimension(self):
+    def get_dimension(self):
         if self.data==[]: return 0
         else: return len(self.data[0])    
         

@@ -63,7 +63,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
             return max(self.__SpecificVariableRank[idmesh].values())+1
         else: return nvar
     
-    def GetDimension(self):
+    def get_dimension(self):
         return len(self.__ListMesh)
     
     def GetListMesh(self):
@@ -165,7 +165,7 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         return [m.n_elements for m in self.__ListMesh]
 
     @staticmethod        
-    def Create(*args, **kargs):        
+    def create(*args, **kargs):        
         return MeshPGD(*args, **kargs)
         
                                         
@@ -255,5 +255,8 @@ class MeshPGD(MeshBase): #class pour définir des maillages sous forme séparée
         
         elif len(self.__ListMesh) == 1 : return self.__ListMesh[0]
         else: raise NameError("FullMesh can only be extracted from Separated Mesh of dimenson <= 3")
-            
+        
+    @property
+    def n_nodes(self):
+        return self.GetNumberOfNodes()
         

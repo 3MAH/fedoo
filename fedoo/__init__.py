@@ -12,7 +12,7 @@ from .core.base import ConstitutiveLaw
 from .core.base import WeakForm
 from .core.modelingspace import ModelingSpace
 from .core.problem import Problem
-
+from .core.dataset import DataSet, MultiFrameDataSet
 
 # from . import mesh
 # from . import lib_elements

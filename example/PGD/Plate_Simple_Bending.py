@@ -15,16 +15,16 @@ mesh.line_mesh_1D(20, 0, 5, 'lin2', name = "Thickness")
 Mesh['Midplane'].crd_name = ('X','Y')
 Mesh['Thickness'].crd_name = ('Z')
 
-pgd.Mesh.Create("Midplane", "Thickness", name="Domain")
+pgd.Mesh.create("Midplane", "Thickness", name="Domain")
 
 constitutivelaw.ElasticIsotrop(130e6, 0.3, name = 'ElasticLaw')
 weakform.InternalForce("ElasticLaw")
 
 pgd.Assembly.create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
 
-#PGD.Assembly.SetIntegrationElement("Midplane","quad8") # to be developped
-#PGD.Assembly.SetNumber(OfGaussPoint("Midplane",7)
-PGD.Assembly.Launch("Assembling")
+#pgd.Assembly.SetIntegrationElement("Midplane","quad8") # to be developped
+#pgd.Assembly.SetNumber(OfGaussPoint("Midplane",7)
+# pgd.Assembly.Launch("Assembling")
 
 #PGD.Assembly.sum à définir
 
@@ -37,55 +37,53 @@ nodes_top   = Mesh.get_all()["Midplane"].node_sets["top"]
 #
 #nodes_face_left = nodes_left * nodes_all1d
 
-Mesh.get_all()["Domain"].add_node_set([nodes_left ,"all"], name = "faceLeft")
-Mesh.get_all()["Domain"].add_node_set([nodes_right,"all"], name = "faceRight")
+Mesh["Domain"].add_node_set([nodes_left ,"all"], name = "faceLeft")
+Mesh["Domain"].add_node_set([nodes_right,"all"], name = "faceRight")
 
-Problem.Static("Assembling")
+pb = problem.Static("Assembling")
 
-Problem.BoundaryCondition('Dirichlet','DispX',0,"faceLeft")
-Problem.BoundaryCondition('Dirichlet','DispY',0,"faceLeft")
-Problem.BoundaryCondition('Dirichlet','DispZ',0,"faceLeft")
-Problem.BoundaryCondition('Dirichlet','DispZ',-5e-3,"faceRight")
+pb.BoundaryCondition('Dirichlet','DispX',0,"faceLeft")
+pb.BoundaryCondition('Dirichlet','DispY',0,"faceLeft")
+pb.BoundaryCondition('Dirichlet','DispZ',0,"faceLeft")
+pb.BoundaryCondition('Dirichlet','DispZ',-5e-3,"faceRight")
 
-Problem.ApplyBoundaryCondition()
+pb.ApplyBoundaryCondition()
 
 # err0 = Problem.ComputeResidualNorm()
 err0 = 1
 for i in range(20):
     # old = Problem.GetDoFSolution('all')
-    Problem.AddNewTerm(1)    
+    pb.AddNewTerm(1)    
     for j in range(5):
-        Problem.UpdatePGD([i],0)
-        Problem.UpdatePGD([i],1)
+        pb.update_pgd([i],0)
+        pb.update_pgd([i],1)
         
-    Problem.UpdateAlpha()
-    print(Problem.GetX().getTerm(-1).norm())
-    # print((Problem.GetDoFSolution('all') - old).norm())
+    pb.update_alpha()
+    print(pb.GetX().getTerm(-1).norm())
+    # print((pb.GetDoFSolution('all') - old).norm())
     
-    # print(Problem.ComputeResidualNorm(err0))
+    # print(pb.ComputeResidualNorm(err0))
     
 print('Temps de calcul : ', time.time()-t0)
 
 m = Mesh.get_all()["Domain"].ExtractFullMesh(name = 'FullMesh')
-U = [Problem.GetDoFSolution('DispX')[:,:].reshape(-1), \
-     Problem.GetDoFSolution('DispY')[:,:].reshape(-1), \
-     Problem.GetDoFSolution('DispZ')[:,:].reshape(-1) ]
-U = np.array(U).T
+U = [pb.GetDoFSolution('DispX')[:,:].reshape(-1), \
+     pb.GetDoFSolution('DispY')[:,:].reshape(-1), \
+     pb.GetDoFSolution('DispZ')[:,:].reshape(-1) ]
+U = np.array(U)
 
-TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution('all'), "Nodal")
+TensorStrain = Assembly['Assembling'].get_strain(pb.GetDoFSolution('all'), "Node")
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
-TensorStrain = Util.listStrainTensor([s[:,:].reshape(-1) for s in TensorStrain])
-TensorStress = Util.listStressTensor([s[:,:].reshape(-1) for s in TensorStress])
+TensorStrain = util.StrainTensorList([s[:,:].reshape(-1) for s in TensorStrain])
+TensorStress = util.StressTensorList([s[:,:].reshape(-1) for s in TensorStress])
 
-OUT = Util.ExportData('FullMesh')
+data = DataSet(Mesh['FullMesh'])
 
-OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
-OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
+data.node_data['Stress'] = TensorStress.vtkFormat()
+data.node_data['Strain'] = TensorStrain.vtkFormat()
 
-OUT.addNodeData(U, 'Disp')
+data.node_data['Disp'] = U
+data.plot('Stress', scale = 10000)
+# data.to_vtk('test.vtk')
 
-OUT.toVTK('test.vtk')
-
-
-OUT.toVTK()

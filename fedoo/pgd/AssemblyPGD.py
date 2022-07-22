@@ -325,12 +325,12 @@ class AssemblyPGD(AssemblyFEM):
             After that, an arithmetic mean is used to compute a single node value from all adjacent elements.
             The vector lenght is the number of nodes in the mesh  
         """       
-        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd]._get_gausspoint2node_mat() for dd in range(len(self.mesh.GetListMesh()))]])
+        GaussianPointToNodeMatrix = SeparatedOperator([[self.__listAssembly[dd].mesh._get_gausspoint2node_mat() for dd in range(len(self.mesh.GetListMesh()))]])
         res = self.get_gp_results(operator, U)
         return GaussianPointToNodeMatrix * res 
 
 
-    def GetStressTensor(self, U, constitutivelaw, IntegrationType="Nodal"):
+    def GetStressTensor(self, U, constitutivelaw, IntegrationType="Node"):
         """
         Not a static method.
         Return the Stress Tensor of an assembly using the Voigt notation as a python list. 
@@ -338,7 +338,7 @@ class AssemblyPGD(AssemblyFEM):
         see get_node_resultss and get_element_resultss.
 
         Options : 
-        - IntegrationType :"Nodal" or "Element" integration (default : "Nodal")
+        - IntegrationType :"Node" or "Element" integration (default : "Node")
 
         example : 
         S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
@@ -346,7 +346,7 @@ class AssemblyPGD(AssemblyFEM):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw.get_all()[constitutivelaw]
 
-        if IntegrationType == "Nodal":            
+        if IntegrationType == "Node":            
             return [self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in constitutivelaw.GetStress()]
         
         elif IntegrationType == "Element":
@@ -355,7 +355,7 @@ class AssemblyPGD(AssemblyFEM):
         else:
             assert 0, "Wrong argument for IntegrationType"
 
-    def get_strain(self, U, IntegrationType="Nodal"):
+    def get_strain(self, U, IntegrationType="Node"):
         """
         Not a static method.
         Return the Strain Tensor of an assembly using the Voigt notation as a python list. 
@@ -363,13 +363,13 @@ class AssemblyPGD(AssemblyFEM):
         see get_node_resultss and get_element_resultss.
 
         Options : 
-        - IntegrationType :"Nodal" or "Element" integration (default : "Nodal")
+        - IntegrationType :"Node" or "Element" integration (default : "Node")
 
         example : 
         S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
         """
 
-        if IntegrationType == "Nodal":
+        if IntegrationType == "Node":
             return StrainTensorList([self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in self.space.op_strain()])
         
         elif IntegrationType == "Element":
@@ -403,5 +403,5 @@ class AssemblyPGD(AssemblyFEM):
     
     
     @staticmethod        
-    def Create(weakForm, mesh="", name =""):        
+    def create(weakForm, mesh="", name =""):        
         return AssemblyPGD(weakForm, mesh, name)

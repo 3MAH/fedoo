@@ -5,3 +5,4 @@
 #     exec('from .'+module_name+' import *')
 
     
+from .voigt_tensors import StrainTensorList, StressTensorList

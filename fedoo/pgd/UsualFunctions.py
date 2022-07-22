@@ -5,14 +5,14 @@ Created on Mon Jun 18 10:29:20 2018
 @author: etienne
 """
 
-from .SeparatedArray import SeparatedOnes, SeparatedArray
+from fedoo.pgd.SeparatedArray import SeparatedOnes, SeparatedArray
 import numpy as np
 import scipy.sparse as sparse
 from numbers import Number
 
 
 def mult(U,V, max_norm_err = 1e-4):
-    if isinstance(U, number): return mult(V,U)
+    if isinstance(U, Number): return mult(V,U)
     
     if V==0: return 0
     if isinstance(V, Number):       
