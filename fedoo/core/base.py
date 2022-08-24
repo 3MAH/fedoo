@@ -303,7 +303,7 @@ class ProblemBase:
         assert isinstance(name, str) , "An name must be a string" 
         self.__name = name
         self.__solver = ['direct']
-        self._BoundaryConditions = [] #list containing boundary contidions associated to the problem        
+        self._BoundaryConditions = ListBC() #list containing boundary contidions associated to the problem        
         
         ProblemBase.__dic[self.__name] = self
         
@@ -561,7 +561,53 @@ class ProblemBase:
         return self.__solver[0]
     
 
+#=============================================================
+# Base class for boundary conditions (BC)
+#=============================================================
+class BCBase:
+    """Base class for BC (boundary conditions) objects."""
 
+    __dic = {}
+
+    def __init__(self, name = ""):
+        assert isinstance(name, str) , "name must be a string" 
+        self.__name = name
+        
+        if name != "":
+            BCBase.__dic[self.__name] = self
+
+    def __class_getitem__(cls, item):
+        return cls.__dic[item]
+
+    @property
+    def name(self):
+        return self.__name
+
+    @staticmethod
+    def get_all():
+        return BCBase.__dic
+
+
+class ListBC(list, BCBase):
+    """Define a list of elementary boundary conditions. 
+    Derived from the python list object"""
+    def __init__(self, l = [], name = ""):
+        BCBase.__init__(self, name)
+            
+        list.__init__(self,l)
+    
+    def generate(self):
+        return sum((bc.generate() for bc in self), [])            
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 # =============================================================================
 # Functions that call methods of ProblemBase for the current active problem
 # =============================================================================

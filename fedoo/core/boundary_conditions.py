@@ -2,36 +2,176 @@ import numpy as np
 from scipy import sparse
 
 from fedoo.core.modelingspace import ModelingSpace
-from fedoo.pgd.SeparatedArray import *
+from fedoo.core.base import BCBase
+# from fedoo.pgd.SeparatedArray import *
 
-class UniqueBoundaryCondition() :
+class UniqueBoundaryCondition():
     """
     Classe de condition limite
     
     Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
-    def __init__(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", space = None):
+    def __init__(self,BoundaryType,Var,Value,Index,timeEvolution=None, initialValue = None, name = "", space = None):
         """
         Define some boundary conditions        
 
         Parameters
         ----------
         BoundaryType : str
-            Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
-        Var : str, list of str, or list of int
-            variable name (str) or, for MPC only, list of variable name or list of variable rank 
+            Type of boundary conditions : 'Dirichlet' or 'Neumann'.
+        Var : str
+            variable name (str) 
         Value : scalar or list of scalars
-            Variable final value (Dirichlet) or force Value (Neumann) or list of factor (MPC)
-        Index : list of int, str, list of list of int, list of str
-            For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
-            For FEM Problem with MPC: list Node Indexes (list of list of int) 
-            For PGD Problem with Neumann/Dirichlet BC: SetOfname (type str) defining a set of Nodes of the reference mesh
-            For PGD Problem with MPC: list of SetOfname (str)
-        Constant : scalar, optional
-            For MPC only, constant value on the equation
+            Variable final value (Dirichlet) or force Value (Neumann)
+        Index : list of int or str
+            For FEM Problem: Nodes Index (list of int) 
+            For PGD Problem: SetOfname (type str) defining a set of Nodes of the reference mesh
         timeEvolution : function
             Function that gives the temporal evolution of the BC Value (applyed as a factor to the specified BC). The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
+        initialValue : float, array or None
+            if None, the initialValue is keep to the current state.
+            if scalar value: The initialValue is the same for all dof defined in BC
+            if array: the len of the array should be = to the number of dof defined in the BC
+
+            Default: None
+        name : str, optional
+            Define an name for the Boundary Conditions. Default is "".
+
+        Returns
+        -------
+        None.
+        """
+        assert BoundaryType in ['Dirichlet', 'Neumann'], "The type of Boundary conditions should be either 'Dirichlet' or 'Neumann'"
+        
+        BCBase.__init__(self, name)
+        
+        if timeEvolution is None: 
+            def timeEvolution(timeFactor): return timeFactor
+                
+        self.__timeEvolution = timeEvolution
+        
+        self.__DefaultInitialValue = self.__initialValue = initialValue # can be a float or an array or None ! if DefaultInitialValue is None, initialValue can be modified by the Problem
+        
+        if space is None: space = ModelingSpace.get_active()
+        
+        self.__BoundaryType = BoundaryType
+        if isinstance(Var, str): 
+            self.__Var = space.variable_rank(Var)
+        else: 
+            assert 0, 'Var should be a str'  
+            
+        if BoundaryType in ['Dirichlet', 'Neumann']:
+            self.__Value = Value # can be a float or an array !
+            if isinstance(Index, str): self.__SetOfname = Index # must be a string defining a set of nodes
+            else: self.__Index = np.array(Index).astype(int) # must be a np.array  #Not for PGD
+          
+    def __GetFactor(self,timeFactor=1, timeFactorOld = None): 
+        #return the time factor applied to the value of boundary conditions
+        if timeFactorOld is None or self.__BoundaryType == 'Neumann': #for Neumann, the force is applied in any cases
+            return self.__timeEvolution(timeFactor)
+        else: 
+            return self.__timeEvolution(timeFactor)-self.__timeEvolution(timeFactorOld)
+            
+    def GetValue(self,timeFactor=1, timeFactorOld = None): 
+        Factor = self.__GetFactor(timeFactor, timeFactorOld) 
+        if Factor == 0: return 0
+        elif self.__initialValue is None: return Factor * self.__Value         
+        else: #in case there is an initial value
+            if self.__BoundaryType == 'Neumann': #for Neumann, the true value of force is applied 
+                return Factor * (self.__Value - self.__initialValue) + self.__initialValue
+            else: #return the incremental value
+                return Factor * (self.__Value - self.__initialValue)                                   
+
+    def _ApplyTo(self, X, Nnodes, timeFactor=1, timeFactorOld = None): 
+        """
+        X must be a np.array
+        Nnodes must be an int: number of nodes
+        timeFactor is the time Factor (default = 1)
+            timeFactor = 0 for time=t0 
+            timeFactor = 1 for time=tmax 
+        timeFactorOld should be defined for incremental approach.
+        If timeFactorOld is not None, the incremental value between timeFactorOld and timeFactor is applied
+        """
+
+        GlobalIndex = (self.__Var*Nnodes + self.__Index).astype(int)
+        X[GlobalIndex] = self.GetValue(timeFactor, timeFactorOld)        
+        # X[GlobalIndex] = self.__GetFactor(timeFactor, timeFactorOld) * (self.__Value - self.__InitialValue) + self.__InitialValue
+        return X, GlobalIndex
+
+    def ChangeIndex(self,newIndex):
+        self.__Index = np.array(newIndex).astype(int) # must be a np.array
+    
+    def ChangeValue(self,newValue, initialValue = None, timeEvolution=None):
+        #if initialValue == 'Current', keep current value as initial values (change of step)
+        #if initialValue is None, don't change the initial value        
+        if initialValue == 'Current': self.__initialValue = self.__Value
+        elif initialValue is not None: self.__initialValue = initialValue               
+        if timeEvolution is not None: self.__timeEvolution = timeEvolution        
+        self.__Value = newValue # can be a float or an array !  
+        
+    def ChangeInitialValue(self, initialValue):
+        self.__initialValue = initialValue
+    
+    # def GetType(self):
+    #     return self.__BoundaryType
+
+    @property
+    def InitialValue(self):    
+        return self.__initialValue
+
+    @property
+    def DefaultInitialValue(self): 
+        """
+        Non modifiable boundary condition
+        """
+        return self.__DefaultInitialValue
+    
+    @property
+    def FinalValue(self):    
+        return self.__Value
+    
+    @property
+    def Variable(self):
+        return self.__Var
+    
+    @property    
+    def BoundaryType(self):
+        return self.__BoundaryType
+    
+    @property    
+    def SetOfname(self):
+        return self.__SetOfname
+        
+    @property    
+    def Index(self):
+        return self.__Index        
+
+
+class MPC() :
+    """
+    Class that define multi-point constraints
+    
+    Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
+    """
+
+    def __init__(self,Var,Factor,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", space = None):
+        """
+        Define some boundary conditions        
+
+        Parameters
+        ----------        
+        Var : str, list of str, or list of int
+            variable name (str) or, for MPC only, list of variable name or list of variable rank 
+        Factor : scalar or list of scalars
+            list of factor (MPC)
+        Index : list of int, str, list of list of int, list of str
+            For FEM Problem: list Node Indexes (list of list of int) 
+            For PGD Problem: list of SetOfname (str)
+        Constant : scalar, optional
+            Constant value on the MPC equation
+        timeEvolution : function
+            Function that gives the temporal evolution of the constant value. The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
         initialValue : float, array or None
             if None, the initialValue is keep to the current state.
             if scalar value: The initialValue is the same for all dof defined in BC
@@ -50,15 +190,8 @@ class UniqueBoundaryCondition() :
         Remark  
         -------
         To define many MPC in one operation, use array where each line define a single MPC        
-        """
-        # if Problemname is None: problem = ProblemBase.get_active()
-        # else: 
-        #     assert Problemname in ProblemBase.get_all(), "The problem " + Problemname + " doesn't exit. Create the Problem before defining boundary conditions."
-        #     problem = ProblemBase.get_all()['Problemname']        
-        
-        assert BoundaryType in ['Dirichlet', 'Neumann', 'MPC'], "The type of Boundary conditions should be either 'Dirichlet', 'Neumann' or 'MPC'"
-        
-        self.__name = name
+        """                
+        BCBase.__init__(self, name)
         
         if timeEvolution is None: 
             def timeEvolution(timeFactor): return timeFactor
@@ -69,40 +202,29 @@ class UniqueBoundaryCondition() :
         
         if space is None: space = ModelingSpace.get_active()
         
-        self.__BoundaryType = BoundaryType
+        self.__BoundaryType = 'MPC'
         if isinstance(Var, str): 
-            self.__Var = space.variable_rank(Var)
-            if BoundaryType == 'MPC': self.__VarMaster = self.__Var
+            self.__VarMaster = self.__Var = space.variable_rank(Var)
         else: #Var should be a list or a numpy array
-            assert BoundaryType == 'MPC', "Var should be a string for % Boundary Type".format(BoundaryType)
             if isinstance(Var[0], str): Var = [space.variable_rank(v) for v in Var]
             self.__Var = Var[0] #Var for slave DOF (eliminated DOF)
             self.__VarMaster = Var[1:] #Var for master DOF (not eliminated DOF in MPC)
               
-        if BoundaryType in ['Dirichlet', 'Neumann']:
-            self.__Value = Value # can be a float or an array !
-            if isinstance(Index, str): self.__SetOfname = Index # must be a string defining a set of nodes
-            else: self.__Index = np.array(Index).astype(int) # must be a np.array  #Not for PGD
-  
-        elif BoundaryType == 'MPC':  #only for FEM for now
-            
-            Factor =  Value #for MPC, Value is a list containing the factor 
-            if type(Index[0]) == str: #PGD problem
-                self.__SetOfname = Index[0] #SetOfname decribing node indexes for slave DOF (eliminated DOF) #use SetOf for PGD
-                self.__SetOfnameMaster = Index[1:]
-                if Constant is not None:   
-                    raise NameError("MPC boundary condition with PGD problem isn't compatible with a non zero constant value")
-                else: self.__Value = 0
-            else: #FEM Problem
-                self.__IndexMaster = np.array(Index[1:], dtype = int) #Node index for master DOF (not eliminated DOF in MPC)
-                self.__Index = np.array(Index[0], dtype = int) #Node index for slave DOF (eliminated DOF) #use SetOf for PGD
-                if Constant is not None:                 
-                    self.__Value = -Constant/Factor[0] # should be a numeric value or a 1D array for multiple MPC       
-                else: self.__Value = 0
-            
-            self.__Fact = -np.array(Factor[1:])/Factor[0] #does not include the master node coef = 1
-                
-        # problem._BoundaryConditions.append(self)     
+        if type(Index[0]) == str: #PGD problem
+            self.__SetOfname = Index[0] #SetOfname decribing node indexes for slave DOF (eliminated DOF) #use SetOf for PGD
+            self.__SetOfnameMaster = Index[1:]
+            if Constant is not None:   
+                raise NameError("MPC boundary condition with PGD problem isn't compatible with a non zero constant value")
+            else: self.__Value = 0
+        else: #FEM Problem
+            self.__IndexMaster = np.array(Index[1:], dtype = int) #Node index for master DOF (not eliminated DOF in MPC)
+            self.__Index = np.array(Index[0], dtype = int) #Node index for slave DOF (eliminated DOF) #use SetOf for PGD
+            if Constant is not None:                 
+                self.__Value = -Constant/Factor[0] # should be a numeric value or a 1D array for multiple MPC       
+            else: self.__Value = 0
+        
+        self.__Fact = -np.array(Factor[1:])/Factor[0] #does not include the master node coef = 1
+
 
     def __GetFactor(self,timeFactor=1, timeFactorOld = None): 
         #return the time factor applied to the value of boundary conditions
@@ -150,9 +272,6 @@ class UniqueBoundaryCondition() :
         
     def ChangeInitialValue(self, initialValue):
         self.__initialValue = initialValue
-
-    def name(self):
-        return self.__name
     
     # def GetType(self):
     #     return self.__BoundaryType
@@ -215,8 +334,7 @@ class UniqueBoundaryCondition() :
             return self.__VarMaster   
         except: 
             raise NameError('Master Variable only defined for MPC boundary type')
- 
-        
+
     
 
 

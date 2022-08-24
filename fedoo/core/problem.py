@@ -5,7 +5,7 @@ import scipy.sparse.linalg
 
 from fedoo.core.assembly  import Assembly
 from fedoo.core.base import ProblemBase
-from fedoo.core.boundary_conditions import UniqueBoundaryCondition
+from fedoo.core.boundary_conditions import UniqueBoundaryCondition, MPC
 from fedoo.core.output import _ProblemOutput, _get_results
 from fedoo.core.dataset import DataSet
 
@@ -147,6 +147,7 @@ class Problem(ProblemBase):
         data = []
         row = []
         col = []
+        # for e in self._BoundaryConditions.generate(self, timeFactor, timeFactorOld):
         for e in self._BoundaryConditions:
             if e.BoundaryType == 'Dirichlet':
                 Uimp, GlobalIndex = e._ApplyTo(Uimp, n, timeFactor, timeFactorOld)
@@ -284,9 +285,13 @@ class Problem(ProblemBase):
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index, timeEvolution, initialValue, name, self.space))                
         else:
-            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+            if BoundaryType == 'MPC':
+                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+            else:
+                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index, timeEvolution, initialValue, name, self.space)) 
+                
 
 
     @property
