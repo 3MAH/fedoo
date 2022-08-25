@@ -385,13 +385,13 @@ class ProblemBase:
        
         
     # ### Functions related to boundary contidions
-    # def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    # def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
     #     """
     #     Define some boundary conditions        
 
     #     Parameters
     #     ----------
-    #     BoundaryType : str
+    #     bc_type : str
     #         Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
     #     Var : str, list of str, or list of int
     #         variable name (str) or list of variable name or for MPC only, list of variable rank 
@@ -434,13 +434,13 @@ class ProblemBase:
     #         except:
     #             raise NameError('Unknown variable name')
                 
-    #     if isinstance(Var, list) and BoundaryType != 'MPC':          
+    #     if isinstance(Var, list) and bc_type != 'MPC':          
     #         if np.isscalar(Value):
     #             Value = [Value for var in Var] 
     #         for i,var in enumerate(Var):
-    #             self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
+    #             self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
     #     else:
-    #         self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+    #         self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
 
 
     def GetBC(self, name =None):        
@@ -463,12 +463,12 @@ class ProblemBase:
     def PrintBC(self):        
         """
         Print all the boundary conditions under the form:
-            ind_bc : name - BoundaryType
+            ind_bc : name - bc_type
             ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
             name is the str name of the BC ("No name") by default
-            BoundaryType is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
+            bc_type is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
         """
-        listid = [str(i) + ": " + bc.name + " - " + bc.BoundaryType for i,bc in enumerate(self._BoundaryConditions)]
+        listid = [str(i) + ": " + bc.name + " - " + bc.bc_type for i,bc in enumerate(self._BoundaryConditions)]
         print("\n".join(listid))
     
 
@@ -596,8 +596,8 @@ class ListBC(list, BCBase):
             
         list.__init__(self,l)
     
-    def generate(self):
-        return sum((bc.generate() for bc in self), [])            
+    def generate(self, problem, t_fact = 1, t_fact_old = None):
+        return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), [])            
     
     
     
@@ -626,10 +626,10 @@ class ListBC(list, BCBase):
 
 
 # # ## Functions related to boundary contidions
-# def BoundaryCondition(BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", Problemname = None):
+# def BoundaryCondition(bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name", Problemname = None):
 #     if Problemname is None: problem = ProblemBase.get_active()
 #     else: problem = ProblemBase.get_all()[Problemname]
-#     problem.BoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name)
+#     problem.BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name)
 
 # def GetBC(): return ProblemBase.get_active()._BoundaryConditions    
 # def RemoveBC(name =None): ProblemBase.get_active().RemoveBC(name)    

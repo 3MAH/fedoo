@@ -276,7 +276,7 @@ class ProblemPGD(ProblemBase):
     # verifier l'utlisation de var dans boundary conditions PGD
     # reprendre les conditions aux limites en incluant les méthodes de pénalités pour des conditions aux limites plus exotiques
     # verifier qu'il n'y a pas de probleme lié au CL sur les ddl inutiles
-    def apply_boundary_conditions(self, timeFactor=1, timeFactorOld=None):                  
+    def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):                  
         meshPGD = self.mesh
         shapeX = self.__ModelingSpace
         X = self.__X
@@ -299,8 +299,8 @@ class ProblemPGD(ProblemBase):
             SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]            
             # if isinstance(e.FinalValue, list): e.__Value = np.array(e.__Value)
             
-            Value = e.GetValue(timeFactor, timeFactorOld)
-            if e.BoundaryType == 'Neumann':
+            Value = e.GetValue(t_fact, t_fact_old)
+            if e.bc_type == 'Neumann':
                 if Value == 0: continue #dans ce cas, pas de force à ajouter
 #                dd = SetOfNodesForBC[0][0]
 #                index = SetOfNodesForBC[1][0]
@@ -334,7 +334,7 @@ class ProblemPGD(ProblemBase):
                     F = F+Fadd                    
                 else: F.__setitem__(tuple(item), Value)                        
 
-            elif e.BoundaryType == 'Dirichlet':  
+            elif e.bc_type == 'Dirichlet':  
                 if len(SetOfNodesForBC[1]) == 1 and isinstance(Value, (int,float,np.floating,np.ndarray)): #The BC can be applied on only 1 subspace 
                     dd = SetOfNodesForBC[0][0]
                     index = np.array(SetOfNodesForBC[1][0], dtype=int)
@@ -363,7 +363,7 @@ class ProblemPGD(ProblemBase):
                 else: #a penatly method is required                    
                     return NotImplemented    
             
-            elif e.BoundaryType == 'MPC':
+            elif e.bc_type == 'MPC':
                 SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfnameMaster] 
                 
                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
@@ -479,13 +479,13 @@ class ProblemPGD(ProblemBase):
         
  
     ### Functions related to boundary contidions
-    def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
         """
         Define some boundary conditions        
 
         Parameters
         ----------
-        BoundaryType : str
+        bc_type : str
             Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
         Var : str, list of str, or list of int
             variable name (str) or list of variable name or for MPC only, list of variable rank 
@@ -528,13 +528,13 @@ class ProblemPGD(ProblemBase):
             except:
                 raise NameError('Unknown variable name')
                 
-        if isinstance(Var, list) and BoundaryType != 'MPC':          
+        if isinstance(Var, list) and bc_type != 'MPC':          
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
         else:
-            self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+            self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
 
 ##    def CL_ml(self, dd, QQ): #conditions aux limites via des multiplicateurs de lagrange        
 ##        #QQ matrice définissant les CL        

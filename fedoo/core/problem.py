@@ -135,7 +135,7 @@ class Problem(ProblemBase):
         self._set_vect_component(self.__X, name, value)          
        
 
-    def apply_boundary_conditions(self, timeFactor=1, timeFactorOld=None):
+    def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
                 
         n = self.mesh.n_nodes
         nvar = self.space.nvar
@@ -147,29 +147,30 @@ class Problem(ProblemBase):
         data = []
         row = []
         col = []
-        # for e in self._BoundaryConditions.generate(self, timeFactor, timeFactorOld):
-        for e in self._BoundaryConditions:
-            if e.BoundaryType == 'Dirichlet':
-                Uimp, GlobalIndex = e._ApplyTo(Uimp, n, timeFactor, timeFactorOld)
-                DofB.append(GlobalIndex)
+        for e in self._BoundaryConditions.generate(self, t_fact, t_fact_old):
+            if e.bc_type == 'Dirichlet':
+                Uimp[e._dof_index] = e._current_value
+                DofB.append(e._dof_index)
 
-            elif e.BoundaryType == 'Neumann':
-                F = e._ApplyTo(F, n, timeFactor)[0]
+            elif e.bc_type == 'Neumann':
+                F[e._dof_index] = e._current_value
+                # F = e._ApplyTo(F, n, t_fact)[0]
             
-            elif e.BoundaryType == 'MPC':
-                Uimp, GlobalIndex = e._ApplyTo(Uimp, n, timeFactor, timeFactorOld) #valid in this case ??? need to be checked
-                DofB.append(GlobalIndex)
+            elif e.bc_type == 'MPC':
+                Uimp[e._dof_index[0]] = e._current_value  #valid in this case ??? need to be checked
+                DofB.append(e._dof_index[0]) #eliminated dof
                 MPC = True         
-#                if np.isscalar(self.__Index): nbMPC = 1
-#                else: nbMPC = len(self.__Index)
-                nbFact = len(e.Factor)
-                
-                #shape self.__Fact should be nbFact*nbMPC 
+
+                n_fact = len(e._factors) #only factor for non eliminated (master) dof                
+                #shape e.__Fact should be n_fact*nbMPC 
                 #shape self.__Index should be nbMPC
-                #shape self.__IndexMaster should be nbFact*nbMPC
-                data.append(np.array(e.Factor.T).ravel())
-                row.append((np.array(GlobalIndex).reshape(-1,1)*np.ones(nbFact)).ravel())
-                col.append((e.IndexMaster + np.c_[e.VariableMaster]*n).T.ravel())
+                #shape self.__IndexMaster should be n_fact*nbMPC
+                data.append(np.array(e._factors.T).ravel())
+                row.append((np.array(e._dof_index[0]).reshape(-1,1)*np.ones(n_fact)).ravel())
+                col.append(e._dof_index[1:].T.ravel())        
+                # col.append((e.IndexMaster + np.c_[e.VariableMaster]*n).T.ravel())
+
+
         
         
         DofB = np.unique(np.hstack(DofB)).astype(int)
@@ -220,25 +221,25 @@ class Problem(ProblemBase):
         ### is used only for incremental problems
         U = self.GetDoFSolution() 
         F = self.get_ext_forces()
-        Nnodes = self.mesh.n_nodes
+        n_nodes = self.mesh.n_nodes
         for e in self._BoundaryConditions:            
-            if e.DefaultInitialValue is None:
-                if e.BoundaryType == 'Dirichlet':
+            if e._start_value_default is None:
+                if e.bc_type == 'Dirichlet':
                     if U is not 0:
-                        e.ChangeInitialValue(U[e.Variable*Nnodes + e.Index])
-                elif e.BoundaryType == 'Neumann':
+                        e.start_value = U[e.variable*n_nodes + e.node_set]
+                elif e.bc_type == 'Neumann':
                     if F is not 0:
-                        e.ChangeInitialValue(F[e.Variable*Nnodes + e.Index])
+                        e.start_value = F[e.variable*n_nodes + e.node_set]
     
     
     ### Functions related to boundary contidions
-    def BoundaryCondition(self,BoundaryType,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
         """
         Define some boundary conditions        
 
         Parameters
         ----------
-        BoundaryType : str
+        bc_type : str
             Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
         Var : str, list of str, or list of int
             variable name (str) or list of variable name or for MPC only, list of variable rank 
@@ -281,17 +282,19 @@ class Problem(ProblemBase):
             except:
                 raise NameError('Unknown variable name')
                 
-        if isinstance(Var, list) and BoundaryType != 'MPC':          
+        if isinstance(Var, list) and bc_type != 'MPC':          
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,var,Value[i],Index, timeEvolution, initialValue, name, self.space))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index, timeEvolution, initialValue, name))                
+                self._BoundaryConditions[-1].initialize(self)
         else:
-            if BoundaryType == 'MPC':
-                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+            if bc_type == 'MPC':
+                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name))
             else:
-                self._BoundaryConditions.append(UniqueBoundaryCondition(BoundaryType,Var,Value,Index, timeEvolution, initialValue, name, self.space)) 
-                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index, timeEvolution, initialValue, name)) 
+        
+            self._BoundaryConditions[-1].initialize(self)
 
 
     @property

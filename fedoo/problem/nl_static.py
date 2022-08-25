@@ -73,10 +73,10 @@ def _GenerateClass_NonLinearStatic(libBase):
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
             time = timeStart + dt
-            timeFactor    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
-            timeFactorOld = (timeStart-self.t0)/(self.tmax-self.t0)
+            t_fact    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
+            t_fact_old = (timeStart-self.t0)/(self.tmax-self.t0)
 
-            self.apply_boundary_conditions(timeFactor, timeFactorOld)
+            self.apply_boundary_conditions(t_fact, t_fact_old)
             
             #build and solve the linearized system with elastic rigidty matrix           
             self.updateA(dt) #should be the elastic rigidity matrix
