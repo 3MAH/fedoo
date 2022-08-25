@@ -599,7 +599,8 @@ class ListBC(list, BCBase):
     def generate(self, problem, t_fact = 1, t_fact_old = None):
         return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), [])            
     
-    
+    def generate_pgd(self, problem, t_fact = 1, t_fact_old = None):
+        return sum((bc.generate_pgd(problem, t_fact, t_fact_old) for bc in self), [])          
     
     
     

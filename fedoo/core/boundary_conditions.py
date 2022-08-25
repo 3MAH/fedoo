@@ -70,8 +70,8 @@ class UniqueBoundaryCondition():
         if isinstance(self.node_set, str):
             self.node_set = problem.mesh.node_sets[self.node_set]  # must be a string defining a set of nodes
 
-        self.node_set = np.asarray(self.node_set, dtype = int)  # must be a np.array  #Not for PGD
-
+        if not(hasattr(problem.mesh,'GetListMesh')): #not pgd problem
+            self.node_set = np.asarray(self.node_set, dtype = int)  # must be a np.array  #Not for PGD
 
     def generate(self, problem, t_fact, t_fact_old=None):
         self._dof_index = (
@@ -82,7 +82,9 @@ class UniqueBoundaryCondition():
         return [self]
 
     def generate_pgd(self, problem, t_fact, t_fact_old=None):
-        pass
+        self._current_value = self.get_value(t_fact, t_fact_old)
+
+        return [self]
 
     def _get_factor(self, t_fact=1, t_fact_old=None):
         # return the time factor applied to the value of boundary conditions
@@ -229,8 +231,11 @@ class MPC(UniqueBoundaryCondition):
         # list_variables should be a list or a numpy array
         if isinstance(self.list_variables[0], str):
             self.list_variables = [problem.space.variable_rank(v) for v in self.list_variables]
-        if isinstance(self.list_node_sets[0], str):
+        if isinstance(self.list_node_sets[0], str):      
             self.list_node_sets = [problem.mesh.node_sets[n_set] for n_set in self.list_node_sets]
+            if not(hasattr(problem.mesh,'GetListMesh')): #not pgd problem
+                self.list_node_sets = np.asarray(self.list_node_sets, dtype=int) 
+
 
     def generate(self, problem, t_fact, t_fact_old=None):
         # # Node index for master DOF (not eliminated DOF in MPC)
@@ -239,8 +244,7 @@ class MPC(UniqueBoundaryCondition):
         # self.__Index = np.array(Index[0], dtype=int)
         
         n_nodes = problem.mesh.n_nodes
-        self._dof_index = np.asarray(self.list_node_sets, dtype=int) \
-                          + np.c_[self.list_variables]*n_nodes
+        self._dof_index = self.list_node_sets + np.c_[self.list_variables]*n_nodes
         # self._dof_index = [(
         #     self.list_variables[i]*n_nodes + self.list_node_sets[i]).astype(int)
         #     for i in range(len(self.list_variables))]

@@ -233,7 +233,7 @@ class Problem(ProblemBase):
     
     
     ### Functions related to boundary contidions
-    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = ""):
         """
         Define some boundary conditions        
 

@@ -295,16 +295,16 @@ class ProblemPGD(ProblemBase):
         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.get_dimension())] #number of nodes in each dimensions
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.get_dimension())]
         
-        for e in self._BoundaryConditions:
-            SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]            
-            # if isinstance(e.FinalValue, list): e.__Value = np.array(e.__Value)
-            
-            Value = e.GetValue(t_fact, t_fact_old)
+        for e in self._BoundaryConditions.generate_pgd(self, t_fact, t_fact_old):
+            # SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]       
+                        
             if e.bc_type == 'Neumann':
+                SetOfNodesForBC = e.node_set                        
+                Value = e._current_value
                 if Value == 0: continue #dans ce cas, pas de force à ajouter
 #                dd = SetOfNodesForBC[0][0]
 #                index = SetOfNodesForBC[1][0]
-                var = [meshPGD._GetSpecificVariableRank (d, e.Variable) for d in range(meshPGD.get_dimension())] #specific variable rank related to the submesh dd
+                var = [meshPGD._GetSpecificVariableRank (d, e.variable) for d in range(meshPGD.get_dimension())] #specific variable rank related to the submesh dd
                 
                 #item = the index of nodes in each subspace (slice if all nodes are included)
                 item = [slice(Nnd[d]*var[d], Nnd[d]*(var[d]+1)) for d in range(meshPGD.get_dimension())]                
@@ -334,11 +334,13 @@ class ProblemPGD(ProblemBase):
                     F = F+Fadd                    
                 else: F.__setitem__(tuple(item), Value)                        
 
-            elif e.bc_type == 'Dirichlet':  
+            elif e.bc_type == 'Dirichlet':
+                SetOfNodesForBC = e.node_set                        
+                Value = e._current_value
                 if len(SetOfNodesForBC[1]) == 1 and isinstance(Value, (int,float,np.floating,np.ndarray)): #The BC can be applied on only 1 subspace 
                     dd = SetOfNodesForBC[0][0]
                     index = np.array(SetOfNodesForBC[1][0], dtype=int)
-                    var = meshPGD._GetSpecificVariableRank (dd, e.Variable) #specific variable rank related to the submesh dd
+                    var = meshPGD._GetSpecificVariableRank (dd, e.variable) #specific variable rank related to the submesh dd
                     GlobalIndex = (var*Nnd[dd] + index).astype(int)
                     
                     if isinstance(Value, np.ndarray): Value = Value.reshape(-1,1)                                
@@ -364,7 +366,9 @@ class ProblemPGD(ProblemBase):
                     return NotImplemented    
             
             elif e.bc_type == 'MPC':
-                SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfnameMaster] 
+                # SetOfNodesForBC_Master = [meshPGD.node_sets[setofid] for setofid in e.SetOfnameMaster] 
+                SetOfNodesForBC_Master = e.list_node_sets[1:]
+                SetOfNodesForBC = e.list_node_sets[0]
                 
                 #test if The BC can be applied on only 1 subspace, ie if each setofnodes is defined only on 1 same subspace
                 if len(SetOfNodesForBC[1]) == 1 \
@@ -377,7 +381,7 @@ class ProblemPGD(ProblemBase):
                     IndexMaster = np.array([setof[1][0] for setof in SetOfNodesForBC_Master], dtype = int)
                     
                     #global index for the slave nodes (eliminated nodes)
-                    var = meshPGD._GetSpecificVariableRank (dd, e.Variable) #specific variable rank related to the submesh dd
+                    var = meshPGD._GetSpecificVariableRank (dd, e.list_variables[0]) #specific variable rank related to the submesh dd
                     GlobalIndex = (var*Nnd[dd] + np.array(Index)).astype(int)
                     
                     #add the eliminated node to the list of eliminated nodes
@@ -405,14 +409,14 @@ class ProblemPGD(ProblemBase):
                         Xbc_add.data[dd][GlobalIndex] = Value
                         Xbc = Xbc+Xbc_add - Xbc_old           
                                                             
-                    nbFact = len(e.__Fact)
+                    nbFact = len(e._factors)
                 
                     #shape self.Factor should be nbFact*nbMPC 
                     #shape self.Index should be nbMPC
                     #shape self.IndexMaster should be nbFact*nbMPC
-                    data[dd].append(np.array(e.Factor.T).ravel())
+                    data[dd].append(np.array(e._factors.T).ravel())
                     row[dd].append((GlobalIndex.reshape(-1,1)*np.ones(nbFact)).ravel())
-                    col[dd].append((IndexMaster + np.c_[e.VariableMaster]*Nnd[dd]).T.ravel())
+                    col[dd].append((IndexMaster + np.c_[e.list_variables[1:]]*Nnd[dd]).T.ravel())
                                         
                                                             
                 
@@ -479,7 +483,7 @@ class ProblemPGD(ProblemBase):
         
  
     ### Functions related to boundary contidions
-    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = ""):
         """
         Define some boundary conditions        
 
@@ -532,9 +536,15 @@ class ProblemPGD(ProblemBase):
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
+                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index, timeEvolution, initialValue, name))                
+                self._BoundaryConditions[-1].initialize(self)
         else:
-            self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+            if bc_type == 'MPC':
+                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name))
+            else:
+                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index, timeEvolution, initialValue, name)) 
+        
+            self._BoundaryConditions[-1].initialize(self)
 
 ##    def CL_ml(self, dd, QQ): #conditions aux limites via des multiplicateurs de lagrange        
 ##        #QQ matrice définissant les CL        
