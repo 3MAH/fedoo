@@ -52,12 +52,12 @@ fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')
 
 #fixed point on the center to avoid rigid body motion
-pb.BoundaryCondition('Dirichlet', 'Disp', 0, center)
+pb.bc.add('Dirichlet', 'Disp', 0, center)
 
 #Enforced mean strain
-pb.BoundaryCondition('Dirichlet', 'Disp', [E[0], E[1], E[2]], [
+pb.bc.add('Dirichlet', 'Disp', [E[0], E[1], E[2]], [
                            StrainNodes[0]])  # EpsXX, EpsYY, EpsZZ
-pb.BoundaryCondition('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
+pb.bc.add('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
                            StrainNodes[1]])  # EpsXY, EpsXZ, EpsYZ
 
 pb.apply_boundary_conditions()

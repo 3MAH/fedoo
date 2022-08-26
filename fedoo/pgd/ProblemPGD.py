@@ -6,7 +6,7 @@ from fedoo.pgd.SeparatedArray import *
 from fedoo.pgd.SeparatedOperator import *
 #from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
 from fedoo.core.base import ProblemBase
-from fedoo.core.boundary_conditions import UniqueBoundaryCondition
+from fedoo.core.boundary_conditions import BoundaryCondition
 
 #===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)
@@ -295,7 +295,7 @@ class ProblemPGD(ProblemBase):
         Nnd  = [meshPGD.GetListMesh()[d].n_nodes for d in range(meshPGD.get_dimension())] #number of nodes in each dimensions
         Nvar = [meshPGD._GetSpecificNumberOfVariables(d, nvar) for d in range(meshPGD.get_dimension())]
         
-        for e in self._BoundaryConditions.generate_pgd(self, t_fact, t_fact_old):
+        for e in self.bc.generate(self, t_fact, t_fact_old):
             # SetOfNodesForBC = meshPGD.node_sets[e.SetOfname]       
                         
             if e.bc_type == 'Neumann':
@@ -536,16 +536,13 @@ class ProblemPGD(ProblemBase):
             if np.isscalar(Value):
                 Value = [Value for var in Var] 
             for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index, timeEvolution, initialValue, name))                
-                self._BoundaryConditions[-1].initialize(self)
+                self.bc.append(BoundaryCondition(bc_type,var,Value[i],Index, timeEvolution, initialValue, name))                
         else:
             if bc_type == 'MPC':
-                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name))
+                self.bc.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name))
             else:
-                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index, timeEvolution, initialValue, name)) 
+                self.bc.append(BoundaryCondition(bc_type,Var,Value,Index, timeEvolution, initialValue, name)) 
         
-            self._BoundaryConditions[-1].initialize(self)
-
 ##    def CL_ml(self, dd, QQ): #conditions aux limites via des multiplicateurs de lagrange        
 ##        #QQ matrice définissant les CL        
 ##        #à développer

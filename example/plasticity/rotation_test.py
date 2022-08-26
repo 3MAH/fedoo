@@ -102,16 +102,16 @@ tmax = 1
 theta = np.pi/2
 grad_u = np.array([[np.cos(theta)-1,-np.sin(theta),0], [np.sin(theta),np.cos(theta)-1,0], [0,0,0]])
 
-Problem.BoundaryCondition('Dirichlet','Disp',0,node_center)
-Problem.BoundaryCondition('Dirichlet','DispX', grad_u[0,0], [StrainNodes[0]]) #EpsXX
-Problem.BoundaryCondition('Dirichlet','DispY', grad_u[0,1], [StrainNodes[0]]) #EpsYY
-Problem.BoundaryCondition('Dirichlet','DispZ', grad_u[0,2], [StrainNodes[0]]) #EpsZZ
-Problem.BoundaryCondition('Dirichlet','DispX', grad_u[1,0], [StrainNodes[1]]) #EpsXX
-Problem.BoundaryCondition('Dirichlet','DispY', grad_u[1,1], [StrainNodes[1]]) #EpsYY
-Problem.BoundaryCondition('Dirichlet','DispZ', grad_u[1,2], [StrainNodes[1]]) #EpsZZ
-Problem.BoundaryCondition('Dirichlet','DispX', grad_u[2,0], [StrainNodes[2]]) #EpsXX
-Problem.BoundaryCondition('Dirichlet','DispY', grad_u[2,1], [StrainNodes[2]]) #EpsYY
-Problem.BoundaryCondition('Dirichlet','DispZ', grad_u[2,2], [StrainNodes[2]]) #EpsZZ
+Problem.bc.add('Dirichlet','Disp',0,node_center)
+Problem.bc.add('Dirichlet','DispX', grad_u[0,0], [StrainNodes[0]]) #EpsXX
+Problem.bc.add('Dirichlet','DispY', grad_u[0,1], [StrainNodes[0]]) #EpsYY
+Problem.bc.add('Dirichlet','DispZ', grad_u[0,2], [StrainNodes[0]]) #EpsZZ
+Problem.bc.add('Dirichlet','DispX', grad_u[1,0], [StrainNodes[1]]) #EpsXX
+Problem.bc.add('Dirichlet','DispY', grad_u[1,1], [StrainNodes[1]]) #EpsYY
+Problem.bc.add('Dirichlet','DispZ', grad_u[1,2], [StrainNodes[1]]) #EpsZZ
+Problem.bc.add('Dirichlet','DispX', grad_u[2,0], [StrainNodes[2]]) #EpsXX
+Problem.bc.add('Dirichlet','DispY', grad_u[2,1], [StrainNodes[2]]) #EpsYY
+Problem.bc.add('Dirichlet','DispZ', grad_u[2,2], [StrainNodes[2]]) #EpsZZ
 
 # Problem.apply_boundary_conditions()
 
@@ -127,7 +127,7 @@ E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
 # F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 # Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 

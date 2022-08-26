@@ -49,14 +49,14 @@ for computeShear in range(3):
     
     pb = fd.problem.Static("beam")
     
-    pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-    pb.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
-    pb.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
-    pb.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
-    pb.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
-    pb.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
+    pb.bc.add('Dirichlet','DispX',0,nodes_left)
+    pb.bc.add('Dirichlet','DispY',0,nodes_left)
+    pb.bc.add('Dirichlet','DispZ',0,nodes_left)
+    pb.bc.add('Dirichlet','RotX',0,nodes_left)
+    pb.bc.add('Dirichlet','RotY',0,nodes_left)
+    pb.bc.add('Dirichlet','RotZ',0,nodes_left)
     
-    pb.BoundaryCondition('Neumann','DispY',F,nodes_right)
+    pb.bc.add('Neumann','DispY',F,nodes_right)
     
     pb.apply_boundary_conditions()
     pb.solve()

@@ -80,9 +80,9 @@ MeanStrain = np.zeros(6)
 T = readPath[0] #temperature
 time = 0.
 
-pb.BoundaryCondition('Dirichlet','DispX', 0, center)
-pb.BoundaryCondition('Dirichlet','DispY', 0, center)
-pb.BoundaryCondition('Dirichlet','DispZ', 0, center)
+pb.bc.add('Dirichlet','DispX', 0, center)
+pb.bc.add('Dirichlet','DispY', 0, center)
+pb.bc.add('Dirichlet','DispZ', 0, center)
 
 pb.SetNewtonRaphsonErrorCriterion('Displacement')
 
@@ -128,12 +128,12 @@ for blocknumber, block in enumerate(blocks):
             initValue[step.cBC_meca.astype(bool)] = MeanStress[step.cBC_meca.astype(bool)]
             
             pb.RemoveBC("Strain")
-            pb.BoundaryCondition(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], name = 'Strain') #EpsXX
-            pb.BoundaryCondition(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], name = 'Strain') #EpsYY
-            pb.BoundaryCondition(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], name = 'Strain') #EpsZZ
-            pb.BoundaryCondition(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], name = 'Strain') #EpsXY
-            pb.BoundaryCondition(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], name = 'Strain') #EpsXZ
-            pb.BoundaryCondition(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], name = 'Strain') #EpsYZ
+            pb.bc.add(BCtype[0],'DispX', BC_mecas[0,i], [StrainNodes[0]], initialValue = initValue[0], name = 'Strain') #EpsXX
+            pb.bc.add(BCtype[1],'DispY', BC_mecas[1,i], [StrainNodes[0]], initialValue = initValue[1], name = 'Strain') #EpsYY
+            pb.bc.add(BCtype[2],'DispZ', BC_mecas[2,i], [StrainNodes[0]], initialValue = initValue[2], name = 'Strain') #EpsZZ
+            pb.bc.add(BCtype[3],'DispX', BC_mecas[3,i], [StrainNodes[1]], initialValue = initValue[3], name = 'Strain') #EpsXY
+            pb.bc.add(BCtype[4],'DispY', BC_mecas[4,i], [StrainNodes[1]], initialValue = initValue[4], name = 'Strain') #EpsXZ
+            pb.bc.add(BCtype[5],'DispZ', BC_mecas[5,i], [StrainNodes[1]], initialValue = initValue[5], name = 'Strain') #EpsYZ
             
             #pb.apply_boundary_conditions()
             # pb.nlsolve(dt = dt*step.Dn_init, dt_min = dt*step.Dn_init*step.Dn_mini, tmax = dt, update_dt = False, ToleranceNR = 0.05, intervalOutput = 2.0*dt)

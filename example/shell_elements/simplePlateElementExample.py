@@ -54,14 +54,14 @@ if not(os.path.isdir('results')): os.mkdir('results')
 Problem.add_output('results/simplePlate', post_tt_assembly, ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
-Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
+Problem.bc.add('Dirichlet','DispX',0,nodes_left)
+Problem.bc.add('Dirichlet','DispY',0,nodes_left)
+Problem.bc.add('Dirichlet','DispZ',0,nodes_left)
+Problem.bc.add('Dirichlet','RotX',0,nodes_left)
+Problem.bc.add('Dirichlet','RotY',0,nodes_left)
+Problem.bc.add('Dirichlet','RotZ',0,nodes_left)
 
-Problem.BoundaryCondition('Neumann','DispZ',F,node_right_center)
+Problem.bc.add('Neumann','DispZ',F,node_right_center)
 
 Problem.apply_boundary_conditions()
 Problem.solve()

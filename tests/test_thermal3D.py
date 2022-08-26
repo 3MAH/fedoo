@@ -42,19 +42,19 @@ results = pb.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type
 # Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 10
-# Problem.BoundaryCondition('Dirichlet','Temp',0,bottom)
-def timeEvolution(timeFactor): 
-    if timeFactor == 0: return 0
+# Problem.bc.add('Dirichlet','Temp',0,bottom)
+def time_func(t_fact): 
+    if t_fact== 0: return 0
     else: return 1
 
-# Problem.BoundaryCondition('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
-pb.BoundaryCondition('Dirichlet','Temp',3,right, timeEvolution=timeEvolution)
-# Problem.BoundaryCondition('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
+# Problem.bc.add('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
+pb.bc.add('Dirichlet','Temp',3,right, time_func=time_func)
+# Problem.bc.add('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
 
 
-# Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
-# Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-# bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
+# Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
+# Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
+# bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
 
 pb.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 

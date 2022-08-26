@@ -74,11 +74,11 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement")
 
 ################### step 1 ################################
 tmax = 1
-pb.BoundaryCondition('Dirichlet','DispX',0,nodes_bottomLeft)
-pb.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
-pb.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-bc1 = pb.BoundaryCondition('Dirichlet','DispY', uimp, nodes_top1)
-bc2 = pb.BoundaryCondition('Dirichlet','DispY', uimp, nodes_top2)
+pb.bc.add('Dirichlet','DispX',0,nodes_bottomLeft)
+pb.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
+pb.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
+bc1 = pb.bc.add('Dirichlet','DispY', uimp, nodes_top1)
+bc2 = pb.bc.add('Dirichlet','DispY', uimp, nodes_top2)
 
 
 pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
@@ -89,7 +89,7 @@ pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 
 # #We set initial condition to the applied force to relax the load
 # F_app = Problem.GetExternalForce('DispY')[nodes_topCenter]
-# bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 # pb.nlsolve(t0 = 1, tmax = 2, dt = 1., update_dt = True, ToleranceNR = 0.01)
 

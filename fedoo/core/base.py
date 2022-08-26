@@ -286,7 +286,7 @@ class WeakForm:
 #=============================================================
 # Base class for problems (cf problems lib)
 #=============================================================   
-# from fedoo.problem.BoundaryCondition import UniqueBoundaryCondition
+from fedoo.core.boundary_conditions import ListBC
 
 class ProblemBase:
     """
@@ -303,7 +303,8 @@ class ProblemBase:
         assert isinstance(name, str) , "An name must be a string" 
         self.__name = name
         self.__solver = ['direct']
-        self._BoundaryConditions = ListBC() #list containing boundary contidions associated to the problem        
+        self.bc = ListBC(name=self.name+"_bc") #list containing boundary contidions associated to the problem        
+        self.bc._problem = self
         
         ProblemBase.__dic[self.__name] = self
         
@@ -438,38 +439,38 @@ class ProblemBase:
     #         if np.isscalar(Value):
     #             Value = [Value for var in Var] 
     #         for i,var in enumerate(Var):
-    #             self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
+    #             self.bc.append(BoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
     #     else:
-    #         self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
+    #         self.bc.append(BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
 
 
-    def GetBC(self, name =None):        
-        """
-        Return the list of Boundary Conditions
-        if an name is specified (str value), return a list of BC whith the specified name
-        """
-        if name is None: return self._BoundaryConditions
-        else: return [bc for bc in self._BoundaryConditions if bc.name == name]          
+    # def GetBC(self, name =None):        
+    #     """
+    #     Return the list of Boundary Conditions
+    #     if an name is specified (str value), return a list of BC whith the specified name
+    #     """
+    #     if name is None: return self.bc
+    #     else: return [bc for bc in self.bc if bc.name == name]          
         
 
-    def RemoveBC(self,name =None):
-        """
-        Remove all the BC which have the specified name. 
-        If name = None (default) remove all boundary conditions
-        """
-        if name is None: self._BoundaryConditions = []
-        else: self._BoundaryConditions = [bc for bc in self._BoundaryConditions if bc.name != name]          
+    # def RemoveBC(self,name =None):
+    #     """
+    #     Remove all the BC which have the specified name. 
+    #     If name = None (default) remove all boundary conditions
+    #     """
+    #     if name is None: self.bc = []
+    #     else: self.bc = [bc for bc in self.bc if bc.name != name]          
     
-    def PrintBC(self):        
-        """
-        Print all the boundary conditions under the form:
-            ind_bc : name - bc_type
-            ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
-            name is the str name of the BC ("No name") by default
-            bc_type is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
-        """
-        listid = [str(i) + ": " + bc.name + " - " + bc.bc_type for i,bc in enumerate(self._BoundaryConditions)]
-        print("\n".join(listid))
+    # def PrintBC(self):        
+    #     """
+    #     Print all the boundary conditions under the form:
+    #         ind_bc : name - bc_type
+    #         ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
+    #         name is the str name of the BC ("No name") by default
+    #         bc_type is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
+    #     """
+    #     listid = [str(i) + ": " + bc.name + " - " + bc.bc_type for i,bc in enumerate(self.bc)]
+    #     print("\n".join(listid))
     
 
     
@@ -561,46 +562,9 @@ class ProblemBase:
         return self.__solver[0]
     
 
-#=============================================================
-# Base class for boundary conditions (BC)
-#=============================================================
-class BCBase:
-    """Base class for BC (boundary conditions) objects."""
-
-    __dic = {}
-
-    def __init__(self, name = ""):
-        assert isinstance(name, str) , "name must be a string" 
-        self.__name = name
-        
-        if name != "":
-            BCBase.__dic[self.__name] = self
-
-    def __class_getitem__(cls, item):
-        return cls.__dic[item]
-
-    @property
-    def name(self):
-        return self.__name
-
-    @staticmethod
-    def get_all():
-        return BCBase.__dic
 
 
-class ListBC(list, BCBase):
-    """Define a list of elementary boundary conditions. 
-    Derived from the python list object"""
-    def __init__(self, l = [], name = ""):
-        BCBase.__init__(self, name)
-            
-        list.__init__(self,l)
-    
-    def generate(self, problem, t_fact = 1, t_fact_old = None):
-        return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), [])            
-    
-    def generate_pgd(self, problem, t_fact = 1, t_fact_old = None):
-        return sum((bc.generate_pgd(problem, t_fact, t_fact_old) for bc in self), [])          
+
     
     
     
@@ -632,7 +596,7 @@ class ListBC(list, BCBase):
 #     else: problem = ProblemBase.get_all()[Problemname]
 #     problem.BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name)
 
-# def GetBC(): return ProblemBase.get_active()._BoundaryConditions    
+# def GetBC(): return ProblemBase.get_active().bc    
 # def RemoveBC(name =None): ProblemBase.get_active().RemoveBC(name)    
 # def PrintBC(): ProblemBase.get_active().PrintBC()    
  

@@ -42,10 +42,10 @@ Mesh["Domain"].add_node_set([nodes_right,"all"], name = "faceRight")
 
 pb = problem.Static("Assembling")
 
-pb.BoundaryCondition('Dirichlet','DispX',0,"faceLeft")
-pb.BoundaryCondition('Dirichlet','DispY',0,"faceLeft")
-pb.BoundaryCondition('Dirichlet','DispZ',0,"faceLeft")
-pb.BoundaryCondition('Dirichlet','DispZ',-5e-3,"faceRight")
+pb.bc.add('Dirichlet','DispX',0,"faceLeft")
+pb.bc.add('Dirichlet','DispY',0,"faceLeft")
+pb.bc.add('Dirichlet','DispZ',0,"faceLeft")
+pb.bc.add('Dirichlet','DispZ',-5e-3,"faceRight")
 
 pb.apply_boundary_conditions()
 

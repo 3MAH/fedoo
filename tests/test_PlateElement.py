@@ -49,14 +49,14 @@ else:
 
 pb = fd.problem.Static("plate")
 
-pb.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-pb.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
-pb.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
-pb.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
-pb.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
-pb.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
+pb.bc.add('Dirichlet','DispX',0,nodes_left)
+pb.bc.add('Dirichlet','DispY',0,nodes_left)
+pb.bc.add('Dirichlet','DispZ',0,nodes_left)
+pb.bc.add('Dirichlet','RotX',0,nodes_left)
+pb.bc.add('Dirichlet','RotY',0,nodes_left)
+pb.bc.add('Dirichlet','RotZ',0,nodes_left)
 
-pb.BoundaryCondition('Neumann','DispZ',F,node_right_center)
+pb.bc.add('Neumann','DispZ',F,node_right_center)
 
 pb.apply_boundary_conditions()
 pb.solve()

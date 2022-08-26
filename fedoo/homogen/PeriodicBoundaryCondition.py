@@ -47,7 +47,7 @@ if USE_SIMCOON:
         for eq_list in list_nodes:
             eq = np.array(eq_list)
             listVar = tuple(eq[1::3].astype(int)-1)
-            pb.BoundaryCondition('MPC', listVar, eq[2::3], eq[0::3].astype(int))
+            pb.bc.mpc(listVar, eq[2::3], eq[0::3].astype(int))
 
 def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8, Problemname = None):
     """
@@ -111,40 +111,40 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
         top = top[np.argsort(crd[top,0])]
         bottom = bottom[np.argsort(crd[bottom,0])]
         
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[1][0])])
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[1][1])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,  -1), np.full_like(right,-(xmax-xmin), dtype=float)], [right,left  ,np.full_like(right,NodeCD[1][0])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(top  ,1), np.full_like(bottom,-1), np.full_like(top  ,-(ymax-ymin), dtype=float)], [top  ,bottom,np.full_like(top  ,NodeCD[1][1])])
         
         #elimination of DOF from edge left/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[1][1])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeCD[0][1])])
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[1][0])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeCD[1][0])])
         #elimination of DOF from edge right/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[0][0]), np.full_like(corner_rt,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[1][0]), np.full_like(corner_rt,NodeCD[1][1])])   
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[0][0]), np.full_like(corner_rt,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeCD[1][0]), np.full_like(corner_rt,NodeCD[1][1])])   
                                        
         #if rot DOF are used, apply continuity of the rotational dof on each oposite faces and corner
         if 'RotZ' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         if 'RotY' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         if 'RotX' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         
     elif dim == 3:                        
         
@@ -241,93 +241,93 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
         dx = xmax-xmin ; dy = ymax-ymin ; dz = zmax-zmin        
         #[EpsXX, EpsYY, EpsZZ, EpsYZ, EpsXZ, EpsXY]
         #Left/right faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[1][0])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[2][0])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[1][0])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)], [right,left,np.full_like(right,NodeCD[2][0])])
         #top/bottom faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[2][1])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[1][1])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)], [top,bottom,np.full_like(top,NodeCD[2][1])])
         #front/behind faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[2][2])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)], [front,behind,np.full_like(front,NodeCD[2][2])])
                 
         #elimination of DOF from edge left/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[2][1])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[1][1])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeCD[2][1])])        
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[1][0])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[2][0])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[1][0])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeCD[2][0])])        
         #elimination of DOF from edge right/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[0][0]), np.full_like(edge_rt,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[1][0]), np.full_like(edge_rt,NodeCD[1][1])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[2][0]), np.full_like(edge_rt,NodeCD[2][1])])                
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[0][0]), np.full_like(edge_rt,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[1][0]), np.full_like(edge_rt,NodeCD[1][1])])                
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeCD[2][0]), np.full_like(edge_rt,NodeCD[2][1])])                
                                        
         #elimination of DOF from edge top/behind -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[2][1])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[1][1])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeCD[2][1])])        
         #elimination of DOF from edge bottom/front -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[2][2])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeCD[2][2])])        
         #elimination of DOF from edge top/front -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[0][1]), np.full_like(edge_tf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[1][1]), np.full_like(edge_tf,NodeCD[1][2])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[2][1]), np.full_like(edge_tf,NodeCD[2][2])])                
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[0][1]), np.full_like(edge_tf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[1][1]), np.full_like(edge_tf,NodeCD[1][2])])                
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeCD[2][1]), np.full_like(edge_tf,NodeCD[2][2])])                
    
         #elimination of DOF from edge right/behind -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[1][0])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[2][0])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[1][0])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeCD[2][0])])        
         #elimination of DOF from edge left/front -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[2][2])])        
+        pb.bc.mpc(['DispX','DispX',VarCD[0][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeCD[2][2])])        
         #elimination of DOF from edge right/front -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[0][0]), np.full_like(edge_rf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[1][0]), np.full_like(edge_rf,NodeCD[1][2])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[2][0]), np.full_like(edge_rf,NodeCD[2][2])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[0][0]), np.full_like(edge_rf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[1][0]), np.full_like(edge_rf,NodeCD[1][2])])                
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeCD[2][0]), np.full_like(edge_rf,NodeCD[2][2])])
         
         # #### CORNER ####
         #elimination of DOF from corner right/bottom/behind (corner_rbd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[0][0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[1][0])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[2][0])]) 
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[0][0])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[1][0])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeCD[2][0])]) 
         #elimination of DOF from corner left/top/behind (corner_ltd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[2][1])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[1][1])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeCD[2][1])])
         #elimination of DOF from corner left/bottom/front (corner_lbf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[2][2])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeCD[2][2])])
         #elimination of DOF from corner right/top/behind (corner_rtd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[0][0]), np.full_like(corner_rtd,NodeCD[0][1])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[1][0]), np.full_like(corner_rtd,NodeCD[1][1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[2][0]), np.full_like(corner_rtd,NodeCD[2][1])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[0][0]), np.full_like(corner_rtd,NodeCD[0][1])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[1][0]), np.full_like(corner_rtd,NodeCD[1][1])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0],VarCD[2][1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeCD[2][0]), np.full_like(corner_rtd,NodeCD[2][1])])
         #elimination of DOF from corner left/top/front (corner_ltf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[0][1]), np.full_like(corner_ltf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[1][1]), np.full_like(corner_ltf,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[2][1]), np.full_like(corner_ltf,NodeCD[2][2])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][1],VarCD[0][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[0][1]), np.full_like(corner_ltf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][1],VarCD[1][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[1][1]), np.full_like(corner_ltf,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][1],VarCD[2][2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeCD[2][1]), np.full_like(corner_ltf,NodeCD[2][2])])
         #elimination of DOF from corner right/bottom/front (corner_rbf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[0][0]), np.full_like(corner_rbf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[1][0]), np.full_like(corner_rbf,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[2][0]), np.full_like(corner_rbf,NodeCD[2][2])])
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[0][0]), np.full_like(corner_rbf,NodeCD[0][2])])
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[1][0]), np.full_like(corner_rbf,NodeCD[1][2])])
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0],VarCD[2][2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeCD[2][0]), np.full_like(corner_rbf,NodeCD[2][2])])
         
         
                 
         #elimination of DOF from corner right/top/front (corner_rtf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarCD[0][0],VarCD[0][1], VarCD[0][2]], 
+        pb.bc.mpc(['DispX','DispX',VarCD[0][0],VarCD[0][1], VarCD[0][2]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[0][0]), np.full_like(corner_rtf,NodeCD[0][1]), np.full_like(corner_rtf,NodeCD[0][2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarCD[1][0],VarCD[1][1], VarCD[1][2]], 
+        pb.bc.mpc(['DispY','DispY',VarCD[1][0],VarCD[1][1], VarCD[1][2]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[1][0]), np.full_like(corner_rtf,NodeCD[1][1]), np.full_like(corner_rtf,NodeCD[1][2])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarCD[2][0],VarCD[2][1], VarCD[2][2]], 
+        pb.bc.mpc(['DispZ','DispZ',VarCD[2][0],VarCD[2][1], VarCD[2][2]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)    ], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeCD[2][0]), np.full_like(corner_rtf,NodeCD[2][1]), np.full_like(corner_rtf,NodeCD[2][2])])
 
@@ -339,31 +339,31 @@ def DefinePeriodicBoundaryConditionGrad(mesh, NodeCD, VarCD, dim='3D', tol=1e-8,
         
         for var in list_rot_var: 
             #### FACES ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind])
+            pb.bc.mpc([var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc([var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc([var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind])
                      
             #### EDGES ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb])        
             
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd])        
 
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld])        
                            
             #### CORNERS ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd])                       
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd])                        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd])            
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd])            
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd])                       
+            pb.bc.mpc([var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd])                        
+            pb.bc.mpc([var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd])            
+            pb.bc.mpc([var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd])            
+            pb.bc.mpc([var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd])
 
 
 def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, Problemname = None):
@@ -429,41 +429,41 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         top = top[np.argsort(crd[top,0])]
         bottom = bottom[np.argsort(crd[bottom,0])]
         
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right, 1), np.full_like(left, -1), np.full_like(right, -(xmax-xmin), dtype=float)], [right,left,np.full_like(right, NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*(xmax-xmin), dtype=float)], [right,left,np.full_like(right,NodeEps[2])])
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*(ymax-ymin), dtype=float)], [top,bottom,np.full_like(top,NodeEps[2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-(ymax-ymin), dtype=float)], [top,bottom,np.full_like(top,NodeEps[1])])
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(right, 1), np.full_like(left, -1), np.full_like(right, -(xmax-xmin), dtype=float)], [right,left,np.full_like(right, NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[2]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*(xmax-xmin), dtype=float)], [right,left,np.full_like(right,NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[2]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*(ymax-ymin), dtype=float)], [top,bottom,np.full_like(top,NodeEps[2])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-(ymax-ymin), dtype=float)], [top,bottom,np.full_like(top,NodeEps[1])])
         
         #elimination of DOF from edge left/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[2]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-0.5*(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeEps[2])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeEps[1])])
+        pb.bc.mpc(['DispX','DispX',VarEps[2]], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1), np.full_like(corner_lt,-0.5*(ymax-ymin), dtype=float)], [corner_lt, corner_lb, np.full_like(corner_lt,NodeEps[2])])
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[2]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-0.5*(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt, NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt,NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[2]], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1), np.full_like(corner_rb,-0.5*(xmax-xmin), dtype=float)], [corner_rb, corner_lb, np.full_like(corner_lt, NodeEps[2])])
         #elimination of DOF from edge right/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[2]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-0.5*(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeEps[0]), np.full_like(corner_rt,NodeEps[2])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[2],VarEps[1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-0.5*(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeEps[2]), np.full_like(corner_rt,NodeEps[1])])                
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[2]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-(xmax-xmin), dtype=float), np.full_like(corner_rt,-0.5*(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeEps[0]), np.full_like(corner_rt,NodeEps[2])])
+        pb.bc.mpc(['DispY','DispY',VarEps[2],VarEps[1]], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1), np.full_like(corner_rt,-0.5*(xmax-xmin), dtype=float), np.full_like(corner_rt,-(ymax-ymin), dtype=float)], [corner_rt, corner_lb, np.full_like(corner_rt,NodeEps[2]), np.full_like(corner_rt,NodeEps[1])])                
                                        
                       
         #if rot DOF are used, apply continuity of the rotational dof
         if 'RotZ' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotZ','RotZ'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         if 'RotY' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotY','RotY'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         if 'RotX' in ListVar:
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
-            pb.BoundaryCondition('MPC', ['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_lt,1), np.full_like(corner_lb,-1)], [corner_lt, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_rb,1), np.full_like(corner_lb,-1)], [corner_rb, corner_lb])
+            pb.bc.mpc(['RotX','RotX'], [np.full_like(corner_rt,1), np.full_like(corner_lb,-1)], [corner_rt, corner_lb])
         
         
         #StrainNode[0] - 'DispX' is a virtual dof for EXX
@@ -566,91 +566,91 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         dx = xmax-xmin ; dy = ymax-ymin ; dz = zmax-zmin        
         #[EpsXX, EpsYY, EpsZZ, EpsYZ, EpsXZ, EpsXY]
         #Left/right faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(right,1), np.full_like(left, -1), np.full_like(right, -dx, dtype=float)]  , [right,left,np.full_like(right, NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], [right,left,np.full_like(right,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], [right,left,np.full_like(right,NodeEps[4])])
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(right,1), np.full_like(left, -1), np.full_like(right, -dx, dtype=float)]  , [right,left,np.full_like(right, NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], [right,left,np.full_like(right,NodeEps[3])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-0.5*dx, dtype=float)], [right,left,np.full_like(right,NodeEps[4])])
         #top/bottom faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], [top,bottom,np.full_like(top,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top, -dy, dtype=float)]   , [top,bottom,np.full_like(top,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], [top,bottom,np.full_like(top,NodeEps[5])])
+        pb.bc.mpc(['DispX','DispX',VarEps[3]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], [top,bottom,np.full_like(top,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top, -dy, dtype=float)]   , [top,bottom,np.full_like(top,NodeEps[1])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-0.5*dy, dtype=float)], [top,bottom,np.full_like(top,NodeEps[5])])
         #front/behind faces
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], [front,behind,np.full_like(front,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], [front,behind,np.full_like(front,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)    ], [front,behind,np.full_like(front,NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[4]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], [front,behind,np.full_like(front,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[5]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-0.5*dz, dtype=float)], [front,behind,np.full_like(front,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[2]], [np.full_like(front,1), np.full_like(behind,-1), np.full_like(front,-dz, dtype=float)    ], [front,behind,np.full_like(front,NodeEps[2])])
                 
         #elimination of DOF from edge left/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)    ], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[5])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[3]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-dy, dtype=float)    ], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[1])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5]], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1), np.full_like(edge_lt,-0.5*dy, dtype=float)], [edge_lt, edge_lb, np.full_like(edge_lt,NodeEps[5])])        
         #elimination of DOF from edge right/bottom -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)    ], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[4])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-dx, dtype=float)    ], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[3])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1), np.full_like(edge_rb,-0.5*dx, dtype=float)], [edge_rb, edge_lb, np.full_like(edge_lt,NodeEps[4])])        
         #elimination of DOF from edge right/top -> edge left/bottom
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[0]), np.full_like(edge_rt,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[3]), np.full_like(edge_rt,NodeEps[1])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[4]), np.full_like(edge_rt,NodeEps[5])])                
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[0]), np.full_like(edge_rt,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[3]), np.full_like(edge_rt,NodeEps[1])])                
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1), np.full_like(edge_rt,-0.5*dx, dtype=float), np.full_like(edge_rt,-0.5*dy, dtype=float)], [edge_rt, edge_lb, np.full_like(edge_rt,NodeEps[4]), np.full_like(edge_rt,NodeEps[5])])                
                                        
         #elimination of DOF from edge top/behind -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)    ], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[5])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[3]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-dy, dtype=float)    ], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[1])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5]], [np.full_like(edge_td,1), np.full_like(edge_bd,-1), np.full_like(edge_td,-0.5*dy, dtype=float)], [edge_td, edge_bd, np.full_like(edge_td,NodeEps[5])])        
         #elimination of DOF from edge bottom/front -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)    ], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[2])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[4]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[5]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-0.5*dz, dtype=float)], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[2]], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1), np.full_like(edge_bf,-dz, dtype=float)    ], [edge_bf, edge_bd, np.full_like(edge_bf,NodeEps[2])])        
         #elimination of DOF from edge top/front -> edge bottom/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-0.5*dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[3]), np.full_like(edge_tf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float)    , np.full_like(edge_tf,-0.5*dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[1]), np.full_like(edge_tf,NodeEps[5])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)    ], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[5]), np.full_like(edge_tf,NodeEps[2])])                
+        pb.bc.mpc(['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-0.5*dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[3]), np.full_like(edge_tf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-dy, dtype=float)    , np.full_like(edge_tf,-0.5*dz, dtype=float)], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[1]), np.full_like(edge_tf,NodeEps[5])])                
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1), np.full_like(edge_tf,-0.5*dy, dtype=float), np.full_like(edge_tf,-dz, dtype=float)    ], [edge_tf, edge_bd, np.full_like(edge_tf,NodeEps[5]), np.full_like(edge_tf,NodeEps[2])])                
    
         #elimination of DOF from edge right/behind -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)    ], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[4])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dx, dtype=float)    ], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[3])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4]], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dx, dtype=float)], [edge_rd, edge_ld, np.full_like(edge_ld,NodeEps[4])])        
         #elimination of DOF from edge left/front -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)    ], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[2])])        
+        pb.bc.mpc(['DispX','DispX',VarEps[4]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[5]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-0.5*dz, dtype=float)], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[2]], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1), np.full_like(edge_rd,-dz, dtype=float)    ], [edge_lf, edge_ld, np.full_like(edge_ld,NodeEps[2])])        
         #elimination of DOF from edge right/front -> edge left/behind
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx    , dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[0]), np.full_like(edge_rf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[3]), np.full_like(edge_rf,NodeEps[5])])                
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)    ], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[4]), np.full_like(edge_rf,NodeEps[2])])                
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-dx    , dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[0]), np.full_like(edge_rf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-0.5*dz, dtype=float)], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[3]), np.full_like(edge_rf,NodeEps[5])])                
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1), np.full_like(edge_rf,-0.5*dx, dtype=float), np.full_like(edge_rf,-dz, dtype=float)    ], [edge_rf, edge_ld, np.full_like(edge_rf,NodeEps[4]), np.full_like(edge_rf,NodeEps[2])])                
         
         #### CORNER ####
         #elimination of DOF from corner right/bottom/behind (corner_rbd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)    ], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[0])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[4])]) 
+        pb.bc.mpc(['DispX','DispX',VarEps[0]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-dx, dtype=float)    ], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[0])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[3])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4]], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbd,-0.5*dx, dtype=float)], [corner_rbd, corner_lbd, np.full_like(corner_rbd,NodeEps[4])]) 
         #elimination of DOF from corner left/top/behind (corner_ltd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)    ], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[5])])
+        pb.bc.mpc(['DispX','DispX',VarEps[3]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-dy, dtype=float)    ], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[1])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5]], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltd,-0.5*dy, dtype=float)], [corner_ltd, corner_lbd, np.full_like(corner_ltd,NodeEps[5])])
         #elimination of DOF from corner left/bottom/front (corner_lbf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[4]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[5]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)    ], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[4]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[5]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-0.5*dz, dtype=float)], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[2]], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_lbf,-dz, dtype=float)    ], [corner_lbf, corner_lbd, np.full_like(corner_lbf,NodeEps[2])])
         #elimination of DOF from corner right/top/behind (corner_rtd) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float)    , np.full_like(corner_rtd,-0.5*dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[0]), np.full_like(corner_rtd,NodeEps[3])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)    ], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[3]), np.full_like(corner_rtd,NodeEps[1])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-0.5*dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[4]), np.full_like(corner_rtd,NodeEps[5])])
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[3]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-dx, dtype=float)    , np.full_like(corner_rtd,-0.5*dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[0]), np.full_like(corner_rtd,NodeEps[3])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3],VarEps[1]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-dy, dtype=float)    ], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[3]), np.full_like(corner_rtd,NodeEps[1])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4],VarEps[5]], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtd,-0.5*dx, dtype=float), np.full_like(corner_rtd,-0.5*dy, dtype=float)], [corner_rtd, corner_lbd, np.full_like(corner_rtd,NodeEps[4]), np.full_like(corner_rtd,NodeEps[5])])
         #elimination of DOF from corner left/top/front (corner_ltf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-0.5*dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[3]), np.full_like(corner_ltf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float)    , np.full_like(corner_ltf,-0.5*dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[1]), np.full_like(corner_ltf,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)    ], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[5]), np.full_like(corner_ltf,NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[3],VarEps[4]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-0.5*dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[3]), np.full_like(corner_ltf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[1],VarEps[5]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-dy, dtype=float)    , np.full_like(corner_ltf,-0.5*dz, dtype=float)], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[1]), np.full_like(corner_ltf,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[5],VarEps[2]], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1), np.full_like(corner_ltf,-0.5*dy, dtype=float), np.full_like(corner_ltf,-dz, dtype=float)    ], [corner_ltf, corner_lbd, np.full_like(corner_ltf,NodeEps[5]), np.full_like(corner_ltf,NodeEps[2])])
         #elimination of DOF from corner right/bottom/front (corner_rbf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float)    , np.full_like(corner_rbf,-0.5*dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[0]), np.full_like(corner_rbf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-0.5*dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[3]), np.full_like(corner_rbf,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)    ], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[4]), np.full_like(corner_rbf,NodeEps[2])])
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[4]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-dx, dtype=float)    , np.full_like(corner_rbf,-0.5*dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[0]), np.full_like(corner_rbf,NodeEps[4])])
+        pb.bc.mpc(['DispY','DispY',VarEps[3],VarEps[5]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-0.5*dz, dtype=float)], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[3]), np.full_like(corner_rbf,NodeEps[5])])
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4],VarEps[2]], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rbf,-0.5*dx, dtype=float), np.full_like(corner_rbf,-dz, dtype=float)    ], [corner_rbf, corner_lbd, np.full_like(corner_rbf,NodeEps[4]), np.full_like(corner_rbf,NodeEps[2])])
         
         #elimination of DOF from corner right/top/front (corner_rtf) -> corner left/bottom/behind (corner_lbd) 
-        pb.BoundaryCondition('MPC', ['DispX','DispX',VarEps[0],VarEps[3], VarEps[4]], 
+        pb.bc.mpc(['DispX','DispX',VarEps[0],VarEps[3], VarEps[4]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-dx, dtype=float)    , np.full_like(corner_rtf,-0.5*dy, dtype=float), np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeEps[0]), np.full_like(corner_rtf,NodeEps[3]), np.full_like(corner_rtf,NodeEps[4])])
-        pb.BoundaryCondition('MPC', ['DispY','DispY',VarEps[3],VarEps[1], VarEps[5]], 
+        pb.bc.mpc(['DispY','DispY',VarEps[3],VarEps[1], VarEps[5]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-0.5*dx, dtype=float), np.full_like(corner_rtf,-dy, dtype=float)    , np.full_like(corner_rtf,-0.5*dz, dtype=float)], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeEps[3]), np.full_like(corner_rtf,NodeEps[1]), np.full_like(corner_rtf,NodeEps[5])])
-        pb.BoundaryCondition('MPC', ['DispZ','DispZ',VarEps[4],VarEps[5], VarEps[2]], 
+        pb.bc.mpc(['DispZ','DispZ',VarEps[4],VarEps[5], VarEps[2]], 
                                     [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1), np.full_like(corner_rtf,-0.5*dx, dtype=float), np.full_like(corner_rtf,-0.5*dy, dtype=float), np.full_like(corner_rtf,-dz, dtype=float)    ], 
                                     [corner_rtf, corner_lbd, np.full_like(corner_rtf,NodeEps[4]), np.full_like(corner_rtf,NodeEps[5]), np.full_like(corner_rtf,NodeEps[2])])
 
@@ -662,30 +662,30 @@ def DefinePeriodicBoundaryCondition(mesh, NodeEps, VarEps, dim='3D', tol=1e-8, P
         
         for var in list_rot_var: 
             #### FACES ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind])
+            pb.bc.mpc([var,var], [np.full_like(right,1), np.full_like(left,-1)], [right,left])
+            pb.bc.mpc([var,var], [np.full_like(top,1), np.full_like(bottom,-1)], [top,bottom])
+            pb.bc.mpc([var,var], [np.full_like(front,1), np.full_like(behind,-1)], [front,behind])
                      
             #### EDGES ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_lt,1), np.full_like(edge_lb,-1)], [edge_lt, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rb,1), np.full_like(edge_lb,-1)], [edge_rb, edge_lb])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rt,1), np.full_like(edge_lb,-1)], [edge_rt, edge_lb])        
             
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_td,1), np.full_like(edge_bd,-1)], [edge_td, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_bf,1), np.full_like(edge_bd,-1)], [edge_bf, edge_bd])        
+            pb.bc.mpc([var,var], [np.full_like(edge_tf,1), np.full_like(edge_bd,-1)], [edge_tf, edge_bd])        
 
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld])        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rd,1), np.full_like(edge_ld,-1)], [edge_rd, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_lf,1), np.full_like(edge_ld,-1)], [edge_lf, edge_ld])        
+            pb.bc.mpc([var,var], [np.full_like(edge_rf,1), np.full_like(edge_ld,-1)], [edge_rf, edge_ld])        
                            
             #### CORNERS ####
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd])                       
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd])                        
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd])            
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd])            
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd])
-            pb.BoundaryCondition('MPC', [var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_rbd,1), np.full_like(corner_lbd,-1)], [corner_rbd, corner_lbd])                       
+            pb.bc.mpc([var,var], [np.full_like(corner_ltd,1), np.full_like(corner_lbd,-1)], [corner_ltd, corner_lbd])                        
+            pb.bc.mpc([var,var], [np.full_like(corner_lbf,1), np.full_like(corner_lbd,-1)], [corner_lbf, corner_lbd])            
+            pb.bc.mpc([var,var], [np.full_like(corner_rtd,1), np.full_like(corner_lbd,-1)], [corner_rtd, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_ltf,1), np.full_like(corner_lbd,-1)], [corner_ltf, corner_lbd])            
+            pb.bc.mpc([var,var], [np.full_like(corner_rbf,1), np.full_like(corner_lbd,-1)], [corner_rbf, corner_lbd])
+            pb.bc.mpc([var,var], [np.full_like(corner_rtf,1), np.full_like(corner_lbd,-1)], [corner_rtf, corner_lbd])
                                     
         

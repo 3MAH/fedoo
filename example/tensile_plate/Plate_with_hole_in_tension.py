@@ -36,9 +36,9 @@ xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 mesh.add_node_set(list(np.where(crd[:,0] == xmin)[0]), "left")
 mesh.add_node_set(list(np.where(crd[:,0] == xmax)[0]), "right")
 
-Problem.BoundaryCondition('Dirichlet','DispX',-5e-1,mesh.node_sets["left"])
-Problem.BoundaryCondition('Dirichlet','DispX', 5e-1,mesh.node_sets["right"])
-Problem.BoundaryCondition('Dirichlet','DispY',0,[0])
+Problem.bc.add('Dirichlet','DispX',-5e-1,mesh.node_sets["left"])
+Problem.bc.add('Dirichlet','DispX', 5e-1,mesh.node_sets["right"])
+Problem.bc.add('Dirichlet','DispY',0,[0])
 
 Problem.apply_boundary_conditions()
 

@@ -33,11 +33,11 @@ nodes_right = Mesh.get_all()[meshname].node_sets["right"]
 nodes_top = Mesh.get_all()[meshname].node_sets["top"]
 nodes_bottom = Mesh.get_all()[meshname].node_sets["bottom"]
 
-Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
+Problem.bc.add('Dirichlet','DispX',0,nodes_left)
+Problem.bc.add('Dirichlet','DispY', 0,nodes_left)
+Problem.bc.add('Dirichlet','DispZ', 0,nodes_left)
 
-Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
+Problem.bc.add('Dirichlet','DispY', -10, nodes_right)
 
 Problem.apply_boundary_conditions()
 

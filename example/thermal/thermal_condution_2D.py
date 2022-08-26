@@ -45,11 +45,11 @@ Problem.add_output('results/thermal2D', 'Assembling', ['temp'], output_type='Nod
 # Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 200
-Problem.BoundaryCondition('Dirichlet','Temp',100,left, initialValue = 0)
-Problem.BoundaryCondition('Dirichlet','Temp',50,right, initialValue = 0)
-# Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
-# Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-# bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
+Problem.bc.add('Dirichlet','Temp',100,left, initialValue = 0)
+Problem.bc.add('Dirichlet','Temp',50,right, initialValue = 0)
+# Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
+# Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
+# bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
 
 Problem.nlsolve(dt = tmax/10, tmax = tmax, update_dt = True)
 

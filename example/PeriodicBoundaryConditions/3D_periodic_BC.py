@@ -56,16 +56,16 @@ Homogen.DefinePeriodicBoundaryCondition("Domain",
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]], 
         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
 
-Problem.BoundaryCondition('Dirichlet','DispX', 0, center)
-Problem.BoundaryCondition('Dirichlet','DispY', 0, center)
-Problem.BoundaryCondition('Dirichlet','DispZ', 0, center)
+Problem.bc.add('Dirichlet','DispX', 0, center)
+Problem.bc.add('Dirichlet','DispY', 0, center)
+Problem.bc.add('Dirichlet','DispZ', 0, center)
 
-Problem.BoundaryCondition('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
-Problem.BoundaryCondition('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
-Problem.BoundaryCondition('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsZZ
-Problem.BoundaryCondition('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
-Problem.BoundaryCondition('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
-Problem.BoundaryCondition('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
+Problem.bc.add('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
+Problem.bc.add('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
+Problem.bc.add('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsZZ
+Problem.bc.add('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
+Problem.bc.add('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
+Problem.bc.add('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
 Problem.apply_boundary_conditions()
 

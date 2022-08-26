@@ -5,7 +5,7 @@ import scipy.sparse.linalg
 
 from fedoo.core.assembly  import Assembly
 from fedoo.core.base import ProblemBase
-from fedoo.core.boundary_conditions import UniqueBoundaryCondition, MPC
+from fedoo.core.boundary_conditions import BoundaryCondition, MPC
 from fedoo.core.output import _ProblemOutput, _get_results
 from fedoo.core.dataset import DataSet
 
@@ -147,7 +147,7 @@ class Problem(ProblemBase):
         data = []
         row = []
         col = []
-        for e in self._BoundaryConditions.generate(self, t_fact, t_fact_old):
+        for e in self.bc.generate(self, t_fact, t_fact_old):
             if e.bc_type == 'Dirichlet':
                 Uimp[e._dof_index] = e._current_value
                 DofB.append(e._dof_index)
@@ -222,7 +222,7 @@ class Problem(ProblemBase):
         U = self.GetDoFSolution() 
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
-        for e in self._BoundaryConditions:            
+        for e in self.bc.generate(self):         
             if e._start_value_default is None:
                 if e.bc_type == 'Dirichlet':
                     if U is not 0:
@@ -230,71 +230,6 @@ class Problem(ProblemBase):
                 elif e.bc_type == 'Neumann':
                     if F is not 0:
                         e.start_value = F[e.variable*n_nodes + e.node_set]
-    
-    
-    ### Functions related to boundary contidions
-    def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = ""):
-        """
-        Define some boundary conditions        
-
-        Parameters
-        ----------
-        bc_type : str
-            Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
-        Var : str, list of str, or list of int
-            variable name (str) or list of variable name or for MPC only, list of variable rank 
-        Value : scalar or array or list of scalars or list of array
-            Variable final value (Dirichlet) or force Value (Neumann) or list of factor (MPC)
-            For Neumann and Dirichlet, if Var is a list of str, Value may be :
-                (i) scalar if the same Value is applied for all Variable
-                (ii) list of scalars, if the scalar values are different for all Variable (in this case the len of Value should be equal to the lenght of Var)
-                (iii) list of arrays, if the scalar Value is potentially different for all variables and for all indexes. In this case, Value[num_var][i] should give the value of the num_var variable related to the node i.
-        Index : list of int, str, list of list of int, list of str
-            For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
-            For FEM Problem with MPC: list Node Indexes (list of list of int) 
-            For PGD Problem with Neumann/Dirichlet BC: SetOfname (type str) defining a set of Nodes of the reference mesh
-            For PGD Problem with MPC: list of SetOfname (str)
-        Constant : scalar, optional
-            For MPC only, constant value on the equation
-        timeEvolution : function
-            Function that gives the temporal evolution of the BC Value (applyed as a factor to the specified BC). The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
-        initialValue : float, array or None
-            if None, the initialValue is keep to the current state.
-            if scalar value: The initialValue is the same for all dof defined in BC
-            if array: the len of the array should be = to the number of dof defined in the BC
-
-            Default: None
-        name : str, optional
-            Define an name for the Boundary Conditions. Default is "No name". The same name may be used for several BC.
-
-        Returns
-        -------
-        None.
-
-        Remark  
-        -------
-        To define many MPC in one operation, use array where each line define a single MPC        
-        """
-        if isinstance(Var, str) and Var not in self.space.list_variables():
-            #we assume that Var is a Vector
-            try: 
-                Var = [self.space.variable_name(var_rank) for var_rank in self.space.get_vector(Var)]
-            except:
-                raise NameError('Unknown variable name')
-                
-        if isinstance(Var, list) and bc_type != 'MPC':          
-            if np.isscalar(Value):
-                Value = [Value for var in Var] 
-            for i,var in enumerate(Var):
-                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,var,Value[i],Index, timeEvolution, initialValue, name))                
-                self._BoundaryConditions[-1].initialize(self)
-        else:
-            if bc_type == 'MPC':
-                self._BoundaryConditions.append(MPC(Var,Value,Index,Constant, timeEvolution, initialValue, name))
-            else:
-                self._BoundaryConditions.append(UniqueBoundaryCondition(bc_type,Var,Value,Index, timeEvolution, initialValue, name)) 
-        
-            self._BoundaryConditions[-1].initialize(self)
 
 
     @property

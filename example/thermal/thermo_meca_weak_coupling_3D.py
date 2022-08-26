@@ -101,10 +101,10 @@ def timeEvolution(timeFactor):
     else: return 1
 
 
-pb_th.BoundaryCondition('Dirichlet','Temp',100,right, timeEvolution=timeEvolution, name='temp')
-# pb_th.BoundaryCondition('Dirichlet','Temp',100,right, name='temp')
+pb_th.bc.add('Dirichlet','Temp',100,right, timeEvolution=timeEvolution, name='temp')
+# pb_th.bc.add('Dirichlet','Temp',100,right, name='temp')
 
-pb_m.BoundaryCondition('Dirichlet','Disp',0,boundary)
+pb_m.bc.add('Dirichlet','Disp',0,boundary)
 
 # -------------------- Solve  ------------------------------
 
@@ -137,7 +137,7 @@ for i in range(nb_iter):
 
 
 # pb_th.RemoveBC('temp')
-# pb_th.BoundaryCondition('Dirichlet','Temp',0,right, timeEvolution=timeEvolution, initialValue = 100, name='temp')
+# pb_th.bc.add('Dirichlet','Temp',0,right, timeEvolution=timeEvolution, initialValue = 100, name='temp')
 pb_th.GetBC('temp')[0].ChangeValue(0, initialValue = 'Current')
 # pb_th.apply_boundary_conditions()
 

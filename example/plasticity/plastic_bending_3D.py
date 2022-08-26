@@ -96,11 +96,11 @@ Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 
 
 ################### step 1 ################################
 tmax = 1
-Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_bottomLeft)
-Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
-Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_bottomLeft)
-Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
+Problem.bc.add('Dirichlet','DispX',0,nodes_bottomLeft)
+Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
+Problem.bc.add('Dirichlet','DispZ', 0,nodes_bottomLeft)
+Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
+bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
 
 Problem.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
 
@@ -111,7 +111,7 @@ E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
 # F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 # Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 

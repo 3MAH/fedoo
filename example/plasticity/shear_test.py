@@ -96,10 +96,15 @@ results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII
 
 ################### step 1 ################################
 tmax = 1
-pb.BoundaryCondition('Dirichlet','Disp',0,nodes_bottom)
-pb.BoundaryCondition('Dirichlet','DispY', 0,nodes_top)
-pb.BoundaryCondition('Dirichlet','DispZ', 0,nodes_top)
-pb.BoundaryCondition('Dirichlet','DispX', uimp,nodes_top)
+# pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
+# pb.bc.add('Dirichlet','DispY', 0,nodes_top)
+# pb.bc.add('Dirichlet','DispZ', 0,nodes_top)
+# pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
+
+pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
+pb.bc.add('Dirichlet',['DispY', 'DispZ'], 0,nodes_top)
+pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
+
 
 pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
@@ -109,7 +114,7 @@ E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(),
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
 # F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.BoundaryCondition('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 # Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 

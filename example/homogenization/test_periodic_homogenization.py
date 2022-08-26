@@ -117,10 +117,10 @@ else:
     pb.add_output('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
 
     
-    pb.BoundaryCondition('Dirichlet', 'DispX', 0, center, name = 'center')
-    pb.BoundaryCondition('Dirichlet', 'DispY', 0, center, name = 'center')
+    pb.bc.add('Dirichlet', 'DispX', 0, center, name = 'center')
+    pb.bc.add('Dirichlet', 'DispY', 0, center, name = 'center')
     if dim ==3:
-        pb.BoundaryCondition('Dirichlet', 'DispZ', 0, center, name = 'center')
+        pb.bc.add('Dirichlet', 'DispZ', 0, center, name = 'center')
     
     pb.apply_boundary_conditions()
     
@@ -131,22 +131,22 @@ else:
     typeBC = 'Neumann'
     for i in range(6):
         pb.RemoveBC("_Strain")
-        pb.BoundaryCondition(typeBC, 'DispX',
+        pb.bc.add(typeBC, 'DispX',
               BC_perturb[i][0], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsXX
-        pb.BoundaryCondition(typeBC, 'DispY',
+        pb.bc.add(typeBC, 'DispY',
               BC_perturb[i][1], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsYY        
-        pb.BoundaryCondition(typeBC, 'DispX',
+        pb.bc.add(typeBC, 'DispX',
               BC_perturb[i][3], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXY
         
         if dim == 3:         
-            pb.BoundaryCondition(typeBC, 'DispZ',
+            pb.bc.add(typeBC, 'DispZ',
                   BC_perturb[i][2], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsZZ        
-            pb.BoundaryCondition(typeBC, 'DispY',
+            pb.bc.add(typeBC, 'DispY',
                   BC_perturb[i][4], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXZ
-            pb.BoundaryCondition(typeBC, 'DispZ',
+            pb.bc.add(typeBC, 'DispZ',
                   BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
         else:
-            pb.BoundaryCondition('Dirichlet', 'DispY', 0, StrainNodes[1], name = '_Strain')
+            pb.bc.add('Dirichlet', 'DispY', 0, StrainNodes[1], name = '_Strain')
 
         
         pb.apply_boundary_conditions()
