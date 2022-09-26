@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import sparse
 from numbers import Number
+from itertools import chain
 
 # from fedoo.core.base import BCBase
 # from fedoo.pgd.SeparatedArray import *
@@ -17,10 +18,12 @@ class BCBase:
 
     def __init__(self, name=""):
         assert isinstance(name, str), "name must be a string"
-        self.__name = name
+        self.__name = name            
 
         if name != "":
             BCBase.__dic[self.__name] = self
+            
+        self._keep_at_end = False #set to True if bc need to be generated after standard bc
 
     def __class_getitem__(cls, item):
         return cls.__dic[item]
@@ -41,15 +44,23 @@ class BCBase:
         return BCBase.__dic
 
 
-class ListBC(list, BCBase):
+class ListBC(BCBase):
     """Class that define a list of ordered elementary boundary conditions (the bc are applied in the list order). 
     Derived from the python list object"""
 
-    def __init__(self, l=[], name=""):
+    def __init__(self, l=None, name=""):
         BCBase.__init__(self, name)
         self._problem = None
         self.bc_type = 'ListBC'
-        list.__init__(self, l)
+        if l is None: 
+            self.data = []
+        else: 
+            self.data = l #list containing the bc
+        self.data_end = [] #bc that needs to be placed at the end of the list
+
+
+    def __iter__(self):
+        return chain(self.data, self.data_end) #build a generator object                    
 
 
     def __repr__(self):
@@ -61,6 +72,18 @@ class ListBC(list, BCBase):
         
         return "\n".join(list_str)
 
+
+    def __len__(self):
+        return len(self.data) + len(self.data_end)
+    
+    
+    def __getitem__(self, items):
+        if isinstance(items, int) and items:
+            if items < len(self.data): return self.data[items]
+            else: return self.data_end[items-len(self.data)]
+        
+        return (self.data + self.data_end)[items]
+            
     
     def str_condensed(self):
         """Return a condensed one line str describing the object"""
@@ -69,22 +92,35 @@ class ListBC(list, BCBase):
         else: 
             "ListBC (name = {}) -> list of {} bc".format(self.name, len(self))
 
+    # def insert(self, index, bc):       
+    #     if self._problem is not None:
+    #         bc.initialize(self._problem)
+    #     self.data.insert(index, bc)
 
-    def insert(self, index, element):
+    def append(self, bc):
         if self._problem is not None:
-            element.initialize(self._problem)
-        super().insert(index, element)
-
-    def append(self, element):
-        if self._problem is not None:
-            element.initialize(self._problem)
-        super().append(element)
+            bc.initialize(self._problem)
+        if bc._keep_at_end: 
+            self.data_end.append(bc)
+        else:
+            self.data.append(bc)
 
     def extend(self, iterable):
         if self._problem is not None:
-            for element in iterable:
-                element.initialize(self._problem)
-        super().extend(iterable)
+            for bc in iterable:
+                bc.initialize(self._problem)
+        if hasattr(iterable, '_keep_at_end') and iterable._keep_at_end:
+            self.data_end.extend(iterable)
+        else:
+            self.data.extend(iterable)
+    
+    
+    def remove(self, bc):
+        try:
+            self.data.remove(bc)
+        except:
+            self.data_end.remove(bc)
+
 
     def add(self, *args, **kargs):
         """
@@ -115,7 +151,7 @@ class ListBC(list, BCBase):
             bc.initialize(problem)
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
-        return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), [])
+        return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), []) #use chain instead of sum would be better ?
 
 
 class BoundaryCondition(BCBase):
@@ -125,7 +161,7 @@ class BoundaryCondition(BCBase):
     Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
     """
 
-    def __init__(self, bc_type, variable, value, node_set, time_func=None, start_value=None, name=""):
+    def __init__(self, bc_type, node_set, variable, value, time_func=None, start_value=None, name=""):
         """
         Define some standard boundary conditions (Dirichlet of Neumann BC)
         
@@ -189,7 +225,7 @@ class BoundaryCondition(BCBase):
 
 
     @staticmethod
-    def create(bc_type, variable, value, node_set, time_func=None, start_value=None, name="", space=None):
+    def create(bc_type, node_set, variable, value, time_func=None, start_value=None, name="", space=None):
         """
         Create one or several standard boundary conditions (Dirichlet or Neumann BC) 
             
@@ -237,11 +273,11 @@ class BoundaryCondition(BCBase):
         if isinstance(variable, list):
             if np.isscalar(value):
                 value = [value for var in variable]
-
-            return ListBC([BoundaryCondition.create(bc_type, var, value[i], node_set, time_func, start_value, name)
+            
+            return ListBC([BoundaryCondition.create(bc_type, node_set, var, value[i], time_func, start_value, name, space)
                            for i, var in enumerate(variable)])
         else:
-            return BoundaryCondition(bc_type, variable, value, node_set, time_func, start_value, name)
+            return BoundaryCondition(bc_type, node_set, variable, value, time_func, start_value, name)
 
 
     def str_condensed(self):
@@ -298,7 +334,7 @@ class BoundaryCondition(BCBase):
             # must be a np.array  #Not for PGD
             self.node_set = np.asarray(self.node_set, dtype=int)
 
-    def generate(self, problem, t_fact, t_fact_old=None):
+    def generate(self, problem, t_fact, t_fact_old=None):       
         self._current_value = self.get_value(t_fact, t_fact_old)
 
         if not(self.pgd):
@@ -344,6 +380,35 @@ class BoundaryCondition(BCBase):
             else:  # return the incremental value
                 return factor * (self.value - self.start_value)
 
+    def get_true_value(self,t_fact=1, t_fact_old=None):
+        """
+        Return the true bc value. For incremental problems, this function return
+        the real bc values, which is in general different to the incremental values 
+        given by the get_value function.
+
+        Parameters
+        ----------
+        t_fact : float between 0 and 1.
+            The time factor. t_fact = 0 at the beginning of the increment (start value)
+            t_fact = 1 at the end. The default is 1.
+        t_fact_old : float between 0 and 1. 
+            The time factor at the previous iteration (only used for incremental problems).
+            The default is None.
+
+        Returns
+        -------
+        The value of the dirichlet of neumann boundary condition at the speficied time evolution.
+
+        """
+        factor = self._get_factor(t_fact, t_fact_old)
+        if factor == 0:
+            return 0
+        elif self.start_value is None:
+            return factor * self.value
+        else:  # in case there is an initial value
+            return factor * (self.value - self.start_value) + self.start_value
+        
+    
     # def change_index(self,newIndex):
     #     self.__Index = np.array(newIndex).astype(int) # must be a np.array
 
@@ -364,10 +429,14 @@ class MPC(BCBase):
     Class that define multi-point constraints
     """
 
-    def __init__(self, list_variables, list_factors, list_node_sets, constant=None, time_func=None, start_constant=None, name=""):
+    def __init__(self, list_node_sets, list_variables, list_factors, constant=None, time_func=None, start_constant=None, name=""):
         """
-        Create a multi-point constraints object     
-
+        Create a linear multi-point constraint object   
+        To create a MPC of the equation 
+        4*Ux_12 - 2*Uz_15 = 7 (Ux_12 is the displacement along x of the 12th node)
+        use the following MPC:
+            MPC([12,15], ['Disp_X', 'Disp_Z'], [4, -2], 7)
+        
         Parameters
         ----------        
         list_variables : list of str, or list of int

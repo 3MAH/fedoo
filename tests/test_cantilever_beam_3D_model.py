@@ -26,11 +26,11 @@ nodes_right = mesh.node_sets["right"]
 nodes_top = mesh.node_sets["top"]
 nodes_bottom = mesh.node_sets["bottom"]
 
-pb.bc.add('Dirichlet','DispX',0,nodes_left)
-pb.bc.add('Dirichlet','DispY', 0,nodes_left)
-pb.bc.add('Dirichlet','DispZ', 0,nodes_left)
+pb.bc.add('Dirichlet',nodes_left,'DispX',0)
+pb.bc.add('Dirichlet',nodes_left,'DispY',0)
+pb.bc.add('Dirichlet',nodes_left,'DispZ',0)
 
-pb.bc.add('Dirichlet','DispY', -10, nodes_right)
+pb.bc.add('Dirichlet',nodes_right,'DispY',-10)
 
 pb.apply_boundary_conditions()
 

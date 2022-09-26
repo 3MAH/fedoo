@@ -28,11 +28,11 @@ bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0]
 
 #Boundary conditions
 #symetry condition on left (ux = 0)
-pb.bc.add('Dirichlet','DispX',    0  , left) 
+pb.bc.add('Dirichlet', left, 'DispX',    0 ) 
 #symetry condition on bottom edge (ux = 0)
-pb.bc.add('Dirichlet','DispY',    0  , bottom) 
+pb.bc.add('Dirichlet', bottom, 'DispY',    0 ) 
 #displacement on right (ux=0.1mm)
-pb.bc.add('Dirichlet','DispX', 0.1, right) 
+pb.bc.add('Dirichlet', right, 'DispX', 0.1 ) 
 
 pb.apply_boundary_conditions()
 

@@ -62,7 +62,6 @@ else:
 
 
 
-
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
 fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # WeakForm.InternalForceUL("ConstitutiveLaw")
@@ -101,9 +100,9 @@ tmax = 1
 # pb.bc.add('Dirichlet','DispZ', 0,nodes_top)
 # pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
 
-pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
-pb.bc.add('Dirichlet',['DispY', 'DispZ'], 0,nodes_top)
-pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
+pb.bc.add('Dirichlet',nodes_bottom, 'Disp',0)
+pb.bc.add('Dirichlet',nodes_top, ['DispY', 'DispZ'], 0)
+pb.bc.add('Dirichlet',nodes_top, 'DispX', uimp)
 
 
 pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)

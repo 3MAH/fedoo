@@ -58,14 +58,14 @@ pb = fd.problem.Static("plate")
 # Problem.add_output('results/simplePlate', post_tt_assembly, ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
-pb.bc.add('Dirichlet','DispX',0,nodes_left)
-pb.bc.add('Dirichlet','DispY',0,nodes_left)
-pb.bc.add('Dirichlet','DispZ',0,nodes_left)
-pb.bc.add('Dirichlet','RotX',0,nodes_left)
-pb.bc.add('Dirichlet','RotY',0,nodes_left)
-pb.bc.add('Dirichlet','RotZ',0,nodes_left)
+pb.bc.add('Dirichlet',nodes_left,'DispX',0)
+pb.bc.add('Dirichlet',nodes_left,'DispY',0)
+pb.bc.add('Dirichlet',nodes_left,'DispZ',0)
+pb.bc.add('Dirichlet',nodes_left,'RotX',0)
+pb.bc.add('Dirichlet',nodes_left,'RotY',0)
+pb.bc.add('Dirichlet',nodes_left,'RotZ',0)
 
-pb.bc.add('Neumann','DispZ',F,node_right_center)
+pb.bc.add('Neumann',node_right_center,'DispZ',F)
 
 pb.apply_boundary_conditions()
 pb.solve()

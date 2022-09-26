@@ -185,7 +185,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             For Force and Work error criterion, the problem must be updated
             (Update method).
             """
-            DofFree = self._Problem__DofFree
+            DofFree = self._Problem__dof_slave
             if self.__err0 is None: # if self.__err0 is None -> initialize the value of err0            
                 if self.__ErrCriterion == 'Displacement':                     
                     self.__err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion

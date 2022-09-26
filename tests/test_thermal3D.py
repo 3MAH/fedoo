@@ -48,7 +48,7 @@ def time_func(t_fact):
     else: return 1
 
 # Problem.bc.add('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
-pb.bc.add('Dirichlet','Temp',3,right, time_func=time_func)
+pb.bc.add('Dirichlet',right, 'Temp',3, time_func=time_func)
 # Problem.bc.add('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
 
 

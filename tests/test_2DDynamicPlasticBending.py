@@ -74,11 +74,10 @@ pb.SetNewtonRaphsonErrorCriterion("Displacement")
 
 ################### step 1 ################################
 tmax = 1
-pb.bc.add('Dirichlet','DispX',0,nodes_bottomLeft)
-pb.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
-pb.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
-bc1 = pb.bc.add('Dirichlet','DispY', uimp, nodes_top1)
-bc2 = pb.bc.add('Dirichlet','DispY', uimp, nodes_top2)
+pb.bc.add('Dirichlet',nodes_bottomLeft,'Disp',0)
+pb.bc.add('Dirichlet',nodes_bottomRight,'DispY',0)
+bc1 = pb.bc.add('Dirichlet',nodes_top1,'DispY', uimp)
+bc2 = pb.bc.add('Dirichlet',nodes_top2,'DispY', uimp)
 
 
 pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
@@ -97,8 +96,8 @@ pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 # print(time()-start)
 
 res = pb.get_results('Assembling', ['Strain','Stress'], 'Node') 
-assert np.abs(res.node_data['Strain'][0][941]+0.0195533914469858) < 1e-8
-assert np.abs(res.node_data['Stress'][3][234]+3.0035364261379316) < 1e-4
+assert np.abs(res.node_data['Strain'][0][941]+0.019556881827186567) < 1e-8
+assert np.abs(res.node_data['Stress'][3][234]+3.0071859499849736) < 1e-4
 # assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4# assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4
 
 

@@ -44,21 +44,34 @@ pb.SetNewtonRaphsonErrorCriterion("Work")
 # Problem.add_output('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
 
 # Boundary conditions for the linearized strain tensor
-E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
+# E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
+E = [0, 0, 0, 0.05, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
-fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
-	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
-         StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-          ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')
+# fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
+# 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
+#          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+#           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')
+
+
+# bc_periodic = fd.homogen.PeriodicBC('Domain2',
+# 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
+#          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+#           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim=3)
+list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
+                     [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
+                     [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
+list_strain_var = [['DispX', 'DispX', 'DispY'],
+                   ['DispX', 'DispY', 'DispZ'],
+                   ['DispY', 'DispZ', 'DispZ']]
+bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+pb.bc.add(bc_periodic)
 
 #fixed point on the center to avoid rigid body motion
-pb.bc.add('Dirichlet', 'Disp', 0, center)
+pb.bc.add('Dirichlet', center, 'Disp', 0)
 
 #Enforced mean strain
-pb.bc.add('Dirichlet', 'Disp', [E[0], E[1], E[2]], [
-                           StrainNodes[0]])  # EpsXX, EpsYY, EpsZZ
-pb.bc.add('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
-                           StrainNodes[1]])  # EpsXY, EpsXZ, EpsYZ
+pb.bc.add('Dirichlet', [StrainNodes[0]], 'Disp', [E[0], E[1], E[2]])  # EpsXX, EpsYY, EpsZZ
+pb.bc.add('Dirichlet', [StrainNodes[1]], 'Disp', [E[3], E[4], E[5]])  # EpsXY, EpsXZ, EpsYZ
 
 pb.apply_boundary_conditions()
 
