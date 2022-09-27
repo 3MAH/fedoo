@@ -82,7 +82,7 @@ class Spring(ConstitutiveLaw):
             self.ComputeInterfaceStress(self.__Delta)        
 
     # def GetOperartorDelta(self): #operator to get the relative displacement
-    #     U, U_vir = GetDispOperator()  
+    #     U, U_vir = get_DispOperator()  
     #     return U 
         
     def ComputeInterfaceStress(self, Delta, dtime = None): 
@@ -95,7 +95,7 @@ class Spring(ConstitutiveLaw):
 
 #    def GetStressOperator(self, localFrame=None): # methode virtuel
 #    
-#        U, U_vir = GetDispOperator()
+#        U, U_vir = get_DispOperator()
 #        
 #        if self._ConstitutiveLaw__localFrame is None:
 #            if GetNumberOfDimensions() == "3D":        # tester si contrainte plane ou def plane              

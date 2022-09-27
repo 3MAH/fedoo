@@ -26,7 +26,7 @@ class SeparatedOperator: #Opérateur discret avec galerkin
 
     Principal methods
     ----------
-    GetDimension(): return the number of separated spaces
+    get_Dimension(): return the number of separated spaces
     NumberOfOperators(): return the number of terms in the sum of separated operators
     GetShape(dd): return the number of column in the operator related to the space dd
     GetShapeRow(dd): return the number of row in the operator related to the space dd

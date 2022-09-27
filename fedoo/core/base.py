@@ -223,7 +223,7 @@ class WeakForm:
         pass
     
     
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):
         pass
             
     
@@ -444,7 +444,7 @@ class ProblemBase:
     #         self.bc.append(BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
 
 
-    # def GetBC(self, name =None):        
+    # def get_BC(self, name =None):        
     #     """
     #     Return the list of Boundary Conditions
     #     if an name is specified (str value), return a list of BC whith the specified name
@@ -465,7 +465,7 @@ class ProblemBase:
     #     """
     #     Print all the boundary conditions under the form:
     #         ind_bc : name - bc_type
-    #         ind_bc is the index of the bc in the list of boundary conditions (use GetBC to get the list)
+    #         ind_bc is the index of the bc in the list of boundary conditions (use get_BC to get the list)
     #         name is the str name of the BC ("No name") by default
     #         bc_type is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
     #     """
@@ -481,7 +481,7 @@ class ProblemBase:
     
     ### Functions that may be defined depending on the type of problem
     def get_disp(self,name='all'):
-         raise NameError("The method 'GetDisp' is not defined for this kind of problem")
+         raise NameError("The method 'get_Disp' is not defined for this kind of problem")
 
     def get_rot(self,name='all'):
          raise NameError("The method 'GetRot' is not defined for this kind of problem")
@@ -549,8 +549,8 @@ class ProblemBase:
         raise NameError("The method 'get_results' is not defined for this kind of problem")        
 
     #defined in the ProblemPGD classes
-    def GetX(self): raise NameError("Method only defined for PGD Problems") 
-    def GetXbc(self): raise NameError("Method only defined for PGD Problems") 
+    def get_X(self): raise NameError("Method only defined for PGD Problems") 
+    def get_Xbc(self): raise NameError("Method only defined for PGD Problems") 
     def ComputeResidualNorm(self,err_0=None): raise NameError("Method only defined for PGD Problems") 
     def GetResidual(self): raise NameError("Method only defined for PGD Problems") 
     def updatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
@@ -579,10 +579,10 @@ class ProblemBase:
 
 # def get_all():
 #     return ProblemBase.get_all()
-# def GetActive():
+# def get_Active():
 #     return ProblemBase.get_active()
-# def SetActive(Problemname):
-#     ProblemBase.SetActive(Problemname)
+# def set_Active(Problemname):
+#     ProblemBase.set_Active(Problemname)
 
 
 
@@ -596,7 +596,7 @@ class ProblemBase:
 #     else: problem = ProblemBase.get_all()[Problemname]
 #     problem.BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name)
 
-# def GetBC(): return ProblemBase.get_active().bc    
+# def get_BC(): return ProblemBase.get_active().bc    
 # def RemoveBC(name =None): ProblemBase.get_active().RemoveBC(name)    
 # def PrintBC(): ProblemBase.get_active().PrintBC()    
  
@@ -627,34 +627,34 @@ class ProblemBase:
 
 
 # #functions that should be define in the Problem and in the ProblemPGD classes
-# def SetA(A): ProblemBase.get_active().SetA(A)
-# def GetA(): return ProblemBase.get_active().GetA()
-# def GetB(): return ProblemBase.get_active().GetB()
-# def GetD(): return ProblemBase.get_active().GetD()
+# def set_A(A): ProblemBase.get_active().set_A(A)
+# def get_A(): return ProblemBase.get_active().get_A()
+# def get_B(): return ProblemBase.get_active().get_B()
+# def get_D(): return ProblemBase.get_active().get_D()
 # def GetMesh(): return ProblemBase.get_active().mesh
-# def SetD(D): ProblemBase.get_active().SetD(D)
-# def SetB(B): ProblemBase.get_active().SetB(B)
+# def set_D(D): ProblemBase.get_active().set_D(D)
+# def set_B(B): ProblemBase.get_active().set_B(B)
 # def Solve(**kargs): ProblemBase.get_active().solve(**kargs)
-# def GetX(): return ProblemBase.get_active().GetX()
+# def get_X(): return ProblemBase.get_active().get_X()
 # def apply_boundary_conditions(): ProblemBase.get_active().apply_boundary_conditions()
 # def GetDoFSolution(name='all'): return ProblemBase.get_active().GetDoFSolution(name)
-# def SetDoFSolution(name,value): ProblemBase.get_active().SetDoFSolution(name,value)
+# def set_DoFSolution(name,value): ProblemBase.get_active().set_DoFSolution(name,value)
 # def SetInitialBCToCurrent(): ProblemBase.get_active().SetInitialBCToCurrent()
 # def get_global_vectorComponent(vector, name='all'): return ProblemBase.get_active()._get_vect_component(vector, name)
 
 # #functions only defined for Newmark problem 
-# def GetXdot():
-#     return ProblemBase.get_active().GetXdot()
+# def get_Xdot():
+#     return ProblemBase.get_active().get_Xdot()
 
-# def GetXdotdot():
-#     return ProblemBase.get_active().GetXdotdot()
+# def get_Xdotdot():
+#     return ProblemBase.get_active().get_Xdotdot()
 
   
 # def GetVelocity():
 #     return ProblemBase.get_active().GetVelocity()
 
-# def GetAcceleration():
-#     return ProblemBase.get_active().GetAcceleration()
+# def get_Acceleration():
+#     return ProblemBase.get_active().get_Acceleration()
 
 
 # def SetInitialDisplacement(name,value):
@@ -717,13 +717,13 @@ class ProblemBase:
 #     """
 #     return ProblemBase.get_active().GetKineticEnergy()
 
-# def GetDampingPower():
+# def get_DampingPower():
 #     """
 #     returns : Udot.transposed * C * Udot
 #     The damping disspated energy can be approximated by:
 #             Edis = cumtrapz(DampingPower * TimeStep)
 #     """        
-#     return ProblemBase.get_active().GetDampingPower()
+#     return ProblemBase.get_active().get_DampingPower()
 
 # def updateStiffness(StiffnessAssembling):
 #     ProblemBase.get_active().updateStiffness(StiffnessAssembling)
@@ -732,7 +732,7 @@ class ProblemBase:
 
 
 # #functions only used define in the ProblemPGD subclasses
-# def GetXbc(): return ProblemBase.get_active().GetXbc() 
+# def get_Xbc(): return ProblemBase.get_active().get_Xbc() 
 # def ComputeResidualNorm(err_0=None): return ProblemBase.get_active().ComputeResidualNorm(err_0)
 # def GetResidual(): return ProblemBase.get_active().GetResidual()
 # def updatePGD(termToChange, ddcalc='all'): return ProblemBase.get_active().updatePGD(termToChange, ddcalc)

@@ -10,7 +10,7 @@ from fedoo.core.problem import Problem
 from fedoo.problem.static import Static
 # from fedoo.core.base import BoundaryCondition
 from fedoo.core.base import ProblemBase
-from fedoo.homogen.PeriodicBoundaryCondition import DefinePeriodicBoundaryCondition, DefinePeriodicBoundaryConditionNonPerioMesh
+from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
 import numpy as np
 import os
 import time
@@ -106,7 +106,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
 
     pb_post_tt = Problem(0,0,0, mesh, name = "_perturbation")
     pb_post_tt.SetSolver(solver)
-    pb_post_tt.SetA(pb.GetA())    
+    pb_post_tt.set_A(pb.get_A())    
     
     #Shall add other conditions later on
     if meshperio:
@@ -148,7 +148,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
 
         pb_post_tt.solve()
                 
-        X = pb_post_tt.GetX()  # alias
+        X = pb_post_tt.get_X()  # alias
         DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
                                   pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))
 
@@ -156,7 +156,7 @@ def GetHomogenizedStiffness_2(mesh, L, meshperio=True, Problemname =None, **karg
         C = np.linalg.inv(np.array(DStrain).T)
     else:
         
-        F = MatCB.T @ pb_post_tt.GetA() @ MatCB @ pb_post_tt.GetX()[DofFree]
+        F = MatCB.T @ pb_post_tt.get_A() @ MatCB @ pb_post_tt.get_X()[DofFree]
 
         F = F.reshape(3, -1)
         stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
@@ -198,13 +198,13 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     if '_StrainNodes' in mesh.ListSetOfNodes():
         StrainNodes = mesh.node_sets['_StrainNodes']
         remove_strain = False
-        A = pb.GetA()
+        A = pb.get_A()
     else:
         StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
         mesh.add_node_set(StrainNodes,'_StrainNodes')
         remove_strain = True
-        A = pb.GetA().copy()
-        A.resize(np.array(pb.GetA().shape)+6)
+        A = pb.get_A().copy()
+        A.resize(np.array(pb.get_A().shape)+6)
     # StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
     
     if "_perturbation" not in pb.get_all():
@@ -230,7 +230,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     else: 
         pb_post_tt = Problem.get_all()["_perturbation"]
     
-    pb_post_tt.SetA(pb.GetA())
+    pb_post_tt.set_A(pb.get_A())
     
     # typeBC = 'Dirichlet' #doesn't work with meshperio = False
     typeBC = 'Neumann'
@@ -257,7 +257,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
         pb_post_tt.apply_boundary_conditions()
     
         pb_post_tt.solve()
-        X = pb_post_tt.GetX()  # alias    
+        X = pb_post_tt.get_X()  # alias    
         DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
                                   pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
         
@@ -266,7 +266,7 @@ def GetTangentStiffness(pb = None, meshperio = True, **kargs):
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)
     else:
-        F = MatCB.T @ pb_post_tt.GetA() @ MatCB @ pb_post_tt.GetX()[DofFree]
+        F = MatCB.T @ pb_post_tt.get_A() @ MatCB @ pb_post_tt.get_X()[DofFree]
     
         F = F.reshape(3, -1)
         stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]

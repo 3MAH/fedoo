@@ -49,26 +49,26 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     
         def __UpdateA(self): #internal function to be used when modifying M, K or C
             if self.__DampMatrix is 0:
-                self.SetA(self.__StiffMatrix + 1/(self.__Beta*(self.__TimeStep**2))*self.__MassMatrix)
+                self.set_A(self.__StiffMatrix + 1/(self.__Beta*(self.__TimeStep**2))*self.__MassMatrix)
             else:
-                self.SetA(self.__StiffMatrix + 1/(self.__Beta*(self.__TimeStep**2))*self.__MassMatrix + self.__Gamma/(self.__Beta*self.__TimeStep)*self.__DampMatrix)   
+                self.set_A(self.__StiffMatrix + 1/(self.__Beta*(self.__TimeStep**2))*self.__MassMatrix + self.__Gamma/(self.__Beta*self.__TimeStep)*self.__DampMatrix)   
     
-        def GetX(self):
+        def get_X(self):
             return self.GetDoFSolution('all')
         
-        def GetXdot(self):
+        def get_Xdot(self):
             return self.__Xdot
     
-        def GetXdotdot(self):
+        def get_Xdotdot(self):
             return self.__Xdotdot
     
-        def get_disp(self, name = 'all'): #same as GetX
+        def get_disp(self, name = 'all'): #same as get_X
             return self.GetDoFSolution(name)        
                
-        def GetVelocity(self): #same as GetXdot
+        def GetVelocity(self): #same as get_Xdot
             return self.__Xdot
     
-        def GetAcceleration(self): #same as GetXdotdot
+        def get_Acceleration(self): #same as get_Xdotdot
             return self.__Xdotdot
     
         def SetInitialDisplacement(self, name,value):
@@ -118,7 +118,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
                     (self.__Gamma/(self.__Beta*self.__TimeStep))*self.__Xold +   \
                     (self.__Gamma/self.__Beta - 1)                 *self.__Xdot +   \
                     (0.5*self.__TimeStep * (self.__Gamma/self.__Beta - 2)) *self.__Xdotdot)                                                                                      
-            self.SetD(D)                        
+            self.set_D(D)                        
     
         def update(self):
            
@@ -127,7 +127,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             self.__Xdotdot = NewXdotdot
             self.__Xold[:] = self.GetDoFSolution('all')
             self.initialize()
-    #        self.SetD(self.__MassMatrix * ( (1/self.__Beta/(self.__TimeStep**2))*self.__Xold + (1/self.__Beta/self.__TimeStep)*self.__Xdot + (1/2/self.__Beta -1)*self.__Xdotdot) )
+    #        self.set_D(self.__MassMatrix * ( (1/self.__Beta/(self.__TimeStep**2))*self.__Xold + (1/self.__Beta/self.__TimeStep)*self.__Xdot + (1/2/self.__Beta -1)*self.__Xdotdot) )
             
         def GetElasticEnergy(self):
             """
@@ -141,7 +141,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             returns : 0.5 * K * U . U
             """
     
-            E = 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all')
+            E = 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all')
 
             E = np.reshape(E,(3,-1)).T
             
@@ -154,7 +154,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     
             return 0.5*np.dot(self.__Xdot , self.__MassMatrix*self.__Xdot )
         
-        def GetDampingPower(self):
+        def get_DampingPower(self):
             """
             returns : Udot.transposed * C * Udot
             The damping disspated energy can be approximated by:
@@ -172,7 +172,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             K = self.__StiffMatrix
             M = self.__MassMatrix
             C = self.__DampMatrix
-            return np.sum((K*self.GetX() + C*self.GetXdot() + M*self.GetXdotdot())*(self.GetX()-self.__Xold))
+            return np.sum((K*self.get_X() + C*self.get_Xdot() + M*self.get_Xdotdot())*(self.get_X()-self.__Xold))
         
         def updateStiffness(self, StiffnessAssembling):
             if isinstance(StiffnessAssembling,str):

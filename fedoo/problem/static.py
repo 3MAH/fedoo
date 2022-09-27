@@ -28,14 +28,14 @@ def Static(Assembling, name = "MainProblem"):
             returns : sum (0.5 * U.transposed * K * U)
             """
     
-            return sum( 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all') )
+            return sum( 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all') )
 
         def GetNodalElasticEnergy(self):
             """
             returns : 0.5 * K * U . U
             """
     
-            E = 0.5*self.GetDoFSolution('all').transpose() * self.GetA() * self.GetDoFSolution('all')
+            E = 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all')
 
             E = np.reshape(E,(3,-1)).T
 
@@ -44,8 +44,8 @@ def Static(Assembling, name = "MainProblem"):
         def reset(self):
             self.__Assembly.reset()
             
-            self.SetA(self.__Assembly.get_global_matrix()) #tangent stiffness 
-            self.SetD(self.__Assembly.get_global_vector())            
+            self.set_A(self.__Assembly.get_global_matrix()) #tangent stiffness 
+            self.set_D(self.__Assembly.get_global_vector())            
             B = 0            
             self.apply_boundary_conditions()
 
@@ -59,14 +59,14 @@ def Static(Assembling, name = "MainProblem"):
                 - Change in constitutive law (internal variable)
             Update the problem with the new assembled global matrix and global vector
             """
-#            self.__Assembly.update(self.GetD())
+#            self.__Assembly.update(self.get_D())
 #            self.__Assembly.update(self)
-#            self.SetA(Assembling.get_global_matrix())
-#            self.SetD(Assembling.get_global_vector())
+#            self.set_A(Assembling.get_global_matrix())
+#            self.set_D(Assembling.get_global_vector())
 #            
             outValues = self.__Assembly.update(self, dtime, compute)  
-            self.SetA(Assembling.get_global_matrix())
-            self.SetD(Assembling.get_global_vector())
+            self.set_A(Assembling.get_global_matrix())
+            self.set_D(Assembling.get_global_vector())
             return outValues 
         
         def solve(self, **kargs):
@@ -77,7 +77,7 @@ def Static(Assembling, name = "MainProblem"):
             if updateWF == True:
                 self.update(compute = 'none')
             
-        def GetAssembly(self):
+        def get_Assembly(self):
             return self.__Assembly
         
         def ChangeAssembly(self,Assembling, update = True):

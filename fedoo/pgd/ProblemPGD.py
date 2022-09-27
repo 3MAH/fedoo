@@ -158,16 +158,16 @@ class ProblemPGD(ProblemBase):
                 Mat_K +=M    
             return Mat_K       
 
-    def GetB(self):
+    def get_B(self):
         return self.__B
 
-    def SetD(self,D):
+    def set_D(self,D):
         self.__D = D 
 
-    def GetX(self):
+    def get_X(self):
         return self.__X 
    
-    def GetXbc(self):
+    def get_Xbc(self):
         return self.__Xbc 
     
     def GetDoFSolution(self,name='all'):
@@ -181,7 +181,7 @@ class ProblemPGD(ProblemBase):
         else:
             return self.__X.GetVariable(self.space.variable_rank(name), self.mesh) + self.__Xbc.GetVariable(self.space.variable_rank(name), self.mesh)
 
-    def SetDoFSolution(self,name,value):
+    def set_DoFSolution(self,name,value):
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 
@@ -637,7 +637,7 @@ class ProblemPGD(ProblemBase):
 #
 #
 
-# def GetXbc(): return ProblemPGD.get_all()["MainProblem"].GetXbc() 
+# def get_Xbc(): return ProblemPGD.get_all()["MainProblem"].get_Xbc() 
 # def ComputeResidualNorm(err_0=None): return ProblemPGD.get_all()["MainProblem"].ComputeResidualNorm(err_0)
 # def GetResidual(): return ProblemPGD.get_all()["MainProblem"].GetResidual()
 # def updatePGD(termToChange, ddcalc='all'): return ProblemPGD.get_all()["MainProblem"].updatePGD(termToChange, ddcalc)

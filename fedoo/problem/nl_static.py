@@ -53,22 +53,22 @@ def _GenerateClass_NonLinearStatic(libBase):
             return self._get_vect_component(self.__Utot + self.__DU, name)        
         
         def get_ext_forces(self, name = 'all'):
-            return self._get_vect_component(-self.GetD(), name)        
+            return self._get_vect_component(-self.get_D(), name)        
         
         def updateA(self, dt = None):
             #dt not used for static problem
-            self.SetA(self.__Assembly.current.get_global_matrix())
+            self.set_A(self.__Assembly.current.get_global_matrix())
         
         def updateD(self,dt=None, start=False):            
             #dt and start not used for static problem
-            self.SetD(self.__Assembly.current.get_global_vector()) 
+            self.set_D(self.__Assembly.current.get_global_vector()) 
         
         def initialize(self, t0=0.):   
             """
             """
             self.__Assembly.initialize(self,t0)
-            # self.SetA(self.__Assembly.current.get_global_matrix())
-            # self.SetD(self.__Assembly.current.get_global_vector())
+            # self.set_A(self.__Assembly.current.get_global_matrix())
+            # self.set_D(self.__Assembly.current.get_global_vector())
         
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
@@ -91,8 +91,8 @@ def _GenerateClass_NonLinearStatic(libBase):
 
             #update displacement increment
             # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
-            # self.__TotalDisplacement += self.GetX()               
-            self.__DU += self.GetX()
+            # self.__TotalDisplacement += self.get_X()               
+            self.__DU += self.get_X()
         
         # def InitTimeIncrement(self,dt):
         #     self.__Assembly.InitTimeIncrement(self,dt)
@@ -132,7 +132,7 @@ def _GenerateClass_NonLinearStatic(libBase):
         def NewtonRaphsonIncrement(self):                                      
             #solve and update total displacement. A and D should up to date
             self.solve()
-            self.__DU += self.GetX()
+            self.__DU += self.get_X()
             # print(self.__DU)
         
         def update(self, dtime=None, compute = 'all', updateWeakForm = True):   
@@ -152,10 +152,10 @@ def _GenerateClass_NonLinearStatic(libBase):
         def reset(self):
             self.__Assembly.reset()
             
-            self.SetA(0) #tangent stiffness 
-            self.SetD(0)                 
-            # self.SetA(self.__Assembly.current.get_global_matrix()) #tangent stiffness 
-            # self.SetD(self.__Assembly.current.get_global_vector())            
+            self.set_A(0) #tangent stiffness 
+            self.set_D(0)                 
+            # self.set_A(self.__Assembly.current.get_global_matrix()) #tangent stiffness 
+            # self.set_D(self.__Assembly.current.get_global_vector())            
 
             B = 0
             self.__Utot = 0
@@ -166,7 +166,7 @@ def _GenerateClass_NonLinearStatic(libBase):
             self.__iter = 0  
             self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
-        def GetAssembly(self):
+        def get_Assembly(self):
             return self.__Assembly
             
         def ChangeAssembly(self,Assembling, update = True):
@@ -189,20 +189,20 @@ def _GenerateClass_NonLinearStatic(libBase):
             if self.__err0 is None: # if self.__err0 is None -> initialize the value of err0            
                 if self.__ErrCriterion == 'Displacement':                     
                     self.__err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
-                    return np.max(np.abs(self.GetX()))/self.__err0
+                    return np.max(np.abs(self.get_X()))/self.__err0
                 else:
                     self.__err0 = 1
                     self.__err0 = self.NewtonRaphsonError() 
                     return 1                
             else: 
                 if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.GetX()))/self.__err0  #Displacement criterion
+                    return np.max(np.abs(self.get_X()))/self.__err0  #Displacement criterion
                 elif self.__ErrCriterion == 'Force': #Force criterion              
-                    if self.GetD() is 0: return np.max(np.abs(self.GetB()[DofFree]))/self.__err0 
-                    else: return np.max(np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__err0                     
+                    if self.get_D() is 0: return np.max(np.abs(self.get_B()[DofFree]))/self.__err0 
+                    else: return np.max(np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self.__err0                     
                 else: #self.__ErrCriterion == 'Work': #work criterion
-                    if self.GetD() is 0: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]))/self.__err0 
-                    else: return np.max(np.abs(self.GetX()[DofFree]) * np.abs(self.GetB()[DofFree]+self.GetD()[DofFree]))/self.__err0 
+                    if self.get_D() is 0: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]))/self.__err0 
+                    else: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self.__err0 
        
         def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
             if ErrorCriterion in ['Displacement', 'Force','Work']:
@@ -218,14 +218,14 @@ def _GenerateClass_NonLinearStatic(libBase):
         #     returns : sum (0.5 * U.transposed * K * U)
         #     """
     
-        #     return sum( 0.5*self.GetX().transpose() * self.GetA() * self.GetX() )
+        #     return sum( 0.5*self.get_X().transpose() * self.get_A() * self.get_X() )
 
         # def GetNodalElasticEnergy(self):
         #     """
         #     returns : 0.5 * K * U . U
         #     """
     
-        #     E = 0.5*self.GetX().transpose() * self.GetA() * self.GetX()
+        #     E = 0.5*self.get_X().transpose() * self.get_A() * self.get_X()
 
         #     E = np.reshape(E,(3,-1)).T
 
@@ -254,7 +254,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                 
                 #--------------- Solve --------------------------------------------------------        
                 # self.__Assembly.current.assemble_global_mat(compute = 'matrix')
-                # self.SetA(self.__Assembly.current.get_global_matrix())
+                # self.set_A(self.__Assembly.current.get_global_matrix())
                 self.update(dt, compute = 'matrix', updateWeakForm = False) #assemble the tangeant matrix
                 self.updateA(dt)
 

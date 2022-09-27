@@ -4,7 +4,7 @@ import numpy as np
 
 # from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
-from fedoo.lib_elements.element_list import GetDefaultNbPG, get_element
+from fedoo.lib_elements.element_list import get_DefaultNbPG, get_element
 from scipy import sparse
 
 from os.path import splitext
@@ -495,7 +495,7 @@ class Mesh(MeshBase):
 
 
     def init_interpolation(self,n_elm_gp = None):
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
         
         n_nodes = self.n_nodes        
         n_elements = self.n_elements                                         
@@ -542,7 +542,7 @@ class Mesh(MeshBase):
         
     
     def _compute_gaussian_quadrature_mat(self, n_elm_gp = None):        
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
         if n_elm_gp not in self._saved_gaussian_quadrature_mat:
             self.init_interpolation(n_elm_gp)        
                 
@@ -558,28 +558,28 @@ class Mesh(MeshBase):
 
     
     def _get_gausspoint2node_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
         if not(n_elm_gp in self._saved_gausspoint2node_mat):
             self.init_interpolation(n_elm_gp)        
         return self._saved_gausspoint2node_mat[n_elm_gp]
     
     
     def _get_node2gausspoint_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)   
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)   
         if not(n_elm_gp in self._saved_node2gausspoint_mat):
             self.init_interpolation(n_elm_gp)                
         return self._saved_node2gausspoint_mat[n_elm_gp]
 
 
     def _get_gaussian_quadrature_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
         if not(n_elm_gp in self._saved_gaussian_quadrature_mat):
             self._compute_gaussian_quadrature_mat(n_elm_gp)
         return self._saved_gaussian_quadrature_mat[n_elm_gp]
 
 
     def determine_data_type(self, data, n_elm_gp=None):                       
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
  
         test = 0
         if data.shape[-1] == self.n_nodes: 
@@ -603,7 +603,7 @@ class Mesh(MeshBase):
         return: array containing the gausspoint field 
         The shape of the array is tested.
         """               
-        if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)           
+        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)           
         data_type = self.determine_data_type(data, n_elm_gp)       
 
         if data_type == 'Node': 
@@ -617,7 +617,7 @@ class Mesh(MeshBase):
     def convert_data(self, data, convert_from=None, convert_to='GaussPoint', n_elm_gp=None):
        if np.isscalar(data): return data
 
-       if n_elm_gp is None: n_elm_gp = GetDefaultNbPG(self.elm_type)
+       if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
        
        if convert_from is None: convert_from = self.determine_data_type(data, n_elm_gp)
            
@@ -644,7 +644,7 @@ class Mesh(MeshBase):
         assert type_field in ['Node','GaussPoint','Element', None], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"        
         if n_elm_gp is None: 
             if type_field == 'GaussPoint': n_elm_gp = len(field)//self.n_elements
-            else: n_elm_gp = GetDefaultNbPG(self.elm_type)               
+            else: n_elm_gp = get_DefaultNbPG(self.elm_type)               
                             
         return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
 

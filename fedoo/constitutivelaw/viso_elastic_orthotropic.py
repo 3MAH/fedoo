@@ -18,7 +18,7 @@ class ViscoElasticComposites(Mechanical3D):
     
     def GetStress(self, localFrame=None): # methode virtuel
         # tester si contrainte plane ou def plane
-        # if GetDimension() == "2Dstress":
+        # if get_Dimension() == "2Dstress":
         #     print('ViscoElasticComposites law for 2Dstress is not implemented')
         #     return NotImplemented
         

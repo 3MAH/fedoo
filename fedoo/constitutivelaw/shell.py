@@ -9,7 +9,7 @@ import numpy as np
 class ShellBase(ConstitutiveLaw):
     #base model class that should derive any other shell constitutive laws
     def __init__(self, thickness, k=1, name =""):        
-        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         ConstitutiveLaw.__init__(self, name) # heritage   
 
@@ -90,7 +90,7 @@ class ShellBase(ConstitutiveLaw):
 class ShellHomogeneous(ShellBase):
     
     def __init__(self, MatConstitutiveLaw, thickness, k=1, name =""):        
-        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         if isinstance(MatConstitutiveLaw, str):
             MatConstitutiveLaw = ConstitutiveLaw.get_all()[MatConstitutiveLaw]
@@ -165,7 +165,7 @@ class ShellHomogeneous(ShellBase):
 class ShellLaminate(ShellBase):
     
     def __init__(self, listMat, listThickness, k=1, name =""):        
-        # assert GetDimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
         
         self.__listMat = [ConstitutiveLaw.get_all()[mat] if isinstance(mat, str) else mat for mat in listMat]
         thickness = sum(listThickness) #total thickness

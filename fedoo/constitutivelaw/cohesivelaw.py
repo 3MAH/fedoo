@@ -67,14 +67,14 @@ class CohesiveLaw(Spring):
         return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
                 
         #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
-        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        # if get_Dimension() == "3D":        # tester si marche avec contrainte plane ou def plane
         #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
         #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         # else:
         #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(2)] 
         #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
-    def SetDamageVariable(self, value, Irreversible = True):
+    def set_DamageVariable(self, value, Irreversible = True):
         """
         Initialize the damage variable to a certain value: array for multi-point initialization or scalar.
         The damage is considered as irreversible by default.
@@ -85,7 +85,7 @@ class CohesiveLaw(Spring):
         self.__DamageVariable = self.__DamageVariableOpening = value              
         if Irreversible == True: self.updateIrreversibleDamage()            
         
-    def GetDamageVariable(self):
+    def get_DamageVariable(self):
         return self.__DamageVariable
     
     def updateIrreversibleDamage(self):
@@ -320,7 +320,7 @@ class CohesiveLaw(Spring):
 #         sig.append(law.GetInterfaceStress(delta)[2])
 #         law.updateIrreversibleDamage()
 #         delta_plot.append(delta_z)
-#         # print(law.GetDamageVariable())
+#         # print(law.get_DamageVariable())
     
 #     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
 #     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       

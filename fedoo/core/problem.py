@@ -80,22 +80,22 @@ class Problem(ProblemBase):
     def get_results(self, assemb, output_list, output_type=None, position = 1):        
         return _get_results(self, assemb, output_list, output_type, position)
 
-    def SetA(self,A):
+    def set_A(self,A):
         self.__A = A     
         
-    def GetA(self):
+    def get_A(self):
         return self.__A 
 
-    def GetB(self):
+    def get_B(self):
         return self.__B 
     
-    def GetD(self):
+    def get_D(self):
         return self.__D 
     
-    def SetB(self,B):
+    def set_B(self,B):
         self.__B = B    
               
-    def SetD(self,D):
+    def set_D(self,D):
         self.__D = D        
 
     def solve(self, **kargs):
@@ -125,13 +125,13 @@ class Problem(ProblemBase):
             
             self.__X[self.__dof_free]  = (self.__B[self.__dof_free] + self.__D[self.__dof_free]) / self.__A[self.__dof_free]               
 
-    def GetX(self): #solution of the linear system
+    def get_X(self): #solution of the linear system
         return self.__X
     
-    def GetDoFSolution(self,name='all'): #solution of the problem (same as GetX for linear problems if name=='all')
+    def GetDoFSolution(self,name='all'): #solution of the problem (same as get_X for linear problems if name=='all')
         return self._get_vect_component(self.__X, name) 
 
-    def SetDoFSolution(self,name,value):
+    def set_DoFSolution(self,name,value):
         self._set_vect_component(self.__X, name, value)          
        
 
@@ -142,7 +142,7 @@ class Problem(ProblemBase):
         Xbc = np.zeros(nvar*n)
         F = np.zeros(nvar*n)
 
-        MPC = False
+        build_mpc = False
         dof_blocked = set() #only dirichlet bc
         dof_slave = set() 
         data = []
@@ -159,7 +159,7 @@ class Problem(ProblemBase):
             if e.bc_type == 'MPC':
                 Xbc[e._dof_index[0]] = e._current_value  #valid in this case ??? need to be checked
                 dof_slave.update(e._dof_index[0]) #eliminated dof
-                MPC = True         
+                build_mpc = True         
     
                 n_fact = len(e._factors) #only factor for non eliminated (master) dof                
                 #shape e.__Fact should be n_fact*nbMPC 
@@ -177,19 +177,17 @@ class Problem(ProblemBase):
         dof_free = np.setdiff1d(range(nvar*n),dof_slave).astype(int)
         
         #build matrix MPC
-        if MPC:    
+        if build_mpc:    
             #Treating the case where MPC includes some blocked nodes as master nodes
-            #M is a matrix such as Xblocked = M@U + Xbc
-            #Compute M + M@M
+            #M is a matrix such as Xblocked = M@X + Xbc
             M = sparse.coo_matrix( 
                 (np.hstack(data), (np.hstack(row),np.hstack(col))), 
                 shape=(nvar*n,nvar*n))
             
-            # BoundaryCondition.M = M #test : used to compute the reaction - to delete later
-                                   
-            Xbc = Xbc + M@Xbc 
+            #update Xbc with the eliminated dof that may be used as slave dof in mpc
+            Xbc = Xbc + M@Xbc             
+            # M = (M+M@M).tocoo() #Compute M + M@M - not sure it is required
             
-            M = (M+M@M).tocoo()
             data = M.data
             row = M.row
             col = M.col
@@ -198,8 +196,9 @@ class Problem(ProblemBase):
             changeInd = np.full(nvar*n,np.nan) #mettre des nan plutôt que des zeros pour générer une erreur si pb
             changeInd[dof_free] = np.arange(len(dof_free))
             col = changeInd[np.hstack(col)]
-            mask = np.logical_not(np.isnan(col)) #mask to delete nan value 
             
+            mask = np.logical_not(np.isnan(col)) #mask to delete nan value 
+            # print(len(col) - len(col[mask]))
             col = col[mask] ; row = row[mask] ; data = data[mask]
 
         # #adding identity for free nodes

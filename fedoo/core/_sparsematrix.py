@@ -202,7 +202,7 @@ class _BlocSparse():
         
         
 
-    def GetBlocStructure(self):
+    def get_BlocStructure(self):
         #return data that may be reuse with other blocsparse
         return {'col': self.col, 'row':self.row, 'blocShape':self.blocShape,\
                 'Matrix_convertCOOtoCSR':self.Matrix_convertCOOtoCSR, \

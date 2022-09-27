@@ -1,7 +1,7 @@
 from fedoo.core.base import WeakForm
 from fedoo.core.base import ConstitutiveLaw
 # from fedoo.util.StrainOperator import GetStrainOperator, DiffOp
-# from fedoo.core.modelingspace import Variable, Vector, GetDimension
+# from fedoo.core.modelingspace import Variable, Vector, get_Dimension
 
 class InitialStress(WeakForm):
     def __init__(self, InitialStressTensor = 0, name = "", space = None):
@@ -36,7 +36,7 @@ class InitialStress(WeakForm):
         self.__InitialStressTensor = InitialStressTensor
         self.__typeOperator = 'all'
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):               
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):               
         eps = self.space.op_strain()
         if self.__typeOperator == 'Matrix':
             return sum([self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])

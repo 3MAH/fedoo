@@ -44,7 +44,7 @@ class CohesiveLaw_mod(Spring):
         Kdiag = [Kt if i != axis else Kn for i in range(3)] 
         return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]] 
     
-        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        # if get_Dimension() == "3D":        # tester si marche avec contrainte plane ou def plane
         #     Kdiag = [Umd*self.__parameters['KII'] if i != axis else UmdI*self.__parameters['KI'] for i in range(3)] 
         #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         # else:
@@ -104,17 +104,17 @@ class CohesiveLaw_mod(Spring):
         Kdiag = [KII if i != axis else KI for i in range(3)] 
         return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         
-        # if GetDimension() == "3D":        # tester si marche avec contrainte plane ou def plane
+        # if get_Dimension() == "3D":        # tester si marche avec contrainte plane ou def plane
         #     Kdiag = [KII if i != axis else KI for i in range(3)] 
         #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]        
         # else:
         #     Kdiag = [KII if i != axis else KI for i in range(2)] 
         #     return [[Kdiag[0], 0], [0, Kdiag[1]]]                
 
-    def SetDamageVariable(self, value):
+    def set_DamageVariable(self, value):
         self.__DamageVariable = value
         
-    def GetDamageVariable(self):
+    def get_DamageVariable(self):
         return self.__DamageVariable
     
     def updateIrreversibleDamage(self):
@@ -125,7 +125,7 @@ class CohesiveLaw_mod(Spring):
     def updateDamageVariable(self, CohesiveAssembly, U, Irreversible = False, typeData = 'PG'): 
         #Delta is the relative displacement 
         # OperatorDelta  = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
-        # OperatorDelta, U_vir = GetDispOperator()
+        # OperatorDelta, U_vir = get_DispOperator()
         if isinstance(CohesiveAssembly,str):
             CohesiveAssembly = AssemblyBase.get_all()[CohesiveAssembly]
         if typeData == 'Node':
@@ -143,7 +143,7 @@ class CohesiveLaw_mod(Spring):
         if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
         
         # delta_n = delta.pop(self.__parameters['axis'])        
-        # if GetDimension() == "3D":
+        # if get_Dimension() == "3D":
         #     delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
         # else: delta_t = delta[0]
         
@@ -155,7 +155,7 @@ class CohesiveLaw_mod(Spring):
         else: 
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
 
-        if GetDimension() == "3D":
+        if get_Dimension() == "3D":
             delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
         else: delta_t = delta_t[0]                
             
@@ -270,7 +270,7 @@ class CohesiveLaw_mod(Spring):
     #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
     #     delta_n = delta[self.__parameters['axis']]        
     #     delta_t = [d for i,d in enumerate(delta) if i != self.__parameters['axis'] ]
-    #     if GetDimension() == "3D":
+    #     if get_Dimension() == "3D":
     #         delta_t = np.sqrt(delta_t[0]**2 + delta_t[1]**2)
     #     else: delta_t = delta_t[0]
         
@@ -344,7 +344,7 @@ class CohesiveLaw_mod(Spring):
 #         sig.append(law.GetInterfaceStress(delta)[2])
 #         law.updateIrreversibleDamage()
 #         delta_plot.append(delta_z)
-#         # print(law.GetDamageVariable())
+#         # print(law.get_DamageVariable())
     
 #     # for delta_z in np.arange(delta_I_max,-delta_I_max,-delta_I_max/nb_iter):
 #     #     delta = [np.array([0]), np.array([0]), np.array([delta_z])]       

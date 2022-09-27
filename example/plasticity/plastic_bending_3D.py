@@ -22,46 +22,46 @@ alpha = 1e-5 #???
 meshname = "Domain"
 uimp = -8
 
-Mesh.box_mesh(Nx=21, Ny=7, Nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
-mesh = Mesh.get_all()[meshname]
+mesh.box_mesh(Nx=21, Ny=7, Nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+mesh = Mesh[meshname]
 
 crd = mesh.nodes 
 
 mat =0
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    Material.corate = 2
-    # Material.SetMaskH([[] for i in range(6)])
+    material = constitutivelaw.Simcoon("ELISO", props, 1, name='constitutivelaw')
+    material.corate = 2
+    # material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    # Material.SetMaskH(mask)
+    # material.SetMaskH(mask)
 elif mat == 1 or mat == 2:
     Re = 300
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
-        Material.corate = 2
-        # Material.SetMaskH([[] for i in range(6)])
+        material = constitutivelaw.Simcoon("EPICP", props, 8, name='constitutivelaw')
+        material.corate = 2
+        # material.SetMaskH([[] for i in range(6)])
     
         # mask = [[3,4,5] for i in range(3)]
         # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-        # Material.SetMaskH(mask)
+        # material.SetMaskH(mask)
 
     elif mat == 2:
-        Material = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
-        Material.SetHardeningFunction('power', H=k, beta=m)
+        material = constitutivelaw.ElastoPlasticity(E,nu,Re, name='constitutivelaw')
+        material.SetHardeningFunction('power', H=k, beta=m)
 else:
-    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = constitutivelaw.ElasticIsotrop(E, nu, name='constitutivelaw')
 
 
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
-# WeakForm.InternalForceUL("ConstitutiveLaw")
+weakform.InternalForce("constitutivelaw", nlgeom = NLGEOM)
+# weakform.InternalForceUL("constitutivelaw")
 
 
 
@@ -77,12 +77,12 @@ else:
     nodes_top2 = mesh.find_nodes('XY',(3*L/4,h))
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-# Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+# Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
-Problem.NonLinearStatic("Assembling")
+pb = problem.NonLinearStatic("Assembling")
 # Problem.set_solver('cg', precond = True)
-Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
+pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
 # Problem.SetNewtonRaphsonErrorCriterion("Displacement")
 # Problem.SetNewtonRaphsonErrorCriterion("Work")
@@ -90,19 +90,17 @@ Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
+pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
 # Problem.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
 ################### step 1 ################################
 tmax = 1
-Problem.bc.add('Dirichlet','DispX',0,nodes_bottomLeft)
-Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
-Problem.bc.add('Dirichlet','DispZ', 0,nodes_bottomLeft)
-Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
-bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
+pb.bc.add('Dirichlet',nodes_bottomLeft,'Disp',0)
+pb.bc.add('Dirichlet',nodes_bottomRight,'DispY',0)
+bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
 
-Problem.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
 
 
 E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint", False)).T

@@ -46,7 +46,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
         def __UpdateA(self): #internal function to be used when modifying M
             # if MassLumping == True, A is a vector representing the diagonal value
-            self.SetA(  self.__MassMatrix         / (self.__TimeStep**2))
+            self.set_A(  self.__MassMatrix         / (self.__TimeStep**2))
 
         def updateStiffness(self,StiffnessAssembling): #internal function to be used when modifying the siffness matrix
             if isinstance(StiffnessAssembling,str):
@@ -60,10 +60,10 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
                 self.__MassMatrix = np.array(self.__MassMatrix.sum(1))[:,0]
                 self.__UpdateA()
                
-        def GetX(self):
+        def get_X(self):
             return self.GetDoFSolution('all')
         
-        def GetXdot(self):
+        def get_Xdot(self):
             return self.__Xdot
     
         def SetInitialDisplacement(self, name,value):
@@ -112,7 +112,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             if self.__DampMatrix is not 0:
                 D -= self.__DampMatrix * self.__Xdot
 
-            self.SetD(D)                        
+            self.set_D(D)                        
 
         def update(self):       
             self.__Xdot = (Problem.GetDoFSolution('all') - self.__Xold)/self.__TimeStep
@@ -133,7 +133,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
     
             return 0.5*np.dot(self.__Xdot , self.__MassMatrix*self.__Xdot )
         
-        def GetDampingPower(self):
+        def get_DampingPower(self):
             """
             returns : Udot.transposed * C * Udot
             The damping disspated energy can be approximated by:

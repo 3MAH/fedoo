@@ -62,7 +62,7 @@ class SteadyHeatEquation(WeakForm):
     def to_start(self): #to update
         pass       
         
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):      
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):      
              
         K = self.__ConstitutiveLaw.thermal_conductivity
 
@@ -154,7 +154,7 @@ class TemperatureTimeDerivative(WeakForm):
         self.__temp_start = self.__temp                                  
         #no need to update Initial Stress because the last computed stress remained unchanged
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):      
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):      
         
         rho_c = self.__ConstitutiveLaw.density * self.__ConstitutiveLaw.specific_heat        
         

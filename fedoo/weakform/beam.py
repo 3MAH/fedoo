@@ -48,13 +48,13 @@ class Beam(WeakForm):
             self.space.new_variable("RotZ")
             self.space.new_vector('Disp' , ['DispX', 'DispY'])            
             self.space.new_vector('Rot' , ['RotZ'] ) 
-        # elif GetDimension() == '2Dstress':
+        # elif get_Dimension() == '2Dstress':
         #     assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                           
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}        
     
-    def GetDifferentialOperator(self, localFrame):
+    def get_DifferentialOperator(self, localFrame):
         E  = self.__ConstitutiveLaw.GetYoungModulus()
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
@@ -69,7 +69,7 @@ class Beam(WeakForm):
     def GetGeneralizedStress(self):
         #only for post treatment
 
-        eps, eps_vir = GetBeamStrainOperator()
+        eps, eps_vir = get_BeamStrainOperator()
         E  = self.__ConstitutiveLaw.GetYoungModulus()
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
@@ -117,29 +117,29 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         Variable("DispX") 
 #         Variable("DispY")     
         
-#         if GetDimension() == '3D':
+#         if get_Dimension() == '3D':
 #             Variable("DispZ")   
 #             Variable("RotX") #torsion rotation   
 #             Variable("RotY") #flexion   
 #             Variable("RotZ") #flexion   
 #             Variable.global_vector = 'Disp' , ('DispX', 'DispY', 'DispZ' , 'global')
 #             Variable.global_vector = 'Rot' , ('RotX', 'RotY', 'RotZ' , 'global')
-#         elif GetDimension() == '2Dplane':
+#         elif get_Dimension() == '2Dplane':
 #             Variable("RotZ")
-#             # Variable.SetDerivative('DispY', 'RotZ') #only valid with Bernoulli model       
+#             # Variable.set_Derivative('DispY', 'RotZ') #only valid with Bernoulli model       
 #             Variable.global_vector = 'Disp' , ('DispX', 'DispY' )            
-#         elif GetDimension() == '2Dstress':
+#         elif get_Dimension() == '2Dstress':
 #             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
                   
 #         self.__ConstitutiveLaw = CurrentConstitutiveLaw
 #         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz}
     
-#     def GetDifferentialOperator(self, localFrame):
+#     def get_DifferentialOperator(self, localFrame):
 #         E  = self.__ConstitutiveLaw.GetYoungModulus()
 #         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
 #         G = E/(1+nu)/2
         
-#         eps, eps_vir = GetBernoulliBeamStrainOperator()           
+#         eps, eps_vir = get_BernoulliBeamStrainOperator()           
 
 #         Ke = [E*self.__parameters['Section'], 0, 0, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
 #         return sum([eps_vir[i] * eps[i] * Ke[i] for i in range(6)])                
@@ -148,7 +148,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #     def GetGeneralizedStress(self):
 #         #only for post treatment
 
-#         eps, eps_vir = GetBernoulliBeamStrainOperator()
+#         eps, eps_vir = get_BernoulliBeamStrainOperator()
 #         E  = self.__ConstitutiveLaw.GetYoungModulus()
 #         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
 #         G = E/(1+nu)/2

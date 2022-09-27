@@ -34,21 +34,21 @@ def _GenerateClass_NonLinearNewmark(libBase):
                         
         def updateA(self, dt): #internal function to be used when modifying M, K or C
             if self.__DampingAssembly is 0:
-                self.SetA(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix())
+                self.set_A(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix())
             else:
                 if self.__RayleighDamping is not None:
                     #In this case, self.__RayleighDamping = [alpha, beta]
                     DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.get_global_matrix() 
                 else: DampMatrix = self.__DampingAssembly.get_global_matrix()
 
-                self.SetA(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
+                self.set_A(self.__StiffnessAssembly.get_global_matrix() + 1/(self.__Beta*(dt**2))*self.__MassAssembly.get_global_matrix() + self.__Gamma/(self.__Beta*dt)*DampMatrix)   
         
         def updateD(self, dt, start=False):
             #start = True if begining of a new time increment (ie  DispOld-DispStart = 0)
             if start:
                 DeltaDisp = 0 #DeltaDisp = Disp-DispStart = 0 for the 1st increment              
                 if self.__Velocity is 0 and self.__Acceleration is 0: 
-                    self.SetD(0)
+                    self.set_D(0)
                     return
             else: 
                 # DeltaDisp = self._NonLinearStatic__TotalDisplacementOld - self._NonLinearStatic__TotalDisplacementStart
@@ -72,7 +72,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
                     (self.__Gamma/self.__Beta - 1)                 *self.__Velocity +   \
                     (0.5*dt * (self.__Gamma/self.__Beta - 2)) *self.__Acceleration) 
                 
-            self.SetD(D)       
+            self.set_D(D)       
         
         
         def initialize(self, t0):   
@@ -126,10 +126,10 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__StiffnessAssembly.reset()
             if self.__DampingAssembly is not 0:
                 self.__DampingAssembly.reset()            
-            self.SetA(0) #tangent stiffness 
-            self.SetD(0)                 
-            # self.SetA(self.__Assembly.get_global_matrix()) #tangent stiffness 
-            # self.SetD(self.__Assembly.get_global_vector())            
+            self.set_A(0) #tangent stiffness 
+            self.set_D(0)                 
+            # self.set_A(self.__Assembly.get_global_matrix()) #tangent stiffness 
+            # self.set_D(self.__Assembly.get_global_vector())            
 
             B = 0
             self._NonLinearStatic__Utot = 0
@@ -143,7 +143,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__iter = 0  
             self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
         
-        def GetAssembly(self):
+        def get_Assembly(self):
             return self.__StiffnessAssembly
     
             
@@ -181,7 +181,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
                         
         #     #update total displacement            
         #     # self.__DisplacementOld = self.__Displacement
-        #     self.__Displacement += self.GetX()   
+        #     self.__Displacement += self.get_X()   
         #     self.__Err0 = None             
             
         # def EndTimeIncrement(self): 
@@ -205,7 +205,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     #update total displacement
         #     self.solve()
         #     self.__DisplacementOld = self.__Displacement
-        #     self.__Displacement += self.GetX()   
+        #     self.__Displacement += self.get_X()   
 
         # def get_disp(self,name='all'):
         #     # return self._get_vect_component(self.__Displacement, name)
@@ -213,7 +213,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         def GetVelocity(self):
             return self.__Velocity
     
-        def GetAcceleration(self):
+        def get_Acceleration(self):
             return self.__Acceleration
     
         def SetInitialDisplacement(self, name,value):
@@ -270,7 +270,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
                 
 #                 #--------------- Solve --------------------------------------------------------        
 #                 self.__StiffnessAssembly.assemble_global_mat(compute = 'matrix')
-#                 # self.SetA(self.__StiffnessAssembly.get_global_matrix())
+#                 # self.set_A(self.__StiffnessAssembly.get_global_matrix())
 #                 self.__UpdateA()
 #                 self.NewtonRaphsonIncr()
             
@@ -294,14 +294,14 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     returns : sum(0.5 * U.transposed * K * U)
         #     """
     
-        #     return 0.5*np.dot(self.GetX() , self.__StiffMatrix*self.GetX() )
+        #     return 0.5*np.dot(self.get_X() , self.__StiffMatrix*self.get_X() )
                             
         # def GetNodalElasticEnergy(self):
         #     """
         #     returns : 0.5 * K * U . U
         #     """
     
-        #     E = 0.5*self.GetX().transpose() * self.GetA() * self.GetX()
+        #     E = 0.5*self.get_X().transpose() * self.get_A() * self.get_X()
 
         #     E = np.reshape(E,(3,-1)).T
             
@@ -314,7 +314,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
     
         #     return 0.5*np.dot(self.__Xdot , self.__MassMatrix*self.__Xdot )
         
-        # def GetDampingPower(self):
+        # def get_DampingPower(self):
         #     """
         #     returns : Udot.transposed * C * Udot
         #     The damping disspated energy can be approximated by:
@@ -332,7 +332,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
         #     K = self.__StiffMatrix
         #     M = self.__MassMatrix
         #     C = self.__DampMatrix
-        #     return np.sum((K*self.GetX() + C*self.GetXdot() + M*self.GetXdotdot())*(self.GetX()-self.__Xold))
+        #     return np.sum((K*self.get_X() + C*self.get_Xdot() + M*self.get_Xdotdot())*(self.get_X()-self.__Xold))
         
         # def updateStiffness(self, StiffnessAssembling):
         #     if isinstance(StiffnessAssembling,str):

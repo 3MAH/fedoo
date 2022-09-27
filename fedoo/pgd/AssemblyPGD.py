@@ -5,7 +5,7 @@ from fedoo.core._sparsematrix import RowBlocMatrix
 # from fedoo.util.StrainOperator import GetStrainOperator
 from fedoo.util.voigt_tensors import StrainTensorList
 from fedoo.core.mesh import Mesh as MeshFEM
-from fedoo.lib_elements.element_list import GetDefaultNbPG
+from fedoo.lib_elements.element_list import get_DefaultNbPG
 from fedoo.core.base import WeakForm
 from fedoo.pgd.SeparatedOperator import SeparatedOperator
 from fedoo.pgd.SeparatedArray import SeparatedArray, SeparatedZeros
@@ -32,8 +32,8 @@ class AssemblyPGD(AssemblyFEM):
         self.weakform = weakForm
         self.mesh = mesh #should be a MeshPGD object 
         self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.mesh
-        self.__listNumberOfGaussPoints = [GetDefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.mesh (default value)
-        # [GetDefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
+        self.__listNumberOfGaussPoints = [get_DefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.mesh (default value)
+        # [get_DefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
         self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
@@ -50,7 +50,7 @@ class AssemblyPGD(AssemblyFEM):
         mesh = self.mesh
         dim = mesh.get_dimension()
 
-        wf = self.weakform.GetDifferentialOperator(mesh)  
+        wf = self.weakform.get_DifferentialOperator(mesh)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
         
         AA = []  
@@ -86,9 +86,9 @@ class AssemblyPGD(AssemblyFEM):
                 if wf.op_vir[ii].u in associatedVariables:                       
                     var_vir.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op_vir[ii].u][0]])                        
                     coef_vir.extend(associatedVariables[wf.op_vir[ii].u][1])                  
-                # if not(Variable.GetDerivative(wf.op_vir[ii].u) is None): 
-                #     var_vir.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op_vir[ii].u)[0]) )
-                #     coef_vir.append(Variable.GetDerivative(wf.op_vir[ii].u)[1])
+                # if not(Variable.get_Derivative(wf.op_vir[ii].u) is None): 
+                #     var_vir.append(mesh._GetSpecificVariableRank (dd, Variable.get_Derivative(wf.op_vir[ii].u)[0]) )
+                #     coef_vir.append(Variable.get_Derivative(wf.op_vir[ii].u)[1])
 
 
                     
@@ -113,9 +113,9 @@ class AssemblyPGD(AssemblyFEM):
                     if wf.op[ii].u in associatedVariables:                       
                         var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[wf.op[ii].u][0]])                        
                         coef.extend(associatedVariables[wf.op[ii].u][1])
-                    # if not(Variable.GetDerivative(wf.op[ii].u) is None):     
-                    #     var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(wf.op[ii].u)[0]) )
-                    #     coef.append(Variable.GetDerivative(wf.op[ii].u)[1])                                                                             
+                    # if not(Variable.get_Derivative(wf.op[ii].u) is None):     
+                    #     var.append(mesh._GetSpecificVariableRank (dd, Variable.get_Derivative(wf.op[ii].u)[0]) )
+                    #     coef.append(Variable.get_Derivative(wf.op[ii].u)[1])                                                                             
                     
                     
                     
@@ -163,13 +163,13 @@ class AssemblyPGD(AssemblyFEM):
             if len(listElementType) != len(self.mesh.GetListMesh()):
                 assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
             self.__listElementType = [ElementType for ElementType in listElementType]
-            self.__listNumberOfGaussPoints = [GetDefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.mesh (default value)            
+            self.__listNumberOfGaussPoints = [get_DefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.mesh (default value)            
         else:
             for i,m in enumerate(listSubMesh):                
                 if isinstance(m, str): m = MeshFEM.get_all()[m]
                 dd = self.mesh.GetListMesh().index(m)
                 self.__listElementType[dd] = listElementType[i]
-                self.__listNumberOfGaussPoints[dd] = GetDefaultNbPG(listElementType[i], m)
+                self.__listNumberOfGaussPoints[dd] = get_DefaultNbPG(listElementType[i], m)
         
         self.__listAssembly = [AssemblyFEM(self.weakform, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(self.mesh.GetListMesh())]
@@ -284,9 +284,9 @@ class AssemblyPGD(AssemblyFEM):
                 if operator.op[ii].u in associatedVariables:                       
                     var.extend([mesh._GetSpecificVariableRank (dd, v) for v in associatedVariables[operator.op[ii].u][0]])                        
                     coef.extend(associatedVariables[operator.op[ii].u][1])                
-                # if not(Variable.GetDerivative(operator.op[ii].u) is None): 
-                #     var.append(mesh._GetSpecificVariableRank (dd, Variable.GetDerivative(operator.op[ii].u)[0]) )
-                #     coef.append(Variable.GetDerivative(operator.op[ii].u)[1])
+                # if not(Variable.get_Derivative(operator.op[ii].u) is None): 
+                #     var.append(mesh._GetSpecificVariableRank (dd, Variable.get_Derivative(operator.op[ii].u)[0]) )
+                #     coef.append(Variable.get_Derivative(operator.op[ii].u)[1])
                         
                         
                         

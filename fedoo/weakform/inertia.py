@@ -28,7 +28,7 @@ class Inertia(WeakForm):
         
         self.__Density = Density        
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):
         # localFrame is not used for Inertia weak form 
         U = self.space.op_disp()
         U_vir = [u.virtual if u != 0 else 0 for u in U]

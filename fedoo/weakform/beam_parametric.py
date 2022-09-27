@@ -45,11 +45,11 @@ class ParametricBeam(WeakForm):
             self.space.new_variable('RotZ')  
             self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
             self.space.new_vector('Rot' , ('RotX', 'RotY', 'RotZ'))
-        else: #if GetDimension() == '2Dplane':
+        else: #if get_Dimension() == '2Dplane':
             self.space.new_variable('RotZ')
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
             self.space.new_vector('Rot' , ('RotZ'))
-        # elif GetDimension() == '2Dstress':
+        # elif get_Dimension() == '2Dstress':
         #     assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
         
         if R is not None:
@@ -119,7 +119,7 @@ class ParametricBeam(WeakForm):
         return [E_S, kG_S, kG_S, G_Jx, E_Iyy, E_Izz]  
 
 
-    def GetDifferentialOperator(self, mesh, localFrame=None):
+    def get_DifferentialOperator(self, mesh, localFrame=None):
         
         if isinstance(mesh, str):
             mesh = MeshPGD.get_all()[mesh]

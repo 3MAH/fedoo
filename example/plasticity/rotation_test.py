@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 from time import time
 import os
@@ -10,7 +10,7 @@ from pyvistaqt import BackgroundPlotter
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-ModelingSpace("3D")
+fd.ModelingSpace("3D")
 
 NLGEOM = 2
 #Units: N, mm, MPa
@@ -23,45 +23,45 @@ alpha = 1e-5 #???
 meshname = "Domain"
 uimp = 2
 
-mesh.box_mesh(Nx=5, Ny=5, Nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
-mesh = mesh.get_all()[meshname]
+fd.mesh.box_mesh(Nx=5, Ny=5, Nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+mesh = fd.Mesh[meshname]
 
 crd = mesh.nodes 
 
 mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    Material = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    Material.corate = 2
-    # Material.SetMaskH([[] for i in range(6)])
+    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    material.corate = 2
+    # material.SetMaskH([[] for i in range(6)])
     mask = [[3,4,5] for i in range(3)]
     mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    Material.SetMaskH(mask)
+    material.SetMaskH(mask)
 elif mat == 1 or mat == 2:
     Re = 300
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
-        Material.corate = 2
-        # Material.SetMaskH([[] for i in range(6)])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+        material.corate = 2
+        # material.SetMaskH([[] for i in range(6)])
     
         # mask = [[3,4,5] for i in range(3)]
         # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-        # Material.SetMaskH(mask)
+        # material.SetMaskH(mask)
 
     elif mat == 2:
-        Material = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
-        Material.SetHardeningFunction('power', H=k, beta=m)
+        material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
+        material.SetHardeningFunction('power', H=k, beta=m)
 else:
-    Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
 
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # WeakForm.InternalForceUL("ConstitutiveLaw")
 
 
@@ -75,25 +75,30 @@ node_center = mesh.nearest_node([0.5,0.5,0.5])
 StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro strain
 
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
-Problem.NonLinearStatic("Assembling")
-# Problem.set_solver('cg', precond = True)
-Problem.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
+pb = fd.problem.NonLinearStatic("Assembling")
+# pb.set_solver('cg', precond = True)
+pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
-# Problem.SetNewtonRaphsonErrorCriterion("Displacement")
-# Problem.SetNewtonRaphsonErrorCriterion("Work")
-# Problem.SetNewtonRaphsonErrorCriterion("Force")
+# pb.SetNewtonRaphsonErrorCriterion("Displacement")
+# pb.SetNewtonRaphsonErrorCriterion("Work")
+# pb.SetNewtonRaphsonErrorCriterion("Force")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.add_output('results/rot_test', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
-# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+pb.add_output('results/rot_test', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
+# pb.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 
-Homogen.DefinePeriodicBoundaryConditionGrad(meshname,
-        [[StrainNodes[0], StrainNodes[0], StrainNodes[0]], [StrainNodes[1], StrainNodes[1], StrainNodes[1]], [StrainNodes[2], StrainNodes[2], StrainNodes[2]]],
-        [['DispX',        'DispY',        'DispZ'] for i in range(3)], dim='3D', tol=1e-4)
+# Add periodic BC
+list_strain_nodes = [[StrainNodes[0], StrainNodes[0], StrainNodes[0]],
+                     [StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+                     [StrainNodes[2], StrainNodes[2], StrainNodes[2]]]
+list_strain_var = [['DispX', 'DispY', 'DispZ'] for i in range(3)]
+
+bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+pb.bc.add(bc_periodic)
 
 ################### step 1 ################################
 
@@ -102,34 +107,34 @@ tmax = 1
 theta = np.pi/2
 grad_u = np.array([[np.cos(theta)-1,-np.sin(theta),0], [np.sin(theta),np.cos(theta)-1,0], [0,0,0]])
 
-Problem.bc.add('Dirichlet','Disp',0,node_center)
-Problem.bc.add('Dirichlet','DispX', grad_u[0,0], [StrainNodes[0]]) #EpsXX
-Problem.bc.add('Dirichlet','DispY', grad_u[0,1], [StrainNodes[0]]) #EpsYY
-Problem.bc.add('Dirichlet','DispZ', grad_u[0,2], [StrainNodes[0]]) #EpsZZ
-Problem.bc.add('Dirichlet','DispX', grad_u[1,0], [StrainNodes[1]]) #EpsXX
-Problem.bc.add('Dirichlet','DispY', grad_u[1,1], [StrainNodes[1]]) #EpsYY
-Problem.bc.add('Dirichlet','DispZ', grad_u[1,2], [StrainNodes[1]]) #EpsZZ
-Problem.bc.add('Dirichlet','DispX', grad_u[2,0], [StrainNodes[2]]) #EpsXX
-Problem.bc.add('Dirichlet','DispY', grad_u[2,1], [StrainNodes[2]]) #EpsYY
-Problem.bc.add('Dirichlet','DispZ', grad_u[2,2], [StrainNodes[2]]) #EpsZZ
+pb.bc.add('Dirichlet',node_center, 'Disp',0)
+pb.bc.add('Dirichlet',[StrainNodes[0]],'DispX', grad_u[0,0]) #EpsXX
+pb.bc.add('Dirichlet',[StrainNodes[0]], 'DispY', grad_u[0,1]) #EpsYY
+pb.bc.add('Dirichlet',[StrainNodes[0]],'DispZ', grad_u[0,2]) #EpsZZ
+pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispX', grad_u[1,0]) #EpsXX
+pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispY', grad_u[1,1]) #EpsYY
+pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispZ', grad_u[1,2]) #EpsZZ
+pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispX', grad_u[2,0]) #EpsXX
+pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispY', grad_u[2,1]) #EpsYY
+pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispZ', grad_u[2,2]) #EpsZZ
 
-# Problem.apply_boundary_conditions()
+# pb.apply_boundary_conditions()
 
-Problem.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
-# Problem.solve()
-# Problem.save_results()
+# pb.solve()
+# pb.save_results()
 
 
-E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.Assembly['Assembling'].get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
-# F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
+# F_app = pb.get_ext_forces('DispY')[nodes_topCenter]
+# bc = pb.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
-# Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
+# pb.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 
 print(time()-start)
 

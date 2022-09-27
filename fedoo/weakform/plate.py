@@ -1,7 +1,7 @@
 from fedoo.core.base import WeakForm
 from fedoo.core.base import ConstitutiveLaw
 # from fedoo.util.StrainOperator import GetStrainOperator
-# from fedoo.core.modelingspace import Variable, Vector, GetDimension
+# from fedoo.core.modelingspace import Variable, Vector, get_Dimension
 
 class Plate(WeakForm):
     """
@@ -58,7 +58,7 @@ class Plate(WeakForm):
         
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
-    def GetDifferentialOperator(self, localFrame):        
+    def get_DifferentialOperator(self, localFrame):        
         H = self.__ShellConstitutiveLaw.GetShellRigidityMatrix()
 
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
@@ -81,7 +81,7 @@ class Plate(WeakForm):
 
 class Plate_RI(Plate):
 
-    def GetDifferentialOperator(self, localFrame):   
+    def get_DifferentialOperator(self, localFrame):   
         #shear
         H = self._Plate__ShellConstitutiveLaw.GetShellRigidityMatrix_RI()
                 
@@ -95,7 +95,7 @@ class Plate_RI(Plate):
         
 class Plate_FI(Plate):
 
-    def GetDifferentialOperator(self, localFrame):  
+    def get_DifferentialOperator(self, localFrame):  
         #all component but shear, for full integration
         H = self._Plate__ShellConstitutiveLaw.GetShellRigidityMatrix_FI()
         

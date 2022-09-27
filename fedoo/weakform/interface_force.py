@@ -67,7 +67,7 @@ class InterfaceForce(WeakForm):
         self.__ConstitutiveLaw.reset()
         self.__InitialStressVector = 0
 
-    def GetDifferentialOperator(self, mesh=None, localFrame = None):
+    def get_DifferentialOperator(self, mesh=None, localFrame = None):
         
         ### Operator for Interface Stress Operator ###
         dim = self.space.ndim

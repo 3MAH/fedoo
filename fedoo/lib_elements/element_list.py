@@ -64,7 +64,7 @@ def GetNodePositionInElementCoordinates(element, nNd_elm=None):
     elif element in ['cohesive1D']:
         return np.c_[[0., 0.]] #The values are arbitrary, only the size is important
 
-def GetDefaultNbPG(element, mesh=None, raiseError=True):
+def get_DefaultNbPG(element, mesh=None, raiseError=True):
     if element in ['cohesive1D']:
         return 1  
     elif element in ['lin2', 'lin2Bubble','cohesive2D']:
@@ -88,5 +88,5 @@ def GetDefaultNbPG(element, mesh=None, raiseError=True):
         raise NameError('Element unknown: no default number of integration points')
         
     if mesh is not None: 
-        return GetDefaultNbPG(mesh.elm_type)
+        return get_DefaultNbPG(mesh.elm_type)
 

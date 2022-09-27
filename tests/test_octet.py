@@ -28,7 +28,7 @@ k = 1000
 m = 0.25
 alpha = 1e-5
 props = np.array([[1e5, 0.3, alpha, Re, k, m]])
-Material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
 #Create the weak formulation of the mechanical equilibrium equation
 wf = fd.weakform.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
@@ -57,12 +57,17 @@ E = [0, 0, 0, 0.05, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 # 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
 #          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
 #           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim=3)
-list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
-                     [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
-                     [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
-list_strain_var = [['DispX', 'DispX', 'DispY'],
-                   ['DispX', 'DispY', 'DispZ'],
-                   ['DispY', 'DispZ', 'DispZ']]
+list_strain_nodes = [StrainNodes[0], StrainNodes[0], StrainNodes[0],
+                     StrainNodes[1], StrainNodes[1], StrainNodes[1]]
+list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
+# or equivalent: 
+# list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
+#                      [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
+#                      [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
+# list_strain_var = [['DispX', 'DispX', 'DispY'],
+#                    ['DispX', 'DispY', 'DispZ'],
+#                    ['DispY', 'DispZ', 'DispZ']]
+
 bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
 pb.bc.add(bc_periodic)
 
