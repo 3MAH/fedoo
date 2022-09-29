@@ -22,6 +22,7 @@ class Mesh(MeshBase):
         
     Parameters
     ----------
+    
     nodes: numpy array of float
         List of nodes coordinates. nodes[i] is the coordinate of the ith node.
     elements: numpy array of int
@@ -36,30 +37,33 @@ class Mesh(MeshBase):
     
     Alternative constructor
     --------------------------
+    
     It is possible to build a mesh using the following static methods:
-    * Mesh.read(filename, name) to load a mesh from a file 
-    * Mesh.from_pyvista(pvmesh, name) to build a mesh from pyvista UnstructuredGrid object 
+      * Mesh.read(filename, name) to load a mesh from a file 
+      * Mesh.from_pyvista(pvmesh, name) to build a mesh from pyvista UnstructuredGrid object 
     
     
     Example
     --------
-    Create a one element mesh from a 2d mesh in a 3d space
-    >>> import fedoo as fd
-    >>> import numpy as np      
-    >>> nodes = np.array([[0,0],[1,0],[1,1],[0,1]])    
-    >>> elm = np.array([0,1,2,3])
-    >>> mesh = fd.Mesh(nodes, elm, 'quad4', ndim = 3, name = 'unit square mesh')
+    
+    Create a one element mesh from a 2d mesh in a 3d space:
+        
+      >>> import fedoo as fd
+      >>> import numpy as np      
+      >>> nodes = np.array([[0,0],[1,0],[1,1],[0,1]])    
+      >>> elm = np.array([0,1,2,3])
+      >>> mesh = fd.Mesh(nodes, elm, 'quad4', ndim = 3, name = 'unit square mesh')
     """
     
     
     def __init__(self, nodes, elements=None, elm_type=None, ndim = None, name = ""):
         MeshBase.__init__(self, name)
         self.nodes = nodes #node coordinates     
-        """ List of nodes coordinates. nodes[i] is the coordinate of the ith node."""
+        """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
         self.elements = elements #element table
-        """ List of nodes coordinates. nodes[i] is the coordinate of the ith node."""
+        """ List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
-        """Type of the element. The type of the element should be coherent with the shape of elements."""
+        """Type of the element (str). The type of the element should be coherent with the shape of elements."""
         self.node_sets = {} #node on the boundary for instance
         """Dict containing node sets associated to the mesh"""
         self.element_sets = {}

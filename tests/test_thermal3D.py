@@ -12,7 +12,7 @@ nb_iter = 3
 # Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
 # Mesh.import_file('octet_surf.msh', meshname = "Domain")
 # Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-fd.mesh.import_file('../util/meshes/gyroid.msh', meshname = "Domain")
+fd.mesh.import_file('../util/meshes/gyroid.msh', name = "Domain")
 
 mesh = fd.Mesh[meshname]
 

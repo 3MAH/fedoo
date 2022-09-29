@@ -5,8 +5,8 @@ import numpy as np
 fd.ModelingSpace("2Dstress") 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-meshObject = fd.mesh.hole_plate_mesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \
-	ElementShape = 'quad4', name ="Domain") 
+mesh = fd.mesh.hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, \
+	elm_type = 'quad4', name ="Domain") 
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
 fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
@@ -21,10 +21,9 @@ fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True)
 pb = fd.problem.Static("Assembly")
 
 #Definition of the set of nodes for boundary conditions
-crd = meshObject.nodes
-left  = np.where(crd[:,0] == np.min(crd[:,0]))[0]
-right = np.where(crd[:,0] == np.max(crd[:,0]))[0]  
-bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0] 
+left = mesh.find_nodes('X',mesh.bounding_box.xmin)
+right = mesh.find_nodes('X',mesh.bounding_box.xmax)
+bottom = mesh.find_nodes('Y', mesh.bounding_box.ymin)
 
 #Boundary conditions
 #symetry condition on left (ux = 0)

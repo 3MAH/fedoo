@@ -8,7 +8,7 @@ fd.ModelingSpace("3D")
 
 #Units: N, mm, MPa
 #Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
-mesh = fd.mesh.box_mesh(Nx=11, Ny=5, Nz=5, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
+mesh = fd.mesh.box_mesh(nx=11, ny=5, nz=5, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')

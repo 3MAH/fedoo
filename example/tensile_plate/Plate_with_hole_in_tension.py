@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd 
 import numpy as np
 import time
 
@@ -8,58 +8,56 @@ method_output = 1
 # method_output = 2 to write the vtk file at the end 
 # method_output = 3 to save the results (disp, stress, strain) in a dict
 
-ModelingSpace("2Dstress")
+fd.ModelingSpace("2Dstress")
 
-Mesh.import_file('plate_with_hole.msh', meshname = "Domain")
+fd.mesh.import_file('plate_with_hole.msh', name = "Domain")
 
 #alternative mesh below (uncomment the line)
 #Mesh.rectangle_mesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, name ="Domain")
-type_el = Mesh.get_all()['Domain'].elm_type
-meshname = "Domain"
+type_el = fd.Mesh['Domain'].elm_type
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
+fd.weakform.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
+fd.Assembly.create("ElasticLaw", "Domain", type_el, name="Assembling") 
 
 #Type of problem 
-Problem.Static("Assembling")
+pb = fd.problem.Static("Assembling")
 
 #Boundary conditions
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshname]
+mesh = fd.Mesh["Domain"]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 mesh.add_node_set(list(np.where(crd[:,0] == xmin)[0]), "left")
 mesh.add_node_set(list(np.where(crd[:,0] == xmax)[0]), "right")
 
-Problem.bc.add('Dirichlet','DispX',-5e-1,mesh.node_sets["left"])
-Problem.bc.add('Dirichlet','DispX', 5e-1,mesh.node_sets["right"])
-Problem.bc.add('Dirichlet','DispY',0,[0])
+pb.bc.add('Dirichlet', "left", 'DispX',-5e-1)
+pb.bc.add('Dirichlet', "right", 'DispX', 5e-1)
+pb.bc.add('Dirichlet',[0], 'DispY',0)
 
-Problem.apply_boundary_conditions()
+pb.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 if method_output == 1:
     #Method 1: use the automatic result output    
-    Problem.add_output('plate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
-    Problem.add_output('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
+    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
+    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
 
 
-Problem.set_solver('CG')
+pb.set_solver('CG')
 t0 = time.time() 
 print('Solving...')
-Problem.solve()
+pb.solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
 
-
 if method_output == 1:
-    Problem.save_results()
+    pb.save_results()
     
 elif method_output == 2:
     #Method 2: write the vtk output file by hand
@@ -100,4 +98,4 @@ elif method_output == 2:
     print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
 
 elif method_output == 3:
-    res = Problem.get_results("Assembling", ['disp', 'Stress','Strain'], 'Node')
+    res = pb.get_results("Assembling", ['disp', 'Stress','Strain'], 'Node')

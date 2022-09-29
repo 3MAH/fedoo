@@ -23,7 +23,7 @@ alpha = 1e-5 #???
 rho = 1600e-6
 uimp = -0.5
 
-fd.mesh.rectangle_mesh(Nx=101, Ny=11,x_min=0, x_max=L, y_min=0, y_max=h, ElementShape = 'quad4', name = "Domain")
+fd.mesh.rectangle_mesh(nx=101, ny=11,x_min=0, x_max=L, y_min=0, y_max=h, elm_type = 'quad4', name = "Domain")
 mesh = fd.Mesh["Domain"]
 
 crd = mesh.nodes 

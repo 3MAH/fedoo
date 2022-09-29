@@ -3,7 +3,7 @@
 Geometry and Mesh (:mod:`fedoo.mesh`)
 ===========================================
 
-.. currentmodule:: fedoo.core.mesh
+.. currentmodule:: fedoo
 
 Class Mesh
 ====================
@@ -15,7 +15,6 @@ Class Mesh
    Mesh
 
 
-
 .. currentmodule:: fedoo.mesh
 
 Mesh manipulation functions
@@ -24,8 +23,10 @@ Mesh manipulation functions
 .. autosummary::
    :toctree: generated/
    
-   get_all
    stack
+
+
+.. _importmesh:
 
 Import/Export Fedoo Mesh object        
 ==================================
@@ -38,6 +39,8 @@ Import/Export Fedoo Mesh object
    import_vtk
 
 
+.. _build_simple_mesh:
+
 Mesh Creation Functions
 ===============================
 
@@ -45,12 +48,14 @@ Mesh Creation Functions
    :toctree: generated/
    
    rectangle_mesh 
-   grid_mesh_cylindric
-   line_mesh_1D
-   line_mesh_cylindric
    box_mesh
+   line_mesh_1D
+   line_mesh
+   line_mesh_cylindric
+   grid_mesh_cylindric   
+   hole_plate_mesh         
    structured_mesh_2D
-   generate_nodes          
+   generate_nodes    
 """
 
 
