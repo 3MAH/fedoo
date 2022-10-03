@@ -156,8 +156,8 @@ if USE_SIMCOON:
                     #Get the stress tensor (PG values)
                     # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint")
     
-                    TensorStrain = material.GetStrain()
-                    TensorStress = material.GetPKII()
+                    TensorStrain = material.get_strain()
+                    TensorStress = material.get_pk2()
                     
                     MeanStress = np.array([1/Volume*Assembly.get_all()['Assembling'].integrate_field(TensorStress[i]) for i in range(6)])
     

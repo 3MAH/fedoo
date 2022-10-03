@@ -88,16 +88,16 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                     data = data_sav[res] #avoid a new data conversion
                 else:
                     if res in ['PKII','PK2']:
-                        data = material.GetPKII()
+                        data = material.get_pk2()
                     elif res == 'Stress':
                         #stress for small displacement
-                        data = material.GetStress(position = position)
+                        data = material.get_stress(position = position)
                     elif res == 'Kirchhoff':
-                        data = material.GetKirchhoff()
+                        data = material.get_kirchhoff()
                     elif res == 'Cauchy':
-                        data = material.GetCauchy()
+                        data = material.get_cauchy()
                     elif res == 'Strain':
-                        data = material.GetStrain(position = position)                                                
+                        data = material.get_strain(position = position)                                                
                                                             
                     #keep data in memory in case it may be used later for vm, pc or pdir stress computation
                     data_sav[res] = data
@@ -115,13 +115,13 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                     data=data_sav[res[:-3]]
                 else:
                     if res in ['PKII_vm','PK2_vm']:
-                        data = material.GetPKII()
+                        data = material.get_pk2()
                     elif res == 'Stress_vm':
-                        data = material.GetStress(position = position)
+                        data = material.get_stress(position = position)
                     elif res == 'Kirchhoff_vm':
-                        data = material.GetKirchhoff()
+                        data = material.get_kirchhoff()
                     elif res == 'Cauchy_vm':
-                        data = material.GetCauchy()
+                        data = material.get_cauchy()
 
                     data_sav[res[:-3]] = data                                                     
 
@@ -146,13 +146,13 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                     
                 else:                    
                     if measure_type in ['PKII','PK2']:
-                        data = material.GetPKII()
+                        data = material.get_pk2()
                     elif measure_type == 'Stress':
-                        data = material.GetStress(position = position)
+                        data = material.get_stress(position = position)
                     elif measure_type == 'Kirchhoff':
-                        data = material.GetKirchhoff()
+                        data = material.get_kirchhoff()
                     elif measure_type == 'Cauchy':
-                        data = material.GetCauchy()
+                        data = material.get_cauchy()
                     
                     data_sav[measure_type] = data                        
                     data = data.GetPrincipalStress()
@@ -170,12 +170,12 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data_type = 'GaussPoint'
                     
             elif res == 'Statev':
-                data = material.GetStatev()
+                data = material.get_statev()
                 # data = assemb.convert_data(data, None, output_type).T
                 data_type = 'GaussPoint'
             
             elif res in ['Wm']:
-                data = material.GetWm()
+                data = material.get_wm()
                 # data = assemb.convert_data(data, None, output_type).T
                 data_type = 'GaussPoint'
             

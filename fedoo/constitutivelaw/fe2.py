@@ -41,22 +41,22 @@ class FE2(Mechanical3D):
                 
         # self.__currentGradDisp = self.__initialGradDisp = 0        
             
-    def GetPKII(self):
+    def get_pk2(self):
         return StressTensorList(self.__stress)
     
-    # def GetKirchhoff(self):
+    # def get_kirchhoff(self):
     #     return StressTensorList(self.Kirchhoff.T)        
     
-    # def GetCauchy(self):
+    # def get_cauchy(self):
     #     return StressTensorList(self.Cauchy.T)        
     
-    def GetStrain(self, **kargs):
+    def get_strain(self, **kargs):
         return StrainTensorList(self.__strain)
            
-    # def GetStatev(self):
+    # def get_statev(self):
     #     return self.statev.T
 
-    def GetStress(self, **kargs): #same as GetPKII (used for small def)
+    def get_stress(self, **kargs): #same as GetPKII (used for small def)
         return StressTensorList(self.__stress)
     
     # def GetHelas (self):
@@ -65,10 +65,10 @@ class FE2(Mechanical3D):
 
     #     return np.squeeze(self.L.transpose(1,2,0)) 
     
-    def GetWm(self):
+    def get_wm(self):
         return self.__Wm
     
-    def GetCurrentGradDisp(self):
+    def get_disp_grad(self):
         if self.__currentGradDisp is 0: return 0
         else: return self.__currentGradDisp
         
@@ -195,7 +195,7 @@ class FE2(Mechanical3D):
         self.Lt[id_pb]= GetTangentStiffness(pb.name)
         
         material = self.list_assembly[id_pb].weakform.GetConstitutiveLaw()
-        stress_field = material.GetStress()
+        stress_field = material.get_stress()
         self.__stress[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].integrate_field(stress_field[i]) for i in range(6)])
     
         Wm_field = material.Wm

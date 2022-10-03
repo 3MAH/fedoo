@@ -30,19 +30,19 @@ class ElasticAnisotropic(Mechanical3D):
     def GetTangentMatrix(self):
         return self.__H
 
-    def GetStress(self, **kargs):
+    def get_stress(self, **kargs):
         #alias of GetStress mainly use for small strain displacement problems
         return (self._stress)
     
-    def GetPKII(self):
+    def get_pk2(self):
         #alias of GetPKII mainly use for small strain displacement problems
         return self._stress
     
-    def GetCauchy(self):
+    def get_cauchy(self):
         #alias of GetStress mainly use for small strain displacement problems
         return self._stress
     
-    def GetStrain(self, **kargs):
+    def get_strain(self, **kargs):
         return self.__currentStrain
     
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
@@ -53,7 +53,7 @@ class ElasticAnisotropic(Mechanical3D):
     #         return assembly.get_strain(displacement, type_output)  
     
     
-    def GetCurrentGradDisp(self):
+    def get_disp_grad(self):
         return self._grad_disp          
     
     def initialize(self, assembly, pb, t0 = 0., nlgeom=False):

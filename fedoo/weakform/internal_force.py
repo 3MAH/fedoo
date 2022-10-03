@@ -58,13 +58,13 @@ class InternalForce(WeakForm):
     def get_DifferentialOperator(self, mesh=None, localFrame = None):
         
         if self._nlgeom == 1: #add initial displacement effect 
-            if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
+            if not(hasattr(self.__ConstitutiveLaw, 'get_disp_grad')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")                        
-            eps = self.space.op_strain(self.__ConstitutiveLaw.GetCurrentGradDisp())
-            initial_stress = self.__ConstitutiveLaw.GetPKII()
+            eps = self.space.op_strain(self.__ConstitutiveLaw.get_disp_grad())
+            initial_stress = self.__ConstitutiveLaw.get_pk2()
         else: 
             eps = self.space.op_strain()
-            initial_stress = self.__ConstitutiveLaw.GetCauchy() #required for updated lagrangian method
+            initial_stress = self.__ConstitutiveLaw.get_cauchy() #required for updated lagrangian method
         
         H = self.__ConstitutiveLaw.GetH()
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]

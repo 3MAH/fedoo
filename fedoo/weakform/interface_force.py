@@ -54,7 +54,7 @@ class InterfaceForce(WeakForm):
         if self.__nlgeom: #need to be modifed for nlgeom
             if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
-            self.__InitialGradDispTensor = self.__ConstitutiveLaw.GetCurrentGradDisp()
+            self.__InitialGradDispTensor = self.__ConstitutiveLaw.get_disp_grad()
         
 
     def to_start(self):

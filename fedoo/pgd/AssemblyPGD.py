@@ -347,10 +347,10 @@ class AssemblyPGD(AssemblyFEM):
             constitutivelaw = ConstitutiveLaw.get_all()[constitutivelaw]
 
         if IntegrationType == "Node":            
-            return [self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in constitutivelaw.GetStress()]
+            return [self.get_node_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_nodes) for e in constitutivelaw.get_stress()]
         
         elif IntegrationType == "Element":
-            return [self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in constitutivelaw.GetStress()]
+            return [self.get_element_results(e, U) if e!=0 else SeparatedZeros(self.mesh.n_elements) for e in constitutivelaw.get_stress()]
         
         else:
             assert 0, "Wrong argument for IntegrationType"

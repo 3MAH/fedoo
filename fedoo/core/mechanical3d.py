@@ -15,28 +15,28 @@ class Mechanical3D(ConstitutiveLaw):
         self._stress = 0 #current stress (pk2 if nlgeom) at integration points
         self._grad_disp = 0 #current grad_disp at integration points
         
-    def GetPKII(self):
+    def get_pk2(self):
         return NotImplemented
         
-    def GetKirchhoff(self):
+    def get_kirchhoff(self):
         return NotImplemented        
     
-    def GetCauchy(self):
+    def get_cauchy(self):
         return NotImplemented        
     
-    def GetStrain(self):
+    def get_strain(self):
         return NotImplemented
            
-    def GetStatev(self):
+    def get_statev(self):
         return NotImplemented
 
-    def GetWm(self):
+    def get_wm(self):
         return NotImplemented
 
-    def GetStress(self, **kargs): #same as GetPKII (used for small def)
+    def get_stress(self, **kargs): #same as GetPKII (used for small def)
         return NotImplemented
     
-    def GetCurrentGradDisp(self): #use if nlgeom == True
+    def get_disp_grad(self): #use if nlgeom == True
         return NotImplemented
     
     def GetTangentMatrix(self): #Tangent Matrix in local coordinate system (no change of basis)

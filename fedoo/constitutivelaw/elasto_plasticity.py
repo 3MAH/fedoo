@@ -138,21 +138,21 @@ class ElastoPlasticity(Mechanical3D):
     def GetPlasticity(self):
         return self.__currentP
     
-    def GetStrain(self, **kargs):
+    def get_strain(self, **kargs):
         return self.__currentPlasticStrainTensor
     
-    def GetPKII(self):
+    def get_pk2(self):
         return self.__currentSigma
     
-    def GetCauchy(self, **kargs): #same as GetPKII
+    def get_cauchy(self, **kargs): #same as GetPKII
         #alias of GetPKII mainly use for small strain displacement problems
         return self.__currentSigma
     
-    def GetStress(self, **kargs): #same as GetPKII
+    def get_stress(self, **kargs): #same as GetPKII
         #alias of GetPKII mainly use for small strain displacement problems
         return self.__currentSigma
     
-    def GetCurrentGradDisp(self):
+    def get_disp_grad(self):
         return self.__currentGradDisp
         
     def GetTangentMatrix(self):             

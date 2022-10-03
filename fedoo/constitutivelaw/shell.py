@@ -55,7 +55,7 @@ class ShellBase(ConstitutiveLaw):
     def GetGeneralizedStress(self):
         return self.__GeneralizedStress    
     
-    def GetStrain(self, **kargs):
+    def get_strain(self, **kargs):
         """
         Return the last computational strain using the Update method
 
@@ -83,7 +83,7 @@ class ShellBase(ConstitutiveLaw):
         
         return Strain
     
-    def GetStress(self, **kargs):
+    def get_stress(self, **kargs):
         raise NameError('"GetStress" not implemented, contact developer.')
         
   
@@ -134,8 +134,8 @@ class ShellHomogeneous(ShellBase):
         
         return H    
                      
-    def GetStress(self, **kargs):
-        Strain = self.GetStrain(**kargs)
+    def get_stress(self, **kargs):
+        Strain = self.get_strain(**kargs)
         Hplane = self.__material.GetH(dimension="2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.GetH()                       
@@ -215,8 +215,8 @@ class ShellLaminate(ShellBase):
             
         return H
         
-    def GetStress(self, **kargs):
-        Strain = self.GetStrain(**kargs) 
+    def get_stress(self, **kargs):
+        Strain = self.get_strain(**kargs) 
         position = kargs.get('position', 1)
         layer = self.FindLayer(position)   # find the layer corresponding to the specified position        
 

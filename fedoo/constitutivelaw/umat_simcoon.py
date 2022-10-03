@@ -42,29 +42,25 @@ if USE_SIMCOON:
             
             self.use_elastic_lt = False #mainly for debug purpose
                 
-        def GetPKII(self):
+        def get_pk2(self):
             return StressTensorList(self.PKII.T)
         
-        def GetKirchhoff(self):
+        def get_kirchhoff(self):
             return StressTensorList(self.Kirchhoff.T)        
         
-        def GetCauchy(self):
+        def get_cauchy(self):
             return StressTensorList(self.Cauchy.T)        
         
-        def GetStrain(self, **kargs):
+        def get_strain(self, **kargs):
             return StrainTensorList(self.etot.T)
                
-        def GetStatev(self):
+        def get_statev(self):
             return self.statev.T
 
-        def GetWm(self):
+        def get_wm(self):
             return self.Wm.T
-        
-        def GetCurrentStress(self): #same as GetPKII (used for small def)
-            print('Warning : GetCurrentStress will be removed in future versions. Use GetStress instead')
-            return StressTensorList(self.PKII.T)
 
-        def GetStress(self, **kargs): #same as GetPKII (used for small def)
+        def get_stress(self, **kargs): #same as GetPKII (used for small def)
             return StressTensorList(self.PKII.T)
         
         # def GetHelas (self):
@@ -73,7 +69,7 @@ if USE_SIMCOON:
     
         #     return np.squeeze(self.L.transpose(1,2,0)) 
         
-        def GetCurrentGradDisp(self):
+        def get_disp_grad(self):
             if self.__currentGradDisp is 0: return 0
             else: return self.__currentGradDisp
             
