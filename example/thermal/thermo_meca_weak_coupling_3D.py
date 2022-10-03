@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 from time import time
 import os
@@ -10,14 +10,14 @@ start = time()
 
 
 # -------------------- MESH ------------------------------
-# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
-# Mesh.import_file('octet_surf.msh', meshname = "Domain")
-# Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-Mesh.import_file('data/gyroid.msh', meshname = "Domain")
+# fd.mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
+# fd.mesh.import_file('octet_surf.msh', meshname = "Domain")
+# fd.mesh.import_file('data/octet_1.msh', meshname = "Domain")
+fd.mesh.import_file('../../util/meshes/gyroid.msh', name = "Domain")
 meshname = "Domain"
 filename_res = 'results/thermo_meca_nl'
 
-mesh = Mesh.get_all()[meshname]
+mesh = fd.Mesh[meshname]
 
 crd = mesh.nodes 
 
@@ -35,23 +35,23 @@ front = mesh.find_nodes('Z', Xmax[2])
 boundary = np.unique(np.hstack((bottom,top,left,right, back, front)))
 
 # -------------------- Thermal Problem ------------------------------
-thermal_space = ModelingSpace("3D")
+thermal_space = fd.ModelingSpace("3D")
 
 
 K = 500 # K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
-thermal_law = ConstitutiveLaw.ThermalProperties(K, c, rho, name='ThermalLaw')
-wf_th = WeakForm.HeatEquation("ThermalLaw", space = thermal_space)
-assemb = Assembly.create("ThermalLaw", meshname, name="Assembling_T")    
+thermal_law = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
+wf_th = fd.weakform.HeatEquation("ThermalLaw", space = thermal_space)
+assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling_T")    
 
-pb_th = Problem.NonLinearStatic("Assembling_T")
+pb_th = fd.problem.NonLinearStatic("Assembling_T")
 
 # Problem.set_solver('cg', precond = True)
 pb_th.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 # -------------------- Mechanical Problem ------------------------------
-mech_space = ModelingSpace("3D")
+mech_space = fd.ModelingSpace("3D")
 
 E = 200e3
 nu=0.3
@@ -60,7 +60,7 @@ NLGEOM = False
 mat =0
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    mechancial_law = ConstitutiveLaw.Simcoon("ELISO", props, 1, name='MechanicalLaw')
+    mechancial_law = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='MechanicalLaw')
     mechancial_law.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
 elif mat == 1 or mat == 2:
@@ -69,27 +69,27 @@ elif mat == 1 or mat == 2:
     m=1#0.3 #0.25
     if mat == 1:
         props = np.array([[E, nu, alpha, Re,k,m]])
-        mechancial_law = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='MechanicalLaw')
+        mechancial_law = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='MechanicalLaw')
         mechancial_law.corate = 2
     elif mat == 2:
-        mechancial_law = ConstitutiveLaw.ElastoPlasticity(E,nu,Re, name='MechanicalLaw')
+        mechancial_law = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='MechanicalLaw')
         mechancial_law.SetHardeningFunction('power', H=k, beta=m)
 else:
-    mechancial_law = ConstitutiveLaw.ElasticIsotrop(E, nu, name='MechanicalLaw')
+    mechancial_law = fd.constitutivelaw.ElasticIsotrop(E, nu, name='MechanicalLaw')
 
-WeakForm.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
+fd.weakform.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
 
-Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
-pb_m = Problem.NonLinearStatic("Assembling_M")
+pb_m = fd.problem.NonLinearStatic("Assembling_M")
 # pb_m.set_solver('cg', precond = True)
 pb_m.SetNewtonRaphsonErrorCriterion("Displacement", tol = 1e-2, err0 = 1)
 
 # -------------------- Set output ------------------------------
 #create a 'result' folder and set the desired ouputs
-pb_m.add_output(filename_res+'_me', 'Assembling_M', ['disp', 'cauchy', 'strain', 'cauchy_vm', 'statev', 'wm'], output_type='Node', file_format ='npz')    
+res_m = pb_m.add_output(filename_res+'_me', 'Assembling_M', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
 
-pb_th.add_output(filename_res+'_th', 'Assembling_T', ['temp'], output_type='Node', file_format ='npz')    
+res_th = pb_th.add_output(filename_res+'_th', 'Assembling_T', ['Temp'], output_type='Node', file_format ='npz')    
 # # Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 # -------------------- Boundary Conditions ------------------------------
@@ -101,10 +101,10 @@ def timeEvolution(timeFactor):
     else: return 1
 
 
-pb_th.bc.add('Dirichlet','Temp',100,right, timeEvolution=timeEvolution, name='temp')
-# pb_th.bc.add('Dirichlet','Temp',100,right, name='temp')
+pb_th.bc.add('Dirichlet',right,'Temp',100, time_func=timeEvolution, name='temp')
+# pb_th.bc.add('Dirichlet',right,'Temp',100, name='temp')
 
-pb_m.bc.add('Dirichlet','Disp',0,boundary)
+pb_m.bc.add('Dirichlet',boundary,'Disp',0)
 
 # -------------------- Solve  ------------------------------
 
@@ -118,19 +118,25 @@ pb_m.initialize()
 pb_th.tmax = tmax
 pb_m.tmax = tmax
 
-for i in range(nb_iter):    
+pb_th.set_start(dt)
+pb_m.set_start(dt)
+
+for i in range(nb_iter):       
     time = i*dt
     convergence, nbNRiter, normRes = pb_th.SolveTimeIncrement(time, dt)
     # assert convergence, 'thermal problem has not converged'
     if not(convergence): print('WARNING: iteration', i, 'has not converged: err =', normRes)
+    pb_th.set_start(dt)
     pb_th.save_results(i)
     
     print('Iter {} - Therm - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
-    temp = assemb.convert_data(pb_th.get_temp(), convertFrom='Node', convertTo='GaussPoint')
+    pb_m.set_start(dt)
+    temp = assemb.convert_data(pb_th.get_temp(), convert_from='Node', convert_to='GaussPoint')
     mechancial_law.set_T(temp)
     
     convergence, nbNRiter, normRes = pb_m.SolveTimeIncrement(time, dt)
     assert convergence, 'mechanical problem has not converged'
+    pb_m.set_start(dt)
     pb_m.save_results(i)
     
     print('Iter {} - Mech - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
@@ -164,6 +170,20 @@ for i in range(nb_iter, 2*nb_iter):
     print('Iter {} - Mech - Time: {:.5f} - NR iter: {} - Err: {:.5f}'.format(i, time, nbNRiter, normRes))
 
 nb_iter = 2*nb_iter
+
+
+
+### Simple movie output
+# res_m.write_movie('stress_field.mp4', 'Cauchy_vm')
+# res_th.write_movie('temp_field.mp4', 'Temp')
+
+
+
+
+
+
+
+
 
 # #Generate video using pyvista
 # import pyvista as pv

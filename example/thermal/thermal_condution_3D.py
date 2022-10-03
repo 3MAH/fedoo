@@ -16,7 +16,7 @@ nb_iter = 100
 # Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname) 
 # Mesh.import_file('octet_surf.msh', meshname = "Domain")
 # Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-fd.mesh.import_file('../../util/meshes/gyroid.msh', meshname = "Domain")
+fd.mesh.import_file('../../util/meshes/gyroid.msh', name = "Domain")
 
 mesh = fd.Mesh[meshname]
 
@@ -27,7 +27,7 @@ c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
 material = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf = fd.weakform.HeatEquation("ThermalLaw")
-assemb = fd.assembly.create("ThermalLaw", meshname, name="Assembling")    
+assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")    
 
 #note set for boundary conditions
 Xmin, Xmax = mesh.bounding_box
@@ -36,16 +36,16 @@ top = mesh.find_nodes('Z', Xmax[2])
 left = mesh.find_nodes('X', Xmin[2])
 right = mesh.find_nodes('X', Xmax[2])
 
-fd.problem.NonLinearStatic("Assembling")
+pb = fd.problem.NonLinearStatic("Assembling")
 
 # Problem.set_solver('cg', precond = True)
 
-fd.problem.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
+pb.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = fd.problem.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
-# Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+results = pb.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
+# pb.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 10
 # Problem.bc.add('Dirichlet','Temp',0,bottom)
@@ -53,16 +53,16 @@ def timeEvolution(timeFactor):
     if timeFactor == 0: return 0
     else: return 1
 
-# Problem.bc.add('Dirichlet','Temp',100,left, timeEvolution=timeEvolution)
-fd.problem.bc.add('Dirichlet','Temp',100,right, timeEvolution=timeEvolution)
-# Problem.bc.add('Dirichlet','Temp',100,top, timeEvolution=timeEvolution)
+# Problem.bc.add('Dirichlet',left,'Temp',100, time_func=timeEvolution)
+pb.bc.add('Dirichlet',right,'Temp',100, time_func=timeEvolution)
+# Problem.bc.add('Dirichlet',top,'Temp',100, time_func=timeEvolution)
 
 
 # Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
 # Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
 # bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
 
-fd.problem.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
+pb.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 
 cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
         (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),

@@ -196,7 +196,8 @@ class WeakFormSum(WeakForm):
         for wf in self.__list_weakform: 
             Diff_wf = wf.get_DifferentialOperator(mesh, localFrame)
             mat_lumping = wf.assembly_options.get('mat_lumping', False) #True of False
-            self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op
+            if Diff_wf != 0:
+                self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op
             Diff += Diff_wf            
         return Diff
     

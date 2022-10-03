@@ -887,7 +887,7 @@ class Assembly(AssemblyBase):
 
 
 
-    # def GetStressTensor(self, U, constitutiveLaw, Type="Nodal"):
+    # def GetStressTensor(self, U, constitutiveLaw, Type="Node"):
     #     """
     #     Not a static method.
     #     Return the Stress Tensor of an assembly using the Voigt notation as a python list. 
@@ -897,7 +897,7 @@ class Assembly(AssemblyBase):
     #     For non linear ones, use the GetStress method of the ConstitutiveLaw object.
 
     #     Options : 
-    #     - Type :"Nodal", "Element" or "GaussPoint" integration (default : "Nodal")
+    #     - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")
 
     #     See get_node_results, get_element_results and get_gp_results.
 
@@ -907,7 +907,7 @@ class Assembly(AssemblyBase):
     #     if isinstance(constitutiveLaw, str):
     #         constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
 
-    #     if Type == "Nodal":
+    #     if Type == "Node":
     #         return StressTensorList([self.get_node_results(e, U) if e!=0 else np.zeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
         
     #     elif Type == "Element":
@@ -917,7 +917,7 @@ class Assembly(AssemblyBase):
     #         return StressTensorList([self.get_gp_results(e, U) if e!=0 else np.zeros(self.n_gauss_points) for e in constitutiveLaw.GetStressOperator()])
         
     #     else:
-    #         assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
+    #         assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
         
     
     def set_disp(self, disp):
@@ -934,7 +934,7 @@ class Assembly(AssemblyBase):
             else: 
                 self.current.mesh.nodes = new_crd
                 
-    def get_strain(self, U, Type="Nodal", nlgeom = None):
+    def get_strain(self, U, Type="Node", nlgeom = None):
         """
         Not a static method.
         Return the Green Lagrange Strain Tensor of an assembly using the Voigt notation as a python list. 
@@ -942,7 +942,7 @@ class Assembly(AssemblyBase):
         see get_node_results and get_element_results
 
         Options : 
-        - Type :"Nodal", "Element" or "GaussPoint" integration (default : "Nodal")
+        - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")
         - nlgeom = True or False if the strain tensor account for geometrical non-linearities
         if nlgeom = False, the Strain Tensor is assumed linear (default : True)
 
@@ -967,7 +967,7 @@ class Assembly(AssemblyBase):
         
         return StrainTensorList(Strain)
     
-    def get_grad_disp(self, U, Type = "Nodal"):
+    def get_grad_disp(self, U, Type = "Node"):
         """
         Return the Gradient Tensor of a vector (generally displacement given by Problem.get_DofSolution('all')
         as a list of list of numpy array
@@ -975,11 +975,11 @@ class Assembly(AssemblyBase):
         see get_node_resultss and get_element_resultss
 
         Options : 
-        - Type :"Nodal", "Element" or "GaussPoint" integration (default : "Nodal")
+        - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")
         """        
         grad_operator = self.space.op_grad_u()        
 
-        if Type == "Nodal":
+        if Type == "Node":
             return [ [self.get_node_results(op, U) if op != 0 else np.zeros(self.mesh.n_nodes) for op in line_op] for line_op in grad_operator]
             
         elif Type == "Element":
@@ -988,7 +988,7 @@ class Assembly(AssemblyBase):
         elif Type == "GaussPoint":
             return [ [self.get_gp_results(op, U) if op!=0 else np.zeros(self.n_gauss_points) for op in line_op] for line_op in grad_operator]        
         else:
-            assert 0, "Wrong argument for Type: use 'Nodal', 'Element', or 'GaussPoint'"
+            assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
 
     def get_ext_forces(self, U, nvar=None):
         """
@@ -996,13 +996,13 @@ class Assembly(AssemblyBase):
         Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U
         The resulting forces are the sum of :
         - External forces (associated to Neumann boundary conditions)
-        - Nodal reaction (associated to Dirichelet boundary conditions)
+        - Node reaction (associated to Dirichelet boundary conditions)
         - Inertia forces 
         
         Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.         
                     
         example : 
-        S = SpecificAssembly.GetNodalForces(Problem.Problem.GetDoFSolution('all'))
+        S = SpecificAssembly.get_ext_forces(Problem.Problem.GetDoFSolution('all'))
 
         an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !
         """

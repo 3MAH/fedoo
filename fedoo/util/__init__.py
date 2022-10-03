@@ -6,3 +6,4 @@
 
     
 from .voigt_tensors import StrainTensorList, StressTensorList
+from .dof_coupling import RigidTie

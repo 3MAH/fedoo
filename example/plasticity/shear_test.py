@@ -26,7 +26,7 @@ uimp = 1
 filename = 'sheartest_ref'
 res_dir = 'results/'
 
-fd.mesh.box_mesh(Nx=11, Ny=11, Nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+fd.mesh.box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
 mesh = fd.Mesh[meshname]
 
 crd = mesh.nodes 
@@ -67,11 +67,6 @@ fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # WeakForm.InternalForceUL("ConstitutiveLaw")
 
 
-
-#note set for boundary conditions
-nodes_bottom = mesh.find_nodes('Y',0)
-nodes_top = mesh.find_nodes('Y',1)
-
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
@@ -94,7 +89,11 @@ results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII
 
 
 ################### step 1 ################################
-tmax = 1
+#node sets for boundary conditions
+nodes_bottom = mesh.find_nodes('Y',0)
+nodes_top = mesh.find_nodes('Y',1)
+
+
 # pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
 # pb.bc.add('Dirichlet','DispY', 0,nodes_top)
 # pb.bc.add('Dirichlet','DispZ', 0,nodes_top)
@@ -128,6 +127,12 @@ print(time()-start)
 # Simple plot with default options
 # ------------------------------------
 results.plot('Cauchy_vm', component = 0, show = True)
+
+# ------------------------------------
+# Simple plot with default options and save to png
+# ------------------------------------
+# pl = results.plot('Cauchy_vm', component = 0, show = False)
+# pl.show(screenshot = "test.png")
 
 # ------------------------------------
 # Write movie with default options

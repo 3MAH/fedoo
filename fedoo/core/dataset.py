@@ -99,7 +99,7 @@ class DataSet():
             meshplot = self.meshplot_gp
             crd = self.mesh_gp.nodes      
                 
-            scalars = self.mesh_gp.convert_data(scalars, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(scalars.T)//self.mesh.n_elements).T
+            scalars = self.mesh_gp.convert_data(scalars, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(scalars.T)//self.mesh.n_elements)
             if 'Disp' in self.node_data:
                 ndim = self.mesh.ndim
                 U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T

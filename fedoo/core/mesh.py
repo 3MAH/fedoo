@@ -167,37 +167,59 @@ class Mesh(MeshBase):
         self.element_sets[name] = element_indices
         
            
-    def add_nodes(self, coordinates = None, nb_added = None):
+    def add_nodes(self, *args): #coordinates = None, nb_added = None):
         """
         Add some nodes to the node list.
-        
         The new nodes are not liked to any element.
-
+        
+        The method can be used in several ways: 
+            
+        * mesh.add_nodes()
+            Add one node at the center of the bounding box
+        * mesh.add_nodes(nb_nodes)
+            Add several nodes at the center of the bounding box
+        * mesh.add_nodes(nodes)
+            Add some nodes with the specified coordinates
+        * mesh.add_nodes(nodes, nb_nodes)
+            Add several nodes at the same coordinates given in nodes
+                        
         Parameters
         ----------
-        coordinates : np.ndarray
-            The coordinates of the new nodes.             
-        nb_added : int
+        nb_nodes: int
             Number of new nodes
-            By default, the value is deduced from she shape of coordinates
-            nb_added is used only for creating several nodes with the same coordinates
+            If the nodes coorinates ("nodes") is not specified, new nodes are created at 
+            the center of the bounding box.            
+        nodes: np.ndarray 
+            The coordinates of the new nodes. If nb_nodes is not specified, the number of nodes is deduced from
+            the number of line. 
+            If only one node position is given (ie len(nodes) == ndim) and nb_nodes is given, 
+            several nodes are created at the same position.
         """
-        n_nodes_old = self.n_nodes
-        if nb_added is None and coordinates is None: nb_added = 1
-        if nb_added is None:
-            self.nodes = np.vstack((self.nodes, coordinates))
-        else:
-            if coordinates is None:
-                self.nodes = np.vstack((self.nodes, 
-                    np.zeros([nb_added,self.nodes.shape[1]])))
-            else:
-                self.nodes = np.vstack((self.nodes, 
-                    np.tile(coordinates,(nb_added,1))))
+        
+        n_nodes_old = self.n_nodes        
+
+        if len(args) == 0:
+            args = [1]
+            
+        if len(args) == 1:
+            if np.isscalar(args[0]):
+                # nb_nodes = args[0]
+                self.nodes = np.vstack((self.nodes,
+                    np.tile(self.bounding_box.center,(args[0],1))))
+            else: 
+                # nodes = args[0]
+                self.nodes = np.vstack((self.nodes, args[0]))
+                
+        elif len(args) == 2:
+            #args = [nodes, nb_nodes]
+            assert len(args[0].shape) == 1 or args[0].shape[1] == 1, "Only one node coordinates should be specified in nodes if nb_nodes is given."
+            self.nodes = np.vstack((self.nodes, 
+                np.tile(args[0],(args[1],1))))
 
         return np.arange(n_nodes_old,self.n_nodes)
 
     def add_internal_nodes(self, nb_added):
-        new_nodes = self.add_nodes(nb_added=self.n_elements*nb_added)
+        new_nodes = self.add_nodes(self.n_elements*nb_added)
         self.elements = np.c_[self.elements, new_nodes]
         self.reset_interpolation()
         

@@ -107,15 +107,15 @@ The boundaries are automatically stored as set of nodes ('left', 'right', 'top',
 
 .. code-block:: python
 
-    nodes_left = Mesh.GetAll()['Domain'].GetSetOfNodes("left")
-    nodes_right = Mesh.GetAll()['Domain'].GetSetOfNodes("right")
+    nodes_left = fd.Mesh['Domain'].GetSetOfNodes("left")
+    nodes_right = fd.Mesh['Domain'].GetSetOfNodes("right")
 
 An easy way to get some set of nodes at a given position is to use the numpy function where altogether to a condition on the node coordiantes.
 For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
 
 .. code-block:: python
     
-    crd = Mesh.GetAll()['Domain'].GetNodeCoordinates() #Get the coordinates of nodes
+    crd = Mesh['Domain'].nodes #Get the coordinates of nodes
     X = crd[:,0] #Get the x position of nodes
     x_min = X.min() 
     x_max = X.max()

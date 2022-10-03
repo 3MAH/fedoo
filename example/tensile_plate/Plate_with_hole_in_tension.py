@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
-method_output = 1
+method_output = 2
 # method_output = 1 to automatically save the results in a vtk file
 # method_output = 2 to write the vtk file at the end 
 # method_output = 3 to save the results (disp, stress, strain) in a dict
@@ -44,8 +44,8 @@ pb.apply_boundary_conditions()
 #--------------- Solve --------------------------------------------------------
 if method_output == 1:
     #Method 1: use the automatic result output    
-    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['disp', 'strain', 'stress', 'stress_vm'], output_type='Node', file_format ='vtk')    
-    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['stress', 'strain'], output_type='Element', file_format ='vtk')    
+    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['Disp', 'Strain', 'Stress', 'Stress_vm'], output_type='Node', file_format ='vtk')    
+    pb.add_output('plate_with_hole_in_tension', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
 
 
 pb.set_solver('CG')
@@ -59,43 +59,43 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 if method_output == 1:
     pb.save_results()
     
-elif method_output == 2:
-    #Method 2: write the vtk output file by hand
-    #Get the nodal values of stress tensor, strain tensor, stress principal component ('Stress_PC') and stress principal directions ('Stress_PDir1', 'Stress_PDir2')
-    res = Problem.get_results("Assembling", ['Stress','Strain', 'Stress_PC', 'Stress_PDir1', 'Stress_PDir2'], 'Node')    
-    TensorStrain = res['Strain']
-    TensorStress = res['Stress']
-    # Get the principal directions (vectors on nodes)
-    PrincipalStress = res['Stress_Principal']
-    PrincipalDirection1 = res['Stress_PrincipalDir1']
-    PrincipalDirection2 = res['Stress_PrincipalDir2']    
+# elif method_output == 2:
+#     #Method 2: write the vtk output file by hand
+#     #Get the nodal values of stress tensor, strain tensor, stress principal component ('Stress_PC') and stress principal directions ('Stress_PDir1', 'Stress_PDir2')
+#     res = pb.get_results("Assembling", ['Stress','Strain', 'Stress_pc', 'Stress_pdir1', 'Stress_pdir2'], 'Node')    
+#     TensorStrain = res['Strain']
+#     TensorStress = res['Stress']
+#     # Get the principal directions (vectors on nodes)
+#     PrincipalStress = res['Stress_Principal']
+#     PrincipalDirection1 = res['Stress_PrincipalDir1']
+#     PrincipalDirection2 = res['Stress_PrincipalDir2']    
     
-    #Get the stress tensor (element values)
-    res = Problem.get_results("Assembling", ['Stress','Strain'], 'Element')
-    TensorStrainEl = res['Strain']
-    TensorStressEl = res['Stress']
+#     #Get the stress tensor (element values)
+#     res = pb.get_results("Assembling", ['Stress','Strain'], 'Element')
+#     TensorStrainEl = res['Strain']
+#     TensorStressEl = res['Stress']
         
-    #Get the displacement vector on nodes for export to vtk
-    U = Problem.get_disp().T #transpose for comatibility to vtk export
+#     #Get the displacement vector on nodes for export to vtk
+#     U = pb.get_disp().T #transpose for comatibility to vtk export
     
-    #Write the vtk file                            
-    OUT = Util.ExportData(meshname)
+#     #Write the vtk file                            
+#     OUT = fd.util.ExportData(meshname)
     
-    OUT.addNodeData(U,'Displacement')
-    OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
-    OUT.addElmData(TensorStressEl.vtkFormat(),'Stress')
-    OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
-    OUT.addElmData(TensorStrainEl.vtkFormat(),'Strain')
-    OUT.addNodeData(TensorStress.vonMises(),'VMStress')
-    OUT.addElmData(TensorStressEl.vonMises(),'VMStress')
-    OUT.addNodeData(PrincipalStress,'PrincipalStress')
-    OUT.addNodeData(PrincipalDirection1,'DirPrincipal1')
-    OUT.addNodeData(PrincipalDirection2,'DirPrincipal2')
+#     OUT.addNodeData(U,'Displacement')
+#     OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
+#     OUT.addElmData(TensorStressEl.vtkFormat(),'Stress')
+#     OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
+#     OUT.addElmData(TensorStrainEl.vtkFormat(),'Strain')
+#     OUT.addNodeData(TensorStress.vonMises(),'VMStress')
+#     OUT.addElmData(TensorStressEl.vonMises(),'VMStress')
+#     OUT.addNodeData(PrincipalStress,'PrincipalStress')
+#     OUT.addNodeData(PrincipalDirection1,'DirPrincipal1')
+#     OUT.addNodeData(PrincipalDirection2,'DirPrincipal2')
     
-    OUT.toVTK("plate_with_hole_in_tension.vtk")
-    print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
+#     OUT.toVTK("plate_with_hole_in_tension.vtk")
+#     print('Elastic Energy: ' + str(pb.GetElasticEnergy()))
     
-    print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
+#     print('Result file "plate_with_hole_in_tension.vtk" written in the active directory')
 
 elif method_output == 3:
-    res = pb.get_results("Assembling", ['disp', 'Stress','Strain'], 'Node')
+    res = pb.get_results("Assembling", ['Disp', 'Stress','Strain'], 'Node')

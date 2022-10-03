@@ -1,36 +1,36 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
 
 t0 = time.time()
-ModelingSpace("3D")
-Mesh.import_file('gyroid.msh', meshname = "Domain")
-meshname = "Domain"
+fd.ModelingSpace("3D")
+fd.mesh.import_file('gyroid.msh', name = "Domain")
+name = "Domain"
 
-type_el = Mesh.get_all()[meshname].elm_type
+mesh = fd.Mesh[name]
+type_el = fd.Mesh[name].elm_type
 
 #Definition of the set of nodes for boundary conditions
-mesh = Mesh.get_all()[meshname]
+
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
 center = [np.linalg.norm(crd,axis=1).argmin()]
 
-crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2
-StrainNodes = mesh.add_nodes(crd_center,2) #add virtual nodes for macro strain
+StrainNodes = mesh.add_nodes(2) #add virtual nodes for macro strain
 
 #Material definition
-material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
+fd.weakform.InternalForce("ElasticLaw")
 
 #Assembly
-Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
+fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling") 
 
 #Type of problem 
-Problem.Static("Assembling")
+pb = fd.problem.Static("Assembling")
 
 
 #Boundary conditions
@@ -45,32 +45,39 @@ E = [0,0,0,0,0,1] #[EXX, EYY, EZZ, EXY, EXZ, EYZ]
 #Util.DefinePeriodicBoundaryCondition(meshname,
 #        [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
 #        ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D')
-Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(meshname,
+
+# list_strain_nodes = [StrainNodes[0], StrainNodes[0], StrainNodes[0],
+#                      StrainNodes[1], StrainNodes[1], StrainNodes[1]]
+# list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
+
+# bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+# pb.bc.add(bc_periodic)
+fd.homogen.DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', tol=1e-4, nNeighbours = 3, powInter = 1.0)
 
-Problem.bc.add('Dirichlet','DispX', 0, center)
-Problem.bc.add('Dirichlet','DispY', 0, center)
-Problem.bc.add('Dirichlet','DispZ', 0, center)
+pb.bc.add('Dirichlet','DispX', 0, center)
+pb.bc.add('Dirichlet','DispY', 0, center)
+pb.bc.add('Dirichlet','DispZ', 0, center)
 
-Problem.bc.add('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
-Problem.bc.add('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
-Problem.bc.add('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsZZ
-Problem.bc.add('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
-Problem.bc.add('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
-Problem.bc.add('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
+pb.bc.add('Dirichlet','DispX', E[0], [StrainNodes[0]]) #EpsXX
+pb.bc.add('Dirichlet','DispY', E[1], [StrainNodes[0]]) #EpsYY
+pb.bc.add('Dirichlet','DispZ', E[2], [StrainNodes[0]]) #EpsZZ
+pb.bc.add('Dirichlet','DispX', E[3], [StrainNodes[1]]) #EpsXY
+pb.bc.add('Dirichlet','DispY', E[4], [StrainNodes[1]]) #EpsXZ
+pb.bc.add('Dirichlet','DispZ', E[5], [StrainNodes[1]]) #EpsYZ
 
-Problem.apply_boundary_conditions()
+pb.apply_boundary_conditions()
 
 #lv--------------- Soe --------------------------------------------------------
-Problem.set_solver('CG')
+pb.set_solver('CG')
 print('Solving...')
 print(time.time()-t0)
-Problem.solve()
+pb.solve()
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
-TensorStrain = ConstitutiveLaw.get_all()['ElasticLaw'].GetStrain()
-TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
+TensorStrain = fd.ConstitutiveLaw['ElasticLaw'].GetStrain()
+TensorStress = fd.ConstitutiveLaw['ElasticLaw'].GetStress()
 
 #------------------------------------------------------------------------------
 #Optional: Compute and write data in a vtk file (for visualization with paraview for instance)
@@ -78,26 +85,26 @@ TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 output_VTK = 1
 if output_VTK == 1:
     #Get the stress tensor (nodal values converted from PG values)
-    TensorStrainNd = Assembly.convert_data(TensorStrain, meshname, convertTo = "Node")
-    TensorStressNd = Assembly.convert_data(TensorStress, meshname, convertTo = "Node")
+    TensorStrainNd = fd.Assembly.convert_data(TensorStrain, meshname, convertTo = "Node")
+    TensorStressNd = fd.Assembly.convert_data(TensorStress, meshname, convertTo = "Node")
     
     #Get the stress tensor (element values)
-    TensorStrainEl = Assembly.convert_data(TensorStrain, meshname, convertTo = "Element")       
-    TensorStressEl = Assembly.convert_data(TensorStress, meshname, convertTo = "Element")
+    TensorStrainEl = fd.Assembly.convert_data(TensorStrain, meshname, convertTo = "Element")       
+    TensorStressEl = fd.Assembly.convert_data(TensorStress, meshname, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Nodal")       
+    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(pb.get_disp(), "Nodal")       
     # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
     
     # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Element")       
+    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(pb.get_disp(), "Element")       
     # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
     
     # Get the principal directions (vectors on nodes)
     PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
     
     #Get the displacement vector on nodes for export to vtk
-    U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
+    U = np.reshape(pb.GetDoFSolution('all'),(3,-1)).T
     N = Mesh.get_all()[meshname].n_nodes
     # U = np.c_[U,np.zeros(N)]
     

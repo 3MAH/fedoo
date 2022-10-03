@@ -13,7 +13,7 @@ The ConstitutiveLaw library contains the following classes:
 Solid mechanical constitutive laws
 ======================================
 
-These laws should be associated with :mod:`WeakForm.InternalForce`
+These laws should be associated with :py:class:`weakform.InternalForce`
 
 .. autosummary::   
    :toctree: generated/
@@ -30,7 +30,7 @@ These laws should be associated with :mod:`WeakForm.InternalForce`
 Interface mechanical constitutive laws
 ======================================
 
-These laws should be associated with :mod:`WeakForm.InterfaceForce`
+These laws should be associated with :py:class:`weakform.InterfaceForce`
 
 .. autosummary::   
    :toctree: generated/
@@ -42,7 +42,7 @@ These laws should be associated with :mod:`WeakForm.InterfaceForce`
 Shell constitutive laws
 ======================================
 
-These laws should be associated with :mod:`WeakForm.Plate`
+These laws should be associated with :py:class:`weakform.Plate`
 
 .. autosummary::   
    :toctree: generated/
@@ -50,6 +50,17 @@ These laws should be associated with :mod:`WeakForm.Plate`
 
    ShellLaminate
    ShellHomogeneous 
+   
+Thermal constitutive law
+======================================
+
+These laws should be associated with :py:class:`fedoo.weakform.HeatEquation` or  :py:class:`weakform.SteadyHeatEquation`
+
+.. autosummary::   
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   ThermalProperties
 
 """
 

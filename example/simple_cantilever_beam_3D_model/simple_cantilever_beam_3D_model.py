@@ -1,14 +1,14 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
 
-ModelingSpace("3D")
+fd.ModelingSpace("3D")
 
 #Units: N, mm, MPa
-#Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
-Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
+#fd.mesh.box_mesh(nx=101, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
+fd.mesh.box_mesh(nx=101, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
 
 meshname = "Domain"
 #mesh = Mesh.get_all()[meshname]
@@ -18,43 +18,43 @@ meshname = "Domain"
 #mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmax)[0]), "right")
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
+fd.weakform.InternalForce("ElasticLaw")
 
 #Assembly (print the time required for assembling)
-Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
+fd.Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
 
 #Type of problem 
-Problem.Static("Assembling")
+pb = fd.problem.Static("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.get_all()[meshname].node_sets["left"]
-nodes_right = Mesh.get_all()[meshname].node_sets["right"]
-nodes_top = Mesh.get_all()[meshname].node_sets["top"]
-nodes_bottom = Mesh.get_all()[meshname].node_sets["bottom"]
+nodes_left = fd.Mesh[meshname].node_sets["left"]
+nodes_right = fd.Mesh[meshname].node_sets["right"]
+nodes_top = fd.Mesh[meshname].node_sets["top"]
+nodes_bottom = fd.Mesh[meshname].node_sets["bottom"]
 
-Problem.bc.add('Dirichlet','DispX',0,nodes_left)
-Problem.bc.add('Dirichlet','DispY', 0,nodes_left)
-Problem.bc.add('Dirichlet','DispZ', 0,nodes_left)
+pb.bc.add('Dirichlet',nodes_left, 'Disp', 0)
+pb.bc.add('Dirichlet',nodes_right, 'DispY', -10)
 
-Problem.bc.add('Dirichlet','DispY', -10, nodes_right)
-
-Problem.apply_boundary_conditions()
+pb.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-# Problem.set_solver('cg') #uncomment for conjugate gradient solver
+# pb.set_solver('cg') #uncomment for conjugate gradient solver
 print('Solving...')
-Problem.solve() 
+pb.solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
+
+res = pb.get_results('Assembling', ['Stress']).plot('Stress')
+
 
 #--------------- Post-Treatment -----------------------------------------------
 #Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
+U = np.reshape(pb.GetDoFSolution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "Nodal")       
-TensorStress = Problem.get_results('Assembling', ['stress'], 'Node')['Stress']
+TensorStrain = fd.Assembly['Assembling'].get_strain(pb.GetDoFSolution(), "Node")       
+TensorStress = pb.get_results('Assembling', ['Stress'], 'Node')['Stress']
 # ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 
 #PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
@@ -71,18 +71,18 @@ TensorStress = Problem.get_results('Assembling', ['stress'], 'Node')['Stress']
 #TensorStrainEl = np.vstack([TensorStrainEl[i] for i in [0,1,2,5,3,4]]).T 
                                                     
 
-#Write the vtk file                            
-OUT = Util.ExportData(meshname)
+# #Write the vtk file                            
+# OUT = Util.ExportData(meshname)
 
-OUT.addNodeData(U.astype(float),'Displacement')
-OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
-OUT.addNodeData(TensorStress.vonMises(),'VMStress')
-OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
-#OUT.addNodeData(PrincipalStress, 'PrincipalStress')
-#OUT.addNodeData(PrincipalDirection[0], '1stPrincipalDirection')
+# OUT.addNodeData(U.astype(float),'Displacement')
+# OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
+# OUT.addNodeData(TensorStress.vonMises(),'VMStress')
+# OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
+# #OUT.addNodeData(PrincipalStress, 'PrincipalStress')
+# #OUT.addNodeData(PrincipalDirection[0], '1stPrincipalDirection')
 
-OUT.toVTK("simple_cantilever_3D_model.vtk")
-print('Elastic Energy: ' + str(Problem.GetElasticEnergy()))
+# OUT.toVTK("simple_cantilever_3D_model.vtk")
+# print('Elastic Energy: ' + str(pb.GetElasticEnergy()))
 
-print('Result file "simple_cantilever_3D_model.vtk" written in the active directory')
+# print('Result file "simple_cantilever_3D_model.vtk" written in the active directory')
 

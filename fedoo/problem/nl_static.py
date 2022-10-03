@@ -106,7 +106,7 @@ def _GenerateClass_NonLinearStatic(libBase):
         #     self.__Assembly.NewTimeIncrement()     
             
             
-        def set_start(self,dt, save_results):
+        def set_start(self,dt, save_results=False):
             #dt not used for static problem
             if self.__DU is not 0: 
                 self.__Utot += self.__DU
