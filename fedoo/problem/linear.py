@@ -5,14 +5,14 @@ from fedoo.pgd.ProblemPGD import ProblemPGD
 # from fedoo.problem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
-def Static(Assembling, name = "MainProblem"):
+def Linear(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                 
     if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
     
-    class __Static(libBase):
+    class __Linear(libBase):
                 
         def __init__(self, assembling, name):   
             assembling.initialize(self,0)                         
@@ -28,14 +28,14 @@ def Static(Assembling, name = "MainProblem"):
             returns : sum (0.5 * U.transposed * K * U)
             """
     
-            return sum( 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all') )
+            return sum( 0.5*self.get_dof_solution('all').transpose() * self.get_A() * self.get_dof_solution('all') )
 
         def GetNodalElasticEnergy(self):
             """
             returns : 0.5 * K * U . U
             """
     
-            E = 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all')
+            E = 0.5*self.get_dof_solution('all').transpose() * self.get_A() * self.get_dof_solution('all')
 
             E = np.reshape(E,(3,-1)).T
 
@@ -92,12 +92,12 @@ def Static(Assembling, name = "MainProblem"):
         
         def get_disp(self,name='all'):    
             if name == 'all': name = 'Disp'
-            return self.GetDoFSolution(name)
+            return self.get_dof_solution(name)
         
         def get_rot(self,name='all'):    
             if name == 'all': name = 'Rot'
-            return self.GetDoFSolution(name)
+            return self.get_dof_solution(name)
         
-    return __Static(Assembling, name)
+    return __Linear(Assembling, name)
 
 

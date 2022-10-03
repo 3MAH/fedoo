@@ -90,7 +90,7 @@ else:
     assemb = Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
     
     #Type of problem
-    pb = Problem.Static("Assembling")
+    pb = Problem.Linear("Assembling")
     
     #Shall add other conditions later on
     Problemname = None

@@ -45,10 +45,10 @@ thermal_law = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf_th = fd.weakform.HeatEquation("ThermalLaw", space = thermal_space)
 assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling_T")    
 
-pb_th = fd.problem.NonLinearStatic("Assembling_T")
+pb_th = fd.problem.NonLinear("Assembling_T")
 
 # Problem.set_solver('cg', precond = True)
-pb_th.SetNewtonRaphsonErrorCriterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
+pb_th.set_nr_criterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 # -------------------- Mechanical Problem ------------------------------
 mech_space = fd.ModelingSpace("3D")
@@ -81,9 +81,9 @@ fd.weakform.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
 
 fd.Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
-pb_m = fd.problem.NonLinearStatic("Assembling_M")
+pb_m = fd.problem.NonLinear("Assembling_M")
 # pb_m.set_solver('cg', precond = True)
-pb_m.SetNewtonRaphsonErrorCriterion("Displacement", tol = 1e-2, err0 = 1)
+pb_m.set_nr_criterion("Displacement", tol = 1e-2, err0 = 1)
 
 # -------------------- Set output ------------------------------
 #create a 'result' folder and set the desired ouputs

@@ -341,7 +341,7 @@ class AssemblyPGD(AssemblyFEM):
         - IntegrationType :"Node" or "Element" integration (default : "Node")
 
         example : 
-        S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
+        S = SpecificAssembly.GetStressTensor(Problem.Problem.get_dof_solution('all'), SpecificConstitutiveLaw)
         """
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw.get_all()[constitutivelaw]
@@ -366,7 +366,7 @@ class AssemblyPGD(AssemblyFEM):
         - IntegrationType :"Node" or "Element" integration (default : "Node")
 
         example : 
-        S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
+        S = SpecificAssembly.GetStressTensor(Problem.Problem.get_dof_solution('all'), SpecificConstitutiveLaw)
         """
 
         if IntegrationType == "Node":
@@ -392,7 +392,7 @@ class AssemblyPGD(AssemblyFEM):
         Return a list of separated array [Fx, Fy, Fz, Mx, My, Mz].   
                     
         example : 
-        S = SpecificAssembly.GetNodalForces(PGD.Problem.GetDoFSolution('all'))
+        S = SpecificAssembly.GetNodalForces(PGD.Problem.get_dof_solution('all'))
         """
 
         ExtForce = self.get_global_matrix() * U

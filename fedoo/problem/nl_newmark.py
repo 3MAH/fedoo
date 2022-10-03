@@ -1,16 +1,17 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
-from fedoo.problem.nl_static import _GenerateClass_NonLinearStatic
+from fedoo.pgd.ProblemPGD import ProblemPGD
+from fedoo.problem.non_linear import _GenerateClass_NonLinear
 
 #dynamical inheritance. The class is generated inside a function
 def _GenerateClass_NonLinearNewmark(libBase):
     
-    NLStaticClass = _GenerateClass_NonLinearStatic(libBase)
-    class __Newmark(NLStaticClass):    
+    NLClass = _GenerateClass_NonLinear(libBase)
+    class __Newmark(NLClass):    
             
         def __init__(self, StiffnessAssembly, MassAssembly , Beta, Gamma, DampingAssembly, name):
-            NLStaticClass.__init__(self, StiffnessAssembly, name)  
+            NLClass.__init__(self, StiffnessAssembly, name)  
             
             # if DampingAssembly is 0:
             #     A = StiffnessAssembly.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembly.get_global_matrix() #tangent matrix
@@ -23,7 +24,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__Gamma      = Gamma
 
             self.__MassAssembly  = MassAssembly
-            self.__StiffnessAssembly = StiffnessAssembly #alias of self._NLStaticClass__Assembly 
+            self.__StiffnessAssembly = StiffnessAssembly #alias of self._NLClass__Assembly 
             self.__DampingAssembly = DampingAssembly
             self.__RayleighDamping = None
 
@@ -51,8 +52,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
                     self.set_D(0)
                     return
             else: 
-                # DeltaDisp = self._NonLinearStatic__TotalDisplacementOld - self._NonLinearStatic__TotalDisplacementStart
-                DeltaDisp = self._NonLinearStatic__DU
+                # DeltaDisp = self._NonLinear__TotalDisplacementOld - self._NonLinear__TotalDisplacementStart
+                DeltaDisp = self._dU
             
             D = self.__MassAssembly.get_global_matrix() * ( \
                     (1/(self.__Beta*dt**2))*DeltaDisp +   \
@@ -91,16 +92,16 @@ def _GenerateClass_NonLinearNewmark(libBase):
                 self.__DampingAssembly.NewTimeIncrement()
             
             #update velocity and acceleration
-            NewAcceleration = (1/self.__Beta/(dt**2)) * (self._NonLinearStatic__DU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
+            NewAcceleration = (1/self.__Beta/(dt**2)) * (self._dU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
             self.__Velocity += dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
             self.__Acceleration = NewAcceleration
             
-            self._NonLinearStatic__Utot += self._NonLinearStatic__DU
-            self._NonLinearStatic__DU = 0
+            self._U += self._dU
+            self._dU = 0
 
             
         def to_start(self):     
-            self._NonLinearStatic__DU = 0
+            self._dU = 0
             
             self.__MassAssembly.to_start()
             self.__StiffnessAssembly.to_start()
@@ -132,8 +133,8 @@ def _GenerateClass_NonLinearNewmark(libBase):
             # self.set_D(self.__Assembly.get_global_vector())            
 
             B = 0
-            self._NonLinearStatic__Utot = 0
-            self._NonLinearStatic__DU = 0
+            self._U = 0
+            self._dU = 0
             self.__Velocity = 0
             self.__Acceleration = 0                    
             
@@ -253,7 +254,7 @@ def _GenerateClass_NonLinearNewmark(libBase):
             self.__RayleighDamping = [alpha, beta]
             self.__DampingAssembly = 'Rayleigh'    
 
-#         def SolveTimeIncrement(self,time, max_subiter = 5, ToleranceNR = 5e-3):            
+#         def solve_time_increment(self,time, max_subiter = 5, ToleranceNR = 5e-3):            
             
 #             self.NewTimeIncrement(time)
         

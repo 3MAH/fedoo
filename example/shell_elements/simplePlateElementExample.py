@@ -47,7 +47,7 @@ else:
     post_tt_assembly = 'plate_FI'
 
 
-Problem.Static("plate")
+Problem.Linear("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')

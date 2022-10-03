@@ -84,7 +84,7 @@ Assembly.create("ElasticLaw", meshname, type_el, name="Assembling")
 #------------------------------------------------------------------------------
 #Static problem based on the just defined assembly
 #------------------------------------------------------------------------------
-Problem.Static("Assembling")
+Problem.Linear("Assembling")
 
 #------------------------------------------------------------------------------
 #Boundary conditions
@@ -160,7 +160,7 @@ TensorStressEl = Assembly.get_all()['Assembling'].convert_data(TensorStress, con
 PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
 
 #Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
+U = np.reshape(Problem.get_dof_solution('all'),(3,-1)).T
 N = Mesh.get_all()[meshname].n_nodes
 # U = np.c_[U,np.zeros(N)]
 

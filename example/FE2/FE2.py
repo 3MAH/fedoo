@@ -41,8 +41,8 @@ WeakForm.InternalForce("FEM", name = "WeakForm")
 Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-Problem.NonLinearStatic("Assembly")
-# Problem.SetNewtonRaphsonErrorCriterion("Displacement")
+Problem.NonLinear("Assembly")
+# Problem.set_nr_criterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')

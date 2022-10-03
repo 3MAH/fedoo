@@ -47,7 +47,7 @@ else:
     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
     post_tt_assembly = 'plate_FI'
 
-pb = fd.problem.Static("plate")
+pb = fd.problem.Linear("plate")
 
 pb.bc.add('Dirichlet', nodes_left, 'DispX',0,)
 pb.bc.add('Dirichlet', nodes_left, 'DispY',0)

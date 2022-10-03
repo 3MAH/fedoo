@@ -171,7 +171,7 @@ if USE_SIMCOON:
             if self.use_elastic_lt: self.elastic_Lt = self.Lt.copy() ### debut only ####
     
         def update(self,assembly, pb, dtime):   
-            displacement = pb.GetDoFSolution()
+            displacement = pb.get_dof_solution()
 
             #tranpose for compatibility with simcoon
             if displacement is 0: 
@@ -187,7 +187,7 @@ if USE_SIMCOON:
             self.compute_Detot(dtime, F1)  
             
             
-            # test = np.array(assembly.get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T #linearized strain tensor
+            # test = np.array(assembly.get_strain(pb.get_dof_solution(), "GaussPoint", False)).T #linearized strain tensor
             # print( (self.etot+self.Detot - test).max() )
             
 

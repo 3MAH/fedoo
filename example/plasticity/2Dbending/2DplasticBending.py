@@ -62,13 +62,13 @@ else:
 
 Assembly.create("ConstitutiveLaw", meshname, 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
-Problem.NonLinearStatic("Assembling")
+Problem.NonLinear("Assembling")
 
 # Problem.set_solver('cg', precond = True)
 
-Problem.SetNewtonRaphsonErrorCriterion("Displacement")
-# Problem.SetNewtonRaphsonErrorCriterion("Work")
-# Problem.SetNewtonRaphsonErrorCriterion("Force")
+Problem.set_nr_criterion("Displacement")
+# Problem.set_nr_criterion("Work")
+# Problem.set_nr_criterion("Force")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')

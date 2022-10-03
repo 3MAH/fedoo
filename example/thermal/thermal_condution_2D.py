@@ -32,10 +32,10 @@ assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")
 left = mesh.find_nodes('X', 0)
 right = mesh.find_nodes('X', L)
 
-pb = fd.problem.NonLinearStatic("Assembling")
+pb = fd.problem.NonLinear("Assembling")
 
 # Problem.set_solver('cg', precond = True)
-pb.SetNewtonRaphsonErrorCriterion("Displacement", tol = 1e-2, max_subiter=5, err0 = 100)
+pb.set_nr_criterion("Displacement", tol = 1e-2, max_subiter=5, err0 = 100)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')

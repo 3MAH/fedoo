@@ -80,7 +80,7 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data_type = 'Node'
                 
             elif res == 'Fext':
-                data = assemb.get_ext_forces(pb.GetDoFSolution())
+                data = assemb.get_ext_forces(pb.get_dof_solution())
                 data_type = 'Node'
                                                 
             elif res in ['PKII', 'PK2', 'Kirchhoff', 'Cauchy','Strain', 'Stress']:
@@ -180,12 +180,12 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data_type = 'GaussPoint'
             
             elif res == 'Fint':
-                data = assemb.get_int_forces(pb.GetDoFSolution(), 'local')
+                data = assemb.get_int_forces(pb.get_dof_solution(), 'local')
                 # data = assemb.convert_data(data, None, output_type)
                 data_type = 'GaussPoint' #or 'Element' ? 
                 
             elif res == 'Fint_global':
-                data = assemb.get_int_forces(pb.GetDoFSolution(), 'global')
+                data = assemb.get_int_forces(pb.get_dof_solution(), 'global')
                 # data = assemb.convert_data(data, None, output_type)
                 data_type = 'GaussPoint' #or 'Element' ? 
             

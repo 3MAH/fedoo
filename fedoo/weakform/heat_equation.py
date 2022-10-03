@@ -46,15 +46,15 @@ class SteadyHeatEquation(WeakForm):
         # self.__nlgeom = nlgeom #geometric non linearities
         
     def initialize(self, assembly, pb, t0 = 0.):
-        if not(np.isscalar(pb.GetDoFSolution())):
+        if not(np.isscalar(pb.get_dof_solution())):
             self.__grad_temp = [0 if operator is 0 else 
-                                assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]
+                                assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
         else: 
             self.__grad_temp = [0 for operator in self.__op_grad_temp]
 
     def update(self, assembly, pb, dtime):
         self.__grad_temp = [0 if operator is 0 else 
-                    assembly.get_gp_results(operator, pb.GetDoFSolution()) for operator in self.__op_grad_temp]   
+                    assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]   
 
     def reset(self): #to update
         pass
@@ -131,7 +131,7 @@ class TemperatureTimeDerivative(WeakForm):
     #     return self.__InitialStressTensor 
         
     def initialize(self, assembly, pb, t0 = 0.):
-        if not(np.isscalar(pb.GetDoFSolution())):
+        if not(np.isscalar(pb.get_dof_solution())):
             self.__temp_start = assembly.convert_data(pb.get_temp(), convert_from='Node', convert_to='GaussPoint')
             self.__temp = self.__temp_start
         else: 

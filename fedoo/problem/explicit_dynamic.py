@@ -61,7 +61,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
                 self.__UpdateA()
                
         def get_X(self):
-            return self.GetDoFSolution('all')
+            return self.get_dof_solution('all')
         
         def get_Xdot(self):
             return self.__Xdot
@@ -115,8 +115,8 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             self.set_D(D)                        
 
         def update(self):       
-            self.__Xdot = (Problem.GetDoFSolution('all') - self.__Xold)/self.__TimeStep
-            self.__Xold[:] = Problem.GetDoFSolution('all')
+            self.__Xdot = (Problem.get_dof_solution('all') - self.__Xold)/self.__TimeStep
+            self.__Xold[:] = Problem.get_dof_solution('all')
             self.initialize()
             
         def GetElasticEnergy(self):
@@ -124,7 +124,7 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             returns : 0.5 * U.transposed * K * U
             """
     
-            return 0.5*np.dot(self.GetDoFSolution('all') , self.__StiffMatrix*self.GetDoFSolution('all') )
+            return 0.5*np.dot(self.get_dof_solution('all') , self.__StiffMatrix*self.get_dof_solution('all') )
     
         def GetKineticEnergy(self):
             """

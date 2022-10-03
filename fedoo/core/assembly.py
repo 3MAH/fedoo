@@ -902,7 +902,7 @@ class Assembly(AssemblyBase):
     #     See get_node_results, get_element_results and get_gp_results.
 
     #     example : 
-    #     S = SpecificAssembly.GetStressTensor(Problem.Problem.GetDoFSolution('all'), SpecificConstitutiveLaw)
+    #     S = SpecificAssembly.GetStressTensor(Problem.Problem.get_dof_solution('all'), SpecificConstitutiveLaw)
     #     """
     #     if isinstance(constitutiveLaw, str):
     #         constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
@@ -947,7 +947,7 @@ class Assembly(AssemblyBase):
         if nlgeom = False, the Strain Tensor is assumed linear (default : True)
 
         example : 
-        S = SpecificAssembly.get_strain(Problem.Problem.GetDoFSolution('all'))
+        S = SpecificAssembly.get_strain(Problem.Problem.get_dof_solution('all'))
         """        
 
         if nlgeom is None: 
@@ -1002,7 +1002,7 @@ class Assembly(AssemblyBase):
         Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.         
                     
         example : 
-        S = SpecificAssembly.get_ext_forces(Problem.Problem.GetDoFSolution('all'))
+        S = SpecificAssembly.get_ext_forces(Problem.Problem.get_dof_solution('all'))
 
         an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !
         """

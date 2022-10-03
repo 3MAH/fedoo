@@ -70,13 +70,13 @@ fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
-pb = fd.problem.NonLinearStatic("Assembling")
+pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
-pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
+pb.set_nr_criterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
 
-# Problem.SetNewtonRaphsonErrorCriterion("Displacement")
-# Problem.SetNewtonRaphsonErrorCriterion("Work")
-# Problem.SetNewtonRaphsonErrorCriterion("Force")
+# Problem.set_nr_criterion("Displacement")
+# Problem.set_nr_criterion("Work")
+# Problem.set_nr_criterion("Force")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
@@ -106,7 +106,7 @@ pb.bc.add('Dirichlet',nodes_top, 'DispX', uimp)
 
 pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
-E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

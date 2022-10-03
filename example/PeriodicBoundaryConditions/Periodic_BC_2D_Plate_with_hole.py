@@ -59,7 +59,7 @@ Assembly.create("ElasticLaw", meshname, type_el, name="Assembling")
 #------------------------------------------------------------------------------
 #Static problem based on the just defined assembly
 #------------------------------------------------------------------------------
-Problem.Static("Assembling")
+Problem.Linear("Assembling")
 
 #------------------------------------------------------------------------------
 #Boundary conditions
@@ -96,7 +96,7 @@ Problem.solve()
 # Post-treatment
 #------------------------------------------------------------------------------
 #plot the deformed mesh with the shear stress (component=5)
-Util.fieldPlot2d("Assembling", disp = Problem.GetDoFSolution(), dataname = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
+Util.fieldPlot2d("Assembling", disp = Problem.get_dof_solution(), dataname = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
 
 # print the macroscopic strain tensor and stress tensor
 print('Strain tensor ([Exx, Eyy, Exy]): ', [Problem.get_disp('DispX')[-2], Problem.get_disp('DispY')[-1], Problem.get_disp('DispY')[-2]])
@@ -129,7 +129,7 @@ print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 # PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
 
 # #Get the displacement vector on nodes for export to vtk
-# U = np.reshape(Problem.GetDoFSolution('all'),(2,-1)).T
+# U = np.reshape(Problem.get_dof_solution('all'),(2,-1)).T
 # N = Mesh.get_all()[meshname].n_nodes
 # U = np.c_[U,np.zeros(N)]
 

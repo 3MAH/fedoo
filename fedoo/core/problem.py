@@ -128,7 +128,7 @@ class Problem(ProblemBase):
     def get_X(self): #solution of the linear system
         return self.__X
     
-    def GetDoFSolution(self,name='all'): #solution of the problem (same as get_X for linear problems if name=='all')
+    def get_dof_solution(self,name='all'): #solution of the problem (same as get_X for linear problems if name=='all')
         return self._get_vect_component(self.__X, name) 
 
     def set_DoFSolution(self,name,value):
@@ -217,7 +217,7 @@ class Problem(ProblemBase):
 
     def SetInitialBCToCurrent(self):
         ### is used only for incremental problems
-        U = self.GetDoFSolution() 
+        U = self.get_dof_solution() 
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
         for e in self.bc.generate(self):        

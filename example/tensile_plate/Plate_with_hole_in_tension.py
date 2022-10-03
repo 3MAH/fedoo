@@ -24,7 +24,7 @@ fd.weakform.InternalForce("ElasticLaw")
 fd.Assembly.create("ElasticLaw", "Domain", type_el, name="Assembling") 
 
 #Type of problem 
-pb = fd.problem.Static("Assembling")
+pb = fd.problem.Linear("Assembling")
 
 #Boundary conditions
 

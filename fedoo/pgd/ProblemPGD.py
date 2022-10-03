@@ -170,7 +170,7 @@ class ProblemPGD(ProblemBase):
     def get_Xbc(self):
         return self.__Xbc 
     
-    def GetDoFSolution(self,name='all'):
+    def get_dof_solution(self,name='all'):
         assert isinstance(name,str), 'argument error'
         
         if name.lower() == 'all': 

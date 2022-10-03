@@ -36,7 +36,7 @@ class ShellBase(ConstitutiveLaw):
     def update(self,assembly, pb, dtime):
         # disp = pb.get_disp()
         # rot = pb.get_rot()
-        U = pb.GetDoFSolution()
+        U = pb.get_dof_solution()
         if U is 0: 
             self.__GeneralizedStrain = 0
             self.__GeneralizedStress = 0                        

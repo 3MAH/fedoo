@@ -48,7 +48,7 @@ else:
     Assembly.Sum("plate_RI", "plate_FI", name = "plate", assembly_output = 'plate')
 
 
-Problem.Static("plate")
+Problem.Linear("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')

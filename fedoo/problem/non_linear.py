@@ -4,8 +4,8 @@ from fedoo.core.problem import Problem
 from fedoo.pgd.ProblemPGD import ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
-def _GenerateClass_NonLinearStatic(libBase):
-    class __NonLinearStatic(libBase):
+def _GenerateClass_NonLinear(libBase):
+    class __NonLinear(libBase):
         
         def __init__(self, Assembling, name):                                  
             #A = Assembling.current.get_global_matrix() #tangent stiffness matrix
@@ -14,13 +14,24 @@ def _GenerateClass_NonLinearStatic(libBase):
             #D = Assembling.get_global_vector() #initial stress vector
             D = 0 #initial stress vector #will be initialized later
             self.print_info = 1 #print info of NR convergence during solve
-            self.__Utot = 0 #displacement at the end of the previous converged increment
-            self.__DU = 0 #displacement increment
-            self.__err0 = None #initial error for NR error estimation
-            self.__ErrCriterion = 'Displacement' #Error criterion type   
-            self.__default_err0 = None #reference value to normalize the NR error. If None, autocomputed
-            self.__tolerance_nr = 5e-3
-            self.__max_subiter = 5
+            self._U = 0 #displacement at the end of the previous converged increment
+            self._dU = 0 #displacement increment
+            
+            self._err0 = None #initial error for NR error estimation
+        
+            self.nr_parameters = {'err0': None, #default error for NR error estimation
+                                  'criterion': 'Displacement', #
+                                  'tol': 5e-3,
+                                  'max_subiter': 5
+                                  }
+            """
+            Parameters to set the newton raphson algorithm:
+                * 'err0': The reference error. Default is None (automatically computed)
+                * 'criterion': Type of convergence test in ['Displacement', 'Force', 'Work']. Default is 'Displacement'.
+                * 'tol': Error tolerance for convergence. Default is 5e-3.
+                * 'max_subiter': Number of nr iteration before returning a convergence error. Default is 5. 
+            """
+
 
             self.__Assembly = Assembling
             libBase.__init__(self,A,B,D,Assembling.mesh, name, Assembling.space)        
@@ -34,23 +45,23 @@ def _GenerateClass_NonLinearStatic(libBase):
         
         #Return the displacement components
         def get_disp(self,name='Disp'):    
-            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
-            return self._get_vect_component(self.__Utot + self.__DU, name)    
+            if self._dU is 0: return self._get_vect_component(self._U, name)
+            return self._get_vect_component(self._U + self._dU, name)    
         
         #Return the rotation components
         def get_rot(self,name='Rot'):    
-            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
-            return self._get_vect_component(self.__Utot + self.__DU, name)    
+            if self._dU is 0: return self._get_vect_component(self._U, name)
+            return self._get_vect_component(self._U + self._dU, name)    
 
         #Return the Temperature
         def get_temp(self):    
-            if self.__DU is 0: return self._get_vect_component(self.__Utot, 'Temp')
-            return self._get_vect_component(self.__Utot + self.__DU, 'Temp')    
+            if self._dU is 0: return self._get_vect_component(self._U, 'Temp')
+            return self._get_vect_component(self._U + self._dU, 'Temp')    
         
         #Return all the dof for every variable under a vector form
-        def GetDoFSolution(self,name='all'):
-            if self.__DU is 0: return self._get_vect_component(self.__Utot, name)
-            return self._get_vect_component(self.__Utot + self.__DU, name)        
+        def get_dof_solution(self,name='all'):
+            if self._dU is 0: return self._get_vect_component(self._U, name)
+            return self._get_vect_component(self._U + self._dU, name)        
         
         def get_ext_forces(self, name = 'all'):
             return self._get_vect_component(-self.get_D(), name)        
@@ -92,26 +103,26 @@ def _GenerateClass_NonLinearStatic(libBase):
             #update displacement increment
             # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
             # self.__TotalDisplacement += self.get_X()               
-            self.__DU += self.get_X()
+            self._dU += self.get_X()
         
         # def InitTimeIncrement(self,dt):
         #     self.__Assembly.InitTimeIncrement(self,dt)
-        #     self.__err0 = self.__default_err0 #initial error for NR error estimation
+        #     self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
             
         # def NewTimeIncrement(self,dt):
         #     #dt not used for static problem
         #     #dt = dt for the previous increment
-        #     self.__Utot += self.__DU
-        #     self.__DU = 0
+        #     self._U += self._dU
+        #     self._dU = 0
         #     self.__Assembly.NewTimeIncrement()     
             
             
         def set_start(self,dt, save_results=False):
             #dt not used for static problem
-            if self.__DU is not 0: 
-                self.__Utot += self.__DU
-                self.__DU = 0                
-                self.__err0 = self.__default_err0 #initial error for NR error estimation
+            if self._dU is not 0: 
+                self._U += self._dU
+                self._dU = 0                
+                self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
                 self.__Assembly.set_start(self,dt)    
                 
                 #Save results            
@@ -119,21 +130,21 @@ def _GenerateClass_NonLinearStatic(libBase):
                     self.save_results(self.__compteurOutput)                              
                     self.__compteurOutput += 1     
             else:
-                self.__err0 = self.__default_err0 #initial error for NR error estimation
+                self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
                 self.__Assembly.set_start(self,dt)    
             
             
         def to_start(self):   
-            self.__DU = 0                       
-            self.__err0 = self.__default_err0 #initial error for NR error estimation
+            self._dU = 0                       
+            self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
             self.__Assembly.to_start()
             
                               
         def NewtonRaphsonIncrement(self):                                      
             #solve and update total displacement. A and D should up to date
             self.solve()
-            self.__DU += self.get_X()
-            # print(self.__DU)
+            self._dU += self.get_X()
+            # print(self._dU)
         
         def update(self, dtime=None, compute = 'all', updateWeakForm = True):   
             """
@@ -158,10 +169,10 @@ def _GenerateClass_NonLinearStatic(libBase):
             # self.set_D(self.__Assembly.current.get_global_vector())            
 
             B = 0
-            self.__Utot = 0
-            self.__DU = 0
+            self._U = 0
+            self._dU = 0
                         
-            self.__err0 = self.__default_err0 #initial error for NR error estimation   
+            self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation   
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
             self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
@@ -186,32 +197,48 @@ def _GenerateClass_NonLinearStatic(libBase):
             (Update method).
             """
             DofFree = self._Problem__dof_slave
-            if self.__err0 is None: # if self.__err0 is None -> initialize the value of err0            
-                if self.__ErrCriterion == 'Displacement':                     
-                    self.__err0 = np.max(np.abs((self.__Utot + self.__DU)[DofFree])) #Displacement criterion
-                    return np.max(np.abs(self.get_X()))/self.__err0
+            if self._err0 is None: # if self._err0 is None -> initialize the value of err0            
+                if self.nr_parameters['criterion'] == 'Displacement':                     
+                    self._err0 = np.max(np.abs((self._U + self._dU)[DofFree])) #Displacement criterion
+                    return np.max(np.abs(self.get_X()))/self._err0
                 else:
-                    self.__err0 = 1
-                    self.__err0 = self.NewtonRaphsonError() 
+                    self._err0 = 1
+                    self._err0 = self.NewtonRaphsonError() 
                     return 1                
             else: 
-                if self.__ErrCriterion == 'Displacement': 
-                    return np.max(np.abs(self.get_X()))/self.__err0  #Displacement criterion
-                elif self.__ErrCriterion == 'Force': #Force criterion              
-                    if self.get_D() is 0: return np.max(np.abs(self.get_B()[DofFree]))/self.__err0 
-                    else: return np.max(np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self.__err0                     
-                else: #self.__ErrCriterion == 'Work': #work criterion
-                    if self.get_D() is 0: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]))/self.__err0 
-                    else: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self.__err0 
+                if self.nr_parameters['criterion'] == 'Displacement': 
+                    return np.max(np.abs(self.get_X()))/self._err0  #Displacement criterion
+                elif self.nr_parameters['criterion'] == 'Force': #Force criterion              
+                    if self.get_D() is 0: return np.max(np.abs(self.get_B()[DofFree]))/self._err0 
+                    else: return np.max(np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self._err0                     
+                else: #self.nr_parameters['criterion'] == 'Work': #work criterion
+                    if self.get_D() is 0: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]))/self._err0 
+                    else: return np.max(np.abs(self.get_X()[DofFree]) * np.abs(self.get_B()[DofFree]+self.get_D()[DofFree]))/self._err0 
        
-        def SetNewtonRaphsonErrorCriterion(self, ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
-            if ErrorCriterion in ['Displacement', 'Force','Work']:
-                self.__ErrCriterion = ErrorCriterion     
-                self.__tolerance_nr = tol
-                self.__max_subiter = max_subiter
-                self.__default_err0 = err0 #value used to normalize the nr error. 
-            else: 
-                raise NameError('ErrCriterion must be set to "Displacement", "Force" or "Work"')
+        def set_nr_criterion(self, criterion = 'Displacement', **kargs):
+            """
+            Define the convergence criterion of the newton raphson algorith. 
+            For a problem pb, the newton raphson parameters can also be directly set in the 
+            pb.nr_parameters dict.
+            
+            Parameter: 
+                * criterion: Type of convergence test. Str in ['Displacement', 'Force', 'Work'] (default = "Displacement"). 
+            
+            Optional parameters that can be set as kargs:
+                * err0: The reference error. Float or None. (if None, err0 is automatically computed)
+                * tol: Error tolerance for convergence. Float.
+                * max_subiter: Number of nr iteration before returning a convergence error. Int.
+            """
+            if criterion not in ["Displacement", "Force", "Work"]:
+                raise NameError('criterion must be set to "Displacement", "Force" or "Work"')
+            self.nr_parameters['criterion'] = criterion
+            
+            for key in kargs:
+                if key not in ['err0', 'tol', 'max_subiter']:
+                    raise NameError("Newton Raphson parameters should be in ['err0', 'tol', 'max_subiter']")                
+
+                self.nr_parameters[key] = kargs[key]
+               
         
         # def GetElasticEnergy(self): #only work for classical FEM
         #     """
@@ -231,9 +258,9 @@ def _GenerateClass_NonLinearStatic(libBase):
 
         #     return E                   
         
-        def SolveTimeIncrement(self, timeStart, dt, max_subiter = None, ToleranceNR = None):                                
-            if max_subiter is None: max_subiter = self.__max_subiter
-            if ToleranceNR is None: ToleranceNR = self.__tolerance_nr 
+        def solve_time_increment(self, timeStart, dt, max_subiter = None, ToleranceNR = None):                                
+            if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
+            if ToleranceNR is None: ToleranceNR = self.nr_parameters['tol'] 
            
             self.elastic_prediction(timeStart, dt)
             for subiter in range(max_subiter): #newton-raphson iterations
@@ -266,8 +293,8 @@ def _GenerateClass_NonLinearStatic(libBase):
         def nlsolve(self, **kargs):              
             #parameters
             self.print_info = kargs.get('print_info',self.print_info)
-            max_subiter = kargs.get('max_subiter',self.__max_subiter)
-            ToleranceNR = kargs.get('ToleranceNR',self.__tolerance_nr)
+            max_subiter = kargs.get('max_subiter',self.nr_parameters['max_subiter'])
+            ToleranceNR = kargs.get('ToleranceNR',self.nr_parameters['tol'])
             self.t0 = kargs.get('t0',self.t0) #time at the start of the time step
             self.tmax = kargs.get('tmax',self.tmax) #time at the end of the time step
             dt = kargs.get('dt',0.1) #initial time step
@@ -288,7 +315,7 @@ def _GenerateClass_NonLinearStatic(libBase):
                         
             time = self.t0  #time at the begining of the iteration                          
             
-            if self.__Utot is 0:#Initialize only if 1st step
+            if self._U is 0:#Initialize only if 1st step
                 self.initialize(self.t0)
                             
             while time < self.tmax - self.err_num:                         
@@ -309,8 +336,8 @@ def _GenerateClass_NonLinearStatic(libBase):
                                
                 self.set_start(dt, save_results)                  
                     
-                #self.SolveTimeIncrement = Newton Raphson loop
-                convergence, nbNRiter, normRes = self.SolveTimeIncrement(time, current_dt, max_subiter, ToleranceNR)
+                #self.solve_time_increment = Newton Raphson loop
+                convergence, nbNRiter, normRes = self.solve_time_increment(time, current_dt, max_subiter, ToleranceNR)
                 
                 if (convergence) :
                     time = time + current_dt #update time value 
@@ -340,15 +367,15 @@ def _GenerateClass_NonLinearStatic(libBase):
             
             self.set_start(dt, True)
                                                                             
-    return __NonLinearStatic
+    return __NonLinear
 
-def NonLinearStatic(Assembling, name = "MainProblem"):
+def NonLinear(Assembling, name = "MainProblem"):
     if isinstance(Assembling,str):
         Assembling = Assembly.get_all()[Assembling]
                
     if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem            
 
-    __NonLinearStatic = _GenerateClass_NonLinearStatic(libBase) 
+    __NonLinear = _GenerateClass_NonLinear(libBase) 
 
-    return __NonLinearStatic(Assembling, name)
+    return __NonLinear(Assembling, name)

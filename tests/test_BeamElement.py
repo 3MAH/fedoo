@@ -47,7 +47,7 @@ for computeShear in range(3):
         fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
         fd.Assembly.create("WFbeam", "beam", "beamFCQ", name="beam", MeshChange = True)    
     
-    pb = fd.problem.Static("beam")
+    pb = fd.problem.Linear("beam")
     
     pb.bc.add('Dirichlet',nodes_left,['Disp', 'Rot'],0)    
     pb.bc.add('Neumann',nodes_right,'DispY',F)
@@ -56,7 +56,7 @@ for computeShear in range(3):
     pb.solve()
     
     #Post treatment               
-    results = fd.Assembly['beam'].get_ext_forces(pb.GetDoFSolution('all'))
+    results = fd.Assembly['beam'].get_ext_forces(pb.get_dof_solution('all'))
     
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
@@ -72,11 +72,11 @@ for computeShear in range(3):
     assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = fd.Assembly['beam'].get_int_forces(pb.GetDoFSolution('all'), 'local')
+    results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
     IntMoment = results[:,3:]
     IntForce = results[:,0:3]    
     
-    U = np.reshape(pb.GetDoFSolution('all'),(6,-1)).T
+    U = np.reshape(pb.get_dof_solution('all'),(6,-1)).T
     Theta = U[:nodes_right[0]+1,3:]              
     U = U[:nodes_right[0]+1,0:3]
     

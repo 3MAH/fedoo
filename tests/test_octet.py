@@ -37,8 +37,8 @@ wf = fd.weakform.InternalForce("ConstitutiveLaw", name = "WeakForm", nlgeom=Fals
 assemb = fd.Assembly.create("WeakForm", "Domain2", 'tet4', name="Assembly")
 
 # Type of problem
-pb = fd.problem.NonLinearStatic("Assembly")
-pb.SetNewtonRaphsonErrorCriterion("Work")
+pb = fd.problem.NonLinear("Assembly")
+pb.set_nr_criterion(criterion = "Work")
 
 # Set the desired ouputs at each time step
 # Problem.add_output('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')

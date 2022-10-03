@@ -7,7 +7,7 @@ from fedoo.core.base import ConstitutiveLaw
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
-from fedoo.problem.static import Static
+from fedoo.problem.linear import Linear
 # from fedoo.core.base import BoundaryCondition
 from fedoo.core.base import ProblemBase
 from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh

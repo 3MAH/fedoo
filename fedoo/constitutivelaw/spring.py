@@ -73,7 +73,7 @@ class Spring(ConstitutiveLaw):
     def update(self,assembly, pb, dtime):            
         #dtime not used for this law
         
-        displacement = pb.GetDoFSolution()
+        displacement = pb.get_dof_solution()
         if displacement is 0: self._InterfaceStress = self.__Delta = 0
         else:
             op_delta = assembly.space.op_disp() #relative displacement = disp if used with cohesive element

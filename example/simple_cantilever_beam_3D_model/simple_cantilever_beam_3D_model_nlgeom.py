@@ -25,7 +25,7 @@ WeakForm.InternalForce("ElasticLaw", nlgeom = True)
 assemb = Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
 
 #Type of problem 
-Problem.NonLinearStatic("Assembling")
+Problem.NonLinear("Assembling")
 
 #Boundary conditions
 nodes_left = Mesh.get_all()[meshname].node_sets["left"]

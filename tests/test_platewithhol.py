@@ -18,7 +18,7 @@ fd.weakform.InternalForce("ElasticLaw", name = "WeakForm")
 fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-pb = fd.problem.Static("Assembly")
+pb = fd.problem.Linear("Assembly")
 
 #Definition of the set of nodes for boundary conditions
 left = mesh.find_nodes('X',mesh.bounding_box.xmin)

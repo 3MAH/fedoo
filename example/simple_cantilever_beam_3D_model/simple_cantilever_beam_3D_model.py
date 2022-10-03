@@ -25,7 +25,7 @@ fd.weakform.InternalForce("ElasticLaw")
 fd.Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
 
 #Type of problem 
-pb = fd.problem.Static("Assembling")
+pb = fd.problem.Linear("Assembling")
 
 #Boundary conditions
 nodes_left = fd.Mesh[meshname].node_sets["left"]
@@ -50,10 +50,10 @@ res = pb.get_results('Assembling', ['Stress']).plot('Stress')
 
 #--------------- Post-Treatment -----------------------------------------------
 #Get the displacement vector on nodes for export to vtk
-U = np.reshape(pb.GetDoFSolution('all'),(3,-1)).T
+U = np.reshape(pb.get_dof_solution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = fd.Assembly['Assembling'].get_strain(pb.GetDoFSolution(), "Node")       
+TensorStrain = fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "Node")       
 TensorStress = pb.get_results('Assembling', ['Stress'], 'Node')['Stress']
 # ConstitutiveLaw.get_all()['ElasticLaw'].GetStress()
 

@@ -1,6 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.pgd.ProblemPGD import ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
 def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling = 0, name = "MainProblem"):
@@ -54,7 +55,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
                 self.set_A(self.__StiffMatrix + 1/(self.__Beta*(self.__TimeStep**2))*self.__MassMatrix + self.__Gamma/(self.__Beta*self.__TimeStep)*self.__DampMatrix)   
     
         def get_X(self):
-            return self.GetDoFSolution('all')
+            return self.get_dof_solution('all')
         
         def get_Xdot(self):
             return self.__Xdot
@@ -63,7 +64,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             return self.__Xdotdot
     
         def get_disp(self, name = 'all'): #same as get_X
-            return self.GetDoFSolution(name)        
+            return self.get_dof_solution(name)        
                
         def GetVelocity(self): #same as get_Xdot
             return self.__Xdot
@@ -122,10 +123,10 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     
         def update(self):
            
-            NewXdotdot = (1/self.__Beta/(self.__TimeStep**2)) * (self.GetDoFSolution('all') - self.__Xold - self.__TimeStep*self.__Xdot) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Xdotdot
+            NewXdotdot = (1/self.__Beta/(self.__TimeStep**2)) * (self.get_dof_solution('all') - self.__Xold - self.__TimeStep*self.__Xdot) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Xdotdot
             self.__Xdot += self.__TimeStep * ( (1-self.__Gamma)*self.__Xdotdot + self.__Gamma*NewXdotdot)
             self.__Xdotdot = NewXdotdot
-            self.__Xold[:] = self.GetDoFSolution('all')
+            self.__Xold[:] = self.get_dof_solution('all')
             self.initialize()
     #        self.set_D(self.__MassMatrix * ( (1/self.__Beta/(self.__TimeStep**2))*self.__Xold + (1/self.__Beta/self.__TimeStep)*self.__Xdot + (1/2/self.__Beta -1)*self.__Xdotdot) )
             
@@ -134,14 +135,14 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             returns : sum(0.5 * U.transposed * K * U)
             """
     
-            return 0.5*np.dot(self.GetDoFSolution('all') , self.__StiffMatrix*self.GetDoFSolution('all') )
+            return 0.5*np.dot(self.get_dof_solution('all') , self.__StiffMatrix*self.get_dof_solution('all') )
                             
         def GetNodalElasticEnergy(self):
             """
             returns : 0.5 * K * U . U
             """
     
-            E = 0.5*self.GetDoFSolution('all').transpose() * self.get_A() * self.GetDoFSolution('all')
+            E = 0.5*self.get_dof_solution('all').transpose() * self.get_A() * self.get_dof_solution('all')
 
             E = np.reshape(E,(3,-1)).T
             

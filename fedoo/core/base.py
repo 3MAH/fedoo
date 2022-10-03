@@ -264,21 +264,25 @@ class WeakForm:
         
     @staticmethod
     def nvar(self):
+        """Return the number of variables used in the modeling space associated to the WeakForm."""
         return self.__space.nvar
 
 
     @staticmethod
     def get_all():
+        """Return the list of all weak forms."""        
         return WeakForm.__dic
 
 
     @property
     def space(self):
+        """Return the ModelingSpace associated to the WeakForm if defined."""        
         return self.__space
     
     
     @property
     def name(self):
+        """Return the name of the WeakForm."""
         return self.__name
     
 
@@ -304,6 +308,8 @@ class ProblemBase:
         self.__name = name
         self.__solver = ['direct']
         self.bc = ListBC(name=self.name+"_bc") #list containing boundary contidions associated to the problem        
+        """Boundary conditions defined on the problem."""
+
         self.bc._problem = self
         
         ProblemBase.__dic[self.__name] = self
@@ -327,7 +333,7 @@ class ProblemBase:
     
     @property
     def space(self):
-        """Return the ModelingSpace associated to the problem is defined."""
+        """Return the ModelingSpace associated to the Problem if defined."""
         return self.__space
     
     
@@ -349,7 +355,10 @@ class ProblemBase:
     
     @staticmethod
     def get_active():
-        """Return the active ModelingSpace."""
+        """
+        Static method.
+        Return the active Problem.
+        """
         return ProblemBase.active
         
     
@@ -382,184 +391,102 @@ class ProblemBase:
         
     @staticmethod
     def get_all():
+        """Return the list of all problems."""
         return ProblemBase.__dic
-       
+           
+    @property
+    def solver(self):
+        """Return the current solver used for the problem."""
+        return self.__solver[0]
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # ### Functions that may be defined depending on the type of problem
+    # def get_disp(self,name='all'):
+    #      raise NameError("The method 'get_Disp' is not defined for this kind of problem")
+
+    # def get_rot(self,name='all'):
+    #      raise NameError("The method 'GetRot' is not defined for this kind of problem")
+
+    # def get_temp(self):
+    #      raise NameError("The method 'GetTemp' is not defined for this kind of problem")
+    
+    # def update(self,):
+    #     raise NameError("The method 'Update' is not defined for this kind of problem")    
         
-    # ### Functions related to boundary contidions
-    # def BoundaryCondition(self,bc_type,Var,Value,Index,Constant = None, timeEvolution=None, initialValue = None, name = "No name"):
+    # def ChangeAssembly(self,Assembling):
+    #     raise NameError("The method 'ChangeAssembly' is not defined for this kind of problem")    
+        
+    # def SetNewtonRaphsonErrorCriterion(self,ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
     #     """
-    #     Define some boundary conditions        
+    #     Set the error criterion used for the newton raphson algorithm
 
     #     Parameters
     #     ----------
-    #     bc_type : str
-    #         Type of boundary conditions : 'Dirichlet', 'Neumann' or 'MPC' for multipoint constraints.
-    #     Var : str, list of str, or list of int
-    #         variable name (str) or list of variable name or for MPC only, list of variable rank 
-    #     Value : scalar or array or list of scalars or list of array
-    #         Variable final value (Dirichlet) or force Value (Neumann) or list of factor (MPC)
-    #         For Neumann and Dirichlet, if Var is a list of str, Value may be :
-    #             (i) scalar if the same Value is applied for all Variable
-    #             (ii) list of scalars, if the scalar values are different for all Variable (in this case the len of Value should be equal to the lenght of Var)
-    #             (iii) list of arrays, if the scalar Value is potentially different for all variables and for all indexes. In this case, Value[num_var][i] should give the value of the num_var variable related to the node i.
-    #     Index : list of int, str, list of list of int, list of str
-    #         For FEM Problem with Neumann/Dirichlet BC: Nodes Index (list of int) 
-    #         For FEM Problem with MPC: list Node Indexes (list of list of int) 
-    #         For PGD Problem with Neumann/Dirichlet BC: SetOfname (type str) defining a set of Nodes of the reference mesh
-    #         For PGD Problem with MPC: list of SetOfname (str)
-    #     Constant : scalar, optional
-    #         For MPC only, constant value on the equation
-    #     timeEvolution : function
-    #         Function that gives the temporal evolution of the BC Value (applyed as a factor to the specified BC). The function y=f(x) where x in [0,1] and y in [0,1]. For x, 0 denote the begining of the step and 1 the end.
-    #     initialValue : float, array or None
-    #         if None, the initialValue is keep to the current state.
-    #         if scalar value: The initialValue is the same for all dof defined in BC
-    #         if array: the len of the array should be = to the number of dof defined in the BC
-
-    #         Default: None
-    #     name : str, optional
-    #         Define an name for the Boundary Conditions. Default is "No name". The same name may be used for several BC.
-
-    #     Returns
-    #     -------
-    #     None.
-
-    #     Remark  
-    #     -------
-    #     To define many MPC in one operation, use array where each line define a single MPC        
+    #     ErrorCriterion : str in ['Displacement', 'Force', 'Work']             
+    #         Set the type of error criterion.             
+    #     tol : float
+    #         Tolerance of the NewtonRaphson algorithm (default = 5e-3)
+    #     max_subiter: int
+    #         Number of newton raphson iteration before returning an error
+    #     err0 : scalar
+    #         Reference value of error used for normalization
     #     """
-    #     if isinstance(Var, str) and Var not in self.space.list_variables():
-    #         #we assume that Var is a Vector
-    #         try: 
-    #             Var = [self.space.variable_name(var_rank) for var_rank in self.space.get_vector(Var)]
-    #         except:
-    #             raise NameError('Unknown variable name')
-                
-    #     if isinstance(Var, list) and bc_type != 'MPC':          
-    #         if np.isscalar(Value):
-    #             Value = [Value for var in Var] 
-    #         for i,var in enumerate(Var):
-    #             self.bc.append(BoundaryCondition(bc_type,var,Value[i],Index,Constant, timeEvolution, initialValue, name, self.space))                
-    #     else:
-    #         self.bc.append(BoundaryCondition(bc_type,Var,Value,Index,Constant, timeEvolution, initialValue, name, self.space))
-
-
-    # def get_BC(self, name =None):        
-    #     """
-    #     Return the list of Boundary Conditions
-    #     if an name is specified (str value), return a list of BC whith the specified name
-    #     """
-    #     if name is None: return self.bc
-    #     else: return [bc for bc in self.bc if bc.name == name]          
+    #     raise NameError("The method 'SetNewtonRaphsonErrorCriterion' is not defined for this kind of problem")    
         
-
-    # def RemoveBC(self,name =None):
-    #     """
-    #     Remove all the BC which have the specified name. 
-    #     If name = None (default) remove all boundary conditions
-    #     """
-    #     if name is None: self.bc = []
-    #     else: self.bc = [bc for bc in self.bc if bc.name != name]          
-    
-    # def PrintBC(self):        
-    #     """
-    #     Print all the boundary conditions under the form:
-    #         ind_bc : name - bc_type
-    #         ind_bc is the index of the bc in the list of boundary conditions (use get_BC to get the list)
-    #         name is the str name of the BC ("No name") by default
-    #         bc_type is the type of BC, ie "Dirichlet", "Neumann" or "MPC"
-    #     """
-    #     listid = [str(i) + ": " + bc.name + " - " + bc.bc_type for i,bc in enumerate(self.bc)]
-    #     print("\n".join(listid))
-    
-
-    
-
-    
-                                
-
-    
-    ### Functions that may be defined depending on the type of problem
-    def get_disp(self,name='all'):
-         raise NameError("The method 'get_Disp' is not defined for this kind of problem")
-
-    def get_rot(self,name='all'):
-         raise NameError("The method 'GetRot' is not defined for this kind of problem")
-
-    def get_temp(self):
-         raise NameError("The method 'GetTemp' is not defined for this kind of problem")
-    
-    def update(self,):
-        raise NameError("The method 'Update' is not defined for this kind of problem")    
+    # def NewtonRaphsonError(self):
+    #     raise NameError("The method 'NewtonRaphsonError' is not defined for this kind of problem")        
         
-    def ChangeAssembly(self,Assembling):
-        raise NameError("The method 'ChangeAssembly' is not defined for this kind of problem")    
-        
-    def SetNewtonRaphsonErrorCriterion(self,ErrorCriterion, tol=5e-3, max_subiter = 5, err0 = None):
-        """
-        Set the error criterion used for the newton raphson algorithm
-
-        Parameters
-        ----------
-        ErrorCriterion : str in ['Displacement', 'Force', 'Work']             
-            Set the type of error criterion.             
-        tol : float
-            Tolerance of the NewtonRaphson algorithm (default = 5e-3)
-        max_subiter: int
-            Number of newton raphson iteration before returning an error
-        err0 : scalar
-            Reference value of error used for normalization
-        """
-        raise NameError("The method 'SetNewtonRaphsonErrorCriterion' is not defined for this kind of problem")    
-        
-    def NewtonRaphsonError(self):
-        raise NameError("The method 'NewtonRaphsonError' is not defined for this kind of problem")        
-        
-    def NewTimeIncrement(self,LoadFactor):
-        raise NameError("The method 'NewTimeIncrement' is not defined for this kind of problem")    
+    # def NewTimeIncrement(self,LoadFactor):
+    #     raise NameError("The method 'NewTimeIncrement' is not defined for this kind of problem")    
             
-    def NewtonRaphsonIncr(self):                   
-        raise NameError("The method 'NewtonRaphsonIncr' is not defined for this kind of problem")            
+    # def NewtonRaphsonIncr(self):                   
+    #     raise NameError("The method 'NewtonRaphsonIncr' is not defined for this kind of problem")            
         
-    def to_start(self):
-        raise NameError("The method 'to_start' is not defined for this kind of problem")    
+    # def to_start(self):
+    #     raise NameError("The method 'to_start' is not defined for this kind of problem")    
     
-    def resetLoadFactor(self):             
-        raise NameError("The method 'resetLoadFactor' is not defined for this kind of problem")    
+    # def resetLoadFactor(self):             
+    #     raise NameError("The method 'resetLoadFactor' is not defined for this kind of problem")    
     
-    def reset(self):
-        raise NameError("The method 'reset' is not defined for this kind of problem")    
+    # def reset(self):
+    #     raise NameError("The method 'reset' is not defined for this kind of problem")    
         
-    def GetElasticEnergy(self):
-        raise NameError("The method 'GetElasticEnergy' is not defined for this kind of problem")    
+    # def GetElasticEnergy(self):
+    #     raise NameError("The method 'GetElasticEnergy' is not defined for this kind of problem")    
     
-    def GetNodalElasticEnergy(self):
-        raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
+    # def GetNodalElasticEnergy(self):
+    #     raise NameError("The method 'GetNodalElasticEnergy' is not defined for this kind of problem")    
         
-    def get_ext_forces(self, name = 'all'):
-        raise NameError("The method 'get_ext_forces' is not defined for this kind of problem")    
+    # def get_ext_forces(self, name = 'all'):
+    #     raise NameError("The method 'get_ext_forces' is not defined for this kind of problem")    
 
-    def add_output(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
-        raise NameError("The method 'add_output' is not defined for this kind of problem")    
+    # def add_output(self, filename, assemblyname, output_list, output_type='Node', file_format ='vtk', position = 'top'):
+    #     raise NameError("The method 'add_output' is not defined for this kind of problem")    
         
-    def save_results(self, iterOutput=None):        
-        raise NameError("The method 'save_results' is not defined for this kind of problem")
+    # def save_results(self, iterOutput=None):        
+    #     raise NameError("The method 'save_results' is not defined for this kind of problem")
     
-    def get_results(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
-        raise NameError("The method 'get_results' is not defined for this kind of problem")        
+    # def get_results(self, assemb, output_list, output_type='Node', position = 1, res_format = None):
+    #     raise NameError("The method 'get_results' is not defined for this kind of problem")        
 
-    #defined in the ProblemPGD classes
-    def get_X(self): raise NameError("Method only defined for PGD Problems") 
-    def get_Xbc(self): raise NameError("Method only defined for PGD Problems") 
-    def ComputeResidualNorm(self,err_0=None): raise NameError("Method only defined for PGD Problems") 
-    def GetResidual(self): raise NameError("Method only defined for PGD Problems") 
-    def updatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
-    def updateAlpha(self): raise NameError("Method only defined for PGD Problems") 
-    def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): raise NameError("Method only defined for PGD Problems") 
+    # #defined in the ProblemPGD classes
+    # def get_X(self): raise NameError("Method only defined for PGD Problems") 
+    # def get_Xbc(self): raise NameError("Method only defined for PGD Problems") 
+    # def ComputeResidualNorm(self,err_0=None): raise NameError("Method only defined for PGD Problems") 
+    # def GetResidual(self): raise NameError("Method only defined for PGD Problems") 
+    # def updatePGD(self,termToChange, ddcalc='all'): raise NameError("Method only defined for PGD Problems") 
+    # def updateAlpha(self): raise NameError("Method only defined for PGD Problems") 
+    # def AddNewTerm(self,numberOfTerm = 1, value = None, variable = 'all'): raise NameError("Method only defined for PGD Problems") 
     
-    @property
-    def solver(self):
-        return self.__solver[0]
+
     
 
 
@@ -637,7 +564,7 @@ class ProblemBase:
 # def Solve(**kargs): ProblemBase.get_active().solve(**kargs)
 # def get_X(): return ProblemBase.get_active().get_X()
 # def apply_boundary_conditions(): ProblemBase.get_active().apply_boundary_conditions()
-# def GetDoFSolution(name='all'): return ProblemBase.get_active().GetDoFSolution(name)
+# def get_dof_solution(name='all'): return ProblemBase.get_active().get_dof_solution(name)
 # def set_DoFSolution(name,value): ProblemBase.get_active().set_DoFSolution(name,value)
 # def SetInitialBCToCurrent(): ProblemBase.get_active().SetInitialBCToCurrent()
 # def get_global_vectorComponent(vector, name='all'): return ProblemBase.get_active()._get_vect_component(vector, name)

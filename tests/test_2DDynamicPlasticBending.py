@@ -62,9 +62,9 @@ pb = fd.problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 
 # Problem.set_solver('cg', precond = True)
 
-pb.SetNewtonRaphsonErrorCriterion("Displacement")
-# pb.SetNewtonRaphsonErrorCriterion("Work")
-# pb.SetNewtonRaphsonErrorCriterion("Force")
+pb.set_nr_criterion("Displacement")
+# pb.set_nr_criterion("Work")
+# pb.set_nr_criterion("Force")
 
 #create a 'result' folder and set the desired ouputs
 # if not(os.path.isdir('results')): os.mkdir('results')

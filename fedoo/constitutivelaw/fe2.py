@@ -5,7 +5,7 @@
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
-from fedoo.problem.nl_static import NonLinearStatic
+from fedoo.problem.non_linear import NonLinear
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
 from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness, GetHomogenizedStiffness
@@ -203,7 +203,7 @@ class FE2(Mechanical3D):
 
 
     def update(self,assembly, pb, dtime):   
-        displacement = pb.GetDoFSolution()
+        displacement = pb.get_dof_solution()
 
         if displacement is 0: 
             self.__currentGradDisp = 0

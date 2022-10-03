@@ -16,7 +16,7 @@ if USE_SIMCOON:
     from fedoo.constitutivelaw.umat_simcoon import Simcoon
     from fedoo.weakform.internal_force import InternalForce
     from fedoo.core.assembly import Assembly
-    from fedoo.problem.nl_static import NonLinearStatic
+    from fedoo.problem.non_linear import NonLinear
     # from fedoo.core.base import BoundaryCondition
     from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
     from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness
@@ -154,7 +154,7 @@ if USE_SIMCOON:
                     #--------------- Post-Treatment -----------------------------------------------
                     #Compute the mean stress and strain
                     #Get the stress tensor (PG values)
-                    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint")
+                    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_dof_solution(), "GaussPoint")
     
                     TensorStrain = material.get_strain()
                     TensorStress = material.get_pk2()

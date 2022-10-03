@@ -40,7 +40,7 @@ nodes_top   = Mesh.get_all()["Midplane"].node_sets["top"]
 Mesh["Domain"].add_node_set([nodes_left ,"all"], name = "faceLeft")
 Mesh["Domain"].add_node_set([nodes_right,"all"], name = "faceRight")
 
-pb = problem.Static("Assembling")
+pb = problem.Linear("Assembling")
 
 pb.bc.add('Dirichlet',"faceLeft",'DispX',0)
 pb.bc.add('Dirichlet',"faceLeft",'DispY',0)
@@ -52,27 +52,27 @@ pb.apply_boundary_conditions()
 # err0 = Problem.ComputeResidualNorm()
 err0 = 1
 for i in range(20):
-    # old = Problem.GetDoFSolution('all')
+    # old = Problem.get_dof_solution('all')
     pb.AddNewTerm(1)    
     for j in range(5):
         pb.update_pgd([i],0)
         pb.update_pgd([i],1)
         
     pb.update_alpha()
-    print(pb.GetX().getTerm(-1).norm())
-    # print((pb.GetDoFSolution('all') - old).norm())
+    print(pb.get_X().getTerm(-1).norm())
+    # print((pb.get_dof_solution('all') - old).norm())
     
     # print(pb.ComputeResidualNorm(err0))
     
 print('Temps de calcul : ', time.time()-t0)
 
 m = Mesh.get_all()["Domain"].ExtractFullMesh(name = 'FullMesh')
-U = [pb.GetDoFSolution('DispX')[:,:].reshape(-1), \
-     pb.GetDoFSolution('DispY')[:,:].reshape(-1), \
-     pb.GetDoFSolution('DispZ')[:,:].reshape(-1) ]
+U = [pb.get_dof_solution('DispX')[:,:].reshape(-1), \
+     pb.get_dof_solution('DispY')[:,:].reshape(-1), \
+     pb.get_dof_solution('DispZ')[:,:].reshape(-1) ]
 U = np.array(U)
 
-TensorStrain = Assembly['Assembling'].get_strain(pb.GetDoFSolution('all'), "Node")
+TensorStrain = Assembly['Assembling'].get_strain(pb.get_dof_solution('all'), "Node")
 TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 TensorStrain = util.StrainTensorList([s[:,:].reshape(-1) for s in TensorStrain])

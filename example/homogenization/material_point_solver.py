@@ -65,7 +65,7 @@ WeakForm.InternalForce(material, name="wf")
 Assembly.create("wf", mesh, type_el, name="Assembling", n_elm_gp = 1)
 
 #Type of problem
-pb = Problem.NonLinearStatic("Assembling")
+pb = Problem.NonLinear("Assembling")
 
 Homogen.DefinePeriodicBoundaryCondition(mesh,
 [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
@@ -84,7 +84,7 @@ pb.bc.add('Dirichlet','DispX', 0, center)
 pb.bc.add('Dirichlet','DispY', 0, center)
 pb.bc.add('Dirichlet','DispZ', 0, center)
 
-pb.SetNewtonRaphsonErrorCriterion('Displacement')
+pb.set_nr_criterion('Displacement')
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir(path_results)): os.mkdir(path_results)
@@ -143,7 +143,7 @@ for blocknumber, block in enumerate(blocks):
             #--------------- Post-Treatment -----------------------------------------------
             #Compute the mean stress and strain
             #Get the stress tensor (PG values)
-            # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint")
+            # TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_dof_solution(), "GaussPoint")
 
             TensorStrain = material.GetStrain()
             TensorStress = material.GetPKII()

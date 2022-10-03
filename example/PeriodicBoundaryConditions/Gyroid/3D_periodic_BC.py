@@ -30,7 +30,7 @@ fd.weakform.InternalForce("ElasticLaw")
 fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling") 
 
 #Type of problem 
-pb = fd.problem.Static("Assembling")
+pb = fd.problem.Linear("Assembling")
 
 
 #Boundary conditions
@@ -104,7 +104,7 @@ if output_VTK == 1:
     PrincipalStress, PrincipalDirection = TensorStressNd.GetPrincipalStress()
     
     #Get the displacement vector on nodes for export to vtk
-    U = np.reshape(pb.GetDoFSolution('all'),(3,-1)).T
+    U = np.reshape(pb.get_dof_solution('all'),(3,-1)).T
     N = Mesh.get_all()[meshname].n_nodes
     # U = np.c_[U,np.zeros(N)]
     

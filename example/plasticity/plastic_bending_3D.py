@@ -80,13 +80,13 @@ else:
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
-pb = problem.NonLinearStatic("Assembling")
+pb = problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
-pb.SetNewtonRaphsonErrorCriterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
+pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
-# Problem.SetNewtonRaphsonErrorCriterion("Displacement")
-# Problem.SetNewtonRaphsonErrorCriterion("Work")
-# Problem.SetNewtonRaphsonErrorCriterion("Force")
+# Problem.set_nr_criterion("Displacement")
+# Problem.set_nr_criterion("Work")
+# Problem.set_nr_criterion("Force")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
@@ -103,7 +103,7 @@ bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
 pb.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
 
 
-E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.GetDoFSolution(), "GaussPoint", False)).T
+E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.get_dof_solution(), "GaussPoint", False)).T
 
 # ################### step 2 ################################
 # bc.Remove()

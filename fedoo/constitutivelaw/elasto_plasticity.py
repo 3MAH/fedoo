@@ -203,7 +203,7 @@ class ElastoPlasticity(Mechanical3D):
 
     
     def update(self,assembly, pb, time):
-        displacement = pb.GetDoFSolution()
+        displacement = pb.get_dof_solution()
         
         if displacement is 0: 
             self.__currentGradDisp = 0

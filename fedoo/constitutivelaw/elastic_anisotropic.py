@@ -46,7 +46,7 @@ class ElasticAnisotropic(Mechanical3D):
         return self.__currentStrain
     
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
-    #     displacement = pb.GetDoFSolution()                
+    #     displacement = pb.get_dof_solution()                
     #     if displacement is 0: 
     #         return 0 #if displacement = 0, Strain = 0
     #     else:
@@ -62,7 +62,7 @@ class ElasticAnisotropic(Mechanical3D):
         self.nlgeom = nlgeom
     
     def update(self,assembly, pb, dtime):
-        displacement = pb.GetDoFSolution()
+        displacement = pb.get_dof_solution()
         
         if displacement is 0: 
             self._grad_disp = 0
