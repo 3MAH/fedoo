@@ -78,9 +78,15 @@ class ListBC(BCBase):
     
     
     def __getitem__(self, items):
-        if isinstance(items, int) and items:
+        if isinstance(items, int):
             if items < len(self.data): return self.data[items]
             else: return self.data_end[items-len(self.data)]
+            
+        elif isinstance(items, str):
+            for bc in self.data:
+                if bc.name == items: return bc
+            for bc in self.data_end:
+                if bc.name == items: return bc            
         
         return (self.data + self.data_end)[items]
             
@@ -116,10 +122,19 @@ class ListBC(BCBase):
     
     
     def remove(self, bc):
-        try:
-            self.data.remove(bc)
-        except:
-            self.data_end.remove(bc)
+        if isinstance(bc, int): 
+            if bc < len(self.data): del self.data[bc]
+            else: del self.data_end[bc-len(self.data)]
+        elif isinstance(bc, str):
+            for item in self.data:
+                if item.name == bc: del item
+            for bc in self.data_end:
+                if item.name == bc: del item
+        else:
+            try:
+                self.data.remove(bc)
+            except:
+                self.data_end.remove(bc)
 
 
     def add(self, *args, **kargs):

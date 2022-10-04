@@ -44,8 +44,7 @@ pb.set_nr_criterion(criterion = "Work")
 # Problem.add_output('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
 
 # Boundary conditions for the linearized strain tensor
-# E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
-E = [0, 0, 0, 0.05, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
+E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
 # fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
 # 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],

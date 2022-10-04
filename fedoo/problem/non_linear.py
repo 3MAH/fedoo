@@ -7,11 +7,11 @@ from fedoo.pgd.ProblemPGD import ProblemPGD
 def _GenerateClass_NonLinear(libBase):
     class __NonLinear(libBase):
         
-        def __init__(self, Assembling, name):                                  
-            #A = Assembling.current.get_global_matrix() #tangent stiffness matrix
+        def __init__(self, assembling, name):                                  
+            #A = assembling.current.get_global_matrix() #tangent stiffness matrix
             A = 0 #tangent stiffness matrix - will be initialized only when required
             B = 0             
-            #D = Assembling.get_global_vector() #initial stress vector
+            #D = assembling.get_global_vector() #initial stress vector
             D = 0 #initial stress vector #will be initialized later
             self.print_info = 1 #print info of NR convergence during solve
             self._U = 0 #displacement at the end of the previous converged increment
@@ -33,8 +33,8 @@ def _GenerateClass_NonLinear(libBase):
             """
 
 
-            self.__Assembly = Assembling
-            libBase.__init__(self,A,B,D,Assembling.mesh, name, Assembling.space)        
+            self.__assembly = assembling
+            libBase.__init__(self,A,B,D,assembling.mesh, name, assembling.space)        
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0
             self.__compteurOutput = 0
@@ -68,18 +68,18 @@ def _GenerateClass_NonLinear(libBase):
         
         def updateA(self, dt = None):
             #dt not used for static problem
-            self.set_A(self.__Assembly.current.get_global_matrix())
+            self.set_A(self.__assembly.current.get_global_matrix())
         
         def updateD(self,dt=None, start=False):            
             #dt and start not used for static problem
-            self.set_D(self.__Assembly.current.get_global_vector()) 
+            self.set_D(self.__assembly.current.get_global_vector()) 
         
         def initialize(self, t0=0.):   
             """
             """
-            self.__Assembly.initialize(self,t0)
-            # self.set_A(self.__Assembly.current.get_global_matrix())
-            # self.set_D(self.__Assembly.current.get_global_vector())
+            self.__assembly.initialize(self,t0)
+            # self.set_A(self.__assembly.current.get_global_matrix())
+            # self.set_D(self.__assembly.current.get_global_vector())
         
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
@@ -106,7 +106,7 @@ def _GenerateClass_NonLinear(libBase):
             self._dU += self.get_X()
         
         # def InitTimeIncrement(self,dt):
-        #     self.__Assembly.InitTimeIncrement(self,dt)
+        #     self.__assembly.InitTimeIncrement(self,dt)
         #     self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
             
         # def NewTimeIncrement(self,dt):
@@ -114,7 +114,7 @@ def _GenerateClass_NonLinear(libBase):
         #     #dt = dt for the previous increment
         #     self._U += self._dU
         #     self._dU = 0
-        #     self.__Assembly.NewTimeIncrement()     
+        #     self.__assembly.NewTimeIncrement()     
             
             
         def set_start(self,dt, save_results=False):
@@ -123,7 +123,7 @@ def _GenerateClass_NonLinear(libBase):
                 self._U += self._dU
                 self._dU = 0                
                 self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
-                self.__Assembly.set_start(self,dt)    
+                self.__assembly.set_start(self,dt)    
                 
                 #Save results            
                 if save_results: 
@@ -131,13 +131,13 @@ def _GenerateClass_NonLinear(libBase):
                     self.__compteurOutput += 1     
             else:
                 self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
-                self.__Assembly.set_start(self,dt)    
+                self.__assembly.set_start(self,dt)    
             
             
         def to_start(self):   
             self._dU = 0                       
             self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
-            self.__Assembly.to_start()
+            self.__assembly.to_start()
             
                               
         def NewtonRaphsonIncrement(self):                                      
@@ -156,17 +156,17 @@ def _GenerateClass_NonLinear(libBase):
             Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
             """
             if updateWeakForm == True:
-                self.__Assembly.update(self, dtime, compute)
+                self.__assembly.update(self, dtime, compute)
             else: 
-                self.__Assembly.current.assemble_global_mat(compute)
+                self.__assembly.current.assemble_global_mat(compute)
 
         def reset(self):
-            self.__Assembly.reset()
+            self.__assembly.reset()
             
             self.set_A(0) #tangent stiffness 
             self.set_D(0)                 
-            # self.set_A(self.__Assembly.current.get_global_matrix()) #tangent stiffness 
-            # self.set_D(self.__Assembly.current.get_global_vector())            
+            # self.set_A(self.__assembly.current.get_global_matrix()) #tangent stiffness 
+            # self.set_D(self.__assembly.current.get_global_vector())            
 
             B = 0
             self._U = 0
@@ -176,18 +176,16 @@ def _GenerateClass_NonLinear(libBase):
             self.t0 = 0 ; self.tmax = 1
             self.__iter = 0  
             self.apply_boundary_conditions() #perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
-        
-        def get_Assembly(self):
-            return self.__Assembly
+
             
-        def ChangeAssembly(self,Assembling, update = True):
+        def change_assembly(self,assembling, update = True):
             """
             Modify the assembly associated to the problem and update the problem (see Assembly.update for more information)
             """
-            if isinstance(Assembling,str):
-                Assembling = Assembly.get_all()[Assembling]
+            if isinstance(assembling,str):
+                assembling = Assembly[assembling]
                 
-            self.__Assembly = Assembling
+            self.__assembly = assembling
             if update: self.update()
             
         def NewtonRaphsonError(self):
@@ -366,16 +364,21 @@ def _GenerateClass_NonLinear(libBase):
                         raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
             
             self.set_start(dt, True)
+            
+        
+        @property
+        def assembly(self):
+            return self.__assembly
                                                                             
     return __NonLinear
 
-def NonLinear(Assembling, name = "MainProblem"):
-    if isinstance(Assembling,str):
-        Assembling = Assembly.get_all()[Assembling]
+def NonLinear(assembling, name = "MainProblem"):
+    if isinstance(assembling,str):
+        assembling = Assembly.get_all()[assembling]
                
-    if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem            
 
     __NonLinear = _GenerateClass_NonLinear(libBase) 
 
-    return __NonLinear(Assembling, name)
+    return __NonLinear(assembling, name)

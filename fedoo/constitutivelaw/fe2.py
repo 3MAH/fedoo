@@ -8,7 +8,7 @@ from fedoo.core.assembly import Assembly
 from fedoo.problem.non_linear import NonLinear
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
-from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness, GetHomogenizedStiffness
+from fedoo.homogen.tangent_stiffness import get_tangent_stiffness, get_homogenized_stiffness
 import numpy as np
 import multiprocessing 
 
@@ -143,7 +143,7 @@ class FE2(Mechanical3D):
                             # list_material.append(self.__constitutivelaw.copy())
                       
                 #Type of problem
-                self.list_problem.append(NonLinearStatic(self.list_assembly[i], name = '_fe2_cell_'+str(i)))            
+                self.list_problem.append(NonLinear(self.list_assembly[i], name = '_fe2_cell_'+str(i)))            
                 pb_micro = self.list_problem[-1]
                 meshperio = True
                 
@@ -161,7 +161,7 @@ class FE2(Mechanical3D):
                 pb_micro.BoundaryCondition('Dirichlet','DispY', 0, [self._list_center[i]])
                 pb_micro.BoundaryCondition('Dirichlet','DispZ', 0, [self._list_center[i]])
                 
-                self.L[i] = GetHomogenizedStiffness(self.list_assembly[i])
+                self.L[i] = get_homogenized_stiffness(self.list_assembly[i])
             
             pb.MakeActive()
             self.Lt = self.L.copy()
@@ -192,7 +192,7 @@ class FE2(Mechanical3D):
         
         pb.nlsolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
         
-        self.Lt[id_pb]= GetTangentStiffness(pb.name)
+        self.Lt[id_pb]= get_tangent_stiffness(pb.name)
         
         material = self.list_assembly[id_pb].weakform.GetConstitutiveLaw()
         stress_field = material.get_stress()

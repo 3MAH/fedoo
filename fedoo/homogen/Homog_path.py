@@ -19,7 +19,7 @@ if USE_SIMCOON:
     from fedoo.problem.non_linear import NonLinear
     # from fedoo.core.base import BoundaryCondition
     from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
-    from fedoo.homogen.TangentStiffnessMatrix import GetTangentStiffness
+    from fedoo.homogen.tangent_stiffness import get_tangent_stiffness
     import numpy as np
     import os
     import re

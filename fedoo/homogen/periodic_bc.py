@@ -10,26 +10,51 @@ from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 from fedoo.core.base import ProblemBase
 from fedoo.core.mesh import MeshBase
 
-# USE_SIMCOON = True
+USE_SIMCOON = True
 
-# if USE_SIMCOON: 
-#     try:
-#         from simcoon import simmit as sim
-#         USE_SIMCOON = True
-#     except:
-#         USE_SIMCOON = False
-#         print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
-
-# if USE_SIMCOON:    
+if USE_SIMCOON: 
+    try:
+        from simcoon import simmit as sim
+        USE_SIMCOON = True
+    except:
+        USE_SIMCOON = False
+        print('WARNING: Simcoon library not found. The simcoon constitutive law is disabled.')       
     
     
 
+
+    # def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, node_cd, var_cd, dim='3D', tol=1e-8, Problemname = None, nNeighbours = 3, powInter = 1.0):
+        
+    #     if Problemname is None: pb = ProblemBase.get_active()
+    #     elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
+    #     elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
+    #     else: raise NameError('Problemname not understood')
+        
+    #     #Definition of the set of nodes for boundary conditions
+    #     if isinstance(mesh, str):
+    #         mesh = MeshBase.get_all()[mesh]
+    
+    #     if isinstance(var_cd, str):
+    #         var_cd = [pb.space.variable_rank(v) for v in var_cd]
+        
+    #     coords_nodes = mesh.nodes
+    #     if isinstance(node_cd[0], np.int64):
+    #         node_cd_int32 = [n.item() for n in node_cd]
+    #     else:
+    #         node_cd_int32 = [n for n in node_cd]
+        
+    #     list_nodes = sim.nonperioMPC(coords_nodes, node_cd_int32, nNeighbours, powInter)
+            
+    #     for eq_list in list_nodes:
+    #         eq = np.array(eq_list)
+    #         list_var = tuple(eq[1::3].astype(int)-1)
+    #         pb.bc.mpc(list_var, eq[2::3], eq[0::3].astype(int))
 
 
 class PeriodicBC(BCBase):
     """Class defining periodic boundary conditions"""
     
-    def __init__(self, node_cd, var_cd, dim=3, tol=1e-8, name = "Periodicity"):
+    def __init__(self, node_cd, var_cd, dim=3, tol=1e-8, meshperio = True, name = "Periodicity"):
         """   
         Create a perdiodic boundary condition object using several multi-points constraints.
         Some constraint driver (cd) dof  are used to define mean strain or mean displacement gradient.
@@ -38,8 +63,8 @@ class PeriodicBC(BCBase):
         
         The constraint drivers can be defined in several way
             * [Eps_XX] or [[Eps_XX]] -> strain dof for 1D periodicity
-            * [Eps_XX, Eps_YY, Eps_XY] -> strain dof for 2D periodicity 
-            * [Eps_XX, Eps_YY, Eps_ZZ, Eps_XY, Eps_XZ, Eps_YZ] -> strain dof for 3D periodicity 
+            * [Eps_XX, Eps_YY, 2*Eps_XY] -> strain dof for 2D periodicity using Voigt notation for shear components
+            * [Eps_XX, Eps_YY, Eps_ZZ, 2*Eps_XY, 2*Eps_XZ, 2*Eps_YZ] -> strain dof for 3D periodicity using Voigt notation for shear components
             * [[DU_XX, DU_XY], [DU_YX, DU_YY]] -> gradient of displacement for 2D periodicity
             * [[DU_XX, DU_XY, DU_XZ], [DU_YX, DU_YY, DU_YZ], [DU_ZX, DU_ZY, DU_ZZ]] 
             -> gradient of displacement for 3D periodicity                       
@@ -86,7 +111,7 @@ class PeriodicBC(BCBase):
                                  StrainNodes[1], StrainNodes[1], StrainNodes[1]]
             list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
             
-            # or equivalent using the displacement gradient formulation: 
+            # or using the displacement gradient formulation (in this case the shear strain are true strain component): 
             # list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
             #                      [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
             #                      [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
@@ -98,33 +123,42 @@ class PeriodicBC(BCBase):
             
         """
         
-                
-        if np.isscalar(node_cd[0]):
-            if len(node_cd) == 1: 
-                if dim is None: dim = 1
-                var_cd = [var_cd]
-                node_cd = [node_cd]
-            elif len(node_cd) == 3: 
-                if dim is None: dim = 2
-                node_cd = [[node_cd[0], node_cd[2]],
-                           [node_cd[2], node_cd[1]]]
-                var_cd =  [[var_cd[0], var_cd[2]],
-                           [var_cd[2], var_cd[1]]]
-                
-            elif len(node_cd) == 6:
-                if dim is None: dim = 3 
-                node_cd = [[node_cd[0], node_cd[3], node_cd[4]],
-                           [node_cd[3], node_cd[1], node_cd[5]],
-                           [node_cd[4], node_cd[5], node_cd[2]]]
-                var_cd =  [[var_cd[0], var_cd[3], var_cd[4]],
-                           [var_cd[3], var_cd[1], var_cd[5]],
-                           [var_cd[4], var_cd[5], var_cd[2]]]
-            else: 
-                raise NameError('Lenght of node_cd and var_cd should be 1,3 or 6')
+        self.shear_coef = 1
+        if meshperio:         
+            if np.isscalar(node_cd[0]):
+                self.shear_coef = 0.5
+                if len(node_cd) == 1: 
+                    if dim is None: dim = 1
+                    var_cd = [var_cd]
+                    node_cd = [node_cd]
+                elif len(node_cd) == 3: 
+                    if dim is None: dim = 2
+                    node_cd = [[node_cd[0], node_cd[2]],
+                               [node_cd[2], node_cd[1]]]
+                    var_cd =  [[var_cd[0], var_cd[2]],
+                               [var_cd[2], var_cd[1]]]
+                    
+                elif len(node_cd) == 6:
+                    if dim is None: dim = 3 
+                    node_cd = [[node_cd[0], node_cd[3], node_cd[4]],
+                               [node_cd[3], node_cd[1], node_cd[5]],
+                               [node_cd[4], node_cd[5], node_cd[2]]]
+                    var_cd =  [[var_cd[0], var_cd[3], var_cd[4]],
+                               [var_cd[3], var_cd[1], var_cd[5]],
+                               [var_cd[4], var_cd[5], var_cd[2]]]
+                else: 
+                    raise NameError('Lenght of node_cd and var_cd should be 1,3 or 6')
         
-        elif dim is None: 
-            dim = len(node_cd[0])
+            elif dim is None: 
+                dim = len(node_cd[0])
+
+        else: 
+            assert np.isscalar(node_cd[0]), "Only small strain tensor can be treated with non periodic mesh"
+                
+            self.n_neighbours = 3
+            self.pow_inter = 1.0  
         
+                
         self.node_cd = node_cd
         self.var_cd = var_cd
         self.dim = dim #dimension of periodicity (1, 2 or 3)
@@ -132,6 +166,10 @@ class PeriodicBC(BCBase):
         self.bc_type = 'PeriodicBC'
         BCBase.__init__(self, name)
         
+        self.meshperio = meshperio
+        
+       
+            
 
     def __repr__(self):
         list_str = ['{}D Periodic Boundary Condition:'.format(self.dim)]
@@ -147,15 +185,42 @@ class PeriodicBC(BCBase):
         var_cd = self.var_cd
         node_cd = self.node_cd           
 
-        crd = mesh.nodes
+        crd = mesh.nodes        
+        
+        
+        #==========================================================
+        #=========== Non Periodic Mesh using simcoon function =====
+        #==========================================================   
+        if self.meshperio == False:
+            assert USE_SIMCOON, "Simcoon needs to be installed before using Periodic BC with non perio mesh."
+            
+            if isinstance(node_cd[0], np.int64):
+                node_cd_int32 = [n.item() for n in node_cd]
+            else:
+                node_cd_int32 = [n for n in node_cd]
+            
+            list_nodes = sim.nonperioMPC(crd, node_cd_int32, self.n_neighbours, self.pow_inter)
+            
+            res = ListBC()        
+            for eq_list in list_nodes:
+                eq = np.array(eq_list)
+                list_var = tuple(eq[1::3].astype(int)-1)
+                res.append(MPC(eq[0::3].astype(int), list_var, eq[2::3]))
+            
+            res.initialize(problem)
+            self.list_mpc = res
+            
+            return
+      
+        #==========================================================
+        #=========== Create set of nodes ==========================
+        #==========================================================       
+        
         xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
         ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
         if self.dim == 3:                        
             zmax = np.max(crd[:,2]) ; zmin = np.min(crd[:,2])
-      
-        #==========================================================
-        #=========== Create set of nodes ==========================
-        #==========================================================        
+
         left   = np.where( np.abs(crd[:,0] - xmin) < tol )[0]
         right  = np.where( np.abs(crd[:,0] - xmax) < tol )[0]
         
@@ -278,6 +343,8 @@ class PeriodicBC(BCBase):
         if self.dim > 1: dy = ymax-ymin 
         if self.dim > 2: dz = zmax-zmin                
         
+        sc = self.shear_coef
+        
         res = ListBC()        
 
         #Left/right faces (DispX)
@@ -285,106 +352,106 @@ class PeriodicBC(BCBase):
         
         if self.dim > 1:
             #Left/right faces (DispY)
-            res.append(MPC([right,left,np.full_like(right,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)]))
+            res.append(MPC([right,left,np.full_like(right,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-sc*dx, dtype=float)]))
             
             #top/bottom faces (DispX and DispY)
-            res.append(MPC([top,bottom,np.full_like(top,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)]))
+            res.append(MPC([top,bottom,np.full_like(top,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-sc*dy, dtype=float)]))
             res.append(MPC([top,bottom,np.full_like(top,node_cd[1][1])], ['DispY','DispY',var_cd[1][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)]))
             
             #elimination of DOF from edge left/top -> edge left/bottom (DispX, DispY)
-            res.append(MPC([left_top, left_bottom, np.full_like(left_top,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(left_top,1), np.full_like(left_bottom,-1), np.full_like(left_top,-dy, dtype=float)]))
+            res.append(MPC([left_top, left_bottom, np.full_like(left_top,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(left_top,1), np.full_like(left_bottom,-1), np.full_like(left_top,-sc*dy, dtype=float)]))
             res.append(MPC([left_top, left_bottom, np.full_like(left_top,node_cd[1][1])], ['DispY','DispY',var_cd[1][1]], [np.full_like(left_top,1), np.full_like(left_bottom,-1), np.full_like(left_top,-dy, dtype=float)]))
             #elimination of DOF from edge right/bottom -> edge left/bottom (DispX, DispY)
             res.append(MPC([right_bottom, left_bottom, np.full_like(left_top,node_cd[0][0])], ['DispX','DispX',var_cd[0][0]], [np.full_like(right_bottom,1), np.full_like(left_bottom,-1), np.full_like(right_bottom,-dx, dtype=float)]))
-            res.append(MPC([right_bottom, left_bottom, np.full_like(left_top,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_bottom,1), np.full_like(left_bottom,-1), np.full_like(right_bottom,-dx, dtype=float)]))
+            res.append(MPC([right_bottom, left_bottom, np.full_like(left_top,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_bottom,1), np.full_like(left_bottom,-1), np.full_like(right_bottom,-sc*dx, dtype=float)]))
             #elimination of DOF from edge right/top -> edge left/bottom (DispX, DispY)
-            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[0][0]), np.full_like(right_top,node_cd[0][1])], ['DispX','DispX',var_cd[0][0],var_cd[0][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-dx, dtype=float), np.full_like(right_top,-dy, dtype=float)]))
-            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[1][0]), np.full_like(right_top,node_cd[1][1])], ['DispY','DispY',var_cd[1][0],var_cd[1][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-dx, dtype=float), np.full_like(right_top,-dy, dtype=float)]))
+            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[0][0]), np.full_like(right_top,node_cd[0][1])], ['DispX','DispX',var_cd[0][0],var_cd[0][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-dx, dtype=float), np.full_like(right_top,-sc*dy, dtype=float)]))
+            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[1][0]), np.full_like(right_top,node_cd[1][1])], ['DispY','DispY',var_cd[1][0],var_cd[1][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-sc*dx, dtype=float), np.full_like(right_top,-dy, dtype=float)]))
 
             
         if self.dim > 2:
             #DispZ for Left/right faces
-            res.append(MPC([right,left,np.full_like(right,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-dx, dtype=float)]))
+            res.append(MPC([right,left,np.full_like(right,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right,1), np.full_like(left,-1), np.full_like(right,-sc*dx, dtype=float)]))
             #DispZ for top/bottom faces
-            res.append(MPC([top,bottom,np.full_like(top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-dy, dtype=float)]))
+            res.append(MPC([top,bottom,np.full_like(top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(top,1), np.full_like(bottom,-1), np.full_like(top,-sc*dy, dtype=float)]))
         
             #elimination of DOF from edge left/top -> edge left/bottom (DispZ)
-            res.append(MPC([left_top, left_bottom, np.full_like(left_top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(left_top,1), np.full_like(left_bottom,-1), np.full_like(left_top,-dy, dtype=float)]))
+            res.append(MPC([left_top, left_bottom, np.full_like(left_top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(left_top,1), np.full_like(left_bottom,-1), np.full_like(left_top,-sc*dy, dtype=float)]))
             #elimination of DOF from edge right/bottom -> edge left/bottom (DispZ)
-            res.append(MPC([right_bottom, left_bottom, np.full_like(left_top,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_bottom,1), np.full_like(left_bottom,-1), np.full_like(right_bottom,-dx, dtype=float)]))
+            res.append(MPC([right_bottom, left_bottom, np.full_like(left_top,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_bottom,1), np.full_like(left_bottom,-1), np.full_like(right_bottom,-sc*dx, dtype=float)]))
             #elimination of DOF from edge right/top -> edge left/bottom (DispZ)
-            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[2][0]), np.full_like(right_top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-dx, dtype=float), np.full_like(right_top,-dy, dtype=float)])) 
+            res.append(MPC([right_top, left_bottom, np.full_like(right_top,node_cd[2][0]), np.full_like(right_top,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][1]], [np.full_like(right_top,1), np.full_like(left_bottom,-1), np.full_like(right_top,-sc*dx, dtype=float), np.full_like(right_top,-sc*dy, dtype=float)])) 
 
             
             #front/back faces
-            res.append(MPC([front,back,np.full_like(front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(front,1), np.full_like(back,-1), np.full_like(front,-dz, dtype=float)]))
-            res.append(MPC([front,back,np.full_like(front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(front,1), np.full_like(back,-1), np.full_like(front,-dz, dtype=float)]))
+            res.append(MPC([front,back,np.full_like(front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(front,1), np.full_like(back,-1), np.full_like(front,-sc*dz, dtype=float)]))
+            res.append(MPC([front,back,np.full_like(front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(front,1), np.full_like(back,-1), np.full_like(front,-sc*dz, dtype=float)]))
             res.append(MPC([front,back,np.full_like(front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][2]], [np.full_like(front,1), np.full_like(back,-1), np.full_like(front,-dz, dtype=float)]))
                 
             #elimination of DOF from edge top/back -> edge bottom/back
-            res.append(MPC([top_back, bottom_back, np.full_like(top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(top_back,1), np.full_like(bottom_back,-1), np.full_like(top_back,-dy, dtype=float)]))
+            res.append(MPC([top_back, bottom_back, np.full_like(top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(top_back,1), np.full_like(bottom_back,-1), np.full_like(top_back,-sc*dy, dtype=float)]))
             res.append(MPC([top_back, bottom_back, np.full_like(top_back,node_cd[1][1])], ['DispY','DispY',var_cd[1][1]], [np.full_like(top_back,1), np.full_like(bottom_back,-1), np.full_like(top_back,-dy, dtype=float)]))
-            res.append(MPC([top_back, bottom_back, np.full_like(top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(top_back,1), np.full_like(bottom_back,-1), np.full_like(top_back,-dy, dtype=float)]))
+            res.append(MPC([top_back, bottom_back, np.full_like(top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(top_back,1), np.full_like(bottom_back,-1), np.full_like(top_back,-sc*dy, dtype=float)]))
             #elimination of DOF from edge bottom/front -> edge bottom/back
-            res.append(MPC([bottom_front, bottom_back, np.full_like(bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(bottom_front,1), np.full_like(bottom_back,-1), np.full_like(bottom_front,-dz, dtype=float)]))
-            res.append(MPC([bottom_front, bottom_back, np.full_like(bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(bottom_front,1), np.full_like(bottom_back,-1), np.full_like(bottom_front,-dz, dtype=float)]))
+            res.append(MPC([bottom_front, bottom_back, np.full_like(bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(bottom_front,1), np.full_like(bottom_back,-1), np.full_like(bottom_front,-sc*dz, dtype=float)]))
+            res.append(MPC([bottom_front, bottom_back, np.full_like(bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(bottom_front,1), np.full_like(bottom_back,-1), np.full_like(bottom_front,-sc*dz, dtype=float)]))
             res.append(MPC([bottom_front, bottom_back, np.full_like(bottom_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][2]], [np.full_like(bottom_front,1), np.full_like(bottom_back,-1), np.full_like(bottom_front,-dz, dtype=float)]))
             #elimination of DOF from edge top/front -> edge bottom/back
-            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[0][1]), np.full_like(top_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][1],var_cd[0][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-dy, dtype=float), np.full_like(top_front,-dz, dtype=float)]))
-            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[1][1]), np.full_like(top_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][1],var_cd[1][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-dy, dtype=float), np.full_like(top_front,-dz, dtype=float)]))
-            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[2][1]), np.full_like(top_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][1],var_cd[2][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-dy, dtype=float), np.full_like(top_front,-dz, dtype=float)]))
+            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[0][1]), np.full_like(top_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][1],var_cd[0][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-sc*dy, dtype=float), np.full_like(top_front,-sc*dz, dtype=float)]))
+            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[1][1]), np.full_like(top_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][1],var_cd[1][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-dy, dtype=float),    np.full_like(top_front,-sc*dz, dtype=float)]))
+            res.append(MPC([top_front, bottom_back, np.full_like(top_front,node_cd[2][1]), np.full_like(top_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][1],var_cd[2][2]], [np.full_like(top_front,1), np.full_like(bottom_back,-1), np.full_like(top_front,-sc*dy, dtype=float), np.full_like(top_front,-dz, dtype=float)]))
             
             #elimination of DOF from edge right/back -> edge left/back
             res.append(MPC([right_back, left_back, np.full_like(left_back,node_cd[0][0])], ['DispX','DispX',var_cd[0][0]], [np.full_like(right_back,1), np.full_like(left_back,-1), np.full_like(right_back,-dx, dtype=float)]))
-            res.append(MPC([right_back, left_back, np.full_like(left_back,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_back,1), np.full_like(left_back,-1), np.full_like(right_back,-dx, dtype=float)]))
-            res.append(MPC([right_back, left_back, np.full_like(left_back,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_back,1), np.full_like(left_back,-1), np.full_like(right_back,-dx, dtype=float)]))
+            res.append(MPC([right_back, left_back, np.full_like(left_back,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_back,1), np.full_like(left_back,-1), np.full_like(right_back,-sc*dx, dtype=float)]))
+            res.append(MPC([right_back, left_back, np.full_like(left_back,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_back,1), np.full_like(left_back,-1), np.full_like(right_back,-sc*dx, dtype=float)]))
             #elimination of DOF from edge left/front -> edge left/back
-            res.append(MPC([left_front, left_back, np.full_like(left_back,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(left_front,1), np.full_like(left_back,-1), np.full_like(right_back,-dz, dtype=float)]))
-            res.append(MPC([left_front, left_back, np.full_like(left_back,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(left_front,1), np.full_like(left_back,-1), np.full_like(right_back,-dz, dtype=float)]))
+            res.append(MPC([left_front, left_back, np.full_like(left_back,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(left_front,1), np.full_like(left_back,-1), np.full_like(right_back,-sc*dz, dtype=float)]))
+            res.append(MPC([left_front, left_back, np.full_like(left_back,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(left_front,1), np.full_like(left_back,-1), np.full_like(right_back,-sc*dz, dtype=float)]))
             res.append(MPC([left_front, left_back, np.full_like(left_back,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][2]], [np.full_like(left_front,1), np.full_like(left_back,-1), np.full_like(right_back,-dz, dtype=float)]))
             #elimination of DOF from edge right/front -> edge left/back
-            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[0][0]), np.full_like(right_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][0],var_cd[0][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-dx, dtype=float), np.full_like(right_front,-dz, dtype=float)]))
-            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[1][0]), np.full_like(right_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][0],var_cd[1][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-dx, dtype=float), np.full_like(right_front,-dz, dtype=float)]))
-            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[2][0]), np.full_like(right_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-dx, dtype=float), np.full_like(right_front,-dz, dtype=float)]))
+            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[0][0]), np.full_like(right_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][0],var_cd[0][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-dx, dtype=float),    np.full_like(right_front,-sc*dz, dtype=float)]))
+            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[1][0]), np.full_like(right_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][0],var_cd[1][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-sc*dx, dtype=float), np.full_like(right_front,-sc*dz, dtype=float)]))
+            res.append(MPC([right_front, left_back, np.full_like(right_front,node_cd[2][0]), np.full_like(right_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][2]], [np.full_like(right_front,1), np.full_like(left_back,-1), np.full_like(right_front,-sc*dx, dtype=float), np.full_like(right_front,-dz, dtype=float)]))
             
             # #### CORNER ####
             #elimination of DOF from corner right/bottom/back (right_bottom_back) -> corner left/bottom/back (left_bottom_back) 
             res.append(MPC([right_bottom_back, left_bottom_back, np.full_like(right_bottom_back,node_cd[0][0])], ['DispX','DispX',var_cd[0][0]], [np.full_like(right_bottom_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_back,-dx, dtype=float)]))
-            res.append(MPC([right_bottom_back, left_bottom_back, np.full_like(right_bottom_back,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_bottom_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_back,-dx, dtype=float)]))
-            res.append(MPC([right_bottom_back, left_bottom_back, np.full_like(right_bottom_back,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_bottom_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_back,-dx, dtype=float)]))
+            res.append(MPC([right_bottom_back, left_bottom_back, np.full_like(right_bottom_back,node_cd[1][0])], ['DispY','DispY',var_cd[1][0]], [np.full_like(right_bottom_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_back,-sc*dx, dtype=float)]))
+            res.append(MPC([right_bottom_back, left_bottom_back, np.full_like(right_bottom_back,node_cd[2][0])], ['DispZ','DispZ',var_cd[2][0]], [np.full_like(right_bottom_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_back,-sc*dx, dtype=float)]))
             #elimination of DOF from corner left/top/back (left_top_back) -> corner left/bottom/back (left_bottom_back) 
-            res.append(MPC([left_top_back, left_bottom_back, np.full_like(left_top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(left_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_back,-dy, dtype=float)]))
+            res.append(MPC([left_top_back, left_bottom_back, np.full_like(left_top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][1]], [np.full_like(left_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_back,-sc*dy, dtype=float)]))
             res.append(MPC([left_top_back, left_bottom_back, np.full_like(left_top_back,node_cd[1][1])], ['DispY','DispY',var_cd[1][1]], [np.full_like(left_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_back,-dy, dtype=float)]))
-            res.append(MPC([left_top_back, left_bottom_back, np.full_like(left_top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(left_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_back,-dy, dtype=float)]))
+            res.append(MPC([left_top_back, left_bottom_back, np.full_like(left_top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][1]], [np.full_like(left_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_back,-sc*dy, dtype=float)]))
             #elimination of DOF from corner left/bottom/front (left_bottom_front) -> corner left/bottom/back (left_bottom_back) 
-            res.append(MPC([left_bottom_front, left_bottom_back, np.full_like(left_bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(left_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_bottom_front,-dz, dtype=float)]))
-            res.append(MPC([left_bottom_front, left_bottom_back, np.full_like(left_bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(left_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_bottom_front,-dz, dtype=float)]))
+            res.append(MPC([left_bottom_front, left_bottom_back, np.full_like(left_bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][2]], [np.full_like(left_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_bottom_front,-sc*dz, dtype=float)]))
+            res.append(MPC([left_bottom_front, left_bottom_back, np.full_like(left_bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][2]], [np.full_like(left_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_bottom_front,-sc*dz, dtype=float)]))
             res.append(MPC([left_bottom_front, left_bottom_back, np.full_like(left_bottom_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][2]], [np.full_like(left_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_bottom_front,-dz, dtype=float)]))
             #elimination of DOF from corner right/top/back (right_top_back) -> corner left/bottom/back (left_bottom_back) 
-            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[0][0]), np.full_like(right_top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][0],var_cd[0][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-dx, dtype=float), np.full_like(right_top_back,-dy, dtype=float)]))
-            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[1][0]), np.full_like(right_top_back,node_cd[1][1])], ['DispY','DispY',var_cd[1][0],var_cd[1][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-dx, dtype=float), np.full_like(right_top_back,-dy, dtype=float)]))
-            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[2][0]), np.full_like(right_top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-dx, dtype=float), np.full_like(right_top_back,-dy, dtype=float)]))
+            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[0][0]), np.full_like(right_top_back,node_cd[0][1])], ['DispX','DispX',var_cd[0][0],var_cd[0][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-dx, dtype=float),    np.full_like(right_top_back,-sc*dy, dtype=float)]))
+            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[1][0]), np.full_like(right_top_back,node_cd[1][1])], ['DispY','DispY',var_cd[1][0],var_cd[1][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-sc*dx, dtype=float), np.full_like(right_top_back,-dy, dtype=float)]))
+            res.append(MPC([right_top_back, left_bottom_back, np.full_like(right_top_back,node_cd[2][0]), np.full_like(right_top_back,node_cd[2][1])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][1]], [np.full_like(right_top_back,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_back,-sc*dx, dtype=float), np.full_like(right_top_back,-sc*dy, dtype=float)]))
             #elimination of DOF from corner left/top/front (left_top_front) -> corner left/bottom/back (left_bottom_back) 
-            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[0][1]), np.full_like(left_top_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][1],var_cd[0][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-dy, dtype=float), np.full_like(left_top_front,-dz, dtype=float)]))
-            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[1][1]), np.full_like(left_top_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][1],var_cd[1][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-dy, dtype=float), np.full_like(left_top_front,-dz, dtype=float)]))
-            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[2][1]), np.full_like(left_top_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][1],var_cd[2][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-dy, dtype=float), np.full_like(left_top_front,-dz, dtype=float)]))
+            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[0][1]), np.full_like(left_top_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][1],var_cd[0][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-sc*dy, dtype=float), np.full_like(left_top_front,-sc*dz, dtype=float)]))
+            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[1][1]), np.full_like(left_top_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][1],var_cd[1][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-dy, dtype=float),    np.full_like(left_top_front,-sc*dz, dtype=float)]))
+            res.append(MPC([left_top_front, left_bottom_back, np.full_like(left_top_front,node_cd[2][1]), np.full_like(left_top_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][1],var_cd[2][2]], [np.full_like(left_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(left_top_front,-sc*dy, dtype=float), np.full_like(left_top_front,-dz, dtype=float)]))
             #elimination of DOF from corner right/bottom/front (right_bottom_front) -> corner left/bottom/back (left_bottom_back) 
-            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[0][0]), np.full_like(right_bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][0],var_cd[0][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-dx, dtype=float), np.full_like(right_bottom_front,-dz, dtype=float)]))
-            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[1][0]), np.full_like(right_bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][0],var_cd[1][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-dx, dtype=float), np.full_like(right_bottom_front,-dz, dtype=float)]))
-            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[2][0]), np.full_like(right_bottom_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-dx, dtype=float), np.full_like(right_bottom_front,-dz, dtype=float)]))
+            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[0][0]), np.full_like(right_bottom_front,node_cd[0][2])], ['DispX','DispX',var_cd[0][0],var_cd[0][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-dx, dtype=float),    np.full_like(right_bottom_front,-sc*dz, dtype=float)]))
+            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[1][0]), np.full_like(right_bottom_front,node_cd[1][2])], ['DispY','DispY',var_cd[1][0],var_cd[1][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-sc*dx, dtype=float), np.full_like(right_bottom_front,-sc*dz, dtype=float)]))
+            res.append(MPC([right_bottom_front, left_bottom_back, np.full_like(right_bottom_front,node_cd[2][0]), np.full_like(right_bottom_front,node_cd[2][2])], ['DispZ','DispZ',var_cd[2][0],var_cd[2][2]], [np.full_like(right_bottom_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_bottom_front,-sc*dx, dtype=float), np.full_like(right_bottom_front,-dz, dtype=float)]))
             
             
                     
             #elimination of DOF from corner right/top/front (right_top_front) -> corner left/bottom/back (left_bottom_back) 
             res.append(MPC([right_top_front, left_bottom_back, np.full_like(right_top_front,node_cd[0][0]), np.full_like(right_top_front,node_cd[0][1]), np.full_like(right_top_front,node_cd[0][2])], 
                                         ['DispX','DispX',var_cd[0][0],var_cd[0][1], var_cd[0][2]], 
-                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-dx, dtype=float), np.full_like(right_top_front,-dy, dtype=float), np.full_like(right_top_front,-dz, dtype=float)]))
+                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-dx, dtype=float), np.full_like(right_top_front,-sc*dy, dtype=float), np.full_like(right_top_front,-sc*dz, dtype=float)]))
             res.append(MPC([right_top_front, left_bottom_back, np.full_like(right_top_front,node_cd[1][0]), np.full_like(right_top_front,node_cd[1][1]), np.full_like(right_top_front,node_cd[1][2])],
                                         ['DispY','DispY',var_cd[1][0],var_cd[1][1], var_cd[1][2]], 
-                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-dx, dtype=float), np.full_like(right_top_front,-dy, dtype=float), np.full_like(right_top_front,-0.5*dz, dtype=float)]))
+                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-sc*dx, dtype=float), np.full_like(right_top_front,-dy, dtype=float), np.full_like(right_top_front,-sc*dz, dtype=float)]))
             res.append(MPC([right_top_front, left_bottom_back, np.full_like(right_top_front,node_cd[2][0]), np.full_like(right_top_front,node_cd[2][1]), np.full_like(right_top_front,node_cd[2][2])],
                                         ['DispZ','DispZ',var_cd[2][0],var_cd[2][1], var_cd[2][2]], 
-                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-dx, dtype=float), np.full_like(right_top_front,-dy, dtype=float), np.full_like(right_top_front,-dz, dtype=float)]))
+                                        [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1), np.full_like(right_top_front,-sc*dx, dtype=float), np.full_like(right_top_front,-sc*dy, dtype=float), np.full_like(right_top_front,-dz, dtype=float)]))
     
         #if rot DOF are used, apply continuity of the rotational dof
         list_rot_var = []
@@ -1136,29 +1203,3 @@ class PeriodicBC(BCBase):
 #             pb.bc.mpc([var,var], [np.full_like(right_top_front,1), np.full_like(left_bottom_back,-1)], [right_top_front, left_bottom_back])
                                     
         
-    # def DefinePeriodicBoundaryConditionNonPerioMesh(mesh, node_cd, var_cd, dim='3D', tol=1e-8, Problemname = None, nNeighbours = 3, powInter = 1.0):
-        
-    #     if Problemname is None: pb = ProblemBase.get_active()
-    #     elif isinstance(Problemname, str): pb = ProblemBase.get_all()[Problemname]
-    #     elif isinstance(Problemname, ProblemBase): pb = Problemname #assume Problemname is a Problem Object
-    #     else: raise NameError('Problemname not understood')
-        
-    #     #Definition of the set of nodes for boundary conditions
-    #     if isinstance(mesh, str):
-    #         mesh = MeshBase.get_all()[mesh]
-    
-    #     if isinstance(var_cd, str):
-    #         var_cd = [pb.space.variable_rank(v) for v in var_cd]
-        
-    #     coords_nodes = mesh.nodes
-    #     if isinstance(node_cd[0], np.int64):
-    #         node_cd_int32 = [n.item() for n in node_cd]
-    #     else:
-    #         node_cd_int32 = [n for n in node_cd]
-        
-    #     list_nodes = sim.nonperioMPC(coords_nodes, node_cd_int32, nNeighbours, powInter)
-            
-    #     for eq_list in list_nodes:
-    #         eq = np.array(eq_list)
-    #         list_var = tuple(eq[1::3].astype(int)-1)
-    #         pb.bc.mpc(list_var, eq[2::3], eq[0::3].astype(int))

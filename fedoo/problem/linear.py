@@ -5,11 +5,11 @@ from fedoo.pgd.ProblemPGD import ProblemPGD
 # from fedoo.problem.ProblemPGDtest   import ProblemPGDtest as ProblemPGD
 
 #dynamical inheritance. The class is generated inside a function
-def Linear(Assembling, name = "MainProblem"):
-    if isinstance(Assembling,str):
-        Assembling = Assembly.get_all()[Assembling]
+def Linear(assembling, name = "MainProblem"):
+    if isinstance(assembling,str):
+        assembling = Assembly.get_all()[assembling]
                 
-    if hasattr(Assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
+    if hasattr(assembling.mesh, 'GetListMesh'): libBase = ProblemPGD
     else: libBase = Problem
     
     class __Linear(libBase):
@@ -19,7 +19,7 @@ def Linear(Assembling, name = "MainProblem"):
             A = assembling.get_global_matrix()
             B = 0             
             D = assembling.get_global_vector()     
-            self.__Assembly = Assembling
+            self.__assembly = assembling
                         
             libBase.__init__(self,A,B,D,assembling.mesh, name)
     
@@ -42,10 +42,10 @@ def Linear(Assembling, name = "MainProblem"):
             return E
         
         def reset(self):
-            self.__Assembly.reset()
+            self.__assembly.reset()
             
-            self.set_A(self.__Assembly.get_global_matrix()) #tangent stiffness 
-            self.set_D(self.__Assembly.get_global_vector())            
+            self.set_A(self.__assembly.get_global_matrix()) #tangent stiffness 
+            self.set_D(self.__assembly.get_global_vector())            
             B = 0            
             self.apply_boundary_conditions()
 
@@ -59,14 +59,14 @@ def Linear(Assembling, name = "MainProblem"):
                 - Change in constitutive law (internal variable)
             Update the problem with the new assembled global matrix and global vector
             """
-#            self.__Assembly.update(self.get_D())
-#            self.__Assembly.update(self)
-#            self.set_A(Assembling.get_global_matrix())
-#            self.set_D(Assembling.get_global_vector())
+#            self.__assembly.update(self.get_D())
+#            self.__assembly.update(self)
+#            self.set_A(assembling.get_global_matrix())
+#            self.set_D(assembling.get_global_vector())
 #            
-            outValues = self.__Assembly.update(self, dtime, compute)  
-            self.set_A(Assembling.get_global_matrix())
-            self.set_D(Assembling.get_global_vector())
+            outValues = self.__assembly.update(self, dtime, compute)  
+            self.set_A(assembling.get_global_matrix())
+            self.set_D(assembling.get_global_vector())
             return outValues 
         
         def solve(self, **kargs):
@@ -75,19 +75,17 @@ def Linear(Assembling, name = "MainProblem"):
             updateWF = kargs.pop('updateWF', True)
             libBase.solve(self)
             if updateWF == True:
-                self.update(compute = 'none')
-            
-        def get_Assembly(self):
-            return self.__Assembly
+                self.update(compute = 'none')                    
         
-        def ChangeAssembly(self,Assembling, update = True):
+        
+        def change_assembly(self,assembling, update = True):
             """
             Modify the assembly associated to the problem and update the problem (see Assembly.update for more information)
             """
-            if isinstance(Assembling,str):
-                Assembling = Assembly.get_all()[Assembling]
+            if isinstance(assembling,str):
+                assembling = Assembly[assembling]
                 
-            self.__Assembly = Assembling
+            self.__assembly = assembling
             if update: self.update()        
         
         def get_disp(self,name='all'):    
@@ -98,6 +96,10 @@ def Linear(Assembling, name = "MainProblem"):
             if name == 'all': name = 'Rot'
             return self.get_dof_solution(name)
         
-    return __Linear(Assembling, name)
+        @property
+        def assembly(self):
+            return self.__assembly
+        
+    return __Linear(assembling, name)
 
 
