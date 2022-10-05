@@ -180,7 +180,7 @@ class WeakFormSum(WeakForm):
         if any([wf.assembly_options!={} for wf in list_weakform]):
             self.assembly_options = None
             # if assembly_options is None, the weakForm have to be splited into several sub-weakform before 
-            # being used in an Assembly. This is automatically done when using Assembly.Create function
+            # being used in an Assembly. This is automatically done when using Assembly.create function
             # The restulting Assembly will be an AssemblySum object
             
         self.__constitutivelaw = ListConstitutiveLaw([a.GetConstitutiveLaw() for a in list_weakform])
@@ -190,12 +190,16 @@ class WeakFormSum(WeakForm):
         #return a list of constitutivelaw
         return self.__constitutivelaw    
     
-    def get_DifferentialOperator(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None, localFrame = None):
         Diff = 0
         self._list_mat_lumping = []
+        
+        if mesh is None: elm_type = None
+        else: elm_type = mesh.elm_type
+        
         for wf in self.__list_weakform: 
-            Diff_wf = wf.get_DifferentialOperator(mesh, localFrame)
-            mat_lumping = wf.assembly_options.get('mat_lumping', False) #True of False
+            Diff_wf = wf.get_weak_equation(mesh, localFrame)
+            mat_lumping = wf.assembly_options.get('mat_lumping', elm_type, False) #True of False
             if Diff_wf != 0:
                 self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op
             Diff += Diff_wf            

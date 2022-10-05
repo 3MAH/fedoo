@@ -119,7 +119,7 @@ class ParametricBeam(WeakForm):
         return [E_S, kG_S, kG_S, G_Jx, E_Iyy, E_Izz]  
 
 
-    def get_DifferentialOperator(self, mesh, localFrame=None):
+    def get_weak_equation(self, mesh, localFrame=None):
         
         if isinstance(mesh, str):
             mesh = MeshPGD.get_all()[mesh]

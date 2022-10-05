@@ -192,6 +192,48 @@ class ConstitutiveLaw:
 #=============================================================
 # Base class for weakforms (cf weakforms lib)
 #=============================================================
+class _AssemblyOptions:
+    def __init__(self):
+        self.elm_options = {None:{}} #None for default value
+    
+    def __setitem__(self, item, value):
+        #possible options : 
+        # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
+        # * 'n_elm_gp' - set the default n_elm_gp
+        # * 'mat_lumping' - matrix lumping if set to True
+        
+        if isinstance(item, tuple):
+            assert len(item)  == 2, "item not understoond"
+            self.set(item[0], value, item[1])
+        else:
+            self.set(item, value) #set default value for all element
+    
+    def __getitem__(self, item):
+        if isinstance(item, tuple):                        
+            assert len(item)  == 2, "item not understoond"
+            return self.get(item[0], item[1])
+        else: 
+            return self.get(item)
+            
+               
+    def get(self, option, elm_type = None, default = None):     
+        assert isinstance(option, str) and (isinstance(elm_type, str) or elm_type is None), "option and elm_type should be str"
+
+        if elm_type in self.elm_options and option in self.elm_options[elm_type]:
+            return self.elm_options[elm_type][option]
+        else: 
+            return self.elm_options[None].get(option, default)
+        
+
+    def set(self, option, value, elm_type = None): 
+        assert isinstance(option, str) and (isinstance(elm_type, str) or elm_type is None), "option and elm_type should be str"
+            
+        if elm_type not in self.elm_options:
+            self.elm_options[elm_type] = {option:value}
+        else:     
+            self.elm_options[elm_type][option] = value
+        
+
 class WeakForm:
     """Base class for weakforms (cf weakforms lib)."""
 
@@ -205,11 +247,7 @@ class WeakForm:
         elif isinstance(space, str):
             space = ModelingSpace[space]
         self.__space = space
-        self.assembly_options = {}
-        #possible options : 
-        # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
-        # * 'n_elm_gp' - set the default n_elm_gp
-        # * 'mat_lumping' - matrix lumping if set to True
+        self.assembly_options = _AssemblyOptions()
         
         if name != "":WeakForm.__dic[self.__name] = self
         
@@ -223,7 +261,7 @@ class WeakForm:
         pass
     
     
-    def get_DifferentialOperator(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None, localFrame = None):
         pass
             
     

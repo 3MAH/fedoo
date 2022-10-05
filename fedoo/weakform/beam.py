@@ -54,7 +54,7 @@ class Beam(WeakForm):
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}        
     
-    def get_DifferentialOperator(self, localFrame):
+    def get_weak_equation(self, localFrame):
         E  = self.__ConstitutiveLaw.GetYoungModulus()
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
@@ -68,8 +68,7 @@ class Beam(WeakForm):
     
     def GetGeneralizedStress(self):
         #only for post treatment
-
-        eps, eps_vir = get_BeamStrainOperator()
+        eps = self.space.op_beam_strain()         
         E  = self.__ConstitutiveLaw.GetYoungModulus()
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
@@ -134,7 +133,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         self.__ConstitutiveLaw = CurrentConstitutiveLaw
 #         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz}
     
-#     def get_DifferentialOperator(self, localFrame):
+#     def get_weak_equation(self, localFrame):
 #         E  = self.__ConstitutiveLaw.GetYoungModulus()
 #         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
 #         G = E/(1+nu)/2

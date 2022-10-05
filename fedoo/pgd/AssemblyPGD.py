@@ -50,7 +50,7 @@ class AssemblyPGD(AssemblyFEM):
         mesh = self.mesh
         dim = mesh.get_dimension()
 
-        wf = self.weakform.get_DifferentialOperator(mesh)  
+        wf = self.weakform.get_weak_equation(mesh)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
         
         AA = []  

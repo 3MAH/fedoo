@@ -20,7 +20,6 @@ F = -10
 
 geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = True #if true, use reduce integration for shear 
 
 material = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Material')
 fd.constitutivelaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
@@ -32,20 +31,26 @@ nodes_right = mesh.node_sets['right']
 
 node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
+fd.weakform.Plate("PlateSection", name = "WFplate")
+fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")   
 
-if reduced_integration == False:
-    fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
-    post_tt_assembly = 'plate'
-else:    
-    fd.weakform.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
+
+# or by hand
+# reduced_integration = True #if true, use reduce integration for shear 
+# if reduced_integration == False:
+#     fd.weakform.PlateFI("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
+#     post_tt_assembly = 'plate'
+# else:    
+    # fd.weakform.PlateShear("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+    # fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    fd.weakform.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
+    # fd.weakform.PlateKirchhoffLove("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+    # fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
-    post_tt_assembly = 'plate_FI'
+    # fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
+    # post_tt_assembly = 'plate_FI'
+
 
 pb = fd.problem.Linear("plate")
 
@@ -67,5 +72,5 @@ pb.solve()
 
 assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
 
-# # z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(20)
+# # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(20)
 # # plt.plot(StressDistribution[0], z)

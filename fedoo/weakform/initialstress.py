@@ -36,7 +36,7 @@ class InitialStress(WeakForm):
         self.__InitialStressTensor = InitialStressTensor
         self.__typeOperator = 'all'
 
-    def get_DifferentialOperator(self, mesh=None, localFrame = None):               
+    def get_weak_equation(self, mesh=None, localFrame = None):               
         eps = self.space.op_strain()
         if self.__typeOperator == 'Matrix':
             return sum([self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])

@@ -20,7 +20,6 @@ F = -100
 
 geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = True #if true, use reduce integration for shear 
 
 mat1 = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Mat1')
 mat2 = fd.constitutivelaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
@@ -36,20 +35,23 @@ nodes_right = mesh.node_sets['right']
 node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
-if reduced_integration == False:
-    fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
-    post_tt_assembly = 'plate'
-else:    
-    fd.weakform.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
+# reduced_integration = True #if true, use reduce integration for shear 
+# if reduced_integration == False:
+#     fd.weakform.PlateFI("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
+#     post_tt_assembly = 'plate'
+# else:    
+#     fd.weakform.PlateShear("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    fd.weakform.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
-    fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
+#     fd.weakform.PlateKirchhoffLove("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
-    post_tt_assembly = 'plate_FI'
+#     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
+#     post_tt_assembly = 'plate_FI'
 
+fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
 
 pb = fd.problem.Linear("plate")
 

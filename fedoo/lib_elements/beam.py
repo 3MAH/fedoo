@@ -141,13 +141,13 @@ class BeamFCQ_disp(Element1D): #2 nodes with derivatative dof
         return np.transpose([6*xi**2-6*xi, -6*xi**2+6*xi, 3*xi**2-4*xi+1, 0*xi, 0*xi, 3*xi**2-2*xi], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=6)          
 
 BeamFCQ = {'DispX':['beamFCQ_lin2'],             
-            'DispY':['beamFCQ_disp',(1, 'DispX')], 
-            'DispZ':['beamFCQ_disp', (1, 'RotX')],            
-            'RotX':['beamFCQ_lin2'], 
-            'RotY':['beamFCQ_rot'], 
-            'RotZ':['beamFCQ_rot'], 
-            '__default':['beamFCQ_lin2'],
-            '__local_csys':True}      
+           'DispY':['beamFCQ_disp',(1, 'DispX')], 
+           'DispZ':['beamFCQ_disp', (1, 'RotX')],            
+           'RotX':['beamFCQ_lin2'], 
+           'RotY':['beamFCQ_rot'], 
+           'RotZ':['beamFCQ_rot'], 
+           '__default':['beamFCQ_lin2'],
+           '__local_csys':True}      
 
 
 # --------------------------------------

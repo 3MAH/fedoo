@@ -55,7 +55,7 @@ class InternalForce(WeakForm):
             
             self.__NonLinearStrainOperatorVirtual = NonLinearStrainOperatorVirtual
             
-    def get_DifferentialOperator(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None, localFrame = None):
         
         if self._nlgeom == 1: #add initial displacement effect 
             if not(hasattr(self.__ConstitutiveLaw, 'get_disp_grad')):
