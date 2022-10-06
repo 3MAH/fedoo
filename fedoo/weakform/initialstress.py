@@ -1,13 +1,13 @@
-from fedoo.core.base import WeakForm
+from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 # from fedoo.util.StrainOperator import GetStrainOperator, DiffOp
 # from fedoo.core.modelingspace import Variable, Vector, get_Dimension
 
-class InitialStress(WeakForm):
+class InitialStress(WeakFormBase):
     def __init__(self, InitialStressTensor = 0, name = "", space = None):
         if name == "": name = "InitialStress"
             
-        WeakForm.__init__(self,name, space)
+        WeakFormBase.__init__(self,name, space)
         
         if InitialStressTensor == 0:
             InitialStressTensor = [0,0,0,0,0,0] #list of the six stress component (sig_xx, sig_yy, sig_zz, sig_yz, sig_xz, sigxy)

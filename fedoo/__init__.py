@@ -9,7 +9,7 @@ from . import problem
 from .core.mesh import Mesh
 from .core.assembly import Assembly
 from .core.base import ConstitutiveLaw
-from .core.base import WeakForm
+from .core.weakform import WeakForm
 from .core.modelingspace import ModelingSpace
 from .core.problem import Problem
 from .core.dataset import DataSet, MultiFrameDataSet

@@ -11,10 +11,53 @@ from fedoo.lib_elements.quadrangle import *
 from fedoo.lib_elements.finite_difference_1d import *
 
 
+# class ElementLib:
+#     list_element = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
+#             'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
+#             'tri3':Tri3,'tri6':Tri6,'tri3bubble':Tri3Bubble,
+#             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
+#             'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
+#             'beam':Beam, 'beamfcq':BeamFCQ, 'bernoullibeam':BernoulliBeam,
+#             'parameter':Parameter, 'node':Node,
+#             'pquad4':pquad4, 'ptri3':ptri3, 'pquad8':pquad8, 'ptri6':ptri6, 'pquad9':pquad9,
+#             'bernoullibeam_rot': BernoulliBeam_rot, 'bernoullibeam_disp': BernoulliBeam_disp,
+#             'beamfcq_lin2':BeamFCQ_lin2, 'beamfcq_rot':BeamFCQ_rot,'beamfcq_disp':BeamFCQ_disp,
+#             'beam_dispy':Beam_dispY,'beam_dispz':Beam_dispZ,
+#             'beam_rotz':Beam_rotZ, 'beam_roty':Beam_rotY}
+    
+#     default_nb_pg = {'lin2':2, 'lin3':3, 'lin2bubble':2, 'lin3bubble':3,'lin4':4,
+#             'cohesive1d':1, 'cohesive2d':2, 'cohesive3d':4,
+#             'tri3':3,'tri6':4,'tri3bubble':3,
+#             'quad4':4,'quad8':9,'quad9':9,
+#             'tet4':4,'tet10':15,'hex8':8,'hex20':27,                        
+#             'beam':4, 'beamfcq':4, 'bernoullibeam':4,
+#             'parameter':0, 'node':0,
+#             'pquad4':4, 'ptri3':3, 'pquad8':9, 'ptri6':4, 'pquad9':9
+#             }
+    
+#     def __init__(self):
+#         pass
+        
+        
+    
+# class CombinedElement: #element that use several interpolation depending on the variable
+#     def __init__(self):
+#         pass
+    
+    
+
+
+
+
+
+
+
 def get_element(element_str):
+    # if not isinstance(element_str, str): return element_str
+    
     list_element = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
             'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
-            'tri3':Tri3,'tri6':Tri6,'tri3Bubble':Tri3Bubble,
+            'tri3':Tri3,'tri6':Tri6,'tri3bubble':Tri3Bubble,
             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
             'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
             'beam':Beam, 'beamfcq':BeamFCQ, 'bernoullibeam':BernoulliBeam,

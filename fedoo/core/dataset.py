@@ -109,8 +109,8 @@ class DataSet():
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
-                meshplot = self.meshplot                        
-            crd = self.mesh.nodes
+                meshplot = self.meshplot                                    
+            crd = self.mesh.nodes            
             
             if 'Disp' in self.node_data:
                 U = self.node_data['Disp'].T
@@ -128,8 +128,13 @@ class DataSet():
                 color='Black',
                 # n_colors= 10
             )
-           
+
+        if crd.shape[1] < 3: 
+            crd = np.c_[crd, np.zeros((len(crd), 3-crd.shape[1]))]
+            
         if 'Disp' in self.node_data:
+            if U.shape[1] < 3: 
+                U = np.c_[U, np.zeros((len(U), 3-U.shape[1]))]
             meshplot.points = crd + scale*U  
         else: 
             meshplot.points = crd

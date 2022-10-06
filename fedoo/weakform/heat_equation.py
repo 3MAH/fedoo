@@ -1,26 +1,19 @@
-from fedoo.core.base import ConstitutiveLaw, WeakForm
-from fedoo.core.assembly_sum import WeakFormSum
+from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.weakform import WeakFormBase, WeakFormSum
 import numpy as np
 
 
-class SteadyHeatEquation(WeakForm):
+class SteadyHeatEquation(WeakFormBase):
     """
-    Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
-    
-    * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
-    * May include initial stress depending on the ConstitutiveLaw.
-    * This weak form accepts geometrical non linearities (with nlgeom = True). In this case the initial displacement is also considered. 
-    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.constitutivelaw.Simcoon` Constitutive Law
-    
+    Weak formulation of the steady heat equation (without time evolution).
+        
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
+        Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
     nlgeom: bool (default = False)
-        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
     """
     def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
@@ -29,7 +22,7 @@ class SteadyHeatEquation(WeakForm):
         if name is None:
             name = thermal_constitutivelaw.name
             
-        WeakForm.__init__(self,name,space)
+        WeakFormBase.__init__(self,name,space)
         
         self.space.new_variable("Temp") #temperature
         
@@ -86,25 +79,7 @@ class SteadyHeatEquation(WeakForm):
 
 
 
-class TemperatureTimeDerivative(WeakForm):
-    """
-    Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
-    
-    * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
-    * May include initial stress depending on the ConstitutiveLaw.
-    * This weak form accepts geometrical non linearities (with nlgeom = True). In this case the initial displacement is also considered. 
-    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.constitutivelaw.Simcoon` Constitutive Law
-    
-    Parameters
-    ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
-        name of the WeakForm     
-    nlgeom: bool (default = False)
-        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
-        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
-    """
+class TemperatureTimeDerivative(WeakFormBase):
     def __init__(self, thermal_constitutivelaw, name = None, nlgeom = False, space = None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
@@ -112,7 +87,7 @@ class TemperatureTimeDerivative(WeakForm):
         if name is None:
             name = thermal_constitutivelaw.name
             
-        WeakForm.__init__(self,name,space)
+        WeakFormBase.__init__(self,name,space)
         
         self.space.new_variable("Temp") #temperature
             
@@ -176,6 +151,27 @@ class TemperatureTimeDerivative(WeakForm):
     
     
 def HeatEquation(thermal_constitutivelaw, name = None, nlgeom = False, space = None):
+    """
+    Weak formulation of the heat equation.
+        
+    Parameters
+    ----------
+    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
+        Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    name: str
+        name of the WeakForm     
+    nlgeom: bool (default = False)
+    
+    This weakform use mat_lumping for the time derivative assembly. 
+    Without mat_lumping, the solution is generally wrong with notable temperature oscillations.     
+    
+    However, it is possible to change this parameter using: 
+        
+        .. code-block:: python
+
+            wf = fedoo.weakform.HeatEquation(thermal_constitutivelaw)
+            wf.list_weakform[1].assembly_options['mat_lumping'] = False
+    """
     heat_eq_diffusion = SteadyHeatEquation(thermal_constitutivelaw, "", nlgeom, space)
     heat_eq_time = TemperatureTimeDerivative(thermal_constitutivelaw, "", nlgeom, space)
     heat_eq_time.assembly_options['mat_lumping'] = True #use mat_lumping for the temperature time derivative 

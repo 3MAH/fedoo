@@ -46,8 +46,8 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
                 
         for i,res in enumerate(output_list):
-            output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
-            if res not in _available_output:
+            # output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
+            if res not in _available_output and res not in pb.space.list_variables() and res not in pb.space.list_vectors():
                 print("List of available output: ", _available_output)
                 raise NameError(res, "' doens't match to any available output")
                 
@@ -67,17 +67,21 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
         result = DataSet(assemb.mesh)
                     
         for res in output_list:   
-            if res == 'Disp':
-                data = pb.get_disp()
-                data_type = 'Node'                               
-            
-            elif res == 'Rot':            
-                data = pb.get_rot()
-                data_type = 'Node'                               
-                            
-            elif res == 'Temp':            
-                data = pb.get_temp()
+            if res in pb.space.list_variables() or res in pb.space.list_vectors():
+                data = pb.get_dof_solution(res)
                 data_type = 'Node'
+                
+            # if res == 'Disp':
+            #     data = pb.get_disp()
+            #     data_type = 'Node'                               
+            
+            # elif res == 'Rot':            
+            #     data = pb.get_rot()
+            #     data_type = 'Node'                               
+                            
+            # elif res == 'Temp':            
+            #     data = pb.get_temp()
+            #     data_type = 'Node'
                 
             elif res == 'Fext':
                 data = assemb.get_ext_forces(pb.get_dof_solution())

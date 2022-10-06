@@ -1,7 +1,7 @@
-from fedoo.core.base import WeakForm
+from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 
-class InternalForce(WeakForm):
+class InternalForce(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
     
@@ -27,7 +27,7 @@ class InternalForce(WeakForm):
         if name == "":
             name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,name, space)
+        WeakFormBase.__init__(self,name, space)
         
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                

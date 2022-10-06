@@ -1,10 +1,11 @@
-from fedoo.core.base import ConstitutiveLaw, WeakForm
+from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.weakform import WeakFormBase
 from fedoo.pgd.MeshPGD import MeshPGD
 from fedoo.pgd.SeparatedArray import SeparatedOnes
 
 import numpy as np
 
-class ParametricBeam(WeakForm):
+class ParametricBeam(WeakFormBase):
     """
     ParametricBernoulliBeam(E=None, nu = None, S=None, Jx=None, Iyy=None, Izz = None, R = None, name = "").
     * Same has BernoulliBeam but with the possibility to set each parameter as a coordinate of the problem.
@@ -34,7 +35,7 @@ class ParametricBeam(WeakForm):
             Iyy = Izz = pi * R**4/4         
         """
     
-        WeakForm.__init__(self,name, space)
+        WeakFormBase.__init__(self,name, space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")     

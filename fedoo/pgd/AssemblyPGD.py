@@ -6,7 +6,7 @@ from fedoo.core._sparsematrix import RowBlocMatrix
 from fedoo.util.voigt_tensors import StrainTensorList
 from fedoo.core.mesh import Mesh as MeshFEM
 from fedoo.lib_elements.element_list import get_DefaultNbPG
-from fedoo.core.base import WeakForm
+from fedoo.core.weakform import WeakFormBase
 from fedoo.pgd.SeparatedOperator import SeparatedOperator
 from fedoo.pgd.SeparatedArray import SeparatedArray, SeparatedZeros
 from fedoo.core.base import ConstitutiveLaw
@@ -22,7 +22,7 @@ class AssemblyPGD(AssemblyFEM):
         #mesh should be of type PGD.Mesh
 
         if isinstance(weakForm, str):            
-            weakForm = WeakForm.get_all()[weakForm]
+            weakForm = WeakFormBase[weakForm]
 
         if isinstance(mesh, str):
             mesh = MeshFEM.get_all()[mesh]

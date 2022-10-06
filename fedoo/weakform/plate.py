@@ -1,10 +1,9 @@
-from fedoo.core.base import WeakForm
-from fedoo.core.assembly_sum import WeakFormSum
+from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
 # from fedoo.util.StrainOperator import GetStrainOperator
 # from fedoo.core.modelingspace import Variable, Vector, get_Dimension
 
-class PlateFI(WeakForm):
+class PlateFI(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for plate models.
     This weak form has to be used in combination with a Shell Constitutive Law
@@ -27,7 +26,7 @@ class PlateFI(WeakForm):
         if name == "":
             name = PlateConstitutiveLaw.name
             
-        WeakForm.__init__(self,name, space)
+        WeakFormBase.__init__(self,name, space)
         
         assert self.space.ndim == 3, "No 2D model for a plate kinematic. Choose '3D' problem dimension."
 

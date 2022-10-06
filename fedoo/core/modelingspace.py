@@ -160,13 +160,15 @@ class ModelingSpace:
     #Methods related to Varibale
     #===================================================
     def new_variable(self, name):
-        """Create a new variable with the given name."""
+        """Create a new variable with the given name. """
         assert isinstance(name,str) , "The variable must be a string"
         assert name[:2] != '__', "Names of variable should not begin by '__'"
         
         if name not in self._variable.keys():
             self._variable[name] = self._nvar
             self._nvar +=1
+        
+        # return DiffOp(self._variable[name])
 
 
     def variable_rank(self,name):

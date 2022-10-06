@@ -1,7 +1,7 @@
-from fedoo.core.base import WeakForm
+from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 
-class InterfaceForce(WeakForm):
+class InterfaceForce(WeakFormBase):
     """
     Weak formulation of the interface equilibrium equation.
     
@@ -25,7 +25,7 @@ class InterfaceForce(WeakForm):
         if name == "":
             name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,name)
+        WeakFormBase.__init__(self,name)
         
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                

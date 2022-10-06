@@ -1,11 +1,11 @@
 #simcoon compatible
 
-from fedoo.core.base import AssemblyBase, _AssemblyOptions
+from fedoo.core.base import AssemblyBase
+from fedoo.core.weakform import _AssemblyOptions, WeakFormBase
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.core.mesh import Mesh
 from fedoo.lib_elements.element_list import * 
-from fedoo.core.base import WeakForm
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core._sparsematrix import _BlocSparseOld as BlocSparseOld #required for 'old' _assembly_method
@@ -54,7 +54,7 @@ class Assembly(AssemblyBase):
     def __init__(self,weakform, mesh="", elm_type="", name ="", **kargs):                      
         
         if isinstance(weakform, str):
-            weakform = WeakForm.get_all()[weakform]
+            weakform = WeakFormBase.get_all()[weakform]
         
         if weakform.assembly_options is None:
             #should be a non compatible WeakFormSum object
@@ -63,7 +63,7 @@ class Assembly(AssemblyBase):
         if isinstance(mesh, str):
             mesh = Mesh.get_all()[mesh]
             
-        if isinstance(weakform, WeakForm):
+        if isinstance(weakform, WeakFormBase):
             self.weakform = weakform
             AssemblyBase.__init__(self, name, weakform.space)
         else: #weakform should be a ModelingSpace object
@@ -1138,7 +1138,7 @@ class Assembly(AssemblyBase):
     @staticmethod
     def create(weakform, mesh="", elm_type="", name ="", **kargs): 
         if isinstance(weakform, str):
-            weakform = WeakForm[weakform]
+            weakform = WeakFormBase[weakform]
         
         if isinstance(mesh, str): mesh = Mesh[mesh]        
         if elm_type == "": elm_type = mesh.elm_type

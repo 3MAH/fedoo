@@ -1,6 +1,7 @@
-from fedoo.core.base import ConstitutiveLaw, WeakForm
+from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.weakform import WeakFormBase
 
-class Beam(WeakForm):
+class Beam(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for beam models.
     Geometrical non linearities not implemented for now
@@ -33,7 +34,7 @@ class Beam(WeakForm):
         if name == "":
             name = CurrentConstitutiveLaw.name
             
-        WeakForm.__init__(self,name, space)
+        WeakFormBase.__init__(self,name, space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")            
@@ -103,7 +104,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
     #same as beam with k=0 (no shear effect)
     return Beam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, name = name)
 
-# class BernoulliBeam(WeakForm):
+# class BernoulliBeam(WeakFormBase):
 #     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         if isinstance(CurrentConstitutiveLaw, str):
 #             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
@@ -111,7 +112,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         if name == "":
 #             name = CurrentConstitutiveLaw.name
             
-#         WeakForm.__init__(self,name)
+#         WeakFormBase.__init__(self,name)
 
 #         Variable("DispX") 
 #         Variable("DispY")     

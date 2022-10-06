@@ -1,6 +1,7 @@
-from fedoo.core.base import ConstitutiveLaw, WeakForm
+from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.weakform import WeakFormBase
 
-class Inertia(WeakForm):
+class Inertia(WeakFormBase):
     """
     Weak formulation related to the inertia effect into dynamical simulation.
     Should be used in :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark` or :mod:`fedoo.problem.ExplicitDynamic`
@@ -17,7 +18,7 @@ class Inertia(WeakForm):
         if name == "":
             name = "Inertia"
             
-        WeakForm.__init__(self,name,space)
+        WeakFormBase.__init__(self,name,space)
 
         self.space.new_variable("DispX") 
         self.space.new_variable("DispY")                
