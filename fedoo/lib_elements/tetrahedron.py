@@ -33,6 +33,10 @@ class ElementTetrahedron(Element):
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
 
 class Tet4(ElementTetrahedron):
+    name = 'tet4'
+    default_n_gp = 4
+    n_nodes = 4
+    
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd = np.c_[[0. , 0. , 0. , 1.],\
                            [1. , 0. , 0. , 0.],\
@@ -49,6 +53,10 @@ class Tet4(ElementTetrahedron):
                          [0. , 1. , -1. , 0.] ]) for xi in vec_xi]   
                          
 class Tet10(ElementTetrahedron):
+    name = 'tet10'
+    default_n_gp = 15
+    n_nodes = 10
+    
     def __init__(self, n_elm_gp=15, **kargs):
         self.xi_nd = np.c_[[0. , 0. , 0. , 1. , 0. , 0. , 0. , 0.5 , 0.5 , 0.5],\
                            [1. , 0. , 0. , 0. , 0.5 , 0. , 0.5 , 0.5 , 0. , 0.],\

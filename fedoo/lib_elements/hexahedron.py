@@ -28,6 +28,10 @@ class ElementHexahedron(Element):
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
 
 class Hex8(ElementHexahedron):
+    name = 'hex8'
+    default_n_gp = 8
+    n_nodes = 8
+    
     def __init__(self, n_elm_gp=8, **kargs):
         self.xi_nd = np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1.],\
                            [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1.],\
@@ -48,6 +52,10 @@ class Hex8(ElementHexahedron):
                          [-0.125*(1-xi[0])*(1-xi[1]) , -0.125*(1+xi[0])*(1-xi[1]), -0.125*(1+xi[0])*(1+xi[1]), -0.125*(1-xi[0])*(1+xi[1]), 0.125*(1-xi[0])*(1-xi[1]) , 0.125*(1+xi[0])*(1-xi[1]) , 0.125*(1+xi[0])*(1+xi[1]), 0.125*(1-xi[0])*(1+xi[1]) ] ]) for xi in vec_xi]      
 
 class Hex20(ElementHexahedron):
+    name = 'hex20'
+    default_n_gp = 27
+    n_nodes = 20
+    
     def __init__(self, n_elm_gp=27, **kargs):
         self.xi_nd = np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1. , 0. ,  1. , 0. , -1. , -1.,  1. , 1. ,-1. , 0.,  1. , 0. ,-1.],\
                            [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1. , -1. , 0. , 1. ,  0. , -1., -1. , 1. , 1. , -1.,  0. , 1. ,0.],\

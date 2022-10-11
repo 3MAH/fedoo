@@ -151,6 +151,10 @@ class DataSet():
             pl.camera.Azimuth(30)
             pl.camera.Elevation(15)
 
+        if component == "norm": 
+            component = 0
+            scalars = np.linalg.norm(scalars, axis = 0)
+
         pl.add_mesh(meshplot, scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
             
         pl.add_axes(color='Black', interactive = True)
@@ -562,6 +566,7 @@ class MultiFrameDataSet(DataSet):
         clim = kargs.pop('clim', clim)    
         window_size = kargs.pop('window_size', [1024, 768])
 
+        component_save = component 
     
         self.load(0)
         
@@ -628,7 +633,11 @@ class MultiFrameDataSet(DataSet):
             else:            
                 if 'Disp' in self.node_data:
                     meshplot.points = crd + scale*self.node_data['Disp'].T
-                     
+
+            if component_save == "norm":
+                component = 0
+                scalars = np.linalg.norm(scalars, axis = 0)                     
+                
             if i == 0:
                 pl.add_mesh(meshplot, scalars = data.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim,  **kargs)
             else:

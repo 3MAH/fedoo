@@ -5,7 +5,7 @@ from fedoo.core._sparsematrix import RowBlocMatrix
 # from fedoo.util.StrainOperator import GetStrainOperator
 from fedoo.util.voigt_tensors import StrainTensorList
 from fedoo.core.mesh import Mesh as MeshFEM
-from fedoo.lib_elements.element_list import get_DefaultNbPG
+from fedoo.lib_elements.element_list import get_default_n_gp
 from fedoo.core.weakform import WeakFormBase
 from fedoo.pgd.SeparatedOperator import SeparatedOperator
 from fedoo.pgd.SeparatedArray import SeparatedArray, SeparatedZeros
@@ -32,8 +32,8 @@ class AssemblyPGD(AssemblyFEM):
         self.weakform = weakForm
         self.mesh = mesh #should be a MeshPGD object 
         self.__listElementType = [m.elm_type for m in mesh.GetListMesh()] #ElementType for every subMesh defined in self.mesh
-        self.__listNumberOfGaussPoints = [get_DefaultNbPG(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.mesh (default value)
-        # [get_DefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
+        self.__listNumberOfGaussPoints = [get_default_n_gp(eltype) for eltype in self.__listElementType] #Nb_pg for every subMesh defined in self.mesh (default value)
+        # [get_default_n_gp(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))]
         
         self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
@@ -163,13 +163,13 @@ class AssemblyPGD(AssemblyFEM):
             if len(listElementType) != len(self.mesh.GetListMesh()):
                 assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
             self.__listElementType = [ElementType for ElementType in listElementType]
-            self.__listNumberOfGaussPoints = [get_DefaultNbPG(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.mesh (default value)            
+            self.__listNumberOfGaussPoints = [get_default_n_gp(self.__listElementType[dd], self.mesh.GetListMesh()[dd]) for dd in range(len(self.__listElementType))] #Nb_pg for every subMesh defined in self.mesh (default value)            
         else:
             for i,m in enumerate(listSubMesh):                
                 if isinstance(m, str): m = MeshFEM.get_all()[m]
                 dd = self.mesh.GetListMesh().index(m)
                 self.__listElementType[dd] = listElementType[i]
-                self.__listNumberOfGaussPoints[dd] = get_DefaultNbPG(listElementType[i], m)
+                self.__listNumberOfGaussPoints[dd] = get_default_n_gp(listElementType[i], m)
         
         self.__listAssembly = [AssemblyFEM(self.weakform, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(self.mesh.GetListMesh())]

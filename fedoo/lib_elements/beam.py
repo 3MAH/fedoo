@@ -1,10 +1,14 @@
 import numpy as np
-from fedoo.lib_elements.element_base import *
+from fedoo.lib_elements.element_base import Element1D, Element1DGeom2
+from fedoo.lib_elements.element_list import CombinedElement
 
 # --------------------------------------
 #bernoulliBeam
 # --------------------------------------
 class BernoulliBeam_disp(Element1D): #2 nodes with derivatative dof
+    name = 'bernoullibeam_disp'
+    n_nodes = 2
+
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
@@ -32,6 +36,9 @@ class BernoulliBeam_disp(Element1D): #2 nodes with derivatative dof
         
    
 class BernoulliBeam_rot(Element1D): #2 nodes with derivatative dof
+    name = 'bernoullibeam_rot'
+    n_nodes = 2
+    
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir
         elmGeom = kargs.get('elmGeom', None)
         if elmGeom is not None:
@@ -65,14 +72,22 @@ class BernoulliBeam_rot(Element1D): #2 nodes with derivatative dof
         # return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
     
 
-BernoulliBeam = {'DispX':['lin2'], 'DispY':['BernoulliBeam_disp', (1, 'RotZ')], 'DispZ':['BernoulliBeam_disp', (-1, 'RotY')], 
-        'RotX':['lin2'], 'RotY':['BernoulliBeam_rot', (-1, 'DispZ')], 'RotZ':['BernoulliBeam_rot', (1, 'DispY')],
-        '__default':['lin2'], '__local_csys':True}  
+# BernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoullibeam_disp', (1, 'RotZ')], 'DispZ':['bernoullibeam_disp', (-1, 'RotY')], 
+#         'RotX':['lin2'], 'RotY':['bernoullibeam_rot', (-1, 'DispZ')], 'RotZ':['bernoullibeam_rot', (1, 'DispY')],
+#         '__default':['lin2'], '__local_csys':True}  
+
+BernoulliBeam = CombinedElement("bernoullibeam", 'lin2', default_n_gp = 4, local_csys = True)
+BernoulliBeam.dict_elm_type = {'DispY':BernoulliBeam_disp, 'DispZ':BernoulliBeam_disp,
+        'RotY':BernoulliBeam_rot, 'RotZ':BernoulliBeam_rot }
+BernoulliBeam.associated_variables = {'DispY':(1,'RotZ'), 'DispZ':(-1,'RotY'),'RotY':(-1, 'DispZ'), 'RotZ':(1, 'DispY')}
 
 # --------------------------------------
 #Timoshenko FCQ beam 
 # --------------------------------------
 class BeamFCQ_lin2(Element1DGeom2,Element1D):
+    name = 'beamfcq_lin2'
+    n_nodes = 3
+    
     def __init__(self, n_elm_gp=2, **kargs):
         self.xi_nd = np.c_[[0., 1., 0.5]]                     
         self.n_elm_gp = n_elm_gp
@@ -85,6 +100,8 @@ class BeamFCQ_lin2(Element1DGeom2,Element1D):
         return [np.array([[-1., 1., 0]]) for x in xi]
 
 class BeamFCQ_rot(Element1D): #2 nodes with derivatative dof
+    name = 'beamfcq_rot'
+    n_nodes = 3
         
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         # elmGeom = kargs.get('elmGeom', None)
@@ -113,6 +130,9 @@ class BeamFCQ_rot(Element1D): #2 nodes with derivatative dof
         return np.transpose([6*xi-4, 6*xi-2, -8*xi+4], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=3)       
 
 class BeamFCQ_disp(Element1D): #2 nodes with derivatative dof
+    name = 'beamfcq_disp'
+    n_nodes = 3
+    
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
     #     elmGeom = kargs.get('elmGeom', None)
     #     if elmGeom is not None:
@@ -140,15 +160,19 @@ class BeamFCQ_disp(Element1D): #2 nodes with derivatative dof
     def ShapeFunctionDerivative(self,xi):          
         return np.transpose([6*xi**2-6*xi, -6*xi**2+6*xi, 3*xi**2-4*xi+1, 0*xi, 0*xi, 3*xi**2-2*xi], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=6)          
 
-BeamFCQ = {'DispX':['beamFCQ_lin2'],             
-           'DispY':['beamFCQ_disp',(1, 'DispX')], 
-           'DispZ':['beamFCQ_disp', (1, 'RotX')],            
-           'RotX':['beamFCQ_lin2'], 
-           'RotY':['beamFCQ_rot'], 
-           'RotZ':['beamFCQ_rot'], 
-           '__default':['beamFCQ_lin2'],
-           '__local_csys':True}      
+# BeamFCQ = {'DispX':['beamfcq_lin2'],             
+#            'DispY':['beamfcq_disp',(1, 'DispX')], 
+#            'DispZ':['beamfcq_disp', (1, 'RotX')],            
+#            'RotX':['beamfcq_lin2'], 
+#            'RotY':['beamfcq_rot'], 
+#            'RotZ':['beamfcq_rot'], 
+#            '__default':['beamfcq_lin2'],
+#            '__local_csys':True}      
 
+BeamFCQ = CombinedElement("beamfcq", 'lin2', default_n_gp = 4, local_csys = True)
+BeamFCQ.dict_elm_type = {'DispX':BeamFCQ_lin2, 'DispY':BeamFCQ_disp, 'DispZ':BeamFCQ_disp,            
+           'RotX':BeamFCQ_lin2, 'RotY':BeamFCQ_rot, 'RotZ':BeamFCQ_rot}      
+BeamFCQ.associated_variables ={'DispY':(1, 'DispX'), 'DispZ':(1, 'RotX')}           
 
 # --------------------------------------
 # "beam" element
@@ -156,6 +180,9 @@ BeamFCQ = {'DispX':['beamFCQ_lin2'],
 #see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
 # --------------------------------------
 class Beam_rotZ(Element1D): #2 nodes with derivatative dof
+    name = 'beam_rotz'
+    n_nodes = 2
+    
     _L2phi = 0 #default value = no shear effect. Use SetProperties_Beam to include shear effect
         
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
@@ -192,6 +219,9 @@ class Beam_rotZ(Element1D): #2 nodes with derivatative dof
         return np.transpose([C*(6*xi-(4+phi)), C*(6*xi-(2-phi)), Nvprime , -Nvprime], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)     
 
 class Beam_dispY(Element1D): #2 nodes with derivatative dof
+    name = 'beam_dispy'
+    n_nodes = 2
+    
     _L2phi = 0
     
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
@@ -234,19 +264,28 @@ class Beam_dispY(Element1D): #2 nodes with derivatative dof
 
 
 class Beam_rotY(Beam_rotZ):
+    name = 'beam_roty'
     _L2phi = 0
 class Beam_dispZ(Beam_dispY):    
+    name = 'beam_dispz'
     _L2phi = 0
 
 
-Beam = {'DispX':['lin2'],             
-        'DispY':['beam_dispY', (1, 'RotZ')], 
-        'DispZ':['beam_dispZ', (-1, 'RotY')],            
-        'RotX':['lin2'], 
-        'RotY':['beam_rotY', (-1, 'DispZ')], 
-        'RotZ':['beam_rotZ', (1, 'DispY')], 
-        '__default':['lin2'],
-        '__local_csys':True}         
+# Beam = {'DispX':['lin2'],             
+#         'DispY':['beam_dispy', (1, 'RotZ')], 
+#         'DispZ':['beam_dispz', (-1, 'RotY')],            
+#         'RotX':['lin2'], 
+#         'RotY':['beam_roty', (-1, 'DispZ')], 
+#         'RotZ':['beam_rotz', (1, 'DispY')], 
+#         '__default':['lin2'],
+#         '__local_csys':True}     
+
+Beam = CombinedElement("beam", 'lin2', default_n_gp = 4, local_csys = True)
+Beam.dict_elm_type =  {'DispY':Beam_dispY, 'DispZ':Beam_dispZ,
+        'RotY':Beam_rotY, 'RotZ':Beam_rotZ}
+Beam.associated_variables ={'DispY':(1, 'RotZ'), 'DispZ':(-1, 'RotY'),            
+        'RotY':(-1, 'DispZ'), 'RotZ':(1, 'DispY')} 
+
 
 def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
     if np.isscalar(k) and k==0: 

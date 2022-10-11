@@ -33,6 +33,10 @@ class ElementQuadrangle(Element2D):
     
 
 class Quad4(ElementQuadrangle):
+    name = 'quad4'
+    default_n_gp = 4
+    n_nodes = 4
+    
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd =  np.c_[[-1. , 1., 1., -1.],\
                             [-1. , -1., 1., 1.]]
@@ -49,6 +53,10 @@ class Quad4(ElementQuadrangle):
         return [ np.array([ [0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) for xi in vec_xi]        
 
 class Quad8(ElementQuadrangle):
+    name = 'quad8'
+    default_n_gp = 9
+    n_nodes = 8
+    
     def __init__(self, n_elm_gp=9, **kargs):
         self.xi_nd = np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1.],\
                            [-1. , -1., 1., 1. ,-1., 0., 1., 0.]]
@@ -67,6 +75,10 @@ class Quad8(ElementQuadrangle):
 
 
 class Quad9(ElementQuadrangle):
+    name = 'quad9'
+    default_n_gp = 9
+    n_nodes = 9
+    
     def __init__(self, n_elm_gp=9, **kargs):
         self.xi_nd =  np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1., 0.],\
                             [-1. , -1., 1., 1. ,-1., 0., 1., 0., 0.]]

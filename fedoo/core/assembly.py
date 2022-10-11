@@ -79,12 +79,12 @@ class Assembly(AssemblyBase):
         self.meshChange = kargs.pop('MeshChange', False)        
         self.mesh = mesh   
         if elm_type == "": elm_type = mesh.elm_type
-        self.elm_type= elm_type #.lower()
+        self.elm_type= elm_type.lower()
         self._use_local_csys = self._test_if_local_csys()
 
         self.n_elm_gp = kargs.pop('n_elm_gp', None)
         if self.n_elm_gp is None: 
-            self.n_elm_gp = weakform.assembly_options.get('n_elm_gp', elm_type, get_DefaultNbPG(elm_type, mesh))
+            self.n_elm_gp = weakform.assembly_options.get('n_elm_gp', elm_type, get_default_n_gp(elm_type, mesh))
         
         self.assume_sym = weakform.assembly_options.get('assume_sym', elm_type, False)
         self.mat_lumping = weakform.assembly_options.get('mat_lumping', elm_type, False)
@@ -169,7 +169,7 @@ class Assembly(AssemblyBase):
                           for b in blocks_row] for blocks_row in blocks ]        
                 MM = sparse.bmat(blocks, format ='csr')
                 
-            else:
+            else:                
                 MM = BlocSparse(nvar, nvar, self.n_elm_gp, self._saved_bloc_structure, assume_sym = self.assume_sym)
                 listMatvir = listCoef_PG = None
                 
@@ -283,10 +283,9 @@ class Assembly(AssemblyBase):
             
             #list_elm_type contains the id of the element associated with every variable
             #list_elm_type could be stored to avoid reevaluation 
-            if isinstance(get_element(self.elm_type), dict):
-                elementDict = get_element(self.elm_type)
-                list_elm_type = [elementDict.get(self.space.variable_name(i))[0] for i in range(nvar)]
-                list_elm_type = [elementDict.get('__default') if elmtype is None else elmtype for elmtype in list_elm_type]
+            if hasattr(get_element(elm_type), 'get_elm_type'):            
+                element = get_element(self.elm_type)
+                list_elm_type = [element.get_elm_type(self.space.variable_name(i)) for i in range(nvar)]
             else: list_elm_type = [self.elm_type for i in range(nvar)]
             
             if 'blocShape' not in saveOperator:
@@ -436,7 +435,7 @@ class Assembly(AssemblyBase):
             local_frame = mesh.local_frame
             elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
     #        xi_nd = elmRefGeom.xi_nd
-            xi_nd = GetNodePositionInElementCoordinates(mesh.elm_type, n_elm_nodes) 
+            xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes) 
 
             if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
                 for nameVector in self.space.list_vectors():
@@ -580,8 +579,7 @@ class Assembly(AssemblyBase):
         n_elements = mesh.n_elements
         elements = mesh.elements
         nodes = mesh.nodes
-        n_elm_nodes = mesh.n_elm_nodes #number of nodes associated to each element
-
+        n_elm_nodes = mesh.n_elm_nodes #number of nodes associated to each element including internal nodes
         
         #-------------------------------------------------------------------
         #Case of finite difference mesh    
@@ -596,7 +594,7 @@ class Assembly(AssemblyBase):
             Assembly._saved_change_of_basis_mat[mesh] = 1 # No change of basis:  mat_change_of_basis = 1 #this line could be deleted because the coordinate should in principle defined as 'global' 
             Assembly._saved_elementary_operators[(mesh,elm_type,n_elm_gp)] = OP #elmRef.computeOperator(nodes,elements)
             return                                
-        
+                
         
         #-------------------------------------------------------------------
         # Initialize the geometrical interpolation (gaussian quadrature, jacobian matrix, ...)
@@ -621,40 +619,41 @@ class Assembly(AssemblyBase):
             col = np.empty((n_elements, n_elm_gp, n_elm_nodes))
             col[:] = np.arange(n_elements).reshape((-1,1,1)) + np.arange(n_elm_nodes).reshape((1,1,-1))*n_elements 
             col = col.reshape(-1)  
-            n_col = n_elements * n_elm_nodes
-                      
-
+            n_col = n_elements * n_elm_nodes                      
 
 
         #-------------------------------------------------------------------
         # Build the list of elm_type to assemble (some beam element required several elm_type in function of the variable)
         #-------------------------------------------------------------------        
         objElement = get_element(elm_type)
-        if isinstance(objElement, dict):
-            list_elm_type = set([objElement[key][0] for key in objElement.keys() if key[:2]!='__' or key == '__default'])               
+        if hasattr(objElement, 'get_all_elm_type'):
+            list_elm_type = objElement.get_all_elm_type()
         else: 
-            list_elm_type =  [elm_type]
+            list_elm_type = [objElement]
   
         
         #-------------------------------------------------------------------
         # Assembly of the elementary operators for each elm_type 
         #-------------------------------------------------------------------      
-        for elm_type in list_elm_type: 
-            elmRef = get_element(elm_type)(n_elm_gp, mesh = mesh, elmGeom = elmRefGeom)
+        for elm_type in list_elm_type:             
+            elmRef = elm_type(n_elm_gp, mesh = mesh, elmGeom = elmRefGeom)                        
+            
+            n_interpol_nodes = elmRef.n_nodes #number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
+            
             nb_dir_deriv = 0
             if hasattr(elmRef,'ShapeFunctionDerivativePG'):
                 derivativePG = elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG #derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2] 
             nop = nb_dir_deriv+1 #nombre d'opérateur à discrétiser
     
-            NbDoFperNode = np.shape(elmRef.ShapeFunctionPG)[-1]//n_elm_nodes
+            NbDoFperNode = np.shape(elmRef.ShapeFunctionPG)[-1]//n_interpol_nodes
             
             data = [[np.empty((n_elements, n_elm_gp, n_elm_nodes)) for j in range(NbDoFperNode)] for i in range(nop)] 
     
             for j in range(0,NbDoFperNode):
-                data[0][j][:] = elmRef.ShapeFunctionPG[...,j*n_elm_nodes:(j+1)*n_elm_nodes].reshape((-1,n_elm_gp,n_elm_nodes)) #same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
+                data[0][j][:,:,:n_interpol_nodes] = elmRef.ShapeFunctionPG[...,j*n_interpol_nodes:(j+1)*n_interpol_nodes].reshape((-1,n_elm_gp,n_interpol_nodes)) #same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv+1][j][:] = derivativePG[...,dir_deriv, j*n_elm_nodes:(j+1)*n_elm_nodes]
+                    data[dir_deriv+1][j][:,:,:n_interpol_nodes] = derivativePG[...,dir_deriv, j*n_interpol_nodes:(j+1)*n_interpol_nodes]
             
             op_dd = [ [sparse.coo_matrix((data[i][j].reshape(-1),(row,col)), shape=(n_elements*n_elm_gp , n_col) ).tocsr() for j in range(NbDoFperNode) ] for i in range(nop)]        
                 
@@ -662,7 +661,7 @@ class Assembly(AssemblyBase):
             for i in range(nb_dir_deriv):  
                 data[1, i] = op_dd[i+1] #as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
-            Assembly._saved_elementary_operators[(mesh,elm_type,n_elm_gp)] = data   
+            Assembly._saved_elementary_operators[(mesh,elm_type.name,n_elm_gp)] = data   
     
     
     def _get_elementary_operator(self, deriv, n_elm_gp=None): 
@@ -674,17 +673,14 @@ class Assembly(AssemblyBase):
         elm_type = self.elm_type
         mesh = self.mesh
         
-        if isinstance(get_element(elm_type), dict):
-            elementDict = get_element(elm_type)
-            elm_type = elementDict.get(self.space.variable_name(deriv.u))
-            if elm_type is None: elm_type = elementDict.get('__default')
-            elm_type = elm_type[0]
+        if hasattr(get_element(elm_type), 'get_elm_type'):
+            elm_type = get_element(elm_type).get_elm_type(self.space.variable_name(deriv.u)).name
             
         if not((mesh,elm_type,n_elm_gp) in Assembly._saved_elementary_operators):
             self.compute_elementary_operators(n_elm_gp)
         
         data = Assembly._saved_elementary_operators[(mesh,elm_type,n_elm_gp)]
-
+        
         if deriv.ordre == 0 and 0 in data:
             return data[0]
         
@@ -708,10 +704,13 @@ class Assembly(AssemblyBase):
         elm_type = self.elm_type
         if elm_type not in Assembly._saved_associated_variables:
             objElement = get_element(elm_type)
-            if isinstance(objElement, dict):            
+            if hasattr(objElement, "associated_variables"):
                 Assembly._saved_associated_variables[elm_type] = {self.space.variable_rank(key): 
-                                       [[self.space.variable_rank(v) for v in val[1][1::2]],
-                                        val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1} 
+                                       [[self.space.variable_rank(v) for v in val[1::2]],
+                                        val[0::2]] for key,val in objElement.associated_variables.items() if key in self.space.list_variables()} 
+                # Assembly._saved_associated_variables[elm_type] = {self.space.variable_rank(key): 
+                #                        [[self.space.variable_rank(v) for v in val[1][1::2]],
+                #                         val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1} 
                     # val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1}
             else: Assembly._saved_associated_variables[elm_type] = {}
         return Assembly._saved_associated_variables[elm_type]     
@@ -721,10 +720,16 @@ class Assembly(AssemblyBase):
         #determine the type of coordinate system used for vector of variables (displacement for instance). This type may be specified in element (under dict form only with elm_dict['__local_csys'] = True)        
         #return True if the variables are defined in a local coordinate system, or False if global variables are used. If local variables are used, a change of variable is required
         #If '__local_csys' is not specified in the element, 'global' value (no change of basis) is considered by default
-        if isinstance(get_element(self.elm_type), dict):
-            return get_element(self.elm_type).get('__local_csys', False)                
-        else: 
-            return False   
+        element = get_element(self.elm_type)
+        if hasattr(element, "local_csys"):
+            return element.local_csys
+        else:
+            return False
+        
+        # if isinstance(get_element(self.elm_type), dict):
+        #     return get_element(self.elm_type).get('__local_csys', False)                
+        # else: 
+        #     return False   
 
                 
     def get_element_results(self, operator, U):
@@ -1142,12 +1147,13 @@ class Assembly(AssemblyBase):
         
         if isinstance(mesh, str): mesh = Mesh[mesh]        
         if elm_type == "": elm_type = mesh.elm_type
+        elm_type = elm_type.lower()
 
         if hasattr(weakform, 'list_weakform') and weakform.assembly_options is None: #WeakFormSum object
             list_weakform = weakform.list_weakform
                                 
             #get lists of some non compatible assembly_options items for each weakform in list_weakform
-            list_n_elm_gp = [wf.assembly_options.get('n_elm_gp', elm_type, get_DefaultNbPG(elm_type, mesh)) for wf in list_weakform]
+            list_n_elm_gp = [wf.assembly_options.get('n_elm_gp', elm_type, get_default_n_gp(elm_type, mesh)) for wf in list_weakform]
             list_assume_sym = [wf.assembly_options.get('assume_sym', elm_type, False) for wf in list_weakform]
             list_prop = list(zip(list_n_elm_gp, list_assume_sym))
             list_diff_prop = list(set(list_prop)) #list of different non compatible properties that required separated assembly

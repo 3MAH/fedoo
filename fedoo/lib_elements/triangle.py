@@ -43,6 +43,10 @@ class ElementTriangle(Element2D):
     
 
 class Tri3(ElementTriangle):
+    name = 'tri3'
+    default_n_gp = 3
+    n_nodes = 3
+    
     def __init__(self, n_elm_gp=3, **kargs):        
         self.xi_nd = np.c_[[0. , 1., 0.],\
                            [0. , 0., 1.]]
@@ -58,13 +62,20 @@ class Tri3(ElementTriangle):
     def ShapeFunctionDerivative(self, xi): 
         return [ np.array([[-1.,1.,0.],[-1.,0.,1.]]) for x in xi]        
     
-class Tri3Bubble(Tri3):    
+class Tri3Bubble(Tri3):
+    name = 'tri3bubble'
+    n_nodes = 4
+    
     def ShapeFunction(self, xi):    
         return np.c_[1-xi[:,0]-xi[:,1], xi[:,0], xi[:,1], (1-xi[:,0]-xi[:,1])*xi[:,0]*xi[:,1]] 
     def ShapeFunctionDerivative(self, xi):
         return [np.array([ [-1.,1.,0.,x[1]*(1-2*x[0]-x[1])] , [-1.,0.,1.,x[0]*(1-2*x[1]-x[0])] ]) for x in xi]                
 
 class Tri6(ElementTriangle):
+    name = 'tri6'
+    default_n_gp = 4
+    n_nodes = 6
+    
     def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd =  np.c_[[0. , 1., 0., 0.5, 0.5, 0. ],\
                             [0. , 0., 1., 0. , 0.5, 0.5]]  

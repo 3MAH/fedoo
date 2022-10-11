@@ -4,7 +4,7 @@ import numpy as np
 
 # from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
-from fedoo.lib_elements.element_list import get_DefaultNbPG, get_element
+from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from scipy import sparse
 
 from os.path import splitext
@@ -222,6 +222,7 @@ class Mesh(MeshBase):
         new_nodes = self.add_nodes(self.n_elements*nb_added)
         self.elements = np.c_[self.elements, new_nodes]
         self.reset_interpolation()
+        return new_nodes
         
     
     # warning , this method must be static
@@ -281,7 +282,10 @@ class Mesh(MeshBase):
         n_nodes = self.n_nodes
         decimal_round = int(-np.log10(tol)-1)
         crd = self.nodes.round(decimal_round) #round coordinates to match tolerance
-        ind_sorted   = np.lexsort((crd[:  ,2], crd[:  ,1], crd[:  ,0]))
+        if self.ndim == 3:
+            ind_sorted   = np.lexsort((crd[:  ,2], crd[:  ,1], crd[:  ,0]))
+        elif self.ndim == 2:
+            ind_sorted   = np.lexsort((crd[:  ,1], crd[:  ,0]))
 
         ind_coincident = np.where(np.linalg.norm(crd[ind_sorted[:-1]]-crd[ind_sorted[1:]], axis = 1) == 0)[0] #indices of the first coincident nodes
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident+1]]).T
@@ -466,26 +470,27 @@ class Mesh(MeshBase):
     
     def to_pyvista(self):
         if USE_PYVISTA:            
-            cell_type =  {'lin2':3,
-                          'tri3':5,
-                          'quad4':9,
-                          'tet4':10,
-                          'hex8':12,
-                          'wed6':13,
-                          'pyr5':14,
-                          'lin3':21,
-                          'tri6':22,
-                          'quad8':23,           
-                          'tet10':24,
-                          'hex20':25
+            cell_type, n_elm_nodes =  {'lin2':(3,2),
+                          'tri3':(5,3),
+                          'quad4':(9,4),
+                          'tet4':(10,4),
+                          'hex8':(12,8),
+                          'wed6':(13,6),
+                          'pyr5':(14,5),
+                          'lin3':(21,3),
+                          'tri6':(22,6),
+                          'quad8':(23,8),           
+                          'tet10':(24,10),
+                          'hex20':(25,20)
                           }.get(self.elm_type, None)
             if cell_type is None: raise NameError('Element Type '+ str(self.elm_type) + ' not available in pyvista')
 
-            elm = np.empty((self.elements.shape[0], self.elements.shape[1]+1), dtype=int)
-            elm[:,0] = self.elements.shape[1]
-            elm[:,1:] = self.elements
+            # elm = np.empty((self.elements.shape[0], self.elements.shape[1]+1), dtype=int)
+            elm = np.empty((self.elements.shape[0], n_elm_nodes+1), dtype=int)
+            elm[:,0] = n_elm_nodes #self.elements.shape[1]
+            elm[:,1:] = self.elements[:,:n_elm_nodes]
             crd = self.nodes
-            
+                      
             if crd.shape[1]<3:
                 crd = np.hstack((crd, np.zeros((crd.shape[0], 3-crd.shape[1]))))
                 
@@ -521,7 +526,7 @@ class Mesh(MeshBase):
 
 
     def init_interpolation(self,n_elm_gp = None):
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         
         n_nodes = self.n_nodes        
         n_elements = self.n_elements                                         
@@ -532,9 +537,9 @@ class Mesh(MeshBase):
         #-------------------------------------------------------------------   
         # elm_interpol = get_element(self.elm_type)(n_elm_gp, mesh=self) #initialise element interpolation
         elm_interpol = get_element(self.elm_type)(n_elm_gp) #initialise element interpolation
-        n_elm_dof = len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_elm_dof = n_elm_nd
+        n_interpol_nodes = elm_interpol.n_nodes #len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_interpol_nodes = n_elm_nd
 
-        elm_geom = self.elements[:,:n_elm_dof] #element table restrictied to geometrical dof
+        elm_geom = self.elements[:,:n_interpol_nodes] #element table restrictied to geometrical dof
 
         n_elm_with_nd = np.bincount(elm_geom.reshape(-1)) #len(n_elm_with_nd) = n_nodes #number of elements connected to each node        
                 
@@ -545,20 +550,20 @@ class Mesh(MeshBase):
         row[:] = np.arange(n_elements).reshape((-1,1,1)) + np.arange(n_elm_gp).reshape(1,-1,1)*n_elements 
         col[:] = self.elements.reshape((n_elements,1,n_elm_nd))
         #row_geom/col_geom: row and col indices using only the dof used in the geometrical interpolation (col = col_geom if geometrical and variable interpolation are the same)
-        row_geom = np.reshape(row[...,:n_elm_dof], -1) ; col_geom = np.reshape(col[...,:n_elm_dof], -1)
+        row_geom = np.reshape(row[...,:n_interpol_nodes], -1) ; col_geom = np.reshape(col[...,:n_interpol_nodes], -1)
         
         #-------------------------------------------------------------------
         # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)    
         #-------------------------------------------------------------------                                
         PGtoNode = np.linalg.pinv(elm_interpol.ShapeFunctionPG) #pseudo-inverse of NodeToPG
-        dataPGtoNode = PGtoNode.T.reshape((1,n_elm_gp,n_elm_dof))/n_elm_with_nd[elm_geom].reshape((n_elements,1,n_elm_dof)) #shape = (n_elements, n_elm_gp, n_elm_nd)   
+        dataPGtoNode = PGtoNode.T.reshape((1,n_elm_gp,n_interpol_nodes))/n_elm_with_nd[elm_geom].reshape((n_elements,1,n_interpol_nodes)) #shape = (n_elements, n_elm_gp, n_elm_nd)   
         self._saved_gausspoint2node_mat[n_elm_gp] = sparse.coo_matrix((dataPGtoNode.reshape(-1),(col_geom,row_geom)), shape=(n_nodes,n_elements*n_elm_gp) ).tocsr() #matrix to compute the node values from pg using the geometrical shape functions 
 
         #-------------------------------------------------------------------
         # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)    
         #-------------------------------------------------------------------             
-        dataNodeToPG = np.empty((n_elements, n_elm_gp, n_elm_dof))
-        dataNodeToPG[:] = elm_interpol.ShapeFunctionPG.reshape((1,n_elm_gp,n_elm_dof)) 
+        dataNodeToPG = np.empty((n_elements, n_elm_gp, n_interpol_nodes))
+        dataNodeToPG[:] = elm_interpol.ShapeFunctionPG.reshape((1,n_elm_gp,n_interpol_nodes)) 
         self._saved_node2gausspoint_mat[n_elm_gp] = sparse.coo_matrix((np.reshape(dataNodeToPG,-1),(row_geom,col_geom)), shape=(n_elements*n_elm_gp, n_nodes) ).tocsr() #matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
         
         # save some data related to interpolation for potentiel future use
@@ -568,7 +573,7 @@ class Mesh(MeshBase):
         
     
     def _compute_gaussian_quadrature_mat(self, n_elm_gp = None):        
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         if n_elm_gp not in self._saved_gaussian_quadrature_mat:
             self.init_interpolation(n_elm_gp)        
                 
@@ -584,28 +589,28 @@ class Mesh(MeshBase):
 
     
     def _get_gausspoint2node_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         if not(n_elm_gp in self._saved_gausspoint2node_mat):
             self.init_interpolation(n_elm_gp)        
         return self._saved_gausspoint2node_mat[n_elm_gp]
     
     
     def _get_node2gausspoint_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)   
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)   
         if not(n_elm_gp in self._saved_node2gausspoint_mat):
             self.init_interpolation(n_elm_gp)                
         return self._saved_node2gausspoint_mat[n_elm_gp]
 
 
     def _get_gaussian_quadrature_mat(self, n_elm_gp=None): 
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         if not(n_elm_gp in self._saved_gaussian_quadrature_mat):
             self._compute_gaussian_quadrature_mat(n_elm_gp)
         return self._saved_gaussian_quadrature_mat[n_elm_gp]
 
 
     def determine_data_type(self, data, n_elm_gp=None):                       
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
  
         test = 0
         if data.shape[-1] == self.n_nodes: 
@@ -629,7 +634,7 @@ class Mesh(MeshBase):
         return: array containing the gausspoint field 
         The shape of the array is tested.
         """               
-        if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)           
+        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)           
         data_type = self.determine_data_type(data, n_elm_gp)       
 
         if data_type == 'Node': 
@@ -643,7 +648,7 @@ class Mesh(MeshBase):
     def convert_data(self, data, convert_from=None, convert_to='GaussPoint', n_elm_gp=None):
        if np.isscalar(data): return data
 
-       if n_elm_gp is None: n_elm_gp = get_DefaultNbPG(self.elm_type)
+       if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
        
        if convert_from is None: convert_from = self.determine_data_type(data, n_elm_gp)
            
@@ -670,7 +675,7 @@ class Mesh(MeshBase):
         assert type_field in ['Node','GaussPoint','Element', None], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"        
         if n_elm_gp is None: 
             if type_field == 'GaussPoint': n_elm_gp = len(field)//self.n_elements
-            else: n_elm_gp = get_DefaultNbPG(self.elm_type)               
+            else: n_elm_gp = get_default_n_gp(self.elm_type)               
                             
         return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
 
