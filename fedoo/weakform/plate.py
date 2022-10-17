@@ -58,7 +58,7 @@ class PlateFI(WeakFormBase):
         
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
-    def get_weak_equation(self, localFrame):        
+    def get_weak_equation(self, mesh = None):        
         H = self.__ShellConstitutiveLaw.GetShellRigidityMatrix()
 
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
@@ -82,7 +82,7 @@ class PlateFI(WeakFormBase):
 
 class PlateShear(PlateFI): #weak form of plate shear energy containing only the shear strain energy
 
-    def get_weak_equation(self, localFrame):   
+    def get_weak_equation(self, mesh = None):   
         #shear
         H = self._PlateFI__ShellConstitutiveLaw.GetShellRigidityMatrix_RI()
                 
@@ -97,7 +97,7 @@ class PlateShear(PlateFI): #weak form of plate shear energy containing only the 
     
 class PlateKirchhoffLove(PlateFI): #plate without shear strain
 
-    def get_weak_equation(self, localFrame):  
+    def get_weak_equation(self, mesh = None):  
         #all component but shear, for full integration
         H = self._PlateFI__ShellConstitutiveLaw.GetShellRigidityMatrix_FI()
         

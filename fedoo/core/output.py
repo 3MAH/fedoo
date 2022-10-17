@@ -84,7 +84,8 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             #     data_type = 'Node'
                 
             elif res == 'Fext':
-                data = assemb.get_ext_forces(pb.get_dof_solution())
+                # data = assemb.get_ext_forces(pb.get_dof_solution())
+                data = pb.get_ext_forces().reshape(3,-1)
                 data_type = 'Node'
                                                 
             elif res in ['PKII', 'PK2', 'Kirchhoff', 'Cauchy','Strain', 'Stress']:

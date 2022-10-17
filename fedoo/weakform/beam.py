@@ -55,7 +55,7 @@ class Beam(WeakFormBase):
         self.__ConstitutiveLaw = CurrentConstitutiveLaw
         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}        
     
-    def get_weak_equation(self, localFrame):
+    def get_weak_equation(self, mesh = None):
         E  = self.__ConstitutiveLaw.GetYoungModulus()
         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
         G = E/(1+nu)/2
@@ -134,7 +134,7 @@ def BernoulliBeam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
 #         self.__ConstitutiveLaw = CurrentConstitutiveLaw
 #         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz}
     
-#     def get_weak_equation(self, localFrame):
+#     def get_weak_equation(self, mesh = None):
 #         E  = self.__ConstitutiveLaw.GetYoungModulus()
 #         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
 #         G = E/(1+nu)/2

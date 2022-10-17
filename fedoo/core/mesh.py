@@ -70,6 +70,8 @@ class Mesh(MeshBase):
         """Dict containing element sets associated to the mesh"""
         self.local_frame = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
+        self._n_physical_nodes = None #if None, the number of physical_nodes is the same as n_nodes
+
         if ndim is None: ndim = self.nodes.shape[1]
         elif ndim > self.nodes.shape[1]:
             dim_add = ndim-self.nodes.shape[1]
@@ -194,8 +196,10 @@ class Mesh(MeshBase):
             the number of line. 
             If only one node position is given (ie len(nodes) == ndim) and nb_nodes is given, 
             several nodes are created at the same position.
-        """
-        
+        """        
+        # if self._n_physical_nodes is not None: 
+        #     print('WARNING: the new nodes will be considered are virtual nodes. To avoid this behavior, consider adding virtual nodes at the end.')
+
         n_nodes_old = self.n_nodes        
 
         if len(args) == 0:
@@ -217,8 +221,31 @@ class Mesh(MeshBase):
                 np.tile(args[0],(args[1],1))))
 
         return np.arange(n_nodes_old,self.n_nodes)
+    
+    
+    def add_virtual_nodes(self, *args): #coordinates = None, nb_added = None):
+        """
+        Add some nodes to the node list.
+        
+        This method is exactly the same as add_nodes, excepted that the 
+        new nodes are considered as virtural, ie are not intended to be
+        associated to any element, nor visualised.           
+        """
+        if self._n_physical_nodes is None: self._n_physical_nodes = self.n_nodes
+        return self.add_nodes(*args)
+    
 
     def add_internal_nodes(self, nb_added):
+        """
+        Add some nodes to the node list.
+        
+        This method add nb_added nodes to each elements. The total number
+        of added elements is then: nb_added*n_elements
+        
+        The added nodes are internal nodes required for specific element interpolations.        
+        The new nodes are considered as virtual nodes (ie will not be displayed).
+        """
+        if self._n_physical_nodes is None: self._n_physical_nodes = self.n_nodes
         new_nodes = self.add_nodes(self.n_elements*nb_added)
         self.elements = np.c_[self.elements, new_nodes]
         self.reset_interpolation()
@@ -690,12 +717,27 @@ class Mesh(MeshBase):
         self._elm_interpolation = {}
         self._sparse_structure = {}
 
+    
+    @property
+    def physical_nodes(self):
+        if self._n_physical_nodes is None:
+            return self.nodes
+        else: 
+            return self.nodes[:self._n_physical_nodes]
+
     @property
     def n_nodes(self):
         """
         Total number of nodes in the Mesh        
         """
         return len(self.nodes)
+    
+    @property
+    def n_physical_nodes(self):
+        if self._n_physical_nodes is None:
+            return self.n_nodes
+        else: 
+            return self._n_physical_nodes
     
     @property
     def n_elements(self):
@@ -890,7 +932,8 @@ class Mesh(MeshBase):
 class BoundingBox(list):
     def __init__(self, m):
         if isinstance(m, Mesh):
-            m = [m.nodes.min(axis=0), m.nodes.max(axis=0)]
+            nodes = m.physical_nodes
+            m = [nodes.min(axis=0), nodes.max(axis=0)]
         elif isinstance(m,list):
             if len(m) != 2:                
                 raise NameError('list lenght for BoundingBox object must be 2')        

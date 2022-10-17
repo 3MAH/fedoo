@@ -31,7 +31,7 @@ class Problem(ProblemBase):
 
 
         self.__X = np.ndarray( self.n_dof ) #empty array
-        self.__Xbc = 0
+        self._Xbc = 0
 
         self.__dof_slave = np.array([])
         self.__dof_free    = np.array([])
@@ -102,7 +102,7 @@ class Problem(ProblemBase):
         if len(self.__A.shape) == 2: #A is a matrix        
             if len(self.__dof_slave) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
              # to delete after a careful validation of the other case
-            # self.__X[self.__dof_slave] = self.__Xbc[self.__dof_slave]
+            # self.__X[self.__dof_slave] = self._Xbc[self.__dof_slave]
             
             # Temp = self.__A[:,self.__dof_slave].dot(self.__X[self.__dof_slave])
             # if self.__D is 0:
@@ -111,11 +111,11 @@ class Problem(ProblemBase):
             #     self.__X[self.__dof_free]  = self._solve(self.__A[self.__dof_free,:][:,self.__dof_free],self.__B[self.__dof_free] + self.__D[self.__dof_free] - Temp[self.__dof_free])
 
             if self.__D is 0:
-                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self.__Xbc)  )   
+                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
             else:
-                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self.__Xbc)  )                   
+                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self._Xbc)  )                   
                        
-            self.__X = self.__MatCB * self.__X[self.__dof_free]  + self.__Xbc
+            self.__X = self.__MatCB * self.__X[self.__dof_free]  + self._Xbc
 
                 
         elif len(self.__A.shape) == 1: #A is a diagonal matrix stored as a vector containing diagonal values 
@@ -139,7 +139,7 @@ class Problem(ProblemBase):
                 
         n = self.mesh.n_nodes
         nvar = self.space.nvar
-        Xbc = np.zeros(nvar*n)
+        self._Xbc = np.zeros(nvar*n)
         F = np.zeros(nvar*n)
 
         build_mpc = False
@@ -148,16 +148,17 @@ class Problem(ProblemBase):
         data = []
         row = []
         col = []
+        
         for e in self.bc.generate(self, t_fact, t_fact_old):
             if e.bc_type == 'Dirichlet':
-                Xbc[e._dof_index] = e._current_value
+                self._Xbc[e._dof_index] = e._current_value
                 dof_blocked.update(e._dof_index)
 
             if e.bc_type == 'Neumann':
                 F[e._dof_index] = e._current_value
             
             if e.bc_type == 'MPC':
-                Xbc[e._dof_index[0]] = e._current_value  #valid in this case ??? need to be checked
+                self._Xbc[e._dof_index[0]] = e._current_value  #valid in this case ??? need to be checked
                 dof_slave.update(e._dof_index[0]) #eliminated dof
                 build_mpc = True         
     
@@ -185,7 +186,7 @@ class Problem(ProblemBase):
                 shape=(nvar*n,nvar*n))
             
             #update Xbc with the eliminated dof that may be used as slave dof in mpc
-            Xbc = Xbc + M@Xbc             
+            self._Xbc = self._Xbc + M@self._Xbc             
             # M = (M+M@M).tocoo() #Compute M + M@M - not sure it is required
             
             data = M.data
@@ -200,27 +201,38 @@ class Problem(ProblemBase):
             mask = np.logical_not(np.isnan(col)) #mask to delete nan value 
             # print(len(col) - len(col[mask]))
             col = col[mask] ; row = row[mask] ; data = data[mask]
+            
+            self._MFext = M.tocsr().T
+        else: 
+            self._MFext = 0
 
         # #adding identity for free nodes
         col = np.hstack((col,np.arange(len(dof_free)))) #np.hstack((col,dof_free)) #col.append(dof_free)  
         row = np.hstack((row,dof_free)) #row.append(dof_free)            
         data = np.hstack((data, np.ones(len(dof_free)))) #data.append(np.ones(len(dof_free)))
         
-        self.__MatCB = sparse.coo_matrix( 
+        self.__MatCB = sparse.coo_matrix(  
                 (data,(row,col)), 
                 shape=(nvar*n,len(dof_free))).tocsr()
         
-        self.__Xbc = Xbc
         self.__B = F
         self.__dof_slave = dof_slave
         self.__dof_free = dof_free
+        self._t_fact = t_fact
+
+
+    def update_boundary_conditions(self):
+        self.apply_boundary_conditions(self._t_fact, self._t_fact)
+        
 
     def SetInitialBCToCurrent(self):
         ### is used only for incremental problems
         U = self.get_dof_solution() 
+        if U is 0: return 
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
-        for e in self.bc.generate(self):        
+        # for e in self.bc.generate(self):
+        for e in self.bc.list_all():
             if e.bc_type == 'Dirichlet':
                 if e._start_value_default is None:
                     if U is not 0:
@@ -229,6 +241,39 @@ class Problem(ProblemBase):
                 if e._start_value_default is None:
                     if F is not 0:
                         e.start_value = F[e.variable*n_nodes + e.node_set]
+
+
+    def get_ext_forces(self, name = 'all'):
+        """
+        Return the nodal Forces and/or moments in global coordinates.
+        The resulting forces are the sum of :
+        - External forces (associated to Neumann boundary conditions)
+        - Node reaction (associated to Dirichelet boundary conditions)
+        - Inertia forces 
+        
+        parameter:
+        ------------
+        * name (str) 
+            - the name of the variable associated to the requested force.
+            - the name of a vector. In that case, the function return 
+            the external force of every vector component.
+            - 'all': in this case, return a 1d numpy array containing the external force for
+            associated to every variable. The returned array may be easily reshaped 
+            to separated components by using:
+            pb.get_ext_forces().reshape(pb.space.nvar,-1)
+        """
+        if self._MFext is 0:  
+            if self.get_D() is 0:
+                return self._get_vect_component(self.get_A() @ self.get_X(), name)
+            else:
+                return self._get_vect_component(self.get_A() @ self.get_X() - self.get_D(), name)
+        else:
+            #need to be checked
+            M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
+            if self.get_D() is 0:
+                return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
+            else:
+                return self._get_vect_component(M @ self.get_A() @ self.get_X() - M @ self.get_D(), name)
 
 
     @property

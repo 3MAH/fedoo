@@ -103,7 +103,7 @@ class WeakFormBase:
         pass
     
     
-    def get_weak_equation(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None):
         return NotImplemented
             
     
@@ -174,7 +174,7 @@ class WeakForm(WeakFormBase):
         WeakFormBase.__init__(self, name, space)
         self.weak_equation = weak_equation
     
-    def get_weak_equation(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None):
         return self.weak_equation
     
     
@@ -243,7 +243,7 @@ class WeakFormSum(WeakFormBase):
         #return a list of constitutivelaw
         return self.__constitutivelaw    
     
-    def get_weak_equation(self, mesh=None, localFrame = None):
+    def get_weak_equation(self, mesh=None):
         Diff = 0
         self._list_mat_lumping = []
         
@@ -251,7 +251,7 @@ class WeakFormSum(WeakFormBase):
         else: elm_type = mesh.elm_type
         
         for wf in self.__list_weakform: 
-            Diff_wf = wf.get_weak_equation(mesh, localFrame)
+            Diff_wf = wf.get_weak_equation(mesh)
             mat_lumping = wf.assembly_options.get('mat_lumping', elm_type, False) #True of False
             if Diff_wf != 0:
                 self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op

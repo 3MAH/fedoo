@@ -56,8 +56,9 @@ for computeShear in range(3):
     pb.solve()
     
     #Post treatment               
-    results = fd.Assembly['beam'].get_ext_forces(pb.get_dof_solution('all'))
-    
+    Fext = pb.get_ext_forces('Disp')
+    Mext = pb.get_ext_forces('Rot')
+        
     # print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
     # print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
     # print('Reaction RZ at the clamped extermity: ' + str(results[0][2]))
@@ -68,8 +69,8 @@ for computeShear in range(3):
     # print('RX at the free extremity: ' + str(results[nodes_right[0]][0]))
     # print('RZ at the free extremity: ' + str(results[nodes_right[0]][2]))
     
-    assert np.abs(results[0][1]+F)<1e-10 #Ry=2
-    assert np.abs(results[0][5]+F*L)<1e-10 #Mf = 20
+    assert np.abs(Fext[1][0]+F)<1e-10 #Ry=2
+    assert np.abs(Mext[2][0]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
     results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')

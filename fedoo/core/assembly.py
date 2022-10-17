@@ -950,25 +950,23 @@ class Assembly(AssemblyBase):
         else:
             assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
 
-    def get_ext_forces(self, U, nvar=None):
-        """
-        Not a static method.
-        Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U
-        The resulting forces are the sum of :
-        - External forces (associated to Neumann boundary conditions)
-        - Node reaction (associated to Dirichelet boundary conditions)
-        - Inertia forces 
+#     def get_ext_forces(self, U, nvar=None):
+#         """
+#         Not a static method.
+#         Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U
+#         The resulting forces are the sum of :
+#         - External forces (associated to Neumann boundary conditions)
+#         - Node reaction (associated to Dirichelet boundary conditions)
+#         - Inertia forces 
         
-        Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.         
+#         Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.         
                     
-        example : 
-        S = SpecificAssembly.get_ext_forces(Problem.Problem.get_dof_solution('all'))
-
-        an optionnal parameter is allowed to have extenal forces for other types of simulation with no beams !
-        """
-        if nvar is None: nvar = self.space.nvar
-        return np.reshape(self.get_global_matrix() * U - self.get_global_vector(), (nvar,-1)).T                        
-#        return np.reshape(self.get_global_matrix() * U, (Nvar,-1)).T                        
+#         example : 
+#         S = SpecificAssembly.get_ext_forces(Problem.Problem.get_dof_solution('all'))
+#         """
+#         if nvar is None: nvar = self.space.nvar
+#         return np.reshape(self.get_global_matrix() * U - self.get_global_vector(), (nvar,-1))                        
+# #        return np.reshape(self.get_global_matrix() * U, (Nvar,-1)).T                        
 
         
 

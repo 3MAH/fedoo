@@ -63,8 +63,8 @@ def _GenerateClass_NonLinear(libBase):
             if self._dU is 0: return self._get_vect_component(self._U, name)
             return self._get_vect_component(self._U + self._dU, name)        
         
-        def get_ext_forces(self, name = 'all'):
-            return self._get_vect_component(-self.get_D(), name)        
+        # def get_ext_forces(self, name = 'all'):
+        #     return self._get_vect_component(-self.get_D(), name)        
         
         def updateA(self, dt = None):
             #dt not used for static problem
@@ -80,6 +80,7 @@ def _GenerateClass_NonLinear(libBase):
             self.__assembly.initialize(self,t0)
             # self.set_A(self.__assembly.current.get_global_matrix())
             # self.set_D(self.__assembly.current.get_global_vector())
+            
         
         def elastic_prediction(self, timeStart, dt):
             #update the boundary conditions with the time variation
@@ -96,25 +97,12 @@ def _GenerateClass_NonLinear(libBase):
 
             #set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
             try:
-                self._Problem__Xbc *= 0 
+                self._Xbc *= 0 
             except:
                 self._ProblemPGD__Xbc = 0
 
-            #update displacement increment
-            # if self.__TotalDisplacement is not 0: self.__TotalDisplacementOld = self.__TotalDisplacement.copy()
-            # self.__TotalDisplacement += self.get_X()               
+            #update displacement increment        
             self._dU += self.get_X()
-        
-        # def InitTimeIncrement(self,dt):
-        #     self.__assembly.InitTimeIncrement(self,dt)
-        #     self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
-            
-        # def NewTimeIncrement(self,dt):
-        #     #dt not used for static problem
-        #     #dt = dt for the previous increment
-        #     self._U += self._dU
-        #     self._dU = 0
-        #     self.__assembly.NewTimeIncrement()     
             
             
         def set_start(self,dt, save_results=False):
@@ -159,6 +147,9 @@ def _GenerateClass_NonLinear(libBase):
                 self.__assembly.update(self, dtime, compute)
             else: 
                 self.__assembly.current.assemble_global_mat(compute)
+                
+            if self.bc._update_during_inc:
+                self.update_boundary_conditions()
 
         def reset(self):
             self.__assembly.reset()

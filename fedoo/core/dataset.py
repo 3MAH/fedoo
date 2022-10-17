@@ -91,7 +91,7 @@ class DataSet():
         
         show = kargs.pop('show', True)
         show_edges = kargs.pop('show_edges', True)
-        sargs=kargs.pop('scalar_bar_args', None) 
+        sargs=kargs.pop('scalar_bar_args', None)                 
         
         if data_type == 'GaussPoint':
             if self.meshplot_gp is None:
@@ -99,22 +99,28 @@ class DataSet():
             meshplot = self.meshplot_gp
             crd = self.mesh_gp.nodes      
                 
-            scalars = self.mesh_gp.convert_data(scalars, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(scalars.T)//self.mesh.n_elements)
+            scalars = self.mesh_gp.convert_data(scalars, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(scalars.T)//self.mesh.n_elements).T
             if 'Disp' in self.node_data:
                 ndim = self.mesh.ndim
                 U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T
                 # meshplot.point_data['Disp'] = U  
                                                                     
         elif scalars is not None:
+            n_physical_nodes = self.mesh.n_physical_nodes
+            
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
                 meshplot = self.meshplot                                    
-            crd = self.mesh.nodes            
+            crd = self.mesh.physical_nodes
             
             if 'Disp' in self.node_data:
-                U = self.node_data['Disp'].T
-                #     meshplot.point_data['Disp'] = self.node_data['Disp'].T          
+                U = self.node_data['Disp'].T[:n_physical_nodes]
+            
+            if data_type == 'Node':
+                scalars = scalars.T[:n_physical_nodes]
+            else: 
+                scalars = scalars.T
                
         pl = pv.Plotter()
         # pl = pv.Plotter()
@@ -153,9 +159,9 @@ class DataSet():
 
         if component == "norm": 
             component = 0
-            scalars = np.linalg.norm(scalars, axis = 0)
+            scalars = np.linalg.norm(scalars, axis = 1)
 
-        pl.add_mesh(meshplot, scalars = scalars.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
+        pl.add_mesh(meshplot, scalars = scalars, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", **kargs)
             
         pl.add_axes(color='Black', interactive = True)
         
@@ -525,10 +531,14 @@ class MultiFrameDataSet(DataSet):
             Number of frames per second
         * quality : int between 1 and 10 (default = 5)
             Define the quality of the writen movie. Higher is better but take more place. 
+        * azimuth: scalar (default = 30)
+            Angle of azimuth at the begining of the video.
+        * elevation: scalar (default = 15)
+            Angle of elevation at the begining of the video.        
         * rot_azimuth : scalar (default = 0)
-            Angle of azimuth rotation that is made at each new frame. Used to make easy video with moving camera.            
+            Angle of azimuth rotation that is made at each new frame. Used to make easy video with camera moving around the scene.      
         * rot_elevation :  scalar (default = 0)
-            Angle of elevation rotation that is made at each new frame. Used to make easy video with moving camera.            
+            Angle of elevation rotation that is made at each new frame. Used to make easy video with camera moving around the scene.            
         * scalar_bar_args' : 
             dict containing the arguments related to scalar bar.             
         * scale : scalar (default = 1)
@@ -557,6 +567,9 @@ class MultiFrameDataSet(DataSet):
         
         rot_azimuth = kargs.pop('rot_azimuth', 0)
         rot_elevation = kargs.pop('rot_elevation', 0)
+        
+        azimuth = kargs.pop('azimuth',30)
+        elevation = kargs.pop('elevation',15)
     
         #auto compute boundary        
         Xmin, Xmax, clim = self.get_all_frame_lim(scalars, component, data_type, scale)
@@ -565,9 +578,7 @@ class MultiFrameDataSet(DataSet):
             
         clim = kargs.pop('clim', clim)    
         window_size = kargs.pop('window_size', [1024, 768])
-
-        component_save = component 
-    
+   
         self.load(0)
         
         data, data_type = self.get_data(scalars, data_type, True)
@@ -579,11 +590,13 @@ class MultiFrameDataSet(DataSet):
             crd = self.mesh_gp.nodes             
         
         elif scalars is not None:
+            n_physical_nodes = self.mesh.n_physical_nodes
+            
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
                 meshplot = self.meshplot
-            crd = self.mesh.nodes 
+            crd = self.mesh.physical_nodes 
         else:
             return NotImplemented
        
@@ -617,8 +630,8 @@ class MultiFrameDataSet(DataSet):
         pl.camera.up = tuple([0,1,0]) 
         
         if ndim == 3:
-            pl.camera.Azimuth(30)
-            pl.camera.Elevation(15)
+            pl.camera.Azimuth(azimuth)
+            pl.camera.Elevation(elevation)
 
 
         for i in range(0,self.n_iter):
@@ -626,51 +639,29 @@ class MultiFrameDataSet(DataSet):
             data = self.get_data(scalars, data_type)
             
             if data_type == 'GaussPoint':                
-                data = self.mesh_gp.convert_data(data, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(data.T)//self.mesh.n_elements).T
+                data = self.mesh_gp.convert_data(data, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(data.T)//self.mesh.n_elements)
                 if 'Disp' in self.node_data:                    
                     U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T
                     meshplot.points = crd + scale*U  
             else:            
                 if 'Disp' in self.node_data:
-                    meshplot.points = crd + scale*self.node_data['Disp'].T
-
-            if component_save == "norm":
-                component = 0
-                scalars = np.linalg.norm(scalars, axis = 0)                     
+                    meshplot.points = crd + scale*self.node_data['Disp'].T[:n_physical_nodes]
                 
+                if data_type == 'Node':
+                    data = data[:,:n_physical_nodes]                
+
+            if component == "norm":                
+                data = np.linalg.norm(data, axis = 0)                     
+            elif len(data.shape)>1:
+                data = data[component] #if data is only 1D array, component ignored
+                                        
             if i == 0:
-                pl.add_mesh(meshplot, scalars = data.T, component = component, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim,  **kargs)
+                pl.add_mesh(meshplot, scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim,  **kargs)
             else:
                 if clim is None: 
-                    if len(data.shape)>1:
-                        pl.update_scalar_bar_range([data[component].min(), data[component].max()])
-                    else:
-                        #scalar field -> component ignored
-                        pl.update_scalar_bar_range([data.min(), data.max()])
+                    pl.update_scalar_bar_range([data.min(), data.max()])
 
-                pl.update_scalars(data.T)
-                
-            
-            
-
-            # for res in [res_th, res_me]:
-            #     for item in res:
-            #         if item[-4:] == 'Node':
-            #             if len(res[item]) == len(crd):
-            #                 meshplot.point_data[item[:-5]] = res[item]
-            #             else:
-            #                 meshplot.point_data[item[:-5]] = res[item].T
-            #         else:
-            #             meshplot.cell_data[item] = res[item].T
-                    
-            # actor = pl.add_mesh(meshplot, scalars = 'data', show_edges = True, scalar_bar_args=sargs, cmap="bwr", clim = [0,100])
-            # meshplot.points = crd + factor*meshplot.point_data['Disp']
-            
-            # if i == 0: 
-            #     pl.add_mesh(meshplot, scalars = field_name, component = component, show_edges = True, scalar_bar_args=sargs, cmap="jet", clim = clim)
-    
-            # if clim is None: 
-            #     pl.update_scalar_bar_range([meshplot.point_data[field_name].min(), meshplot.point_data[field_name].max()])
+                pl.update_scalars(data)
     
             if rot_azimuth: 
                 pl.camera.Azimuth(rot_azimuth)
@@ -691,16 +682,24 @@ class MultiFrameDataSet(DataSet):
                 
         ndim = self.mesh.ndim
         clim = [np.inf, -np.inf]
-        crd = self.mesh.nodes
+        crd = self.mesh.physical_nodes
+        n_physical_nodes = self.mesh.n_physical_nodes
         
         for i in range(0,self.n_iter):                                   
             self.load(i)
-            
-            data = self.get_data(field, data_type)[component]
+            data = self.get_data(field, data_type)
+            if len(data.shape)>1:
+                if component == "norm":
+                    data = np.linalg.norm(data, axis = 0)[:n_physical_nodes]
+                else:
+                    data = data[component,:n_physical_nodes]
+            else: 
+                data = data[:n_physical_nodes]
+                
             clim = [np.min([data.min(),clim[0]]), np.max([data.max(), clim[1]])]           
 
             if 'Disp' in self.node_data:
-                new_crd = crd + scale*self.node_data['Disp'].T
+                new_crd = crd + scale*self.node_data['Disp'].T[:n_physical_nodes]
                         
                 new_Xmin = new_crd.min(axis = 0) ; new_Xmax = new_crd.max(axis=0)
                 if i == 0:

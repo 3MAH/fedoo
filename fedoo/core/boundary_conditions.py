@@ -24,6 +24,7 @@ class BCBase:
             BCBase.__dic[self.__name] = self
             
         self._keep_at_end = False #set to True if bc need to be generated after standard bc
+        self._update_during_inc = False #set to True if bc need to be generated during newton raphson increment        
 
     def __class_getitem__(cls, item):
         return cls.__dic[item]
@@ -110,6 +111,8 @@ class ListBC(BCBase):
             self.data_end.append(bc)
         else:
             self.data.append(bc)
+            
+        if bc._update_during_inc: self._update_during_inc = True
 
     def extend(self, iterable):
         if self._problem is not None:
@@ -120,6 +123,9 @@ class ListBC(BCBase):
         else:
             self.data.extend(iterable)
     
+        if hasattr(iterable,'_update_during_inc') and iterable._update_during_inc:
+            self._update_during_inc = True
+
     
     def remove(self, bc):
         if isinstance(bc, int): 
@@ -135,6 +141,14 @@ class ListBC(BCBase):
                 self.data.remove(bc)
             except:
                 self.data_end.remove(bc)
+        
+        #recompute self._update_during_inc
+        if self._update_during_inc:    
+            self._update_during_inc = False
+            for bc in self:
+                if bc._update_during_inc:
+                    self._update_during_inc = True
+                    break
 
 
     def add(self, *args, **kargs):
@@ -166,8 +180,23 @@ class ListBC(BCBase):
             bc.initialize(problem)
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
-        return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), []) #use chain instead of sum would be better ?
+        #return a generator function (the generate method will be called only when required)
+        for listbc in self:
+            for bc in listbc.generate(problem, t_fact, t_fact_old):
+                yield bc
+            
+        # return chain(*(bc.generate(problem, t_fact, t_fact_old) for bc in self)) #use chain instead of sum would be better ?
+        # return sum((bc.generate(problem, t_fact, t_fact_old) for bc in self), []) #use chain instead of sum would be better ?
 
+    def list_all(self):
+        #return a generator function (the generate method will be called only when required)
+        for listbc in self:
+            if isinstance(listbc, ListBC):
+                for bc in listbc.list_all():
+                    yield bc
+            else:
+                yield listbc
+                
 
 class BoundaryCondition(BCBase):
     """
