@@ -28,7 +28,8 @@ res_dir = 'results/'
 # fd.mesh.box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
 # meshname = "Domain"
 
-fd.mesh.import_file('../../util/meshes/octet_surf.msh', name = "Domain")
+fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")
+fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")
 meshname = "Domain2"
 
 mesh = fd.Mesh[meshname]
@@ -154,7 +155,7 @@ results.plot('Cauchy_vm', component = "0", data_type='Node' ,show = True)
 # ------------------------------------
 # Write movie with moving camera
 # ------------------------------------
-results.write_movie(res_dir+filename, 'Statev', component = 1, framerate = 12, quality = 5, rot_azimuth = -0.4, rot_elevation = 0)
+results.write_movie(res_dir+filename, 'Cauchy_vm', component = 0, framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)
 
 
 

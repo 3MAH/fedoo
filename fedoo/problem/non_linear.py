@@ -82,11 +82,11 @@ def _GenerateClass_NonLinear(libBase):
             # self.set_D(self.__assembly.current.get_global_vector())
             
         
-        def elastic_prediction(self, timeStart, dt):
+        def elastic_prediction(self, dt):
             #update the boundary conditions with the time variation
-            time = timeStart + dt
-            t_fact    = (time-self.t0)/(self.tmax-self.t0) #adimensional time            
-            t_fact_old = (timeStart-self.t0)/(self.tmax-self.t0)
+            time_end = self.time + dt
+            t_fact    = (time_end-self.t0)/(self.tmax-self.t0) #adimensional time            
+            t_fact_old = (self.time-self.t0)/(self.tmax-self.t0)
 
             self.apply_boundary_conditions(t_fact, t_fact_old)
             
@@ -134,7 +134,7 @@ def _GenerateClass_NonLinear(libBase):
             self._dU += self.get_X()
             # print(self._dU)
         
-        def update(self, dtime=None, compute = 'all', updateWeakForm = True):   
+        def update(self, dt=None, compute = 'all', updateWeakForm = True):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -144,7 +144,7 @@ def _GenerateClass_NonLinear(libBase):
             Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
             """
             if updateWeakForm == True:
-                self.__assembly.update(self, dtime, compute)
+                self.__assembly.update(self, dt, compute)
             else: 
                 self.__assembly.current.assemble_global_mat(compute)
                 
@@ -247,11 +247,11 @@ def _GenerateClass_NonLinear(libBase):
 
         #     return E                   
         
-        def solve_time_increment(self, timeStart, dt, max_subiter = None, ToleranceNR = None):                                
+        def solve_time_increment(self, dt, max_subiter = None, ToleranceNR = None):                                
             if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
             if ToleranceNR is None: ToleranceNR = self.nr_parameters['tol'] 
            
-            self.elastic_prediction(timeStart, dt)
+            self.elastic_prediction(dt)
             for subiter in range(max_subiter): #newton-raphson iterations
                 #update Stress and initial displacement and Update stiffness matrix
                 self.update(dt, compute = 'vector') #update the out of balance force vector
@@ -261,7 +261,7 @@ def _GenerateClass_NonLinear(libBase):
                 normRes = self.NewtonRaphsonError()    
 
                 if self.print_info > 1:
-                    print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, timeStart+dt, normRes))
+                    print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, self.time+dt, normRes))
 
                 if normRes < ToleranceNR: #convergence of the NR algorithm                    
                     #Initialize the next increment                    
@@ -302,38 +302,38 @@ def _GenerateClass_NonLinear(libBase):
             
             self.SetInitialBCToCurrent()            
                         
-            time = self.t0  #time at the begining of the iteration                          
+            self.time = self.t0  #time at the begining of the iteration                          
             
             if self._U is 0:#Initialize only if 1st step
                 self.initialize(self.t0)
                             
-            while time < self.tmax - self.err_num:                         
+            while self.time < self.tmax - self.err_num:                         
         
-                save_results = (time != self.t0) and \
-                    ((time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%intervalOutput == 0))
+                save_results = (self.time != self.t0) and \
+                    ((self.time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%intervalOutput == 0))
 
                 #update next_time                
-                if time == next_time: 
+                if self.time == next_time: 
                     # self.__saveOutputAtExactTime should be True 
                     next_time = next_time + intervalOutput
                     if next_time > self.tmax - self.err_num: next_time = self.tmax
                     
-                if time+dt > next_time - self.err_num: #if dt is too high, it is reduced to reach next_time
-                    current_dt = next_time-time
+                if self.time+dt > next_time - self.err_num: #if dt is too high, it is reduced to reach next_time
+                    current_dt = next_time-self.time
                 else: 
                     current_dt = dt
                                
                 self.set_start(dt, save_results)                  
                     
                 #self.solve_time_increment = Newton Raphson loop
-                convergence, nbNRiter, normRes = self.solve_time_increment(time, current_dt, max_subiter, ToleranceNR)
+                convergence, nbNRiter, normRes = self.solve_time_increment(current_dt, max_subiter, ToleranceNR)
                 
                 if (convergence) :
-                    time = time + current_dt #update time value 
+                    self.time = self.time + current_dt #update time value 
                     self.__iter += 1
                     
                     if self.print_info > 0:
-                        print('Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, time, dt, nbNRiter, normRes))
+                        print('Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}'.format(self.__iter, self.time, dt, nbNRiter, normRes))
 
                     #Check if dt can be increased
                     if update_dt and nbNRiter < 2 and dt == current_dt: 

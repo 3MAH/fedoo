@@ -84,31 +84,60 @@ def _GenerateClass_NonLinearNewmark(libBase):
             if self.__DampingAssembly is not 0 and self.__RayleighDamping is None:
                 self.__DampingAssembly.initialize(self,t0)       
         
-        def NewTimeIncrement(self, dt):         
-            ### dt is the time step of the previous increment            
-            self.__MassAssembly.NewTimeIncrement()
-            self.__StiffnessAssembly.NewTimeIncrement()
-            if self.__DampingAssembly is not 0:
-                self.__DampingAssembly.NewTimeIncrement()
-            
-            #update velocity and acceleration
-            NewAcceleration = (1/self.__Beta/(dt**2)) * (self._dU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
-            self.__Velocity += dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
-            self.__Acceleration = NewAcceleration
-            
-            self._U += self._dU
-            self._dU = 0
-
-            
+                
         def to_start(self):     
             self._dU = 0
             
+            self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
+
             self.__MassAssembly.to_start()
-            self.__StiffnessAssembly.to_start()
-            if self.__DampingAssembly is not 0:
-                self.__DampingAssembly.to_start()                                
+            # self.__StiffnessAssembly.to_start()
+            # if self.__DampingAssembly is not 0:
+            #     self.__DampingAssembly.to_start()          
+
+
+        def set_start(self,dt, save_results=False):
+            ### dt is the time step of the previous increment            
+            
+            if self._dU is not 0: 
+                #update velocity and acceleration
+                NewAcceleration = (1/self.__Beta/(dt**2)) * (self._dU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
+                self.__Velocity += dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
+                self.__Acceleration = NewAcceleration
+                
+                self._U += self._dU
+                self._dU = 0                           
+            
+            self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
+            # self.__MassAssembly.set_start(self,dt)
+            self.__StiffnessAssembly.set_start(self,dt)
+            # if self.__DampingAssembly is not 0:
+            #     self.__DampingAssembly.set_start(self,dt)   
+                
+            #Save results            
+            if save_results and self._dU is not 0: 
+                self.save_results(self.__compteurOutput)                              
+                self.__compteurOutput += 1     
+           
+            
         
-        def update(self, dtime=None, compute = 'all', updateWeakForm = True):   
+        # def NewTimeIncrement(self, dt):         
+        #     ### dt is the time step of the previous increment            
+        #     self.__MassAssembly.NewTimeIncrement()
+        #     self.__StiffnessAssembly.NewTimeIncrement()
+        #     if self.__DampingAssembly is not 0:
+        #         self.__DampingAssembly.NewTimeIncrement()
+            
+        #     #update velocity and acceleration
+        #     NewAcceleration = (1/self.__Beta/(dt**2)) * (self._dU - dt*self.__Velocity) - 1/self.__Beta*(0.5 - self.__Beta)*self.__Acceleration
+        #     self.__Velocity += dt * ( (1-self.__Gamma)*self.__Acceleration + self.__Gamma*NewAcceleration)
+        #     self.__Acceleration = NewAcceleration
+            
+        #     self._U += self._dU
+        #     self._dU = 0
+                
+        
+        def update(self, dt=None, compute = 'all', updateWeakForm = True):   
             """
             Assemble the matrix including the following modification:
                 - New initial Stress
@@ -118,9 +147,19 @@ def _GenerateClass_NonLinearNewmark(libBase):
             Update the problem with the new assembled global matrix and global vector
             """
             if updateWeakForm == True:
-                self.__StiffnessAssembly.update(self, dtime, compute)  
+                self.__StiffnessAssembly.update(self, dt, compute)  
+                # self.__MassAssembly.update(self,dt,compute)
+                # if self.__DampingAssembly is not 0:
+                #     self.__DampingAssembly.update(self,dt,compute)
             else: 
-                self.__StiffnessAssembly.assemble_global_mat(compute)
+                self.__StiffnessAssembly.current.assemble_global_mat(compute)
+                # self.__MassAssembly.current.assemble_global_mat(compute)
+                # if self.__DampingAssembly is not 0:
+                #     self.__DampingAssembly.current.assemble_global_mat(compute)
+                
+            if self.bc._update_during_inc:
+                self.update_boundary_conditions()
+                
 
         def reset(self):
             self.__MassAssembly.reset()

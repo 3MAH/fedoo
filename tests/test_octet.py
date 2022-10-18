@@ -7,7 +7,7 @@ fd.Assembly.delete_memory()
 fd.ModelingSpace("3D")
 
 #Import the mesh generated with Microgen
-fd.mesh.import_file('data/MeshPeriodic.msh', name = "Domain")
+fd.mesh.import_file('../util/meshes/octet_truss.msh', name = "Domain")
 
 #Get the imported mesh 
 mesh = fd.Mesh["Domain2"]
