@@ -8,7 +8,12 @@ import numpy as np
 import os
 from fedoo.core.mesh import Mesh
 
-
+try:
+    from matplotlib import pylab as plt
+    USE_MPL = True
+except:
+    USE_MPL = False
+    
 try: 
     import pyvista as pv
     USE_PYVISTA = True
@@ -39,10 +44,13 @@ class DataSet():
                 self.element_data = data
             elif data_type == 'gausspoint':
                 self.gausspoint_data = data
+            elif data_type == 'scalar':
+                self.scalar_data = data
             elif data_type == 'all':
                 self.node_data = {k:v for k,v in data.items() if k[-2:] == 'nd'}
                 self.element_data = {k:v for k,v in data.items() if k[-2:] == 'el'}
                 self.gausspoint_data = {k:v for k,v in data.items() if k[-2:] == 'gp'}
+                self.scalar_data = {k:v for k,v in data.items() if k[-2:] == 'sc'}
         
         self.meshplot = None
         self.meshplot_gp = None #a mesh with discontinuity between each element to plot gauss points field
@@ -268,6 +276,7 @@ class DataSet():
             self.node_data = data.node_data
             self.element_data = data.element_data
             self.gausspoint_data = data.gausspoint_data
+            self.scalar_data = data.scalar_data
             if load_mesh: self.mesh = data.mesh            
         elif isinstance(data, pv.UnstructuredGrid):
             self.meshplot = data
@@ -289,7 +298,11 @@ class DataSet():
                     self.mesh = Mesh.read(os.path.splitext(filename)[0]+'.vtk')
                 
                 data = np.load(filename)                
-                self.load_dict(data)
+                # self.load_dict(data)
+                self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
+                self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
+                self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}
+                self.scalar_data = {k[:-3]:v.item() for k,v in data.items() if k[-2:] == 'sc'}
             elif ext == '.csv':
                 return NotImplemented
             elif ext == '.xlsx':
@@ -306,8 +319,8 @@ class DataSet():
         The old data are erased."""
         self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
         self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
-        self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}       
-            
+        self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}
+        self.scalar_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'sc'}
                 
     def to_pandas(self):
         if USE_PANDA:
@@ -408,6 +421,8 @@ class DataSet():
         out = {k+'_nd':v for k,v in self.node_data.items()}
         out.update({k+'_el':v for k,v in self.element_data.items()})
         out.update({k+'_gp':v for k,v in self.gausspoint_data.items()})
+        out.update({k+'_sc':v for k,v in self.scalar_data.items()})
+
         return out
 
 
@@ -683,18 +698,41 @@ class MultiFrameDataSet(DataSet):
         
     
     
-    def get_history(self, field, indices, **kargs):
+    def get_history(self, list_fields, list_indices=None, **kargs):
         
         data_type = kargs.pop('data_type', None)
         component = kargs.pop('component', 0)
-           
-        history = []
-        for it in range(self.n_iter):
-            self.load(it)
-            data = self.get_data(field, component, data_type)
-            history.append(data[indices])
+
+        if isinstance(list_fields, str): 
+            list_fields = [list_fields]
+            list_indices = [list_indices]            
+        else:            
+            if list_indices is None: 
+                list_indices = [None for field in list_fields]
         
-        return np.array(history)
+        history = [[] for field in list_fields]        
+        for it in range(self.n_iter):
+            self.load(it)                        
+            for i,field in enumerate(list_fields):
+                data = self.get_data(field, component, data_type)
+                if list_indices[i] is None or np.isscalar(data):
+                    history[i].append(data)
+                else:
+                    history[i].append(data[list_indices[i]])
+        
+        return tuple(np.array(field_hist) for field_hist in history)
+    
+    
+    def plot_history(self, field, indice, **kargs):
+        
+        if USE_MPL:
+            data_type = kargs.pop('data_type', None)
+            component = kargs.pop('component', 0)
+    
+            t,data = self.get_history(['Time', field], [None, indice])
+            plt.plot(t,data)
+        else:
+            raise NameError('Matplotlib not found')
     
         
     def get_all_frame_lim(self, field, component=0, data_type = None, scale = 1):

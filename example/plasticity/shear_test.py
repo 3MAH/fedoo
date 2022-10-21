@@ -155,6 +155,13 @@ results.plot('Cauchy_vm', component = 0, show = True)
 # ------------------------------------
 # results.write_movie(res_dir+filename, 'Cauchy_vm', framerate = 5, quality = 5, rot_azimuth = 3, rot_elevation = 0.5)
 
+# ------------------------------------
+# Plot time history
+# ------------------------------------
+# from matplotlib import pylab
+# t, sigma = results.get_history(('Time','Cauchy'), (0,12), component = 3)
+# pylab.plot(t,sigma)
+# #or results.plot_history('Cauchy', 12)
 
 
 

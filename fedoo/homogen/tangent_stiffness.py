@@ -9,7 +9,7 @@ from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
 from fedoo.problem.linear import Linear
 from fedoo.core.base import ProblemBase
-from fedoo.homogen.periodic_bc import PeriodicBC
+from fedoo.constraint.periodic_bc import PeriodicBC
 import numpy as np
 import os
 import time

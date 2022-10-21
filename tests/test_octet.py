@@ -20,7 +20,7 @@ crd_center = bounds.center
 center = mesh.nearest_node(crd_center)
 
 # Add 2 virtual nodes for macro strain 
-StrainNodes = fd.Mesh["Domain2"].add_nodes(crd_center, 2)  
+StrainNodes = fd.Mesh["Domain2"].add_virtual_nodes(crd_center, 2)  
 
 # Material definition and simcoon elasto-plastic constitutive law
 Re = 300
@@ -67,7 +67,7 @@ list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
 #                    ['DispX', 'DispY', 'DispZ'],
 #                    ['DispY', 'DispZ', 'DispZ']]
 
-bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
 pb.bc.add(bc_periodic)
 
 #fixed point on the center to avoid rigid body motion

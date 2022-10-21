@@ -204,7 +204,9 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 result.element_data[res] = data
             elif data_type == 'GaussPoint':
                 result.gausspoint_data[res] = data
-                    
+        
+        if hasattr(pb, 'time'): result.scalar_data['Time'] = pb.time
+        
         return result
 
 
@@ -301,7 +303,7 @@ class _ProblemOutput:
                     out = list_data[list_full_filename.index(full_filename)]                                                                             
             
             #compute the results
-            res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)                        
+            res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)       
             out.add_data(res)            
         
         for i, out in enumerate(list_data): 

@@ -29,7 +29,7 @@ res_dir = 'results/'
 # meshname = "Domain"
 
 fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")
-fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")
+# fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")
 meshname = "Domain2"
 
 mesh = fd.Mesh[meshname]
@@ -100,7 +100,7 @@ results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII
 
 
 
-pb.bc.add(fd.util.RigidTie(right, node_cd, var_cd))
+pb.bc.add(fd.constraint.RigidTie(right, node_cd, var_cd))
 
 # pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
 # pb.bc.add('Dirichlet','DispY', 0,nodes_top)

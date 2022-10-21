@@ -7,7 +7,7 @@ from fedoo.weakform.internal_force import InternalForce
 from fedoo.core.assembly import Assembly
 from fedoo.problem.non_linear import NonLinear
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-from fedoo.homogen.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
+from fedoo.constraint.periodic_bc import PeriodicBC #, DefinePeriodicBoundaryConditionNonPerioMesh
 from fedoo.homogen.tangent_stiffness import get_tangent_stiffness, get_homogenized_stiffness
 import numpy as np
 import multiprocessing 
