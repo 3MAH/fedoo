@@ -1,6 +1,6 @@
 """This module contains functions to import fedoo mesh from files"""
 
-from fedoo.core.mesh import Mesh
+from fedoo.core.mesh import Mesh, MultiMesh
 import numpy as np
 
 def import_file(filename, name = None):
@@ -260,6 +260,12 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
     
     count = 0
     if version == '2.2':   
+        if len(list(np.unique(celltype_all))) > 1:
+            multi_mesh = True
+            list_mesh = []
+        else: 
+            multi_mesh = False
+
         for celltype in list(np.unique(celltype_all)):     
             type_elm = None
             list_el = np.where(celltype_all == celltype)[0]
@@ -276,17 +282,27 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
                 GeometricalEntity.append([i for i in range(len(list_el)) if Geom_all[list_el[i]]==geom ])
                        
             if type_elm is None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
-            else:          
-                if len(list(np.unique(celltype_all))) == 1:
-                    importedMeshName = name
-                else: importedMeshName = name+str(count)
-                    
-                print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-                Mesh(crd, elm, type_elm, name = importedMeshName)            
-                #Rajouter GeometricalEntity en elSet
-                count+=1
+            else:    
+                if multi_mesh:
+                    mesh_name = name+str(count)
+                else: 
+                    mesh_name = name
+                
+                imported_mesh = Mesh(crd, elm, type_elm, name = mesh_name) 
+                
+                #Rajouter GeometricalEntity en elSet    
+                
+                if multi_mesh:                
+                    list_mesh.append(imported_mesh)
+                count += 1
         
-    elif version == '4.1': 
+    elif version == '4.1':         
+        if len(element_all) > 1:
+            multi_mesh = True
+            list_mesh = []
+        else: 
+            multi_mesh = False
+            
         for elementType in element_all:  
             
             elm =  np.array(element_all[elementType][0], int) - numnode0            
@@ -297,21 +313,27 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
             if type_elm == 'tet10': #swap axes to account for different numbering schemes
                 elm[:, [8, 9]] = elm[:, [9, 8]]
             
-            if len(element_all) == 1:
-                importedMeshName = name
-            else: importedMeshName = name+str(count)
-                
-            # print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-            m = Mesh(crd, elm, type_elm, name = importedMeshName)            
+            if multi_mesh:
+                mesh_name = name+str(count)
+            else: 
+                mesh_name = name
             
+            imported_mesh = Mesh(crd, elm, type_elm, name = mesh_name)    
             #add entity set of elements
             for elset in element_all[elementType][1]:
-                m.add_element_set(element_all[elementType][1][elset], elset)
-                
-            
-            count+=1
-            
-    return NodeData, NodeDataName, ElmData, ElmDataName       
+                imported_mesh.add_element_set(element_all[elementType][1][elset], elset)
+
+            if multi_mesh:                
+                list_mesh.append(imported_mesh)
+                                               
+            # print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
+            count += 1
+    
+    if multi_mesh: 
+        imported_mesh = MultiMesh.from_mesh_list(list_mesh, name)
+    
+    return imported_mesh
+    # return NodeData, NodeDataName, ElmData, ElmDataName       
     
     
     
@@ -415,6 +437,12 @@ def import_vtk(filename, name = None):
     
     #Traitement des éléments
     count = 0
+    if len(list(np.unique(celltype_all))):
+        multi_mesh = True
+        list_mesh = []
+    else: 
+        multi_mesh = False
+        
     for celltype in list(np.unique(celltype_all)):         
         list_el = np.where(celltype_all == celltype)[0]
         elm =  np.array([cells[el].split()[1:] for el in list_el], dtype = int) 
@@ -434,12 +462,16 @@ def import_vtk(filename, name = None):
 
         if type_elm == None: print('Warning : Elements type {} is not implemeted!'.format(celltype)) #element ignored
         else:            
-            if len(list(np.unique(celltype_all))) == 1:
-                importedMeshName = name
-            else: importedMeshName = name+str(count)
+            if multi_mesh:
+                mesh_name = name+str(count)
+            else: mesh_name = name
                 
-            print('Mesh imported: "' + importedMeshName + '" with elements ' + type_elm)
-            Mesh(crd, elm, type_elm, name = importedMeshName)
+            # print('Mesh imported: "' + mesh_name + '" with elements ' + type_elm)
+            imported_mesh = Mesh(crd, elm, type_elm, name = mesh_name)
             count+=1
-
-    return NodeData, NodeDataName, ElmData, ElmDataName
+            
+    if multi_mesh:
+        list_mesh.append(imported_mesh)            
+        
+    return imported_mesh
+    # return NodeData, NodeDataName, ElmData, ElmDataName

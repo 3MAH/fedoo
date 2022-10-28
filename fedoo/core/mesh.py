@@ -64,7 +64,7 @@ class Mesh(MeshBase):
         """ List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
         """Type of the element (str). The type of the element should be coherent with the shape of elements."""
-        self.node_sets = {} #node on the boundary for instance
+        self.node_sets = {} 
         """Dict containing node sets associated to the mesh"""
         self.element_sets = {}
         """Dict containing element sets associated to the mesh"""
@@ -96,11 +96,14 @@ class Mesh(MeshBase):
     
     @staticmethod
     def from_pyvista(pvmesh, name = ""):
-        """Build a Mesh from a pyvista UnstructuredGrid mesh. 
+        """Build a Mesh from a pyvista UnstructuredGrid or PolyData mesh. 
         Node and element data are not copied.
         For now, only mesh with single element type may be imported.
-        Multi-element meshes will be integrated later. """        
+        Multi-element meshes will be integrated later. """                        
         if USE_PYVISTA:     
+            if isinstance(pvmesh, pv.PolyData):
+                pvmesh = pvmesh.cast_to_unstructured_grid()
+                
             if len(pvmesh.cells_dict) != 1: return NotImplemented
             
             elm_type =  {3:'lin2',
@@ -766,168 +769,45 @@ class Mesh(MeshBase):
     def bounding_box(self):
         return BoundingBox(self)
 
-
-    # def GetCoordinatename(self):
-    #     return self.crd_name
     
-    # def SetCoordinatename(self,ListCoordinatename):        
-    #     self.crd_name = ListCoordinatename
-    
-    
-    
-    
-    
-    #
-    # To be developed later
-    #
-    # def InititalizeLocalFrame(self):
-    #     """
-    #     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
-    #     """
-#        elmRef = self.elm_type(1)        
-#        rep_loc = np.zeros((self.__n_nodes,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
-#        for e in self.elements:
-#            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
-#            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e]) 
-#
-#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__n_nodes)])
-#        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
-#        self__.localBasis = rep_loc
 
-
-    #
-    # development
-    #
-#     def GetElementLocalFrame(self): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
-#         #initialisation
-#         elmRef = eval(self.elm_type)(1) #only 1 gauss point for returning one local Frame per element
-               
-#         elm = self.elements
-#         crd = self.nodes
-        
-# #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
-#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (n_elements, n_elm_gp, nb of vectors in basis = dim, dim)
-
-
-    # def bounding_box(self, return_center = False):
-    #     """
-    #     Return the cordinate of the left/bottom/behind (Xmin) and the right/top/front (Xmax) corners
-
-    #     Parameters
-    #     ----------
-    #     return_center : bool, optional (default = False)
-    #         if return_center = True, also return the coordinate of the center of the bounding box
-
-    #     Returns
-    #     -------
-    #     - Xmin: numpy array of float containing the coordinates of the left/bottom/behind corner
-    #     - Xmax: numpy array of float containing the coordinates of the right/top/front corner
-    #     - Xcenter (if return_center = True): numpy array of float containing the coordinates of the center
-    #     """
-    #     Xmin = self.nodes.min(axis=0)
-    #     Xmax = self.nodes.max(axis=0)
-    #     if return_center == False: 
-    #         return Xmin, Xmax
-    #     else: 
-    #         return Xmin, Xmax, (Xmin+Xmax)/2
-    
-    
-    # def GetSetOfNodes(self,SetOfId):
-    #     """
-    #     Return the set of nodes whose name is SetOfId
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         name of the set of nodes
-
-    #     Returns
-    #     -------
-    #     list or 1D numpy array containing node indexes
-    #     """
-    #     return self.node_sets[SetOfId]
-        
-    # def GetSetOfElements(self,SetOfId):
-    #     """
-    #     Return the set of elements whose name is SetOfId
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         name of the set of elements
-
-    #     Returns
-    #     -------
-    #     list or 1D numpy array containing element indexes
-    #     """
-    #     return self.element_sets[SetOfId]
-
-    # def RemoveSetOfNodes(self,SetOfId):
-    #     """
-    #     Remove the set of nodes whose name is SetOfId from the Mesh
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         name of the set of nodes
-    #     """
-    #     del self.node_sets[SetOfId]
-        
-    # def RemoveSetOfElements(self,SetOfId):
-    #     """
-    #     Remove the set of elements whose name is SetOfId from the Mesh
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         name of the set of elements
-    #     """
-    #     del self.element_sets[SetOfId]
-
-    # def ListSetOfNodes(self):
-    #     """
-    #     Return a list containing the name (str) of all set of nodes defined in the Mesh.
-    #     """
-    #     return [key for key in self.node_sets]
-
-    # def ListSetOfElements(self):    
-    #     """
-    #     Return a list containing the name (str) of all set of elements defined in the Mesh.
-    #     """
-    #     return [key for key in self.element_sets]
-                                
-    # def GetElementShape(self):
-    #     """
-    #     Return the element shape (ie, type of element) of the Mesh. 
-        
-    #     Parameters
-    #     ----------
-    #     SetOfId : str
-    #         name of the set of nodes
+class MultiMesh(Mesh):
+    def __init__(self, nodes, elements_dict = None, ndim = None, name = ""):
+        MeshBase.__init__(self, name)
+        self.nodes = nodes #node coordinates    
+        """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""    
+                
+        if ndim is None: ndim = self.nodes.shape[1]
+        elif ndim > self.nodes.shape[1]:
+            dim_add = ndim-self.nodes.shape[1]
+            self.nodes = np.c_[self.nodes, np.zeros((self.n_nodes, dim_add))]            
             
-    #     The element shape if defined as a str according the the list of available element shape.
-    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
+        if ndim == 1: self.crd_name = ('X')
+        elif self.nodes.shape[1] == 2: self.crd_name = ('X', 'Y')
+        else: self.crd_name = ('X', 'Y', 'Z')
         
-    #     Remark
-    #     ----------
-    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
-    #     """
-    #     return self.elm_type
+        self.mesh_dict = {}
+        if elements_dict is not None:
+            for elm_type, elements in enumerate(elements_dict):                  
+                self.mesh_dict[elm_type] = Mesh(self.nodes, elements, elm_type, ndim)
+        
+        self.node_sets = {} 
+        """Dict containing node sets associated to the mesh"""
+                
+        self._n_physical_nodes = None #if None, the number of physical_nodes is the same as n_nodes                       
     
-    # def SetElementShape(self, value):
-    #     """
-    #     Change the element shape (ie, type of element) of the Mesh.
-        
-        
-    #     The element shape if defined as a str according the the list of available element shape.
-    #     For instance, the element shape may be: 'lin2', 'tri3', 'tri6', 'quad4', 'quad8', 'quad9', 'hex8', ...
-        
-    #     Remark
-    #     ----------
-    #     The element shape associated to the Mesh is only used for geometrical interpolation and may be different from the one used in the Assembly object.
-    #     """
-    #     self.elm_type = value
+    def __getitem__(self, item):
+        return self.mesh_dict[item]
     
+    @staticmethod
+    def from_mesh_list(mesh_list, name = ""):
+        multi_mesh = MultiMesh(mesh_list[0].nodes, name)
+        multi_mesh._n_physical_nodes = mesh_list[0]._n_physical_nodes
+        for mesh in mesh_list:
+            multi_mesh.mesh_dict[mesh.elm_type] = mesh
+            
+        return multi_mesh
+        
 
 class BoundingBox(list):
     def __init__(self, m):
@@ -1005,4 +885,35 @@ if __name__=="__main__":
     print(a.nodes)
 
 
+
+ #
+    # May be integrated later ?
+    #
+    # def InititalizeLocalFrame(self):
+    #     """
+    #     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
+    #     """
+#        elmRef = self.elm_type(1)        
+#        rep_loc = np.zeros((self.__n_nodes,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))   
+#        for e in self.elements:
+#            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
+#            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e]) 
+#
+#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__n_nodes)])
+#        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
+#        self__.localBasis = rep_loc
+
+
+    #
+    # development
+    #
+#     def GetElementLocalFrame(self): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
+#         #initialisation
+#         elmRef = eval(self.elm_type)(1) #only 1 gauss point for returning one local Frame per element
+               
+#         elm = self.elements
+#         crd = self.nodes
+        
+# #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
+#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (n_elements, n_elm_gp, nb of vectors in basis = dim, dim)
 
