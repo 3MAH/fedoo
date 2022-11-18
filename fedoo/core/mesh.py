@@ -5,6 +5,7 @@ import numpy as np
 # from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
 from fedoo.lib_elements.element_list import get_default_n_gp, get_element
+from fedoo.mesh.test_periodicity import is_periodic
 from scipy import sparse
 
 from os.path import splitext
@@ -415,7 +416,7 @@ class Mesh(MeshBase):
         The disp vector should be on the form [u, v, w]
         """
         self.nodes = self.nodes + disp.T        
-        
+            
     
     def extract_elements(self,SetOfElementKey, name =""):
         """
@@ -494,6 +495,27 @@ class Mesh(MeshBase):
             return np.where(np.linalg.norm(self.nodes-value, axis=1) < tol)[0]
         else:
             raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
+
+    
+    def is_periodic(self, tol=1e-8, dim=3):
+        """
+        Test if the mesh is periodic (have nodes at the same positions on adjacent faces)
+    
+        Parameters
+        ----------
+        tol : float (default = 1e-8)
+            Tolerance used to test the nodes positions. 
+        dim : 1,2 or 3 (default = 3)
+            Dimension of the periodicity. If dim = 1, the periodicity is tested only over the 1st axis (x axis).
+            if dim = 2, the periodicity is tested on the 2 first axis (x and y axis).
+            if dim = 3, the periodicity is tested in 3 directions (x,y,z).
+    
+        Returns
+        -------
+        True if the mesh is periodic else return False.    
+        """
+        return is_periodic(self.nodes, tol, dim)
+        
 
     def copy(self):
         return Mesh(self.nodes.copy(),self.elements.copy(), self.elm_type)

@@ -3,34 +3,52 @@ from fedoo.lib_elements.element_base import *
 
 class ElementQuadrangle(Element2D):
     def __init__(self,n_elm_gp): 
-        #initialize the gauss points and the associated weight
-        if n_elm_gp == 1: #ordre exact 1
-            xi   = np.c_[[0.]] ; eta  = np.c_[[0.]] ; w_pg = np.array([4.])
-        elif n_elm_gp == 4: #ordre exact 2
-            a = 1./np.sqrt(3)
-            xi = np.c_[[-a, a, a, -a]] ; eta = np.c_[[-a, -a, a, a]] ; w_pg = np.array([1., 1., 1., 1.])
-        elif n_elm_gp == 9: #ordre exact 3
-            a = 0.774596669241483
-            xi =  np.c_[[-a,  a, a, -a, 0., a , 0., -a, 0.]] ; eta = np.c_[[-a, -a, a,  a, -a, 0., a , 0., 0.]]
-            w_pg = np.array([25/81., 25/81., 25/81., 25/81., 40/81., 40/81., 40/81., 40/81., 64/81.])
-        elif n_elm_gp == 16: #ordre exact 4
-            a = 0.339981043584856 ; b = 0.861136311594053
-            w_a = 0.652145154862546 ; w_b = 0.347854845137454        
-            xi =  np.c_[[-b, -a,  a,  b, -b, -a,  a,  b, -b, -a, a, b, -b, -a, a, b ]] 
-            eta = np.c_[[-b, -b, -b, -b, -a, -a, -a, -a,  a,  a, a, a,  b,  b, b, b ]]
-            w_pg = np.array([w_b**2, w_a*w_b, w_a*w_b, w_b**2, w_a*w_b, w_a**2, w_a**2, w_a*w_b, w_a*w_b, w_a**2, w_a**2, w_a*w_b, w_b**2, w_a*w_b, w_a*w_b, w_b**2])
-        elif n_elm_gp == 0: 
-            self.xi_pg = self.xi_nd #if n_elm_gp == 0, we take the position of the nodes
-        else:
-            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for quadrangle element"  
-    
-        if n_elm_gp != 0:    
-            self.xi_pg = np.c_[xi,eta]
-            self.w_pg = w_pg
-        
+        if n_elm_gp == 0:  #if n_elm_gp == 0, we take the position of the nodes
+            self.xi_pg = self.xi_nd            
+        else: 
+            self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp) # = np.c_[xi,eta]             
+            self.w_pg = self.get_gp_weight(n_elm_gp)
+            
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
         self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
     
+
+    def get_gp_elm_coordinates(self,n_elm_gp=None):
+        if n_elm_gp is None: return self.xi_pg
+        
+        if n_elm_gp == 1: #ordre exact 1
+            return np.array([[0, 0]])
+        elif n_elm_gp == 4: # ordre exacte 2
+            a = 1/np.sqrt(3)
+            return np.array([[-a,-a], [a,-a], [a,a], [-a,a]])    #= np.c_[xi, eta]
+        elif n_elm_gp == 9: # ordre exacte 3
+            a = 0.774596669241483
+            return  np.array([[-a,-a], [a,-a], [a,a], [-a,a], [0,-a], [a,0], [0,a], [-a,0], [0,0]]) 
+        elif n_elm_gp == 16: # ordre exacte 5
+            a = 0.339981043584856 ; b = 0.861136311594053
+            return np.array([[-b,-b], [-a,-b],[a,-b],[b,-b],
+                             [-b,-a], [-a,-a],[a,-a],[b,-a],
+                             [-b,a], [-a,a],[a,a],[b,a],
+                             [-b,b], [-a,b],[a,b],[b,b]])     
+        else:
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for triangle element"  
+
+
+    def get_gp_weight(self,n_elm_gp=None):
+        if n_elm_gp is None: return self.w_pg
+            
+        if n_elm_gp == 1:
+            return np.array([4.])
+        elif n_elm_gp == 4: # ordre exacte 2
+            return np.array([1., 1., 1., 1.])
+        elif n_elm_gp == 9: # ordre exacte 3
+            return np.array([25/81., 25/81., 25/81., 25/81., 40/81., 40/81., 40/81., 40/81., 64/81.])
+        elif n_elm_gp == 16: # ordre exacte 4
+            w_a = 0.652145154862546 ; w_b = 0.347854845137454        
+            return np.array([w_b**2, w_a*w_b, w_a*w_b, w_b**2, w_a*w_b, w_a**2, w_a**2, w_a*w_b, w_a*w_b, w_a**2, w_a**2, w_a*w_b, w_b**2, w_a*w_b, w_a*w_b, w_b**2])
+        else:
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for triangle element"  
+
 
 class Quad4(ElementQuadrangle):
     name = 'quad4'

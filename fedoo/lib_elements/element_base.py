@@ -66,34 +66,47 @@ class Element:
     
 class Element1D(Element):
     def __init__(self,n_elm_gp): #Points de gauss pour les éléments de référence 1D entre 0 et 1
-        if n_elm_gp == 1:
-            self.xi_pg = np.c_[[1./2]]
-            self.w_pg = np.array([1.])
-        elif n_elm_gp == 2: #ordre exacte 2
-            self.xi_pg = np.c_[[1./2 - np.sqrt(3)/6 , 1./2 + np.sqrt(3)/6 ]]
-            self.w_pg = np.array([1./2 , 1./2])
-        elif n_elm_gp == 3: #ordre exacte 3
-            self.xi_pg = np.c_[[1./2-np.sqrt(0.15) , 1./2 , 1./2 + np.sqrt(0.15)]]
-            self.w_pg = np.array([5./18, 8./18, 5./18])
-        elif n_elm_gp == 4:
-            w_1  =   0.5 + 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
-            w_2  =   0.5 - 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
-            a_1  = 0.5*(1 + np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
-            b_1  = 0.5*(1 - np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
-            a_2  = 0.5*(1 + np.sqrt((3.0 + 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
-            b_2  = 0.5*(1 - np.sqrt((3.0 + 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
-            self.xi_pg   = np.c_[[b_2,b_1,a_1,a_2]]
-            self.w_pg= np.array([w_2/2, w_1/2, w_1/2, w_2/2])
-        elif n_elm_gp == 0: #if n_elm_gp == 0, we take the position of the nodes            
-            self.xi_pg = self.xi_nd
-        else:
-            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for 1D element"                                                     
-                          
+        if n_elm_gp == 0:  #if n_elm_gp == 0, we take the position of the nodes
+            self.xi_pg = self.xi_nd            
+        else: 
+            self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp) # = np.c_[xi,eta]             
+            self.w_pg = self.get_gp_weight(n_elm_gp)    
+    
         self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
         
         if hasattr(self, "ShapeFunctionDerivative"):
             self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
-        
+     
+    def get_gp_elm_coordinates(self,n_elm_gp):
+        if n_elm_gp == 1:
+            return np.array([[0.5]])
+        elif n_elm_gp == 2: #ordre exacte 2
+            return np.c_[[0.5 - np.sqrt(3)/6 , 0.5 + np.sqrt(3)/6 ]]
+        elif n_elm_gp == 3: #ordre exacte 3
+            return np.c_[[0.5-np.sqrt(0.15) , 0.5 , 0.5 + np.sqrt(0.15)]]        
+        elif n_elm_gp == 4:            
+            a_1  = 0.5*(1 + np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
+            b_1  = 0.5*(1 - np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
+            a_2  = 0.5*(1 + np.sqrt((3.0 + 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
+            b_2  = 0.5*(1 - np.sqrt((3.0 + 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
+            return np.c_[[b_2,b_1,a_1,a_2]]
+        else:
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for 1D element"                                                     
+                          
+    def get_gp_weight(self,n_elm_gp):
+        if n_elm_gp == 1:            
+            return np.array([1.])
+        elif n_elm_gp == 2: #ordre exacte 2
+            return np.array([1./2 , 1./2])
+        elif n_elm_gp == 3: #ordre exacte 3
+            return np.array([5./18, 8./18, 5./18])
+        elif n_elm_gp == 4:
+            w_1  =   0.5 + 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
+            w_2  =   0.5 - 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
+            return np.array([w_2/2, w_1/2, w_1/2, w_2/2])
+        else:
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for 1D element"                                                                             
+
     def ComputeDetJacobian(self,vec_x, vec_xi):
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)
         self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)

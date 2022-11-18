@@ -10,7 +10,8 @@ class Cohesive1D(Element):
     
     def __init__(self, n_elm_gp=1, **kargs):
         self.n_elm_gp = 1 #pas de point de gauss pour les éléments cohésifs car pas de point d'intégration
-        self.xi_pg = np.c_[[0.]] ; self.xi_nd = np.c_[[0., 0.]] #The values are arbitrary, only the size is important
+        self.xi_pg = np.array([[0.]]) ; 
+        self.xi_nd = np.c_[[0., 0.]] #The values are arbitrary, only the size is important
         self.w_pg = np.array([1.]) 
     
     def ComputeJacobianMatrix(self,vec_x, vec_xi): 

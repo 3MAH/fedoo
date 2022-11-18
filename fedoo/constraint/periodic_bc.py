@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jan 23 15:27:43 2020
-
-@author: Etienne
-"""
 # from fedoo.core.base   import ProblemBase 
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC

@@ -4,29 +4,41 @@ from fedoo.lib_elements.element_base import *
 class ElementHexahedron(Element):
     def __init__(self,n_elm_gp):                 
         #initialize the gauss points and the associated weight           
+        if n_elm_gp == 0:  #if n_elm_gp == 0, we take the position of the nodes
+            self.xi_pg = self.xi_nd            
+        else: 
+            self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp) # = np.c_[xi,eta]             
+            self.w_pg = self.get_gp_weight(n_elm_gp)
+            
+        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
+        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+            
+    def get_gp_elm_coordinates(self,n_elm_gp):
         if n_elm_gp == 1:
-            xi = np.c_[[0.]] ; eta = np.c_[[0.]] ; zeta = np.c_[[0.]]
-            w_pg = np.array([8.])    
+            return np.array([[0.,0.,0.]]) # = np.c_[xi,eta,zeta]
         elif n_elm_gp == 8:
             a = 0.57735026918962573
             xi =  np.c_[[-a, -a, -a, -a, a, a, a, a]] ; eta = np.c_[[-a, -a, a,  a, -a, -a, a, a]] ; zeta = np.c_[[-a, a, -a, a, -a, a , -a, a]]
-            w_pg = np.array([1., 1., 1., 1., 1., 1., 1., 1.])
+            return np.c_[xi, eta, zeta]
         elif n_elm_gp == 27:
             a = 0.7745966692414834 ; b = 0.5555555555555556 ; c = 0.8888888888888888 
             xi =  np.c_[[-a, -a, -a, -a, -a, -a, -a, -a, -a, 0., 0., 0., 0., 0., 0., 0., 0., 0., a, a, a, a, a, a, a, a, a]] ; eta = np.c_[[-a, -a, -a, 0., 0., 0., a, a, a, -a, -a, -a, 0., 0., 0., a, a, a, -a, -a, -a, 0., 0., 0., a, a, a]] ; zeta = np.c_[[-a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a, -a, 0., a]]
-            w_pg = np.array([b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b*(c**2), c**3, b*(c**2), (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3])
-        elif n_elm_gp == 0: 
-            self.xi_pg = self.xi_nd #if n_elm_gp == 0, we take the position of the nodes            
+            return np.c_[xi, eta, zeta]
         else:
             assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for hexahedron element"
 
-        if n_elm_gp != 0:    
-            self.xi_pg = np.c_[xi,eta,zeta]
-            self.w_pg = w_pg
-        
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+    def get_gp_weight(self,n_elm_gp):
+        if n_elm_gp == 1:
+            return np.array([8.])    
+        elif n_elm_gp == 8:
+            return np.array([1., 1., 1., 1., 1., 1., 1., 1.])
+        elif n_elm_gp == 27:
+            b = 0.5555555555555556 ; c = 0.8888888888888888 
+            return np.array([b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b*(c**2), c**3, b*(c**2), (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3, (b**2)*c, b*(c**2), (b**2)*c, b**3, (b**2)*c, b**3])
+        else:
+            assert 0, "Number of gauss points "+str(n_elm_gp)+" unavailable for hexahedron element"
 
+        
 class Hex8(ElementHexahedron):
     name = 'hex8'
     default_n_gp = 8
