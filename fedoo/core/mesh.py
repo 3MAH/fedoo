@@ -899,7 +899,35 @@ class BoundingBox(list):
         """
         return the volume of the bounding box
         """
-        return (self[1]-self[0]).prod()               
+        return (self[1]-self[0]).prod()           
+
+    @property
+    def size(self):
+        """
+        return the sizes of the bounding box
+        """
+        return (self[1]-self[0])
+    
+    @property
+    def size_x(self):
+        """
+        return the size of the bounding box in the x direction
+        """
+        return (self[1][0]-self[0][0])
+    
+    @property
+    def size_y(self):
+        """
+        return the size of the bounding box in the y direction
+        """
+        return (self[1][1]-self[0][1])
+    
+    @property
+    def size_z(self):
+        """
+        return the size of the bounding box in the z direction
+        """
+        return (self[1][2]-self[0][2])
 
 if __name__=="__main__":
     import scipy as sp
