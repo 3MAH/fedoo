@@ -45,7 +45,7 @@ elif mat == 1:
 else:
     Material = ConstitutiveLaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-WeakForm.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+WeakForm.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
 
 
 

@@ -60,8 +60,8 @@ else:
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-weakform.InternalForce("constitutivelaw", nlgeom = NLGEOM)
-# weakform.InternalForceUL("constitutivelaw")
+weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
+# weakform.StressEquilibriumUL("constitutivelaw")
 
 
 

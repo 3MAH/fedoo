@@ -49,7 +49,7 @@ ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 #------------------------------------------------------------------------------
 #Mechanical weak formulation
 #------------------------------------------------------------------------------
-WeakForm.InternalForce("ElasticLaw")
+WeakForm.StressEquilibrium("ElasticLaw")
 
 #------------------------------------------------------------------------------
 #Global Matrix assembly

@@ -1,7 +1,7 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 
-class InternalForce(WeakFormBase):
+class StressEquilibrium(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
     
@@ -12,7 +12,7 @@ class InternalForce(WeakFormBase):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
+    constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
@@ -20,12 +20,12 @@ class InternalForce(WeakFormBase):
         If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
         such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
     """
-    def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = 0, space = None):
-        if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
+    def __init__(self, constitutivelaw, name = "", nlgeom = 0, space = None):
+        if isinstance(constitutivelaw, str):
+            constitutivelaw = ConstitutiveLaw[constitutivelaw]
 
         if name == "":
-            name = CurrentConstitutiveLaw.name
+            name = constitutivelaw.name
             
         WeakFormBase.__init__(self,name, space)
         
@@ -37,7 +37,7 @@ class InternalForce(WeakFormBase):
         else: #2D assumed
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
         
-        self.__ConstitutiveLaw = CurrentConstitutiveLaw
+        self.constitutivelaw = constitutivelaw
         self._nlgeom = nlgeom #geometric non linearities
         self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
         
@@ -58,15 +58,15 @@ class InternalForce(WeakFormBase):
     def get_weak_equation(self, mesh=None):
         
         if self._nlgeom == 1: #add initial displacement effect 
-            if not(hasattr(self.__ConstitutiveLaw, 'get_disp_grad')):
+            if not(hasattr(self.constitutivelaw, 'get_disp_grad')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")                        
-            eps = self.space.op_strain(self.__ConstitutiveLaw.get_disp_grad())
-            initial_stress = self.__ConstitutiveLaw.get_pk2()
+            eps = self.space.op_strain(self.constitutivelaw.get_disp_grad())
+            initial_stress = self.constitutivelaw.get_pk2()
         else: 
             eps = self.space.op_strain()
-            initial_stress = self.__ConstitutiveLaw.get_cauchy() #required for updated lagrangian method
+            initial_stress = self.constitutivelaw.get_cauchy() #required for updated lagrangian method
         
-        H = self.__ConstitutiveLaw.GetH()
+        H = self.constitutivelaw.GetH()
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
                 
         DiffOp = sum([0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)])
@@ -101,9 +101,6 @@ class InternalForce(WeakFormBase):
             if self._assembly.current.mesh in self._assembly._saved_change_of_basis_mat:
                 del self._assembly._saved_change_of_basis_mat[self._assembly.current.mesh]
             self._assembly.current.compute_elementary_operators()            
-
-    def GetConstitutiveLaw(self):
-        return self.__ConstitutiveLaw
     
     def copy(self, new_id = ""):
         """
@@ -118,9 +115,9 @@ class InternalForce(WeakFormBase):
         -------
         The copy of the weakform
         """
-        new_cl = self.__ConstitutiveLaw.copy()
+        new_cl = self.constitutivelaw.copy()
         
-        return InternalForce(new_cl, name = "", nlgeom = self.nlgeom, space = self.space)
+        return StressEquilibrium(new_cl, name = "", nlgeom = self.nlgeom, space = self.space)
     
     @property
     def nlgeom(self):

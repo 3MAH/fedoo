@@ -36,15 +36,15 @@ nodes_right = [Nb_elm]
 #computeShear = 2: shear strain using the "beamFCQ" element (using internal variables) -> Caillerie, D., Kotronis, P., and Cybulski, R. (2015). A new Timoshenko finite element beamwith internal degrees of freedom.International Journal of Numerical and Analytical Methods in Geomechanics
 for computeShear in range(3):   
     if computeShear == 0:
-        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
+        fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
         fd.Assembly.create("WFbeam", "beam", "bernoullibeam", name="beam", MeshChange = True)    
     elif computeShear == 1:
-        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
+        fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
         fd.lib_elements.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
         fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
         fd.Mesh['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
-        fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
+        fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
         fd.Assembly.create("WFbeam", "beam", "beamfcq", name="beam", MeshChange = True)    
     
     pb = fd.problem.Linear("beam")

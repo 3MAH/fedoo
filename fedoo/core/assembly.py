@@ -490,10 +490,10 @@ class Assembly(AssemblyBase):
         Parameters: 
             - t0: the initial time        
         """        
-        if self.weakform.GetConstitutiveLaw() is not None:
+        if self.weakform.constitutivelaw is not None:
             if hasattr(self.weakform,'nlgeom'): nlgeom = self.weakform.nlgeom
             else: nlgeom=False
-            self.weakform.GetConstitutiveLaw().initialize(self, pb, t0, nlgeom)
+            self.weakform.constitutivelaw.initialize(self, pb, t0, nlgeom)
         
         self.weakform.initialize(self, pb, t0)
                 
@@ -504,8 +504,8 @@ class Assembly(AssemblyBase):
         Generally used to increase non reversible internal variable
         Assemble the new global matrix. 
         """
-        if self.weakform.GetConstitutiveLaw() is not None:
-            self.weakform.GetConstitutiveLaw().set_start() #should update GetH() method to return elastic rigidity matrix for prediction   
+        if self.weakform.constitutivelaw is not None:
+            self.weakform.constitutivelaw.set_start() #should update GetH() method to return elastic rigidity matrix for prediction   
         self.weakform.set_start(self, pb, dt) 
         self.assemble_global_mat()  
         #no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
@@ -518,8 +518,8 @@ class Assembly(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        if self.weakform.GetConstitutiveLaw() is not None:
-            self.weakform.GetConstitutiveLaw().update(self, pb, dtime)
+        if self.weakform.constitutivelaw is not None:
+            self.weakform.constitutivelaw.update(self, pb, dtime)
         self.weakform.update(self, pb, dtime)
         self.current.assemble_global_mat(compute)
 
@@ -528,8 +528,8 @@ class Assembly(AssemblyBase):
         reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        if self.weakform.GetConstitutiveLaw() is not None:
-            self.weakform.GetConstitutiveLaw().to_start()
+        if self.weakform.constitutivelaw is not None:
+            self.weakform.constitutivelaw.to_start()
         self.weakform.to_start()
         # self.assemble_global_mat(compute='all')
 
@@ -540,8 +540,8 @@ class Assembly(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         and stored global matrix and vector are deleted
         """
-        if self.weakform.GetConstitutiveLaw() is not None:
-            self.weakform.GetConstitutiveLaw().reset()
+        if self.weakform.constitutivelaw is not None:
+            self.weakform.constitutivelaw.reset()
         self.weakform.reset()    
         self.delete_global_mat()
 

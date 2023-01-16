@@ -77,7 +77,7 @@ elif mat == 1 or mat == 2:
 else:
     mechancial_law = fd.constitutivelaw.ElasticIsotrop(E, nu, name='MechanicalLaw')
 
-fd.weakform.InternalForce("MechanicalLaw", nlgeom = NLGEOM)
+fd.weakform.StressEquilibrium("MechanicalLaw", nlgeom = NLGEOM)
 
 fd.Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 

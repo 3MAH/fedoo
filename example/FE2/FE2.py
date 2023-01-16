@@ -28,14 +28,14 @@ uimp = -5
 props = np.array([[E, nu, alpha, Re,k,m]])
 Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
-WeakForm.InternalForce("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
+WeakForm.StressEquilibrium("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
 
 micro_assembly = Assembly.create('micro_wf', mesh_micro)
 
 micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
 
 #Create the weak formulation of the mechanical equilibrium equation
-WeakForm.InternalForce("FEM", name = "WeakForm") 
+WeakForm.StressEquilibrium("FEM", name = "WeakForm") 
 
 #Create a global assembly
 Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 

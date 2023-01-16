@@ -62,8 +62,8 @@ else:
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
-# WeakForm.InternalForceUL("ConstitutiveLaw")
+fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+# WeakForm.StressEquilibriumUL("ConstitutiveLaw")
 
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time

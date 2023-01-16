@@ -77,6 +77,8 @@ class WeakFormBase:
         self.__space = space
         self.assembly_options = _AssemblyOptions()
         
+        self.constitutivelaw = None #no constitutivelaw by default
+        
         if name != "":WeakFormBase.__dic[self.__name] = self
         
     
@@ -96,11 +98,6 @@ class WeakFormBase:
             return wf1 + wf2
         else:
             return NotImplemented
-        
-        
-    def GetConstitutiveLaw(self):
-        #no constitutive law by default
-        pass
     
     
     def get_weak_equation(self, mesh=None):
@@ -187,31 +184,31 @@ class ListConstitutiveLaw(ConstitutiveLaw):
     def __init__(self, list_constitutivelaw, name =""):    
         ConstitutiveLaw.__init__(self,name)   
         
-        self.__list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
+        self._list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
     
     def initialize(self, assembly, pb, t0=0., nlgeom=False):
-        for cl in self.__list_constitutivelaw:
+        for cl in self._list_constitutivelaw:
             cl.initialize(assembly, pb, t0)
 
     
     def update(self, assembly, pb, dtime):        
-        for cl in self.__list_constitutivelaw:
+        for cl in self._list_constitutivelaw:
             cl.update(assembly, pb, dtime)
     
     
     def set_start(self):  
-        for cl in self.__list_constitutivelaw:
+        for cl in self._list_constitutivelaw:
             cl.set_start()
     
     
     def to_start(self):
-        for cl in self.__list_constitutivelaw:
+        for cl in self._list_constitutivelaw:
             cl.to_start()
 
 
     def reset(self):
-        for cl in self.__list_constitutivelaw:
+        for cl in self._list_constitutivelaw:
             cl.reset()
     
     
@@ -236,12 +233,9 @@ class WeakFormSum(WeakFormBase):
             # being used in an Assembly. This is automatically done when using Assembly.create function
             # The restulting Assembly will be an AssemblySum object
             
-        self.__constitutivelaw = ListConstitutiveLaw([a.GetConstitutiveLaw() for a in list_weakform if a.GetConstitutiveLaw() is not None])
-        self.__list_weakform = list_weakform
-        
-    def GetConstitutiveLaw(self):
-        #return a list of constitutivelaw
-        return self.__constitutivelaw    
+        self.constitutivelaw = ListConstitutiveLaw([a.constitutivelaw for a in list_weakform if a.constitutivelaw is not None])
+        self._list_weakform = list_weakform
+  
     
     def get_weak_equation(self, mesh=None):
         Diff = 0
@@ -250,7 +244,7 @@ class WeakFormSum(WeakFormBase):
         if mesh is None: elm_type = None
         else: elm_type = mesh.elm_type
         
-        for wf in self.__list_weakform: 
+        for wf in self._list_weakform: 
             Diff_wf = wf.get_weak_equation(mesh)
             mat_lumping = wf.assembly_options.get('mat_lumping', elm_type, False) #True of False
             if Diff_wf != 0:
@@ -259,25 +253,25 @@ class WeakFormSum(WeakFormBase):
         return Diff
     
     def initialize(self, assembly, pb, t0=0.):
-        for wf in self.__list_weakform:
+        for wf in self._list_weakform:
             wf.initialize(assembly, pb, t0)
 
     def set_start(self, assembly, pb, dt):
-        for wf in self.__list_weakform:
+        for wf in self._list_weakform:
             wf.set_start(assembly, pb, dt)
     
     def update(self, assembly, pb, dtime):        
-        for wf in self.__list_weakform:
+        for wf in self._list_weakform:
             wf.update(assembly, pb, dtime)
     
     def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
-        for wf in self.__list_weakform:
+        for wf in self._list_weakform:
             wf.to_start()
 
     def reset(self):
         #function called if all the problem history is reseted.
-        for wf in self.__list_weakform:
+        for wf in self._list_weakform:
             wf.reset()
     
     def copy(self):
@@ -286,4 +280,5 @@ class WeakFormSum(WeakFormBase):
 
     @property
     def list_weakform(self):
-        return self.__list_weakform
+        return self._list_weakform
+    

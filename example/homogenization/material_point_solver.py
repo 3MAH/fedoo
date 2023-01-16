@@ -61,7 +61,7 @@ else:
     material = umat_name
 
 #Assembly
-WeakForm.InternalForce(material, name="wf")
+WeakForm.StressEquilibrium(material, name="wf")
 Assembly.create("wf", mesh, type_el, name="Assembling", n_elm_gp = 1)
 
 #Type of problem

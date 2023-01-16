@@ -18,7 +18,7 @@ type_el = fd.Mesh['Domain'].elm_type
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.InternalForce("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw")
 
 #Assembly
 fd.Assembly.create("ElasticLaw", "Domain", type_el, name="Assembling") 

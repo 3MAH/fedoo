@@ -24,7 +24,7 @@ StrainNodes = mesh.add_nodes(2) #add virtual nodes for macro strain
 
 #Material definition
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.InternalForce("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw")
 
 #Assembly
 fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling") 

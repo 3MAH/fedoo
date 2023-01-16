@@ -62,7 +62,7 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             else:
                 assemb = assemb.assembly_output
                 
-        material = assemb.weakform.GetConstitutiveLaw()
+        material = assemb.weakform.constitutivelaw
         
         result = DataSet(assemb.mesh)
                     

@@ -43,7 +43,7 @@ elif mat == 1:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-fd.weakform.InternalForce("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
 
 #note set for boundary conditions
 nodes_bottomLeft = np.where((crd[:,0]==0) * (crd[:,1]==0))[0]

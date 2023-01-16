@@ -34,7 +34,7 @@ StrainNodes = Mesh.get_all()[meshname].add_nodes(np.zeros(crd.shape[1]),2) #add 
 
 #Material definition
 material = ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+WeakForm.StressEquilibrium("ElasticLaw")
 
 #Assembly
 Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 

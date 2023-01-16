@@ -3,7 +3,7 @@
 
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.weakform.internal_force import InternalForce
+from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.core.assembly import Assembly
 from fedoo.problem.non_linear import NonLinear
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList

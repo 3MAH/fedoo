@@ -1,7 +1,5 @@
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
-# from fedoo.util.StrainOperator import GetStrainOperator
-# from fedoo.core.modelingspace import Variable, Vector, get_Dimension
 
 class PlateFI(WeakFormBase):
     """
@@ -39,7 +37,7 @@ class PlateFI(WeakFormBase):
         self.space.new_vector('Disp' , ('DispX', 'DispY', 'DispZ'))
         self.space.new_vector('Rot' , ('RotX', 'RotY', 'RotZ'))     
         
-        self.__ShellConstitutiveLaw = PlateConstitutiveLaw
+        self.constitutivelaw = PlateConstitutiveLaw
         
     def GetGeneralizedStrainOperator(self):
         #membrane strain
@@ -59,7 +57,7 @@ class PlateFI(WeakFormBase):
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
     def get_weak_equation(self, mesh = None):        
-        H = self.__ShellConstitutiveLaw.GetShellRigidityMatrix()
+        H = self.constitutivelaw.GetShellRigidityMatrix()
 
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(8)]) for i in range(8)]
@@ -71,20 +69,16 @@ class PlateFI(WeakFormBase):
         diffop += self.space.variable('RotZ').virtual*self.space.variable('RotZ')*penalty
         
         return diffop
-      
-    def GetConstitutiveLaw(self):
-        return self.__ShellConstitutiveLaw
 
     def update(self, assembly, pb, dtime):
         pass
-        # self.__ShellConstitutiveLaw.update(assembly, pb, dtime)    
 
 
 class PlateShear(PlateFI): #weak form of plate shear energy containing only the shear strain energy
 
     def get_weak_equation(self, mesh = None):   
         #shear
-        H = self._PlateFI__ShellConstitutiveLaw.GetShellRigidityMatrix_RI()
+        H = self.constitutivelaw.GetShellRigidityMatrix_RI()
                 
         GammaXZ = self.space.derivative('DispZ', 'X') + self.space.variable('RotY')
         GammaYZ = self.space.derivative('DispZ', 'Y') - self.space.variable('RotX') 
@@ -99,7 +93,7 @@ class PlateKirchhoffLove(PlateFI): #plate without shear strain
 
     def get_weak_equation(self, mesh = None):  
         #all component but shear, for full integration
-        H = self._PlateFI__ShellConstitutiveLaw.GetShellRigidityMatrix_FI()
+        H = self.constitutivelaw.GetShellRigidityMatrix_FI()
         
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                       
         GeneralizedStress = [sum([0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j]*H[i][j] for j in range(6)]) for i in range(6)]

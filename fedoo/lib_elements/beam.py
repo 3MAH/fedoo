@@ -71,11 +71,6 @@ class BernoulliBeam_rot(Element1D): #2 nodes with derivatative dof
             return np.transpose([(-4+6*xi)+0*L, (-2+6*xi)+0*L, (1/L)*(-6+12*xi), (1/L)*(6-12*xi)], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)
         # return [np.array([[-4+6*x, -2+6*x, -6+12*x, 6-12*x]]) for x in xi[:,0]]  
     
-
-# BernoulliBeam = {'DispX':['lin2'], 'DispY':['bernoullibeam_disp', (1, 'RotZ')], 'DispZ':['bernoullibeam_disp', (-1, 'RotY')], 
-#         'RotX':['lin2'], 'RotY':['bernoullibeam_rot', (-1, 'DispZ')], 'RotZ':['bernoullibeam_rot', (1, 'DispY')],
-#         '__default':['lin2'], '__local_csys':True}  
-
 BernoulliBeam = CombinedElement("bernoullibeam", 'lin2', default_n_gp = 4, local_csys = True)
 BernoulliBeam.dict_elm_type = {'DispY':BernoulliBeam_disp, 'DispZ':BernoulliBeam_disp,
         'RotY':BernoulliBeam_rot, 'RotZ':BernoulliBeam_rot }
@@ -160,19 +155,11 @@ class BeamFCQ_disp(Element1D): #2 nodes with derivatative dof
     def ShapeFunctionDerivative(self,xi):          
         return np.transpose([6*xi**2-6*xi, -6*xi**2+6*xi, 3*xi**2-4*xi+1, 0*xi, 0*xi, 3*xi**2-2*xi], (1,2,0)) #shape = (Nb_pg, Nd_deriv=1, Nddl=6)          
 
-# BeamFCQ = {'DispX':['beamfcq_lin2'],             
-#            'DispY':['beamfcq_disp',(1, 'DispX')], 
-#            'DispZ':['beamfcq_disp', (1, 'RotX')],            
-#            'RotX':['beamfcq_lin2'], 
-#            'RotY':['beamfcq_rot'], 
-#            'RotZ':['beamfcq_rot'], 
-#            '__default':['beamfcq_lin2'],
-#            '__local_csys':True}      
-
 BeamFCQ = CombinedElement("beamfcq", 'lin2', default_n_gp = 4, local_csys = True)
 BeamFCQ.dict_elm_type = {'DispX':BeamFCQ_lin2, 'DispY':BeamFCQ_disp, 'DispZ':BeamFCQ_disp,            
            'RotX':BeamFCQ_lin2, 'RotY':BeamFCQ_rot, 'RotZ':BeamFCQ_rot}      
 BeamFCQ.associated_variables ={'DispY':(1, 'DispX'), 'DispZ':(1, 'RotX')}           
+
 
 # --------------------------------------
 # "beam" element

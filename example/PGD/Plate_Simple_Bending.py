@@ -18,7 +18,7 @@ Mesh['Thickness'].crd_name = ('Z')
 pgd.Mesh.create("Midplane", "Thickness", name="Domain")
 
 constitutivelaw.ElasticIsotrop(130e6, 0.3, name = 'ElasticLaw')
-weakform.InternalForce("ElasticLaw")
+weakform.StressEquilibrium("ElasticLaw")
 
 pgd.Assembly.create("ElasticLaw", "Domain", name = "Assembling") # attention l'assemblage n'est fait à cette ligne
 

@@ -14,7 +14,7 @@ if USE_SIMCOON:
 if USE_SIMCOON:    
     from fedoo.core.base import MeshBase as Mesh
     from fedoo.constitutivelaw.umat_simcoon import Simcoon
-    from fedoo.weakform.internal_force import InternalForce
+    from fedoo.weakform.stress_equilibrium import StressEquilibrium
     from fedoo.core.assembly import Assembly
     from fedoo.problem.non_linear import NonLinear
     # from fedoo.core.base import BoundaryCondition

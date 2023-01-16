@@ -7,31 +7,23 @@ import time
 fd.ModelingSpace("3D")
 
 #Units: N, mm, MPa
-#fd.mesh.box_mesh(nx=101, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
-fd.mesh.box_mesh(nx=101, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
-
-meshname = "Domain"
-#mesh = Mesh.get_all()[meshname]
-#crd = mesh.nodes 
-#xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
-#mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmin)[0]), "left")
-#mesh.add_node_set(list(np.where(mesh.nodes[:,0] == xmax)[0]), "right")
+mesh = fd.mesh.box_mesh(nx=101, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-fd.weakform.InternalForce("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw")
 
 #Assembly (print the time required for assembling)
-fd.Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
+fd.Assembly.create("ElasticLaw", mesh, 'hex8', name="Assembling") 
 
 #Type of problem 
 pb = fd.problem.Linear("Assembling")
 
 #Boundary conditions
-nodes_left = fd.Mesh[meshname].node_sets["left"]
-nodes_right = fd.Mesh[meshname].node_sets["right"]
-nodes_top = fd.Mesh[meshname].node_sets["top"]
-nodes_bottom = fd.Mesh[meshname].node_sets["bottom"]
+nodes_left = mesh.node_sets["left"]
+nodes_right = mesh.node_sets["right"]
+nodes_top = mesh.node_sets["top"]
+nodes_bottom = mesh.node_sets["bottom"]
 
 pb.bc.add('Dirichlet',nodes_left, 'Disp', 0)
 pb.bc.add('Dirichlet',nodes_right, 'DispY', -10)

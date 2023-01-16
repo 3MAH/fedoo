@@ -52,7 +52,7 @@ print('props', props_test)
 
 if method == 0:
     Material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
-    wf = WeakForm.InternalForce("ElasticLaw", name = "WeakForm", nlgeom=False)
+    wf = WeakForm.StressEquilibrium("ElasticLaw", name = "WeakForm", nlgeom=False)
 
     # Assembly
     assemb = Assembly.create("WeakForm", meshname, mesh.elm_type, name="Assembly")
@@ -86,7 +86,7 @@ else:
     material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
-    WeakForm.InternalForce("ElasticLaw")
+    WeakForm.StressEquilibrium("ElasticLaw")
     assemb = Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
     
     #Type of problem

@@ -12,7 +12,7 @@ mesh = fd.mesh.hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, 
 fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
 
 #Create the weak formulation of the mechanical equilibrium equation
-fd.weakform.InternalForce("ElasticLaw", name = "WeakForm") 
+fd.weakform.StressEquilibrium("ElasticLaw", name = "WeakForm") 
 
 #Create a global assembly
 fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True) 

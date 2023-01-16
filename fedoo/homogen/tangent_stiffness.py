@@ -4,7 +4,7 @@
 from fedoo.core.base import MeshBase as Mesh
 from fedoo.constitutivelaw import ElasticAnisotropic
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.weakform.internal_force import InternalForce
+from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
 from fedoo.problem.linear import Linear
