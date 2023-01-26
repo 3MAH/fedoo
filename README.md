@@ -1,5 +1,5 @@
 # fedoo
-Finite element library including PGD solver
+Finite element library
 [![FEDOO Logo](https://github.com/3MAH/fedoo/blob/master/fedOOLogos.png)](https://github.com/3MAH/fedoo)
 
 About
