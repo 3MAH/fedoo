@@ -36,11 +36,11 @@ class Spring(ConstitutiveLaw):
     def GetInterfaceStress(self):
         return self._InterfaceStress
 
-    def GetTangentMatrix(self):
+    def get_tangent_matrix(self):
         return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]     
     
     def GetK(self):
-        return self.__ChangeBasisK(self.GetTangentMatrix())
+        return self.__ChangeBasisK(self.get_tangent_matrix())
     
     def __ChangeBasisK(self, K):
         #Change of basis capability for spring type laws on the form : ForceVector = K * DispVector

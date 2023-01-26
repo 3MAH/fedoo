@@ -66,7 +66,7 @@ class CompositeUD(ElasticAnisotropic):
         
         return {'EX':EL, 'EY':ET, 'EZ':ET, 'GYZ':GTT, 'GXZ':GLT, 'GXY':GLT, 'nuYZ':nuTT, 'nuXZ':nuLT, 'nuXY':nuLT}
 
-    def GetTangentMatrix(self):        
+    def get_tangent_matrix(self):        
         Vf = self.__parameters['Vf']
         #carac composites (cf Berthelot)
         #Vf taux de fibres      

@@ -636,7 +636,7 @@ class Assembly(AssemblyBase):
         # Assembly of the elementary operators for each elm_type 
         #-------------------------------------------------------------------      
         for elm_type in list_elm_type:             
-            elmRef = elm_type(n_elm_gp, mesh = mesh, elmGeom = elmRefGeom)                        
+            elmRef = elm_type(n_elm_gp, elmGeom = elmRefGeom, assembly = self)                        
             
             n_interpol_nodes = elmRef.n_nodes #number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
             
@@ -1073,7 +1073,7 @@ class Assembly(AssemblyBase):
         elif CoordinateSystem == 'global': 
             #require a transformation between local and global coordinates on element
             #classical mat_change_of_basis transform only toward nodal values
-            elmRef = get_element(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element            
+            elmRef = get_element(self.mesh.elm_type)(1, assembly=assembly)#one pg  with the geometrical element            
             if dim == 3: vec = [0,1,2] 
             else: vec = [0,1]
        

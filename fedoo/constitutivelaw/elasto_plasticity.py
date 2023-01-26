@@ -155,7 +155,7 @@ class ElastoPlasticity(Mechanical3D):
     def get_disp_grad(self):
         return self.__currentGradDisp
         
-    def GetTangentMatrix(self):             
+    def get_tangent_matrix(self):             
         return self.__TangeantModuli
                         
                       

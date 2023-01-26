@@ -27,7 +27,7 @@ class ElasticAnisotropic(Mechanical3D):
         self._stress = 0
         self._grad_disp = 0            
     
-    def GetTangentMatrix(self):
+    def get_tangent_matrix(self):
         return self.__H
 
     def get_stress(self, **kargs):

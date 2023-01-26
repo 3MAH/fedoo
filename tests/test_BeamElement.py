@@ -8,8 +8,7 @@ import numpy as np
 fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
-fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
-
+fd.constitutivelaw.ElasticIsotrop(E, nu,name="ElasticLaw")
 #circular section 
 R = 1
 Section = np.pi * R**2
@@ -40,7 +39,6 @@ for computeShear in range(3):
         fd.Assembly.create("WFbeam", "beam", "bernoullibeam", name="beam", MeshChange = True)    
     elif computeShear == 1:
         fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
-        fd.lib_elements.SetProperties_Beam(Iyy, Izz, Section, nu, k=k)
         fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange = True)
     else:  #computeShear = 2
         fd.Mesh['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)

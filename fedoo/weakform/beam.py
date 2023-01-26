@@ -1,4 +1,5 @@
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.weakform import WeakFormBase
 
 class BeamEquilibrium(WeakFormBase):
@@ -8,11 +9,11 @@ class BeamEquilibrium(WeakFormBase):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
+    material: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law used to get the young modulus and poisson ratio
         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
         (as :mod:`fedoo.constitutivelaw.ElasticIsotrop`)        
-    Section: scalar or arrays of gauss point values
+    A: scalar or arrays of gauss point values
         Beam section area
     Jx: scalar or arrays of gauss point values
         Torsion constant
@@ -25,14 +26,14 @@ class BeamEquilibrium(WeakFormBase):
     name: str
         name of the WeakForm     
     """
-    def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, name = "", space = None):
+    def __init__(self, material, A=None, Jx=None, Iyy=None, Izz=None, k=0, name = "", space = None):
         #k: shear shape factor
         
-        if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
+        # if isinstance(material, str):
+        #     material = ConstitutiveLaw[material]
 
-        if name == "":
-            name = CurrentConstitutiveLaw.name
+        # if name == "":
+        #     name = material.name
             
         WeakFormBase.__init__(self,name, space)
 
@@ -51,111 +52,26 @@ class BeamEquilibrium(WeakFormBase):
             self.space.new_vector('Rot' , ['RotZ'] ) 
         # elif get_Dimension() == '2Dstress':
         #     assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
-                          
-        self.__ConstitutiveLaw = CurrentConstitutiveLaw
-        self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz, 'k':k}        
+        
+        if isinstance(material, BeamProperties):
+            self.properties = material
+        else:
+            self.properties = BeamProperties(material, A, Jx, Iyy, Izz, k, name+"_properties")
+        
+        
     
     def get_weak_equation(self, mesh = None):
-        E  = self.__ConstitutiveLaw.GetYoungModulus()
-        nu = self.__ConstitutiveLaw.GetPoissonRatio()       
-        G = E/(1+nu)/2
-        
         eps = self.space.op_beam_strain()           
-        beamShearStifness = self.__parameters['k'] * G * self.__parameters['Section']
+        Ke = self.properties.get_beam_rigidity()
 
-        Ke = [E*self.__parameters['Section'], beamShearStifness, beamShearStifness, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
         return sum([eps[i].virtual * eps[i] * Ke[i] if eps[i] != 0 else 0 for i in range(6)])                
 
     
     def GetGeneralizedStress(self):
         #only for post treatment
         eps = self.space.op_beam_strain()         
-        E  = self.__ConstitutiveLaw.GetYoungModulus()
-        nu = self.__ConstitutiveLaw.GetPoissonRatio()       
-        G = E/(1+nu)/2
-        beamShearStifness = self.__parameters['k'] * G * self.__parameters['Section']
-
-        Ke = [E*self.__parameters['Section'], beamShearStifness, beamShearStifness, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
+        Ke = self.properties.get_beam_rigidity()
         return [eps[i] * Ke[i] for i in range(6)]
-
-
-# def BernoulliBeamEquilibrium(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
-#     """
-#     Weak formulation of the mechanical equilibrium equation for beam model base on the Bernoulli hypothesis (no shear strain)   
-#     This weak formulation is an alias for :mod:`fedoo.weakform.Beam` with k=0
-    
-#     Parameters
-#     ----------
-#     CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-#         Material Constitutive Law used to get the young modulus and poisson ratio
-#         The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
-#         (as :mod:`fedoo.constitutivelaw.ElasticIsotrop`)        
-#     Section: scalar or arrays of gauss point values
-#         Beam section area
-#     Jx: scalar or arrays of gauss point values
-#         Torsion constant
-#     Iyy: scalar or arrays of gauss point values
-#         Second moment of area with respect to y (beam local coordinate system)
-#     Izz:
-#         Second moment of area with respect to z (beam local coordinate system)
-#     name: str
-#         name of the WeakForm     
-#     """
-#     #same as beam with k=0 (no shear effect)
-#     return Beam(CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, k=0, name = name)
-
-# class BernoulliBeam(WeakFormBase):
-#     def __init__(self, CurrentConstitutiveLaw, Section, Jx, Iyy, Izz, name = ""):
-#         if isinstance(CurrentConstitutiveLaw, str):
-#             CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
-
-#         if name == "":
-#             name = CurrentConstitutiveLaw.name
-            
-#         WeakFormBase.__init__(self,name)
-
-#         Variable("DispX") 
-#         Variable("DispY")     
-        
-#         if get_Dimension() == '3D':
-#             Variable("DispZ")   
-#             Variable("RotX") #torsion rotation   
-#             Variable("RotY") #flexion   
-#             Variable("RotZ") #flexion   
-#             Variable.global_vector = 'Disp' , ('DispX', 'DispY', 'DispZ' , 'global')
-#             Variable.global_vector = 'Rot' , ('RotX', 'RotY', 'RotZ' , 'global')
-#         elif get_Dimension() == '2Dplane':
-#             Variable("RotZ")
-#             # Variable.set_Derivative('DispY', 'RotZ') #only valid with Bernoulli model       
-#             Variable.global_vector = 'Disp' , ('DispX', 'DispY' )            
-#         elif get_Dimension() == '2Dstress':
-#             assert 0, "No 2Dstress model for a beam kinematic. Choose '2Dplane' instead."
-                  
-#         self.__ConstitutiveLaw = CurrentConstitutiveLaw
-#         self.__parameters = {'Section': Section, 'Jx': Jx, 'Iyy':Iyy, 'Izz':Izz}
-    
-#     def get_weak_equation(self, mesh = None):
-#         E  = self.__ConstitutiveLaw.GetYoungModulus()
-#         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
-#         G = E/(1+nu)/2
-        
-#         eps, eps_vir = get_BernoulliBeamStrainOperator()           
-
-#         Ke = [E*self.__parameters['Section'], 0, 0, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
-#         return sum([eps_vir[i] * eps[i] * Ke[i] for i in range(6)])                
-
-    
-#     def GetGeneralizedStress(self):
-#         #only for post treatment
-
-#         eps, eps_vir = get_BernoulliBeamStrainOperator()
-#         E  = self.__ConstitutiveLaw.GetYoungModulus()
-#         nu = self.__ConstitutiveLaw.GetPoissonRatio()       
-#         G = E/(1+nu)/2
-#         Ke = [E*self.__parameters['Section'], 0, 0, G*self.__parameters['Jx'], E*self.__parameters['Iyy'], E*self.__parameters['Izz']]
-        
-#         return [eps[i] * Ke[i] for i in range(6)]
-
 
 
     

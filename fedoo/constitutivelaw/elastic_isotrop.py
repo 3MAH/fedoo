@@ -14,37 +14,28 @@ class ElasticIsotrop(ElasticAnisotropic):
     
     Parameters
     ----------
-    YoungModulus : scalars or arrays of gauss point values.
+    E : scalars or arrays of gauss point values.
         The Young Modulus of the elastic isotropic material
-    PoissonRatio : scalars or arrays of gauss point values.
-        The PoissonRatio of the elastic isotropic material
+    nu : scalars or arrays of gauss point values.
+        The Poisson Ratio of the elastic isotropic material
     name : str, optional
         The name of the constitutive law       
     """
     
-    def __init__(self, YoungModulus, PoissonRatio, name =""):
+    def __init__(self, E, nu, name =""):
+        
 
         Mechanical3D.__init__(self, name) # heritage
-        self.__YoungModulus = YoungModulus
-        self.__PoissonRatio = PoissonRatio    
-
-    def GetYoungModulus(self):
-        """
-        Return the Young Modulus 
-        """
-        return self.__YoungModulus
-
-    def GetPoissonRatio(self):
-        """
-        Return the Poisson Ratio
-        """
-        return self.__PoissonRatio       
+        self.E = E
+        """Young Modulus of the material"""
+        self.nu = nu
+        """Poisson Ratio of the material """ 
     
-    def GetTangentMatrix(self):     
+    def get_tangent_matrix(self):     
         #the returned stiffness matrix is 6x6 even in 2D
         H  = np.zeros((6,6), dtype='object')
-        E  = self.__YoungModulus 
-        nu = self.__PoissonRatio       
+        E  = self.E
+        nu = self.nu
 
         H[0,0]=H[1,1]=H[2,2]= E*(1./(1+nu) + nu/((1.+nu)*(1-2*nu))) #H1 = 2*mu+lamb
         H[0,1]=H[0,2]=H[1,2]= E*(nu/((1+nu)*(1-2*nu)))  #H2 = lamb
@@ -53,12 +44,12 @@ class ElasticIsotrop(ElasticAnisotropic):
             
         return H        
 
-    def GetTangentMatrix_2Dstress(self):
+    def get_tangent_matrix_2Dstress(self):
         #for 2D stress problems       
         #the returned stiffness matrix is 6x6 even in 2D
         H  = np.zeros((6,6), dtype='object')
-        E  = self.__YoungModulus 
-        nu = self.__PoissonRatio       
+        E  = self.E
+        nu = self.nu
 
         H[0,0]=H[1,1]= E/(1-nu**2)
         H[0,1]= nu*E/(1-nu**2)
@@ -67,7 +58,11 @@ class ElasticIsotrop(ElasticAnisotropic):
             
         return H        
     
+    @property
+    def G(self):
+        """Shear modulus of the material"""
+        return self.E/(1+self.nu)/2
     
 if __name__=="__main__":
     law = ElasticIsotrop(5e9,0.3)
-    print(law.GetTangentMatrix())
+    print(law.get_tangent_matrix())

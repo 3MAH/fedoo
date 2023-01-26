@@ -57,7 +57,7 @@ class CohesiveLaw_mod(Spring):
     
     
     
-    def GetTangentMatrix(self): #Get tangent moduli
+    def get_tangent_matrix(self): #Get tangent moduli
         if self.__currentInterfaceStress is None:
             return self.GetKelas()
 

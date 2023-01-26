@@ -55,7 +55,7 @@ class CohesiveLaw(Spring):
         self.__parameters = {'GIc':GIc, 'SImax':SImax, 'KI':KI, 'GIIc':GIIc, 'SIImax':SIImax, 'KII':KII, 'axis':axis}                          
         self._InterfaceStress = 0
     
-    def GetTangentMatrix(self):
+    def get_tangent_matrix(self):
         Umd = 1 - self.__DamageVariable
         UmdI = 1 - self.__DamageVariableOpening 
 

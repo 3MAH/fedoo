@@ -72,7 +72,7 @@ class FE2(Mechanical3D):
         if self.__currentGradDisp is 0: return 0
         else: return self.__currentGradDisp
         
-    def GetTangentMatrix(self):
+    def get_tangent_matrix(self):
         
         H = np.squeeze(self.Lt.transpose(1,2,0))
         return H

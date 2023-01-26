@@ -73,7 +73,7 @@ if USE_SIMCOON:
             if self.__currentGradDisp is 0: return 0
             else: return self.__currentGradDisp
             
-        def GetTangentMatrix(self):
+        def get_tangent_matrix(self):
            
             if len(self.Lt) == 0:
                 #same as Initialize with only one points
@@ -119,7 +119,7 @@ if USE_SIMCOON:
             self.__initialGradDisp = self.__currentGradDisp
     
          
-        def GetMaskH(self):
+        def get_mask_H(self):
             """
             Return the actual mask applied to the tangent matrix
             mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)
@@ -128,7 +128,7 @@ if USE_SIMCOON:
             """
             return self.__mask
         
-        def SetMaskH(self, mask):
+        def set_mask_H(self, mask):
             """
             Set the mask applied to the tangent matrix
             mask -> contains list of tangent matrix terms that are 0 (before potential change of Basis)

@@ -165,12 +165,16 @@ BeamFCQ.associated_variables ={'DispY':(1, 'DispX'), 'DispZ':(1, 'RotX')}
 # "beam" element
 # Timoshenko FCQM beam 
 #see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
+#only work if beam properties dont change (linear problems), because the properties are embedded in the shape functions.
 # --------------------------------------
+
+
+
+        
+
 class Beam_rotZ(Element1D): #2 nodes with derivatative dof
     name = 'beam_rotz'
     n_nodes = 2
-    
-    _L2phi = 0 #default value = no shear effect. Use SetProperties_Beam to include shear effect
         
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         elmGeom = kargs.get('elmGeom', None)
@@ -183,25 +187,52 @@ class Beam_rotZ(Element1D): #2 nodes with derivatative dof
             print('Unit lenght assumed')
             self.L = np.array([1])
         
-        # if self._L2phi is None: raise NameError('Undefined beam properties. Use "fedoo.Element.SetProperties_BeamFCQM" before launching the assembly')
-        self.phi = self._L2phi/self.L**2  
+        assembly = kargs.get('assembly', None)      
+        if assembly is not None: 
+            self.phi = self._compute_phi(assembly.weakform)
+        else: self.phi = 0 #no shear effect
         
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
         Element1D.__init__(self, n_elm_gp)        
-            
+        
+    def _compute_phi(self,weakform):    
+        if weakform is not None:
+            try:
+                k = weakform.properties.k
+            except:
+                raise NameError('Weakform not compatible with "beam" element')
+            if not(np.isscalar(k) and k==0): 
+                # E = weakform.properties.material.E
+                nu = weakform.properties.material.nu
+                return 24*weakform.properties.Izz*(1+nu)/(k*weakform.properties.A*self.L**2)
+                #or in function of G:
+                #self.phi = 12*E*weakform.properties.Izz/(k*G*weakform.properties.A*self.L**2)    
+        return 0 #no shear effect
+    
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
         # [(tetai,tetaj,vi,vj)]
-                    
-        phi = self.phi.reshape(1,-1) ; L = self.L.reshape(1,-1)        
-        C = 1/(1+phi)
+        L = self.L.reshape(1,-1)                            
+        if self.phi is not 0: 
+            phi = self.phi.reshape(1,-1)
+            C = 1/(1+phi)
+        else: 
+            phi = 0  
+            C = np.ones_like(L)                    
+
         Nv = (6*C/L) * (xi**2-xi)
         return np.transpose([C*(3*xi**2-(4+phi)*xi+1+phi), C*(3*xi**2-(2-phi)*xi), Nv , -Nv], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)         
     
     def ShapeFunctionDerivative(self,xi):  
-        phi = self.phi.reshape(1,1,-1) ; L = self.L.reshape(1,1,-1)        
-        C = 1/(1+phi)
+        L = self.L.reshape(1,1,-1)        
+        if self.phi is not 0: 
+            phi = self.phi.reshape(1,1,-1)
+            C = 1/(1+phi)
+        else: 
+            phi = 0    
+            C = np.ones_like(L)                    
+
         Nvprime = (6*C/L) * (2*xi-1)
         return np.transpose([C*(6*xi-(4+phi)), C*(6*xi-(2-phi)), Nvprime , -Nvprime], (3,2,1,0)) #shape = (Nel, Nb_pg, Nd_deriv=1, Nddl=4)     
 
@@ -209,7 +240,7 @@ class Beam_dispY(Element1D): #2 nodes with derivatative dof
     name = 'beam_dispy'
     n_nodes = 2
     
-    _L2phi = 0
+    _compute_phi = Beam_rotZ._compute_phi
     
     def __init__(self, n_elm_gp=4, **kargs): # pour la matrice de masse on est sous-integré (il en faut 6), pour la matrice de rigidite -> reste à voir    
         elmGeom = kargs.get('elmGeom', None)
@@ -222,17 +253,27 @@ class Beam_dispY(Element1D): #2 nodes with derivatative dof
             print('Unit lenght assumed')
             self.L = np.array([1])
             
-        self.phi = self._L2phi/self.L**2  
-        
+        assembly = kargs.get('assembly', None)      
+        if assembly is not None: 
+            self.phi = self._compute_phi(assembly.weakform)
+        else: self.phi = 0 #no shear effect
+            
         self.xi_nd = np.c_[[0., 1.]]               
         self.n_elm_gp = n_elm_gp
         Element1D.__init__(self, n_elm_gp)        
             
     #Dans les fonctions suivantes, xi doit toujours être une matrice colonne    
     def ShapeFunction(self,xi):
-        # [(vi,vj,tetai,tetaj)]                    
-        phi = self.phi.reshape(1,-1) ; L = self.L.reshape(1,-1)        
-        C = 1/(1+phi)
+        # [(vi,vj,tetai,tetaj)]     
+        L = self.L.reshape(1,-1)        
+
+        if self.phi is not 0: 
+            phi = self.phi.reshape(1,-1)
+            C = 1/(1+phi)
+        else: 
+            phi = 0
+            C = np.ones_like(L)            
+        
         Nv2 = -C * (2*xi**3-3*xi**2-phi*xi) ; Nv1 = 1-Nv2
         Nth1 = C*L* (xi**3 - (2+phi/2)*xi**2 + (1+phi/2)*xi)
         Nth2 = C*L* (xi**3 - (1-phi/2)*xi**2 - (phi/2)*xi)
@@ -240,9 +281,16 @@ class Beam_dispY(Element1D): #2 nodes with derivatative dof
         return np.transpose([Nv1 , Nv2, Nth1, Nth2], (2,1,0)) #shape = (Nel, Nb_pg, Nddl=4)         
     
     def ShapeFunctionDerivative(self,xi):  
-        phi = self.phi.reshape(1,1,-1) ; L = self.L.reshape(1,1,-1)        
-        C = 1/(1+phi)
-                
+        
+        L = self.L.reshape(1,1,-1)
+        
+        if self.phi is not 0: 
+            phi = self.phi.reshape(1,1,-1)  
+            C = 1/(1+phi)
+        else: 
+            phi = 0
+            C = np.ones_like(L)            
+            
         Nv1prime = C * (6*xi**2-6*xi-phi) ; Nv2prime = -Nv1prime
         Nth1prime = C*L* (3*xi**2 - (4+phi)*xi + (1+phi/2))
         Nth2prime = C*L* (3*xi**2 - (2-phi)*xi - (phi/2))
@@ -252,10 +300,26 @@ class Beam_dispY(Element1D): #2 nodes with derivatative dof
 
 class Beam_rotY(Beam_rotZ):
     name = 'beam_roty'
-    _L2phi = 0
+    
+    def _compute_phi(self,weakform):    
+        if weakform is not None:
+            try:
+                k = weakform.properties.k
+            except:
+                raise NameError('Weakform not compatible with "beam" element')
+            if not(np.isscalar(k) and k==0): 
+                # E = weakform.material.E
+                nu = weakform.properties.material.nu
+                return 24*weakform.properties.Iyy*(1+nu)/(k*weakform.properties.A*self.L**2)
+                #or in function of G:
+                #self.phi = 12*E*weakform.properties.Iyy/(k*G*weakform.properties.A*self.L**2)    
+        return 0 #no shear effect
+
+    
 class Beam_dispZ(Beam_dispY):    
     name = 'beam_dispz'
-    _L2phi = 0
+    
+    _compute_phi = Beam_rotY._compute_phi
 
 
 # Beam = {'DispX':['lin2'],             
@@ -274,18 +338,18 @@ Beam.associated_variables ={'DispY':(1, 'RotZ'), 'DispZ':(-1, 'RotY'),
         'RotY':(-1, 'DispZ'), 'RotZ':(1, 'DispY')} 
 
 
-def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
-    if np.isscalar(k) and k==0: 
-        #no shear effect
-        Beam_rotZ._L2phi = Beam_dispY._L2phi = 0
-        Beam_rotY._L2phi = Beam_dispZ._L2phi = 0
-    elif nu is None:
-        if G is None or E is None: raise NameError('Missing property')
-        Beam_rotZ._L2phi = Beam_dispY._L2phi = 12*E*Izz/(k*G*A)    
-        Beam_rotY._L2phi = Beam_dispZ._L2phi = 12*E*Iyy/(k*G*A)    
-    else:
-        Beam_rotZ._L2phi = Beam_dispY._L2phi = 24*Izz*(1+nu)/(k*A)
-        Beam_rotY._L2phi = Beam_dispZ._L2phi = 24*Iyy*(1+nu)/(k*A)  
+# def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
+#     if np.isscalar(k) and k==0: 
+#         #no shear effect
+#         Beam_rotZ._L2phi = Beam_dispY._L2phi = 0
+#         Beam_rotY._L2phi = Beam_dispZ._L2phi = 0
+#     elif nu is None:
+#         if G is None or E is None: raise NameError('Missing property')
+#         Beam_rotZ._L2phi = Beam_dispY._L2phi = 12*E*Izz/(k*G*A)    
+#         Beam_rotY._L2phi = Beam_dispZ._L2phi = 12*E*Iyy/(k*G*A)    
+#     else:
+#         Beam_rotZ._L2phi = Beam_dispY._L2phi = 24*Izz*(1+nu)/(k*A)
+#         Beam_rotY._L2phi = Beam_dispZ._L2phi = 24*Iyy*(1+nu)/(k*A)  
        
 
 

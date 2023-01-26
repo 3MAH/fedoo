@@ -25,18 +25,30 @@ class ElasticOrthotropic(ElasticAnisotropic):
     nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
         Poisson's ratio 
     """
-    def __init__(self, EX, EY, EZ, GYZ, GXZ, GXY, nuYZ, nuXZ, nuXY, name =""):
+    def __init__(self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name =""):
         Mechanical3D.__init__(self, name) # heritage
-
-        self.__parameters = {'EX':EX, 'EY':EY, 'EZ':EZ, 'GYZ':GYZ, 'GXZ':GXZ, 'GXY':GXY, 'nuYZ':nuYZ, 'nuXZ':nuXZ, 'nuXY':nuXY}
         
-    def GetEngineeringConstants(self):
-        """
-        Return a dict containing the engineering constants
-        """
-        return self.__parameters
-    
-    def GetTangentMatrix(self): 
+        self.Ex = Ex
+        self.Ey = Ey
+        self.Ez = Ez
+        self.Gyz = Gyz
+        self.Gxz = Gxz
+        self.Gxy = Gxy
+        self.nuyz = nuyz
+        self.nuxz = nuxz
+        self.nuxy = nuxy
+        
+    def get_tangent_matrix(self): 
+        EX = self.Ex
+        EY = self.Ey 
+        EZ = self.Ez
+        GYZ = self.Gyz
+        GXZ = self.Gxz
+        GXY = self.Gxy
+        nuYZ = self.nuyz
+        nuXZ = self.nuxz
+        nuXY = self.nuxy
+        
 #        S = sp.array([[1/EX    , -nuXY/EX, -nuXZ/EX, 0    , 0    , 0    ], \
 #                      [-nuXY/EX, 1/EY    , -nuYZ/EY, 0    , 0    , 0    ], \
 #                      [-nuXZ/EX, -nuYZ/EY, 1/EZ    , 0    , 0    , 0    ], \
