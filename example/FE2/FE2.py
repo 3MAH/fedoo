@@ -3,15 +3,15 @@ import numpy as np
 import os
 
 #Define the Modeling Space - Here 2D problem with plane stress assumption.
-Util.ProblemDimension("2Dplane", 'macro_space') 
-Util.ProblemDimension("3D", 'micro_space') 
+ModelingSpace("2Dplane", 'macro_space') 
+ModelingSpace("3D", 'micro_space') 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-mesh_macro = Mesh.HolePlateMesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
-	ElementShape = 'quad4', ID ="macro") 
+mesh_macro = Mesh.hole_plate_mesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
+	ElementShape = 'quad4', name ="macro") 
     
-Mesh.ImportFromFile('octet_surf.msh', meshID = "micro")
-mesh_micro = Mesh.GetAll()['micro2']
+Mesh.import_file('octet_surf.msh', meshname = "micro")
+mesh_micro = Mesh.get_all()['micro2']
 
 # Util.meshPlot2d("macro")
 
@@ -26,55 +26,55 @@ m=0.25
 uimp = -5
 
 props = np.array([[E, nu, alpha, Re,k,m]])
-Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
-WeakForm.InternalForce("ConstitutiveLaw", ID = 'micro_wf', space = 'micro_space') 
+WeakForm.StressEquilibrium("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
 
-micro_assembly = Assembly.Create('micro_wf', mesh_micro)
+micro_assembly = Assembly.create('micro_wf', mesh_micro)
 
-micro_cells = ConstitutiveLaw.FE2(micro_assembly, ID='FEM')
+micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
 
 #Create the weak formulation of the mechanical equilibrium equation
-WeakForm.InternalForce("FEM", ID = "WeakForm") 
+WeakForm.StressEquilibrium("FEM", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.Create("WeakForm", "macro", ID="Assembly", MeshChange = True) 
+Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-Problem.NonLinearStatic("Assembly")
-# Problem.SetNewtonRaphsonErrorCriterion("Displacement")
+Problem.NonLinear("Assembly")
+# Problem.set_nr_criterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
-Problem.AddOutput('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
+Problem.add_output('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
+Problem.add_output('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
 
 #output result for a random micro cell (here for the 5th integration point)
 #Warning : the results of micro_cells are automatically saved at each NR iteration (several iteration per time iteration)
-# Problem.Initialize(0) #to build prolems
-# micro_cells.list_problem[5].AddOutput('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
+# Problem.initialize(0) #to build prolems
+# micro_cells.list_problem[5].add_output('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
 
 
 #Definition of the set of nodes for boundary conditions
-crd = mesh_macro.GetNodeCoordinates()
+crd = mesh_macro.nodes
 left  = np.where(crd[:,0] == np.min(crd[:,0]))[0]
 right = np.where(crd[:,0] == np.max(crd[:,0]))[0]  
 bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0] 
 
 #Boundary conditions
 #symetry condition on left (ux = 0)
-Problem.BoundaryCondition('Dirichlet','DispX',    0  , left) 
+Problem.bc.add('Dirichlet','DispX',    0  , left) 
 #symetry condition on bottom edge (ux = 0)
-Problem.BoundaryCondition('Dirichlet','DispY',    0  , bottom) 
+Problem.bc.add('Dirichlet','DispY',    0  , bottom) 
 #displacement on right (ux=0.1mm)
-Problem.BoundaryCondition('Dirichlet','DispX', 0.1, right) 
+Problem.bc.add('Dirichlet','DispX', 0.1, right) 
 
-Problem.ApplyBoundaryCondition()
+Problem.apply_boundary_conditions()
 
 #Solve problem
-Problem.NLSolve()
+Problem.nlsolve()
 
 #---------- Post-Treatment ----------
 #Get the stress tensor, strain tensor, and displacement (nodal values)
-res_nd = Problem.GetResults("Assembly", ['Stress_VM','Strain'], 'Node')
-U = Problem.GetDisp()
+res_nd = Problem.get_results("Assembly", ['Stress_VM','Strain'], 'Node')
+U = Problem.get_disp()

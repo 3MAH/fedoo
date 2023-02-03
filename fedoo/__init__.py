@@ -1,9 +1,20 @@
-from . import libUtil as Util
-from . import libMesh as Mesh
-from . import libElement as Element
-from . import libConstitutiveLaw as ConstitutiveLaw
-from . import libWeakForm as WeakForm
-from . import libAssembly as Assembly
-from . import libProblem as Problem
-from . import libHomogen as Homogen
-from . import libPGD as PGD
+from . import constitutivelaw 
+from . import weakform 
+from . import mesh
+# from . import pgd 
+from . import problem
+# from . import core
+# from . import utilities
+
+from .core.mesh import Mesh
+from .core.assembly import Assembly
+from .core.base import ConstitutiveLaw
+from .core.weakform import WeakForm
+from .core.modelingspace import ModelingSpace
+from .core.problem import Problem
+from .core.dataset import DataSet, MultiFrameDataSet
+
+# from . import mesh
+# from . import lib_elements
+
+ 

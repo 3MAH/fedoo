@@ -5,11 +5,11 @@ from simcoon import simmit as sim
 import os
 
 #--------------- Pre-Treatment --------------------------------------------------------
-Util.ProblemDimension("3D")
+ModelingSpace("3D")
 
-Mesh.ImportFromFile('octet_surf.msh', meshID = "Domain")
+mesh.import_file('../../util/meshes/octet_surf.msh', meshname = "Domain")
 
-meshID = "Domain2"
+meshname = "Domain2"
 
 umat_name = 'ELISO'
 props = np.array([[1e5, 0.3, 1]])
@@ -28,4 +28,4 @@ path_file = 'path.txt'
 outputfile = 'results_ELISO.txt'
 outputdatfile = 'output.dat'
 
-Homogen.GetResultsUnitCell(meshID, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)
+homogen.get_resultsUnitCell(meshname, umat_name, props, nstatev, solver_type, corate_type, path_data, path_results, path_file, outputfile, outputdatfile, meshperio=True)

@@ -18,11 +18,11 @@ The main steps to define a problem are:
 Import library
 ______________
 
-The first step is to import the fedoo library. 
+The first step is to import the fedoo library. Obvisously, fedoo needs to be :doc:`installed <Install>`.
 
-.. code-block:: none
+.. code-block:: python
 
-   from fedoo import * #Import all the fedoo library
+   import fedoo as fd #Import all the fedoo library
    import numpy as np #Numpy is often usefull
    
 
@@ -30,71 +30,71 @@ Create the modeling space
 ___________________________
 
 In fedoo, most of objects are associated to a modeling space. The modeling space is a space in which the variables and coordinates are created. 
-The most convenient way to create a modeling space is to define the dimension of the problem using the Util.ProblemDimension(dimension) method. 
-The dimension of the problem should be '3D' or '2Dplane' (for planar problem). The dimension of the problem may also be set to '2Dstress' for planar problem based on the plane stress assumption.
+The dimension of the modeling space car be '3D' or '2D' (for planar problem). The dimension of the space may also be set to '2Dstress' for planar problem based on the plane stress assumption.
 
-.. code-block:: none
+.. code-block:: python
 
-    Util.ProblemDimension("3D")
+    fd.ModelingSpace("3D") 
 
 
 Create and/or import the geometry (mesh)
 _________________________________________
 
-The module :doc:`Mesh <Mesh>` contains several functions to build up simple meshes. 
-For instance to build the mesh of a box, we can use: 
+The module :ref:`mesh <build_simple_mesh>` contains several functions to build up simple meshes. 
+For instance to build the mesh of a box (3d rectangle), we can use: 
 
-.. code-block:: none
+.. code-block:: python
 
-    Mesh.BoxMesh(Nx=31, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
+    fd.mesh.box_mesh(nx=31, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = "Domain") 
 
-You can also import a Mesh from the VTK or GMSH format with the function: 
-Mesh.ImportFromFile (see :mod:`fedoo.libMesh.MeshImport.ImportFromFile`)
+You can also import a Mesh by using one of the following Mesh constructor :py:meth:`fedoo.Mesh.read`, :py:meth:`fedoo.Mesh.from_pyvista` or with the function fd.mesh.import_file (see :ref:`importmesh`) that allow to import meshes from the VTK or GMSH format.
 
 
 Create weak formulations 
 ___________________________
 
 We need to define one or several equations to solve. 
-In a finite element analyses, the equations are written using a weak formulation. 
-The type of weak formulation may be related to a specific type of elements. 
+In a finite element analyses, the equations are written using a weak formulations. 
+In fedoo, the equation is defined by creating a WeakForm object. 
+
+The type of WeakForm may be related to a specific type of elements. 
 
 For instance, a beam weak formulation should be associated to beam elements.
-The module :doc:`WeakForm <WeakForm>` list the available type of weak formulation. 
+The module :doc:`weakform <WeakForm>` list the available type of weak formulation. 
 Most of weak formulations needs the definition of a material constitutive law.
-The module :doc:`ConstitutiveLaw <ConstitutiveLaw>` list the available ConstitutiveLaw.
+The module :doc:`constitutivelaw <ConstitutiveLaw>` list the available ConstitutiveLaw.
 
 For instance a simple weak formulation may be defined by:
 
-.. code-block:: none
+.. code-block:: python
     
-    ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
-    WeakForm.InternalForce("ElasticLaw", ID="MyWeakForm")
+    fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
+    fd.weakform.InternalForce("ElasticLaw", name = "MyWeakForm")
 
 
 Create global matrix assembies
 __________________________________
 
 Once mesh and weak formulations have been created, we can now proceed to the assembly of the global matrices.
-For each weak formulation associated to a mesh, an Assembly object needs to be created. To combine several assembly, there is a dedicated function Assembly.Sum(ListAssembly).
+For each weak formulation associated to a mesh, an Assembly object needs to be created. To combine several assembly, there is a dedicated constructor :py:meth:`fedoo.Assembly.sum`.
 
 For instance, a simple assembly for the previously defined weak formulation and mesh is:
 
-.. code-block:: none
+.. code-block:: python
     
-    Assembly.Create("MyWeakForm", 'Domain', ID="MyAssembly") 
+    fd.Assembly.create("MyWeakForm", 'Domain', name = "MyAssembly") 
 
 
 Set the Problem and the solver
 ________________________________
 
-.. code-block:: none
+.. code-block:: python
     
-    Problem.Static("MyAssembly") 
+    pb = fd.problem.Static("MyAssembly") 
 
 
 
-.. code-block:: none
+.. code-block:: python
 
     Problem.SetSolver('cg') #for conjugate gradient solver
 
@@ -105,17 +105,17 @@ _____________________
 To apply the boundary conditions, we need to define some list of nodes indices for boundaries.
 The boundaries are automatically stored as set of nodes ('left', 'right', 'top', 'bottom', ...) when the function Mesh.BoxMesh is used.
 
-.. code-block:: none
+.. code-block:: python
 
-    nodes_left = Mesh.GetAll()['Domain'].GetSetOfNodes("left")
-    nodes_right = Mesh.GetAll()['Domain'].GetSetOfNodes("right")
+    nodes_left = fd.Mesh['Domain'].GetSetOfNodes("left")
+    nodes_right = fd.Mesh['Domain'].GetSetOfNodes("right")
 
 An easy way to get some set of nodes at a given position is to use the numpy function where altogether to a condition on the node coordiantes.
 For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
 
-.. code-block:: none
+.. code-block:: python
     
-    crd = Mesh.GetAll()['Domain'].GetNodeCoordinates() #Get the coordinates of nodes
+    crd = Mesh['Domain'].nodes #Get the coordinates of nodes
     X = crd[:,0] #Get the x position of nodes
     x_min = X.min() 
     x_max = X.max()
@@ -127,7 +127,7 @@ For instance, to get the left and right list of nodes with a 1e-10 position tole
 Once the list of nodes have been defined, the boundary conditions can be applied with the
 Problem.BoundaryCondition function. 
 
-.. code-block:: none
+.. code-block:: python
 
     Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
     Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
@@ -137,7 +137,7 @@ Problem.BoundaryCondition function.
 
 To apply the boundary conditions to the active problem use the command: 
 
-.. code-block:: none
+.. code-block:: python
 
     Problem.ApplyBoundaryCondition()
 

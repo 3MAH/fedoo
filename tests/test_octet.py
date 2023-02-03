@@ -1,27 +1,26 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
  
-Assembly.DeleteMemory()
+fd.Assembly.delete_memory()
 
 #Define the Modeling Space - Here 3D problem 
-Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 
 #Import the mesh generated with Microgen
-Mesh.ImportFromFile('data/MeshPeriodic.msh', meshID = "Domain")
+fd.mesh.import_file('../util/meshes/octet_truss.msh', name = "Domain")
 
 #Get the imported mesh 
-mesh = Mesh.GetAll()["Domain2"]
+mesh = fd.Mesh["Domain2"]
 
 #Get the bounding box (corners coordinates and center)
-Xmin, Xmax, crd_center = mesh.GetBoundingBox(return_center = True)
-# total volume of the bounding box
-Volume = (Xmax-Xmin).prod()
-
+bounds = mesh.bounding_box
+volume = bounds.volume
+crd_center = bounds.center
 #Nearest node to the center of the bounding box for boundary conditions
-center = mesh.GetNearestNode(crd_center)
+center = mesh.nearest_node(crd_center)
 
 # Add 2 virtual nodes for macro strain 
-StrainNodes = Mesh.GetAll()["Domain2"].AddNodes(crd_center, 2)  
+StrainNodes = fd.Mesh["Domain2"].add_virtual_nodes(crd_center, 2)  
 
 # Material definition and simcoon elasto-plastic constitutive law
 Re = 300
@@ -29,49 +28,66 @@ k = 1000
 m = 0.25
 alpha = 1e-5
 props = np.array([[1e5, 0.3, alpha, Re, k, m]])
-Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, ID='ConstitutiveLaw')
+material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
 #Create the weak formulation of the mechanical equilibrium equation
-wf = WeakForm.InternalForce("ConstitutiveLaw", ID = "WeakForm", nlgeom=False)
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", name = "WeakForm", nlgeom=False)
 
 # Assembly
-assemb = Assembly.Create("WeakForm", "Domain2", 'tet4', ID="Assembly")
+assemb = fd.Assembly.create("WeakForm", "Domain2", 'tet4', name="Assembly")
 
 # Type of problem
-Problem.NonLinearStatic("Assembly")
-Problem.SetNewtonRaphsonErrorCriterion("Work")
+pb = fd.problem.NonLinear("Assembly")
+pb.set_nr_criterion(criterion = "Work")
 
 # Set the desired ouputs at each time step
-# Problem.AddOutput('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
+# Problem.add_output('results', 'Assembly', ['disp', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Node', file_format ='vtk')
 
 # Boundary conditions for the linearized strain tensor
 E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
-Homogen.DefinePeriodicBoundaryCondition('Domain2',
-	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
-         StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-          ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')
+# fd.homogen.DefinePeriodicBoundaryCondition('Domain2',
+# 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
+#          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+#           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim='3D')
+
+
+# bc_periodic = fd.homogen.PeriodicBC('Domain2',
+# 	[StrainNodes[0], StrainNodes[0], StrainNodes[0],
+#          StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+#           ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ'], dim=3)
+list_strain_nodes = [StrainNodes[0], StrainNodes[0], StrainNodes[0],
+                     StrainNodes[1], StrainNodes[1], StrainNodes[1]]
+list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
+# or equivalent: 
+# list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
+#                      [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
+#                      [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
+# list_strain_var = [['DispX', 'DispX', 'DispY'],
+#                    ['DispX', 'DispY', 'DispZ'],
+#                    ['DispY', 'DispZ', 'DispZ']]
+
+bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+pb.bc.add(bc_periodic)
 
 #fixed point on the center to avoid rigid body motion
-Problem.BoundaryCondition('Dirichlet', 'Disp', 0, center)
+pb.bc.add('Dirichlet', center, 'Disp', 0)
 
 #Enforced mean strain
-Problem.BoundaryCondition('Dirichlet', 'Disp', [E[0], E[1], E[2]], [
-                           StrainNodes[0]])  # EpsXX, EpsYY, EpsZZ
-Problem.BoundaryCondition('Dirichlet', 'Disp', [E[3], E[4], E[5]], [
-                           StrainNodes[1]])  # EpsXY, EpsXZ, EpsYZ
+pb.bc.add('Dirichlet', [StrainNodes[0]], 'Disp', [E[0], E[1], E[2]])  # EpsXX, EpsYY, EpsZZ
+pb.bc.add('Dirichlet', [StrainNodes[1]], 'Disp', [E[3], E[4], E[5]])  # EpsXY, EpsXZ, EpsYZ
 
-Problem.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 # ---------------  Non linear solver--------------------------------------------
-Problem.SetSolver('CG') #conjugate gradient solver
-Problem.NLSolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
+pb.set_solver('CG') #conjugate gradient solver
+pb.nlsolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
 
 # --------------- Post-Treatment -----------------------------------------------
 # Get the stress and strain tensor (PG values)
-res = Problem.GetResults('Assembly', ['Strain','Stress'], 'GaussPoint') 
-TensorStrain = res['Strain']
-TensorStress = res['Stress']
+res = pb.get_results('Assembly', ['Strain','Stress'], 'GaussPoint') 
+TensorStrain = res.gausspoint_data['Strain']
+TensorStress = res.gausspoint_data['Stress']
 
 assert np.abs(TensorStress[4][222]-72.37808598199845) <1e-15
 assert np.abs(TensorStrain[2][876]-0.030469198588675583) <1e-15

@@ -1,52 +1,52 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 
 #Define the Modeling Space - Here 2D problem with plane stress assumption.
-Util.ProblemDimension("2Dstress") 
+fd.ModelingSpace("2Dstress") 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-meshObject = Mesh.HolePlateMesh(Nx=11, Ny=11, Lx=100, Ly=100, R=20, \
-	ElementShape = 'quad4', ID ="Domain") 
+mesh = fd.mesh.hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, \
+	elm_type = 'quad4', name ="Domain") 
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
-ConstitutiveLaw.ElasticIsotrop(2e5, 0.3, ID = 'ElasticLaw') 
+fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
 
 #Create the weak formulation of the mechanical equilibrium equation
-WeakForm.InternalForce("ElasticLaw", ID = "WeakForm") 
+fd.weakform.StressEquilibrium("ElasticLaw", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.Create("WeakForm", "Domain", ID="Assembly", MeshChange = True) 
+fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-Problem.Static("Assembly")
+pb = fd.problem.Linear("Assembly")
 
 #Definition of the set of nodes for boundary conditions
-crd = meshObject.GetNodeCoordinates()
-left  = np.where(crd[:,0] == np.min(crd[:,0]))[0]
-right = np.where(crd[:,0] == np.max(crd[:,0]))[0]  
-bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0] 
+left = mesh.find_nodes('X',mesh.bounding_box.xmin)
+right = mesh.find_nodes('X',mesh.bounding_box.xmax)
+bottom = mesh.find_nodes('Y', mesh.bounding_box.ymin)
 
 #Boundary conditions
 #symetry condition on left (ux = 0)
-Problem.BoundaryCondition('Dirichlet','DispX',    0  , left) 
+pb.bc.add('Dirichlet', left, 'DispX',    0 ) 
 #symetry condition on bottom edge (ux = 0)
-Problem.BoundaryCondition('Dirichlet','DispY',    0  , bottom) 
+pb.bc.add('Dirichlet', bottom, 'DispY',    0 ) 
 #displacement on right (ux=0.1mm)
-Problem.BoundaryCondition('Dirichlet','DispX', 0.1, right) 
+pb.bc.add('Dirichlet', right, 'DispX', 0.1 ) 
 
-Problem.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 #Solve problem
-Problem.Solve()
+pb.solve()
 
 #---------- Post-Treatment ----------
 #Get the stress tensor, strain tensor, and displacement (nodal values)
-res_nd = Problem.GetResults("Assembly", ['Stress_VM','Strain'], 'Node')
-U = Problem.GetDisp()
+res = pb.get_results("Assembly", ['Stress_vm','Strain'], 'Node')
+
+U = pb.get_disp()
 
 assert U[0,22] == 0.1
 assert np.abs(U[1,22] +0.010440829731661383) < 1e-15
-assert np.abs(res_nd['Stress_Mises'][53]-350.22455046711923) < 1e-15
+assert np.abs(res.node_data['Stress_vm'][53]-350.1929992233047) < 1e-15
 
-# Util.fieldPlot2d("Assembly", disp = Problem.GetDisp(), dataID = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
-# Util.fieldPlot2d("Assembly", disp = Problem.GetDisp(), dataID = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")
+# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
+# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")

@@ -1,54 +1,52 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 
 #Units: N, mm, MPa
-#Mesh.BoxMesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
-Mesh.BoxMesh(Nx=11, Ny=5, Nz=5, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', ID = 'Domain')
-
-meshID = "Domain"
+#Mesh.box_mesh(Nx=101, Ny=21, Nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, ElementShape = 'hex8', name = 'Domain')
+mesh = fd.mesh.box_mesh(nx=11, ny=5, nz=5, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = 'Domain')
 
 #Material definition
-ConstitutiveLaw.ElasticIsotrop(200e3, 0.3, ID = 'ElasticLaw')
-WeakForm.InternalForce("ElasticLaw")
+fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
+fd.weakform.StressEquilibrium("ElasticLaw")
 
 #Assembly (print the time required for assembling)
-Assembly.Create("ElasticLaw", meshID, 'hex8', ID="Assembling") 
+fd.Assembly.create("ElasticLaw", 'Domain', 'hex8', name="Assembling") 
 
 #Type of problem 
-Problem.Static("Assembling")
+pb = fd.problem.Linear("Assembling")
 
 #Boundary conditions
-nodes_left = Mesh.GetAll()[meshID].GetSetOfNodes("left")
-nodes_right = Mesh.GetAll()[meshID].GetSetOfNodes("right")
-nodes_top = Mesh.GetAll()[meshID].GetSetOfNodes("top")
-nodes_bottom = Mesh.GetAll()[meshID].GetSetOfNodes("bottom")
+nodes_left = mesh.node_sets["left"]
+nodes_right = mesh.node_sets["right"]
+nodes_top = mesh.node_sets["top"]
+nodes_bottom = mesh.node_sets["bottom"]
 
-Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
+pb.bc.add('Dirichlet',nodes_left,'DispX',0)
+pb.bc.add('Dirichlet',nodes_left,'DispY',0)
+pb.bc.add('Dirichlet',nodes_left,'DispZ',0)
 
-Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
+pb.bc.add('Dirichlet',nodes_right,'DispY',-10)
 
-Problem.ApplyBoundaryCondition()
+pb.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 t0 = time.time() 
-# Problem.SetSolver('cg') #uncomment for conjugate gradient solver
+# Problem.set_solver('cg') #uncomment for conjugate gradient solver
 print('Solving...')
-Problem.Solve() 
+pb.solve() 
 print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
 #Get the displacement vector on nodes for export to vtk
-U = np.reshape(Problem.GetDoFSolution('all'),(3,-1)).T
+U = np.reshape(pb.get_dof_solution('all'),(3,-1)).T
 
 #Get the stress tensor (nodal values)
-TensorStrain = Assembly.GetAll()['Assembling'].GetStrainTensor(Problem.GetDoFSolution(), "Nodal", nlgeom=False)       
-TensorStress = ConstitutiveLaw.GetAll()['ElasticLaw'].GetStressFromStrain(TensorStrain)
+TensorStrain = fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "Node", nlgeom=False)       
+TensorStress = fd.ConstitutiveLaw['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
 assert np.abs(TensorStress[5][-1] + 0.900798346778864) < 1e-15

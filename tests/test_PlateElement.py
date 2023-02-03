@@ -2,14 +2,14 @@
 # Plate element to model the canteleaver beam using different kind of plate elements
 #
 
-from fedoo import *
+import fedoo as fd
 import numpy as np
 # from matplotlib import pylab as plt
 # import os 
 
-Assembly.DeleteMemory()
+fd.Assembly.delete_memory()
 
-Util.ProblemDimension("3D")
+fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
 
@@ -20,53 +20,57 @@ F = -10
 
 geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = True #if true, use reduce integration for shear 
 
-material = ConstitutiveLaw.ElasticIsotrop(E, nu, ID = 'Material')
-ConstitutiveLaw.ShellHomogeneous('Material', thickness, ID = 'PlateSection')
+material = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Material')
+fd.constitutivelaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
 
-mesh = Mesh.RectangleMesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, ID='plate')
+mesh = fd.mesh.rectangle_mesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, name='plate')
 
-nodes_left = mesh.GetSetOfNodes('left')
-nodes_right = mesh.GetSetOfNodes('right')
+nodes_left = mesh.node_sets['left']
+nodes_right = mesh.node_sets['right']
 
-node_right_center = nodes_right[(mesh.GetNodeCoordinates()[nodes_right,1]**2).argmin()]
+node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
+
+fd.weakform.Plate("PlateSection", name = "WFplate")
+fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")   
 
 
-if reduced_integration == False:
-    WeakForm.Plate("PlateSection", ID = "WFplate") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate", "plate", plateElementType, ID="plate")    
-    post_tt_assembly = 'plate'
-else:    
-    WeakForm.Plate_RI("PlateSection", ID = "WFplate_RI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_RI", "plate", plateElementType, ID="plate_RI", nb_pg = 1)    
+# or by hand
+# reduced_integration = True #if true, use reduce integration for shear 
+# if reduced_integration == False:
+#     fd.weakform.PlateFI("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
+#     post_tt_assembly = 'plate'
+# else:    
+    # fd.weakform.PlateShear("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+    # fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    WeakForm.Plate_FI("PlateSection", ID = "WFplate_FI") #by default k=0 i.e. no shear effect
-    Assembly.Create("WFplate_FI", "plate", plateElementType, ID="plate_FI") 
+    # fd.weakform.PlateKirchhoffLove("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+    # fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    Assembly.Sum("plate_RI", "plate_FI", ID = "plate")
-    post_tt_assembly = 'plate_FI'
+    # fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
+    # post_tt_assembly = 'plate_FI'
 
 
-Problem.Static("plate")
+pb = fd.problem.Linear("plate")
 
-Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','DispZ',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotX',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotY',0,nodes_left)
-Problem.BoundaryCondition('Dirichlet','RotZ',0,nodes_left)
+pb.bc.add('Dirichlet', nodes_left, 'DispX',0,)
+pb.bc.add('Dirichlet', nodes_left, 'DispY',0)
+pb.bc.add('Dirichlet', nodes_left, 'DispZ',0)
+pb.bc.add('Dirichlet', nodes_left, 'RotX',0)
+pb.bc.add('Dirichlet', nodes_left, 'RotY',0)
+pb.bc.add('Dirichlet', nodes_left, 'RotZ',0)
 
-Problem.BoundaryCondition('Neumann','DispZ',F,node_right_center)
+pb.bc.add('Neumann', node_right_center, 'DispZ', F)
 
-Problem.ApplyBoundaryCondition()
-Problem.Solve()
+pb.apply_boundary_conditions()
+pb.solve()
 
 # I = h*thickness**3/12
 # # print('Beam analitical deflection: ', F*L**3/(3*E*I))
-# # print('Numerical deflection: ', Problem.GetDisp('DispZ')[node_right_center])
+# # print('Numerical deflection: ', pb.get_disp('DispZ')[node_right_center])
 
-assert np.abs(Problem.GetDisp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
 
-# # z, StressDistribution = ConstitutiveLaw.GetAll()['PlateSection'].GetStressDistribution(20)
+# # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(20)
 # # plt.plot(StressDistribution[0], z)

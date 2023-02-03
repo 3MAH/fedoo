@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd 
 import numpy as np
 from time import time
 import os
@@ -8,7 +8,7 @@ from numpy import linalg
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-Util.ProblemDimension("2Dplane")
+fd.ModelingSpace("2Dplane")
 
 #Units: N, mm, MPa
 h = 2
@@ -16,42 +16,40 @@ w = 10
 L = 1
 # E = 200e3
 # nu=0.3
-meshID = "Domain"
+meshname = "Domain"
 uimp = -5
 
-Mesh.RectangleMesh(Nx=21, Ny=21, x_min=0, x_max=L, y_min=0, y_max=L, ElementShape = 'quad4', ID = meshID) 
-mesh = Mesh.GetAll()[meshID]
-
-crd = mesh.GetNodeCoordinates() 
+fd.mesh.rectangle_mesh(nx=21, ny=21, x_min=0, x_max=L, y_min=0, y_max=L, elm_type = 'quad4', name = meshname) 
+mesh = fd.Mesh[meshname]
 
 K = 18 #W/K/m
 c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
-Material = ConstitutiveLaw.ThermalProperties(K, c, rho, ID='ThermalLaw')
-wf = WeakForm.HeatEquation("ThermalLaw")
-assemb = Assembly.Create("ThermalLaw", meshID, ID="Assembling")    
+Material = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
+wf = fd.weakform.HeatEquation("ThermalLaw")
+assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")    
 
-left = mesh.FindNodes('X', 0)
-right = mesh.FindNodes('X', L)
+left = mesh.find_nodes('X', 0)
+right = mesh.find_nodes('X', L)
 
-Problem.NonLinearStatic("Assembling")
+pb = fd.problem.NonLinear("Assembling")
 
-# Problem.SetSolver('cg', precond = True)
-Problem.SetNewtonRaphsonErrorCriterion("Displacement", tol = 1e-2, max_subiter=5, err0 = 100)
+# Problem.set_solver('cg', precond = True)
+pb.set_nr_criterion("Displacement", tol = 1e-2, max_subiter=5, err0 = 100)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.AddOutput('results/thermal2D', 'Assembling', ['temp'], output_type='Node', file_format ='vtk')    
-# Problem.AddOutput('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+pb.add_output('results/thermal2D', 'Assembling', ['Temp'], output_type='Node', file_format ='vtk')    
+# Problem.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 200
-Problem.BoundaryCondition('Dirichlet','Temp',100,left, initialValue = 0)
-Problem.BoundaryCondition('Dirichlet','Temp',50,right, initialValue = 0)
-# Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_bottomLeft)
-# Problem.BoundaryCondition('Dirichlet','DispY',0,nodes_bottomRight)
-# bc = Problem.BoundaryCondition('Dirichlet','DispY', uimp, nodes_topCenter)
+pb.bc.add('Dirichlet',left,'Temp',100, start_value = 0)
+pb.bc.add('Dirichlet',right,'Temp',50, start_value = 0)
+# Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
+# Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
+# bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
 
-Problem.NLSolve(dt = tmax/10, tmax = tmax, update_dt = True)
+pb.nlsolve(dt = tmax/10, tmax = tmax, update_dt = True)
 
 
 
