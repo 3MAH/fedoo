@@ -1,7 +1,7 @@
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
 
-class PlateFI(WeakFormBase):
+class PlateEquilibriumFI(WeakFormBase): #plate weakform whith full integration. 
     """
     Weak formulation of the mechanical equilibrium equation for plate models.
     This weak form has to be used in combination with a Shell Constitutive Law
@@ -74,7 +74,7 @@ class PlateFI(WeakFormBase):
         pass
 
 
-class PlateShear(PlateFI): #weak form of plate shear energy containing only the shear strain energy
+class PlateShearEquilibrium(PlateEquilibriumFI): #weak form of plate shear energy containing only the shear strain energy
 
     def get_weak_equation(self, mesh = None):   
         #shear
@@ -89,7 +89,7 @@ class PlateShear(PlateFI): #weak form of plate shear energy containing only the 
         return sum([0 if GeneralizedStrain[i] is 0 else GeneralizedStrain[i].virtual*GeneralizedStress[i] for i in range(2)])        
         
     
-class PlateKirchhoffLove(PlateFI): #plate without shear strain
+class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI): #plate without shear strain
 
     def get_weak_equation(self, mesh = None):  
         #all component but shear, for full integration
@@ -107,9 +107,9 @@ class PlateKirchhoffLove(PlateFI): #plate without shear strain
         return diffop
 
     
-def PlateRI(PlateConstitutiveLaw, name = None, space=None): #plate weakform which force reduced integration for shear terms
-    plate_shear = PlateShear(PlateConstitutiveLaw, "", space)
-    plate_kl = PlateKirchhoffLove(PlateConstitutiveLaw, "", space)
+def PlateEquilibriumSI(PlateConstitutiveLaw, name = None, space=None): #plate weakform which force reduced integration for shear terms
+    plate_shear = PlateShearEquilibrium(PlateConstitutiveLaw, "", space)
+    plate_kl = PlateKirchhoffLoveEquilibrium(PlateConstitutiveLaw, "", space)
 
     plate_shear.assembly_options['n_elm_gp'] = 1 #use reduced integration for shear components
     if name is None: 
@@ -118,9 +118,9 @@ def PlateRI(PlateConstitutiveLaw, name = None, space=None): #plate weakform whic
     return WeakFormSum([plate_kl, plate_shear], name)
 
 
-def Plate(PlateConstitutiveLaw, name = None, space=None):
-    plate_shear = PlateShear(PlateConstitutiveLaw, "", space)
-    plate_kl = PlateKirchhoffLove(PlateConstitutiveLaw, "", space)
+def PlateEquilibrium(PlateConstitutiveLaw, name = None, space=None):
+    plate_shear = PlateShearEquilibrium(PlateConstitutiveLaw, "", space)
+    plate_kl = PlateKirchhoffLoveEquilibrium(PlateConstitutiveLaw, "", space)
     
     #if linear element 'ptri3' and 'pquad4': use reduced integration for shear terms
     plate_shear.assembly_options['n_elm_gp', 'ptri3'] = 1 
@@ -129,7 +129,4 @@ def Plate(PlateConstitutiveLaw, name = None, space=None):
         if isinstance(PlateConstitutiveLaw,str): name = ConstitutiveLaw().get_all()[PlateConstitutiveLaw].name
         else: name = PlateConstitutiveLaw.name
     return WeakFormSum([plate_kl, plate_shear], name)
-    
-
-
-    
+        
