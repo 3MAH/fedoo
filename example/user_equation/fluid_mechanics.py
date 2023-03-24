@@ -90,7 +90,8 @@ res = pb.get_results('assembling', ["V", "P"])
 # pl = res.plot("V", component = "norm", show = False)
 pl = res.plot("P", component = 0, show_edges = False, show = False)
 
-pl.mesh['velocity'] = np.c_[res['V'].T, np.zeros(mesh.n_nodes)]
+#get velocity associated to physical nodes and add a dim to allow 3d treatment
+pl.mesh['velocity'] = np.c_[res['V'][:,:mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)]
 
 line_streamlines = pl.mesh.streamlines(
     'velocity',

@@ -37,7 +37,7 @@ nodes_right = [Nb_elm]
 computeShear = 1
 
 if computeShear == 0:
-    fd.weakform.Beam("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
+    fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam")    
 elif computeShear == 1:
     fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
@@ -56,17 +56,17 @@ pb.apply_boundary_conditions()
 pb.solve()
 
 #Post treatment               
-results = fd.Assembly['beam'].get_ext_forces(pb.get_dof_solution('all'))
+results = pb.get_results(fd.Assembly['beam'], ['Fext'])['Fext']
 
 print('Reaction RX at the clamped extermity: ' + str(results[0][0]))
-print('Reaction RY at the clamped extermity: ' + str(results[0][1]))
-print('Reaction RZ at the clamped extermity: ' + str(results[0][2]))
-print('Moment MX at the clamped extermity: ' + str(results[0][3]))
-print('Moment MY at the clamped extermity: ' + str(results[0][4]))
-print('Moment MZ at the clamped extermity: ' + str(results[0][5]))
+print('Reaction RY at the clamped extermity: ' + str(results[1][0]))
+print('Reaction RZ at the clamped extermity: ' + str(results[2][0]))
+print('Moment MX at the clamped extermity: ' + str(results[3][0]))
+print('Moment MY at the clamped extermity: ' + str(results[4][0]))
+print('Moment MZ at the clamped extermity: ' + str(results[5][0]))
 
-print('RX at the free extremity: ' + str(results[nodes_right[0]][0]))
-print('RZ at the free extremity: ' + str(results[nodes_right[0]][2]))
+print('RX at the free extremity: ' + str(results[0][nodes_right[0]]))
+print('RZ at the free extremity: ' + str(results[2][nodes_right[0]]))
 
 #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
 results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')

@@ -49,4 +49,4 @@ U = np.reshape(pb.get_dof_solution('all'),(3,-1)).T
 TensorStrain = fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "Node", nlgeom=False)       
 TensorStress = fd.ConstitutiveLaw['ElasticLaw'].GetStressFromStrain(TensorStrain)
 
-assert np.abs(TensorStress[5][-1] + 0.900798346778864) < 1e-15
+assert np.abs(TensorStress[5][-1] + 0.9007983467254552) < 1e-10

@@ -4,7 +4,7 @@ Created on Fri Mar 25 16:25:38 2022
 
 @author: Etienne
 """
-from fedoo import *
+import fedoo as fd
 from simcoon import simmit as sim
 import numpy as np
 import os 
@@ -12,35 +12,30 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 dim = 3
 meshperio = True
-method = 3
+method = 1
+dir_meshes = '../../util/meshes/'
 
 if dim == 2: 
-    ModelingSpace("2Dplane")
+    fd.ModelingSpace("2Dplane")
 else: 
-    ModelingSpace("3D")
+    fd.ModelingSpace("3D")
 
 if dim == 3: 
     # Mesh.import_file('./meshes/octet_surf.msh', meshname = "Domain")
     # Mesh.import_file('./meshes/gyroid.msh', meshname = "Domain2") meshperio = False
-    Mesh.import_file('./meshes/gyroid_per.vtk', meshname = "Domain2") ; 
     # Mesh.import_file('./meshes/MeshPeriodic2_quad.msh', meshname = "Domain")
-    # Mesh.box_mesh(10,10,10, ElementShape = 'hex20', name = "Domain2")
+    # mesh = fd.mesh.box_mesh(10,10,10, elm_type = 'hex8', name = "Domain")
+
+    mesh = fd.Mesh.read(dir_meshes + 'gyroid_per.vtk', name = "Domain") ; 
 else: 
-    Mesh.rectangle_mesh(10,10, ElementShape = 'quad8', name = "Domain2")
-    
-# out = Util.ExportData("Domain")
-# out.toVTK()
-meshname = "Domain2"
-mesh = Mesh.get_all()[meshname]
+    mesh = fd.Mesh.rectangle_mesh(10,10, ElementShape = 'quad8', name = "Domain2")
+
 crd = mesh.nodes
 elm = mesh.elements
-# mesh.SetElementShape('hex8')
 
 bounds = mesh.bounding_box
-
 right = mesh.find_nodes('X', bounds.xmax)
 left = mesh.find_nodes('X', bounds.xmin)
-
 
 umat_name = 'ELISO'
 props = np.array([[1e5, 0.3, 1]])
@@ -51,17 +46,17 @@ props_test = sim.L_iso_props(L)
 print('props', props_test)
 
 if method == 0:
-    Material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
-    wf = WeakForm.StressEquilibrium("ElasticLaw", name = "WeakForm", nlgeom=False)
+    material = fd.constitutivelaw.ElasticAnisotropic(L, name = 'ElasticLaw')
+    wf = fd.weakform.StressEquilibrium(material, name = "WeakForm", nlgeom=False)
 
     # Assembly
-    assemb = Assembly.create("WeakForm", meshname, mesh.elm_type, name="Assembly")
+    assemb = fd.Assembly.create("WeakForm", mesh, mesh.elm_type, name="Assembly")
 
-    if '_perturbation' in Problem.get_all(): 
-        del Problem.get_all()['_perturbation']
-    L_eff = Homogen.GetHomogenizedStiffness(assemb, meshperio)
+    # if '_perturbation' in fd.Problem.get_all(): 
+    #     del fd.Problem.get_all()['_perturbation']
+    L_eff = fd.homogen.get_homogenized_stiffness(assemb, meshperio)
 elif method == 1: 
-    L_eff = Homogen.GetHomogenizedStiffness_2(meshname, L, meshperio=meshperio)
+    L_eff = fd.homogen.get_homogenized_stiffness_2(mesh, L, meshperio=meshperio)
 else:            
     type_el = mesh.elm_type
     # type_el = 'hex20'
@@ -83,33 +78,36 @@ else:
     DStrain = []
     DStress = []
     
-    material = ConstitutiveLaw.ElasticAnisotropic(L, name = 'ElasticLaw')
+    material = fd.constitutivelaw.ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
-    WeakForm.StressEquilibrium("ElasticLaw")
-    assemb = Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
+    fd.weakform.StressEquilibrium("ElasticLaw")
+    assemb = fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
     
     #Type of problem
-    pb = Problem.Linear("Assembling")
+    pb = fd.problem.Linear("Assembling")
     
     #Shall add other conditions later on
-    Problemname = None
-    if dim == 3: 
-        if meshperio:
-            Homogen.DefinePeriodicBoundaryCondition(mesh,
-            [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
-        else:
-            Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
-            [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
-    elif dim == 2: 
-        if meshperio:
-            Homogen.DefinePeriodicBoundaryCondition(mesh,
-            [StrainNodes[0], StrainNodes[0], StrainNodes[1]],
-            ['DispX',        'DispY',        'DispX'], dim='2D', Problemname = Problemname)            
-        else:
-            assert 0, 'NotImplemented'
+    bc_periodic = fd.constraint.PeriodicBC([StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+                                           ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim = dim, meshperio = meshperio)
+    pb.bc.add(bc_periodic)
+
+    # if dim == 3: 
+    #     if meshperio:
+    #         Homogen.DefinePeriodicBoundaryCondition(mesh,
+    #         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+    #         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
+    #     else:
+    #         Homogen.DefinePeriodicBoundaryConditionNonPerioMesh(mesh,
+    #         [StrainNodes[0], StrainNodes[0], StrainNodes[0], StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+    #         ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = Problemname)
+    # elif dim == 2: 
+    #     if meshperio:
+    #         Homogen.DefinePeriodicBoundaryCondition(mesh,
+    #         [StrainNodes[0], StrainNodes[0], StrainNodes[1]],
+    #         ['DispX',        'DispY',        'DispX'], dim='2D', Problemname = Problemname)            
+    #     else:
+    #         assert 0, 'NotImplemented'
     
     #create a 'result' folder and set the desired ouputs
     if not(os.path.isdir('results')): os.mkdir('results')
@@ -117,36 +115,33 @@ else:
     pb.add_output('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
 
     
-    pb.bc.add('Dirichlet', 'DispX', 0, center, name = 'center')
-    pb.bc.add('Dirichlet', 'DispY', 0, center, name = 'center')
-    if dim ==3:
-        pb.bc.add('Dirichlet', 'DispZ', 0, center, name = 'center')
+    pb.bc.add('Dirichlet', center, 'Disp', 0, name = 'center')
     
     pb.apply_boundary_conditions()
     
-    DofFree = pb._Problem__DofFree
+    DofFree = pb._Problem__dof_free
     MatCB = pb._Problem__MatCB
     
     # typeBC = 'Dirichlet'
     typeBC = 'Neumann'
     for i in range(6):
-        pb.RemoveBC("_Strain")
-        pb.bc.add(typeBC, 'DispX',
-              BC_perturb[i][0], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsXX
-        pb.bc.add(typeBC, 'DispY',
-              BC_perturb[i][1], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsYY        
-        pb.bc.add(typeBC, 'DispX',
-              BC_perturb[i][3], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXY
+        pb.bc.remove("_Strain")
+        pb.bc.add(typeBC, [StrainNodes[0]], 'DispX',
+              BC_perturb[i][0], start_value=0, name = '_Strain')  # EpsXX
+        pb.bc.add(typeBC, [StrainNodes[0]], 'DispY',
+              BC_perturb[i][1], start_value=0, name = '_Strain')  # EpsYY        
+        pb.bc.add(typeBC, [StrainNodes[1]], 'DispX',
+              BC_perturb[i][3], start_value=0, name = '_Strain')  # EpsXY
         
         if dim == 3:         
-            pb.bc.add(typeBC, 'DispZ',
-                  BC_perturb[i][2], [StrainNodes[0]], initialValue=0, name = '_Strain')  # EpsZZ        
-            pb.bc.add(typeBC, 'DispY',
-                  BC_perturb[i][4], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsXZ
-            pb.bc.add(typeBC, 'DispZ',
-                  BC_perturb[i][5], [StrainNodes[1]], initialValue=0, name = '_Strain')  # EpsYZ
+            pb.bc.add(typeBC, [StrainNodes[0]], 'DispZ',
+                  BC_perturb[i][2], start_value=0, name = '_Strain')  # EpsZZ        
+            pb.bc.add(typeBC, [StrainNodes[1]], 'DispY',
+                  BC_perturb[i][4], start_value=0, name = '_Strain')  # EpsXZ
+            pb.bc.add(typeBC, [StrainNodes[1]], 'DispZ',
+                  BC_perturb[i][5], start_value=0, name = '_Strain')  # EpsYZ
         else:
-            pb.bc.add('Dirichlet', 'DispY', 0, StrainNodes[1], name = '_Strain')
+            pb.bc.add('Dirichlet', StrainNodes[1], 'DispY', 0, name = '_Strain')
 
         
         pb.apply_boundary_conditions()
@@ -154,22 +149,22 @@ else:
         pb.solve()
         pb.save_results(i)
 
-        X = pb.GetX()  # alias
+        X = pb.get_X()  
         if dim == 3: 
-            DStrain.append(np.array([pb._global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispZ')[StrainNodes[0]],
-                                      pb._global_vectorComponent(X, 'DispX')[StrainNodes[1]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[1]], pb._global_vectorComponent(X, 'DispZ')[StrainNodes[1]]]))        
+            DStrain.append(np.array([pb._get_vect_component(X, 'DispX')[StrainNodes[0]], pb._get_vect_component(X, 'DispY')[StrainNodes[0]], pb._get_vect_component(X, 'DispZ')[StrainNodes[0]],
+                                      pb._get_vect_component(X, 'DispX')[StrainNodes[1]], pb._get_vect_component(X, 'DispY')[StrainNodes[1]], pb._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
     
-            F = MatCB.T @ pb.GetA() @ MatCB @ X[DofFree]
+            F = MatCB.T @ pb.get_A() @ MatCB @ X[DofFree]
         
             F = F.reshape(3, -1)
             stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
         
             DStress.append(stress)
         elif dim == 2:
-            DStrain.append(np.array([pb._global_vectorComponent(X, 'DispX')[StrainNodes[0]], pb._global_vectorComponent(X, 'DispY')[StrainNodes[0]], 0,
-                                     pb._global_vectorComponent(X, 'DispX')[StrainNodes[1]], 0, 0]))        
+            DStrain.append(np.array([pb._get_vect_component(X, 'DispX')[StrainNodes[0]], pb._get_vect_component(X, 'DispY')[StrainNodes[0]], 0,
+                                     pb._get_vect_component(X, 'DispX')[StrainNodes[1]], 0, 0]))        
     
-            F = MatCB.T @ pb.GetA() @ MatCB @ X[DofFree]
+            F = MatCB.T @ pb.get_A() @ MatCB @ X[DofFree]
         
             F = F.reshape(2, -1)
             stress = [F[0, -2], F[1, -2], 0, F[0, -1], 0, 0]

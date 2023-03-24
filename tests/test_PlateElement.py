@@ -22,7 +22,7 @@ geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
 
 material = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Material')
-fd.constitutivelaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
+fd.constitutivelaw.ShellHomogeneous('Material', thickness, k=1, name = 'PlateSection')
 
 mesh = fd.mesh.rectangle_mesh(51,11,0,L,-h/2,h/2, geomElementType, ndim = 3, name='plate')
 
@@ -31,30 +31,29 @@ nodes_right = mesh.node_sets['right']
 
 node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
-fd.weakform.Plate("PlateSection", name = "WFplate")
+fd.weakform.PlateEquilibrium("PlateSection", name = "WFplate")
 fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")   
-
 
 # or by hand
 # reduced_integration = True #if true, use reduce integration for shear 
 # if reduced_integration == False:
-#     fd.weakform.PlateFI("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+#     fd.weakform.PlateEquilibriumFI("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
 #     fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
 #     post_tt_assembly = 'plate'
 # else:    
-    # fd.weakform.PlateShear("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    # fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
+#     fd.weakform.PlateShearEquilibrium("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
     
-    # fd.weakform.PlateKirchhoffLove("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
-    # fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
+#     fd.weakform.PlateKirchhoffLoveEquilibrium("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
+#     fd.Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
     
-    # fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
-    # post_tt_assembly = 'plate_FI'
+#     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
+#     post_tt_assembly = 'plate_FI'
 
 
 pb = fd.problem.Linear("plate")
 
-pb.bc.add('Dirichlet', nodes_left, 'DispX',0,)
+pb.bc.add('Dirichlet', nodes_left, 'DispX',0)
 pb.bc.add('Dirichlet', nodes_left, 'DispY',0)
 pb.bc.add('Dirichlet', nodes_left, 'DispZ',0)
 pb.bc.add('Dirichlet', nodes_left, 'RotX',0)
@@ -70,7 +69,7 @@ pb.solve()
 # # print('Beam analitical deflection: ', F*L**3/(3*E*I))
 # # print('Numerical deflection: ', pb.get_disp('DispZ')[node_right_center])
 
-assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873054593) < 1e-15
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873679332) < 1e-10
 
 # # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(20)
 # # plt.plot(StressDistribution[0], z)

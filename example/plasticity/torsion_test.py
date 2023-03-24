@@ -62,12 +62,12 @@ else:
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name ="wf")
 # WeakForm.StressEquilibriumUL("ConstitutiveLaw")
 
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create("wf", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 #node set for boundary conditions
 left = mesh.find_nodes('X',0)

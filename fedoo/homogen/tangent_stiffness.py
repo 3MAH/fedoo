@@ -55,12 +55,14 @@ def get_homogenized_stiffness(assemb,meshperio=True, **kargs):
        mesh.remove_nodes(StrainNodes)
        del mesh.node_sets['_StrainNodes']
        
-    del pb.get_all()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
+    # del pb.get_all()['_perturbation'] #erase the perturbation problem in case of homogenized stiffness is required for another mesh
 
     return C
 
 
 def get_homogenized_stiffness_2(mesh, L, meshperio=True, Problemname =None, **kargs):
+    
+    print("WARNING: get_homogenized_stiffness_2 will be deleted in future versions of fedoo. Use get_homogenized_stiffness instead after building an Assembly object.")
     #################### PERTURBATION METHODE #############################
 
     solver = kargs.get('solver', 'direct')
@@ -97,7 +99,7 @@ def get_homogenized_stiffness_2(mesh, L, meshperio=True, Problemname =None, **ka
     ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
-    InternalForce("ElasticLaw")
+    StressEquilibrium("ElasticLaw")
     Assembly("ElasticLaw", mesh, type_el, name ="Assembling")
 
     #Type of problem
@@ -199,10 +201,15 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
         A.resize(np.array(pb.get_A().shape)+6)
     # StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
     
+    if "_perturbation" in pb.get_all() and Problem["_perturbation"].mesh is not mesh:
+        #if required an option could be added to delete '_perturbation' in case the mesh may change
+        print('WARNING: delete old "_perturbation" problem that is related to another mesh')
+        del pb.get_all()['_perturbation']
+    
     if "_perturbation" not in pb.get_all():
         #initialize perturbation problem 
         pb_post_tt = Problem(0,0,0, mesh, name = "_perturbation")
-        pb_post_tt.set_solver('cg')
+        pb_post_tt.set_solver(solver)
         
         pb.make_active()
         
@@ -266,30 +273,3 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
         
     return C
 
-
-
-# # ############# CONDENSATION METHOD -> a tester si besoin ##################
-# Compute the stress
-
-# Fext_b = Problem.get_ext_forces('Disp')[:,boundary_nodes] #Get the external reaction on boundary nodes
-# MeanStress2 = (1/Volume)* D@Fext_b.ravel()
-
-# #Compute tangent matrix
-# K = Assembly.get_all()['Assembling'].get_global_matrix()    #Get global FE assembly matrix
-
-
-# Kbb = K[dof_boundary][:,dof_boundary]
-# Kaa = K[dof_internal][:,dof_internal]
-# Kab = K[dof_internal][:,dof_boundary]
-# Kba = K[dof_boundary][:,dof_internal]
-
-# Condensed_Kbb = (Kbb - Kba @sparse.linalg.inv(Kaa)@ Kab).todense() #matrix should be almost dense
-
-# #macroscopic tangent matrix
-# # C = (1/Volume)* D@ Condensed_Kbb @ D.T #linear BC
-# C = (1/Volume)*Q@np.linalg.pinv(P @ np.linalg.pinv(Condensed_Kbb) @ P.T)@Q.T
-# print(C-Cref)
-# ####################################################
-
-    
-    

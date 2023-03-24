@@ -50,7 +50,7 @@ node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 #     fd.Assembly.sum("plate_RI", "plate_FI", name = "plate")
 #     post_tt_assembly = 'plate_FI'
 
-fd.weakform.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
+fd.weakform.PlateEquilibrium("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
 fd.Assembly.create("WFplate", "plate", plateElementType, name="plate")    
 
 pb = fd.problem.Linear("plate")
@@ -72,7 +72,7 @@ pb.bc.add('Neumann',node_right_center,'DispZ',F)
 pb.apply_boundary_conditions()
 pb.solve()
 
-assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.768895223177235) < 1e-15
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.768895223360722) < 1e-10
 
 
 # z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)

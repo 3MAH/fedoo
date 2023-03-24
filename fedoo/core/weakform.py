@@ -222,7 +222,17 @@ class ListConstitutiveLaw(ConstitutiveLaw):
 #=============================================================
 class WeakFormSum(WeakFormBase):
     
-    def __init__(self, list_weakform, name =""):    
+    def __init__(self, list_weakform, name =""):
+        #if there is WeakFormSum object in the list, upack it in the new WeakFormSum
+        if any([isinstance(wf, WeakFormSum) for wf in list_weakform]): 
+            l_wf = []
+            for wf in list_weakform:
+                if isinstance(wf, WeakFormSum):
+                    l_wf.extend(wf.list_weakform)
+                else:
+                    l_wf.append(wf)
+            list_weakform = l_wf
+                
         assert len(set([a.space for a in list_weakform])) == 1, \
             "Sum of assembly are possible only if all assembly are associated to the same modeling space"
         WeakFormBase.__init__(self, name, space = list_weakform[0].space)        
