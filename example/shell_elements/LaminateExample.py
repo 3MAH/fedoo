@@ -2,12 +2,11 @@
 # Plate element to model the canteleaver beam using different kind of plate elements
 #
 
-from fedoo import *
-import numpy as np
+import fedoo as fd
 from matplotlib import pylab as plt
 import os 
 
-ModelingSpace("3D")
+fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
 
@@ -16,18 +15,18 @@ h = 20
 thickness = 1
 F = -100
 
-geomElementType = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
-plateElementType = 'p'+geomElementType #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = False #if true, use reduce integration for shear 
-saveResults = True
+geom_elm_type = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
+plate_elm_type = 'p'+geom_elm_type #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
+reduced_integration = 'auto' #choose among True, False and 'auto'. if True, use reduce integration for shear. 
+save_results = True
 
-mat1 = ConstitutiveLaw.ElasticIsotrop(E, nu, name = 'Mat1')
-mat2 = ConstitutiveLaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
+mat1 = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Mat1')
+mat2 = fd.constitutivelaw.ElasticIsotrop(E/10, nu, name = 'Mat2')
 
 # ConstitutiveLaw.ShellHomogeneous('Material', thickness, name = 'PlateSection')
-ConstitutiveLaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], name = 'PlateSection')
+fd.constitutivelaw.ShellLaminate(['Mat1', 'Mat2', 'Mat1'], [0.2,1,0.2], name = 'PlateSection')  #by default k=1 i.e. with shear effect
 
-mesh = Mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geomElementType, name='plate', ndim = 3)
+mesh = fd.mesh.rectangle_mesh(201,21,0,L,-h/2,h/2, geom_elm_type, name='plate', ndim = 3)
 
 nodes_left = mesh.node_sets['left']
 nodes_right = mesh.node_sets['right']
@@ -35,40 +34,34 @@ nodes_right = mesh.node_sets['right']
 node_right_center = nodes_right[(mesh.nodes[nodes_right,1]**2).argmin()]
 
 
-if reduced_integration == False:
-    WeakForm.Plate("PlateSection", name = "WFplate") #by default k=0 i.e. no shear effect
-    Assembly.create("WFplate", "plate", plateElementType, name="plate")    
+if reduced_integration == 'auto':
+    fd.weakform.PlateEquilibrium("PlateSection", name = "WFplate")
+elif reduced_integration:   
+    #selective integration: reduced integration for shear terms and full integration for flexural terms
+    fd.weakform.PlateEquilibriumSI("PlateSection", name = "WFplate") 
 else:    
-    WeakForm.Plate_RI("PlateSection", name = "WFplate_RI") #by default k=0 i.e. no shear effect
-    Assembly.create("WFplate_RI", "plate", plateElementType, name="plate_RI", n_elm_gp = 1)    
-    
-    WeakForm.Plate_FI("PlateSection", name = "WFplate_FI") #by default k=0 i.e. no shear effect
-    Assembly.create("WFplate_FI", "plate", plateElementType, name="plate_FI") 
-    
-    Assembly.Sum("plate_RI", "plate_FI", name = "plate", assembly_output = 'plate')
+    #full integration
+    fd.weakform.PlateEquilibriumFI("PlateSection", name = "WFplate") 
 
+fd.Assembly.create("WFplate", "plate", plate_elm_type, name="plate")    
 
-Problem.Linear("plate")
+pb = fd.problem.Linear("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.add_output('results/simplePlate', 'plate', ['disp','rot', 'stress', 'strain'], output_type='Node', file_format ='vtk', position = -1)    
+pb.add_output('results/simplePlate', 'plate', ['Disp','Rot', 'Stress', 'Strain'], output_type='Node', file_format ='vtk', position = -1)    
 
 
-Problem.bc.add('Dirichlet','DispX',0,nodes_left)
-Problem.bc.add('Dirichlet','DispY',0,nodes_left)
-Problem.bc.add('Dirichlet','DispZ',0,nodes_left)
-Problem.bc.add('Dirichlet','RotX',0,nodes_left)
-Problem.bc.add('Dirichlet','RotY',0,nodes_left)
-Problem.bc.add('Dirichlet','RotZ',0,nodes_left)
+pb.bc.add('Dirichlet',nodes_left,'Disp',0) 
+pb.bc.add('Dirichlet',nodes_left,'Rot',0)
 
-Problem.bc.add('Neumann','DispZ',F,node_right_center)
+pb.bc.add('Neumann',node_right_center, 'DispZ',F)
 
-Problem.apply_boundary_conditions()
-Problem.solve()
+pb.apply_boundary_conditions()
+pb.solve()
 
-if saveResults == True: 
-    Problem.save_results() #save in vtk
+if save_results == True: 
+    pb.save_results() #save in vtk
 
-z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)
+z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(200)
 plt.plot(StressDistribution[0], z)

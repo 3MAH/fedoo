@@ -57,7 +57,7 @@ class ShellBase(ConstitutiveLaw):
     
     def get_strain(self, **kargs):
         """
-        Return the last computational strain using the Update method
+        Return the last computed strain using the Update method
 
         Optional parameters
         ------------------------

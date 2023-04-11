@@ -1,19 +1,18 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 import os
 
 #Define the Modeling Space - Here 2D problem with plane stress assumption.
-ModelingSpace("2Dplane", 'macro_space') 
-ModelingSpace("3D", 'micro_space') 
+fd.ModelingSpace("2Dplane", 'macro_space') 
+fd.ModelingSpace("3D", 'micro_space') 
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
-mesh_macro = Mesh.hole_plate_mesh(Nx=3, Ny=3, Lx=100, Ly=100, R=20, \
-	ElementShape = 'quad4', name ="macro") 
+mesh_macro = fd.mesh.hole_plate_mesh(nx=3, ny=3, length=100, height=100, radius=20, \
+	elm_type = 'quad4', name ="macro") 
     
-Mesh.import_file('octet_surf.msh', meshname = "micro")
-mesh_micro = Mesh.get_all()['micro2']
+mesh_micro = fd.mesh.import_file('octet_surf.msh', name = "micro")['tet4']
 
-# Util.meshPlot2d("macro")
+# fd.util.meshPlot2d("macro")
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
 
@@ -26,28 +25,28 @@ m=0.25
 uimp = -5
 
 props = np.array([[E, nu, alpha, Re,k,m]])
-Material = ConstitutiveLaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+Material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
 
-WeakForm.StressEquilibrium("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
+fd.weakform.StressEquilibrium("ConstitutiveLaw", name = 'micro_wf', space = 'micro_space') 
 
-micro_assembly = Assembly.create('micro_wf', mesh_micro)
+micro_assembly = fd.Assembly.create('micro_wf', mesh_micro)
 
-micro_cells = ConstitutiveLaw.FE2(micro_assembly, name='FEM')
+micro_cells = fd.constitutivelaw.FE2(micro_assembly, name='FEM')
 
 #Create the weak formulation of the mechanical equilibrium equation
-WeakForm.StressEquilibrium("FEM", name = "WeakForm") 
+fd.weakform.StressEquilibrium("FEM", name = "WeakForm") 
 
 #Create a global assembly
-Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
+fd.Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
-Problem.NonLinear("Assembly")
+pb = fd.problem.NonLinear("Assembly")
 # Problem.set_nr_criterion("Displacement")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-Problem.add_output('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
-Problem.add_output('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
+pb.add_output('results/FE2', 'Assembly', ['disp', 'stress', 'strain', 'stress_vm', 'wm'], output_type='Node', file_format ='vtk')    
+pb.add_output('results/FE2', 'Assembly', ['stress', 'stress', 'stress_vm'], output_type='Element', file_format ='vtk')    
 
 #output result for a random micro cell (here for the 5th integration point)
 #Warning : the results of micro_cells are automatically saved at each NR iteration (several iteration per time iteration)
@@ -63,18 +62,18 @@ bottom = np.where(crd[:,1] == np.min(crd[:,1]))[0]
 
 #Boundary conditions
 #symetry condition on left (ux = 0)
-Problem.bc.add('Dirichlet','DispX',    0  , left) 
+pb.bc.add('Dirichlet','DispX',    0  , left) 
 #symetry condition on bottom edge (ux = 0)
-Problem.bc.add('Dirichlet','DispY',    0  , bottom) 
+pb.bc.add('Dirichlet','DispY',    0  , bottom) 
 #displacement on right (ux=0.1mm)
-Problem.bc.add('Dirichlet','DispX', 0.1, right) 
+pb.bc.add('Dirichlet','DispX', 0.1, right) 
 
-Problem.apply_boundary_conditions()
+pb.apply_boundary_conditions()
 
 #Solve problem
-Problem.nlsolve()
+fd.problem.nlsolve()
 
 #---------- Post-Treatment ----------
 #Get the stress tensor, strain tensor, and displacement (nodal values)
-res_nd = Problem.get_results("Assembly", ['Stress_VM','Strain'], 'Node')
-U = Problem.get_disp()
+res_nd = pb.get_results("Assembly", ['Stress_VM','Strain'], 'Node')
+U = pb.get_disp()
