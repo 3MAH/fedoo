@@ -90,7 +90,9 @@ class ListBC(BCBase):
                 if bc.name == items: return bc            
         
         return (self.data + self.data_end)[items]
-            
+    
+    def __delitem__(self, idx):
+        self.remove(idx)
     
     def str_condensed(self):
         """Return a condensed one line str describing the object"""
@@ -132,10 +134,11 @@ class ListBC(BCBase):
             if bc < len(self.data): del self.data[bc]
             else: del self.data_end[bc-len(self.data)]
         elif isinstance(bc, str):
-            for item in self.data:
-                if item.name == bc: del item
-            for bc in self.data_end:
-                if item.name == bc: del item
+            for count,item in enumerate(self.data): 
+                if item.name == bc: 
+                    del self.data[count]
+            for count,item in enumerate(self.data_end):
+                if item.name == bc: del self.data_end[count]
         else:
             try:
                 self.data.remove(bc)
@@ -168,9 +171,12 @@ class ListBC(BCBase):
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
             self.append(args[0])
+            return args[0]
         else:  # define a boundary condition
             kargs['space'] = self._problem.space
-            self.append(BoundaryCondition.create(*args, **kargs))
+            bc = BoundaryCondition.create(*args, **kargs)
+            self.append(bc)
+            return bc
 
     def mpc(self, *args, **kargs):
         self.append(MPC(*args, **kargs))

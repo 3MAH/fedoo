@@ -25,17 +25,13 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
     class __Newmark(libBase):    
             
         def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name):
-                    
+
             if DampingAssembling is 0:
                 A = StiffnessAssembling.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembling.get_global_matrix()
             else:
                 A = StiffnessAssembling.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembling.get_global_matrix() + Gamma/(Beta*TimeStep)*DampingAssembling.get_global_matrix()
-                
-            B = 0 ; D = 0
             
-            self.__Xold    = self._new_vect_dof(A) #displacement at the previous time step        
-            self.__Xdot    = self._new_vect_dof(A)
-            self.__Xdotdot = self._new_vect_dof(A)
+            B = 0 ; D = 0
             
             self.__Beta       = Beta
             self.__Gamma      = Gamma
@@ -46,7 +42,11 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
             if DampingAssembling == 0: self.__DampMatrix = 0
             else: self.__DampMatrix = DampingAssembling.get_global_matrix()
             
-            libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
+            libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name, StiffnessAssembling.space)
+            
+            self.__Xold    = self._new_vect_dof() #displacement at the previous time step        
+            self.__Xdot    = self._new_vect_dof()
+            self.__Xdotdot = self._new_vect_dof()
     
         def __UpdateA(self): #internal function to be used when modifying M, K or C
             if self.__DampMatrix is 0:
@@ -63,7 +63,7 @@ def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, Damping
         def get_Xdotdot(self):
             return self.__Xdotdot
     
-        def get_disp(self, name = 'all'): #same as get_X
+        def get_disp(self, name = 'Disp'): #same as get_X
             return self.get_dof_solution(name)        
                
         def GetVelocity(self): #same as get_Xdot

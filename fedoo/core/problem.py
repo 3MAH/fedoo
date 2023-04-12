@@ -37,7 +37,8 @@ class Problem(ProblemBase):
         self.__dof_free    = np.array([])
         
         #prepering output demand to export results
-        self.__ProblemOutput = _ProblemOutput()        
+        self._problem_output = _ProblemOutput()
+        self.state_variables = {}
 
     def _new_vect_dof(self): #initialize a vector (force vector for instance) whose size is n_dof
         return np.zeros(self.n_dof)     
@@ -72,10 +73,10 @@ class Problem(ProblemBase):
             return vector[i*n : (i+1)*n]   
 
     def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='npz', position = 1):
-        return self.__ProblemOutput.add_output(filename, assemblyname, output_list, output_type, file_format, position)            
+        return self._problem_output.add_output(filename, assemblyname, output_list, output_type, file_format, position)            
 
     def save_results(self, iterOutput=None):
-        self.__ProblemOutput.save_results(self, iterOutput)
+        self._problem_output.save_results(self, iterOutput)
 
     def get_results(self, assemb, output_list, output_type=None, position = 1):        
         return _get_results(self, assemb, output_list, output_type, position)
@@ -131,7 +132,7 @@ class Problem(ProblemBase):
     def get_dof_solution(self,name='all'): #solution of the problem (same as get_X for linear problems if name=='all')
         return self._get_vect_component(self.__X, name) 
 
-    def set_DoFSolution(self,name,value):
+    def set_dof_solution(self,name,value):
         self._set_vect_component(self.__X, name, value)          
        
 
@@ -278,7 +279,7 @@ class Problem(ProblemBase):
 
     @property
     def results(self):
-        return self.__ProblemOutput.data_sets
+        return self._problem_output.data_sets
 
     @property
     def n_dof(self):

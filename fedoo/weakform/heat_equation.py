@@ -131,7 +131,7 @@ class TemperatureTimeDerivative(WeakFormBase):
 
     def get_weak_equation(self, mesh=None):      
         
-        rho_c = self.__ConstitutiveLaw.density * self.__ConstitutiveLaw.specific_heat        
+        rho_c = self.__ConstitutiveLaw.density * self.__ConstitutiveLaw.specific_heat
         
         op_temp = self.space.variable('Temp') #temperature increment (incremental weakform)
         #steady state should not include the following term

@@ -1,33 +1,16 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.pgd.ProblemPGD import ProblemPGD
 import scipy.sparse as sparse
 
-def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling = 0, name = "MainProblem"):
-    """
-    Define a Centred Difference problem for structural dynamic
-    For damping, the backward euler derivative is used to compute the velocity
-    The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
-    """
-        
-    if isinstance(StiffnessAssembling,str):
-        StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
+def _GenerateClass_ExplicitDynamic(lib_base):
+    
+    class __ExplicitDynamic(lib_base):
                 
-    if isinstance(MassAssembling,str):
-        MassAssembling = Assembly.get_all()[MassAssembling]
-        
-    if isinstance(DampingAssembling,str):
-        DampingAssembling = Assembly.get_all()[DampingAssembling]
+        def __init__(self, StiffnessAssembly, MassAssembly , TimeStep, DampingAssembly, name):  
 
-    if hasattr(StiffnessAssembling.mesh, 'GetListMesh'): libBase = ProblemPGD
-    else: libBase = Problem
-
-
-    class __ExplicitDynamic(libBase):
-        
-        def __init__(self, StiffnessAssembling, MassAssembling , TimeStep, DampingAssembling, name):  
-
-            A = 1/(TimeStep**2)*MassAssembling.get_global_matrix()   
+            A = 1/(TimeStep**2)*MassAssembly.get_global_matrix()   
             B = 0 ; D = 0
             
             self.__Xold    = self._new_vect_dof(A) #displacement at the previous time step        
@@ -37,22 +20,22 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
             self.__TimeStep   = TimeStep
             self.__MassLuming = False
             
-            self.__MassMatrix  = MassAssembling.get_global_matrix()
-            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
-            if DampingAssembling == 0: self.__DampMatrix = 0
-            else: self.__DampMatrix = DampingAssembling.get_global_matrix()
+            self.__MassMatrix  = MassAssembly.get_global_matrix()
+            self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
+            if DampingAssembly == 0: self.__DampMatrix = 0
+            else: self.__DampMatrix = DampingAssembly.get_global_matrix()
             
-            libBase.__init__(self,A,B,D,StiffnessAssembling.mesh,name)        
+            lib_base.__init__(self,A,B,D,StiffnessAssembly.mesh,name)        
 
         def __UpdateA(self): #internal function to be used when modifying M
             # if MassLumping == True, A is a vector representing the diagonal value
             self.set_A(  self.__MassMatrix         / (self.__TimeStep**2))
 
-        def updateStiffness(self,StiffnessAssembling): #internal function to be used when modifying the siffness matrix
-            if isinstance(StiffnessAssembling,str):
-                StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
+        def updateStiffness(self,StiffnessAssembly): #internal function to be used when modifying the siffness matrix
+            if isinstance(StiffnessAssembly,str):
+                StiffnessAssembly = Assembly.get_all()[StiffnessAssembly]
             
-            self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
+            self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
 
         def MassLumping(self): #internal function to be used when modifying M
             self.__MassLuming = True
@@ -146,3 +129,25 @@ def ExplicitDynamic(StiffnessAssembling, MassAssembling , TimeStep, DampingAssem
 
         def SetMassMatrix(self,e):
             self.__MassMatrix = e
+
+def ExplicitDynamic(StiffnessAssembly, MassAssembly , TimeStep, DampingAssembly = 0, name = "MainProblem"):
+    """
+    Define a Centred Difference problem for structural dynamic
+    For damping, the backward euler derivative is used to compute the velocity
+    The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
+    """        
+   
+    if isinstance(StiffnessAssembly,str):
+        StiffnessAssembly = Assembly.get_all()[StiffnessAssembly]
+                
+    if isinstance(MassAssembly,str):
+        MassAssembly = Assembly.get_all()[MassAssembly]
+        
+    if isinstance(DampingAssembly,str):
+        DampingAssembly = Assembly.get_all()[DampingAssembly]
+
+    if hasattr(StiffnessAssembly.mesh, 'GetListMesh'): lib_base = ProblemPGD
+    else: lib_base = Problem
+
+    __ExplicitDynamic = _GenerateClass_ExplicitDynamic(lib_base)
+    return __ExplicitDynamic(StiffnessAssembly, MassAssembly , TimeStep, DampingAssembly, name)
