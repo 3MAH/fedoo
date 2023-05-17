@@ -22,14 +22,14 @@ _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
 
 _available_format = ['vtk', 'msh', 'npz', 'npz_compressed', 'csv', 'xlsx']
 
-_label_dict = {'pkii':'PKII',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
-                'pkii_vm':'PKII_vm','pk2_vm':'PK2_vm','kirchoff_vm':'Kirchhoff_vm','kirchhoff_vm':'Kirchhoff_vm','cauchy_vm':'Cauchy_vm',
-                'pkii_pc':'PKII_pc', 'pk2_pc':'PK2_pc', 'kirchoff_pc':'Kirchhoff_pc', 'kirchhoff_pc':'Kirchhoff_pc', 'cauchy_pc':'Cauchy_pc', 'stress_pc':'Stress_pc',
-                'pkii_pdir1':'PKII_pdir1', 'pk2_pdir1':'PK2_pdir1', 'kirchoff_pdir1':'Kirchhoff_pdir1', 'kirchhoff_pdir1':'Kirchhoff_pdir1', 'cauchy_pdir1':'Cauchy_pdir1', 'stress_pdir1':'Stress_pdir1',
-                'pkii_pdir2':'PKII_pdir2', 'pk2_pdir2':'PK2_pdir2', 'kirchoff_pdir2':'Kirchhoff_pdir2', 'kirchhoff_pdir2':'Kirchhoff_pdir2', 'cauchy_pdir2':'Cauchy_pdir2', 'stress_pdir2':'Stress_pdir2',
-                'pkii_pdir3':'PKII_pdir3', 'pk2_pdir3':'PK2_pdir3', 'kirchoff_pdir3':'Kirchhoff_pdir3', 'kirchhoff_pdir3':'Kirchhoff_pdir3', 'cauchy_pdir3':'Cauchy_pdir1', 'stress_pdir3':'Stress_pdir3',
-                'disp':'Disp', 'rot':'Rot', 'temp':'Temp', 'strain':'Strain', 'statev':'Statev', 'stress':'Stress', 'stress_vm':'Stress_vm', 'fext':'Fext', 
-                'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global' 
+_label_dict = {'pkii':'PK2',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Stress',
+               'pkii_vm':'PK2_vm','pk2_vm':'PK2_vm','kirchoff_vm':'Kirchhoff_vm','kirchhoff_vm':'Kirchhoff_vm','cauchy_vm':'Stress_vm',
+               'pkii_pc':'PK2_pc', 'pk2_pc':'PK2_pc', 'kirchoff_pc':'Kirchhoff_pc', 'kirchhoff_pc':'Kirchhoff_pc', 'cauchy_pc':'Stress_pc', 'stress_pc':'Stress_pc',
+               'pkii_pdir1':'PK2_pdir1', 'pk2_pdir1':'PK2_pdir1', 'kirchoff_pdir1':'Kirchhoff_pdir1', 'kirchhoff_pdir1':'Kirchhoff_pdir1', 'cauchy_pdir1':'Sress_pdir1', 'stress_pdir1':'Stress_pdir1',
+               'pkii_pdir2':'PK2_pdir2', 'pk2_pdir2':'PK2_pdir2', 'kirchoff_pdir2':'Kirchhoff_pdir2', 'kirchhoff_pdir2':'Kirchhoff_pdir2', 'cauchy_pdir2':'Stress_pdir2', 'stress_pdir2':'Stress_pdir2',
+               'pkii_pdir3':'PK2_pdir3', 'pk2_pdir3':'PK2_pdir3', 'kirchoff_pdir3':'Kirchhoff_pdir3', 'kirchhoff_pdir3':'Kirchhoff_pdir3', 'cauchy_pdir3':'Stress_pdir1', 'stress_pdir3':'Stress_pdir3',
+               'disp':'Disp', 'rot':'Rot', 'temp':'Temp', 'strain':'Strain', 'statev':'Statev', 'stress':'Stress', 'stress_vm':'Stress_vm', 'fext':'Fext', 
+               'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global' 
 }
 
 #  {'pkii':', save_mesh = FalsePKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
@@ -62,7 +62,7 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             else:
                 assemb = assemb.assembly_output
                 
-        material = assemb.weakform.constitutivelaw
+        sv = assemb.sv #state variables associated to the assembly
         
         result = DataSet(assemb.mesh)
                     
@@ -71,38 +71,40 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data = pb.get_dof_solution(res)
                 data_type = 'Node'
                 
-            # if res == 'Disp':
-            #     data = pb.get_disp()
-            #     data_type = 'Node'                               
-            
-            # elif res == 'Rot':            
-            #     data = pb.get_rot()
-            #     data_type = 'Node'                               
-                            
-            # elif res == 'Temp':            
-            #     data = pb.get_temp()
-            #     data_type = 'Node'
-                
             elif res == 'Fext':
                 # data = assemb.get_ext_forces(pb.get_dof_solution())
                 data = pb.get_ext_forces().reshape(pb.space.nvar,-1)
                 data_type = 'Node'
                                                 
-            elif res in ['PKII', 'PK2', 'Kirchhoff', 'Cauchy','Strain', 'Stress']:
+            elif res in ['PK2', 'Kirchhoff', 'Strain', 'Stress']:
                 if res in data_sav: 
                     data = data_sav[res] #avoid a new data conversion
                 else:
-                    if res in ['PKII','PK2']:
-                        data = material.get_pk2()
-                    elif res == 'Stress':
-                        #stress for small displacement
-                        data = material.get_stress(position = position)
-                    elif res == 'Kirchhoff':
-                        data = material.get_kirchhoff()
-                    elif res == 'Cauchy':
-                        data = material.get_cauchy()
-                    elif res == 'Strain':
-                        data = material.get_strain(position = position)                                                
+                    if res in sv: 
+                        data = sv[res]
+                    else: 
+                        #attent to compute
+                        try:
+                            if res == 'Strain': 
+                                data = assemb.weakform.constitutivelaw.get_strain(assemb, position=position)
+                            elif res == 'Stress':
+                                data = assemb.weakform.constitutivelaw.get_stress(assemb, position=position)
+                            else: assert 0
+                        except: 
+                            raise NameError('Field "{}" not available'.format(res))
+                    
+                    # if res in ['PK2']:
+                    #     data = sv['PK2']
+                    # elif res == 'Stress':
+                    #     #stress for small displacement
+                    #     data = sv['Stress']
+                    #     # data = material.get_stress(position = position)
+                    # elif res == 'Kirchhoff':
+                    #     data = sv['Stress']
+                    # elif res == 'Cauchy':
+                    #     data = material.get_cauchy()
+                    # elif res == 'Strain':
+                    #     data = material.get_strain(position = position)                                                
                                                             
                     #keep data in memory in case it may be used later for vm, pc or pdir stress computation
                     data_sav[res] = data
@@ -115,28 +117,30 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 
                 data = np.array(data)                
                                         
-            elif res in ['PKII_vm', 'PK2_vm', 'Kirchhoff_vm', 'Cauchy_vm', 'Stress_vm']:
+            elif res in ['PK2_vm', 'Kirchhoff_vm', 'Stress_vm']:
                 if res[:-3] in data_sav: 
                     data=data_sav[res[:-3]]
                 else:
-                    if res in ['PKII_vm','PK2_vm']:
-                        data = material.get_pk2()
-                    elif res == 'Stress_vm':
-                        data = material.get_stress(position = position)
-                    elif res == 'Kirchhoff_vm':
-                        data = material.get_kirchhoff()
-                    elif res == 'Cauchy_vm':
-                        data = material.get_cauchy()
+                    data = sv[res[:-3]]
+                    
+                    # if res in ['PKII_vm','PK2_vm']:
+                    #     data = material.get_pk2()
+                    # elif res == 'Stress_vm':
+                    #     data = material.get_stress(position = position)
+                    # elif res == 'Kirchhoff_vm':
+                    #     data = material.get_kirchhoff()
+                    # elif res == 'Cauchy_vm':
+                    #     data = material.get_cauchy()
 
                     data_sav[res[:-3]] = data                                                     
 
-                data = data.vonMises()
+                data = data.von_mises()
                 data_type = 'GaussPoint'
                     
-            elif res in ['PKII_pc', 'PK2_pc', 'Kirchhoff_pc', 'Cauchy_pc', 'Stress_pc', 
-                         'PKII_pdir1', 'PK2_pdir1', 'Kirchhoff_pdir1', 'Cauchy_pdir1', 'Stress_pdir1',
-                         'PKII_pdir2', 'PK2_pdir2', 'Kirchhoff_pdir2', 'Cauchy_pdir2', 'Stress_pdir2',
-                         'PKII_pdir3', 'PK2_pdir3', 'Kirchhoff_pdir3', 'Cauchy_pdir3', 'Stress_pdir3']:
+            elif res in ['PK2_pc', 'Kirchhoff_pc', 'Cauchy_pc', 'Stress_pc', 
+                         'PK2_pdir1', 'Kirchhoff_pdir1', 'Cauchy_pdir1', 'Stress_pdir1',
+                         'PK2_pdir2', 'Kirchhoff_pdir2', 'Cauchy_pdir2', 'Stress_pdir2',
+                         'PK2_pdir3', 'Kirchhoff_pdir3', 'Cauchy_pdir3', 'Stress_pdir3']:
                 #stress principal component
                 if res[-3:] == '_pc': measure_type = res[:-3]
                 else: measure_type = res[:-6]
@@ -146,21 +150,22 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                     
                 elif measure_type in data_sav: 
                     data = data_sav[measure_type]
-                    data = data.GetPrincipalStress()
+                    data = data.diagonalize()
                     data_sav[measure_type+'_pc'] = data
                     
-                else:                    
-                    if measure_type in ['PKII','PK2']:
-                        data = material.get_pk2()
-                    elif measure_type == 'Stress':
-                        data = material.get_stress(position = position)
-                    elif measure_type == 'Kirchhoff':
-                        data = material.get_kirchhoff()
-                    elif measure_type == 'Cauchy':
-                        data = material.get_cauchy()
+                else:           
+                    data = sv[measure_type]
+                    # if measure_type in ['PKII','PK2']:
+                    #     data = material.get_pk2()
+                    # elif measure_type == 'Stress':
+                    #     data = material.get_stress(position = position)
+                    # elif measure_type == 'Kirchhoff':
+                    #     data = material.get_kirchhoff()
+                    # elif measure_type == 'Cauchy':
+                    #     data = material.get_cauchy()
                     
                     data_sav[measure_type] = data                        
-                    data = data.GetPrincipalStress()
+                    data = data.diagonalize()
                     data_sav[measure_type+'_pc'] = data
                 
                 if res[-3:] == '_pc': #principal component
@@ -175,12 +180,14 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data_type = 'GaussPoint'
                     
             elif res == 'Statev':
-                data = material.get_statev()
+                data = sv['Statev']
+                # data = material.get_statev()
                 # data = assemb.convert_data(data, None, output_type).T
                 data_type = 'GaussPoint'
             
             elif res in ['Wm']:
-                data = material.get_wm()
+                data = sv['Wm']
+                # data = material.get_wm()
                 # data = assemb.convert_data(data, None, output_type).T
                 data_type = 'GaussPoint'
             

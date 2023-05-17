@@ -100,22 +100,22 @@ class WeakFormBase:
             return NotImplemented
     
     
-    def get_weak_equation(self, mesh=None):
+    def get_weak_equation(self, assembly):
         return NotImplemented
             
     
-    def initialize(self, assembly, pb, t0=0.):
+    def initialize(self, assembly, pb):
         #function called at the very begining of the resolution
         pass
 
 
-    def set_start(self, assembly, pb, dt):
+    def set_start(self, assembly, pb):
         #function called at the begining of a new time increment
         #For now, used only to inform the weak form the the time step for the next increment.
         pass
     
 
-    def update(self, assembly, pb, dtime):
+    def update(self, assembly, pb):
         #function called when the problem is updated (NR loop or time increment)
         #- New initial Stress
         #- New initial Displacement
@@ -187,14 +187,14 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         self._list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
     
-    def initialize(self, assembly, pb, t0=0., nlgeom=False):
+    def initialize(self, assembly, pb):
         for cl in self._list_constitutivelaw:
-            cl.initialize(assembly, pb, t0)
+            cl.initialize(assembly, pb)
 
     
-    def update(self, assembly, pb, dtime):        
+    def update(self, assembly, pb):        
         for cl in self._list_constitutivelaw:
-            cl.update(assembly, pb, dtime)
+            cl.update(assembly, pb)
     
     
     def set_start(self):  
@@ -247,32 +247,32 @@ class WeakFormSum(WeakFormBase):
         self._list_weakform = list_weakform
   
     
-    def get_weak_equation(self, mesh=None):
+    def get_weak_equation(self, assembly, pb):
         Diff = 0
         self._list_mat_lumping = []
         
-        if mesh is None: elm_type = None
-        else: elm_type = mesh.elm_type
+        if assembly.mesh is None: elm_type = None
+        else: elm_type = assembly.mesh.elm_type
         
         for wf in self._list_weakform: 
-            Diff_wf = wf.get_weak_equation(mesh)
+            Diff_wf = wf.get_weak_equation(assembly, pb)
             mat_lumping = wf.assembly_options.get('mat_lumping', elm_type, False) #True of False
             if Diff_wf != 0:
                 self._list_mat_lumping.extend([mat_lumping for i in range(len(Diff_wf.op))]) #generate a list of mat_lumping value for each elementary op
             Diff += Diff_wf            
         return Diff
     
-    def initialize(self, assembly, pb, t0=0.):
+    def initialize(self, assembly, pb):
         for wf in self._list_weakform:
-            wf.initialize(assembly, pb, t0)
+            wf.initialize(assembly, pb)
 
-    def set_start(self, assembly, pb, dt):
+    def set_start(self, assembly, pb):
         for wf in self._list_weakform:
-            wf.set_start(assembly, pb, dt)
+            wf.set_start(assembly, pb)
     
-    def update(self, assembly, pb, dtime):        
+    def update(self, assembly, pb):        
         for wf in self._list_weakform:
-            wf.update(assembly, pb, dtime)
+            wf.update(assembly, pb)
     
     def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step

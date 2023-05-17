@@ -38,7 +38,7 @@ class CompositeUD(ElasticAnisotropic):
 
         self.__parameters = {'Vf':Vf, 'E_f':E_f, 'E_m':E_m, 'nu_f':nu_f, 'nu_m':nu_m, 'angle':angle}   
         
-    def GetEngineeringConstants(self):
+    def get_engineering_constants(self):
         """
         return a dict containing the engineering constants
         """
@@ -66,7 +66,9 @@ class CompositeUD(ElasticAnisotropic):
         
         return {'EX':EL, 'EY':ET, 'EZ':ET, 'GYZ':GTT, 'GXZ':GLT, 'GXY':GLT, 'nuYZ':nuTT, 'nuXZ':nuLT, 'nuXY':nuLT}
 
-    def get_tangent_matrix(self):        
+    def get_tangent_matrix(self, assembly, dimension=None): 
+        if dimension is None: dimension = assembly.space.get_dimension()
+
         Vf = self.__parameters['Vf']
         #carac composites (cf Berthelot)
         #Vf taux de fibres      
@@ -133,11 +135,9 @@ class CompositeUD(ElasticAnisotropic):
             H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
             if len(H.shape) == 3: H = np.rollaxis(H,0,3)
             
-        return H
-        
+        H = self.local2global_H(self._H)
+        if dimension == "2Dstress":
+            return self.get_H_plane_stress(H)
+        else: 
+            return H       
        
-    def initialize(self, assembly, pb, t0 = 0., nlgeom=True):
-        pass
-        # for key in self.__parameters:
-        #     self.__parameters['key'] = assemb.convert_data(data) #convert to gauss point
-            

@@ -36,6 +36,7 @@ class AssemblySum(AssemblyBase):
 
         self.__list_assembly = list_assembly
         self.__assembly_output = kargs.get('assembly_output', None)
+        if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
                         
         self.mesh = list_assembly[0].mesh
 
@@ -58,7 +59,7 @@ class AssemblySum(AssemblyBase):
         if not(compute == 'matrix'):
             self.global_vector = sum([assembly.get_global_vector() for assembly in self.__list_assembly])
     
-    def update(self, pb, dtime=None, compute = 'all'):
+    def update(self, pb, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
         Parameters: 
@@ -67,10 +68,10 @@ class AssemblySum(AssemblyBase):
         """
         if self.__reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
             for assembly in self.__list_assembly:
-                assembly.update(pb,dtime,compute)           
+                assembly.update(pb,compute)           
         else:
             for numAssembly in self.__reload:
-                self.__list_assembly[numAssembly].update(pb,dtime,compute)
+                self.__list_assembly[numAssembly].update(pb,compute)
                     
         if not(compute == 'vector'):         
             self.global_matrix =  sum([assembly.get_global_matrix() for assembly in self.__list_assembly])
@@ -78,23 +79,23 @@ class AssemblySum(AssemblyBase):
             self.global_vector =  sum([assembly.get_global_vector() for assembly in self.__list_assembly]) 
 
 
-    def set_start(self, pb, dt):
+    def set_start(self, pb):
         """
         Apply the modification to the constitutive equation required at each new time increment. 
         Generally used to increase non reversible internal variable
         Assemble the new global matrix. 
         """
         for assembly in self.__list_assembly:
-            assembly.set_start(pb, dt)   
+            assembly.set_start(pb)   
                 
 
-    def initialize(self, pb, t0=0.):
+    def initialize(self, pb):
         """
         reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
         for assembly in self.__list_assembly:
-            assembly.initialize(pb, t0=0.)   
+            assembly.initialize(pb)   
 
     def to_start(self):
         """

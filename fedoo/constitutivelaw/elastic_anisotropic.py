@@ -23,27 +23,45 @@ class ElasticAnisotropic(Mechanical3D):
     def __init__(self, H, name =""):
         Mechanical3D.__init__(self, name) # heritage
 
-        self.__H = H
-        self._stress = 0
-        self._grad_disp = 0            
-    
-    def get_tangent_matrix(self):
-        return self.__H
+        self._H = H
+        # self._stress = 0
+        # self._grad_disp = 0            
 
-    def get_stress(self, **kargs):
-        #alias of GetStress mainly use for small strain displacement problems
-        return (self._stress)
+    def initialize(self, assembly, pb):
+        assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
+
+
+    def update(self, assembly, pb):
+            #linear problem = no need to recompute tangent matrix if it has already been computed
+            if 'TangentMatrix' in assembly.sv: 
+                H = assembly.sv['TangentMatrix'] 
+            else:             
+                H = self.get_tangent_matrix(assembly)
+                assembly.sv['TangentMatrix'] = H
+            
+            TotalStrain = assembly.sv['Strain']        
+            assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+            
+       
+    def get_stress_from_strain(self, assembly, strain_tensor):     
+        H = self.get_tangent_matrix(assembly)
+        
+        sigma = StressTensorList([sum([strain_tensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
+
+        return sigma # list of 6 objets 
     
-    def get_pk2(self):
-        #alias of GetPKII mainly use for small strain displacement problems
-        return self._stress
-    
-    def get_cauchy(self):
-        #alias of GetStress mainly use for small strain displacement problems
-        return self._stress
-    
-    def get_strain(self, **kargs):
-        return self.__currentStrain
+        
+    def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
+        if dimension is None: dimension = assembly.space.get_dimension()
+        
+        H = self.local2global_H(self._H)
+        if dimension == "2Dstress":
+            return self.get_H_plane_stress(H)
+        else: 
+            return H            
+
+    def get_elastic_matrix(self, dimension = "3D"):
+        return self.get_tangent_matrix(None,dimension)
     
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
     #     displacement = pb.get_dof_solution()                
@@ -52,47 +70,10 @@ class ElasticAnisotropic(Mechanical3D):
     #     else:
     #         return assembly.get_strain(displacement, type_output)  
     
-    
-    def get_disp_grad(self):
-        return self._grad_disp          
-    
-    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
-        if self._dimension is None:   
-            self._dimension = assembly.space.get_dimension()
-        self.nlgeom = nlgeom
-    
-    def update(self,assembly, pb, dtime):
-        displacement = pb.get_dof_solution()
-        
-        if displacement is 0: 
-            self._grad_disp = 0
-            self._stress = 0                        
-        else:
-            self._grad_disp = assembly.get_grad_disp(displacement, "GaussPoint")
-
-            GradValues = self._grad_disp #alias
-            if self.nlgeom == False:
-                Strain  = [GradValues[i][i] for i in range(3)] 
-                Strain += [GradValues[0][1] + GradValues[1][0], GradValues[0][2] + GradValues[2][0], GradValues[1][2] + GradValues[2][1]]
-            else:            
-                Strain  = [GradValues[i][i] + 0.5*sum([GradValues[k][i]**2 for k in range(3)]) for i in range(3)] 
-                Strain += [GradValues[0][1] + GradValues[1][0] + sum([GradValues[k][0]*GradValues[k][1] for k in range(3)])] 
-                Strain += [GradValues[0][2] + GradValues[2][0] + sum([GradValues[k][0]*GradValues[k][2] for k in range(3)])]
-                Strain += [GradValues[1][2] + GradValues[2][1] + sum([GradValues[k][1]*GradValues[k][2] for k in range(3)])]
-            TotalStrain = StrainTensorList(Strain)
-                
-            self.__currentStrain = TotalStrain                            
        
-            H = self.GetH()
-        
-            self._stress = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
-       
-    def GetStressFromStrain(self, StrainTensor):     
-        H = self.GetH()
-        
-        sigma = StressTensorList([sum([StrainTensor[j]*H[i][j] for j in range(6)]) for i in range(6)])
-
-        return sigma # list of 6 objets 
+    
+    
+    
     
      
                         

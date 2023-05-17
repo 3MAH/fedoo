@@ -7,6 +7,7 @@ Created on Tue Jul  5 10:55:37 2022
 import numpy as np
 import os
 from fedoo.core.mesh import Mesh
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 try:
     from matplotlib import pylab as plt
@@ -204,6 +205,9 @@ class DataSet():
         if component is not None and not(np.isscalar(data)) and len(data.shape)>1: #if data is scalar or 1d array, component ignored
             if component == "norm":
                 data = np.linalg.norm(data, axis = 0)
+            if component == "vm":
+                #Try to compute the von mises stress
+                data = StressTensorList(data).von_mises()
             else:
                 data = data[component]                                            
         
@@ -520,7 +524,7 @@ class MultiFrameDataSet(DataSet):
             DataSet.load(self, data,load_mesh)
 
     
-    def plot(self, field = None, **kargs):                
+    def plot(self, field = None, data_type = None, **kargs):                
         iteration = kargs.pop('iteration', None)
         if iteration is None: 
             if self.loaded_iter is None: 
@@ -528,7 +532,7 @@ class MultiFrameDataSet(DataSet):
         else: 
             self.load(iteration)
                 
-        return DataSet.plot(self, field, **kargs)
+        return DataSet.plot(self, field, data_type, **kargs)
         
         
     def write_movie(self, filename='test', field = None, data_type = None, **kargs):

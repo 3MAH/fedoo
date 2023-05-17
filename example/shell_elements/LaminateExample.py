@@ -49,8 +49,8 @@ pb = fd.problem.Linear("plate")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-pb.add_output('results/simplePlate', 'plate', ['Disp','Rot', 'Stress', 'Strain'], output_type='Node', file_format ='vtk', position = -1)    
-
+# res = pb.add_output('results/simplePlate', 'plate', ['Disp','Rot','Stress', 'Stress_vm'], output_type='Node', file_format ='vtk', position = -1)    
+res = pb.add_output('results/simplePlate', 'plate', ['Disp','Rot','Stress'], file_format ='npz', position = -1)    
 
 pb.bc.add('Dirichlet',nodes_left,'Disp',0) 
 pb.bc.add('Dirichlet',nodes_left,'Rot',0)
@@ -63,5 +63,9 @@ pb.solve()
 if save_results == True: 
     pb.save_results() #save in vtk
 
-z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(200)
+#plot the stress distribution
+z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],200)
 plt.plot(StressDistribution[0], z)
+
+#plot the von mises stress on the lower face 
+res.plot('Stress', component="vm") 

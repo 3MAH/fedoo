@@ -120,10 +120,8 @@ class ParametricBeam(WeakFormBase):
         return [E_S, kG_S, kG_S, G_Jx, E_Iyy, E_Izz]  
 
 
-    def get_weak_equation(self, mesh):
-        
-        if isinstance(mesh, str):
-            mesh = MeshPGD.get_all()[mesh]
+    def get_weak_equation(self, assembly, pb):
+        mesh = assembly.mesh
 
         Ke = self.__GetKe(mesh)            
         eps = self.space.op_beam_strain()

@@ -1,7 +1,7 @@
 #derive de ConstitutiveLaw
 #This law should be used with an InternalForce WeakForm
 
-USE_SIMCOON = True
+USE_SIMCOON = False
 
 if USE_SIMCOON: 
     try:

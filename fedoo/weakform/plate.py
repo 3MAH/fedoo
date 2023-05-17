@@ -60,7 +60,7 @@ class PlateEquilibriumFI(WeakFormBase): #plate weakform whith full integration.
         
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]                
         
-    def get_weak_equation(self, mesh = None):        
+    def get_weak_equation(self, assembly, pb):        
         H = self.constitutivelaw.GetShellRigidityMatrix()
 
         GeneralizedStrain = self.GetGeneralizedStrainOperator()                
@@ -74,13 +74,13 @@ class PlateEquilibriumFI(WeakFormBase): #plate weakform whith full integration.
         
         return diffop
 
-    def update(self, assembly, pb, dtime):
+    def update(self, assembly, pb):
         pass
 
 
 class PlateShearEquilibrium(PlateEquilibriumFI): #weak form of plate shear energy containing only the shear strain energy
 
-    def get_weak_equation(self, mesh = None):   
+    def get_weak_equation(self, assembly, pb):   
         #shear
         H = self.constitutivelaw.GetShellRigidityMatrix_RI()
                 
@@ -95,7 +95,7 @@ class PlateShearEquilibrium(PlateEquilibriumFI): #weak form of plate shear energ
     
 class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI): #plate without shear strain
 
-    def get_weak_equation(self, mesh = None):  
+    def get_weak_equation(self, assembly, pb):  
         #all component but shear, for full integration
         H = self.constitutivelaw.GetShellRigidityMatrix_FI()
         

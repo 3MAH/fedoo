@@ -1,4 +1,4 @@
-from fedoo import *
+import fedoo as fd
 import numpy as np
 from time import time
 import os
@@ -8,7 +8,7 @@ from numpy import linalg
 start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
-ModelingSpace("3D")
+fd.ModelingSpace("3D")
 
 NLGEOM = 2
 typeBending = '3nodes' #'3nodes' or '4nodes'
@@ -22,15 +22,15 @@ alpha = 1e-5 #???
 meshname = "Domain"
 uimp = -8
 
-mesh.box_mesh(Nx=21, Ny=7, Nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
-mesh = Mesh[meshname]
+mesh = fd.mesh.box_mesh(nx=21, ny=7, nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
+
 
 crd = mesh.nodes 
 
 mat =0
 if mat == 0:
-    props = np.array([[E, nu, alpha]])
-    material = constitutivelaw.Simcoon("ELISO", props, 1, name='constitutivelaw')
+    props = np.array([E, nu, alpha])
+    material = fd.constitutivelaw.Simcoon_new("ELISO", props, name='constitutivelaw')
     material.corate = 2
     # material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
@@ -41,8 +41,8 @@ elif mat == 1 or mat == 2:
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
-        props = np.array([[E, nu, alpha, Re,k,m]])
-        material = constitutivelaw.Simcoon("EPICP", props, 8, name='constitutivelaw')
+        props = np.array([E, nu, alpha, Re,k,m])
+        material = fd.constitutivelaw.Simcoon_new("EPICP", props, name='constitutivelaw')
         material.corate = 2
         # material.SetMaskH([[] for i in range(6)])
     
@@ -51,16 +51,16 @@ elif mat == 1 or mat == 2:
         # material.SetMaskH(mask)
 
     elif mat == 2:
-        material = constitutivelaw.ElastoPlasticity(E,nu,Re, name='constitutivelaw')
+        material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='constitutivelaw')
         material.SetHardeningFunction('power', H=k, beta=m)
 else:
-    material = constitutivelaw.ElasticIsotrop(E, nu, name='constitutivelaw')
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='constitutivelaw')
 
 
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
+fd.weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
 # weakform.StressEquilibriumUL("constitutivelaw")
 
 
@@ -78,9 +78,9 @@ else:
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
-pb = problem.NonLinear("Assembling")
+pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
 pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
@@ -90,8 +90,10 @@ pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
-# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
+# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Cauchy', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])    
+res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm'])    
 
 
 ################### step 1 ################################
@@ -102,9 +104,9 @@ bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
 
 pb.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
 
-
-E = np.array(Assembly.get_all()['Assembling'].get_strain(Problem.get_dof_solution(), "GaussPoint", False)).T
-
+E = assemb.sv['Strain'] 
+# E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
+# 
 # ################### step 2 ################################
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
@@ -118,35 +120,39 @@ print(time()-start)
 
 ### plot with pyvista
 
+# print(assemb.sv['TangentMatrix'])
 
+res.plot('Stress','Node', component = 'vm')
+# res.plot('Statev', 'Node', component = 1)
+# res.write_movie('test', 'Stress', component=0)
 
-import pyvista as pv
+# import pyvista as pv
 
-meshplot = pv.read('results/bendingPlastic3D_15.vtk')
-# meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
+# meshplot = pv.read('results/bendingPlastic3D_15.vtk')
+# # meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
 
-pl = pv.Plotter()
-pl.set_background('White')
+# pl = pv.Plotter()
+# pl.set_background('White')
 
-sargs = dict(
-    interactive=True,
-    title_font_size=20,
-    label_font_size=16,
-    color='Black',
-    # n_colors= 10
-)
+# sargs = dict(
+#     interactive=True,
+#     title_font_size=20,
+#     label_font_size=16,
+#     color='Black',
+#     # n_colors= 10
+# )
 
-# cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-#         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-#         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# pl.camera_position = cpos
+# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
+# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
+# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
+# # pl.camera_position = cpos
 
-# pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'Disp', component = 1, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
+# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'Disp', component = 1, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
 
-cpos = pl.show(return_cpos = True)
-# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
+# cpos = pl.show(return_cpos = True)
+# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
 
 

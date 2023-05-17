@@ -60,7 +60,7 @@ class BeamEquilibrium(WeakFormBase):
         
         
     
-    def get_weak_equation(self, mesh = None):
+    def get_weak_equation(self, assembly, pb):
         eps = self.space.op_beam_strain()           
         Ke = self.properties.get_beam_rigidity()
 

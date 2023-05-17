@@ -37,8 +37,7 @@ class Problem(ProblemBase):
         self.__dof_free    = np.array([])
         
         #prepering output demand to export results
-        self._problem_output = _ProblemOutput()
-        self.state_variables = {}
+        self._problem_output = _ProblemOutput()        
 
     def _new_vect_dof(self): #initialize a vector (force vector for instance) whose size is n_dof
         return np.zeros(self.n_dof)     
@@ -226,7 +225,7 @@ class Problem(ProblemBase):
         self.apply_boundary_conditions(self._t_fact, self._t_fact)
         
 
-    def SetInitialBCToCurrent(self):
+    def init_bc_start_value(self):
         ### is used only for incremental problems
         U = self.get_dof_solution() 
         if U is 0: return 
@@ -283,4 +282,5 @@ class Problem(ProblemBase):
 
     @property
     def n_dof(self):
-        return self.mesh.n_nodes * self.space.nvar    
+        return self.mesh.n_nodes * self.space.nvar   
+    

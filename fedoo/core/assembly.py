@@ -93,6 +93,11 @@ class Assembly(AssemblyBase):
         self._assembly_method = 'new' #_assembly_method = 'old' and 'very_old' only used for debug purpose        
         self.__factorize_op = True #option for debug purpose (should be set to True for performance)        
 
+        self.sv = {}
+        """ Dictionary of state variables associated to the associated for the current problem."""
+        self.sv_start = {}
+
+        self._pb = None
 
     def assemble_global_mat(self, compute = 'all'):
         """
@@ -115,7 +120,7 @@ class Assembly(AssemblyBase):
             self.compute_elementary_operators()
                  
         nvar = self.space.nvar
-        wf = self.weakform.get_weak_equation(self.mesh)      
+        wf = self.weakform.get_weak_equation(self,self._pb)      
         
         MatGaussianQuadrature = self._get_gaussian_quadrature_mat()        
         mat_change_of_basis = self.get_change_of_basis_mat()        
@@ -484,55 +489,59 @@ class Assembly(AssemblyBase):
         return Assembly._saved_change_of_basis_mat[mesh]
 
  
-    def initialize(self, pb, t0=0.):
+    def initialize(self, pb):
         """
         Initialize the associated weak form and assemble the global matrix with the elastic matrix
         Parameters: 
-            - t0: the initial time        
+            - pb: the problem associated to the assembly        
         """        
         if self.weakform.constitutivelaw is not None:
-            if hasattr(self.weakform,'nlgeom'): nlgeom = self.weakform.nlgeom
-            else: nlgeom=False
-            self.weakform.constitutivelaw.initialize(self, pb, t0, nlgeom)
+            self.weakform.constitutivelaw.initialize(self, pb)
         
-        self.weakform.initialize(self, pb, t0)
+        self.weakform.initialize(self, pb)
+        
+        self._pb = pb #set the associated problem
                 
 
-    def set_start(self, pb, dt):
+    def set_start(self, pb):
         """
         Apply the modification to the constitutive equation required at each new time increment. 
         Generally used to increase non reversible internal variable
         Assemble the new global matrix. 
         """
+        self.weakform.set_start(self, pb) 
         if self.weakform.constitutivelaw is not None:
-            self.weakform.constitutivelaw.set_start() #should update GetH() method to return elastic rigidity matrix for prediction   
-        self.weakform.set_start(self, pb, dt) 
+            self.weakform.constitutivelaw.set_start(self,pb) #should update GetH() method to return elastic rigidity matrix for prediction   
         self.assemble_global_mat()  
         #no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
         #in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
+        #save statev start values
+        self.sv_start = dict(self.sv) #create a new dict with alias inside (not deep copy)
 
-    def update(self, pb, dtime=None, compute = 'all'):
+    def update(self, pb, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
         Parameters: 
             - pb: a Problem object containing the Dof values
-            - time: the current time        
         """
+        self.weakform.update(self, pb)
         if self.weakform.constitutivelaw is not None:
-            self.weakform.constitutivelaw.update(self, pb, dtime)
-        self.weakform.update(self, pb, dtime)
+            self.weakform.constitutivelaw.update(self, pb)
         self.current.assemble_global_mat(compute)
 
-    def to_start(self):
+    def to_start(self, pb):
         """
         reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
+        self.weakform.to_start(self, pb)
         if self.weakform.constitutivelaw is not None:
-            self.weakform.constitutivelaw.to_start()
-        self.weakform.to_start()
+            self.weakform.constitutivelaw.to_start(self, pb)
         # self.assemble_global_mat(compute='all')
-
+        
+        #replace statev with the start values
+        self.sv = dict(self.sv_start)
+        
  
     def reset(self):
         """
@@ -540,10 +549,14 @@ class Assembly(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         and stored global matrix and vector are deleted
         """
+        self.weakform.reset()            
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.reset()
-        self.weakform.reset()    
         self.delete_global_mat()
+        
+        #remove all state variables
+        self.sv = {} 
+        self.sv_start = {}
 
     @staticmethod
     def delete_memory():
@@ -1027,7 +1040,7 @@ class Assembly(AssemblyBase):
                    if CoordinateSystem == 'global' the result is given in the global coordinate system (default)
         """
         
-        operator = self.weakform.get_weak_equation(self.mesh)
+        operator = self.weakform.get_weak_equation(self, None)
         mesh = self.mesh
         nvar = self.space.nvar
         dim = self.space.ndim
@@ -1124,6 +1137,10 @@ class Assembly(AssemblyBase):
         """
         return self.mesh.n_elements * self.n_elm_gp
     
+    @property
+    def state_variables(self):
+        """Alias for the sv dict containing the state variables."""
+        return self.sv
     
     @staticmethod
     def sum(*listAssembly, name ="", **kargs):
@@ -1179,11 +1196,13 @@ class Assembly(AssemblyBase):
                         wf.assembly_options['n_elm_gp', elm_type] = prop[0]
                         wf.assembly_options['assume_sym', elm_type] = prop[1]
                         wf.assembly_options['mat_lumping', elm_type] = [w.assembly_options.get('mat_lumping',elm_type,False) for w in l_wf]
-                        
+                    
                     list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
+                    if list_weakform[0] in l_wf:     
+                        assembly_output = list_assembly[-1] #by default, the assembly used for output is the one assocaited to the 1st weakform
             
             # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
-            kargs['assembly_output'] = kargs.get('assembly_output', list_assembly[0])
+            kargs['assembly_output'] = kargs.get('assembly_output', assembly_output)
             return AssemblySum(list_assembly, name, **kargs)       
         
         return Assembly(weakform, mesh, elm_type, name, **kargs)

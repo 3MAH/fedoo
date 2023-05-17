@@ -48,5 +48,6 @@ assert U[0,22] == 0.1
 assert np.abs(U[1,22] +0.010440829731661383) < 1e-15
 assert np.abs(res.node_data['Stress_vm'][53]-350.1929992233047) < 1e-15
 
-# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
-# Util.fieldPlot2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")
+# res.plot('Stress_vm')
+# fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
+# fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")

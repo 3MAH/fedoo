@@ -89,9 +89,6 @@ deb = pb.bc.add('Dirichlet',Ymin,'DispY',0, name='deb')
 pb.apply_boundary_conditions()
 pb.solve()
 
-
-
-
 # post traitement
 U = pb.get_dof_solution()
 Gqs = pb.GetElasticEnergy() / (length)
@@ -99,9 +96,6 @@ Gqs = pb.GetElasticEnergy() / (length)
 # OUT = Util.ExportData(meshID)
 # OUT.addNodeData(np.reshape(U,(2,-1)).T,'Displacement')
 # OUT.toVTK("Broberg2D_Dynamic_PreStress.vtk")
-
-
-
 
 #------------------------------------------------
 # deboutonnage dynamique
@@ -137,32 +131,12 @@ for i in range(popo):
     if i%COEFF == 0:
         deb.node_set = deb.node_set[1:]
         
-
-    # mesh.SetNodeCoordinates(mesh.GetNodeCoordinates()+np.reshape((U-previousU),(2,-1)).T)
-    # Assembly.Assembly("ElasticLaw", meshID, "quad4", ID="StiffAssembling")
-    # Assembly.Assembly("Inertia",    meshID, "quad4", ID="MassAssembling")
-    # Problem.Newmark("StiffAssembling", "MassAssembling", Beta, Gamma,  dt)
-    # Problem.Newmark.SetInitialDisplacement('all',U)
-    # Problem.Newmark.SetInitialVelocity('all',V)
-    # Problem.Newmark.SetInitialAcceleration('all',A)
-    # Problem.Newmark.Initialize()
     pb.apply_boundary_conditions()
     pb.solve()
     pb.save_results(i)
     pb.update()
-    # previousU = U
-    # U = Problem.Newmark.GetDoFSolution('all')
-    # V = Problem.Newmark.GetXdot()
-    # A = Problem.Newmark.GetXdotdot()
 
     U = pb.get_disp()    
-    
-    # U = np.reshape(Problem.GetDoFSolution('all'),(2,-1)).T
-    # N = Mesh.GetAll()["Domain"].GetNumberOfNodes()
-    # U = np.c_[U,np.zeros(N)]
-    # OUT = Util.ExportData("Domain")
-    # OUT.addNodeData(U,'Displacement')
-    # OUT.toVTK("Broberg2D_Dynamic_{}.vtk".format(i))
 
     Ecin.append(pb.GetKineticEnergy())
     Eela.append(pb.GetElasticEnergy())

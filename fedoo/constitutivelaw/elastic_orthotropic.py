@@ -38,7 +38,9 @@ class ElasticOrthotropic(ElasticAnisotropic):
         self.nuxz = nuxz
         self.nuxy = nuxy
         
-    def get_tangent_matrix(self): 
+    def get_tangent_matrix(self, assembly, dimension=None): 
+        if dimension is None: dimension = assembly.space.get_dimension()
+
         EX = self.Ex
         EY = self.Ey 
         EZ = self.Ez
@@ -56,10 +58,6 @@ class ElasticOrthotropic(ElasticAnisotropic):
 #                      [0       , 0       , 0       , 0    , 1/GXZ, 0    ], \
 #                      [0       , 0       , 0       , 0    , 0    , 1/GYZ]])                  
 #        H = linalg.inv(S) #H  = sp.zeros((6,6), dtype='object')
-
-        for key in self.__parameters: 
-            temporary = self.__parameters[key]
-            exec(key + '= temporary')
         
         if isinstance(EX, float): H = sp.empty((6,6))
         elif isinstance(EX,(sp.ndarray,list)): H = sp.zeros((6,6,len(EX)))
@@ -72,7 +70,10 @@ class ElasticOrthotropic(ElasticAnisotropic):
         H[0,2] = H[2,0] = EX*(nuYX*nuZY+nuZX)/k
         H[1,2] = H[2,1] = EY*(nuXY*nuZX+nuZY)/k
         H[3,3] = GXY ; H[4,4] = GXZ ; H[5,5] = GYZ
-        
-        return H
-    
+            
+        H = self.local2global_H(self._H)
+        if dimension == "2Dstress":
+            return self.get_H_plane_stress(H)
+        else: 
+            return H          
    

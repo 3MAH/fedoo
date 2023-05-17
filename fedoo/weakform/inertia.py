@@ -29,7 +29,7 @@ class Inertia(WeakFormBase):
         
         self.__Density = Density        
 
-    def get_weak_equation(self, mesh=None):
+    def get_weak_equation(self, assembly, pb):
         # localFrame is not used for Inertia weak form 
         U = self.space.op_disp()
         U_vir = [u.virtual if u != 0 else 0 for u in U]

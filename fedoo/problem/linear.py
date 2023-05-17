@@ -15,7 +15,7 @@ def Linear(assembling, name = "MainProblem"):
     class __Linear(libBase):
                 
         def __init__(self, assembling, name):   
-            assembling.initialize(self,0)                         
+            assembling.initialize(self)                         
             A = assembling.get_global_matrix()
             B = 0             
             D = assembling.get_global_vector()     
@@ -64,7 +64,7 @@ def Linear(assembling, name = "MainProblem"):
 #            self.set_A(assembling.get_global_matrix())
 #            self.set_D(assembling.get_global_vector())
 #            
-            outValues = self.__assembly.update(self, dtime, compute)  
+            outValues = self.__assembly.update(self, compute)  
             self.set_A(assembling.get_global_matrix())
             self.set_D(assembling.get_global_vector())
             return outValues 

@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 #--------------- Pre-Treatment --------------------------------------------------------
-method_output = 2
+method_output = 3
 # method_output = 1 to automatically save the results in a vtk file
 # method_output = 2 to write the vtk file at the end 
 # method_output = 3 to save the results (disp, stress, strain) in a dict

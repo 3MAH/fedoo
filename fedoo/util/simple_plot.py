@@ -16,7 +16,7 @@ from fedoo.core.base import ConstitutiveLaw
 
 
 
-def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, cm = 'hsv'):
+def mesh_plot_2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, cm = 'hsv'):
     """
     Simple function for ploting 2D mesh with node data and node displacement
     
@@ -111,7 +111,7 @@ def meshPlot2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_fa
     
     
 # def fieldPlot2d(mesh, Matname, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
-def fieldPlot2d(assemb, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
+def field_plot_2d(assemb, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
     if isinstance(assemb, str):
         assemb = Assembly.get_all()[assemb]

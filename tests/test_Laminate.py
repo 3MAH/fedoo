@@ -74,6 +74,6 @@ pb.solve()
 
 assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.768895223360722) < 1e-8
 
-
-# z, StressDistribution = ConstitutiveLaw.get_all()['PlateSection'].GetStressDistribution(200)
+# plot the stress distribution
+# z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],200)
 # plt.plot(StressDistribution[0], z)

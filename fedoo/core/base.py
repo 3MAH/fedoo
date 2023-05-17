@@ -116,7 +116,7 @@ class ConstitutiveLaw:
     def __init__(self, name = ""):
         assert isinstance(name, str) , "An name must be a string" 
         self.__name = name
-        self.__localFrame = None
+        self.local_frame = None
         self._dimension = None #str or None to specify a space and associated model (for instance "2Dstress" for plane stress)
 
         ConstitutiveLaw.__dic[self.__name] = self        
@@ -124,37 +124,29 @@ class ConstitutiveLaw:
 
     def __class_getitem__(cls, item):
         return cls.__dic[item]
-
-
-    def SetLocalFrame(self, localFrame):
-        self.__localFrame = localFrame
-
-
-    def GetLocalFrame(self):
-        return self.__localFrame 
-
+    
     
     def reset(self): 
         #function called to restart a problem (reset all internal variables)
         pass
 
     
-    def set_start(self):  
+    def set_start(self, assembly, pb):  
         #function called when the time is increased. Not used for elastic laws
         pass
 
     
-    def to_start(self):
+    def to_start(self, assembly, pb):
         #function called if the time step is reinitialized. Not used for elastic laws
         pass
 
 
-    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
+    def initialize(self, assembly, pb):
         #function called to initialize the constutive law 
         pass
 
     
-    def update(self,assembly, pb, dtime):
+    def update(self,assembly, pb):
         #function called to update the state of constitutive law 
         pass
 

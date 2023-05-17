@@ -36,7 +36,7 @@ class InitialStress(WeakFormBase):
         self.__InitialStressTensor = InitialStressTensor
         self.__typeOperator = 'all'
 
-    def get_weak_equation(self, mesh=None):               
+    def get_weak_equation(self, assembly, pb):               
         eps = self.space.op_strain()
         if self.__typeOperator == 'Matrix':
             return sum([self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)])
@@ -45,7 +45,7 @@ class InitialStress(WeakFormBase):
         elif self.__typeOperator == 'all':
             return sum([self.__NonLinearStrainOperatorVirtual[i] * self.__InitialStressTensor[i] for i in range(6)] + [eps[i].virtual * self.__InitialStressTensor[i] for i in range(6)])
     
-    def SetTypeOperator(TypeOperator):
+    def SetTypeOperator(self, TypeOperator):
         self.__typeOperator = TypeOperator
         
 

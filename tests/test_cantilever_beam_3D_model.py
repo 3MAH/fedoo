@@ -45,8 +45,8 @@ print('Done in ' +str(time.time()-t0) + ' seconds')
 #Get the displacement vector on nodes for export to vtk
 U = np.reshape(pb.get_dof_solution('all'),(3,-1)).T
 
-#Get the stress tensor (nodal values)
+#Get the stress tensor (nodal values) - Old way to get strain and stress -> prefer the use of get_results or direct access to assembly.sv field
 TensorStrain = fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "Node", nlgeom=False)       
-TensorStress = fd.ConstitutiveLaw['ElasticLaw'].GetStressFromStrain(TensorStrain)
+TensorStress = fd.ConstitutiveLaw['ElasticLaw'].get_stress_from_strain(fd.Assembly['Assembling'],TensorStrain)
 
 assert np.abs(TensorStress[5][-1] + 0.9007983467254552) < 1e-10

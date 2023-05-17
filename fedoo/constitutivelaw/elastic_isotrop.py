@@ -31,32 +31,27 @@ class ElasticIsotrop(ElasticAnisotropic):
         self.nu = nu
         """Poisson Ratio of the material """ 
     
-    def get_tangent_matrix(self):     
-        #the returned stiffness matrix is 6x6 even in 2D
+    def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
+        if dimension is None: dimension = assembly.space.get_dimension()
+
+        #the returned stiffness matrix is 6x6 even in 2D      
         H  = np.zeros((6,6), dtype='object')
         E  = self.E
-        nu = self.nu
-
-        H[0,0]=H[1,1]=H[2,2]= E*(1./(1+nu) + nu/((1.+nu)*(1-2*nu))) #H1 = 2*mu+lamb
-        H[0,1]=H[0,2]=H[1,2]= E*(nu/((1+nu)*(1-2*nu)))  #H2 = lamb
-        H[3,3]=H[4,4]=H[5,5] = 0.5*E/(1+nu) #H3 = mu
-        H[1,0]=H[0,1] ; H[2,0]=H[0,2] ; H[2,1] = H[1,2] #symétrie 
-            
-        return H        
-
-    def get_tangent_matrix_2Dstress(self):
-        #for 2D stress problems       
-        #the returned stiffness matrix is 6x6 even in 2D
-        H  = np.zeros((6,6), dtype='object')
-        E  = self.E
-        nu = self.nu
-
-        H[0,0]=H[1,1]= E/(1-nu**2)
-        H[0,1]= nu*E/(1-nu**2)
-        H[3,3] = 0.5*E/(1+nu)    
-        H[1,0]=H[0,1]  #symétrie                                  
-            
-        return H        
+        nu = self.nu          
+        
+        if dimension == "2Dstress":
+            #for 2D plane stress problems       
+            H[0,0]=H[1,1]= E/(1-nu**2)
+            H[0,1]= nu*E/(1-nu**2)
+            H[3,3] = 0.5*E/(1+nu)    
+            H[1,0]=H[0,1]  #symétrie                                                  
+        else:             
+            H[0,0]=H[1,1]=H[2,2]= E*(1./(1+nu) + nu/((1.+nu)*(1-2*nu))) #H1 = 2*mu+lamb
+            H[0,1]=H[0,2]=H[1,2]= E*(nu/((1+nu)*(1-2*nu)))  #H2 = lamb
+            H[3,3]=H[4,4]=H[5,5] = 0.5*E/(1+nu) #H3 = mu
+            H[1,0]=H[0,1] ; H[2,0]=H[0,2] ; H[2,1] = H[1,2] #symétrie 
+                
+        return H
     
     @property
     def G(self):
@@ -65,4 +60,3 @@ class ElasticIsotrop(ElasticAnisotropic):
     
 if __name__=="__main__":
     law = ElasticIsotrop(5e9,0.3)
-    print(law.get_tangent_matrix())
