@@ -48,7 +48,7 @@ if USE_SIMCOON:
 class PeriodicBC(BCBase):
     """Class defining periodic boundary conditions"""
     
-    def __init__(self, node_cd, var_cd, dim=3, tol=1e-8, meshperio = True, name = "Periodicity"):
+    def __init__(self, node_cd, var_cd, dim=None, tol=1e-8, meshperio = True, name = "Periodicity"):
         """   
         Create a perdiodic boundary condition object using several multi-points constraints.
         Some constraint driver (cd) dof  are used to define mean strain or mean displacement gradient.
