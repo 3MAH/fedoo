@@ -12,7 +12,7 @@ start = time()
 
 fd.ModelingSpace("3D")
 
-NLGEOM = 2
+NLGEOM = 'UL'
 #Units: N, mm, MPa
 h = 1
 w = 1
@@ -50,8 +50,8 @@ elif mat == 1 or mat == 2:
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
-        props = np.array([[E, nu, alpha, Re,k,m]])
-        material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+        props = np.array([E, nu, alpha, Re,k,m])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
         material.corate = 2
     elif mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
@@ -94,7 +94,8 @@ if not(os.path.isdir('results')): os.mkdir('results')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
-results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm', 'Fext'])
+results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm', 'Fext'])
+# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm', 'Fext'])
 
 # Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 

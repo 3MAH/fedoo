@@ -12,19 +12,19 @@ from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 try:
     from matplotlib import pylab as plt
     USE_MPL = True
-except:
+except ImportError:
     USE_MPL = False
     
 try: 
     import pyvista as pv
     USE_PYVISTA = True
-except:
+except ImportError:
     USE_PYVISTA = False
     
 try:
     import pandas
     USE_PANDA = True
-except:
+except ImportError:
     USE_PANDA = False
 
 class DataSet():
@@ -87,6 +87,9 @@ class DataSet():
         
     
     def plot(self, field = None, data_type = None, **kargs):
+        
+        if not(USE_PYVISTA):
+            raise NameError("Pyvista not installed.")
         
         if self.mesh is None: 
             raise NameError("Can't generate a plot without an associated mesh. Set the mesh attribute first.")
@@ -282,7 +285,7 @@ class DataSet():
             self.gausspoint_data = data.gausspoint_data
             self.scalar_data = data.scalar_data
             if load_mesh: self.mesh = data.mesh            
-        elif isinstance(data, pv.UnstructuredGrid):
+        elif USE_PYVISTA and isinstance(data, pv.UnstructuredGrid):
             self.meshplot = data
             self.node_data = {k: v.T for k,v in data.point_data.items()}
             self.element_data = {k: v.T for k,v in data.cell_data.items()} 
@@ -294,6 +297,8 @@ class DataSet():
             ext = ext.lower()
             if ext == '.vtk': 
                 #load_mesh ignored because the mesh already in the vtk file
+                if not(USE_PYVISTA):
+                    raise NameError("Pyvista not installed. Pyvista required to load vtk meshes.")
                 DataSet.load(self,pv.read(filename))              
             elif ext == '.msh':
                 return NotImplemented
@@ -577,6 +582,9 @@ class MultiFrameDataSet(DataSet):
             Size of the video in pixel            
         """
     
+        if not(USE_PYVISTA):
+            raise NameError("Pyvista not installed.")
+            
         if self.mesh is None: 
             raise NameError("Can't generate a plot without an associated mesh. Set the mesh attribute first.")
         
@@ -736,7 +744,7 @@ class MultiFrameDataSet(DataSet):
             t,data = self.get_history(['Time', field], [None, indice])
             plt.plot(t,data)
         else:
-            raise NameError('Matplotlib not found')
+            raise NameError('Matplotlib should be installed to plot the data history')
     
         
     def get_all_frame_lim(self, field, component=0, data_type = None, scale = 1):

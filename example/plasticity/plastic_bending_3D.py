@@ -10,7 +10,7 @@ start = time()
 
 fd.ModelingSpace("3D")
 
-NLGEOM = 2
+NLGEOM = True
 typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
@@ -27,10 +27,10 @@ mesh = fd.mesh.box_mesh(nx=21, ny=7, nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z
 
 crd = mesh.nodes 
 
-mat =0
+mat =1
 if mat == 0:
     props = np.array([E, nu, alpha])
-    material = fd.constitutivelaw.Simcoon_new("ELISO", props, name='constitutivelaw')
+    material = fd.constitutivelaw.Simcoon("ELISO", props, name='constitutivelaw')
     material.corate = 2
     # material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
@@ -42,7 +42,7 @@ elif mat == 1 or mat == 2:
     m=0.3 #0.25
     if mat == 1:
         props = np.array([E, nu, alpha, Re,k,m])
-        material = fd.constitutivelaw.Simcoon_new("EPICP", props, name='constitutivelaw')
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name='constitutivelaw')
         material.corate = 2
         # material.SetMaskH([[] for i in range(6)])
     

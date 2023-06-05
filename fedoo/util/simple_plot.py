@@ -4,10 +4,16 @@ Created on Thu May  7 15:22:31 2020
 
 @author: Etienne
 """
-import matplotlib.pyplot as plt
-import matplotlib.tri as mtri
-from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection
+try: 
+    import matplotlib.pyplot as plt
+    import matplotlib.tri as mtri
+    from matplotlib.patches import Polygon
+    from matplotlib.collections import PatchCollection
+    USE_MPL = True
+except ImportError:
+    USE_MPL = False
+    
+    
 
 import numpy as np
 from fedoo.core.mesh import Mesh
@@ -40,6 +46,9 @@ def mesh_plot_2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_
     None.
 
     """
+    if not(USE_MPL):
+        raise NameError('Matplotlib need to be installed to use the function mesh_plot_2D.')
+        
     # Create triangulation.
     if cm == 'binary': 
         color = plt.cm.binary
@@ -113,6 +122,9 @@ def mesh_plot_2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_
 # def fieldPlot2d(mesh, Matname, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 def field_plot_2d(assemb, disp, dataname =None, component=0, data_min=None,data_max=None, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "real", cm = 'hsv'):
 
+    if not(USE_MPL):
+        raise NameError('Matplotlib need to be installed to use the function field_plot_2d.')
+        
     if isinstance(assemb, str):
         assemb = Assembly.get_all()[assemb]
     mesh = assemb.mesh
@@ -120,11 +132,11 @@ def field_plot_2d(assemb, disp, dataname =None, component=0, data_min=None,data_
 
     #type_plot is "real" or "smooth"
     if dataname is None: # no data, just plot mesh
-        meshPlot2d(mesh, disp, None, None, None, scale_factor, plot_edge, nb_level)
+        mesh_plot_2d(mesh, disp, None, None, None, scale_factor, plot_edge, nb_level)
         return    
     elif dataname.lower() == 'disp': #if data is disp, no difference between "real" and "smooth" plot
         try:
-            meshPlot2d(mesh, disp, disp.reshape(2,-1)[component], data_min,data_max, scale_factor, plot_edge, nb_level)
+            mesh_plot_2d(mesh, disp, disp.reshape(2,-1)[component], data_min,data_max, scale_factor, plot_edge, nb_level)
         except: 
             raise NameError('Dataname: '+ str(dataname)+ ' and component: '+ str(component)+" doesn't exist")    
         
@@ -176,9 +188,9 @@ def field_plot_2d(assemb, disp, dataname =None, component=0, data_min=None,data_
         raise NameError('Dataname: '+ str(dataname)+ ' and component: '+ str(component)+" doesn't exist")
     
     if type_plot.lower() == "smooth":
-        meshPlot2d(mesh, U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
+        mesh_plot_2d(mesh, U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
     else: #type_plot.lower() == "real":
-        meshPlot2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
+        mesh_plot_2d('visu', U, data, data_min, data_max, scale_factor, plot_edge, nb_level, cm)
     
     # # Create triangulation.
     # color = plt.cm.hsv

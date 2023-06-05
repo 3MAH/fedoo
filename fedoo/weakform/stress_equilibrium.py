@@ -2,9 +2,9 @@ from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 try:
-    from simcoon import simmitpybind as sim
+    from simcoon import simmit as sim
     USE_SIMCOON = True
-except: 
+except ImportError: 
     USE_SIMCOON = False
     
 import numpy as np
@@ -15,7 +15,7 @@ class StressEquilibrium(WeakFormBase):
     
     * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
     * May include initial stress depending on the ConstitutiveLaw.
-    * This weak form accepts geometrical non linearities (with nlgeom = True). In this case the initial displacement is also considered. 
+    * This weak form accepts geometrical non linearities (with nlgeom = True, 'UL' or 'TL'). In this case the initial displacement is also considered. 
     * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.constitutivelaw.Simcoon` Constitutive Law
     
     Parameters
@@ -24,11 +24,13 @@ class StressEquilibrium(WeakFormBase):
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm     
-    nlgeom: bool (default = False)
-        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems 
+    nlgeom: bool (default = False), 'UL' or 'TL'
+        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems (default updated lagrangian method)        
         such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
+        If nlgeom == 'UL' the updated lagrangian method is used (same as True)
+        If nlgeom == 'TL' the total lagrangian method is used
     """
-    def __init__(self, constitutivelaw, name = "", nlgeom = 0, space = None):
+    def __init__(self, constitutivelaw, name = "", nlgeom = False, space = None):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw[constitutivelaw]
 
@@ -46,10 +48,14 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
         
         self.constitutivelaw = constitutivelaw
-        self.nlgeom = nlgeom #geometric non linearities
+        self.nlgeom = nlgeom #geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)        
+        self.corate = 'log' #'log': logarithmic strain, 'jaumann': jaumann strain, ...
         self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
         
         if nlgeom:
+            if not(USE_SIMCOON):
+                raise NameError('Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)')
+                
             #initialize non linear operator for strain
             op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
             if self.space.ndim == "3D":        
@@ -66,7 +72,7 @@ class StressEquilibrium(WeakFormBase):
             
     def get_weak_equation(self, assembly, pb):
         
-        if self.nlgeom == 1: #add initial displacement effect 
+        if self.nlgeom == 'TL': #add initial displacement effect 
             # assert 'DispGradient' in assembly.sv and 'PK2' in assembly.sv, ""
             # if not(hasattr(self.constitutivelaw, 'get_disp_grad')):
             #     raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")                        
@@ -101,12 +107,20 @@ class StressEquilibrium(WeakFormBase):
         if 'Stress' not in assembly.sv: assembly.sv['Stress'] = 0
         if 'Strain' not in assembly.sv: assembly.sv['Strain'] = 0
         assembly.sv['DispGradient'] = 0
-        if self.nlgeom == 1: 
-            assembly.sv['PK2'] = 0
+        
+        if self.nlgeom:
+            if not(USE_SIMCOON):
+                raise NameError('Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)')
+            
+            if isinstance(self.nlgeom, str): self.nlgeom =self.nlgeom.upper()
+            if self.nlgeom is True: self.nlgeom = 'UL'
+        
+            if self.nlgeom == 'TL': 
+                assembly.sv['PK2'] = 0
             
 
     def update(self, assembly, pb):
-        if self.nlgeom == 2:
+        if self.nlgeom == 'UL':
             # if updated lagragian method -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())               
             # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.get_disp().T)
@@ -136,7 +150,7 @@ class StressEquilibrium(WeakFormBase):
         
                         
     def to_start(self, assembly, pb):    
-        if self.nlgeom == 2:
+        if self.nlgeom == 'UL':
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())               
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
@@ -175,7 +189,7 @@ class StressEquilibrium(WeakFormBase):
 #funtions to compute strain
 def _comp_linear_strain(wf, assembly, pb):    
     #only compatible with standard FE assembly. compatible with simcoon umat
-    assert wf.nlgeom == False, "the current strain measure isn't adapted for finite strain"
+    assert not(wf.nlgeom), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv['DispGradient']
     
     strain = np.empty((6,len(grad_values[0][0])),order='F') #order = F for compatibility with simcoon without performance loss in other cases
@@ -202,7 +216,7 @@ def _comp_log_strain(wf, assembly, pb):
 
 def _comp_linear_strain_pgd(wf, assembly, pb): 
     #may be compatible with other methods like PGD but not compatible with simcoon
-    assert wf.nlgeom == False, "the current strain measure isn't adapted for finite strain"
+    assert not(wf.nlgeom), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv['DispGradient']
     
     strain  = [grad_values[i][i] for i in range(3)] 
@@ -211,7 +225,7 @@ def _comp_linear_strain_pgd(wf, assembly, pb):
     
 def _comp_gl_strain(wf, assembly, pb): 
     #not compatible with simcoon
-    if wf.nlgeom == False:
+    if not(wf.nlgeom):
         return _comp_linear_strain_pgd(wf, assembly, pb)
     else:
         grad_values = assembly.sv['DispGradient']    
