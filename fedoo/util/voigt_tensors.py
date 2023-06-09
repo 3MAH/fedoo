@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 
+try:
+    from simcoon import simmit as sim
+    USE_SIMCOON = True
+except ImportError: 
+    USE_SIMCOON = False 
 
 # class StressTensorArray(np.ndarray):
 
@@ -125,15 +130,41 @@ class _SymetricTensorList(list): #base class for StressTensorList and StrainTens
 
 class StressTensorList(_SymetricTensorList):
     
-    def pk2_to_cauchy(self, GradDeformedCoordinates): 
-        PiolaKStress = self.to_tensor().transpose(2,0,1)          
+    def cauchy_to_pk2(self, F):
+        if USE_SIMCOON:
+            return StressTensorList(sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy = False))
+        else:
+            raise NameError('Install simcoon to allow conversion from cauchy to pk2')
         
-    #            GradX = [[Assembly.get_all()['Assembling'].get_node_results(GradOp[i][j], Mesh.get_all()[meshname].nodes.T.reshape(-1)+Problem.get_disp()) for j in range(3)] for i in range(3)] 
-        GradX = np.transpose(np.array(GradDeformedCoordinates)[:,:,:],(2,0,1))
-        DetGradX = np.linalg.det(GradX)
-    
-        CauchyStress =  (1/DetGradX).reshape(-1,1,1)*np.matmul(GradX,np.matmul(PiolaKStress,GradX.transpose(0,2,1)))
-        return StressTensorList([CauchyStress[:,0,0],CauchyStress[:,1,1],CauchyStress[:,2,2],CauchyStress[:,0,1],CauchyStress[:,0,2],CauchyStress[:,1,2]])
+        
+    def pk2_to_cauchy(self, F): 
+        if USE_SIMCOON:
+            return StressTensorList(sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy = False))
+        else:
+            pk2 = self.to_tensor().transpose(2,0,1)          
+            
+        #            GradX = [[Assembly.get_all()['Assembling'].get_node_results(GradOp[i][j], Mesh.get_all()[meshname].nodes.T.reshape(-1)+Problem.get_disp()) for j in range(3)] for i in range(3)] 
+            F = np.transpose(np.array(F)[:,:,:],(2,0,1))
+            J = np.linalg.det(F)
+            FT = F.transpose(0,2,1)
+        
+            cauchy =  (1/J).reshape(-1,1,1)*(F@pk2@FT)
+            return StressTensorList([cauchy[:,0,0],cauchy[:,1,1],cauchy[:,2,2],cauchy[:,0,1],cauchy[:,0,2],cauchy[:,1,2]])
+
+
+    def cauchy_to_pk1(self, F):
+        if USE_SIMCOON:
+            return StressTensorList(sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy = False))
+        else:
+            raise NameError('Install simcoon to allow conversion from cauchy to pk1')
+
+
+    def pk1_to_cauchy(self, F):
+        if USE_SIMCOON:
+            return StressTensorList(sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy = False))
+        else:
+            raise NameError('Install simcoon to allow conversion from pk1 to cauchy')
+
 
     def von_mises(self):
         """

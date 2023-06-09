@@ -10,7 +10,7 @@ start = time()
 
 fd.ModelingSpace("3D")
 
-NLGEOM = True
+NLGEOM = 'UL'
 typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
@@ -31,7 +31,6 @@ mat =1
 if mat == 0:
     props = np.array([E, nu, alpha])
     material = fd.constitutivelaw.Simcoon("ELISO", props, name='constitutivelaw')
-    material.corate = 2
     # material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
@@ -58,11 +57,9 @@ else:
 
 
 
-
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
-# weakform.StressEquilibriumUL("constitutivelaw")
-
+wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
+wf.corate = "green_naghdi"
 
 
 #note set for boundary conditions
@@ -78,14 +75,16 @@ else:
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+# assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling")     
+
 
 pb = fd.problem.NonLinear("Assembling")
-# Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
+# pb.set_solver('cg', precond = True)
+pb.set_nr_criterion("Displacement", err0 = None, tol = 5e-3, max_subiter = 5)
 
 # Problem.set_nr_criterion("Displacement")
-# Problem.set_nr_criterion("Work")
+# pb.set_nr_criterion("Work")
 # Problem.set_nr_criterion("Force")
 
 #create a 'result' folder and set the desired ouputs
@@ -102,7 +101,7 @@ pb.bc.add('Dirichlet',nodes_bottomLeft,'Disp',0)
 pb.bc.add('Dirichlet',nodes_bottomRight,'DispY',0)
 bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
 
-pb.nlsolve(dt = 0.025, tmax = 1, update_dt = True, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.025, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
 
 E = assemb.sv['Strain'] 
 # E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
@@ -122,7 +121,11 @@ print(time()-start)
 
 # print(assemb.sv['TangentMatrix'])
 
-res.plot('Stress','Node', component = 'vm')
+# from pyvistaqt import BackgroundPlotter
+# plotter = BackgroundPlotter()
+
+res.plot('Stress',component = 'vm')
+
 # res.plot('Statev', 'Node', component = 1)
 # res.write_movie('test', 'Stress', component=0)
 

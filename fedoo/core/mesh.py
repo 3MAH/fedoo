@@ -57,7 +57,7 @@ class Mesh(MeshBase):
     """
     
     
-    def __init__(self, nodes, elements=None, elm_type=None, ndim = None, name = ""):
+    def __init__(self, nodes: np.ndarray[float], elements: np.ndarray[int]|None = None, elm_type: str = None, ndim: int|None = None, name: str = "") -> None:
         MeshBase.__init__(self, name)
         self.nodes = nodes #node coordinates     
         """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
@@ -65,13 +65,13 @@ class Mesh(MeshBase):
         """ List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
         """Type of the element (str). The type of the element should be coherent with the shape of elements."""
-        self.node_sets = {} 
+        self.node_sets: dict = {} 
         """Dict containing node sets associated to the mesh"""
-        self.element_sets = {}
+        self.element_sets: dict = {}
         """Dict containing element sets associated to the mesh"""
-        self.local_frame = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
+        self.local_frame: np.ndarray|None = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
-        self._n_physical_nodes = None #if None, the number of physical_nodes is the same as n_nodes
+        self._n_physical_nodes: int|None = None #if None, the number of physical_nodes is the same as n_nodes
 
         if ndim is None: ndim = self.nodes.shape[1]
         elif ndim > self.nodes.shape[1]:
@@ -83,6 +83,7 @@ class Mesh(MeshBase):
             #     local_frame_temp[:,2,2]   = 1
             #     self.local_frame = local_frame_temp
         
+        self.crd_name: tuple[str, ...]
         if ndim == 1: self.crd_name = ('X')
         elif self.nodes.shape[1] == 2: self.crd_name = ('X', 'Y')
         # elif n == '2Dplane' or n == '2Dstress': self.crd_name = ('X', 'Y')
@@ -96,9 +97,19 @@ class Mesh(MeshBase):
         
     
     @staticmethod
-    def from_pyvista(pvmesh, name = ""):
+    def from_pyvista(pvmesh: pv.PolyData|pv.UnstructuredGrid, name:str = "") -> 'Mesh':
         """Build a Mesh from a pyvista UnstructuredGrid or PolyData mesh. 
         Node and element data are not copied.
+        
+        Parameters
+        ----------
+        pvmesh: pyvista mesh
+        name : str
+            name of the new created Mesh. If specitified, this Mesh will be added in the dict containing all the loaded Mesh (Mesh.get_all()). 
+            By default, the  Mesh is not added to the list.
+        
+        Remark
+        ----------
         For now, only mesh with single element type may be imported.
         Multi-element meshes will be integrated later. """                        
         if USE_PYVISTA:     
@@ -132,9 +143,22 @@ class Mesh(MeshBase):
             
     
     @staticmethod
-    def read(filename, name = ""):
-        """Build a Mesh from a mesh. This function use the pyvista load method. 
-        The file type is inferred from the file name.
+    def read(filename: str, name: str = "") -> 'Mesh':
+        """Build a Mesh from a file. The file type is inferred from the file name.
+        This function use the pyvista read method which
+        is itself based on the vtk native readers and the meshio readers (available 
+        only if the meshio lib is installed.)
+        
+        Parameters
+        ----------
+        filename: str
+            Name of the file to read
+        name : str
+            name of the new created Mesh. If specitified, this Mesh will be added in the dict containing all the loaded Mesh (Mesh.get_all()). 
+            By default, the  Mesh is not added to the list.
+        
+        Remark
+        ----------
         For now, only mesh with single element type may be imported.
         Multi-element meshes will be integrated later. """     
         if USE_PYVISTA:   
@@ -145,35 +169,35 @@ class Mesh(MeshBase):
 
         
     
-    def add_node_set(self,node_indices,name):
+    def add_node_set(self, node_indices: list[int]|np.ndarray[int], name: str) -> None:
         """        
         Add a set of nodes to the Mesh
         
         Parameters
         ----------
-        node indices : list or 1D numpy.array
+        node_indices: list or 1D numpy.array
             A list of node indices
-        name : str
+        name: str
             name of the set of nodes            
         """
         self.node_sets[name] = node_indices
         
         
-    def add_element_set(self,element_indices,name):
+    def add_element_set(self, element_indices: list[int]|np.ndarray[int], name: str) -> None:
         """        
         Add a set of elements to the Mesh
         
         Parameters
         ----------
-        element_indices : list or 1D numpy.array
+        element_indices: list or 1D numpy.array
             A list of node indexes
-        name : str
+        name: str
             name of the set of nodes            
         """
         self.element_sets[name] = element_indices
         
            
-    def add_nodes(self, *args): #coordinates = None, nb_added = None):
+    def add_nodes(self, *args) -> np.ndarray[int]: #coordinates = None, nb_added = None):
         """
         Add some nodes to the node list.
         The new nodes are not liked to any element.
@@ -227,7 +251,7 @@ class Mesh(MeshBase):
         return np.arange(n_nodes_old,self.n_nodes)
     
     
-    def add_virtual_nodes(self, *args): #coordinates = None, nb_added = None):
+    def add_virtual_nodes(self, *args) -> np.ndarray[int]: #coordinates = None, nb_added = None):
         """
         Add some nodes to the node list.
         
@@ -239,7 +263,7 @@ class Mesh(MeshBase):
         return self.add_nodes(*args)
     
 
-    def add_internal_nodes(self, nb_added):
+    def add_internal_nodes(self, nb_added: int) -> np.ndarray[int]:
         """
         Add some nodes to the node list.
         
@@ -258,7 +282,7 @@ class Mesh(MeshBase):
     
     # warning , this method must be static
     @staticmethod
-    def stack(mesh1,mesh2, name = ""):       
+    def stack(mesh1: 'Mesh', mesh2: 'Mesh', name: str = "") -> 'Mesh':       
         """
         *Static method* - Make the spatial stack of two mesh objects which have the same element shape. 
         This function doesn't merge coindicent Nodes. 
@@ -301,7 +325,7 @@ class Mesh(MeshBase):
         return mesh3
     
 
-    def find_coincident_nodes(self,tol=1e-8):
+    def find_coincident_nodes(self, tol: float = 1e-8) -> np.ndarray[int]:
         """ 
         Find some nodes with the same position considering a tolerance given by the argument tol. 
         return an array of shape (number_coincident_nodes, 2) where each line is a pair of nodes that are at the same position.
@@ -322,7 +346,7 @@ class Mesh(MeshBase):
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident+1]]).T
  
     
-    def merge_nodes(self,node_couples):
+    def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
         """ 
         Merge some nodes 
         The total number and the id of nodes are modified
@@ -352,10 +376,15 @@ class Mesh(MeshBase):
         self.reset_interpolation()
     
 
-    def remove_nodes(self, index_nodes):    
+    def remove_nodes(self, index_nodes: list[int]|np.ndarray[int]) -> np.ndarray[int]:    
         """ 
         Remove some nodes and associated element.
         
+        Return a numpy.ndarray arr where arr[old_id] gives the new index of a node
+        with initial index = old_id 
+        
+        Remarks
+        ------------
         The total number and the id of nodes are modified.
         """
         nds_del = np.unique(index_nodes)
@@ -383,7 +412,7 @@ class Mesh(MeshBase):
         return new_num
     
     
-    def find_isolated_nodes(self):  
+    def find_isolated_nodes(self) -> np.ndarray[int]:  
         """ 
         Return the nodes that are not associated with any element. 
 
@@ -395,14 +424,14 @@ class Mesh(MeshBase):
         return np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
     
     
-    def remove_isolated_nodes(self):  
+    def remove_isolated_nodes(self) -> int:  
         """ 
         Remove the nodes that are not associated with any element. 
         
         The total number and the id of nodes are modified
         
-        Return : NumberOfRemovedNodes int 
-            the number of removed nodes (int).         
+        Return : n_removed_nodes (int) 
+            the number of removed nodes.         
         """
         index_non_used_nodes = np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
         self.remove_nodes(index_non_used_nodes)
@@ -410,7 +439,7 @@ class Mesh(MeshBase):
         return len(index_non_used_nodes)
     
         
-    def translate(self,disp):
+    def translate(self, disp: np.ndarray[float]) -> np.ndarray[float]:
         """
         Translate the mesh using the given displacement vector
         The disp vector should be on the form [u, v, w]
@@ -418,7 +447,7 @@ class Mesh(MeshBase):
         self.nodes = self.nodes + disp.T        
             
     
-    def extract_elements(self,SetOfElementKey, name =""):
+    def extract_elements(self, SetOfElementKey: str, name: str ="") -> 'Mesh':
         """
         Return a new mesh from the set of elements defined by SetOfElementKey
         """
@@ -431,7 +460,7 @@ class Mesh(MeshBase):
         return subMesh    
        
     
-    def nearest_node(self, X):
+    def nearest_node(self, X: np.ndarray[float]) -> int:
         """
         Return the index of the nearst node from the given position X
         
@@ -447,7 +476,7 @@ class Mesh(MeshBase):
         return np.linalg.norm(self.nodes-X, axis=1).argmin()
     
         
-    def find_nodes(self, selection_criterion, value=0, tol=1e-6):
+    def find_nodes(self, selection_criterion: str, value: float = 0, tol: float = 1e-6) -> np.ndarray[int]:
         """
         Return a list of nodes from a given selection criterion
 
@@ -497,7 +526,7 @@ class Mesh(MeshBase):
             raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
 
     
-    def is_periodic(self, tol=1e-8, dim=3):
+    def is_periodic(self, tol: float = 1e-8, dim: int = 3) -> bool:
         """
         Test if the mesh is periodic (have nodes at the same positions on adjacent faces)
     
@@ -517,7 +546,7 @@ class Mesh(MeshBase):
         return is_periodic(self.nodes, tol, dim)
         
 
-    def copy(self):
+    def copy(self) -> 'Mesh':
         return Mesh(self.nodes.copy(),self.elements.copy(), self.elm_type)
     
     def to_pyvista(self):
@@ -551,7 +580,7 @@ class Mesh(MeshBase):
             raise NameError('Pyvista not installed.')
             
 
-    def save(self, filename, binary=True):
+    def save(self, filename: str, binary: bool = True) -> None:
         """        
         Save the mesh object to file. This function use the save function of the pyvista UnstructuredGrid object
         
@@ -569,15 +598,15 @@ class Mesh(MeshBase):
         self.to_pyvista().save(filename, binary)
     
     
-    def plot(self,show_edges=True):
+    def plot(self, show_edges: bool = True) -> None:
         """Simple plot function using pyvista"""
-        if USE_PYVISTA:            
+        if USE_PYVISTA:  
             self.to_pyvista().plot(show_edges=show_edges)
         else:
             raise NameError('Pyvista not installed.')
 
 
-    def init_interpolation(self,n_elm_gp = None):
+    def init_interpolation(self, n_elm_gp: int|None = None) -> None:
         if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         
         n_nodes = self.n_nodes        
@@ -624,7 +653,7 @@ class Mesh(MeshBase):
         self._elements_geom = elm_geom #dont depend on n_elm_gp
         
     
-    def _compute_gaussian_quadrature_mat(self, n_elm_gp = None):        
+    def _compute_gaussian_quadrature_mat(self, n_elm_gp: int|None = None) -> None:        
         if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         if n_elm_gp not in self._saved_gaussian_quadrature_mat:
             self.init_interpolation(n_elm_gp)        
@@ -661,7 +690,7 @@ class Mesh(MeshBase):
         return self._saved_gaussian_quadrature_mat[n_elm_gp]
 
 
-    def determine_data_type(self, data, n_elm_gp=None):                       
+    def determine_data_type(self, data: np.ndarray, n_elm_gp: int|None = None) -> str:                       
         if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
  
         test = 0
@@ -679,7 +708,7 @@ class Mesh(MeshBase):
         return data_type  
     
 
-    def data_to_gausspoint(self, data, n_elm_gp=None):         
+    def data_to_gausspoint(self, data: np.ndarray, n_elm_gp: int|None = None) -> np.ndarray:  
         """
         Convert a field array (node values or element values) to gauss points.
         data: array containing the field (node or element values)
@@ -697,7 +726,9 @@ class Mesh(MeshBase):
         return data #in case data contains already PG values
 
 
-    def convert_data(self, data, convert_from=None, convert_to='GaussPoint', n_elm_gp=None):
+    def convert_data(self, data: np.ndarray, convert_from: str|None = None, 
+                     convert_to: str = 'GaussPoint', n_elm_gp: int|None = None) -> np.ndarray:
+        
        if np.isscalar(data): return data
 
        if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
@@ -723,7 +754,8 @@ class Mesh(MeshBase):
        else: return data.T
 
 
-    def integrate_field(self, field, type_field = None, n_elm_gp = None):        
+    def integrate_field(self, field: np.ndarray, type_field: str|None = None, 
+                        n_elm_gp: int|None = None) -> float: 
         assert type_field in ['Node','GaussPoint','Element', None], "TypeField should be 'Node', 'Element' or 'GaussPoint' values"        
         if n_elm_gp is None: 
             if type_field == 'GaussPoint': n_elm_gp = len(field)//self.n_elements
@@ -732,7 +764,7 @@ class Mesh(MeshBase):
         return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
 
 
-    def reset_interpolation(self):
+    def reset_interpolation(self) -> None:
         """Remove all the saved data related to field interpolation. 
         This method should be used when modifying the element table or when removing or adding nodes.
         """
@@ -744,28 +776,28 @@ class Mesh(MeshBase):
 
     
     @property
-    def physical_nodes(self):
+    def physical_nodes(self) -> np.ndarray[float]:
         if self._n_physical_nodes is None:
             return self.nodes
         else: 
             return self.nodes[:self._n_physical_nodes]
 
     @property
-    def n_nodes(self):
+    def n_nodes(self) -> int:
         """
         Total number of nodes in the Mesh        
         """
         return len(self.nodes)
     
     @property
-    def n_physical_nodes(self):
+    def n_physical_nodes(self) -> int:
         if self._n_physical_nodes is None:
             return self.n_nodes
         else: 
             return self._n_physical_nodes
     
     @property
-    def n_elements(self):
+    def n_elements(self) -> int:
         """
         Total number of elements in the Mesh        
         """
@@ -773,7 +805,7 @@ class Mesh(MeshBase):
 
 
     @property
-    def n_elm_nodes(self):
+    def n_elm_nodes(self) -> int:
         """
         Number of nodes associated to each element 
         """
@@ -781,20 +813,21 @@ class Mesh(MeshBase):
     
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """
         Dimension of the mesh       
         """
         return self.nodes.shape[1]
     
     @property
-    def bounding_box(self):
+    def bounding_box(self) -> 'BoundingBox':
         return BoundingBox(self)
 
     
 
 class MultiMesh(Mesh):
-    def __init__(self, nodes, elements_dict = None, ndim = None, name = ""):
+    def __init__(self, nodes: np.ndarray[float], elements_dict: dict = None, 
+                 ndim: int|None = None, name:str = "") -> None:
         MeshBase.__init__(self, name)
         self.nodes = nodes #node coordinates    
         """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""    
@@ -818,11 +851,11 @@ class MultiMesh(Mesh):
                 
         self._n_physical_nodes = None #if None, the number of physical_nodes is the same as n_nodes                       
     
-    def __getitem__(self, item):
+    def __getitem__(self, item:str) -> Mesh:
         return self.mesh_dict[item]
     
     @staticmethod
-    def from_mesh_list(mesh_list, name = ""):
+    def from_mesh_list(mesh_list: list[Mesh], name: str = "") -> 'MultiMesh':
         multi_mesh = MultiMesh(mesh_list[0].nodes, name)
         multi_mesh._n_physical_nodes = mesh_list[0]._n_physical_nodes
         for mesh in mesh_list:
@@ -832,7 +865,7 @@ class MultiMesh(Mesh):
         
 
 class BoundingBox(list):
-    def __init__(self, m):
+    def __init__(self, m: Mesh|list[np.ndarray[float], np.ndarray[float]]):
         if isinstance(m, Mesh):
             nodes = m.physical_nodes
             m = [nodes.min(axis=0), nodes.max(axis=0)]
@@ -845,49 +878,49 @@ class BoundingBox(list):
         list.__init__(self,m)
     
     @property
-    def xmin(self):
+    def xmin(self) -> float:
         """
         return xmin
         """
         return self[0][0]
 
     @property
-    def xmax(self):
+    def xmax(self) -> float:
         """
         return xmax
         """
         return self[1][0]
 
     @property
-    def ymin(self):
+    def ymin(self) -> float:
         """
         return ymin
         """
         return self[0][1]
 
     @property
-    def ymax(self):
+    def ymax(self) -> float:
         """
         return ymax
         """
         return self[1][1]
     
     @property
-    def zmin(self):
+    def zmin(self) -> float:
         """
         return zmin
         """
         return self[0][2]
 
     @property
-    def zmax(self):
+    def zmax(self) -> float:
         """
         return zmax
         """
         return self[1][2]
 
     @property
-    def center(self):
+    def center(self) -> np.ndarray[float]:
         """
         return the center of the bounding box
         """
@@ -895,35 +928,35 @@ class BoundingBox(list):
     
     
     @property
-    def volume(self):
+    def volume(self) -> float:
         """
         return the volume of the bounding box
         """
         return (self[1]-self[0]).prod()           
 
     @property
-    def size(self):
+    def size(self) -> np.ndarray[float]:
         """
         return the sizes of the bounding box
         """
         return (self[1]-self[0])
     
     @property
-    def size_x(self):
+    def size_x(self) -> float:
         """
         return the size of the bounding box in the x direction
         """
         return (self[1][0]-self[0][0])
     
     @property
-    def size_y(self):
+    def size_y(self) -> float:
         """
         return the size of the bounding box in the y direction
         """
         return (self[1][1]-self[0][1])
     
     @property
-    def size_z(self):
+    def size_z(self) -> float:
         """
         return the size of the bounding box in the z direction
         """

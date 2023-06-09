@@ -527,6 +527,7 @@ class Assembly(AssemblyBase):
         self.weakform.update(self, pb)
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.update(self, pb)
+        self.weakform.update_2(self, pb) 
         self.current.assemble_global_mat(compute)
 
     def to_start(self, pb):

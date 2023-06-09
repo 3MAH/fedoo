@@ -48,8 +48,17 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
         
         self.constitutivelaw = constitutivelaw
-        self.nlgeom = nlgeom #geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)        
-        self.corate = 'log' #'log': logarithmic strain, 'jaumann': jaumann strain, ...
+        
+        #default option for non linear 
+        self.nlgeom = nlgeom #geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)                
+        """Method used to treat the geometric non linearities. 
+            * Set to False if geometric non linarities are ignored (default). 
+            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
+            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
+        """
+        
+        self.corate = 'log' #'log': logarithmic strain, 'jaumann': jaumann strain, 'green_naghdi', 'gn'...        
+
         self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
         
         if nlgeom:
@@ -113,7 +122,7 @@ class StressEquilibrium(WeakFormBase):
                 raise NameError('Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)')
             
             if isinstance(self.nlgeom, str): self.nlgeom =self.nlgeom.upper()
-            if self.nlgeom is True: self.nlgeom = 'UL'
+            if self.nlgeom is True: self.nlgeom = 'UL'             
         
             if self.nlgeom == 'TL': 
                 assembly.sv['PK2'] = 0
@@ -140,15 +149,19 @@ class StressEquilibrium(WeakFormBase):
         
             
             #Compute the strain required for the constitutive law.             
-            ##### Should depend on the strain measure used in the cl !!!#########
             if self.nlgeom:
-                _comp_log_strain(self, assembly, pb)
+                self._corate_func(self, assembly, pb)
             else:
                 _comp_linear_strain(self, assembly, pb)
                 
-            # self.compute_strain(assembly,pb)            
+   
+    def update_2(self, assembly, pb):
+        if self.nlgeom == 'TL':
+            assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+            assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), self._convert_Lt_tag)            
+            # assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), "DsigmaDe_JaumannDD_2_DSDE")
+
         
-                        
     def to_start(self, assembly, pb):    
         if self.nlgeom == 'UL':
             # if updated lagragian method -> reset the mesh to the begining of the increment
@@ -159,10 +172,47 @@ class StressEquilibrium(WeakFormBase):
     
     def set_start(self, assembly, pb):
         if self.nlgeom:
-            #update cauchy stress 
-            if assembly.sv['Stress'] is not 0:
-                stress = assembly.sv['Stress'].asarray() 
-                assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+            if 'DStrain' in assembly.sv:
+                #rotate strain and stress -> need to be checked
+                assembly.sv['Strain'] = StrainTensorList(sim.rotate_strain_R(assembly.sv_start['Strain'].asarray(),assembly.sv['DR']) + assembly.sv['DStrain'])
+                
+                #update cauchy stress 
+                if assembly.sv['Stress'] is not 0:
+                    stress = assembly.sv['Stress'].asarray() 
+                    assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+                    if self.nlgeom == 'TL':
+                        assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+
+    @property
+    def corate(self):
+        """
+        Properties defining the way strain is treated in finite strain problem (using a weakform with nlgeom = True)        
+        corate can take the following str values:
+            * "log" (default): exact logarithmic strain (strain is recomputed at each iteration)
+            * "jaumann": Strain using the Jaumann derivative (strain is incremented)
+            * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative (strain is incremented)
+        if nlgeom is False, this property has no effect.
+
+        """
+        return self._corate
+    
+    @corate.setter
+    def corate(self, value):
+        value = value.lower()
+        if value == "log":
+            self._corate_func = _comp_log_strain
+            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
+        elif value in ["gn", "green_naghdi"]:
+            self._corate_func = _comp_gn_strain
+            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
+        elif value == "jaumann":
+            self._corate_func = _comp_jaumann_strain
+            self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
+        else: 
+            raise NameError('corate value not understood. Choose between "log", "green_naghdi" or "jaumann"')
+        self._corate = value
+    
+    
     
     # def copy(self, new_id = ""):
     #     """
@@ -212,7 +262,38 @@ def _comp_log_strain(wf, assembly, pb):
         
     (D,DR, Omega) = sim.objective_rate("log", assembly.sv_start['F'], F1, pb.dtime, False)
     assembly.sv['DR'] = DR
-    assembly.sv['Strain'] = StrainTensorList(sim.Log_strain(F1, True, False))    
+    assembly.sv['Strain'] = StrainTensorList(sim.Log_strain(F1, True, False))  
+
+def _comp_jaumann_strain(wf, assembly, pb):    
+    grad_values = assembly.sv['DispGradient']
+    eye_3 = np.empty((3,3,1), order='F')
+    eye_3[:,:,0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values)
+    assembly.sv['F'] = F1
+    if 'F' not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start['F'] = F0
+        
+    (DStrain, D,DR, Omega) = sim.objective_rate("jaumann", assembly.sv_start['F'], F1, pb.dtime, True)
+    assembly.sv['DR'] = DR
+    assembly.sv['DStrain'] = StrainTensorList(DStrain)  
+
+def _comp_gn_strain(wf, assembly, pb):    
+    #green_naghdi corate
+    grad_values = assembly.sv['DispGradient']
+    eye_3 = np.empty((3,3,1), order='F')
+    eye_3[:,:,0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values)
+    assembly.sv['F'] = F1
+    if 'F' not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start['F'] = F0
+        
+    (DStrain, D,DR, Omega) = sim.objective_rate("green_naghdi", assembly.sv_start['F'], F1, pb.dtime, True)
+    assembly.sv['DR'] = DR
+    assembly.sv['DStrain'] = StrainTensorList(DStrain)  
 
 def _comp_linear_strain_pgd(wf, assembly, pb): 
     #may be compatible with other methods like PGD but not compatible with simcoon

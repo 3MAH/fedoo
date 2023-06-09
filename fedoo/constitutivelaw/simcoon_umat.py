@@ -119,7 +119,8 @@ class Simcoon(Mechanical3D):
             DR = np.empty((3,3,assembly.n_gauss_points), order="F"); DR[...] = np.eye(3).reshape(3,3,1) #initialize all DR to np.eye(3)
             assembly.sv['DR'] = DR
             assembly.sv['Wm'] = np.zeros((4, assembly.n_gauss_points), order='F') 
-            
+            assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+
             #Launch the UMAT to compute the elastic matrix stored in "TangentMatrix"
             if self.props.shape[1] == 1:
                 zeros_6 = np.zeros(6)
@@ -127,11 +128,15 @@ class Simcoon(Mechanical3D):
             else:
                 zeros_6 = np.zeros((6, assembly.n_gauss_points), order='F')               
                 (sigma, statev, wm, assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, zeros_6, zeros_6, zeros_6, DR, self.props, assembly.sv['Statev'], 0, 0, assembly.sv['Wm'])                        
+                            
             if self.use_elastic_lt: assembly.sv['ElasticMatrix'] = assembly.sv['TangentMatrix']
 
 
     def update(self, assembly, pb): 
-        DStrain = assembly.sv['Strain'] - assembly.sv_start['Strain']       
+        if 'DStrain' in assembly.sv:
+            de = assembly.sv['DStrain']
+        else:
+            de = assembly.sv['Strain'] - assembly.sv_start['Strain']
         
         if 'Stress' not in assembly.sv or assembly.sv['Stress'] is 0: 
             assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
@@ -139,7 +144,7 @@ class Simcoon(Mechanical3D):
         if assembly.sv_start['Strain'] is 0: 
             assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
                   
-        (stress, assembly.sv['Statev'], assembly.sv['Wm'], assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, assembly.sv_start['Strain'].array, DStrain.array, assembly.sv['Stress'].array, assembly.sv['DR'], self.props, assembly.sv_start['Statev'], pb.time, pb.dtime, assembly.sv['Wm'])                        
+        (stress, assembly.sv['Statev'], assembly.sv['Wm'], assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, assembly.sv_start['Strain'].array, de.array, assembly.sv_start['Stress'].array, assembly.sv['DR'], self.props, assembly.sv_start['Statev'], pb.time, pb.dtime, assembly.sv_start['Wm'])                        
         assembly.sv['Stress'] = StressTensorList(stress)
 
         # displacement = pb.get_dof_solution()
@@ -172,7 +177,7 @@ class Simcoon(Mechanical3D):
         #     TotalStrain = assembly.sv['Strain']        
         #     assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
                 
-    
+        
     def set_start(self, assembly, pb):
         assembly.sv['TangentMatrix'] = assembly.sv['ElasticMatrix']
         	

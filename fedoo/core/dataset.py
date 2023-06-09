@@ -656,7 +656,7 @@ class MultiFrameDataSet(DataSet):
         pl.add_axes(color='Black', interactive = True)
                         
         pl.open_movie(filename+'.mp4', framerate=framerate, quality = quality)
-        
+        # pl.open_movie(filename, framerate=framerate, quality = quality)
 
         # pl.show(auto_close=False)  # only necessary for an off-screen movie
 

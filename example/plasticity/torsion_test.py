@@ -40,7 +40,6 @@ mat = 1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    material.corate = 2
     # Material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
@@ -52,7 +51,6 @@ elif mat == 1 or mat == 2:
     if mat == 1:
         props = np.array([E, nu, alpha, Re,k,m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
-        material.corate = 2
     elif mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
         material.SetHardeningFunction('power', H=k, beta=m)
@@ -135,12 +133,12 @@ print(time()-start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot('Cauchy_vm', component = "0", data_type='Node' ,show = True)
+results.plot('Stress', component = "vm", data_type='Node' ,show = True)
 
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-# results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
+results.write_movie(res_dir+filename, 'Stress_vm', framerate = 5, quality = 5)
 
 # ------------------------------------
 # Save pdf plot
@@ -156,8 +154,7 @@ results.plot('Cauchy_vm', component = "0", data_type='Node' ,show = True)
 # ------------------------------------
 # Write movie with moving camera
 # ------------------------------------
-results.write_movie(res_dir+filename, 'Cauchy_vm', component = 0, framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)
-
+# results.write_movie(res_dir+filename, 'Stress', component = 0, framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)
 
 
 

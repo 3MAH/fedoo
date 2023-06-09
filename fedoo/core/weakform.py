@@ -123,6 +123,11 @@ class WeakFormBase:
         #- Change in constitutive law (internal variable)
         pass
     
+    def update_2(self, assembly, pb):
+        #function called when the problem is updated (NR loop or time increment)
+        #same as update but launch after the update of constitutivelaws
+        pass
+    
     
     def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
