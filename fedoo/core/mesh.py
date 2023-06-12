@@ -1,5 +1,6 @@
 """Fedoo Mesh object"""
 
+from __future__ import annotations
 import numpy as np
 
 # from fedoo.util.Coordinate import Coordinate
@@ -963,8 +964,7 @@ class BoundingBox(list):
         return (self[1][2]-self[0][2])
 
 if __name__=="__main__":
-    import scipy as sp
-    a = Mesh(sp.array([[0,0,0],[1,0,0]]), sp.array([[0,1]]),'lin2')
+    a = Mesh(np.array([[0,0,0],[1,0,0]]), np.array([[0,1]]),'lin2')
     print(a.nodes)
 
 
