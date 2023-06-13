@@ -25,13 +25,15 @@ The WeakForm library contains the following classes:
    :toctree: generated/
    :template: custom-class-template.rst
 
-   InternalForce
-   InterfaceForce
-   Beam
-   BernoulliBeam
-   Plate
+   StressEquilibrium
+   SteadyHeatEquation
+   HeatEquation
+   BeamEquilibrium
+   PlateEquilibrium
+   PlateEquilibriumFI
+   PlateEquilibriumSI
    Inertia
-   ParametricBernoulliBeam
+   InterfaceForce
 """
 
 

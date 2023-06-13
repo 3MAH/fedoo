@@ -103,6 +103,8 @@ class DataSet():
     
         scale = kargs.pop('scale', 1)        
         show = kargs.pop('show', True)
+        screenshot = kargs.pop('screenshot', False) #not used if show = False
+        
         show_edges = kargs.pop('show_edges', True)
         sargs=kargs.pop('scalar_bar_args', None)                         
         azimuth = kargs.pop('azimuth',30)
@@ -134,9 +136,12 @@ class DataSet():
             
             if data_type == 'Node':
                 data = data[:n_physical_nodes]
-               
-        pl = pv.Plotter()
-        # pl = pv.Plotter()
+        
+        if screenshot:
+            pl = pv.Plotter(off_screen=True)
+        else:
+            pl = pv.Plotter()
+        
         pl.set_background('White')
         
         if sargs is None: #default value
@@ -175,11 +180,15 @@ class DataSet():
         pl.add_axes(color='Black', interactive = True)
         
         pl.add_text(f"{field}_{component}", name='name', color='Black')
-
-        if show: 
-            return pl.show(return_cpos = True)
-        else:
-            return pl
+        
+        if screenshot:
+            pl.show(screenshot=screenshot)
+        else:            
+            if show: 
+                return pl.show(return_cpos = True, screenshot=screenshot)
+                # return pl.show(screenshot=screenshot)
+            else:
+                return pl
        
         # cpos = pl.show(interactive = False, auto_close=False, return_cpos = True)
         # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)

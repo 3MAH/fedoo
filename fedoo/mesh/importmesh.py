@@ -1,9 +1,25 @@
 """This module contains functions to import fedoo mesh from files"""
+from __future__ import annotations
 
 from fedoo.core.mesh import Mesh, MultiMesh
 import numpy as np
 
-def import_file(filename, name = None):
+def import_file(filename: str, name: str = "") -> Mesh:
+    """Import a mesh from a file.
+    
+    Mesh.read should be prefered in most cases.
+
+    Parameters
+    ----------
+    filename : str
+        Name of file to import. Should be a ".msh" or a ".vtk" ascii files.
+    name : str, optional
+        Name of the imported Mesh. The default is "".
+
+    Returns
+    -------
+    Mesh object
+    """
     if filename[-4:].lower() == '.msh':
         return import_msh(filename, name)
     elif filename[-4:].lower() == '.vtk':
@@ -11,16 +27,34 @@ def import_file(filename, name = None):
     else: assert 0, "Only .vtk and .msh file can be imported"
 
 
-def import_msh(filename, name = None, meshType = ['curve','surface','volume'], addEntitySet = True, addPhysicalSet = True):
+def import_msh(filename: str, name: str = "", mesh_type: list[str] = ['curve','surface','volume']) -> Mesh:
+    """Import a mesh from a msh file (gmsh format). 
     
-    if isinstance(meshType, str): meshType = [meshType]
+    Mesh.read should be prefered in most cases.
+
+    Parameters
+    ----------
+    filename : str
+        Name of file to import. Should be a ".msh" or a ".vtk" ascii files.
+    name : str, optional
+        Name of the imported Mesh. The default is "".
+    mesh_type : list of str in {'curve', 'surface', 'volume'}
+        Type of geometries to import. Default = ['curve', 'surface', 'volume'],
+        ie import all meshes.
+
+    Returns
+    -------
+    Mesh object
+    """
+    
+    if isinstance(mesh_type, str): mesh_type = [mesh_type]
     
     possible_element_type = []
-    if 'curve' in meshType:
+    if 'curve' in mesh_type:
         possible_element_type.extend([('1','lin2'), ('8','lin3')]) 
-    if 'surface' in meshType:
+    if 'surface' in mesh_type:
         possible_element_type.extend([('2','tri3'), ('3','quad4'), ('9','tri6'), ('10','quad9'), ('16','quad8')]) 
-    if 'volume' in meshType:
+    if 'volume' in mesh_type:
         possible_element_type.extend([('4','tet4'), ('5','hex8'), ('11','tet10'), ('17','hex20')]) 
     possible_element_type = dict(possible_element_type)
     
@@ -101,7 +135,7 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
                 
             del msh[0:numPoints] 
             
-            if 'curve' in meshType:
+            if 'curve' in mesh_type:
                 #read line entities
                 for i in range(numCurves):
                     l = msh.pop(0).split()
@@ -110,7 +144,7 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
                 del msh[0:numCurves] 
                 
             
-            if 'surface' in meshType:                   
+            if 'surface' in mesh_type:                   
                 #read surface entities
                 for i in range(numSurfaces):
                     l = msh.pop(0).split()                    
@@ -118,7 +152,7 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
             else:
                 del msh[0:numSurfaces] 
             
-            if 'volume' in meshType:
+            if 'volume' in mesh_type:
                 #read volume entitires
                 for i in range(numVolumes):
                     l = msh.pop(0).split()
@@ -341,7 +375,23 @@ def import_msh(filename, name = None, meshType = ['curve','surface','volume'], a
     
     
 
-def import_vtk(filename, name = None):
+def import_vtk(filename: str, name: str = "") -> Mesh:
+    """Import a mesh from a vtk file (gmsh format). 
+    
+    Mesh.read should be prefered in most cases.
+
+    Parameters
+    ----------
+    filename : str
+        Name of file to import. Should be a ".msh" or a ".vtk" ascii files.
+    name : str, optional
+        Name of the imported Mesh. The default is "".
+
+    Returns
+    -------
+    Mesh object
+    """
+    
     filename = filename.strip()
 
     if name == None:

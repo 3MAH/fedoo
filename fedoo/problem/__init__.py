@@ -11,8 +11,8 @@ To create a new Problem, use one of the following function:
    :toctree: generated/
    :template: custom-class-template.rst
 
-   Static
-   NonLinearStatic
+   Linear   
+   NonLinear
    Newmark
    NonLinearNewmark
    ExplicitDynamic   

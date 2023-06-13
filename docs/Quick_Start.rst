@@ -69,10 +69,10 @@ For instance a simple weak formulation may be defined by:
 .. code-block:: python
     
     fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-    fd.weakform.InternalForce("ElasticLaw", name = "MyWeakForm")
+    fd.weakform.StressEquilibrium("ElasticLaw", name = "MyWeakForm")
 
 
-Create global matrix assembies
+Create global matrix assemblies
 __________________________________
 
 Once mesh and weak formulations have been created, we can now proceed to the assembly of the global matrices.
@@ -84,20 +84,31 @@ For instance, a simple assembly for the previously defined weak formulation and 
     
     fd.Assembly.create("MyWeakForm", 'Domain', name = "MyAssembly") 
 
+The Assembly object will automatically compute the assembled stiffness matrix using scipy sparse matrix format.
+To get the global stiffness matrix: 
+
+.. code-block:: python
+
+    fd.Assembly["MyAssembly"].get_matrix()). 
+
 
 Set the Problem and the solver
 ________________________________
 
+The problem should now be defined. Here a Linear problem is created based on the previously defined Assembly.
+
 .. code-block:: python
     
-    pb = fd.problem.Static("MyAssembly") 
+    pb = fd.problem.Linear("MyAssembly") 
 
-
+The solver can be modified as follow:
 
 .. code-block:: python
 
-    Problem.SetSolver('cg') #for conjugate gradient solver
+    pb.set_solver('cg') #for conjugate gradient solver
 
+For direct solver, it is strongly recommanded to install the pypardiso that allow to use the pardiso linear system solver 
+for drastically improved computation performance.  
 
 Boundary conditions
 _____________________
@@ -107,46 +118,43 @@ The boundaries are automatically stored as set of nodes ('left', 'right', 'top',
 
 .. code-block:: python
 
-    nodes_left = fd.Mesh['Domain'].GetSetOfNodes("left")
-    nodes_right = fd.Mesh['Domain'].GetSetOfNodes("right")
+    nodes_left = fd.Mesh['Domain'].node_sets["left"]
+    nodes_right = fd.Mesh['Domain'].node_sets["right"]
 
-An easy way to get some set of nodes at a given position is to use the numpy function where altogether to a condition on the node coordiantes.
+An easy way to get a set of nodes from the position of nodes is to use the :py:meth:`fedoo.Mesh.find` method.
 For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
 
 .. code-block:: python
+
+    nodes_left = Mesh['Domain'].find_nodes('X', mesh.bounding_box.xmin, tol=1e-10)
+    nodes_right = Mesh['Domain'].find_nodes('X', mesh.bounding_box.xmax, tol=1e-10)
+
     
-    crd = Mesh['Domain'].nodes #Get the coordinates of nodes
-    X = crd[:,0] #Get the x position of nodes
-    x_min = X.min() 
-    x_max = X.max()
-    
-    #extract a list of nodes using the numpy np.where function
-    nodes_left = np.where(np.abs(X - xmin) < 1e-10)[0]
-    nodes_right = np.where(np.abs(X - xmax) < 1e-10)[0]
-    
-Once the list of nodes have been defined, the boundary conditions can be applied with the
-Problem.BoundaryCondition function. 
+Once the list of nodes have been defined, the boundary conditions can be added to the problem. 
+The boundary conditions associated to a problem are stored in the attribute pb.bc.
+We can add two type of boundary conditions: 'Dirichlet' to prescribed dof values at given nodes
+or 'Neumann' (nodal force for mechanical problems). 
 
 .. code-block:: python
 
-    Problem.BoundaryCondition('Dirichlet','DispX',0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','DispY', 0,nodes_left)
-    Problem.BoundaryCondition('Dirichlet','DispZ', 0,nodes_left)
+    pb.bc.add('Dirichlet',nodes_left, 'Disp', 0) #displacement vector set to 0 on the left    
     
-    Problem.BoundaryCondition('Dirichlet','DispY', -10, nodes_right)
+    pb.bc.add('Dirichlet',nodes_right, 'DispY', -10) #displacement along y set to -10 on right
 
 To apply the boundary conditions to the active problem use the command: 
 
 .. code-block:: python
 
-    Problem.ApplyBoundaryCondition()
+    pb.apply_boundary_conditions()
 
 
 
 Solve the Problem
 __________________________________
 
+.. code-block:: python
 
+    pb.solve()
 
 Analyse and export results
 ________________________________

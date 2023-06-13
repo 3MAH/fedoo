@@ -100,6 +100,7 @@ class Mesh(MeshBase):
     @staticmethod
     def from_pyvista(pvmesh: pv.PolyData|pv.UnstructuredGrid, name:str = "") -> 'Mesh':
         """Build a Mesh from a pyvista UnstructuredGrid or PolyData mesh. 
+        
         Node and element data are not copied.
         
         Parameters
@@ -109,8 +110,8 @@ class Mesh(MeshBase):
             name of the new created Mesh. If specitified, this Mesh will be added in the dict containing all the loaded Mesh (Mesh.get_all()). 
             By default, the  Mesh is not added to the list.
         
-        Remark
-        ----------
+        Notes
+        -----
         For now, only mesh with single element type may be imported.
         Multi-element meshes will be integrated later. """                        
         if USE_PYVISTA:     
@@ -145,7 +146,9 @@ class Mesh(MeshBase):
     
     @staticmethod
     def read(filename: str, name: str = "") -> 'Mesh':
-        """Build a Mesh from a file. The file type is inferred from the file name.
+        """Build a Mesh from a file. 
+        
+        The file type is inferred from the file name.
         This function use the pyvista read method which
         is itself based on the vtk native readers and the meshio readers (available 
         only if the meshio lib is installed.)
@@ -154,14 +157,15 @@ class Mesh(MeshBase):
         ----------
         filename: str
             Name of the file to read
-        name : str
+        name : str, optional
             name of the new created Mesh. If specitified, this Mesh will be added in the dict containing all the loaded Mesh (Mesh.get_all()). 
             By default, the  Mesh is not added to the list.
         
-        Remark
-        ----------
+        Notes
+        -------
         For now, only mesh with single element type may be imported.
-        Multi-element meshes will be integrated later. """     
+        Multi-element meshes will be integrated later. 
+        """             
         if USE_PYVISTA:   
             mesh = Mesh.from_pyvista(pv.read(filename), name=name)
             return mesh
@@ -384,8 +388,8 @@ class Mesh(MeshBase):
         Return a numpy.ndarray arr where arr[old_id] gives the new index of a node
         with initial index = old_id 
         
-        Remarks
-        ------------
+        Notes
+        -----
         The total number and the id of nodes are modified.
         """
         nds_del = np.unique(index_nodes)

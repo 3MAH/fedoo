@@ -13,7 +13,8 @@ Welcome to FEDOO's documentation!
    ConstitutiveLaw
    WeakForm
    Assembly   
-   Problem   
+   Problem
+   Examples
 
 Indices and tables
 ==================

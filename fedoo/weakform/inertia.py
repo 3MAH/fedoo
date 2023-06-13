@@ -4,6 +4,7 @@ from fedoo.core.weakform import WeakFormBase
 class Inertia(WeakFormBase):
     """
     Weak formulation related to the inertia effect into dynamical simulation.
+    
     Should be used in :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark` or :mod:`fedoo.problem.ExplicitDynamic`
             
     Parameters

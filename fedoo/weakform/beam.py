@@ -5,7 +5,8 @@ from fedoo.core.weakform import WeakFormBase
 class BeamEquilibrium(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for beam models.
-    Geometrical non linearities not implemented for now
+    
+    Geometrical non linearities not implemented for now.
     
     Parameters
     ----------

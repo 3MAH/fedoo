@@ -408,6 +408,10 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', ndi
     for i in range(1,len(x1)-1):                    
         px= ( (x1[i]*y3[i]-y1[i]*x3[i])*(x2-x4)-(x1[i]-x3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )         
         py= ( (x1[i]*y3[i]-y1[i]*x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )
+        
+        # x_fact = (y2-y2[0])/(y2[-1]-y2[0]) * (x1[i]-x1[0])/(x1[-1]-x1[0]) + (x3[i]-x3[0])/(x3[-1]-x3[0]))
+        # (y4-y4[0])/(y4[-1]-y4[0])
+        
         new_crd += list(np.c_[px[1:-1],py[1:-1]])
         grid[i,1:-1] = np.arange(N,len(new_crd),1)
         N = len(new_crd)        
