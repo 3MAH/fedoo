@@ -6,7 +6,7 @@ fd.ModelingSpace("2Dstress")
 
 #Generate a simple structured mesh "Domain" (plate with a hole).
 mesh = fd.mesh.hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, \
-	elm_type = 'quad4', name ="Domain") 
+	elm_type = 'quad4', name ="Domain")
 
 #Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
 fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw') 
@@ -45,8 +45,8 @@ res = pb.get_results("Assembly", ['Stress_vm','Strain'], 'Node')
 U = pb.get_disp()
 
 assert U[0,22] == 0.1
-assert np.abs(U[1,22] +0.010440829731661383) < 1e-15
-assert np.abs(res.node_data['Stress_vm'][53]-350.1929992233047) < 1e-15
+assert np.abs(U[1,22] +0.01962855744173) < 1e-10
+assert np.abs(res.node_data['Stress_vm'][53]-175.50126302014) < 1e-10
 
 # res.plot('Stress_vm')
 # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")

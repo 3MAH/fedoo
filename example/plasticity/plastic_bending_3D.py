@@ -24,7 +24,6 @@ uimp = -8
 
 mesh = fd.mesh.box_mesh(nx=21, ny=7, nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
 
-
 crd = mesh.nodes 
 
 mat =1

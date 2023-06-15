@@ -380,7 +380,7 @@ def box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z
     return returned_mesh
 
 
-def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', ndim = None, name =""):
+def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', method = 0, ndim = None, name =""):
 #     #edge1 and edge3 should have the same lenght 
 #     #edge2 and edge4 should have the same lenght
 #     #last node of edge1 should be the first of edge2 and so on...
@@ -396,23 +396,51 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', ndi
     else: 
         elm = []
         crd = data
-        
-    x1 = crd[edge1,0] ; x2 = crd[edge2,0] ; x3 = crd[edge3,0][::-1] ; x4 = crd[edge4,0][::-1]
-    y1 = crd[edge1,1] ; y2 = crd[edge2,1] ; y3 = crd[edge3,1][::-1] ; y4 = crd[edge4,1][::-1] 
+    
+    edge3 = edge3[::-1]
+    edge4 = edge4[::-1]
+    x1 = crd[edge1] ; x2 = crd[edge2] ; x3 = crd[edge3] ; x4 = crd[edge4]
     new_crd = list(crd.copy())
     grid = np.empty((len(x1), len(x2)))
-    grid[0,:] = edge4[::-1] ; grid[-1,:] = edge2
-    grid[:,0] =  edge1 ; grid[:,-1] = edge3[::-1]
+    grid[0,:] = edge4 ; grid[-1,:] = edge2
+    grid[:,0] =  edge1 ; grid[:,-1] = edge3
     
     N = len(new_crd)
-    for i in range(1,len(x1)-1):                    
-        px= ( (x1[i]*y3[i]-y1[i]*x3[i])*(x2-x4)-(x1[i]-x3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )         
-        py= ( (x1[i]*y3[i]-y1[i]*x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )
-        
-        # x_fact = (y2-y2[0])/(y2[-1]-y2[0]) * (x1[i]-x1[0])/(x1[-1]-x1[0]) + (x3[i]-x3[0])/(x3[-1]-x3[0]))
-        # (y4-y4[0])/(y4[-1]-y4[0])
-        
-        new_crd += list(np.c_[px[1:-1],py[1:-1]])
+    coef1 = np.linspace(0,1,len(x1)).reshape(-1,1)
+    coef2 = np.linspace(0,1,len(x2)).reshape(-1,1)
+    
+    for i in range(1,len(x1)-1):  
+        if method == 0:     
+            #intesection of lines dawn between nodes of oposite edges             
+            pos = ( (x1[i,0]*x3[i,1]-x1[i,1]*x3[i,0])*(x2-x4)-(x1[i]-x3[i])*(x2[:,0]*x4[:,1]-x2[:,1]*x4[:,0]).reshape(-1,1) ) \
+                / ( (x1[i,0]-x3[i,0])*(x2[:,1]-x4[:,1])-(x1[i,1]-x3[i,1])*(x2[:,0]-x4[:,0]) ).reshape(-1,1)                
+            # px= ( (x1[i]*y3[i]-y1[i]*x3[i])*(x2-x4)-(x1[i]-x3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )         
+            # py= ( (x1[i]*y3[i]-y1[i]*x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )
+        elif method == 1:    
+            #nodes are regularly distributed between edge1 and  edge3 and moved in the perpendicular direction to be 
+            #as closed as possible to a regular distribution between edge2 and edge4
+            if i == 1:
+                # pos = x4
+                vec = (x2 - pos)/np.linalg.norm(x2 - pos, axis=1).reshape(-1,1)
+                
+            #prediction of position
+            pos1 = x1[i]*(1-coef2) + x3[i]*coef2
+            #uncentainty of position (pos1 - pos2) where pos2 is the position usging another method
+            dpos = x2*(coef1[i]) + x4*(1-coef1[i]) - pos1 #uncertainty about the best node position
+            #direction vector normalized (pos1-pos_old)
+            # vec = (x2 - pos)/np.linalg.norm(x2 - pos, axis=1).reshape(-1,1)
+            #pos is modified only in the direction vec
+            pos = np.sum(vec * dpos, axis=1).reshape(-1,1)*vec + pos1
+        elif method == 2:
+            #nodes are regularly distributed between edge1 and  edge3
+            pos = x1[i]*(1-coef2) + x3[i]*coef2
+        elif method == 3:
+            #nodes are regularly distributed between edge 2 and edge4
+            pos = x2*(coef1[i]) + x4*(1-coef1[i])        
+            
+
+        new_crd += list(pos[1:-1])
+        # new_crd += list(np.c_[px[1:-1],py[1:-1]])
         grid[i,1:-1] = np.arange(N,len(new_crd),1)
         N = len(new_crd)        
 
@@ -437,15 +465,42 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', ndi
     return Mesh(np.array(new_crd), elm, elm_type, ndim, name)
 
 
-def generate_nodes(mesh, N, data, typeGen = 'straight'):
-    #if typeGen == 'straight' -> data = (node1, node2)
-    #if typeGen == 'circular' -> data = (node1, node2, (center_x, center_y))
+def generate_nodes(mesh, N, data, type_gen = 'straight'):
+    """
+    Add regularly espaced nodes to an existing mesh between to existing nodes.
+    
+    This function serve to generated structured meshes. 
+    To create a 2D stuctured mesh: 
+        - Create and mesh with only sigular nodes that will serve to build the edges
+        - Use the generate_nodes functions to add some nodes to the edge
+        - Use the structured_mesh_2D from the set of nodes corresponding the egdes to build the final mesh.
+
+    Parameters
+    ----------
+    mesh : Mesh
+        the existing mesh
+    N : int
+        Number of generated nodes.
+    data : list or tuple
+        if type_gen == 'straight', data should contain the indices of the starting (data[0]) and ending (data[1]).
+        if type_gen == 'circular', data should contain the indices of the starting (data[0]) and ending (data[1]) nodes and the coordinates of the center of the circle (data[2])
+    type_gen : str in {'straight', 'circular'}
+        Type of line generated. The default is 'straight'.
+
+    Returns
+    -------
+    np.ndarray[int]
+        array containing indices of the new generated nodes
+
+    """
+    #if type_gen == 'straight' -> data = (node1, node2)
+    #if type_gen == 'circular' -> data = (node1, node2, (center_x, center_y))
     crd = mesh.nodes    
-    if typeGen == 'straight':
+    if type_gen == 'straight':
         node1 = data[0] ; node2 = data[1]
         listNodes = mesh.add_nodes(line_mesh(N, crd[node1], crd[node2]).nodes[1:-1])
         return np.array([node1]+list(listNodes)+[node2])
-    if typeGen == 'circular':
+    if type_gen == 'circular':
         nd1 = data[0] ; nd2 = data[1] ; c = data[2]
         c = np.array(c)
         R = np.linalg.norm(crd[nd1]-c)
@@ -458,7 +513,7 @@ def generate_nodes(mesh, N, data, typeGen = 'straight'):
         return np.array([nd1]+list(listNodes)+[nd2])
 
 
-def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 'quad4', sym= True, ndim = None, name =""):
+def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 'quad4', sym= False, ndim = None, name =""):
     """
     Create a mesh of a 2D plate with a hole  
 
@@ -475,7 +530,8 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
         The type of the element generated (default='quad4')
     Sym : bool 
         Sym = True, if only the returned mesh assume symetric condition and 
-        only the quarter of the plate is returned (default=True)
+        only the quarter of the plate is returned (default=False)
+        
     Returns
     -------
     Mesh
@@ -495,11 +551,11 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
         edge1 = generate_nodes(m,nx,(0,1))
         edge2 = generate_nodes(m,ny,(1,2))
         edge3 = generate_nodes(m,nx,(2,5))
-        edge4 = generate_nodes(m,ny,(5,0,(0,0)), typeGen = 'circular')
+        edge4 = generate_nodes(m,ny,(5,0,(0,0)), type_gen = 'circular')
         
         edge5 = generate_nodes(m,nx,(4,3))
         edge6 = generate_nodes(m,ny,(3,2))
-        edge7 = generate_nodes(m,ny,(5,4,(0,0)), typeGen = 'circular')
+        edge7 = generate_nodes(m,ny,(5,4,(0,0)), type_gen = 'circular')
         
         m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4')
         m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', ndim = ndim, name=name)
@@ -510,14 +566,14 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
         edge1 = generate_nodes(m,nx,(0,1))
         edge2 = generate_nodes(m,ny,(1,2))
         edge3 = generate_nodes(m,nx,(2,5))
-        edge4 = generate_nodes(m,ny,(5,0,(0,0)), typeGen = 'circular')
+        edge4 = generate_nodes(m,ny,(5,0,(0,0)), type_gen = 'circular')
         
         edge5 = generate_nodes(m,nx,(4,3))
         edge6 = generate_nodes(m,ny,(3,2))
-        edge7 = generate_nodes(m,ny,(5,4,(0,0)), typeGen = 'circular')
+        edge7 = generate_nodes(m,ny,(5,4,(0,0)), type_gen = 'circular')
         
-        m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4')
-        m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', ndim = ndim)
+        m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4',method=3)
+        m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', method=3, ndim = ndim)
         
         nnd = m.n_nodes
         crd = m.nodes.copy()
