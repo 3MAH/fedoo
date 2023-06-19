@@ -12,7 +12,7 @@ import os
 #--------------- Pre-Treatment --------------------------------------------------------
 dim = 3
 meshperio = True
-method = 1
+method = 2
 dir_meshes = '../../util/meshes/'
 
 if dim == 2: 
@@ -41,7 +41,7 @@ umat_name = 'ELISO'
 props = np.array([[1e5, 0.3, 1]])
 nstatev = 1
 
-L = sim.L_iso(1e5, 0.3, 'Enu')
+L = sim.L_iso(np.array([1e5, 0.3]), 'Enu')
 props_test = sim.L_iso_props(L)
 print('props', props_test)
 
@@ -193,7 +193,7 @@ print('props', props_test_eff)
 
 
 
-
+assert 0
 
 
 
@@ -201,7 +201,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib import cm, colors
 
-plt.rcParams['text.usetex'] = True
+plt.rcParams['text.usetex'] = False
 
 plt.rcParams["figure.figsize"] = (20,8)
 

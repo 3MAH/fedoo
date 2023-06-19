@@ -14,6 +14,7 @@ Welcome to FEDOO's documentation!
    WeakForm
    Assembly   
    Problem
+   post-treatment
    Examples
 
 Indices and tables

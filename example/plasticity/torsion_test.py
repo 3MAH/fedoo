@@ -1,13 +1,7 @@
 import fedoo as fd
 import numpy as np
-from time import time
 import os
-import pylab as plt
-from numpy import linalg
-import pyvista as pv
 
-
-start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
 fd.ModelingSpace("3D")
@@ -25,14 +19,9 @@ uimp = 1
 filename = 'sheartest_ref'
 res_dir = 'results/'
 
-# fd.mesh.box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
-# meshname = "Domain"
-
-fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")
-# fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")
-meshname = "Domain2"
-
-mesh = fd.Mesh[meshname]
+mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
+# mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
+# mesh = fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")['tet4']
 
 crd = mesh.nodes 
 
@@ -64,8 +53,8 @@ fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name ="wf")
 # WeakForm.StressEquilibriumUL("ConstitutiveLaw")
 
 
-# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-fd.Assembly.create("wf", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+# fd.Assembly.create("ConstitutiveLaw", mesh, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create("wf", mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 #node set for boundary conditions
 left = mesh.find_nodes('X',0)
@@ -121,9 +110,6 @@ pb.bc.add('Dirichlet',ref_node[1], 'DispX', 2*np.pi/2) #Rigid rotation of the ri
 pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.025)
 
 E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
-
-
-print(time()-start)
 
 
 # =============================================================

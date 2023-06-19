@@ -39,7 +39,7 @@ def _GenerateClass_NonLinear(libBase):
             self.__iter = 0
             self.__compteurOutput = 0
             
-            self.intervalOutput = None #save results every self.intervalOutput iter or time step if self.__saveOutputAtExactTime = True
+            self.interval_output = None #save results every self.interval_output iter or time step if self.__saveOutputAtExactTime = True
             self.__saveOutputAtExactTime = True
             self.err_num= 1e-8 #numerical error
         
@@ -290,14 +290,14 @@ def _GenerateClass_NonLinear(libBase):
             dt_min = kargs.get('dt_min',1e-6) #min time step
             
             self.__saveOutputAtExactTime = kargs.get('saveOutputAtExactTime',self.__saveOutputAtExactTime)
-            intervalOutput = kargs.get('intervalOutput',self.intervalOutput) # time step for output if saveOutputAtExactTime == 'True' (default) or  number of iter increments between 2 output 
+            interval_output = kargs.get('interval_output',self.interval_output) # time step for output if saveOutputAtExactTime == 'True' (default) or  number of iter increments between 2 output 
             update_dt = kargs.get('update_dt',True)
             
-            if intervalOutput is None:
-                if self.__saveOutputAtExactTime: intervalOutput = dt
-                else: intervalOutput = 1
+            if interval_output is None:
+                if self.__saveOutputAtExactTime: interval_output = dt
+                else: interval_output = 1
             
-            if self.__saveOutputAtExactTime: next_time = self.t0 + intervalOutput
+            if self.__saveOutputAtExactTime: next_time = self.t0 + interval_output
             else: next_time = self.tmax #next_time is the next exact time where the algorithm have to stop for output purpose
             
             self.init_bc_start_value()            
@@ -310,12 +310,12 @@ def _GenerateClass_NonLinear(libBase):
             while self.time < self.tmax - self.err_num:                         
         
                 save_results = (self.time != self.t0) and \
-                    ((self.time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%intervalOutput == 0))
+                    ((self.time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%interval_output == 0))
 
                 #update next_time                
                 if self.time == next_time: 
                     # self.__saveOutputAtExactTime should be True 
-                    next_time = next_time + intervalOutput
+                    next_time = next_time + interval_output
                     if next_time > self.tmax - self.err_num: next_time = self.tmax
                     
                 if self.time+dt > next_time - self.err_num: #if dt is too high, it is reduced to reach next_time

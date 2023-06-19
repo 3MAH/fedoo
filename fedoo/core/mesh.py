@@ -37,12 +37,12 @@ class Mesh(MeshBase):
         The name of the mesh
         
     
-    Alternative constructor
+    Notes
     --------------------------
     
-    It is possible to build a mesh using the following static methods:
-      * Mesh.read(filename, name) to load a mesh from a file 
-      * Mesh.from_pyvista(pvmesh, name) to build a mesh from pyvista UnstructuredGrid object 
+    It is also possible to build a mesh using the following static methods:
+      * :py:meth:`fedoo.Mesh.read` to load a mesh from a file 
+      * :py:meth:`fedoo.Mesh.from_pyvista` to build a mesh from pyvista UnstructuredGrid object 
     
     
     Example
@@ -603,10 +603,15 @@ class Mesh(MeshBase):
         self.to_pyvista().save(filename, binary)
     
     
-    def plot(self, show_edges: bool = True) -> None:
-        """Simple plot function using pyvista"""
+    def plot(self, show_edges: bool = True, **kargs) -> None:
+        """Simple plot function using pyvista.
+        
+        This function is proposed for quick visulation of Mesh. For advanced visualization, 
+        it is recommanded to convert the mesh to pyvista with the to_pyvista() method
+        and directly use the pyvista plot funcitonnalities.
+        """
         if USE_PYVISTA:  
-            self.to_pyvista().plot(show_edges=show_edges)
+            self.to_pyvista().plot(show_edges=show_edges, **kargs)
         else:
             raise NameError('Pyvista not installed.')
 

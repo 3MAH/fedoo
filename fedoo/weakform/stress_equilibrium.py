@@ -60,24 +60,6 @@ class StressEquilibrium(WeakFormBase):
         self.corate = 'log' #'log': logarithmic strain, 'jaumann': jaumann strain, 'green_naghdi', 'gn'...        
 
         self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
-        
-        if nlgeom:
-            if not(USE_SIMCOON):
-                raise NameError('Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)')
-                
-            #initialize non linear operator for strain
-            op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
-            if self.space.ndim == "3D":        
-                #nl_strain_op_vir = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
-                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(3)]) for i in range(3)] 
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(3)])]  
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][0] for k in range(3)])]
-                nl_strain_op_vir += [sum([op_grad_du[k][1].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][1] for k in range(3)])]
-            else:
-                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]            
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
-            
-            self.__nl_strain_op_vir = nl_strain_op_vir
             
     def get_weak_equation(self, assembly, pb):
         
@@ -126,6 +108,20 @@ class StressEquilibrium(WeakFormBase):
         
             if self.nlgeom == 'TL': 
                 assembly.sv['PK2'] = 0
+                                    
+            #initialize non linear operator for strain
+            op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
+            if self.space.ndim == "3D":        
+                #nl_strain_op_vir = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
+                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(3)]) for i in range(3)] 
+                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(3)])]  
+                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][0] for k in range(3)])]
+                nl_strain_op_vir += [sum([op_grad_du[k][1].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][1] for k in range(3)])]
+            else:
+                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]            
+                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
+            
+            self.__nl_strain_op_vir = nl_strain_op_vir
             
 
     def update(self, assembly, pb):

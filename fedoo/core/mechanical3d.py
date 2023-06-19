@@ -102,7 +102,10 @@ class Mechanical3D(ConstitutiveLaw):
             H_local = np.matmul(R_sigma_inv, np.matmul(H_global,R_epsilon))
             if len(H_local.shape) == 3: H_local = np.rollaxis(H_local,0,3)  
             
-        return H_local
+            return H_local
+        
+        else: 
+            return H_global
     
 
 

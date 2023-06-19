@@ -1,37 +1,36 @@
-from fedoo import *
+import fedoo as fd 
 import numpy as np
-import time
 
 #------------------------------------------------------------------------------
 # Dimension of the problem
 #------------------------------------------------------------------------------
-ModelingSpace("2Dstress")
+fd.ModelingSpace("2Dstress")
 
 #------------------------------------------------------------------------------
 # Definition of the Geometry 
 #------------------------------------------------------------------------------
-Mesh.import_file('plate_with_hole.msh', meshname = "Domain")
+fd.Mesh.read('plate_with_hole.msh', name = "Domain")
 
 #alternative mesh below (uncomment the line)
 # Mesh.rectangle_mesh(Nx=51, Ny=51, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = 'quad4', name ="Domain")
 meshname = "Domain"
-type_el = Mesh.get_all()[meshname].elm_type
-Util.meshPlot2d(meshname) #plot the mesh (using matplotlib)
+type_el = fd.Mesh[meshname].elm_type
+fd.util.mesh_plot_2d(meshname) #plot the mesh (using matplotlib)
 
 #------------------------------------------------------------------------------
 # Set of nodes for boundary conditions
 #------------------------------------------------------------------------------
-mesh = Mesh.get_all()[meshname]
+mesh = fd.Mesh[meshname]
 crd = mesh.nodes 
 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
 ymax = np.max(crd[:,1]) ; ymin = np.min(crd[:,1])
 
-center = [np.linalg.norm(crd,axis=1).argmin()]
+mesh.nearest_node(mesh.bounding_box.center)
 
 #------------------------------------------------------------------------------
 # Adding virtual nodes related the macroscopic strain
 #------------------------------------------------------------------------------
-StrainNodes = Mesh.get_all()[meshname].add_nodes(np.zeros(crd.shape[1]),2) 
+StrainNodes = mesh.add_nodes(np.zeros(crd.shape[1]),2) 
 #The position of the virtual node has no importance (the position is arbitrary set to [0,0,0])
 #For a problem in 2D with a 2D periodicity, we need 3 independant strain component 
 #2 nodes (with 2 dof per node in 2D) are required
@@ -44,22 +43,22 @@ StrainNodes = Mesh.get_all()[meshname].add_nodes(np.zeros(crd.shape[1]),2)
 #------------------------------------------------------------------------------
 #Material definition
 #------------------------------------------------------------------------------
-ConstitutiveLaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
+fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
 
 #------------------------------------------------------------------------------
 #Mechanical weak formulation
 #------------------------------------------------------------------------------
-WeakForm.StressEquilibrium("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw")
 
 #------------------------------------------------------------------------------
 #Global Matrix assembly
 #------------------------------------------------------------------------------
-Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
+fd.Assembly.create("ElasticLaw", meshname, type_el, name="Assembling") 
 
 #------------------------------------------------------------------------------
 #Static problem based on the just defined assembly
 #------------------------------------------------------------------------------
-Problem.Linear("Assembling")
+pb = fd.problem.Linear("Assembling")
 
 #------------------------------------------------------------------------------
 #Boundary conditions
@@ -70,7 +69,7 @@ Eyy = 0
 Exy = 0.1
 
 #Add some multipoint constraint for periodic conditions associated to the defined strain dof
-Homogen.DefinePeriodicBoundaryCondition("Domain", [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
+fd.homogen.DefinePeriodicBoundaryCondition("Domain", [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
 
 #Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
 Problem.bc.add('Dirichlet','DispX', Exx, [StrainNodes[0]]) #EpsXX
