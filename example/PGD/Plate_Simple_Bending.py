@@ -40,7 +40,7 @@ nodes_top   = Mesh.get_all()["Midplane"].node_sets["top"]
 Mesh["Domain"].add_node_set([nodes_left ,"all"], name = "faceLeft")
 Mesh["Domain"].add_node_set([nodes_right,"all"], name = "faceRight")
 
-pb = problem.Linear("Assembling")
+pb = pgd.Linear("Assembling")
 
 pb.bc.add('Dirichlet',"faceLeft",'DispX',0)
 pb.bc.add('Dirichlet',"faceLeft",'DispY',0)

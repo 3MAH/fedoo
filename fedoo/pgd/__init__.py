@@ -7,6 +7,7 @@ from .SeparatedArray import SeparatedArray, ConvertArraytoSeparatedArray, Separa
 from .SeparatedOperator import SeparatedOperator 
 from .UsualFunctions import inv, sqrt, exp, power, divide
 from .PeriodicBoundaryConditionPGD import DefinePeriodicBoundaryCondition
+from .ProblemPGD import ProblemPGD, Linear
 
 
 

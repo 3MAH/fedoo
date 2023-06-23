@@ -18,6 +18,12 @@ try:
     USE_PYVISTA = True
 except ImportError:
     USE_PYVISTA = False
+
+try:
+    import pyvistaqt as pvqt
+    USE_PYVISTA_QT = True
+except ImportError:
+    USE_PYVISTA_QT = False
     
 try:
     import pandas
@@ -106,6 +112,7 @@ class DataSet():
     def plot(self, field: str|None = None, data_type: str|None = None,
              component: int|str = 0, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None, 
+             plotter: object = None,
              screenshot: str|None = None, **kargs) -> None:
         
         """Plot a field on the surface of the associated mesh.                
@@ -139,6 +146,13 @@ class DataSet():
             if True, the mesh edges are shown    
         clim: sequence[float], optional
             Sequence of two float to define data boundaries for color bar. Defaults to minimum and maximum of data. 
+        screenshot: str, optional
+            If defined, indicated a filename to save the plot.
+        plotter: pyvista.Plotter object or str in {'qt', 'pv'}
+            If pyvista.Plotter object, plot the mesh in the given plotter
+            If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
+            If 'pv': use the standard pyvista plotter
+            If None: use the background plotter if available, or pyvista plotter if not.            
             
         **kwargs: dict, optional
             See pyvista.Plotter.add_mesh() in the document of pyvista for additional usefull options.
@@ -192,22 +206,48 @@ class DataSet():
             if data_type == 'Node':
                 data = data[:n_physical_nodes]
         
-        if screenshot:
-            pl = pv.Plotter(off_screen=True)
+        backgroundplotter = True
+        if USE_PYVISTA_QT and (plotter is None or plotter == 'qt'):
+            #use pyvistaqt plotter
+            pl = pvqt.BackgroundPlotter()
+        elif plotter is None or plotter == 'pv':
+            #default pyvista plotter
+            backgroundplotter = False
+            if screenshot:
+                pl = pv.Plotter(off_screen=True)
+            else:
+                pl = pv.Plotter()
+        else: 
+            #try to use the given plotter
+            #dont show
+            pl = plotter
+        
+        if pl.renderers.shape == (1,1):
+            multiplot = False
         else:
-            pl = pv.Plotter()
+            multiplot = True
         
-        pl.set_background('White')
+        pl.set_background('White')        
         
-        if sargs is None: #default value
-            sargs = dict(
-                interactive=True,
-                title_font_size=20,
-                label_font_size=16,
-                color='Black',
-                # n_colors= 10
-            )
-
+        if sargs is None and field is not None: #default value
+            if multiplot:                
+                #scalarbar can be interactive in multiplot
+                sargs = dict(
+                    title = f"{field}_{component}",
+                    title_font_size=20,
+                    label_font_size=16,
+                    color='Black',
+                    # n_colors= 10
+                )
+            else:
+                sargs = dict(
+                    interactive=True,
+                    title_font_size=20,
+                    label_font_size=16,
+                    color='Black',
+                    # n_colors= 10
+                )
+                
         if crd.shape[1] < 3: 
             crd = np.c_[crd, np.zeros((len(crd), 3-crd.shape[1]))]
             
@@ -232,24 +272,34 @@ class DataSet():
         
         if field is None:
             meshplot.active_scalars_name = None
-            pl.add_mesh(meshplot, show_edges = show_edges, **kargs)
-        else:             
-            pl.add_mesh(meshplot, scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim, **kargs)
+            if multiplot: 
+                pl.add_mesh(meshplot.copy(), show_edges = show_edges, **kargs)
+            else:
+                pl.add_mesh(meshplot, show_edges = show_edges, **kargs)
+        else:
+            if multiplot:       
+                pl.add_mesh(meshplot.copy(), scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim, **kargs)
+            else:
+                pl.add_mesh(meshplot, scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim, **kargs)
             pl.add_text(f"{field}_{component}", name='name', color='Black')
             
         pl.add_axes(color='Black', interactive = True)
         
-        if screenshot:
-            pl.show(screenshot=screenshot)
-        else:            
-            if show: 
-                return pl.show(return_cpos = True, screenshot=screenshot)
-                # return pl.show(screenshot=screenshot)
+        
+        if screenshot: 
+            name, ext = os.path.splitext(screenshot)
+            ext = ext.lower()
+            if ext in ['.pdf', '.svg', '.eps', '.ps', '.tex']:
+                pl.save_graphic(screenshot)
             else:
-                return pl
-       
-        # cpos = pl.show(interactive = False, auto_close=False, return_cpos = True)
-        # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
+                pl.screenshot(screenshot)            
+                
+            return pl
+                            
+        if not(backgroundplotter) and show:                
+            return pl.show(return_cpos = True)
+            
+        return pl
         
     
     def get_data(self, field, component = None, data_type=None, return_data_type = False):       
@@ -669,7 +719,7 @@ class MultiFrameDataSet(DataSet):
     def write_movie(self, filename: str ='test', field: str|None = None, 
                     data_type: str|None = None, component: int|str = 0, 
                     scale:float = 1, show_edges:bool = True, 
-                    clim: list[float] = None, **kargs):
+                    clim: list[float|None]|None = [None,None], **kargs):
         """        
         Generate a video of the MultiFrameDataSet object by loading iteratively every frame.
 
@@ -687,9 +737,13 @@ class MultiFrameDataSet(DataSet):
             The scale factor used for the nodes displacement, using the 'Disp' vector field
         show_edges : bool (default = True)
             if True, the mesh edges are shown
-        clim: sequence[float], optional
+        clim: sequence[float|None] or None
             Sequence of two float to define data boundaries for color bar. 
-            Defaults to minimum and maximum of data for the all iterations sequence. 
+            If clim is None, clim change at each iteration with the min and max.
+            If one of the  boundary is set to None, the value is replace by the min or max. 
+            of data for the all iterations sequence.
+            Defaults to minimum and maximum of data for the all iterations sequence 
+            (clim =[None,None]). 
         **kargs: dict 
             Other optional parameters (see notes below)
             
@@ -745,7 +799,10 @@ class MultiFrameDataSet(DataSet):
         center = (Xmin+Xmax)/2
         length = np.linalg.norm(Xmax-Xmin)
             
-        if clim is None: clim = clim_data
+        if clim is not None: 
+            if clim[0] is None: clim[0] = clim_data[0]
+            if clim[1] is None: clim[1] = clim_data[1]
+                
         window_size = kargs.pop('window_size', [1024, 768])
    
         self.load(0)
@@ -825,7 +882,8 @@ class MultiFrameDataSet(DataSet):
             else:
                 if clim is None: 
                     pl.update_scalar_bar_range([data.min(), data.max()])
-                    pl.update_scalars(data)
+                
+                pl.update_scalars(data)
     
             if rot_azimuth: 
                 pl.camera.Azimuth(rot_azimuth)
@@ -887,15 +945,7 @@ class MultiFrameDataSet(DataSet):
         
         for i in range(0,self.n_iter):                                   
             self.load(i)
-            data = self.get_data(field, data_type)
-            if len(data.shape)>1:
-                if component == "norm":
-                    data = np.linalg.norm(data, axis = 0)[:n_physical_nodes]
-                else:
-                    data = data[component,:n_physical_nodes]
-            else: 
-                data = data[:n_physical_nodes]
-                
+            data = self.get_data(field, component, data_type)[:n_physical_nodes]
             clim = [np.min([data.min(),clim[0]]), np.max([data.max(), clim[1]])]           
 
             if 'Disp' in self.node_data:

@@ -18,7 +18,6 @@ To create a new Problem, use one of the following function:
    ExplicitDynamic   
 
 Each of these functions creates an object that is derived from a base class "ProblemBase".
-The ProblemBase Class contains all the methods that may be used depending on the kind of Problems.
 
 .. currentmodule:: fedoo.core.base
 
@@ -27,9 +26,6 @@ The ProblemBase Class contains all the methods that may be used depending on the
    :template: custom-class-template.rst
 
    ProblemBase   
-   
-All the ProblemBase methods have an alias function at the root of the Problem Libary which allow 
-to run the methods on the active problem. 
 """
 
 import pkgutil

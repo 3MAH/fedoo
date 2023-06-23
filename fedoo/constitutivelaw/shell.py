@@ -54,9 +54,11 @@ class ShellBase(ConstitutiveLaw):
         """
         Return the last computed strain associated to the given assembly
 
-        Optional parameters
+        Parameters
         ------------------------
-        position : float
+        assembly: Assembly
+            
+        position : float (optional)
             Position in the thickness, given as a fraction of the demi thickness : 
             z = position * total_thickness/2
             position = 1 for the top face (default)
@@ -215,7 +217,7 @@ class ShellLaminate(ShellBase):
     def get_stress(self, assembly, **kargs):
         Strain = self.get_strain(assembly, **kargs) 
         position = kargs.get('position', 1)
-        layer = self.FindLayer(position)   # find the layer corresponding to the specified position        
+        layer = self.find_layer(position)   # find the layer corresponding to the specified position        
 
         Hplane = self.__listMat[layer].get_elastic_matrix("2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
@@ -249,11 +251,11 @@ class ShellLaminate(ShellBase):
         Stress += [sum([0 if Strain[4+j] is 0 else Strain[4+j]*np.array(Hshear[i][j]) for j in range(2)]) for i in range(2)] #SXX, SYY, SXY (SZZ should be = 0)
         return z, Stress
 
-    def FindLayer(self, position = 1):
+    def find_layer(self, position = 1):
         """
-        Return the num of layer corresponding to the given position in the thickness
+        Returns the num of layer corresponding to the given position in the thickness
         
-        Parameter
+        Parameters
         ----------
         position : float
             Position in the thickness, given as a fraction of the demi thickness : 

@@ -198,7 +198,7 @@ class ProblemBase:
 
 
     def __init__(self, name = "", space = None):
-        assert isinstance(name, str) , "An name must be a string" 
+        assert isinstance(name, str) , "A name must be a string" 
         self.__name = name
         self.__solver = ['direct']
         self.bc = ListBC(name=self.name+"_bc") #list containing boundary contidions associated to the problem        
@@ -256,15 +256,22 @@ class ProblemBase:
         return ProblemBase.active
         
     
-    def set_solver(self, solver, tol=1e-5, precond=True):
-        """
-        Define the solver for the linear system resolution.
-        The possible choice are : 
-            'direct': direct solver based on the function scipy.sparse.linalg.spsolve
-                      No option available
-            'cg': conjugate gradient based on the function scipy.sparse.linalg.cg
-                      use the tol arg to specify the convergence tolerance (default = 1e-5)
-                      use precond = False to desactivate the diagonal matrix preconditionning (default precond=True)                                              
+    def set_solver(self, solver: str, tol: float = 1e-5, precond: bool = True):
+        """Define the solver for the linear system resolution.
+        
+        Parameters
+        ---------------
+        solver: str
+            Type of solver.        
+            The possible choice are : 
+            * 'direct': direct solver based on the function scipy.sparse.linalg.spsolve
+            * 'cg': conjugate gradient based on the function scipy.sparse.linalg.cg
+        tol: float     
+            Convergence tolerance for conjugate gradient method (default = 1e-5).
+            This parameters is not used for direct solver.
+        precond: bool
+            use precond = False to desactivate the diagonal matrix preconditionning 
+            in the conjugate gradient method (default precond=True).    
         """
         self.__solver = [solver.lower(), tol, precond]
         

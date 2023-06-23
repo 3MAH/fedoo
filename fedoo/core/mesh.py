@@ -331,8 +331,8 @@ class Mesh(MeshBase):
     
 
     def find_coincident_nodes(self, tol: float = 1e-8) -> np.ndarray[int]:
-        """ 
-        Find some nodes with the same position considering a tolerance given by the argument tol. 
+        """ Find some nodes with the same position considering a tolerance given by the argument tol. 
+        
         return an array of shape (number_coincident_nodes, 2) where each line is a pair of nodes that are at the same position.
         These pairs of nodes can be merged using :
             meshObject.merge_nodes(meshObject.find_coincident_nodes()) 
@@ -482,12 +482,11 @@ class Mesh(MeshBase):
     
         
     def find_nodes(self, selection_criterion: str, value: float = 0, tol: float = 1e-6) -> np.ndarray[int]:
-        """
-        Return a list of nodes from a given selection criterion
+        """Return a list of nodes from a given selection criterion
 
         Parameters
         ----------
-       : str
+        selection_criterion : str
             selection criterion used to select the returned nodes
             possibilities are: 
             - 'X': select nodes with a specified x coordinate value

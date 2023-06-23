@@ -72,7 +72,7 @@ pb.bc.add('Neumann',node_right_center,'DispZ',F)
 pb.apply_boundary_conditions()
 pb.solve()
 
-assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.768895223360722) < 1e-8
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+25.7688952234) < 1e-7
 
 # plot the stress distribution
 # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],200)

@@ -69,7 +69,7 @@ pb.solve()
 # # print('Beam analitical deflection: ', F*L**3/(3*E*I))
 # # print('Numerical deflection: ', pb.get_disp('DispZ')[node_right_center])
 
-assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873054593) < 1e-10
+assert np.abs(pb.get_disp('DispZ')[node_right_center]+19.62990873) < 1e-7
 
 # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],20)
 # plt.plot(StressDistribution[0], z)

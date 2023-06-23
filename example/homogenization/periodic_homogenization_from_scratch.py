@@ -111,17 +111,12 @@ else:
     
     #create a 'result' folder and set the desired ouputs
     if not(os.path.isdir('results')): os.mkdir('results')
-    pb.add_output('results/test', 'Assembling', ['Disp', 'Stress', 'Strain'], output_type='Node', file_format ='vtk')    
-    pb.add_output('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
-
+    pb.add_output('results/test', 'Assembling', ['Disp', 'Stress', 'Strain'])    
+    # pb.add_output('results/test', 'Assembling', ['Disp', 'Stress', 'Strain'], output_type='Node', file_format ='vtk')    
+    # pb.add_output('results/test', 'Assembling', ['Stress', 'Strain'], output_type='Element', file_format ='vtk')    
     
     pb.bc.add('Dirichlet', center, 'Disp', 0, name = 'center')
-    
-    pb.apply_boundary_conditions()
-    
-    DofFree = pb._Problem__dof_free
-    MatCB = pb._Problem__MatCB
-    
+        
     # typeBC = 'Dirichlet'
     typeBC = 'Neumann'
     for i in range(6):
@@ -153,24 +148,27 @@ else:
         if dim == 3: 
             DStrain.append(np.array([pb._get_vect_component(X, 'DispX')[StrainNodes[0]], pb._get_vect_component(X, 'DispY')[StrainNodes[0]], pb._get_vect_component(X, 'DispZ')[StrainNodes[0]],
                                       pb._get_vect_component(X, 'DispX')[StrainNodes[1]], pb._get_vect_component(X, 'DispY')[StrainNodes[1]], pb._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
-    
-            F = MatCB.T @ pb.get_A() @ MatCB @ X[DofFree]
-        
-            F = F.reshape(3, -1)
-            stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
+            
+            Fext = pb.get_ext_forces()
+            Fext = Fext.reshape(3, -1)
+            stress = [Fext[0, -2], Fext[1, -2], Fext[2, -2], Fext[0, -1], Fext[1, -1], Fext[2, -1]]            
         
             DStress.append(stress)
+            
+            Fext2 = pb.get_ext_forces(include_mpc=False)
+            Fext2 = Fext2.reshape(3, -1)
+            assert 0
+
+
         elif dim == 2:
             DStrain.append(np.array([pb._get_vect_component(X, 'DispX')[StrainNodes[0]], pb._get_vect_component(X, 'DispY')[StrainNodes[0]], 0,
                                      pb._get_vect_component(X, 'DispX')[StrainNodes[1]], 0, 0]))        
     
-            F = MatCB.T @ pb.get_A() @ MatCB @ X[DofFree]
-        
-            F = F.reshape(2, -1)
-            stress = [F[0, -2], F[1, -2], 0, F[0, -1], 0, 0]
+            Fext = pb.get_ext_forces()
+            Fext = Fext.reshape(2, -1)
+            stress = [Fext[0, -2], Fext[1, -2], 0, Fext[0, -1], 0, 0]            
         
             DStress.append(stress)
-
     
     if typeBC == "Neumann":
         L_eff = np.linalg.inv(np.array(DStrain).T)

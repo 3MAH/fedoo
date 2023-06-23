@@ -28,7 +28,7 @@ k = 1000
 m = 0.25
 alpha = 1e-5
 props = np.array([1e5, 0.3, alpha, Re, k, m])
-material = fd.constitutivelaw.Simcoon_new("EPICP", props, name='ConstitutiveLaw')
+material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
 
 #Create the weak formulation of the mechanical equilibrium equation
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", name = "WeakForm", nlgeom=False)

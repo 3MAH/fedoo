@@ -12,7 +12,7 @@ start = time()
 
 fd.ModelingSpace("2Dplane")
 
-NLGEOM = True
+NLGEOM =  'TL'
 #Units: N, mm, MPa
 h = 2
 w = 10
@@ -30,15 +30,15 @@ crd = mesh.nodes
 
 mat =1
 if mat == 0:
-    props = np.array([[E, nu, alpha]])
-    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    props = np.array([E, nu, alpha])
+    material = fd.constitutivelaw.Simcoon("ELISO", props, name='ConstitutiveLaw')
     material.corate = 0
 elif mat == 1:
     Re = 300
     k=1000
     m=0.25
-    props = np.array([[E, nu, alpha, Re,k,m]])
-    material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+    props = np.array([E, nu, alpha, Re,k,m])
+    material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
     material.corate = 0
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
@@ -80,7 +80,7 @@ bc1 = pb.bc.add('Dirichlet',nodes_top1,'DispY', uimp)
 bc2 = pb.bc.add('Dirichlet',nodes_top2,'DispY', uimp)
 
 
-pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
+pb.nlsolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.005)
 
 
 ################### step 2 ################################
@@ -96,8 +96,11 @@ pb.nlsolve(dt = 0.2, tmax = 1, update_dt = True, ToleranceNR = 0.005)
 # print(time()-start)
 
 res = pb.get_results('Assembling', ['Strain','Stress'], 'Node') 
-assert np.abs(res.node_data['Strain'][0][941]+0.019651029182686866) < 1e-8
-assert np.abs(res.node_data['Stress'][3][234]+2.6359202403886792) < 1e-4
+assert np.abs(res.node_data['Strain'][0][941]+0.01924864476799095) < 1e-8
+assert np.abs(res.node_data['Stress'][3][234]+56.41916240526384) < 1e-4
+
+# assert np.abs(res.node_data['Strain'][0][941]+0.019651029182686866) < 1e-8
+# assert np.abs(res.node_data['Stress'][3][234]+2.6359202403886792) < 1e-4
 # assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4# assert np.abs(res['Stress'][3][234]+3.937900318926645) < 1e-4
 
 

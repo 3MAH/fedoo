@@ -129,7 +129,7 @@ class WeakFormBase:
         pass
     
     
-    def to_start(self):
+    def to_start(self, assembly, pb):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
         pass
     
@@ -202,14 +202,14 @@ class ListConstitutiveLaw(ConstitutiveLaw):
             cl.update(assembly, pb)
     
     
-    def set_start(self):  
+    def set_start(self, assembly, pb):  
         for cl in self._list_constitutivelaw:
-            cl.set_start()
+            cl.set_start(assembly, pb)
     
     
-    def to_start(self):
+    def to_start(self, assembly, pb):
         for cl in self._list_constitutivelaw:
-            cl.to_start()
+            cl.to_start(assembly, pb)
 
 
     def reset(self):

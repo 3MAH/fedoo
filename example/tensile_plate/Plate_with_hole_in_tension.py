@@ -11,7 +11,7 @@ method_output = 3
 fd.ModelingSpace("2Dstress")
 
 fd.mesh.import_file('plate_with_hole.msh', name = "Domain")
-
+# 
 #alternative mesh below (uncomment the line)
 #Mesh.rectangle_mesh(Nx=101, Ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = type_el, name ="Domain")
 type_el = fd.Mesh['Domain'].elm_type
@@ -99,3 +99,16 @@ if method_output == 1:
 
 elif method_output == 3:
     res = pb.get_results("Assembling", ['Disp', 'Stress','Strain'], 'Node')
+    import pyvista as pv
+    pl = pv.Plotter(shape=(2,2))
+    # from pyvistaqt import BackgroundPlotter
+    # pl = BackgroundPlotter(shape = (2,2))
+    res.plot('Stress','Node','vm', plotter=pl)
+    pl.subplot(1,0)
+    res.plot('Stress','Node', 'XX', plotter=pl)
+    pl.subplot(0,1)
+    res.plot('Stress', 'Node', 'YY', plotter=pl)
+    pl.subplot(1,1)
+    res.plot('Stress', 'Node', 'XY', plotter=pl)
+    pl.show()
+    

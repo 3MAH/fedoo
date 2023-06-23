@@ -44,7 +44,7 @@ pb.set_nr_criterion("Displacement", tol = 5e-2, max_subiter=5, err0 = 100)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-results = pb.add_output('results/thermal3D', 'Assembling', ['Temp'], output_type='Node', file_format ='npz')    
+results = pb.add_output('results/thermal3D', 'Assembling', ['Temp'])    
 # pb.add_output('results/bendingPlastic', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
 tmax = 10
@@ -68,9 +68,9 @@ cpos = [(-2.090457552750125, 1.7582929402632352, 1.707926514944027),
         (0.20739316009534275, -0.2296587829717462, -0.38339561081860574),
         (0.42357673667356105, -0.37693638734293083, 0.8237121512068624)]
 
-results.load(43)
+results.load(46)
 pl = results.plot('Temp', show = False)
 pl.camera_position = cpos
 pl.show()
 
-# results.write_movie('Temp')
+# results.write_movie('toto','Temp')

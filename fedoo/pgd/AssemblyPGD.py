@@ -37,6 +37,12 @@ class AssemblyPGD(AssemblyFEM):
         
         self.__listAssembly = [AssemblyFEM(weakForm, m, self.__listElementType[i], n_elm_gp = self.__listNumberOfGaussPoints[i]) 
                                for i, m in enumerate(mesh.GetListMesh())]
+        
+        self.sv = {}
+        """ Dictionary of state variables associated to the associated for the current problem."""
+        self.sv_start = {}
+        
+        self._pb = None
 
     def assemble_global_mat(self, compute = 'all'):
         """
@@ -50,7 +56,7 @@ class AssemblyPGD(AssemblyFEM):
         mesh = self.mesh
         dim = mesh.get_dimension()
 
-        wf = self.weakform.get_weak_equation(mesh)  
+        wf = self.weakform.get_weak_equation(self, self._pb)  
         nvar = [mesh._GetSpecificNumberOfVariables(idmesh, self.space.nvar) for idmesh in range(dim)]       
         
         AA = []  

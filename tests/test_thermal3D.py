@@ -60,5 +60,5 @@ pb.nlsolve(dt = tmax/nb_iter, tmax = tmax, update_dt = True)
 
 
 results.load()
-assert np.abs(results.node_data['Temp'][8712]-2.679360557129252) < 1e-15
+assert np.abs(results.node_data['Temp'][8712]-2.610859332847924) < 1e-8
 

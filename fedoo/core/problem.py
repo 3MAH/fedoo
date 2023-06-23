@@ -12,6 +12,36 @@ from fedoo.core.dataset import DataSet
 import time 
 
 class Problem(ProblemBase):
+    """Base class to define a problem that generate a linear system and to solve
+    the linear system with some defined boundary conditions.
+        
+    The linear problem is written under the form: 
+    A*X = B+D
+    where:
+     * A is a square matrix build with the associated assembly object calling
+         assembly.get_global_matrix()
+     * X is the column vector containing the degrees of freedom (solution after solving)
+     * B is a column vector used to set Neumann boundary conditions
+     * D is a column vector build with the associated assembly object calling
+         assembly.get_global_vector()    
+
+    Parameters
+    ----------
+    A: scipy sparse matrix
+        Matrix that define the discretized linear system to solve.
+    B: np.ndarray or 0
+        if 0, B is initialized to a zeros array with de adequat shape.
+    D: np.ndarray or 0
+        if 0, D is ignored. 
+    mesh: fedoo Mesh 
+        mesh associated to the problem.
+    name: str (default = "MainProblem")
+        name of the problem.
+    space: ModelingSpace(Optional)
+        ModelingSpace on which the problem is defined.
+    name: str
+        name of the problem.
+    """
     
     def __init__(self, A, B, D, mesh, name = "MainProblem", space = None):
 
@@ -33,8 +63,8 @@ class Problem(ProblemBase):
         self.__X = np.ndarray( self.n_dof ) #empty array
         self._Xbc = 0
 
-        self.__dof_slave = np.array([])
-        self.__dof_free    = np.array([])
+        self._dof_slave = np.array([])
+        self._dof_free  = np.array([])
         
         #prepering output demand to export results
         self._problem_output = _ProblemOutput()        
@@ -100,22 +130,22 @@ class Problem(ProblemBase):
 
     def solve(self, **kargs):
         if len(self.__A.shape) == 2: #A is a matrix        
-            if len(self.__dof_slave) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
+            if len(self._dof_slave) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
              # to delete after a careful validation of the other case
-            # self.__X[self.__dof_slave] = self._Xbc[self.__dof_slave]
+            # self.__X[self._dof_slave] = self._Xbc[self._dof_slave]
             
-            # Temp = self.__A[:,self.__dof_slave].dot(self.__X[self.__dof_slave])
+            # Temp = self.__A[:,self._dof_slave].dot(self.__X[self._dof_slave])
             # if self.__D is 0:
-            #     self.__X[self.__dof_free]  = self._solve(self.__A[self.__dof_free,:][:,self.__dof_free],self.__B[self.__dof_free] - Temp[self.__dof_free])
+            #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] - Temp[self._dof_free])
             # else:
-            #     self.__X[self.__dof_free]  = self._solve(self.__A[self.__dof_free,:][:,self.__dof_free],self.__B[self.__dof_free] + self.__D[self.__dof_free] - Temp[self.__dof_free])
+            #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
 
             if self.__D is 0:
-                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
+                self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
             else:
-                self.__X[self.__dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self._Xbc)  )                   
+                self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self._Xbc)  )                   
                        
-            self.__X = self.__MatCB * self.__X[self.__dof_free]  + self._Xbc
+            self.__X = self.__MatCB * self.__X[self._dof_free]  + self._Xbc
 
                 
         elif len(self.__A.shape) == 1: #A is a diagonal matrix stored as a vector containing diagonal values 
@@ -123,7 +153,7 @@ class Problem(ProblemBase):
             
             assert self.__D is not 0, "internal error, contact developper"
             
-            self.__X[self.__dof_free]  = (self.__B[self.__dof_free] + self.__D[self.__dof_free]) / self.__A[self.__dof_free]               
+            self.__X[self._dof_free]  = (self.__B[self._dof_free] + self.__D[self._dof_free]) / self.__A[self._dof_free]               
 
     def get_X(self): #solution of the linear system
         return self.__X
@@ -202,7 +232,9 @@ class Problem(ProblemBase):
             # print(len(col) - len(col[mask]))
             col = col[mask] ; row = row[mask] ; data = data[mask]
             
-            self._MFext = M.tocsr().T
+            # self._MFext = M.tocsr().T
+            self._MFext = M
+            self._dof_blocked = dof_blocked
         else: 
             self._MFext = 0
 
@@ -216,8 +248,8 @@ class Problem(ProblemBase):
                 shape=(nvar*n,len(dof_free))).tocsr()
         
         self.__B = F
-        self.__dof_slave = dof_slave
-        self.__dof_free = dof_free
+        self._dof_slave = dof_slave
+        self._dof_free = dof_free
         self._t_fact = t_fact
 
 
@@ -243,33 +275,55 @@ class Problem(ProblemBase):
                         e.start_value = F[e.variable*n_nodes + e.node_set]
 
 
-    def get_ext_forces(self, name = 'all'):
-        """
-        Return the nodal Forces and/or moments in global coordinates.
+    def get_ext_forces(self, name = 'all', include_mpc=True):
+        """Return the nodal Forces in global coordinates system.
+        
         The resulting forces are the sum of :
         - External forces (associated to Neumann boundary conditions)
         - Node reaction (associated to Dirichelet boundary conditions)
-        - Inertia forces 
+        - Inertia forces                     
         
-        parameter:
+        Parameters
         ------------
-        * name (str) 
-            - the name of the variable associated to the requested force.
-            - the name of a vector. In that case, the function return 
+        name : str
+            Can be either the name of a variable associated to the requested force,
+            the name of a vector or 'all'. 
+        include_mpc: bool (default = True)
+            if True, the multi_point_constraint (mpc) are included in the returned ext forces. This make the external force 
+            accessible on mpc virtual dof (dof only used in mpc and not linked to a mesh). A direct consequence 
+            is that the external force can't be accessed on the mpc slave dof.
+        
+        Returns
+        ------------
+        np.ndarray
+            The external forces. If a vector name is given, the function returns 
             the external force of every vector component.
-            - 'all': in this case, return a 1d numpy array containing the external force for
-            associated to every variable. The returned array may be easily reshaped 
-            to separated components by using:
-            pb.get_ext_forces().reshape(pb.space.nvar,-1)
+            if name == 'all', return a 1d numpy array containing the external forces 
+            associated to every dof. In this case, the returned array may be easily reshaped 
+            to separated components by using: pb.get_ext_forces().reshape(pb.space.nvar,-1)
+            
+        Notes
+        ---------
+        The "force" mentionned here must be seen as a generic term. 
+        The true physical meanings of the "external forces" depends
+        on the problem and the nature of the dof (for instance moment for rotational dof or
+        heat flux for temperature). 
         """
-        if self._MFext is 0:  
+        if self._MFext is 0 or not(include_mpc):  
             if self.get_D() is 0:
                 return self._get_vect_component(self.get_A() @ self.get_X(), name)
             else:
                 return self._get_vect_component(self.get_A() @ self.get_X() - self.get_D(), name)
         else:
+            M = self._MFext            
+            # adding identity for all dof execpted slave dof in mpc
+            dof_idt = list(self._dof_free) + list(self._dof_blocked) 
+            col = np.hstack((M.col, dof_idt))
+            row = np.hstack((M.row, dof_idt))             
+            data = np.hstack((M.data, np.ones(len(dof_idt))))
+            M = M.tocsr().T
             #need to be checked
-            M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
+            # M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
             if self.get_D() is 0:
                 return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
             else:

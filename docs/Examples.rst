@@ -2,6 +2,8 @@ Simple examples
 =================================
 
 
+.. _example_plate_with_hole:
+
 Plate with hole in tension
 ___________________________
 

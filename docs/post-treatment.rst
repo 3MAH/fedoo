@@ -148,10 +148,35 @@ Read results
    DataSet.load
    MultiFrameDataSet.load
    
-   
 
+Advanced operations
+========================
 
+Multiplot feature
+-----------------------
 
+It is possible to create the plotter before calling the plot function.
+This allow for instance to use the pyvista multiplot capability. 
+For instance,
+we can plot the stress results after the example :ref:`example_plate_with_hole`:
+
+.. code-block:: python
+    
+    import pyvista as pv
+    pl = pv.Plotter(shape=(2,2))
+    # or using the backgroundplotter:
+    # from pyvistaqt import BackgroundPlotter
+    # pl = BackgroundPlotter(shape = (2,2))
+    results.plot('Stress','Node','vm', plotter=pl)
+    pl.subplot(1,0)
+    results.plot('Stress','Node', 'XX', plotter=pl)
+    pl.subplot(0,1)
+    results.plot('Stress', 'Node', 'YY', plotter=pl)
+    pl.subplot(1,1)
+    results.plot('Stress', 'Node', 'XY', plotter=pl)
+    pl.show()
+
+.. image:: ./_static/examples/multiplot.png
 
 
 

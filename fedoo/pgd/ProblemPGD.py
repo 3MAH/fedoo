@@ -7,6 +7,10 @@ from fedoo.pgd.SeparatedOperator import *
 #from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
 from fedoo.core.base import ProblemBase
 from fedoo.core.boundary_conditions import BoundaryCondition
+from fedoo.problem.linear import _LinearBase
+from fedoo.problem.explicit_dynamic import _ExplicitDynamicBase
+from fedoo.problem.non_linear import _NonLinearBase
+from fedoo.problem.newmark import _NewmarkBase
 
 #===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)
@@ -636,6 +640,18 @@ class ProblemPGD(ProblemBase):
 #        return Mat_K
 #
 #
+
+class Linear(_LinearBase, ProblemPGD):
+    pass
+
+class ExplicitDynamic(_ExplicitDynamicBase, ProblemPGD):
+    pass
+
+class NonLinear(_NonLinearBase, ProblemPGD): 
+    pass
+
+class Newmark(_NewmarkBase, ProblemPGD):
+    pass
 
 # def get_Xbc(): return ProblemPGD.get_all()["MainProblem"].get_Xbc() 
 # def ComputeResidualNorm(err_0=None): return ProblemPGD.get_all()["MainProblem"].ComputeResidualNorm(err_0)
