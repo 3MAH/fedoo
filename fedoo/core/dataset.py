@@ -112,6 +112,7 @@ class DataSet():
     def plot(self, field: str|None = None, data_type: str|None = None,
              component: int|str = 0, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None, 
+             node_labels: bool|list = False, element_labels: bool|list = False, 
              plotter: object = None,
              screenshot: str|None = None, **kargs) -> None:
         
@@ -144,15 +145,21 @@ class DataSet():
             show = False allow to customize the plot with pyvista before rendering it.
         show_edges : bool (default = True)
             if True, the mesh edges are shown    
-        clim: sequence[float], optional
+        clim : sequence[float], optional
             Sequence of two float to define data boundaries for color bar. Defaults to minimum and maximum of data. 
-        screenshot: str, optional
-            If defined, indicated a filename to save the plot.
-        plotter: pyvista.Plotter object or str in {'qt', 'pv'}
+        node_labels : bool | list (default = False)
+            If True, show node labels (node indexe)
+            If a list is given, print the label given in node_labels[i] for each node i.
+        element_labels : bool | list (default = False)
+            If True, show element labels (element indexe)
+            If a list is given, print the label given in element_labels[i] for each element i.            
+        plotter : pyvista.Plotter object or str in {'qt', 'pv'}
             If pyvista.Plotter object, plot the mesh in the given plotter
             If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
             If 'pv': use the standard pyvista plotter
             If None: use the background plotter if available, or pyvista plotter if not.            
+        screenshot: str, optional
+            If defined, indicated a filename to save the plot.
             
         **kwargs: dict, optional
             See pyvista.Plotter.add_mesh() in the document of pyvista for additional usefull options.
@@ -285,6 +292,15 @@ class DataSet():
             
         pl.add_axes(color='Black', interactive = True)
         
+        #Node and Element Labels
+        if node_labels:
+            if node_labels == True: 
+                node_labels = list(range(self.mesh.n_physical_nodes))
+            pl.add_point_labels(crd, node_labels)
+        if element_labels:
+            if element_labels == True: 
+                element_labels = list(range(self.mesh.n_elements))
+            pl.add_point_labels(meshplot.cell_centers(), element_labels)
         
         if screenshot: 
             name, ext = os.path.splitext(screenshot)

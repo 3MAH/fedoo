@@ -159,11 +159,11 @@ class ListBC(BCBase):
         Add a boundary condition to the ListBC object, and then to the associated problem
         if there is one. 
         
-        To possible use: 
+        Two possible use: 
         * ListBC.add(bc), where bc is any BC object. 
         Add the object bc at the end of the list. (equivalent to ListBC.append(bc))        
         
-        * ListBC.add(bc_type, variable, value, node_set, time_func=None, start_value=None, name=""):        
+        * ListBC.add(bc_type, node_set, variable, value, time_func=None, start_value=None, name=""):        
         Define some standard boundary conditions (Dirichlet of Neumann BC), using
         the BoundaryCondition.create staticmethod, and add it at the end of the list. 
         

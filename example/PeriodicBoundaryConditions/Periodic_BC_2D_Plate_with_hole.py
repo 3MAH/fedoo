@@ -72,18 +72,18 @@ Exy = 0.1
 fd.homogen.DefinePeriodicBoundaryCondition("Domain", [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
 
 #Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
-Problem.bc.add('Dirichlet','DispX', Exx, [StrainNodes[0]]) #EpsXX
-Problem.bc.add('Dirichlet','DispY', Exy, [StrainNodes[0]]) #EpsXY
+pb.bc.add('Dirichlet','DispX', Exx, [StrainNodes[0]]) #EpsXX
+pb.bc.add('Dirichlet','DispY', Exy, [StrainNodes[0]]) #EpsXY
 # Problem.bc.add('Neumann','DispX', 1e4, [StrainNodes[0]]) #EpsXY
 
-Problem.bc.add('Dirichlet','DispX', 0, [StrainNodes[1]]) #nothing (blocked to avoir singularity)
-Problem.bc.add('Dirichlet','DispY', Eyy, [StrainNodes[1]]) #EpsYY
+pb.bc.add('Dirichlet','DispX', 0, [StrainNodes[1]]) #nothing (blocked to avoir singularity)
+pb.bc.add('Dirichlet','DispY', Eyy, [StrainNodes[1]]) #EpsYY
 
 #Block one node to avoid singularity
-Problem.bc.add('Dirichlet','DispX', 0, center)
-Problem.bc.add('Dirichlet','DispY', 0, center)
+pb.bc.add('Dirichlet','DispX', 0, center)
+pb.bc.add('Dirichlet','DispY', 0, center)
 
-Problem.apply_boundary_conditions()
+pb.apply_boundary_conditions()
 
 #------------------------------------------------------------------------------
 #Solve

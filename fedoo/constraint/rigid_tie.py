@@ -14,7 +14,7 @@ from fedoo.core.mesh import MeshBase
 from scipy.spatial.transform import Rotation
 
 class RigidTie(BCBase):
-    """Boundary conditions class that eliminate dof assuming a rigid body tie between noeds """
+    """Boundary conditions class that eliminate dof assuming a rigid body tie between nodes """
     
     def __init__(self, list_nodes, node_cd, var_cd, name = "Rigid Tie"):
         """   

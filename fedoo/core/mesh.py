@@ -783,7 +783,28 @@ class Mesh(MeshBase):
         self._elm_interpolation = {}
         self._sparse_structure = {}
 
-    
+    def gausspoint_coordinates(self, n_elm_gp: int|None = None) -> np.ndarray:
+        """Return the coordinates of the integration points
+        
+        Parameters
+        ----------
+        n_elm_gp : int|None, optional
+            Number of gauss points. Default depend of the element type. 
+            If n_elm_gp = 1, return the center of the elements 
+            (same as element_centers property)
+
+        Returns
+        -------
+        numpy.ndarray 
+            The coordinates of the gauss points. 
+            The lenght of the returned array is n_elm_gp*n_elements
+            The coordiantes of the ith gauss point (i=0 for the 1st gp) 
+            for each element have index in range(i*n_nodes:(i+1)*n_nodes)    
+            The results can be reshaped (n_elm_gp,n_elements,ndim) for sake
+            of clarity.            
+        """
+        return self._get_node2gausspoint_mat(n_elm_gp) @ self.nodes
+
     @property
     def physical_nodes(self) -> np.ndarray[float]:
         if self._n_physical_nodes is None:
@@ -829,8 +850,18 @@ class Mesh(MeshBase):
         return self.nodes.shape[1]
     
     @property
+    def element_centers(self) -> np.ndarray:
+        """
+        Coordinates of the element centers.
+        element_center[i] gives the coordinates of the ith element center.
+        """
+        return self.gausspoint_coordinates(1)
+    
+    
+    @property
     def bounding_box(self) -> 'BoundingBox':
         return BoundingBox(self)
+
 
     
 
