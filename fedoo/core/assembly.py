@@ -501,6 +501,7 @@ class Assembly(AssemblyBase):
         self.weakform.initialize(self, pb)
         
         self._pb = pb #set the associated problem
+        self.sv_start = dict(self.sv) #initialization in case sv in modified by weakform.initialize
                 
 
     def set_start(self, pb):
@@ -542,6 +543,7 @@ class Assembly(AssemblyBase):
         
         #replace statev with the start values
         self.sv = dict(self.sv_start)
+        self.current.assemble_global_mat('all')
         
  
     def reset(self):
@@ -554,6 +556,7 @@ class Assembly(AssemblyBase):
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.reset()
         self.delete_global_mat()
+        self.current.delete_global_mat()
         
         #remove all state variables
         self.sv = {} 
@@ -946,7 +949,7 @@ class Assembly(AssemblyBase):
         Return the Gradient Tensor of a vector (generally displacement given by Problem.get_DofSolution('all')
         as a list of list of numpy array
         The total displacement field U has to be given as a flatten numpy array
-        see get_node_resultss and get_element_resultss
+        see get_node_results and get_element_resultss
 
         Options : 
         - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")

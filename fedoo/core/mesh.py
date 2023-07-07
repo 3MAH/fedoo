@@ -452,17 +452,43 @@ class Mesh(MeshBase):
         self.nodes = self.nodes + disp.T        
             
     
-    def extract_elements(self, SetOfElementKey: str, name: str ="") -> 'Mesh':
+    def extract_elements(self, element_set: str|list, name: str ="") -> 'Mesh':
         """
-        Return a new mesh from the set of elements defined by SetOfElementKey
-        """
-        new_SetOfElements = {}
-        ListElm = self.element_sets[SetOfElementKey]
-        for key in self.element_sets:
-            new_SetOfElements[key] = np.array([el for el in self.element_sets[key] if el in ListElm])       
+        Return a new mesh from the set of elements defined by element_set
         
-        subMesh = Mesh(self.nodes, self.elements[ListElm], self.elm_type, self.local_frame, name =name)                
-        return subMesh    
+        Parameters
+        ----------
+        element_set : str|list
+            The set of elements. If str is given, it should refer to an 
+            element set that exist in the dict mesh.node_sets with the given key.
+            If a list (or similar object) is given, it should contains 
+            the indices of the nodes.
+        name : str (default="")
+            The name of the new Mesh
+
+        Returns
+        -------
+        Mesh
+        
+        Node
+        ------
+        * The new mesh keep the former element_sets dict with only the extrated 
+        elements. 
+        * The element indices of the new mesh are not the same as the former one.
+        * The new mesh keep the initial nodes and node_sets. To also removed the 
+        nodes, a simple solution is to use the method "remove_isolated_nodes"
+        with the new mesh.         
+        """
+        if isinstance(element_set, str):
+            element_set = self.element_sets[element_set]
+        
+        new_element_sets = {}
+        
+        for key in self.element_sets:
+            new_element_sets[key] = np.array([el for el in self.element_sets[key] if el in element_set])       
+        
+        sub_mesh = Mesh(self.nodes, self.elements[element_set], self.elm_type, self.local_frame, name =name)                
+        return sub_mesh    
        
     
     def nearest_node(self, X: np.ndarray[float]) -> int:
@@ -496,18 +522,41 @@ class Mesh(MeshBase):
             - 'XZ' : select nodes with specified x and z coordinates values
             - 'YZ' : select nodes with specified y and z coordinates values
             - 'Point': Distance to a point            
+            - Arbitrary str expression             
 
         value : scalar or list of scalar of numpy array
             - if selection_criterion in ['X', 'Y', 'Z'] value should be a scalar
             - if selection_criterion in ['XY', 'XZ', 'YZ'] value should be a list (or array) containing 2 scalar which are the coordinates in the given plane
             - if selection_criterion in ['point'] value should be a list (or array) containing 2 scalars (for 2D problem) or 3 scalars (for 3D problems) which are the coordinates of the point.
+            - value is ignored if selection_criterion is an arbitrary expression
             
         tol : float
-            Tolerance of the given criterion
-            
+            Tolerance of the given criterion. Ignored if the selection_criterion 
+            is an arbitrary expression
+        
         Returns
         -------
         List of node index
+        
+        Notes
+        -----------
+        Aritrary expressions allow the use of "and" and "or" logical operator, 
+        parenthesis, and the following compareason operators: ">", "<", "<=", ">=",
+        "==", "!=". The coordinates 'X', 'Y' and 'Z' are available in the expression.
+        In case of arbitrary expression, value and tol parameters are ignored
+ 
+        Example
+        ---------------
+        Create a one element mesh from a 2d mesh in a 3d space:
+            
+          >>> import fedoo as fd
+          >>> mesh = fd.mesh.disk_mesh()
+          
+          >>> nodes = np.array([[0,0],[1,0],[1,1],[0,1]])    
+          >>> elm = np.array([0,1,2,3])
+          >>> mesh = fd.Mesh(nodes, elm, 'quad4', ndim = 3, name = 'unit square mesh')
+          
+        "(X>0.2 and X<0.5) or Y>1" 
         """
         assert np.isscalar(tol), "tol should be a scalar"
         if selection_criterion in ['X','Y','Z']:
@@ -526,10 +575,108 @@ class Mesh(MeshBase):
             return np.where(np.linalg.norm(self.nodes[:,1:]-value, axis=1) < tol)[0]        
         elif selection_criterion.lower() == 'point':
             return np.where(np.linalg.norm(self.nodes-value, axis=1) < tol)[0]
-        else:
-            raise NameError("selection_criterion should be 'X','Y','Z' or 'point'")
+        elif isinstance(selection_criterion, str):
+            #assume arbitrary expression
+            expr = selection_criterion.replace('and', '&')\
+                                      .replace('or', '|')\
+                                      .replace(' ', '')
+            
+            return np.where(self._eval_expr(expr))[0]
 
-    
+        else:
+            raise NameError("selection_criterion should be a string'")
+
+    def _eval_expr(self, expr): #evaluate an expression within the find_nodes method
+        i=i_start = 0
+        logical_op = None
+        while(i<len(expr)):
+            if expr[i_start] == '(':
+                i_end = expr.find(')')
+                if i_end == -1: raise NameError('Invalid expression')
+                new_res = self._eval_expr(expr[i_start+1:i_end])
+            elif expr[i_start] in ['X','Y','Z']:
+                i+=1
+                #avialable operators                    
+                if expr[i:i+2] == '<=':
+                    test_op = np.ndarray.__le__
+                    i+=2
+                elif expr[i:i+2] == '>=':
+                    test_op = np.ndarray.__ge__
+                    i+=2
+                elif expr[i:i+2] == '!=':
+                    test_op = np.ndarray.__ne__
+                    i+=2
+                elif expr[i:i+2] == '==':
+                    test_op = np.ndarray.__eq__    
+                    i+=2
+                elif expr[i:i+1] == '<':
+                    test_op = np.ndarray.__lt__
+                    i+=1
+                elif expr[i:i+1] == '>':
+                    test_op = np.ndarray.__gt__
+                    i+=1   
+                else:
+                    raise NameError('Invalid expression')
+                
+                test = np.array([expr.find(crd_name, i) for crd_name in ['&','|']])
+                if test.max() == -1: 
+                    i_end = -1
+                    value = float(expr[i:])
+                else:
+                    if test.min() == -1: i_end = test.max()
+                    else: i_end = test.min()
+                    value = float(expr[i:i_end])
+                
+                crd_indices = {'X':0,'Y':1,'Z':2}[expr[i_start]]
+                new_res = test_op(self.nodes[:,crd_indices],value)
+            else:
+                raise NameError('Invalid expression')
+                
+            if logical_op is None:
+                res = new_res
+            elif logical_op == '&':
+                res = res&new_res
+            else: #logical_op == '|'
+                res = res|new_res
+                                
+            logical_op = expr[i_end]
+            if i_end != -1:
+                i=i_start = i_end+1
+            else:
+                i = len(expr)
+        
+        return res                
+                
+
+
+    def get_elements_from_nodes(self, node_set: str|list[int], all_nodes: bool = True) -> list:
+        """Return a list of elements that are build with the nodes given in node_set
+
+        Parameters
+        ----------
+        node_set : str|list
+            The set of nodes. If str is given, it should refer to a node set 
+            that exist in the dict mesh.node_sets with the given key.
+            If a list (or similar object) is given, it should contains 
+            the indices of the nodes.
+        all_nodes : bool (default=True)
+            If True, get only elements whose nodes are all in node_set.
+            If False, get elements that have at least 1 node in node set. 
+
+        Returns
+        -------
+        list of element indices
+        """
+        if isinstance(node_set, str):
+            node_set = self.node_sets[node_set]
+        node_set = set(node_set)
+        
+        if all_nodes:
+            return [i for i,element in enumerate(self.elements) if all([n in node_set for n in element])]
+        else: 
+            return [i for i,element in enumerate(self.elements) if any([n in node_set for n in element])]
+            
+
     def is_periodic(self, tol: float = 1e-8, dim: int = 3) -> bool:
         """
         Test if the mesh is periodic (have nodes at the same positions on adjacent faces)
@@ -550,8 +697,39 @@ class Mesh(MeshBase):
         return is_periodic(self.nodes, tol, dim)
         
 
-    def copy(self) -> 'Mesh':
-        return Mesh(self.nodes.copy(),self.elements.copy(), self.elm_type)
+    def deepcopy(self, name:str = "") -> 'Mesh':
+        """ Make a deep copy of the mesh.
+        
+        Parameters
+        ----------
+        name : str
+            Name of the copied mesh.
+        
+        Returns
+        -------    
+        The copied Mesh object.
+        """
+        return Mesh(self.nodes.copy(),self.elements.copy(), self.elm_type, self.ndim, name)
+
+    
+    def copy(self, name:str = "") -> 'Mesh':
+        """ Make a copy of the mesh.
+        
+        This method make a shallow copy, ie the nodes and elements arrays are
+        alias of the former arrays. To also copy these arrays, use the deepcopy
+        method.
+        
+        Parameters
+        ----------
+        name : str
+            Name of the copied mesh.
+        
+        Returns
+        -------    
+        The copied Mesh object.
+        """
+        return Mesh(self.nodes,self.elements, self.elm_type, self.ndim, name)
+
     
     def to_pyvista(self):
         if USE_PYVISTA:            
@@ -616,6 +794,8 @@ class Mesh(MeshBase):
 
 
     def init_interpolation(self, n_elm_gp: int|None = None) -> None:
+        #in principle, no need to recompute if the structure is changed. 
+        #only need to compute the _compute_gaussian_quadrature_mat
         if n_elm_gp is None: n_elm_gp = get_default_n_gp(self.elm_type)
         
         n_nodes = self.n_nodes        

@@ -55,7 +55,11 @@ class AssemblyBase:
 
         self.global_matrix = None
         self.global_vector = None
-        self.mesh = None 
+                
+        if not hasattr(self, 'mesh'): #in case mesh is a property
+            self.mesh = None 
+            
+        self.current = self
         
         if name != "": AssemblyBase.__dic[self.__name] = self
         self.__space = space
@@ -71,7 +75,7 @@ class AssemblyBase:
         if self.global_vector is None: self.assemble_global_mat()        
         return self.global_vector
         
-    def assemble_global_mat(self):
+    def assemble_global_mat(self, compute = 'all'):
         #needs to be defined in inherited classes
         pass
 
@@ -83,6 +87,20 @@ class AssemblyBase:
         self.global_matrix = None
         self.global_vector = None
     
+    def set_start(self, pb):
+        pass
+    
+    def to_start(self, pb):
+        pass
+    
+    def initialize(self, pb):
+        pass
+    
+    def update(self, pb, compute = 'all'):
+        pass
+    
+    def reset(self):
+        pass    
     
     @staticmethod
     def get_all():

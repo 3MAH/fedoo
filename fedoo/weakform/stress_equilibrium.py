@@ -128,9 +128,9 @@ class StressEquilibrium(WeakFormBase):
         if self.nlgeom == 'UL':
             # if updated lagragian method -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())               
-            # assembly.mesh.SetNodeCoordinates(self._crd_ini + pb.get_disp().T)
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
                 del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+                        
             assembly.current.compute_elementary_operators()        
 
         displacement = pb.get_dof_solution()
@@ -164,6 +164,7 @@ class StressEquilibrium(WeakFormBase):
             assembly.set_disp(pb.get_disp())               
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
                 del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+            
             assembly.current.compute_elementary_operators()            
     
     def set_start(self, assembly, pb):

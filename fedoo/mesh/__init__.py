@@ -67,6 +67,6 @@ Mesh Creation Functions
   
 from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
                     line_mesh, line_mesh_cylindric, box_mesh, structured_mesh_2D, \
-                    generate_nodes, hole_plate_mesh, quad2tri
+                    generate_nodes, hole_plate_mesh, disk_mesh, quad2tri
     
 from .importmesh import import_file, import_vtk, import_msh

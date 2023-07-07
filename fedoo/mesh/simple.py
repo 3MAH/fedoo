@@ -513,14 +513,15 @@ def generate_nodes(mesh, N, data, type_gen = 'straight'):
         return np.array([nd1]+list(listNodes)+[nd2])
 
 
-def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 'quad4', sym= False, ndim = None, name =""):
+def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 'quad4', sym= False, include_node_sets = True, ndim = None, name =""):
     """
     Create a mesh of a 2D plate with a hole  
 
     Parameters
     ----------
-    nx, ny : int
-        Numbers of nodes in the x and y axes (default = 11).
+    nr, nt : int
+        Numbers of nodes in the radial and tangent direction from the hole (default = 11). 
+        nt is the number of nodes of the half of an exterior edge
     length, height : int,float
         The length and height of the plate (default : 100).
     radius : int,float
@@ -531,6 +532,8 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
     Sym : bool 
         Sym = True, if only the returned mesh assume symetric condition and 
         only the quarter of the plate is returned (default=False)
+    include_node_sets : bool
+        if True (default), the boundary nodes are included in the mesh node_sets dict.
         
     Returns
     -------
@@ -542,55 +545,50 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
     line_mesh : 1D mesh of a line    
     rectangle_mesh : Surface mesh of a rectangle
     """   
-
+    L = length/2
+    h = height/2
+    m = Mesh(np.array([[radius,0],[L,0],[L,h],[0,h],[0,radius],[radius*np.cos(np.pi/4),radius*np.sin(np.pi/4)]]))
+    edge1 = generate_nodes(m,nr,(0,1))
+    edge2 = generate_nodes(m,nt,(1,2))
+    edge3 = generate_nodes(m,nr,(2,5))
+    edge4 = generate_nodes(m,nt,(5,0,(0,0)), type_gen = 'circular')
     
-    if sym == True:
-        L = length/2
-        h = height/2
-        m = Mesh(np.array([[radius,0],[L,0],[L,h],[0,h],[0,radius],[radius*np.cos(np.pi/4),radius*np.sin(np.pi/4)]]))
-        edge1 = generate_nodes(m,nx,(0,1))
-        edge2 = generate_nodes(m,ny,(1,2))
-        edge3 = generate_nodes(m,nx,(2,5))
-        edge4 = generate_nodes(m,ny,(5,0,(0,0)), type_gen = 'circular')
-        
-        edge5 = generate_nodes(m,nx,(4,3))
-        edge6 = generate_nodes(m,ny,(3,2))
-        edge7 = generate_nodes(m,ny,(5,4,(0,0)), type_gen = 'circular')
-        
-        m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4')
-        m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', ndim = ndim, name=name)
-    else: 
-        L = length/2
-        h = height/2
-        m = Mesh(np.array([[radius,0],[L,0],[L,h],[0,h],[0,radius],[radius*np.cos(np.pi/4),radius*np.sin(np.pi/4)]]))
-        edge1 = generate_nodes(m,nx,(0,1))
-        edge2 = generate_nodes(m,ny,(1,2))
-        edge3 = generate_nodes(m,nx,(2,5))
-        edge4 = generate_nodes(m,ny,(5,0,(0,0)), type_gen = 'circular')
-        
-        edge5 = generate_nodes(m,nx,(4,3))
-        edge6 = generate_nodes(m,ny,(3,2))
-        edge7 = generate_nodes(m,ny,(5,4,(0,0)), type_gen = 'circular')
-        
-        m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4',method=3)
-        m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', method=3, ndim = ndim)
-        
+    edge5 = generate_nodes(m,nr,(4,3))
+    edge6 = generate_nodes(m,nt,(3,2))
+    edge7 = generate_nodes(m,nt,(5,4,(0,0)), type_gen = 'circular')
+    
+    m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = 'quad4', method=3)
+    m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = 'quad4', method=3, ndim = ndim, name=name)
+    
+    if sym:      
+        if include_node_sets:
+            m.node_sets.update({'hole_edge': list(edge4[:0:-1])+list(edge7), 'right': list(edge2), 
+                            'left_sym': list(edge5), 'top': list(edge6), 'bottom_sym': list(edge1)})
+    else:
         nnd = m.n_nodes
         crd = m.nodes.copy()
         crd[:,0] = -m.nodes[:,0]
         m2 = Mesh(crd, m.elements, m.elm_type)
         m = Mesh.stack(m,m2)
-        
+                
         crd = m.nodes.copy()
         crd[:,1] = -m.nodes[:,1]
         m2 = Mesh(crd, m.elements, m.elm_type)
         m = Mesh.stack(m,m2, name=name)
         
+        if include_node_sets:
+            m.node_sets['top'] = list((edge6+nnd)[:0:-1])+list(edge6)
+            m.node_sets['bottom'] = list((edge6+3*nnd)[:0:-1])+list(edge6+2*nnd)
+            m.node_sets['right'] = list((edge2+2*nnd)[:0:-1]) + list(edge2)
+            m.node_sets['left'] = list((edge2+3*nnd)[:0:-1]) + list(edge2+nnd) 
+            edge_hole = np.hstack((edge4[:0:-1],edge7))
+            m.node_sets['hole_edge'] = list(edge_hole) + list(edge_hole[-2::-1]+nnd) + \
+                                       list(edge_hole[1:]+3*nnd) + list(edge_hole[-2:0:-1]+2*nnd)   
+                
         node_to_merge = np.vstack((np.c_[edge5, edge5+nnd], 
                                    np.c_[edge5+2*nnd, edge5+3*nnd],
                                    np.c_[edge1, edge1+2*nnd],
-                                   np.c_[edge1+nnd, edge1+3*nnd]))
-                                   
+                                   np.c_[edge1+nnd, edge1+3*nnd]))                                   
         
         m.merge_nodes(node_to_merge)
         
@@ -598,6 +596,23 @@ def hole_plate_mesh(nx=11, ny=11, length=100, height=100, radius=20, elm_type = 
     elif elm_type == 'tri3': return quad2tri(m)
     else: raise NameError('Non compatible element shape')
     
+
+def disk_mesh(radius=0.5, nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""):
+    m = hole_plate_mesh(nx, ny, 0.5*radius, 0.5*radius, radius, elm_type = 'quad4')
+    hole_edge = m.node_sets['hole_edge']
+
+    m = structured_mesh_2D(m, m.node_sets['right'], 
+                           m.node_sets['top'][::-1],
+                           m.node_sets['left'][::-1],
+                           m.node_sets['bottom'], elm_type = 'quad4', ndim = ndim, name=name)
+    m.node_sets = {'boundary': hole_edge}
+    
+    if elm_type == 'quad4': return m
+    elif elm_type == 'tri3': return quad2tri(m)
+    else: raise NameError('Non compatible element shape')
+
+    
+
 
 def quad2tri(mesh):
     assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"

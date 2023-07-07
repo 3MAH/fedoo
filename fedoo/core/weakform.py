@@ -176,7 +176,7 @@ class WeakForm(WeakFormBase):
         WeakFormBase.__init__(self, name, space)
         self.weak_equation = weak_equation
     
-    def get_weak_equation(self, mesh=None):
+    def get_weak_equation(self, assembly, pb):
         return self.weak_equation
     
     

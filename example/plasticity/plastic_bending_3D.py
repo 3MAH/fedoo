@@ -41,7 +41,7 @@ elif mat == 1 or mat == 2:
     if mat == 1:
         props = np.array([E, nu, alpha, Re,k,m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name='constitutivelaw')
-        material.corate = 2
+        # material.corate = 2
         # material.SetMaskH([[] for i in range(6)])
     
         # mask = [[3,4,5] for i in range(3)]

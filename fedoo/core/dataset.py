@@ -113,7 +113,7 @@ class DataSet():
              component: int|str = 0, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None, 
              node_labels: bool|list = False, element_labels: bool|list = False, 
-             plotter: object = None,
+             show_nodes: bool|float = False, plotter: object = None, 
              screenshot: str|None = None, **kargs) -> None:
         
         """Plot a field on the surface of the associated mesh.                
@@ -152,7 +152,10 @@ class DataSet():
             If a list is given, print the label given in node_labels[i] for each node i.
         element_labels : bool | list (default = False)
             If True, show element labels (element indexe)
-            If a list is given, print the label given in element_labels[i] for each element i.            
+            If a list is given, print the label given in element_labels[i] for each element i.      
+        show_nodes : bool|float (default = False)
+            Plot the nodes. If True, the nodes are shown with a default size.
+            If float, show_nodes is the required size.
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
             If pyvista.Plotter object, plot the mesh in the given plotter
             If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
@@ -172,6 +175,7 @@ class DataSet():
             raise NameError("Can't generate a plot without an associated mesh. Set the mesh attribute first.")
         
         ndim = self.mesh.ndim
+        n_physical_nodes = self.mesh.n_physical_nodes
         
         field = kargs.pop('scalars', field) #kargs scalars can be used instead of field
 
@@ -190,28 +194,45 @@ class DataSet():
             if self.meshplot_gp is None:
                 self._build_mesh_gp()
             meshplot = self.meshplot_gp
-            crd = self.mesh_gp.nodes      
                 
             data = self.mesh_gp.convert_data(data, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(data)//self.mesh.n_elements)
-            if 'Disp' in self.node_data:
+            if 'Disp' in self.node_data and scale != 0:
                 ndim = self.mesh.ndim
                 U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T
                 # meshplot.point_data['Disp'] = U  
-                                                                    
-        else:
-            n_physical_nodes = self.mesh.n_physical_nodes
+                meshplot.points = as_3d_coordinates(self.mesh_gp.nodes + scale*U)
+                
+                if show_nodes: 
+                    #compute center (dont use meshplot to compute center because
+                    #isolated nodes are removed -> may be annoying with show_nodes)
+                    crd = self.mesh.physical_nodes+self.node_data['Disp'].T[:n_physical_nodes]
+                    center = 0.5*(crd.min(axis=0) + crd.max(axis=0))
+                    if len(center) < 3:  center = np.hstack((center, np.zeros(3-len(center))))
+                else: 
+                    meshplot.ComputeBounds()
+                    center = meshplot.center                
+            else:
+                meshplot.points = as_3d_coordinates(self.mesh_gp.nodes)
+                center = self.mesh.bounding_box.center
             
+            
+                                                                    
+        else:            
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
                 meshplot = self.meshplot                                    
-            crd = self.mesh.physical_nodes
             
-            if 'Disp' in self.node_data:
-                U = self.node_data['Disp'].T[:n_physical_nodes]
+            if 'Disp' in self.node_data and scale != 0:
+                meshplot.points = as_3d_coordinates(self.mesh.physical_nodes+self.node_data['Disp'].T[:n_physical_nodes])
+            else:
+                meshplot.points = as_3d_coordinates(self.mesh.physical_nodes)                
             
             if data_type == 'Node':
                 data = data[:n_physical_nodes]
+            
+            center = 0.5*(meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
+            
         
         backgroundplotter = True
         if USE_PYVISTA_QT and (plotter is None or plotter == 'qt'):
@@ -254,20 +275,11 @@ class DataSet():
                     color='Black',
                     # n_colors= 10
                 )
-                
-        if crd.shape[1] < 3: 
-            crd = np.c_[crd, np.zeros((len(crd), 3-crd.shape[1]))]
-            
-        if 'Disp' in self.node_data and scale != 0:
-            if U.shape[1] < 3: 
-                U = np.c_[U, np.zeros((len(U), 3-U.shape[1]))]
-            meshplot.points = crd + scale*U  
-        else: 
-            meshplot.points = crd
 
         #camera position
-        meshplot.ComputeBounds()
-        center = meshplot.center
+        # meshplot.ComputeBounds()
+        # center = meshplot.center
+        
 
         pl.camera.SetFocalPoint(center)
         pl.camera.position = tuple(center+np.array([0,0,2*meshplot.length]))
@@ -292,15 +304,33 @@ class DataSet():
             
         pl.add_axes(color='Black', interactive = True)
         
-        #Node and Element Labels
+        
+        #Node and Element Labels and plot points        
+        if (node_labels or show_nodes): #extract nodes coordinates
+            if data_type == 'GaussPoint':                
+                if 'Disp' in self.node_data:
+                    crd_labels = as_3d_coordinates(
+                        self.mesh.physical_nodes + 
+                        self.node_data['Disp'].T[:n_physical_nodes])                                    
+                else:
+                    crd_labels = as_3d_coordinates(self.mesh.physical_nodes)
+            else:
+                crd_labels = meshplot.points
+                
         if node_labels:
             if node_labels == True: 
-                node_labels = list(range(self.mesh.n_physical_nodes))
-            pl.add_point_labels(crd, node_labels)
+                node_labels = list(range(n_physical_nodes))            
+            pl.add_point_labels(crd_labels, node_labels[:n_physical_nodes])
+        
         if element_labels:
             if element_labels == True: 
                 element_labels = list(range(self.mesh.n_elements))
             pl.add_point_labels(meshplot.cell_centers(), element_labels)
+        
+        if show_nodes:
+            if show_nodes == True: show_nodes = 5
+            pl.add_points(crd_labels, render_points_as_spheres=True, point_size = show_nodes)
+        
         
         if screenshot: 
             name, ext = os.path.splitext(screenshot)
@@ -311,7 +341,7 @@ class DataSet():
                 pl.screenshot(screenshot)            
                 
             return pl
-                            
+        
         if not(backgroundplotter) and show:                
             return pl.show(return_cpos = True)
             
@@ -678,6 +708,8 @@ class MultiFrameDataSet(DataSet):
     def plot(self, field: str|None = None, data_type: str|None = None,
              component: int|str = 0, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None,
+             node_labels: bool|list = False, element_labels: bool|list = False, 
+             show_nodes: bool|float = False, plotter: object = None,
              screenshot: str|None = None, iteration: int|None = None, 
              **kargs) -> None:
         
@@ -715,6 +747,22 @@ class MultiFrameDataSet(DataSet):
             if True, the mesh edges are shown    
         clim: sequence[float], optional
             Sequence of two float to define data boundaries for color bar. Defaults to minimum and maximum of data. 
+        node_labels : bool | list (default = False)
+            If True, show node labels (node indexe)
+            If a list is given, print the label given in node_labels[i] for each node i.
+        element_labels : bool | list (default = False)
+            If True, show element labels (element indexe)
+            If a list is given, print the label given in element_labels[i] for each element i.  
+        show_nodes : bool|float (default = False)
+            Plot the nodes. If True, the nodes are shown with a default size.
+            If float, show_nodes is the required size.
+        plotter : pyvista.Plotter object or str in {'qt', 'pv'}
+            If pyvista.Plotter object, plot the mesh in the given plotter
+            If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
+            If 'pv': use the standard pyvista plotter
+            If None: use the background plotter if available, or pyvista plotter if not.            
+        screenshot: str, optional
+            If defined, indicated a filename to save the plot.
         iteration : int (Optional)
             num of the iteration to plot. If None, the current iteration is plotted.
             If no current iteration is defined, the last iteration is loaded and plotted.
@@ -729,13 +777,15 @@ class MultiFrameDataSet(DataSet):
             self.load(iteration)
                 
         return DataSet.plot(self, field, data_type, component, scale, show, 
-                            show_edges, clim, screenshot, **kargs)
+                            show_edges, clim, node_labels, element_labels, 
+                            show_nodes, plotter, screenshot, **kargs)
     
         
     def write_movie(self, filename: str ='test', field: str|None = None, 
                     data_type: str|None = None, component: int|str = 0, 
                     scale:float = 1, show_edges:bool = True, 
-                    clim: list[float|None]|None = [None,None], **kargs):
+                    clim: list[float|None]|None = [None,None], 
+                    show_nodes: bool|float = False, **kargs):
         """        
         Generate a video of the MultiFrameDataSet object by loading iteratively every frame.
 
@@ -760,6 +810,9 @@ class MultiFrameDataSet(DataSet):
             of data for the all iterations sequence.
             Defaults to minimum and maximum of data for the all iterations sequence 
             (clim =[None,None]). 
+        show_nodes : bool|float (default = False)
+            Plot the nodes. If True, the nodes are shown with a default size.
+            If float, show_nodes is the required size.
         **kargs: dict 
             Other optional parameters (see notes below)
             
@@ -795,6 +848,7 @@ class MultiFrameDataSet(DataSet):
             raise NameError("Can't generate a plot without an associated mesh. Set the mesh attribute first.")
         
         ndim = self.mesh.ndim
+        n_physical_nodes = self.mesh.n_physical_nodes
           
         field = kargs.pop('scalars', field)
         
@@ -809,10 +863,13 @@ class MultiFrameDataSet(DataSet):
         
         azimuth = kargs.pop('azimuth',30)
         elevation = kargs.pop('elevation',15)
-    
+        
+        if show_nodes == True: show_nodes = 5 #default size of nodes
+            
         #auto compute boundary        
         Xmin, Xmax, clim_data = self.get_all_frame_lim(field, component, data_type, scale)
         center = (Xmin+Xmax)/2
+        if len(center) < 3:  center = np.hstack((center, np.zeros(3-len(center))))
         length = np.linalg.norm(Xmax-Xmin)
             
         if clim is not None: 
@@ -829,11 +886,9 @@ class MultiFrameDataSet(DataSet):
             if self.meshplot_gp is None:
                 self._build_mesh_gp()
             meshplot = self.meshplot_gp         
-            crd = self.mesh_gp.nodes             
+            crd = self.mesh_gp.nodes   
         
-        elif data is not None:
-            n_physical_nodes = self.mesh.n_physical_nodes
-            
+        elif data is not None:            
             if self.meshplot is None: 
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else: 
@@ -847,8 +902,6 @@ class MultiFrameDataSet(DataSet):
         
         # pl = pv.Plotter()
         pl.set_background('White')
-        pl.camera.SetFocalPoint(self.mesh.bounding_box.center)
-        # pl.camera.position = (-2.090457552750125, 1.7582929402632352, 1.707926514944027)
         
         if sargs is None: #default value
             sargs = dict(
@@ -884,22 +937,32 @@ class MultiFrameDataSet(DataSet):
                 data = self.mesh_gp.convert_data(data, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(data)//self.mesh.n_elements)
                 if 'Disp' in self.node_data:                    
                     U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T
-                    meshplot.points = crd + scale*U  
+                    new_crd = as_3d_coordinates(crd + scale*U)
+                
+                if show_nodes: 
+                    if 'Disp' in self.node_data:
+                        crd_points = as_3d_coordinates(self.mesh.physical_nodes + scale*self.node_data['Disp'].T[:n_physical_nodes])
             else:            
                 if 'Disp' in self.node_data:
-                    meshplot.points = crd + scale*self.node_data['Disp'].T[:n_physical_nodes]
+                    new_crd =  as_3d_coordinates(crd + scale*self.node_data['Disp'].T[:n_physical_nodes])
+                    crd_points = new_crd #alias
                 
                 if data_type == 'Node':
                     data = data[:n_physical_nodes]                
-
-                                        
-            if i == 0:
+                
+            meshplot.points = new_crd                                      
+            
+            if i == 0:                                                                                            
                 pl.add_mesh(meshplot, scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim,  **kargs)
+                if show_nodes:  
+                    pl.add_points(crd_points, render_points_as_spheres=True, point_size = show_nodes)
+                    mesh_points = pl.mesh
             else:
                 if clim is None: 
                     pl.update_scalar_bar_range([data.min(), data.max()])
                 
-                pl.update_scalars(data)
+                pl.update_scalars(data, meshplot)                
+                if show_nodes: mesh_points.points = crd_points
     
             if rot_azimuth: 
                 pl.camera.Azimuth(rot_azimuth)
@@ -1025,4 +1088,10 @@ def read_data(filename: str, file_format: str ="npz"):
     
     
 
-
+def as_3d_coordinates(crd):    
+    if crd.shape[1] < 3: 
+        return np.c_[crd, np.zeros((len(crd), 3-crd.shape[1]))]
+    else:
+        return crd
+        
+    

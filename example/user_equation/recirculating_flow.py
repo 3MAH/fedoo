@@ -65,7 +65,7 @@ Vnorm = np.linalg.norm(res.node_data['V'], axis=0)
 
 pl = res.plot("V", component = "norm", show = False)
 
-pl.mesh['vectors'] = np.c_[res['V'].T, np.zeros(mesh.n_nodes)]
+pl.mesh['vectors'] = np.c_[res['V'][:,:mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)]
 
 line_streamlines = pl.mesh.streamlines(
     'vectors',
@@ -77,7 +77,7 @@ line_streamlines = pl.mesh.streamlines(
 )
 
 
-pl.add_mesh(line_streamlines.tube(radius=0.01))
+pl.add_mesh(line_streamlines.tube(radius=0.005))
 pl.show()
 
 

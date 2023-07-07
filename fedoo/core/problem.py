@@ -85,7 +85,7 @@ class Problem(ProblemBase):
     def _get_vect_component(self, vector, name): #Get component of a vector (force vector for instance) being given the name of a component (vector or single component)    
         assert isinstance(name,str), 'argument error'
         
-        if name.lower() == 'all':                             
+        if name.lower() == 'all' or vector is 0:                             
             return vector
 
         n = self.mesh.n_nodes
@@ -139,7 +139,7 @@ class Problem(ProblemBase):
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] - Temp[self._dof_free])
             # else:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
-
+            
             if self.__D is 0:
                 self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
             else:

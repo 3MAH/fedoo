@@ -94,6 +94,7 @@ class _NonLinearBase():
         #build and solve the linearized system with elastic rigidty matrix           
         self.updateA() #should be the elastic rigidity matrix
         self.updateD(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
+
         self.solve()        
 
         #set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
@@ -123,7 +124,7 @@ class _NonLinearBase():
             self.__assembly.set_start(self)    
         
         
-    def to_start(self, assembly, pb):   
+    def to_start(self):   
         self._dU = 0                       
         self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
         self.__assembly.to_start(self)
@@ -187,9 +188,12 @@ class _NonLinearBase():
         (Update method).
         """
         dof_free = self._dof_free
-        if self._err0 is None: # if self._err0 is None -> initialize the value of err0            
+        if self._err0 is None: # if self._err0 is None -> initialize the value of err0  
             if self.nr_parameters['criterion'] == 'Displacement':                     
                 self._err0 = np.max(np.abs((self._U + self._dU)[dof_free])) #Displacement criterion
+                if self._err0 == 0: 
+                    self._err0 = 1                
+                    return 1
                 return np.max(np.abs(self.get_X()[dof_free]))/self._err0
             else:
                 self._err0 = 1
@@ -307,7 +311,9 @@ class _NonLinearBase():
         
         if self._U is 0:#Initialize only if 1st step
             self.initialize()
-                        
+        
+        restart = False #bool to know if the iteration is another attempt
+             
         while self.time < self.tmax - self.err_num:                         
     
             save_results = (self.time != self.t0) and \
@@ -323,8 +329,11 @@ class _NonLinearBase():
                 self.dtime = next_time-self.time 
             else: 
                 self.dtime = dt
-                           
-            self.set_start(save_results)                  
+            
+            if restart:
+                restart = False
+            else:                
+                self.set_start(save_results)                  
                 
             #self.solve_time_increment = Newton Raphson loop
             convergence, nbNRiter, normRes = self.solve_time_increment(max_subiter, ToleranceNR)
@@ -342,7 +351,7 @@ class _NonLinearBase():
                     # print('Increase the time increment to {:.5f}'.format(dt))
                 
             else:
-                if update_dt:
+                if update_dt:              
                     dt *= 0.25                                     
                     print('NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}'.format(normRes, dt ))
                     
@@ -351,6 +360,7 @@ class _NonLinearBase():
                     
                     #reset internal variables, update Stress, initial displacement and assemble global matrix at previous time                                      
                     self.to_start()              
+                    restart = True
                     continue                    
                 else: 
                     raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   

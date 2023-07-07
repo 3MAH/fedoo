@@ -34,30 +34,35 @@ class AssemblySum(AssemblyBase):
         assert len(set([a.mesh.n_nodes for a in list_assembly])) == 1,\
             "Sum of assembly are possible only if the two meshes have the same number of Nodes"
 
-        self.__list_assembly = list_assembly
-        self.__assembly_output = kargs.get('assembly_output', None)
-        if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
-                        
-        self.mesh = list_assembly[0].mesh
+        self._list_assembly = list_assembly
 
         if name == "":
             name = '_'.join([assembly.name for assembly in list_assembly])    
             
-        self.__reload = kargs.pop('reload', 'all')                      
-
-
+        self._reload = kargs.pop('reload', 'all')    
+        
+        self.mesh = list_assembly[0].mesh
+        
+        self.current = _AssemblySumCurrent(list_assembly)
+        
+        # for post-treatment only 
+        self.__assembly_output = kargs.get('assembly_output', None)
+        if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
+                        
+    
     def assemble_global_mat(self,compute='all'):
-        if self.__reload == 'all': 
-            for assembly in self.__list_assembly:
+        if self._reload == 'all': 
+            for assembly in self.list_assembly:
                 assembly.assemble_global_mat(compute)
         else:
-            for numAssembly in self.__reload:
-                self.__list_assembly[numAssembly].assemble_global_mat(compute)
+            for numAssembly in self._reload:
+                self.list_assembly[numAssembly].assemble_global_mat(compute)
             
         if not(compute == 'vector'):         
-            self.global_matrix = sum([assembly.get_global_matrix() for assembly in self.__list_assembly])
+            self.global_matrix = sum([assembly.get_global_matrix() for assembly in self.list_assembly])
         if not(compute == 'matrix'):
-            self.global_vector = sum([assembly.get_global_vector() for assembly in self.__list_assembly])
+            self.global_vector = sum([assembly.get_global_vector() for assembly in self.list_assembly])
+    
     
     def update(self, pb, compute = 'all'):
         """
@@ -66,17 +71,17 @@ class AssemblySum(AssemblyBase):
             - pb: a Problem object containing the Dof values
             - time: the current time        
         """
-        if self.__reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
-            for assembly in self.__list_assembly:
+        if self._reload == 'all' or compute in ['vector', 'none']: #if compute == 'vector' or 'none' the reload arg is ignored
+            for assembly in self.list_assembly:
                 assembly.update(pb,compute)           
         else:
-            for numAssembly in self.__reload:
-                self.__list_assembly[numAssembly].update(pb,compute)
+            for numAssembly in self._reload:
+                self.list_assembly[numAssembly].update(pb,compute)
                     
         if not(compute == 'vector'):         
-            self.global_matrix =  sum([assembly.get_global_matrix() for assembly in self.__list_assembly])
+            self.current.global_matrix =  sum([assembly.current.get_global_matrix() for assembly in self.list_assembly])
         if not(compute == 'matrix'):
-            self.global_vector =  sum([assembly.get_global_vector() for assembly in self.__list_assembly]) 
+            self.current.global_vector =  sum([assembly.current.get_global_vector() for assembly in self.list_assembly]) 
 
 
     def set_start(self, pb):
@@ -85,8 +90,9 @@ class AssemblySum(AssemblyBase):
         Generally used to increase non reversible internal variable
         Assemble the new global matrix. 
         """
-        for assembly in self.__list_assembly:
-            assembly.set_start(pb)   
+        for assembly in self.list_assembly:
+            assembly.set_start(pb) 
+        #set_start doesn't change the current state so non need to update global matrices
                 
 
     def initialize(self, pb):
@@ -94,16 +100,19 @@ class AssemblySum(AssemblyBase):
         reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        for assembly in self.__list_assembly:
+        for assembly in self.list_assembly:
             assembly.initialize(pb)   
 
-    def to_start(self):
+    def to_start(self, pb):
         """
         Reset the current time increment (internal variable in the constitutive equation)
         Doesn't assemble the new global matrix. Use the Update method for that purpose.
         """
-        for assembly in self.__list_assembly:
-            assembly.to_start()         
+        for assembly in self._list_assembly:
+            assembly.to_start(pb)       
+        self.current.global_matrix =  sum([assembly.current.get_global_matrix() for assembly in self.list_assembly])
+        self.current.global_vector =  sum([assembly.current.get_global_vector() for assembly in self.list_assembly]) 
+
 
     def reset(self):
         """
@@ -111,24 +120,39 @@ class AssemblySum(AssemblyBase):
         Internal variable in the constitutive equation are reinitialized 
         And stored global matrix and vector are deleted
         """
-        for assembly in self.__list_assembly:
+        for assembly in self.list_assembly:
             assembly.reset() 
         self.delete_global_mat()
 
     @property
     def list_assembly(self):
-        return self.__list_assembly
+        return self._list_assembly
    
     @property
     def assembly_output(self):
         return self.__assembly_output
-    
-
-
-
-
 
         
+
+
+class _AssemblySumCurrent(AssemblySum): #same as AssemblySum using the current assemblies and without output function
+    
+    def __init__(self, list_assembly, **kargs):      
+        self._list_assembly = list_assembly
+        self.__assembly_output = None
+        # self.__assembly_output = kargs.get('assembly_output', None)
+        # if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
+            
+        self._reload = kargs.pop('reload', 'all')                      
+        AssemblyBase.__init__(self, name="")  
+
+    @property
+    def list_assembly(self):
+        return [assembly.current for assembly in self._list_assembly]
+   
+    @property
+    def mesh(self):
+        return self._list_assembly[0].current.mesh
     
 
 # def Sum(*listAssembly, name ="", **kargs):
