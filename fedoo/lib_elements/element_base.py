@@ -181,12 +181,14 @@ class Element1D(Element):
         if len(vec_x.shape) == 2: vec_x = np.array([vec_x])
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)        
         listX = [np.dot(dnn,vec_x)[0] for dnn in dnn_xi]   
+        if self.n_elm_gp == 2:
+            pass
         lastAxis = len(listX[0].shape)-1
         listX = [X/linalg.norm(X,axis = lastAxis).reshape(-1,1) for X in listX]
         if localFrame is None: return np.moveaxis(self.__GetLocalFrameFromX(listX, None) , 2,0)
         else:
             rep_pg = self.interpolateLocalFrame(localFrame, vec_xi) #interpolation du repère local aux points de gauss                  
-            return np.moveaxis(self.__GetLocalFrameFromX(listX, rep_pg) , 2,0)      #shape = (Nel, len(listX), dim:listvec, dim:coordinates)                      
+            return np.moveaxis(self.__GetLocalFrameFromX(listX, rep_pg) , 2,0)      #shape = (Nel, len(listX) = n_elm_gp, dim:listvec, dim:coordinates)                      
             
 class Element1DGeom2(Element1D): #élément 1D à géométrie affine (interpolée par 2 noeuds)         
     def ComputeDetJacobian(self, vec_x, vec_xi):
@@ -211,8 +213,9 @@ class Element1DGeom2(Element1D): #élément 1D à géométrie affine (interpolé
 #        self.derivativePG = np.array([self.inverseJacobian[k] * self.ShapeFunctionDerivativePG[k] for k in range(len(vec_xi))])
 
     def GetLocalFrame(self,vec_x, vec_xi, localFrame=None): #linear local frame
+        # return Element1D.GetLocalFrame(self,vec_x, vec_xi, localFrame)
         if len(vec_x.shape) == 2: vec_x = np.array([vec_x])
-        listX = [vec_x[...,1,0:3]-vec_x[...,0,0:3]] #only 1 element in the list because frame doesn't change over the element (in general nppg elements in list)
+        listX = [vec_x[...,1,0:3]-vec_x[...,0,0:3]] #only 1 element in the list because frame doesn't change over the element (in general nbpg elements in list)
         lastAxis = len(listX[0].shape)-1
         listX = [X/linalg.norm(X,axis = lastAxis).reshape(-1,1) for X in listX]
         

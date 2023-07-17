@@ -732,6 +732,7 @@ class Mesh(MeshBase):
 
     
     def to_pyvista(self):
+        if self.ndim != 3: return self.as_3d().to_pyvista()        
         if USE_PYVISTA:            
             cell_type, n_elm_nodes =  {'lin2':(3,2),
                           'tri3':(5,3),
@@ -752,12 +753,8 @@ class Mesh(MeshBase):
             elm = np.empty((self.elements.shape[0], n_elm_nodes+1), dtype=int)
             elm[:,0] = n_elm_nodes #self.elements.shape[1]
             elm[:,1:] = self.elements[:,:n_elm_nodes]
-            crd = self.nodes
-                      
-            if crd.shape[1]<3:
-                crd = np.hstack((crd, np.zeros((crd.shape[0], 3-crd.shape[1]))))
-                
-            return pv.UnstructuredGrid(elm.ravel(),  np.full(len(elm),cell_type, dtype=int), crd)
+                            
+            return pv.UnstructuredGrid(elm.ravel(),  np.full(len(elm),cell_type, dtype=int), self.nodes)
         else:
             raise NameError('Pyvista not installed.')
             
@@ -784,14 +781,67 @@ class Mesh(MeshBase):
         """Simple plot function using pyvista.
         
         This function is proposed for quick visulation of Mesh. For advanced visualization, 
-        it is recommanded to convert the mesh to pyvista with the to_pyvista() method
-        and directly use the pyvista plot funcitonnalities.
+        it is recommanded to build a DataSet object of the mesh before plotting 
+        (for instance fedoo.DataSet(mesh).plot()) or to convert the mesh to pyvista 
+        with the to_pyvista() method and directly use the pyvista plot funcitonnalities.
+        
+        Parameters
+        ----------
+        show_edges : bool
+            If False, the edges are not plotted (default = True)
+        kargs: arguments directly passed to the pyvista 
+            plot method. See the documentation of pyvista for available options.
         """
         if USE_PYVISTA:  
             self.to_pyvista().plot(show_edges=show_edges, **kargs)
         else:
             raise NameError('Pyvista not installed.')
 
+
+    def get_element_local_frame(self, n_elm_gp: int = 1) -> np.ndarray:
+        elm_ref = get_element(self.elm_type)(n_elm_gp) #1 gauss point by default to compute the local frame at the center of the element
+        elm_nodes_crd = self.nodes[self.elements]        
+        
+        if n_elm_gp==1:
+            return elm_ref.GetLocalFrame(elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp))[:,0,:]
+        else:
+            return np.transpose(elm_ref.GetLocalFrame(elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp)), (1,0,2,3)).reshape(-1,self.ndim, self.ndim)
+
+    def plot_normals(self, mag: float = 1.0, show_mesh: bool = True, **kargs) -> None:
+        """Simple functions to plot the normals of a surface Mesh.
+        
+        This function is proposed for quick visual verification of normals 
+        orientations. The normals are plotted at the center of the elements. 
+        
+        Parameters
+        ----------
+        mag : float
+            Size of the arrows (default = 1). 
+        show_mesh : bool
+            If False, the mesh is not rendered (default = True)
+        kargs: arguments directly passed to the pyvista 
+            add_mesh method. See the documentation of pyvista for available options.
+        """
+        if USE_PYVISTA:  
+            pl = pv.Plotter()
+            
+            if show_mesh:
+                pl.add_mesh(self.to_pyvista(), **kargs)
+            
+            centers = self.element_centers            
+            normals = self.get_element_local_frame()[:,-1]
+            
+
+            if self.ndim <3: 
+                normals = np.column_stack((normals, np.zeros((self.n_elements,3-self.ndim)))) 
+                centers = np.column_stack((self.element_centers, np.zeros((self.n_elements,3-self.ndim)))) 
+           
+            pl.add_arrows(
+                centers, normals, mag=mag, show_scalar_bar=False
+            )
+            pl.show()
+        else:
+            raise NameError('Pyvista not installed.')
 
     def init_interpolation(self, n_elm_gp: int|None = None) -> None:
         #in principle, no need to recompute if the structure is changed. 
@@ -985,6 +1035,40 @@ class Mesh(MeshBase):
         """
         return self._get_node2gausspoint_mat(n_elm_gp) @ self.nodes
 
+    
+    def as_2d(self) -> 'Mesh':
+        """Return a view of the current mesh in 2D.
+        
+        Warning: this method don't check if the element type is compatible 
+        with a 2d mesh. It only truncate or add zeros to the nodes list to force 
+        a 2d mesh. The returned mesh may not be valid.
+        """
+        
+        if self.ndim == 2:
+            return self
+        else: 
+            if self.ndim == 1:
+                nodes = np.column_stack((self.nodes, np.zeros(self.n_nodes)))
+            else:
+                nodes = self.nodes[:,:2]
+            return Mesh(nodes, self.elements, self.elm_type)
+
+    def as_3d(self) -> 'Mesh':
+        """Return a view of the current mesh in 3D.
+        
+        This method truncate or add zeros to the nodes list to force 
+        a 3d mesh."""
+        
+        if self.ndim == 3:
+            return self
+        else: 
+            if self.ndim < 3:
+                nodes = np.column_stack((self.nodes, np.zeros((self.n_nodes, 3-self.ndim))))
+            else:
+                nodes = self.nodes[:,:3]
+            return Mesh(nodes, self.elements, self.elm_type)
+
+    
     @property
     def physical_nodes(self) -> np.ndarray[float]:
         if self._n_physical_nodes is None:
@@ -1040,8 +1124,7 @@ class Mesh(MeshBase):
     
     @property
     def bounding_box(self) -> 'BoundingBox':
-        return BoundingBox(self)
-
+        return BoundingBox(self)    
 
     
 

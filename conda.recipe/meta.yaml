@@ -13,9 +13,9 @@ requirements:
     - python
   run:
     - python
-    - pandas
-    - matplotlib
+    - numpy
     - scipy
+    - pyvista    
     - simcoon
     - pardiso4py
 

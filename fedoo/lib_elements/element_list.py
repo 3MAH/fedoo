@@ -8,13 +8,15 @@ from fedoo.lib_elements.line import *
 from fedoo.lib_elements.tetrahedron import *
 from fedoo.lib_elements.triangle import *
 from fedoo.lib_elements.quadrangle import *
+from fedoo.lib_elements.wedge import *
 from fedoo.lib_elements.finite_difference_1d import *
 
 _dict_elements = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
             'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
             'tri3':Tri3,'tri6':Tri6,'tri3bubble':Tri3Bubble,
             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
-            'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
+            'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,
+            'wed6': Wed6, 'wed15':Wed15, 'wed18': Wed18,                        
             'parameter':Parameter, 'node':Node}
 
 # _dict_elements = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
@@ -34,7 +36,8 @@ _dict_default_n_gp = {'lin2':2, 'lin3':3, 'lin2bubble':2, 'lin3bubble':3,'lin4':
         'cohesive1d':1, 'cohesive2d':2, 'cohesive3d':4,
         'tri3':3,'tri6':4,'tri3bubble':3,
         'quad4':4,'quad8':9,'quad9':9,
-        'tet4':4,'tet10':15,'hex8':8,'hex20':27,                        
+        'tet4':4,'tet10':15,'hex8':8,'hex20':27, 
+        'wed6':6, 'wed15':21, 'wed18':21,                       
         'beam':4, 'beamfcq':4, 'bernoullibeam':4,
         'parameter':0, 'node':0,
         'pquad4':4, 'ptri3':3, 'pquad8':9, 'ptri6':4, 'pquad9':9
@@ -79,6 +82,20 @@ def get_node_elm_coordinates(element, nNd_elm=None):
             return np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1. , 0. ,  1. , 0. , -1. , -1.,  1. , 1. ,-1. , 0.,  1. , 0. ,-1.],\
                          [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1. , -1. , 0. , 1. ,  0. , -1., -1. , 1. , 1. , -1.,  0. , 1. ,0.],\
                          [-1. , -1. , -1., -1. ,  1.,  1. , 1. , 1. , -1. , -1. , -1., -1. ,  0.,  0. , 0. , 0. , 1.,  1. , 1. ,1.]]            
+    elif element in ['wed6', 'wed15', 'wed18']:
+        if nNd_elm == 6: 
+            return np.c_[[-1. , -1. , -1. , 1. , 1., 1.],\
+                         [ 1. ,  0. ,  0. , 1. , 0., 0.],\
+                         [ 0. ,  1. ,  0. , 0. , 1., 0.]]
+        elif nNd_elm == 15:
+            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 0., 0., 0., 1., 1., 1.],\
+                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 1., 0., 0., 0.5, 0., 0.5],\
+                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0., 1., 0., 0.5, 0.5, 0.]]
+        elif nNd_elm == 18:
+            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 0., 0., 0., 1., 1., 1., 0., 0., 0.],\
+                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 1., 0., 0., 0.5, 0., 0.5, 0.5, 0., 0.5],\
+                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0., 1., 0., 0.5, 0.5, 0., 0.5, 0.5, 0.]]
+
     elif element in ['cohesive1d']:
         return np.c_[[0., 0.]] #The values are arbitrary, only the size is important
 

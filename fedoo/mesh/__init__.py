@@ -70,3 +70,5 @@ from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
                     generate_nodes, hole_plate_mesh, disk_mesh, quad2tri
     
 from .importmesh import import_file, import_vtk, import_msh
+
+from .functions import extrude, extract_surface

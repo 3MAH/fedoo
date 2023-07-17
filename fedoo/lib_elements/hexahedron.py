@@ -17,7 +17,7 @@ class ElementHexahedron(Element):
         if n_elm_gp == 1:
             return np.array([[0.,0.,0.]]) # = np.c_[xi,eta,zeta]
         elif n_elm_gp == 8:
-            a = 0.57735026918962573
+            a = 0.5773502691896258 #1/np.sqrt(3)
             xi =  np.c_[[-a, -a, -a, -a, a, a, a, a]] ; eta = np.c_[[-a, -a, a,  a, -a, -a, a, a]] ; zeta = np.c_[[-a, a, -a, a, -a, a , -a, a]]
             return np.c_[xi, eta, zeta]
         elif n_elm_gp == 27:
