@@ -1,3 +1,4 @@
+from ._version import __version__
 from . import constitutivelaw 
 from . import weakform 
 from . import mesh
@@ -17,4 +18,3 @@ from .core.dataset import DataSet, MultiFrameDataSet, read_data
 # from . import mesh
 # from . import lib_elements
 
- 

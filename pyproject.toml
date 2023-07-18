@@ -23,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "numpy",
+    "numpy>=1.22.4",
     "scipy"
 ]
 dynamic = ["version"]
