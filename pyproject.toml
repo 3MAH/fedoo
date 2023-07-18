@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fedoo"
+authors = [
+    {name = "3MAH", email = 'set3mah@gmail.com'},
+]
+description = "Finite elements library"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["FEM", "Structural mechanics"]
+license = {text = "GPLv3"}
+classifiers = [
+    'Intended Audience :: Science/Research',
+    'Topic :: Scientific/Engineering :: Information Analysis',
+    'Operating System :: Microsoft :: Windows',
+    'Operating System :: POSIX',
+    'Operating System :: MacOS',
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "numpy",
+    "scipy"
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+all = [
+    'pardiso4py',
+    'pyvista',
+    'simcoon',
+    'panda',
+    'matplotlib',
+    'pytest',
+    'pytest-cov'
+]
+test = [
+    'pytest',
+    'pytest-cov'
+]
+
+[project.urls]
+Documentation = 'https://fedoo.readthedocs.io/en/latest/'
+"Bug Tracker" = 'https://github.com/3MAH/fedoo/issues'
+"Source Code" = 'https://github.com/3MAH/fedoo'
+
+[tool.setuptools.dynamic]
+version = {attr = 'fedoo._version.__version__'}
+
+[tool.setuptools.packages.find]
+include = [
+    'fedoo',
+    'fedoo.*'
+]
