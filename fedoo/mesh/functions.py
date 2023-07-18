@@ -7,7 +7,7 @@ Created on Thu Jul 13 16:09:45 2023
 import numpy as np
 from fedoo.core.mesh import Mesh
 from fedoo.mesh.simple import line_mesh_1D
-from fedoo.lib_elements.element_list import get_element 
+from fedoo.lib_elements.element_list import get_element, get_node_elm_coordinates
 
 try:
     import pyvista as pv
@@ -116,6 +116,31 @@ def extract_surface(mesh):
     return Mesh(mesh.nodes, surf_elements, face_elm_type)
 
 def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
+    """
+    Build a volume or surface mesh from the extrusion of a surface or wire mesh. 
+    
+    Parameters
+    ----------
+    mesh : fedoo.Mesh
+        The mesh to extrude
+    extrude_path : float, tuple[float] or fedoo.Mesh
+        The path along which the mesh will be extruded. 
+        extrude_path can either be:
+        - a float: extrude_path is the extrusion thickness.
+        - a tuple: extrude_path is the min and max coordinates values along the thickness.
+        - a fedoo.Mesh with line elements: define the path along which the mesh is extruded.        
+    n_nodes : int
+        number of nodes in the extrusion direction. n_nodes is ignored if extrude_path is a Mesh.
+    use_local_frame : bool
+        If True, the extrusion use the nodal local_frame of the extrude_path Mesh 
+        (if available). The default is False.
+    name : str, optional
+        The name of the final Mesh.
+
+    Returns
+    -------
+    Mesh object
+    """
     
     if isinstance(extrude_path, Mesh): 
         mesh1 = extrude_path
@@ -125,6 +150,10 @@ def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
             else: elm_type = 'lin2'
                 
             mesh1 = line_mesh_1D(n_nodes, x_min=0, x_max=extrude_path, elm_type = elm_type, name = "")
+        elif isinstance(extrude_path, tuple) and len(tuple) == 2: #assume iterable 
+            mesh1 = line_mesh_1D(n_nodes, x_min=extrude_path[0], x_max=extrude_path[1], elm_type = elm_type, name = "")
+        else:
+            raise NameError('extrude_path argument not understood. ')
     
     n_el1 = mesh1.n_elements ;
     n_el = n_el1*mesh.n_elements
@@ -192,4 +221,61 @@ def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
     else: return NotImplemented
     
     return Mesh(crd, elm, type_elm, name =name)                        
-   
+
+
+def change_elm_type(mesh, elm_type, name=""):
+    """
+    Attempt to change the type of element of the given mesh with the given elm_type.
+    
+    Work only if the two elements are compatible. This function may change the 
+    order of the nodes and elements.    
+        
+    Parameters
+    ----------
+    mesh : fedoo.Mesh        
+        The mesh to modify
+    elm_type : str
+        New element type
+    name : str, optional
+        name of the new mesh.
+
+    Returns
+    -------
+    fedoo.Mesh
+    
+    Notes
+    ------
+    This function is costly and not optimized. It should be avoided for high dimension 
+    meshes.
+    
+    """
+    elm_ref = get_element(mesh.elm_type)(0)
+    xi_nd = get_node_elm_coordinates(elm_type)
+    
+    if len(xi_nd) <= elm_ref.n_nodes: 
+        #the new elm_type is of lower order thant the previous one
+        return Mesh(mesh.nodes, mesh.elements[:,:elm_ref.n_nodes], elm_type, name=name)
+        
+    xi_nd = xi_nd[elm_ref.n_nodes:]
+    shape_func_val = elm_ref.ShapeFunction(xi_nd)
+    
+    new_nodes_crd = shape_func_val @ mesh.nodes[mesh.elements]
+    new_nodes = np.vstack((mesh.nodes,new_nodes_crd.reshape(-1, mesh.ndim)))
+    
+    new_nodes_ind = np.arange(mesh.n_nodes,mesh.n_nodes+mesh.n_elements*new_nodes_crd.shape[1])
+    new_nodes_ind = new_nodes_ind.reshape(mesh.n_elements, -1)
+
+    new_elm = np.empty((mesh.n_elements,elm_ref.n_nodes+len(xi_nd)), dtype=int)
+    new_elm[:,:elm_ref.n_nodes] = mesh.elements
+    new_elm[:,elm_ref.n_nodes:] = new_nodes_ind
+    
+    new_mesh = Mesh(new_nodes, new_elm, elm_type, name = name)
+
+    new_mesh.merge_nodes(new_mesh.find_coincident_nodes()) #very slow strategy
+    
+    #○r using pyvista. try to see if it is more efficient
+    # new_mesh = new_mesh.to_pyvista().clean(tol=1e-6, remove_unused_points=False)
+    # new_mesh = new_mesh.from_pyvista()
+    return new_mesh
+    
+    

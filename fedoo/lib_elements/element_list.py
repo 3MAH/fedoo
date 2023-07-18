@@ -49,6 +49,8 @@ def add_elements(*args):
         _dict_default_n_gp[elm.name] = elm.default_n_gp
 
 def get_node_elm_coordinates(element, nNd_elm=None):
+    if nNd_elm is None: 
+        nNd_elm = get_element(element).n_nodes
     #return xi_nd ie the position of nodes in the element local coordinate
     if element in ['lin2', 'lin3', 'lin2bubble', 'lin3bubble','cohesive2d']:
         if nNd_elm == 2: return np.c_[[0., 1.]]
@@ -88,13 +90,13 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                          [ 1. ,  0. ,  0. , 1. , 0., 0.],\
                          [ 0. ,  1. ,  0. , 0. , 1., 0.]]
         elif nNd_elm == 15:
-            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 0., 0., 0., 1., 1., 1.],\
-                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 1., 0., 0., 0.5, 0., 0.5],\
-                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0., 1., 0., 0.5, 0.5, 0.]]
+            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 1., 1., 1., 0., 0., 0.],\
+                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 0.5, 0., 0.5, 1., 0., 0.],\
+                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0.5, 0.5, 0., 0., 1., 0.]]
         elif nNd_elm == 18:
-            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 0., 0., 0., 1., 1., 1., 0., 0., 0.],\
-                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 1., 0., 0., 0.5, 0., 0.5, 0.5, 0., 0.5],\
-                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0., 1., 0., 0.5, 0.5, 0., 0.5, 0.5, 0.]]
+            return np.c_[[-1. , -1. , -1. , 1. , 1., 1., -1., -1., -1., 1., 1., 1., 0., 0., 0., 0., 0., 0.],\
+                         [ 1. ,  0. ,  0. , 1. , 0., 0., 0.5, 0., 0.5, 0.5, 0., 0.5, 1., 0., 0., 0.5, 0., 0.5],\
+                         [ 0. ,  1. ,  0. , 0. , 1., 0., 0.5, 0.5, 0., 0.5, 0.5, 0., 0., 1., 0., 0.5, 0.5, 0.]]
 
     elif element in ['cohesive1d']:
         return np.c_[[0., 0.]] #The values are arbitrary, only the size is important

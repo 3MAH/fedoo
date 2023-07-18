@@ -120,18 +120,23 @@ class Mesh(MeshBase):
                 
             if len(pvmesh.cells_dict) != 1: return NotImplemented
             
-            elm_type =  {3:'lin2',
-                         5:'tri3',
-                         9:'quad4',
-                         10:'tet4',
-                         12:'hex8',
-                         13:'wed6',
-                         14:'pyr5',
-                         21:'lin3',
-                         22:'tri6',
-                         23:'quad8', 
-                         24:'tet10',
-                         25:'hex20'
+            elm_type =  {3:'lin2', #pv._vtk.VTK_LINE
+                         5:'tri3', #pv._vtk.VTK_TRIANGLE
+                         9:'quad4', #pv._vtk.VTK_QUAD
+                         10:'tet4', #pv._vtk.VTK_TETRA
+                         12:'hex8', #pv._vtk.VTK_HEXAHEDRON
+                         13:'wed6', #pv._vtk.VTK_WEDGE
+                         14:'pyr5', #NOT IMPLEMENTED in fedoo # pv._vtk.VTK_PYRAMID
+                         21:'lin3', #pv._vtk.VTK_QUADRATIC_EDGE
+                         22:'tri6', #pv._vtk.VTK_QUADRATIC_TRIANGLE
+                         23:'quad8', #pv._vtk.VTK_QUADRATIC_QUAD
+                         24:'tet10', #pv._vtk.VTK_QUADRATIC_TETRA
+                         25:'hex20', #pv._vtk.VTK_QUADRATIC_HEXAHEDRON
+                         26:'wed15', #pv._vtk.VTK_QUADRATIC_WEDGE
+                         27:'pyr13', #NOT IMPLEMENTED in fedoo #pv._vtk.VTK_QUADRATIC_PYRAMID
+                         28:'quad9', #pv._vtk.VTK_BIQUADRATIC_QUAD
+                         29:'hex27', #NOT IMPLEMENTED in fedoo #pv._vtk.VTK_TRIQUADRATIC_HEXAHEDRON
+                         32:'wed18' #pv._vtk.VTK_BIQUADRATIC_QUADRATIC_WEDGE 
                          }.get(pvmesh.celltypes[0], None)
                                    
             if elm_type is None: raise NameError('Element Type '+ str(elm_type) + ' not available in pyvista')            
@@ -734,18 +739,24 @@ class Mesh(MeshBase):
     def to_pyvista(self):
         if self.ndim != 3: return self.as_3d().to_pyvista()        
         if USE_PYVISTA:            
-            cell_type, n_elm_nodes =  {'lin2':(3,2),
-                          'tri3':(5,3),
-                          'quad4':(9,4),
-                          'tet4':(10,4),
-                          'hex8':(12,8),
+            cell_type, n_elm_nodes =  {
+                          'lin2':(3,2), 
+                          'tri3':(5,3), 
+                          'quad4':(9,4), 
+                          'tet4':(10,4), 
+                          'hex8':(12,8), 
                           'wed6':(13,6),
-                          'pyr5':(14,5),
-                          'lin3':(21,3),
-                          'tri6':(22,6),
-                          'quad8':(23,8),           
+                          'pyr5':(14,5), 
+                          'lin3':(21,3), 
+                          'tri6':(22,6), 
+                          'quad8':(23,8), 
                           'tet10':(24,10),
-                          'hex20':(25,20)
+                          'hex20':(25,20), 
+                          'wed15':(26,15), 
+                          'pyr13':(27,13), 
+                          'quad9':(28,9), 
+                          'hex27':(29,27), 
+                          'wed18':(32,18) 
                           }.get(self.elm_type, None)
             if cell_type is None: raise NameError('Element Type '+ str(self.elm_type) + ' not available in pyvista')
 
