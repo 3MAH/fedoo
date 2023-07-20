@@ -160,14 +160,17 @@ class ListBC(BCBase):
         if there is one. 
         
         Two possible use: 
+            
         * ListBC.add(bc), where bc is any BC object. 
-        Add the object bc at the end of the list. (equivalent to ListBC.append(bc))        
+        
+          Add the object bc at the end of the list. (equivalent to ListBC.append(bc))        
         
         * ListBC.add(bc_type, node_set, variable, value, time_func=None, start_value=None, name=""):        
-        Define some standard boundary conditions (Dirichlet of Neumann BC), using
-        the BoundaryCondition.create staticmethod, and add it at the end of the list. 
         
-        Same agruments as the BoundaryCondition.create static method.         
+          Define some standard boundary conditions (Dirichlet of Neumann BC), using
+          the BoundaryCondition.create staticmethod, and add it at the end of the list. 
+        
+          Same agruments as the BoundaryCondition.create static method.         
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
             self.append(args[0])

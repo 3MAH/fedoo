@@ -80,14 +80,14 @@ class PeriodicBC(BCBase):
             Name of the created boundary condition. The default is "Periodicity".
         
         
-        Remarks
+        Notes
         ---------------
         
         * The boundary condition object needs to be used with a problem associated to 
-        a periodic mesh. 
+          a periodic mesh. 
         * The periodic nodes are automatically detected using the given tolerance (tol). 
         * The nodes of the right (x=xmax), top (y=ymax) and front (z=zmax) faces are 
-        eliminated from the system (slave nodes) and can't be used in another mpc.
+          eliminated from the system (slave nodes) and can't be used in another mpc.
         
         Example
         ---------

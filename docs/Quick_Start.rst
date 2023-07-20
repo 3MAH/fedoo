@@ -158,3 +158,5 @@ __________________________________
 
 Analyse and export results
 ________________________________
+
+See the section :doc:`Post-Treatment <post-treatment>`

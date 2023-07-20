@@ -57,13 +57,13 @@ class RigidTie(BCBase):
         by applying first the rotation around Z, then the rotation around Y and finally, the rotation around X.
 
         
-        Remarks
+        Notes
         ---------------
          
         * The node given in list_nodes are eliminated from the system (slave nodes) 
-        and can't be used in another mpc.
+          and can't be used in another mpc.
         * The rigid coupling is highly non-linear and the multi-point constraints are 
-        modified at each iteration. 
+          modified at each iteration. 
         * Once created the RigidTie object needs to be associated to the problem using the Problem.add method.
         
         

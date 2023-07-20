@@ -468,24 +468,24 @@ class Mesh(MeshBase):
         ----------
         element_set : str|list
             The set of elements. If str is given, it should refer to an 
-            element set that exist in the dict mesh.node_sets with the given key.
+            element set that exist in the dict: mesh.node_sets with the given key.
             If a list (or similar object) is given, it should contains 
             the indices of the nodes.
-        name : str (default="")
+        name : str, default: ""
             The name of the new Mesh
 
         Returns
         -------
         Mesh
         
-        Node
+        Notes
         ------
-        * The new mesh keep the former element_sets dict with only the extrated 
-        elements. 
-        * The element indices of the new mesh are not the same as the former one.
+        
+        * The new mesh keep the former element_sets dict with only the extrated elements.         
+        * The element indices of the new mesh are not the same as the former one.        
         * The new mesh keep the initial nodes and node_sets. To also removed the 
-        nodes, a simple solution is to use the method "remove_isolated_nodes"
-        with the new mesh.         
+          nodes, a simple solution is to use the method "remove_isolated_nodes"
+          with the new mesh.         
         """
         if isinstance(element_set, str):
             element_set = self.element_sets[element_set]

@@ -122,7 +122,78 @@ class _SubSV():
             
 
 
-class Heterogeneous(Mechanical3D):    
+class Heterogeneous(Mechanical3D): 
+    """Constitutive Law that allowing to define an heterogeneous constitutive laws.
+    
+    To define constitutive 
+    
+    from a list of phase constitutive laws, an a list of element sets
+        
+    Parameters
+    ----------
+    
+    tup_cl: tuple|list
+        list of constitutive laws for each phase.
+    tup_elset: tuple|list=
+        list of element set that may be given as str (if present in the mesh.element_sets dictionnary)
+        or as list of element index.
+    name: str
+        The name of the heterogeneous constitutive law
+
+    
+    Example
+    --------
+    
+    Create a one element mesh from a 2d mesh in a 3d space:
+       >>> import fedoo as fd
+       >>> import numpy as np
+       >>> 
+       >>> #Generate a mesh with a spherical inclusion inside
+       >>> 
+       >>> #matrix 
+       >>> mesh = fd.mesh.hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, \
+       >>> 	elm_type = 'quad4', name ="Domain")
+       >>> mesh.element_sets['matrix'] = np.arange(0,mesh.n_elements)
+       >>> 
+       >>> #inclusion
+       >>> mesh_disk = fd.mesh.disk_mesh(20, 11, 11)
+       >>> mesh_disk.element_sets['inclusion'] = np.arange(0,mesh_disk.n_elements)
+       >>>         
+       >>> #glue the inclusion to the matrix
+       >>> mesh = mesh + mesh_disk
+       >>> mesh.merge_nodes(np.c_[mesh.node_sets['hole_edge'], mesh.node_sets['boundary']])
+       >>> 
+       >>> #Define the Modeling Space - Here 2D problem with plane stress assumption.
+       >>> fd.ModelingSpace("2Dstress") 
+       >>> 
+       >>> #define the materials and build the heterogeneous Assembly
+       >>> material1 = fd.constitutivelaw.ElasticIsotrop(2e4, 0.3) 
+       >>> material2 = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3) 
+       >>> 
+       >>> material = fd.constitutivelaw.Heterogeneous((material1, material2), ('matrix', 'inclusion'))
+       >>> 
+       >>> wf = fd.weakform.StressEquilibrium(material) 
+       >>> assembly = fd.Assembly.create(wf, mesh)      
+       >>> 
+       >>> #Define a new static problem
+       >>> pb = fd.problem.Linear(assembly)
+       >>> 
+       >>> #Definition of the set of nodes for boundary conditions
+       >>> left = mesh.find_nodes('X',mesh.bounding_box.xmin)
+       >>> right = mesh.find_nodes('X',mesh.bounding_box.xmax)
+       >>> 
+       >>> #Boundary conditions
+       >>> pb.bc.add('Dirichlet', left, 'Disp',    0 )     
+       >>> pb.bc.add('Dirichlet', right, 'Disp', [20,0] )     
+       >>> pb.apply_boundary_conditions()
+       >>> 
+       >>> #Solve problem
+       >>> pb.solve()
+       >>> 
+       >>> #---------- Post-Treatment ----------    
+       >>> res = pb.get_results(assembly, ['Stress','Strain', 'Disp'])
+       >>> res.plot('Stress', component='vm')      
+    """
    
     def __init__(self, tup_cl, tup_elset , name =""):
        

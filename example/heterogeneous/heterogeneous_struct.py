@@ -1,9 +1,6 @@
 import fedoo as fd
 import numpy as np
 
-#Define the Modeling Space - Here 2D problem with plane stress assumption.
-fd.ModelingSpace("2Dstress") 
-
 #Generate a mesh with a spheric inclusion inside
 mesh = fd.mesh.hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, \
 	elm_type = 'quad4', name ="Domain")
@@ -18,7 +15,11 @@ mesh = mesh + mesh_disk
 #glue the inclusion to the matrix
 mesh.merge_nodes(np.c_[mesh.node_sets['hole_edge'], mesh.node_sets['boundary']])
 
-method = 3
+
+#Define the Modeling Space - Here 2D problem with plane stress assumption.
+fd.ModelingSpace("2Dstress") 
+
+method = 1
 if method == 1:
     ### method 1: sum assembly 
     #Define an elastic isotropic material with 

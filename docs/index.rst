@@ -14,8 +14,10 @@ Welcome to FEDOO's documentation!
    WeakForm
    Assembly   
    Problem
+   boundary_conditions
    post-treatment
    Examples
+   heterogeneous
 
 Indices and tables
 ==================
