@@ -521,16 +521,16 @@ class Mesh(MeshBase):
         Parameters
         ----------
         selection_criterion : str
-            selection criterion used to select the returned nodes
-            possibilities are: 
-            - 'X': select nodes with a specified x coordinate value
-            - 'Y': select nodes with a specified y coordinate value
-            - 'Z': select nodes with a specified z coordinate value
-            - 'XY' : select nodes with specified x and y coordinates values
-            - 'XZ' : select nodes with specified x and z coordinates values
-            - 'YZ' : select nodes with specified y and z coordinates values
-            - 'Point': Distance to a point            
-            - Arbitrary str expression             
+            selection criterion used to select the returned nodes.
+            Possibilities are: 
+              - 'X': select nodes with a specified x coordinate value
+              - 'Y': select nodes with a specified y coordinate value
+              - 'Z': select nodes with a specified z coordinate value
+              - 'XY' : select nodes with specified x and y coordinates values
+              - 'XZ' : select nodes with specified x and z coordinates values
+              - 'YZ' : select nodes with specified y and z coordinates values
+              - 'Point': Distance to a point            
+              - Arbitrary str expression             
 
         value : scalar or list of scalar of numpy array
             - if selection_criterion in ['X', 'Y', 'Z'] value should be a scalar
@@ -539,7 +539,7 @@ class Mesh(MeshBase):
             - value is ignored if selection_criterion is an arbitrary expression
             
         tol : float
-            Tolerance of the given criterion. Ignored if the selection_criterion 
+            Tolerance of the given criterion. Ignored if selection_criterion 
             is an arbitrary expression
         
         Returns
@@ -558,13 +558,8 @@ class Mesh(MeshBase):
         Create a one element mesh from a 2d mesh in a 3d space:
             
           >>> import fedoo as fd
-          >>> mesh = fd.mesh.disk_mesh()
-          
-          >>> nodes = np.array([[0,0],[1,0],[1,1],[0,1]])    
-          >>> elm = np.array([0,1,2,3])
-          >>> mesh = fd.Mesh(nodes, elm, 'quad4', ndim = 3, name = 'unit square mesh')
-          
-        "(X>0.2 and X<0.5) or Y>1" 
+          >>> mesh = fd.mesh.disk_mesh()         
+          >>> mesh.find_nodes("(X>0.2 and X<0.5) or Y>0.4") 
         """
         assert np.isscalar(tol), "tol should be a scalar"
         if selection_criterion in ['X','Y','Z']:
@@ -602,6 +597,7 @@ class Mesh(MeshBase):
                 i_end = expr.find(')')
                 if i_end == -1: raise NameError('Invalid expression')
                 new_res = self._eval_expr(expr[i_start+1:i_end])
+                i_end = i_end+1 #after ")"
             elif expr[i_start] in ['X','Y','Z']:
                 i+=1
                 #avialable operators                    
@@ -639,7 +635,7 @@ class Mesh(MeshBase):
                 new_res = test_op(self.nodes[:,crd_indices],value)
             else:
                 raise NameError('Invalid expression')
-                
+            
             if logical_op is None:
                 res = new_res
             elif logical_op == '&':
