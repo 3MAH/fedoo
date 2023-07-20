@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from copy import deepcopy
 
 try:
     from simcoon import simmit as sim
@@ -59,6 +60,12 @@ class _SymetricTensorList(list): #base class for StressTensorList and StrainTens
     def __sub__(self, tensor_list):
         if tensor_list is 0: return self
         return self.__class__(self.asarray()-tensor_list.asarray())
+    
+    def __deepcopy__(self, memo=None):
+        if self.array is None:
+            return deepcopy(self, memo)
+        else:
+            return self.__class__(self.array.copy())                        
     
     def vtk_format(self):
         """
@@ -182,7 +189,6 @@ class StressTensorList(_SymetricTensorList):
 
 
 class StrainTensorList(_SymetricTensorList):
-    
     
     def vtk_format(self):
         """

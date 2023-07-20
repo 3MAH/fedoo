@@ -95,7 +95,10 @@ class Mesh(MeshBase):
         self._saved_gaussian_quadrature_mat = {}
         self._elm_interpolation = {}
         self._sparse_structure = {}
-        
+    
+    
+    def __add__(self, another_mesh):
+        return Mesh.stack(self, another_mesh)
     
     @staticmethod
     def from_pyvista(pvmesh: pv.PolyData|pv.UnstructuredGrid, name:str = "") -> 'Mesh':

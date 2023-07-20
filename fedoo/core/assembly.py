@@ -94,10 +94,13 @@ class Assembly(AssemblyBase):
         self.__factorize_op = True #option for debug purpose (should be set to True for performance)        
 
         self.sv = {}
-        """ Dictionary of state variables associated to the associated for the current problem."""
+        """ Dictionary of state variables associated to the current problem."""
         self.sv_start = {}
 
         self._pb = None
+    
+    def __add__(self, another_assembly):
+        return Assembly.sum(self, another_assembly)
 
     def assemble_global_mat(self, compute = 'all'):
         """
@@ -518,7 +521,7 @@ class Assembly(AssemblyBase):
         #in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
         #save statev start values
         self.sv_start = dict(self.sv) #create a new dict with alias inside (not deep copy)
-
+        
     def update(self, pb, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
@@ -543,6 +546,7 @@ class Assembly(AssemblyBase):
         
         #replace statev with the start values
         self.sv = dict(self.sv_start)
+        
         self.current.assemble_global_mat('all')
         
  

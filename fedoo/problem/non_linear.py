@@ -95,7 +95,8 @@ class _NonLinearBase():
         self.updateA() #should be the elastic rigidity matrix
         self.updateD(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
 
-        self.solve()        
+        self.solve() 
+
 
         #set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)            
         try:
@@ -258,6 +259,8 @@ class _NonLinearBase():
        
         self.elastic_prediction()
         for subiter in range(max_subiter): #newton-raphson iterations
+            if subiter > 0:
+                pass
             #update Stress and initial displacement and Update stiffness matrix
             self.update(compute = 'vector') #update the out of balance force vector
             self.updateD() #required to compute the NR error

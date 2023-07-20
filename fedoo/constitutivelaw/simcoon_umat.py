@@ -179,7 +179,8 @@ class Simcoon(Mechanical3D):
                 
         
     def set_start(self, assembly, pb):
-        assembly.sv['TangentMatrix'] = assembly.sv['ElasticMatrix']
+        if self.use_elastic_lt:
+            assembly.sv['TangentMatrix'] = assembly.sv['ElasticMatrix']
         	
         
     def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
