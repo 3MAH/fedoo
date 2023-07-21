@@ -118,11 +118,9 @@ def get_homogenized_stiffness_2(mesh, L, meshperio=True, Problemname =None, **ka
 
     pb_post_tt.apply_boundary_conditions()
 
-    DofFree = pb_post_tt._Problem__dof_free
-    MatCB = pb_post_tt._Problem__MatCB
-
     # typeBC = 'Dirichlet' #doesn't work with meshperio = False
     typeBC = 'Neumann'
+
     for i in range(6):
         pb_post_tt.bc.remove("_Strain")
         pb_post_tt.bc.add(typeBC, [StrainNodes[0]], 'DispX',
@@ -143,20 +141,20 @@ def get_homogenized_stiffness_2(mesh, L, meshperio=True, Problemname =None, **ka
         pb_post_tt.solve()
                 
         X = pb_post_tt.get_X()  # alias
-        DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))
+        
+        if typeBC == 'Neumann':
+            DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
+                                     pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))
+        else:
+            F = pb_post_tt.get_ext_forces()    
+            F = F.reshape(3, -1)
+            stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]        
+            
+            DStress.append(stress)        
 
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)
     else:
-        
-        F = MatCB.T @ pb_post_tt.get_A() @ MatCB @ pb_post_tt.get_X()[DofFree]
-
-        F = F.reshape(3, -1)
-        stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
-
-        DStress.append(stress)
-        
         C = np.array(DStress).T
         
     return C
@@ -229,9 +227,6 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
     
     pb_post_tt.apply_boundary_conditions()
     
-    DofFree = pb_post_tt._Problem__dof_free
-    MatCB = pb_post_tt._Problem__MatCB
-    
     for i in range(6):
         pb_post_tt.bc.add(typeBC, [StrainNodes[0]], 'DispX',
               BC_perturb[i][0], start_value=0, name = '_Strain')  # EpsXX
@@ -250,21 +245,21 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
     
         pb_post_tt.solve()
         X = pb_post_tt.get_X()  # alias    
-        DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
-                                  pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
-        
+        if typeBC == 'Neumann':
+            DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
+                                     pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
+        else:
+            F = pb_post_tt.get_ext_forces()    
+            F = F.reshape(3, -1)
+            stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]        
+            
+            DStress.append(stress)
+            
         pb_post_tt.bc.remove("_Strain")
-    
+
     if typeBC == "Neumann":
         C = np.linalg.inv(np.array(DStrain).T)
     else:
-        F = MatCB.T @ pb_post_tt.get_A() @ MatCB @ pb_post_tt.get_X()[DofFree]
-    
-        F = F.reshape(3, -1)
-        stress = [F[0, -2], F[1, -2], F[2, -2], F[0, -1], F[1, -1], F[2, -1]]
-    
-        DStress.append(stress)
-        
         C = np.array(DStress).T
                 
     if remove_strain:
