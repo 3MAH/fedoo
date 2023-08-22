@@ -336,7 +336,8 @@ class _NonLinearBase():
             if restart:
                 restart = False
             else:                
-                self.set_start(save_results)                  
+                self.set_start(save_results)   
+            
                 
             #self.solve_time_increment = Newton Raphson loop
             convergence, nbNRiter, normRes = self.solve_time_increment(max_subiter, ToleranceNR)

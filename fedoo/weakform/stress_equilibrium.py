@@ -29,6 +29,8 @@ class StressEquilibrium(WeakFormBase):
         such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
         If nlgeom == 'UL' the updated lagrangian method is used (same as True)
         If nlgeom == 'TL' the total lagrangian method is used
+    space: ModelingSpace
+        Modeling space associated to the weakform. If None is specified, the active ModelingSpace is considered.
     """
     def __init__(self, constitutivelaw, name = "", nlgeom = False, space = None):
         if isinstance(constitutivelaw, str):
@@ -163,7 +165,7 @@ class StressEquilibrium(WeakFormBase):
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())               
             if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+                del assembly._saved_change_of_basis_mat[assembly.current.mesh] 
             
             assembly.current.compute_elementary_operators()            
     
@@ -179,6 +181,17 @@ class StressEquilibrium(WeakFormBase):
                     assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
                     if self.nlgeom == 'TL':
                         assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+                        
+            
+            #### debug test - should do nothing -> to delete  ####
+            if self.nlgeom == 'UL':
+                # if updated lagragian method -> reset the mesh to the begining of the increment
+                assembly.set_disp(pb.get_disp())               
+                if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+                    del assembly._saved_change_of_basis_mat[assembly.current.mesh] 
+                
+                assembly.current.compute_elementary_operators()            
+            ### end ###
 
     @property
     def corate(self):

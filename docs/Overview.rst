@@ -6,33 +6,30 @@ ______________
 
 .. image:: _static/fedOOLogos.png
 
-FEDOO is an open source Finite Element library developed in Python.
-It has originally been developed to allow easy creation and resolution of 
-problems with the Proper Orthogonal Decomposition algorithm (based on a 
-separated decomposition) and is now also mainly developed for standard 
-finite element features. 
-
+Fedoo is a free open source Finite Element library developed in Python.
 It is mainly dedicated for mechanical problems but is easily developpable for other kind of problems (thermal laws already includes).
-
-One of the main application of FEDOO is to simulate the mechanical behavior of microstructures VER behavior, in the context of Architectured materials. 
+One of the main application of FEDOO is to simulate the mechanical response of heterogeneous materials. 
+For that purpose, fedoo is part of the 3mah set that also include microgen for the CAD and meshing of heterogeneous materials 
+and simcoon for the non linear material constitutive models in finite strain. 
 
 
 Main features
 ______________
 
-
-* FEDOO is written in Python 3
+* Entirely written in Python 3
 * Implicit finite element Solver for Static and Dynamics poblems
-* Geometrical non linearities
-* Based on the SIMCOON library for finite strain constitutive laws (simcoon is developped in C++ allowing a fast execution)
-* Constitutive equation library including elasto-plastic law, composites law, ...
-* Include many type of elements like cohesive elements, 2D, 3D, beam, plate, ...
-* Homogeneisation: Easy application of periodic boundary conditions and fast automatic extraction of mean tangeant matrices
-* Embedded results visualization using the powerfull pyvista library
+* Finite strain constitutive laws based on the simcoon library (simcoon is developped in C++ allowing a fast execution)
+* Geometrical non linearities based on the simcoon library 
+* Wide constitutive equation library including composites law, elasto-plastic law, ...
+* Include many type of elements like 2D, 3D, beam, plate, cohesive elements, ...
+* Homogeneisation: Easy application of periodic boundary conditions and fast automatic extraction of mean tangent matrices
+* Embedded results visualization using the powerfull pyvista library (pyvista should be installed for that feature)
 * Multi-point constraints
-* Mesh import/export from VTK and GMSH formats (and others) 
+* Easy Mesh import/export from VTK and GMSH formats (and others) 
 * Easy scripting
-* Good compromise between a reasonable execution time (not the fastest) and an open and lisible code. 
+* Good compromise between a reasonable execution time and an open and lisible code. fedoo is not the fastest finite element software and doesn't intend to be, but a particular attention is paid 
+to the computational cost.
+* Contact in 2D (contact algorithm will be improved and extended to 3D in future versions)
 * And many other....
 
 
@@ -40,5 +37,5 @@ Road map
 ______________
 
 * Thermo-Mechanical problems (almost done)
-* Contact algorithm (and especially self contact)
+* Contact in 3D, Contat with friction
 

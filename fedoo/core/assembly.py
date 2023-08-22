@@ -516,12 +516,14 @@ class Assembly(AssemblyBase):
         self.weakform.set_start(self, pb) 
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.set_start(self,pb) #should update GetH() method to return elastic rigidity matrix for prediction   
-        self.assemble_global_mat()  
-        #no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
-        #in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
-        #save statev start values
+       
         self.sv_start = dict(self.sv) #create a new dict with alias inside (not deep copy)
         
+        self.current.assemble_global_mat('all')  
+        #no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
+        #in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
+        #save statev start values               
+       
     def update(self, pb, compute = 'all'):
         """
         Update the associated weak form and assemble the global matrix
@@ -542,10 +544,9 @@ class Assembly(AssemblyBase):
         self.weakform.to_start(self, pb)
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.to_start(self, pb)
-        # self.assemble_global_mat(compute='all')
         
         #replace statev with the start values
-        self.sv = dict(self.sv_start)
+        self.sv = self.current.sv = dict(self.sv_start)
         
         self.current.assemble_global_mat('all')
         
@@ -589,7 +590,7 @@ class Assembly(AssemblyBase):
         Assembly._saved_associated_variables = {} #dict containing all associated variables (rotational dof for C1 elements) for elm_type
         
         
-    def compute_elementary_operators(self,n_elm_gp = None): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)               
+    def compute_elementary_operators(self,n_elm_gp = None): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)          
         #-------------------------------------------------------------------
         #Initialisation   
         #-------------------------------------------------------------------

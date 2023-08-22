@@ -92,9 +92,13 @@ class AssemblySum(AssemblyBase):
         """
         for assembly in self.list_assembly:
             assembly.set_start(pb) 
-        #set_start doesn't change the current state so non need to update global matrices
-                
 
+        #Update the global matrix to the trial values (generally elastic tangent matrix)
+        self.current.global_matrix =  sum([assembly.current.get_global_matrix() for assembly in self.list_assembly])
+        #in principle no need to update global vector here because the current state is not modified by set_start. Could be improved by removing the next line
+        self.current.global_vector =  sum([assembly.current.get_global_vector() for assembly in self.list_assembly]) 
+
+                
     def initialize(self, pb):
         """
         reset the current time increment (internal variable in the constitutive equation)
@@ -102,6 +106,7 @@ class AssemblySum(AssemblyBase):
         """
         for assembly in self.list_assembly:
             assembly.initialize(pb)   
+
 
     def to_start(self, pb):
         """

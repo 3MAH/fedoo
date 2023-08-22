@@ -135,7 +135,7 @@ class CompositeUD(ElasticAnisotropic):
             H = np.matmul(R_sigma_inv, np.matmul(H,R_epsilon))
             if len(H.shape) == 3: H = np.rollaxis(H,0,3)
             
-        H = self.local2global_H(self._H)
+        H = self.local2global_H(H)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
         else: 
