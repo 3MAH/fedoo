@@ -41,8 +41,8 @@ def extract_surface(mesh):
     
     if mesh.elm_type in ['tet4', 'tet10', 'hex8', 'hex20']:
         if USE_PYVISTA:
-            #the normal orientation seems ok, but need to be ensure
-            return Mesh.from_pyvista(mesh.to_pyvista.extract_surface())        
+            #the normal orientation seems ok, but need to be checked
+            return Mesh.from_pyvista(mesh.to_pyvista().extract_surface())        
         else:
             raise NameError('Pyvista not found. Extraction of volume surface need pyvista.')
     
