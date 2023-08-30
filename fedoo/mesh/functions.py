@@ -39,28 +39,46 @@ def extract_surface(mesh):
     # elements. If a 3D mesh is given, the surface mesh will be composed of 
     # 2D shell elements.
     
-    if mesh.elm_type in ['tet4', 'tet10', 'hex8', 'hex20']:
-        if USE_PYVISTA:
-            #the normal orientation seems ok, but need to be checked
-            return Mesh.from_pyvista(mesh.to_pyvista().extract_surface())        
-        else:
-            raise NameError('Pyvista not found. Extraction of volume surface need pyvista.')
+    # if mesh.elm_type in ['tet4', 'tet10', 'hex8', 'hex20']:
+    #     if USE_PYVISTA:
+    #         #the normal orientation seems ok, but need to be checked
+    #         return Mesh.from_pyvista(mesh.to_pyvista().extract_surface())        
+    #     else:
+    #         raise NameError('Pyvista not found. Extraction of volume surface need pyvista.')
     
     if mesh.elm_type in ['quad4','quad8','quad9']:
         faces_in_elm = [[0,1],[1,2],[2,3],[3,0]]
         n_face_nodes = 2
         face_elm_type = 'lin2'
+        dim = 1
     elif mesh.elm_type in ['tri3','tri6']:
         faces_in_elm = [[0,1],[1,2],[2,0]]
         n_face_nodes = 2
         face_elm_type = 'lin2'
+        dim = 1
+    elif mesh.elm_type in ['tet4', 'tet10']:
+        faces_in_elm = [[0,1,2],[1,2,3],[2,3,0], [3,0,1]]
+        n_face_nodes = 3
+        face_elm_type = 'tri3'
+        dim = 2
+    elif mesh.elm_type in ['hex8', 'hex20']:
+        faces_in_elm = [[0,1,2,3],[5,4,7,6],[0,4,5,1],[2,6,7,3],[1,5,6,2],[4,0,3,7]]
+        n_face_nodes = 4
+        face_elm_type = 'quad4'
+        dim = 2
+    # elif mesh.elm_type in ['hex8', 'hex20']:
+    #     faces_in_elm = [[0,1,2], [0,2,3], [5,4,7], [5,7,6], [0,4,5], [0,5,1], 
+    #                     [2,6,7], [2,7,3], [1,5,6], [1,6,2], [4,0,3], [4,3,7]]
+    #     n_face_nodes = 3
+    #     face_elm_type = 'tri3'
+    #     dim = 2
     else: 
         raise NotImplementedError()
         
     n_faces_in_elm = len(faces_in_elm)
-    list_faces = mesh.elements[:,faces_in_elm] #shape = (n_elements, n_elm_faces, n_node_per_faces)    
+    list_faces = mesh.elements[:,faces_in_elm].reshape(-1,n_face_nodes) #shape = (n_elements, n_elm_faces, n_node_per_faces) before reshape
     
-    test = np.sort(list_faces.reshape(-1,2), axis=1)
+    test = np.sort(list_faces, axis=1)
     ind_sorted = np.lexsort(tuple((test[:,i-1] for i in range(n_face_nodes,0,-1))))
     # sorted_faces = [frozenset(face) for face in test[ind_sorted]]
     sorted_faces = test[ind_sorted]
@@ -70,7 +88,8 @@ def extract_surface(mesh):
     i=1
     while i < len(sorted_faces):            
         if (sorted_faces[i] != sorted_faces[i-1]).any():     
-            surf_elements.append(list(sorted_faces[i-1]))
+            # surf_elements.append(list(sorted_faces[i-1]))
+            surf_elements.append(list(list_faces[ind_sorted[i-1]]))
             ind_element.append(ind_sorted[i-1]//n_faces_in_elm)
             
             if i == len(sorted_faces)-1:
@@ -82,24 +101,49 @@ def extract_surface(mesh):
             while i<len(sorted_faces) and (sorted_faces[i] == sorted_faces[i-1]).all():
                 i+=1
         i+=1
-            
+    
     surf_elements = np.array(surf_elements)
+        
+    nodes_inside=[np.setdiff1d(mesh.elements[ind_element[i]], face)[0] for i,face in enumerate(surf_elements)]
+
+    if face_elm_type == 'quad4':
+        #divide each quad into 2 tri
+        face_elm_type = 'tri3' 
+        surf_elements = np.hstack((surf_elements[:,:3], surf_elements[:,[0,2,3]])).reshape(-1,3)
+        # surf_elements = np.vstack((surf_elements[:, :3], surf_elements[:,[0,2,3]]))
+        nodes_inside = np.column_stack((nodes_inside, nodes_inside)).reshape(-1)
     
     #Check if normal are well defined (outside the volume)
     #idea: compute the distance of a point of the elm that is not the face itself    
-    nodes_inside=[np.setdiff1d(mesh.elements[ind_element[i]], face)[0] for i,face in enumerate(surf_elements)]
         
     element_face = get_element(face_elm_type)(1)
     
     elm_nodes_crd = mesh.nodes[surf_elements]
-    local_frame = element_face.GetLocalFrame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
-
-    tangent_axis = local_frame[:,0,0]
-    normal_axis = local_frame[:,0,1]
     
-    # The two following lines work only for 2 node 1d element    # length = np.linalg.norm(mesh.nodes[surf.elements[:,1]] - mesh.nodes[surf.elements[:,0]], axis = 1)
-    length = np.linalg.norm(elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:], axis = 1)    
-    vec_xi = 1/length*((mesh.nodes[nodes_inside] - elm_nodes_crd[:,0,:]) * tangent_axis).sum(axis=1)
+    if dim == 1:
+        local_frame = element_face.GetLocalFrame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
+    
+        tangent_axis = local_frame[:,0,0]
+        normal_axis = local_frame[:,0,-1]
+        
+        # The two following lines work only for 2 node 1d element    # length = np.linalg.norm(mesh.nodes[surf.elements[:,1]] - mesh.nodes[surf.elements[:,0]], axis = 1)
+        length = np.linalg.norm(elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:], axis = 1)    
+        vec_xi = 1/length*((mesh.nodes[nodes_inside] - elm_nodes_crd[:,0,:]) * tangent_axis).sum(axis=1)
+    else: #dim == 2
+        #work only for tri3 face
+        
+        # tangent1 = elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:]
+        # tangent2 = elm_nodes_crd[:,2,:] - elm_nodes_crd[:,0,:]
+        
+        tangent = elm_nodes_crd[:,1:,:] - elm_nodes_crd[:,[0],:] #tangent[:,i,:] gives the ith tangent axis i in [0,1]. tangent are not orthogonal
+        
+        vec_xi = np.linalg.solve((tangent @ tangent.transpose([0,2,1])),       
+                        np.sum(((mesh.nodes[nodes_inside] - elm_nodes_crd[:,0,:]).reshape(-1,1,3) * tangent), axis=2))
+        
+        # local_frame = element_face.GetLocalFrame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
+        # normal_axis = local_frame[:,0,-1]
+        normal_axis = np.cross(tangent[:,0,:],tangent[:,1,:])
+        normal_axis = normal_axis/np.linalg.norm(normal_axis,axis=1).reshape(-1,1)
 
     #for all elements
     shape_func_val = element_face.ShapeFunction(vec_xi)

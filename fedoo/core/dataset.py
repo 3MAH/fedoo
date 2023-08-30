@@ -113,8 +113,8 @@ class DataSet():
              component: int|str = 0, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None, 
              node_labels: bool|list = False, element_labels: bool|list = False, 
-             show_nodes: bool|float = False, plotter: object = None, 
-             screenshot: str|None = None, **kargs) -> None:
+             show_nodes: bool|float = False, show_normals: bool|float = False,
+             plotter: object = None, screenshot: str|None = None, **kargs) -> None:
         
         """Plot a field on the surface of the associated mesh.                
         
@@ -156,6 +156,11 @@ class DataSet():
         show_nodes : bool|float (default = False)
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
+        show_normals : bool|float (default = False)
+            Plot the face normals. If True, 
+            the vectors are shown with a default magnitude.
+            If float, show_normas is the required magnitude.
+            Only available for 1D or 2D mesh. 
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
             If pyvista.Plotter object, plot the mesh in the given plotter
             If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
@@ -330,6 +335,22 @@ class DataSet():
         if show_nodes:
             if show_nodes == True: show_nodes = 5
             pl.add_points(crd_labels, render_points_as_spheres=True, point_size = show_nodes)
+        
+        if show_normals:                
+            if show_normals == True: show_normals = 1.0 #normal magnitude
+            
+            centers = self.mesh.element_centers      
+            if self.mesh.elm_type[:3] not in ['lin', 'tri', 'qua']:
+                raise NameError("Can't plot normals for volume meshes. Use fedoo.mesh.extract_surface to get a compatible mesh.")
+            normals = self.mesh.get_element_local_frame()[:,-1]
+            
+            if ndim <3: 
+                normals = np.column_stack((normals, np.zeros((self.n_elements,3-ndim)))) 
+                centers = np.column_stack((self.element_centers, np.zeros((self.n_elements,3-ndim)))) 
+           
+            pl.add_arrows(
+                centers, normals, mag=show_normals, show_scalar_bar=False
+            )
         
         
         if screenshot: 
