@@ -144,10 +144,21 @@ class Contact(AssemblyBase):
         elm_ref = get_element(surf.elm_type)(1) #1 gauss point to compute the local base (center of the element)
         elm_nodes_crd = surf.nodes[surf.elements]        
         
-        local_frame = elm_ref.GetLocalFrame(elm_nodes_crd, elm_ref.get_gp_elm_coordinates(1))
-
-        tangent_axis = local_frame[:,0,0]
-        normal_axis = local_frame[:,0,1]
+        if surf.elm_type == 'lin2':
+            local_frame = elm_ref.GetLocalFrame(elm_nodes_crd, elm_ref.get_gp_elm_coordinates(1))
+    
+            tangents = local_frame[:,0,0]
+            normals = local_frame[:,0,1]
+            dim = 1
+        
+        else: #surf.elm_type == 'tri3':
+            tangents = elm_nodes_crd[:,1:,:] - elm_nodes_crd[:,[0],:] #tangents[:,i,:] gives the ith tangent axis i in [0,1]. tangents axes are not orthogonal
+                        
+            normals = np.cross(tangents[:,0,:],tangents[:,1,:])
+            normals = normals/np.linalg.norm(normals,axis=1).reshape(-1,1)
+            dim = 2
+            
+        
         
         # The following lines work only for 2 node 1d element
         # length = np.linalg.norm(mesh.nodes[surf.elements[:,1]] - mesh.nodes[surf.elements[:,0]], axis = 1)
@@ -158,17 +169,18 @@ class Contact(AssemblyBase):
         contact_g = []
 
         data_Ns = []
-        data_N0s = []
-        data_Ts = []
-        data_T0s = []
-
-        #matrix for special treatment -> node 2 node if two nodes are close
-        #should be move in a node_2_node contact assembly 
-        Xs= []
-        indices_n2n = []
-        data_n2n = []
-        contact_n2n = [] #list of nodes in contact in n2n 
-        #end 
+        if dim == 1:
+            data_N0s = []
+            data_Ts = []
+            data_T0s = []
+        else:
+            data_N1 = []
+            data_N2 = []
+            data_T1 = []
+            data_T2 = []
+        
+        first_indices_disp = np.array(self.space.get_vector('Disp')).reshape(-1,1) * surf.n_nodes #column vector with the first indice for each disp component        
+        n_dof_contact = (surf.elements.shape[1]+1)*len(first_indices_disp) #number of dof involved in a contact point
         
         list_nodes = np.unique(surf.elements)               
         
@@ -186,7 +198,7 @@ class Contact(AssemblyBase):
             #     contact_point = (shape_func_val @ elm_nodes_crd[el])
         
             #     #algebric distance from the possible elements
-            #     g = (surf.nodes[slave_node] - contact_point) @ normal_axis[el]
+            #     g = (surf.nodes[slave_node] - contact_point) @ normals[el]
                 
             #     if update_contact:
             #         if (self.no_contact_loss or g<self.clearance):                        
@@ -198,8 +210,8 @@ class Contact(AssemblyBase):
                                                 
             #     # if g>self.clearance: g = self.clearance
                 
-            #     n1 = normal_axis[el]
-            #     a1 = tangent_axis[el]
+            #     n1 = normals[el]
+            #     a1 = tangents[el]
                 
             # elif update_contact:
             
@@ -217,7 +229,12 @@ class Contact(AssemblyBase):
                 possible_elements = [el for el in range(surf.n_elements) if trial_node in surf.elements[el]]
             
                 #orthogonal projection on the element plane in node coordinates
-                vec_xi = 1/length[possible_elements]*((surf.nodes[slave_node] - elm_nodes_crd[possible_elements,0,:]) * tangent_axis[possible_elements]).sum(axis=1)
+                if dim == 1: #surf.elm_type = 'lin2'
+                    vec_xi = 1/length[possible_elements]*((surf.nodes[slave_node] - elm_nodes_crd[possible_elements,0,:]) * tangents[possible_elements]).sum(axis=1)
+                else: #surf.elm_type == 'tri3':
+                    #work only for tri3 face                                        
+                    vec_xi = np.linalg.solve((tangents[possible_elements] @ tangents[possible_elements].transpose([0,2,1])),       
+                                    np.sum(((surf.nodes[slave_node] - elm_nodes_crd[possible_elements,0,:]).reshape(-1,1,3) * tangents[possible_elements]), axis=2))
                 
                 
                 #contact points in global coordinates
@@ -225,14 +242,18 @@ class Contact(AssemblyBase):
                 contact_points = (shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[possible_elements]).squeeze()
         
                 #algebric distance from the possible elements
-                g = ((surf.nodes[slave_node] - contact_points) * normal_axis[possible_elements]).sum(axis=1)            
+                g = ((surf.nodes[slave_node] - contact_points) * normals[possible_elements]).sum(axis=1)            
                 
                 if (g>self.clearance).all():                    
                     continue                                                                
                 
                 # #element that may be in contact (ie vec_xi inside the element) and where g<0  
                 # test = (vec_xi >= 0) * (vec_xi<=1) #id of elements where there may be contact
-                test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
+                if dim == 1: #surf.elm_type == 'lin2': 
+                    test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
+                else:  #surf.elm_type == 'tri3':
+                    test = (vec_xi[:,0]+self.tol >= 0) * (vec_xi[:,1]+self.tol >= 0) * (1-vec_xi[:,0]-vec_xi[:,1]+self.tol>=0) #id of elements where there may be contact
+
 
                 # test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
                 test = np.where(test*(g<self.clearance))[0]
@@ -267,63 +288,81 @@ class Contact(AssemblyBase):
                 #     self.contact_list_xi[slave_node] = vec_xi
                 shape_func_val = shape_func_val[id_el]
                 new_contact_list[slave_node] = el                               
-                
-                n1 = normal_axis[el]
-                a1 = tangent_axis[el]            
+           
             else:
                 el = contact_list.get(slave_node) #read the element in contact
                 if el is None: continue
-            
-                vec_xi = 1/length[el]*((surf.nodes[slave_node] - elm_nodes_crd[el,0,:]) * tangent_axis[el]).sum()
+                
+                if dim == 1: #surf.elm_type == 'lin2':
+                    vec_xi = 1/length[el]*((surf.nodes[slave_node] - elm_nodes_crd[el,0,:]) * tangents[el]).sum()
+                else: #surf.elm_type == 'tri3':
+                    #work only for tri3 face                  
+
+                    #need to be corrected                      
+                    vec_xi = np.linalg.solve( tangents[el] @ tangents[el].T ,       
+                                    np.sum((surf.nodes[slave_node] - elm_nodes_crd[el,0,:]).reshape(1,3) * tangents[el], axis=1)).reshape(1,-1)
                                 
                 #contact points in global coordinates
                 shape_func_val = elm_ref.ShapeFunction(vec_xi)[0]
                 contact_point = (shape_func_val @ elm_nodes_crd[el])
         
                 #algebric distance from the possible elements
-                g = (surf.nodes[slave_node] - contact_point) @ normal_axis[el]     
+                g = (surf.nodes[slave_node] - contact_point) @ normals[el]     
                 # if g>self.clearance: g = self.clearance
-                n1 = normal_axis[el]
-                a1 = tangent_axis[el]
+            
+            n1 = normals[el]
+            a1 = tangents[el]
                 
             contact_g.append(g)
             contact_elements.append(el)
             
-            if vec_xi > 1:
-                shape_func_val = np.array([0.,1.])
-            elif vec_xi < 0:
-                shape_func_val = np.array([1.,0.])
+            # if vec_xi > 1:
+            #     shape_func_val = np.array([0.,1.])
+            # elif vec_xi < 0:
+            #     shape_func_val = np.array([1.,0.])
         
+                
             # Need to build several matrices
             #   - matrix that compute g (algebric normal distance) from u knowing vec_xi (Ns in eq 9.18 p 239)
             #   - matrix that 
             
             # col
             # row
-            # n1 = normal_axis[contact_elements[-1]]
-            # a1 = tangent_axis[contact_elements[-1]]
-            
-            
-            contact_nodes = np.hstack(([slave_node],surf.elements[contact_elements[-1]]))
+            # n1 = normals[el]
+            # a1 = tangents[el]
+                        
+            contact_nodes = np.hstack(([slave_node],surf.elements[el]))
             sorted_indices = contact_nodes.argsort()
             
-            indices.extend(list((contact_nodes[sorted_indices] + np.array([[0], [surf.n_nodes]])).ravel()))
+            indices.extend(list((contact_nodes[sorted_indices] + first_indices_disp).ravel()))            
+            
             data_Ns.extend(list((np.hstack(([1],-shape_func_val))[sorted_indices] * n1.reshape(-1,1)).ravel()))
-            data_Ts.extend(list((np.hstack(([1],-shape_func_val))[sorted_indices] * a1.reshape(-1,1)).ravel()))
             
-            data_N0s.extend(list((np.array([0,-1,1])[sorted_indices] * n1.reshape(-1,1)).ravel())) 
-            data_T0s.extend(list((np.array([0,-1,1])[sorted_indices] * a1.reshape(-1,1)).ravel())) 
-                            
+            if dim == 1:
+                data_Ts.extend(list((np.hstack(([1],-shape_func_val))[sorted_indices] * a1.reshape(-1,1)).ravel()))
+                data_N0s.extend(list((np.array([0,-1,1])[sorted_indices] * n1.reshape(-1,1)).ravel())) 
+                data_T0s.extend(list((np.array([0,-1,1])[sorted_indices] * a1.reshape(-1,1)).ravel())) 
+            else:
+                shape_func_deriv_val = elm_ref.ShapeFunctionDerivative([vec_xi])[0] #constant value for tri3, could be compute outside the loop for an arbitrary vec_xi 
+                data_T1.extend(list((np.hstack(([1],-shape_func_val))[sorted_indices] * (a1[0]).reshape(-1,1)).ravel()))
+                data_T2.extend(list((np.hstack(([1],-shape_func_val))[sorted_indices] * (a1[1]).reshape(-1,1)).ravel()))
+                data_N1.extend(list((np.hstack(([0],-shape_func_deriv_val[0]))[sorted_indices] * n1.reshape(-1,1)).ravel()))
+                data_N2.extend(list((np.hstack(([0],-shape_func_deriv_val[1]))[sorted_indices] * n1.reshape(-1,1)).ravel()))
             
-        shape = (len(contact_elements), self.space.nvar*surf.n_nodes)
-        indptr = np.arange(0,len(indices)+1, 6)
+        shape = (len(contact_elements), self.space.nvar*surf.n_nodes)                
+        indptr = np.arange(0,len(indices)+1, n_dof_contact)
         Ns = sparse.csr_array((data_Ns, indices, indptr), shape=shape)
-        N0s = sparse.csr_array((data_N0s, indices, indptr), shape=shape)  
-        Ts = sparse.csr_array((data_Ts, indices, indptr), shape=shape)
-        T0s = sparse.csr_array((data_Ns, indices, indptr), shape=shape)
+        
+        if dim == 1:
+            N0s = sparse.csr_array((data_N0s, indices, indptr), shape=shape)  
+            Ts = sparse.csr_array((data_Ts, indices, indptr), shape=shape)
+            T0s = sparse.csr_array((data_Ns, indices, indptr), shape=shape)
+        else:
+            T1 = sparse.csr_array((data_T1, indices, indptr), shape=shape)
+            T2 = sparse.csr_array((data_T2, indices, indptr), shape=shape)
+            N1 = sparse.csr_array((data_N1, indices, indptr), shape=shape)
+            N2 = sparse.csr_array((data_N2, indices, indptr), shape=shape)
 
-        M_n2n = sparse.csr_array((data_n2n, indices_n2n, np.arange(0,len(indices_n2n)+1, 2)), 
-                                 shape=(len(indices_n2n)//2, self.space.nvar*surf.n_nodes))
 
         contact_g = np.array(contact_g)            
         # contact_g = contact_g* (contact_g< self.clearance) #remove negative value
@@ -332,24 +371,51 @@ class Contact(AssemblyBase):
         
         Fcontact, eps = self.normal_law(contact_g - self.clearance)
         # print(Fcontact)
-        F_div_l = sparse.diags(Fcontact/length[contact_elements], format='csr') #F = -eps*g
-        g_div_l = sparse.diags(contact_g/length[contact_elements], format='csr')
+              
 
-        #TO DO integrate 9.36 eq from wriggers 2006 with fd._sparse lib to improve building perfomance            
-        # self.global_matrix = self.eps_n @ ( Ns.T@Ns - N0s.T@g_div_l@Ts -  
-        #                            Ts.T@g_div_l@N0s - N0s.T@(g_div_l@g_div_l)@N0s)
+        if dim == 1:
+            F_div_l = sparse.diags(Fcontact/length[contact_elements], format='csr') #F = -eps*g
+            g_div_l = sparse.diags(contact_g/length[contact_elements], format='csr')
 
-        if not(np.isscalar(eps)): 
-            mat_eps = sparse.diags(eps, format='csr')
-            self.global_matrix = ( Ns.T@mat_eps@Ns + N0s.T@F_div_l@Ts +  
-                                       Ts.T@F_div_l@N0s + N0s.T@(F_div_l@g_div_l)@N0s)
-        else:
-            # self.global_matrix = eps*( Ns.T@Ns - N0s.T@g_div_l@Ts -  
-            #                       Ts.T@g_div_l@N0s - N0s.T@(g_div_l@g_div_l)@N0s)
+            #TO DO integrate 9.36 eq from wriggers 2006 with fd._sparse lib to improve building perfomance      
+            
+            if not(np.isscalar(eps)): 
+                mat_eps = sparse.diags(eps, format='csr')
+                self.global_matrix = ( Ns.T@mat_eps@Ns + N0s.T@F_div_l@Ts +  
+                                           Ts.T@F_div_l@N0s + N0s.T@(F_div_l@g_div_l)@N0s)
+            else:
+                # self.global_matrix = eps*( Ns.T@Ns - N0s.T@g_div_l@Ts -  
+                #                       Ts.T@g_div_l@N0s - N0s.T@(g_div_l@g_div_l)@N0s)
+            
+                self.global_matrix = ( eps*Ns.T@Ns + N0s.T@F_div_l@Ts +  
+                                            Ts.T@F_div_l@N0s + N0s.T@(F_div_l@g_div_l)@N0s)
         
-            self.global_matrix = ( eps*Ns.T@Ns + N0s.T@F_div_l@Ts +  
-                                        Ts.T@F_div_l@N0s + N0s.T@(F_div_l@g_div_l)@N0s)
+        else: #dim== 2
         
+            # mat_eps_g = sparse.diags(contact_g * eps, format='csr') 
+            mat_eps_g = sparse.csr_array((contact_g * eps, np.arange(len(contact_g)), np.arange(len(contact_g)+1)))
+            mat_eps_g_g = sparse.csr_array((contact_g * contact_g * eps, mat_eps_g.indices, mat_eps_g.indptr))            
+            reciprocal_metric = np.linalg.inv(tangents[contact_elements] @ tangents[contact_elements].transpose([0,2,1]))
+            #for one el: reciprocal_metric = np.linalg.inv(tangents[el] @ tangents[el].T)   #[[a^11, a^12], [a^21, a^22]] 
+
+            #eps should be multiplied by the element surface for better results
+            
+            if not(np.isscalar(eps)): 
+                mat_eps = sparse.diags(eps, format='csr')
+                
+                self.global_matrix = ( Ns.T@mat_eps@Ns - N1.T@mat_eps_g@T1 - N2.T@mat_eps_g@T2
+                                       - T1.T@mat_eps_g@N1 - T2.T@mat_eps_g@N2
+                                       - N1.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,0], mat_eps_g.indices, mat_eps_g.indptr))@N1
+                                       - N1.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,1], mat_eps_g.indices, mat_eps_g.indptr))@N2
+                                       - N2.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,1], mat_eps_g.indices, mat_eps_g.indptr))@N1
+                                       - N2.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,1,1], mat_eps_g.indices, mat_eps_g.indptr))@N2)
+            else:
+                self.global_matrix = ( eps * Ns.T@Ns - N1.T@mat_eps_g@T1 - N2.T@mat_eps_g@T2
+                                       - T1.T@mat_eps_g@N1 - T2.T@mat_eps_g@N2
+                                       - N1.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,0], mat_eps_g.indices, mat_eps_g.indptr))@N1
+                                       - N1.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,1], mat_eps_g.indices, mat_eps_g.indptr))@N2
+                                       - N2.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,0,1], mat_eps_g.indices, mat_eps_g.indptr))@N1
+                                       - N2.T@sparse.csr_array((mat_eps_g_g.data * reciprocal_metric[:,1,1], mat_eps_g.indices, mat_eps_g.indptr))@N2)
         
         self.global_vector = Ns.T@Fcontact 
         

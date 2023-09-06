@@ -19,8 +19,8 @@ uimp = 1
 filename = 'sheartest_ref'
 res_dir = 'results/'
 
-mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
-# mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
+# mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
+mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
 # mesh = fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")['tet4']
 
 crd = mesh.nodes 
@@ -107,7 +107,7 @@ pb.bc.add('Dirichlet',ref_node[1], 'DispX', 2*np.pi/2) #Rigid rotation of the ri
 # pb.bc.add('Neumann',ref_node[1], 'DispX', 300) #Rigid rotation of the right end
 
 
-pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.025)
+pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.025)
 
 E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
 

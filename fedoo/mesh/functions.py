@@ -17,11 +17,12 @@ except:
     USE_PYVISTA = False
 
 def extract_surface(mesh):
-    """Build a mesh of the surface of a given 2D mesh.
+    """Build a mesh of the surface of a given 2D or 3D mesh.
 
     This function ensure that the normal of the surface elements are 
     oriented outside the volume.
-    For now only usable for 2D meshes.     
+    The returned surface mesh is based on tri3 elements for initial 3D meshes, 
+    and on lin2 elements for initial 2D meshes.    
 
     Parameters
     ----------

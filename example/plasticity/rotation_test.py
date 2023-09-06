@@ -23,7 +23,7 @@ alpha = 1e-5 #???
 meshname = "Domain"
 uimp = 2
 
-fd.mesh.box_mesh(Nx=5, Ny=5, Nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, ElementShape = 'hex8', name = meshname)
+fd.mesh.box_mesh(nx=5, ny=5, nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
 mesh = fd.Mesh[meshname]
 
 crd = mesh.nodes 
