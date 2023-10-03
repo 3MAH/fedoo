@@ -147,6 +147,10 @@ class Mesh(MeshBase):
             elm = list(pvmesh.cells_dict.values())[0]
             # elm = pvmesh.cells.reshape(-1,pvmesh.cells[0]+1)[1:]            
             
+            if 'ndim' in pvmesh.field_data: #vtk mesh are always 3d. the ndim
+                return Mesh(pvmesh.points[:,:int(pvmesh.field_data['ndim'][0])], 
+                            elm, elm_type, name=name)
+                
             return Mesh(pvmesh.points, elm, elm_type, name=name)
         else:
             raise NameError('Pyvista not installed.')
@@ -434,7 +438,7 @@ class Mesh(MeshBase):
         1D array containing the indexes of the non used nodes.
         If all elements are used, return an empty array.        
         """
-        return np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
+        return np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements))
     
     
     def remove_isolated_nodes(self) -> int:  
@@ -446,7 +450,7 @@ class Mesh(MeshBase):
         Return : n_removed_nodes (int) 
             the number of removed nodes.         
         """
-        index_non_used_nodes = np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements.flatten()))
+        index_non_used_nodes = np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements))
         self.remove_nodes(index_non_used_nodes)
         self.reset_interpolation()
         return len(index_non_used_nodes)
@@ -736,7 +740,10 @@ class Mesh(MeshBase):
 
     
     def to_pyvista(self):
-        if self.ndim != 3: return self.as_3d().to_pyvista()        
+        if self.ndim != 3: 
+            pvmesh = self.as_3d().to_pyvista()
+            pvmesh.field_data['ndim'] = self.ndim 
+            return pvmesh
         if USE_PYVISTA:            
             cell_type, n_elm_nodes =  {
                           'lin2':(3,2), 
@@ -763,7 +770,7 @@ class Mesh(MeshBase):
             elm = np.empty((self.elements.shape[0], n_elm_nodes+1), dtype=int)
             elm[:,0] = n_elm_nodes #self.elements.shape[1]
             elm[:,1:] = self.elements[:,:n_elm_nodes]
-                            
+            
             return pv.UnstructuredGrid(elm.ravel(),  np.full(len(elm),cell_type, dtype=int), self.nodes)
         else:
             raise NameError('Pyvista not installed.')
