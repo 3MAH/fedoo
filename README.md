@@ -25,7 +25,20 @@ Provider      | Status
 --------      | ------
 Read the Docs | [![Documentation Status](https://readthedocs.org/projects/fedoo/badge/?version=latest)](https://fedoo.readthedocs.io/en/latest/?badge=latest)
 
-To install Fedoo with conda : 
+
+Installation
+--------------
+Installation with pip including recommanded dependencices:
+```
+pip install fedoo[all]
+```
+
+Minimal installation with pip:
+```
+pip install fedoo
+```
+
+Installation with conda: 
 ```
 conda install -c conda-forge -c set3mah fedoo
 ```

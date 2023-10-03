@@ -3,7 +3,8 @@ sphinx-rtd-theme
 numpy
 scipy
 matplotlib
+pyvista
 simcoon
-pardiso4py
+pypardiso
 pandas
 pytest

@@ -37,7 +37,7 @@ plot = [
     'pyvista[io]'
 ]
 dataio = [
-    'panda'
+    'pandas'
 ]
 test = [
     'pytest',

@@ -1,14 +1,33 @@
 Installation
 =================================
 
-It is highly recommended to use ANACONDA for a simple installation of Fedoo coming with all the dependences and available on Linux, Windows or MacOS.
-
-1. Download and Install ANACONDA (https://www.anaconda.com/) or Miniconda (https://docs.conda.io/en/latest/miniconda.html). 
-
-2. To install Fedoo with conda :
+Installation with pip including recommanded dependencices:
 
 .. code-block:: none
 
-   $ conda install -c conda-forge -c set3mah fedoo
+    $ pip install fedoo[all]
+
+Minimal installation with pip:
+
+.. code-block:: none
+
+    $ pip install fedoo
+
+Installation with conda (not recommanded): 
+
+.. code-block:: none
+
+    $ conda install -c conda-forge -c set3mah fedoo
+
+
+A lot of features (finite strain, non-linear constitutive laws, ...) requires the installation of simcoon.
+Simcoon is available on conda: 
+
+.. code-block:: none
+
+    $ conda install -c conda-forge -c set3mah simcoon
+    
+
+
 
 
