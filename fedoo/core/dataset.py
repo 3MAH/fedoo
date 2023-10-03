@@ -876,7 +876,6 @@ class MultiFrameDataSet(DataSet):
         framerate = kargs.pop('framerate', 24)
         quality = kargs.pop('quality', 5)
                
-        show_edges = kargs.pop('show_edges', True)
         sargs=kargs.pop('scalar_bar_args', None) 
         
         rot_azimuth = kargs.pop('rot_azimuth', 0)
