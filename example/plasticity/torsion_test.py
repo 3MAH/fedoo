@@ -19,8 +19,8 @@ uimp = 1
 filename = 'sheartest_ref'
 res_dir = 'results/'
 
-# mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
-mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
+mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
+# mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
 # mesh = fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")['tet4']
 
 crd = mesh.nodes 

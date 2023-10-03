@@ -15,7 +15,7 @@ class _NewmarkBase():
     The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324    
     """
         
-    def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling, name = "MainProblem"):
+    def __init__(self, StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling=0, name = "MainProblem"):
         
         if isinstance(StiffnessAssembling,str):
             StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]

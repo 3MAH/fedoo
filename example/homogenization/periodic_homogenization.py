@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Mar 25 16:25:38 2022
-
-@author: Etienne
-"""
 import fedoo as fd
 import numpy as np
 import os 
@@ -50,7 +44,9 @@ assemb = fd.Assembly.create(wf, mesh, mesh.elm_type, name="Assembly")
 #     del fd.Problem.get_all()['_perturbation']
 L_eff = fd.homogen.get_homogenized_stiffness(assemb, meshperio)
 
-
+# print(L_eff)
+# # from simcoon import simmit as sim
+# # print(sim.L_iso_props(L_eff)) #to check material properties
 
 import matplotlib.pyplot as plt
 

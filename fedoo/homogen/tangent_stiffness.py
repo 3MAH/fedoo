@@ -247,7 +247,7 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
         X = pb_post_tt.get_X()  # alias    
         if typeBC == 'Neumann':
             DStrain.append(np.array([pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[0]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[0]],
-                                     pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))        
+                                     pb_post_tt._get_vect_component(X, 'DispX')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispY')[StrainNodes[1]], pb_post_tt._get_vect_component(X, 'DispZ')[StrainNodes[1]]]))      
         else:
             F = pb_post_tt.get_ext_forces()    
             F = F.reshape(3, -1)
@@ -257,10 +257,11 @@ def get_tangent_stiffness(pb = None, meshperio = True, **kargs):
             
         pb_post_tt.bc.remove("_Strain")
 
+    volume = mesh.bounding_box.volume
     if typeBC == "Neumann":
-        C = np.linalg.inv(np.array(DStrain).T)
+        C = np.linalg.inv(np.array(DStrain).T) / volume
     else:
-        C = np.array(DStress).T
+        C = np.array(DStress).T / volume
                 
     if remove_strain:
        mesh.remove_nodes(StrainNodes)

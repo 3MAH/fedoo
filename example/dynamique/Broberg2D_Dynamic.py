@@ -10,7 +10,7 @@ Nx,Ny = 10000,10000
 
 #-------------------------------------------------------------------
 # Input parameters
-COEFF = 1
+COEFF = 1 
 MeshSize = 1e-3     # based on the work of C. Fond
 #Nx, Ny   = 40, 200 # based on the work of C. Fond
 
@@ -116,7 +116,7 @@ pb.initialize()
 
 # pb.add_output("Broberg2D_Dynamic", "StiffAssembling", [], output_type=None, file_format ='npz', position = 1)
 # res = pb.add_output("Broberg2D_Dynamic", "StiffAssembling", ["Disp"], file_format ='vtk')
-res = pb.add_output("Broberg2D_Dynamic", "StiffAssembling", ["Disp"])
+res = pb.add_output("Broberg2D_Dynamic", "StiffAssembling", ["Disp", "Stress"])
 
 pb.bc.add('Dirichlet',Xmax,'DispX',0)
 pb.bc.add('Dirichlet',Xmin,'DispX',0)

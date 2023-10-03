@@ -21,26 +21,31 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
-    "numpy>=1.22.4",
-    "scipy"
+    'numpy>=1.22.4',
+    'scipy',
+    'pypardiso'
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-all = [
-    'pardiso4py',
-    'pyvista',
-    'simcoon',
-    'panda',
+all = ['fedoo[plot,dataio,test]']
+plot = [
     'matplotlib',
-    'pytest',
-    'pytest-cov'
+    'pyvista[io]'
+]
+dataio = [
+    'panda'
 ]
 test = [
     'pytest',
     'pytest-cov'
+]
+other = [
+    'microgen',
+    'simcoon'
 ]
 
 [project.urls]
