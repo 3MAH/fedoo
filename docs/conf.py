@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'FEDOO'
+project = 'fedoo'
 copyright = '2019, Etienne Prulière'
 author = 'Etienne Prulière'
 master_doc = 'index'
