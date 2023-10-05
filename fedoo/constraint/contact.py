@@ -7,15 +7,19 @@ from fedoo.core.base import AssemblyBase
 from fedoo.core.base import ProblemBase
 from fedoo.core.mesh import MeshBase, Mesh
 from fedoo.lib_elements.element_list import get_element 
-from scipy import sparse
+from scipy import sparse, spatial
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.mesh import extract_surface as extract_surface_mesh
 from copy import copy
 
+import time
+
 class Contact(AssemblyBase):
     """Contact Assembly based on a node 2 surface formulation"""
     
-    def __init__(self, slave_nodes: list[int], surface_mesh: Mesh, normal_law: str = 'linear', space: ModelingSpace|None = None, name: str = "Contact nodes 2 surface"):
+    def __init__(self, slave_nodes: list[int]|Mesh, surface_mesh: Mesh, normal_law: str = 'linear', 
+                 search_algorithm: str = 'bucket', 
+                 space: ModelingSpace|None = None, name: str = "Contact nodes 2 surface"):
         """
         Assembly related to surface 2 surface contact, using a node 2 surface formulation 
         with a penality method.
@@ -23,8 +27,10 @@ class Contact(AssemblyBase):
         Parameters
         ----------
         
-        slave_nodes: numpy array of int
-            List of nodes indices: nodes that belong to the slave surface.
+        slave_nodes: numpy array of int or Mesh
+            List of nodes indices: nodes that belong to the slave surface 
+            or Mesh of the slave surface (in this case, the slave node indices are
+            extracted).
         surface_mesh: fedoo.Mesh
             Mesh of the master surface
         normal_law: str in {'linear', 'bilinear'}, default = 'linear'
@@ -50,12 +56,22 @@ class Contact(AssemblyBase):
         """
         if space is None: space = ModelingSpace.get_active()            
         AssemblyBase.__init__(self, name, space)
-
+        
+        if isinstance(slave_nodes, Mesh): 
+            slave_nodes = np.unique(slave_nodes.elements)
         self.slave_nodes = slave_nodes
         self.master_nodes = np.unique(surface_mesh.elements)      
         self.mesh = surface_mesh
         
         self.current = self 
+        
+        if search_algorithm.lower() == 'bucket':
+            self.global_search = _nearest_node_bucket_sort
+            self.w = None
+        elif search_algorithm.lower() == 'search_nearest':
+            self.global_search = _nearest_node
+        else:
+            raise(NameError, f'Search alogithm {search_algorithm} not unknown.')
         
         self.eps_a = 1e5
         """ Penalty parameter for soft contact in bilinear contact law."""
@@ -72,6 +88,8 @@ class Contact(AssemblyBase):
         
         self.tol = 0.1
         """ Tolerance for possible slide of a node outside an element."""
+        
+        self.max_penetration = None
         
         self.contact_search_once = True
         """It True, only search contact at the begining of iteration. If False, 
@@ -105,28 +123,54 @@ class Contact(AssemblyBase):
     def assemble_global_mat(self, compute = 'all'):
         pass
        
-    def find_nearest_neighbors(self):
-        """Find the nearest master nodes for all slave nodes
 
-        Returns
-        -------
-        nearest_neighbor: list[int]
-        The index of the nearest master nodes of the ith slave nodes 
-        is given in nearest_neighbor[i]. Return -1 if no master nodes is near enough
-        (criterion givien by the max_dist attribute).
-        """
-        nearest_neighbors = []
-        for slave_node in self.slave_nodes:
-            dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)     
-            trial_node_indice = dist_slave_nodes.argmin()
-            if dist_slave_nodes[trial_node_indice] > self.max_dist: 
-                #to improve performance, ignore contact if distance to the closest node is to high
-                nearest_neighbors.append(-1)     
-            else:
-                nearest_neighbors.append(self.master_nodes[trial_node_indice])
+
+
+    
+
+
+    # def global_search_bucket_sort(self):
+    #     possible_elements = []
         
-        return nearest_neighbors
+    #     #bucket_sort
+    #     w = self.mesh.bounding_box.size.max()/10 #bucket size
+    #     n_buckets =  (self.mesh.bounding_box.size // w).astype(int)
+        
+    #     temp = ((self.mesh.nodes[self.slave_nodes] - self.mesh.bounding_box[0])/w).astype(int)
+    #     bucket_id = temp[:,0] + temp[:,1] * n_buckets[0]  + temp[:,2] * n_buckets[0]*n_buckets[1] #only work in 3D -> improve
+        
+    #     sorted_indices = bucket_id.argsort()
+        
+    #     temp = [0] + [i for i in range(1,len(bucket_id)) if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i-1]]]
+        
+    #     bucket = {bucket_id[sorted_indices[temp[i]]]: sorted_indices[temp[i]:temp[i+1]] for i in range(0, len(temp)-1)} #bucket[2] contain the ith bucket -> perhaps best to include all bucket coordinates (list of list for instance)
+        
+    #     neighbors_buckets = {i: (i+np.array([-1,0,1])+n_buckets[0]*np.array([-1,0,1]).reshape(-1,1) + n_buckets[0]*n_buckets[1]*np.array([-1,0,1]).reshape(-1,1,1)).flatten() for i in bucket}
+        
+    #     for id_b in bucket:
+    #         #closest_node technique:
+    #         slave_node = bucket[id_b]
+    #         master_nodes = sum([list(bucket.get(i,[])) for i in neighbors_buckets[id_b]],[])
             
+    #         # dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[master_nodes], axis=1)     
+    #         dist_slave_nodes = self.mesh.nodes[slave_node] @ self.mesh.nodes[master_nodes].T
+    #         trial_node_indice = dist_slave_nodes.argmin()
+    #         if dist_slave_nodes[trial_node_indice] > self.max_dist: 
+    #             #to improve performance, ignore contact if distance to the closest node is to high
+    #             possible_elements.append([])     
+    #         else:
+                
+    #             nearest_neighbors = self.master_nodes[trial_node_indice]
+    #             # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
+    #             possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]])
+            
+            
+                 
+
+
+            
+        
+
     
     def contact_search(self, contact_list = {}, update_contact = True):
         nodes = self.slave_nodes
@@ -151,6 +195,10 @@ class Contact(AssemblyBase):
             normals = local_frame[:,0,1]
             dim = 1
         
+            # The following lines work only for 2 node 1d element
+            # length = np.linalg.norm(mesh.nodes[surf.elements[:,1]] - mesh.nodes[surf.elements[:,0]], axis = 1)
+            length = np.linalg.norm(elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:], axis = 1)    
+
         else: #surf.elm_type == 'tri3':
             tangents = elm_nodes_crd[:,1:,:] - elm_nodes_crd[:,[0],:] #tangents[:,i,:] gives the ith tangent axis i in [0,1]. tangents axes are not orthogonal
                         
@@ -158,12 +206,6 @@ class Contact(AssemblyBase):
             normals = normals/np.linalg.norm(normals,axis=1).reshape(-1,1)
             dim = 2
             
-        
-        
-        # The following lines work only for 2 node 1d element
-        # length = np.linalg.norm(mesh.nodes[surf.elements[:,1]] - mesh.nodes[surf.elements[:,0]], axis = 1)
-        length = np.linalg.norm(elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:], axis = 1)    
-
         indices = []
         contact_elements = []
         contact_g = []
@@ -185,7 +227,10 @@ class Contact(AssemblyBase):
         list_nodes = np.unique(surf.elements)               
         
         if update_contact:
-            nearest_neighbors = self.find_nearest_neighbors()
+            t0 = time.time()
+            # list_possible_elements = self.global_search_bucket_sort()
+            list_possible_elements = self.global_search()
+            print('temps: ', time.time()-t0)
         
         for i_nd, slave_node in enumerate(nodes):
             # if self.no_slip and slave_node in contact_list:                
@@ -215,19 +260,13 @@ class Contact(AssemblyBase):
                 
             # elif update_contact:
             
-            if update_contact:    
-                # dist_slave_nodes = np.linalg.norm(surf.nodes[slave_node]-surf.nodes[list_nodes], axis=1)          
-                # trial_node_indice = dist_slave_nodes.argmin()               
+            if update_contact:             
+                possible_elements = list_possible_elements[i_nd]
                 
-                trial_node = nearest_neighbors[i_nd]
-                
-                if trial_node == -1: 
-                    #no convenient nodes found
+                if not(len(possible_elements)):#not(possible_elements): 
+                    #no convenient nodes found (empty list)
                     continue                       
-                    
-                #asses which elements can be in contact
-                possible_elements = [el for el in range(surf.n_elements) if trial_node in surf.elements[el]]
-            
+                                
                 #orthogonal projection on the element plane in node coordinates
                 if dim == 1: #surf.elm_type = 'lin2'
                     vec_xi = 1/length[possible_elements]*((surf.nodes[slave_node] - elm_nodes_crd[possible_elements,0,:]) * tangents[possible_elements]).sum(axis=1)
@@ -244,8 +283,12 @@ class Contact(AssemblyBase):
                 #algebric distance from the possible elements
                 g = ((surf.nodes[slave_node] - contact_points) * normals[possible_elements]).sum(axis=1)            
                 
-                if (g>self.clearance).all():                    
-                    continue                                                                
+                if self.max_penetration is None:
+                    if (g>self.clearance).all():                                        
+                        continue                                                                
+                else:
+                    if np.logical_or(g>self.clearance, g<-self.max_penetration).all():                    
+                        continue                                                                
                 
                 # #element that may be in contact (ie vec_xi inside the element) and where g<0  
                 # test = (vec_xi >= 0) * (vec_xi<=1) #id of elements where there may be contact
@@ -254,9 +297,11 @@ class Contact(AssemblyBase):
                 else:  #surf.elm_type == 'tri3':
                     test = (vec_xi[:,0]+self.tol >= 0) * (vec_xi[:,1]+self.tol >= 0) * (1-vec_xi[:,0]-vec_xi[:,1]+self.tol>=0) #id of elements where there may be contact
 
-
                 # test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
-                test = np.where(test*(g<self.clearance))[0]
+                if self.max_penetration is None:
+                    test = np.where(test*(g<self.clearance))[0]
+                else: 
+                    test = np.where(test*(g<self.clearance)*(g>-self.max_penetration))[0]
                                 
                 # if len(test) == 0 and slave_node in contact_list: 
                 #     # test = (vec_xi+self.tol/length[possible_elements] >= 0) * (vec_xi-self.tol/length[possible_elements]<=1) #id of elements where there may be contact
@@ -275,7 +320,8 @@ class Contact(AssemblyBase):
                     #     id_el = possible_elements.index(contact_list[slave_node])
                     # else:                    
                     #     #choose the nearest element
-                    id_el = test[np.abs(g[test]).argmin()]
+                    # id_el = test[np.abs(g[test]).argmin()] #dont work with non zero clearance
+                    id_el = test[g[test].argmax()]
                     
                 #id_el before selecting an id_el, we could also test if the the slave node is inside an element                                        
                 
@@ -349,6 +395,12 @@ class Contact(AssemblyBase):
                 data_N1.extend(list((np.hstack(([0],-shape_func_deriv_val[0]))[sorted_indices] * n1.reshape(-1,1)).ravel()))
                 data_N2.extend(list((np.hstack(([0],-shape_func_deriv_val[1]))[sorted_indices] * n1.reshape(-1,1)).ravel()))
             
+        
+        if not(contact_elements):
+            self.global_matrix = sparse.csr_array((self.space.nvar*surf.n_nodes,self.space.nvar*surf.n_nodes))
+            self.global_vector = 0
+            return {} #empty contact_list
+        
         shape = (len(contact_elements), self.space.nvar*surf.n_nodes)                
         indptr = np.arange(0,len(indices)+1, n_dof_contact)
         Ns = sparse.csr_array((data_Ns, indices, indptr), shape=shape)
@@ -424,6 +476,7 @@ class Contact(AssemblyBase):
         # self.sv['contact_g'] = contact_g
         # print(contact_elements)
         # print(contact_g)
+        
         if update_contact:
             return new_contact_list
         else:
@@ -476,8 +529,8 @@ class Contact(AssemblyBase):
     def update(self, pb, compute = 'all'):        
         self.set_disp(pb.get_disp())
         self.sv['contact_list'] = self.current.contact_search(self.sv['contact_list'], self.update_contact)
-        # if self.update_contact:
-        #     print(self.sv['contact_list'])
+        if self.update_contact:
+            print(self.sv['contact_list'])
         if self.contact_search_once:
             self.update_contact = False
         
@@ -497,6 +550,106 @@ class Contact(AssemblyBase):
     def linear_law(self, g):
         Fcontact = -self.eps_n * np.array(g)
         return Fcontact, self.eps_n
+
+
+
+
+def _nearest_node_bucket_sort(contact_assembly):
+    
+     ndim = contact_assembly.space.ndim
+     mesh = contact_assembly.mesh
+     master_nodes = contact_assembly.master_nodes
+     slave_nodes = contact_assembly.slave_nodes
+     max_dist = contact_assembly.max_dist
+     
+     w = contact_assembly.mesh.bounding_box.size.max()/10 #bucket size #bounding box includes all nodes
+     n_buckets =  (mesh.bounding_box.size // w).astype(int) #n of buckets along each direction
+     
+     #bucket_sort master_nodes         
+     bucket_crd = ((mesh.nodes[master_nodes] - mesh.bounding_box[0])/w).astype(int) #bucket coordinates (ie nth bucket in each direction) for master nodes         
+     bucket_id = bucket_crd[:,0] + bucket_crd[:,1] * n_buckets[0]  + bucket_crd[:,2] * n_buckets[0]*n_buckets[1] #only work in 3D -> improve
+                                
+     sorted_indices = bucket_id.argsort()
+     
+     temp = [0] + [i for i in range(1,len(bucket_id)) if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i-1]]]         
+     bucket_master = {bucket_id[sorted_indices[temp[i]]]: master_nodes[sorted_indices[temp[i]:temp[i+1]]] for i in range(0, len(temp)-1)} #bucket[i] contain the master nodes in the ith bucket 
+     
+     #bucket_sort slave_nodes
+     bucket_crd = ((mesh.nodes[slave_nodes] - mesh.bounding_box[0])/w).astype(int) #bucket coordinates (ie nth bucket in each direction) for slave nodes         
+     bucket_id = bucket_crd[:,0] + bucket_crd[:,1] * n_buckets[0]  + bucket_crd[:,2] * n_buckets[0]*n_buckets[1] #only work in 3D -> improve
+     
+     sorted_indices = bucket_id.argsort()
+     
+     temp = [0] + [i for i in range(1,len(bucket_id)) if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i-1]]]
+     
+     bucket_crd = {bucket_id[sorted_indices[temp[i]]]: bucket_crd[sorted_indices[temp[i]]] for i in range(0, len(temp)-1)} #store the bucket crd for each bucket id 
+     bucket = {bucket_id[sorted_indices[temp[i]]]: sorted_indices[temp[i]:temp[i+1]] for i in range(0, len(temp)-1)} #contain the slave_nodes index for the ith bucket. Use self.slave_nodes[bucket_id] to retrive the corresponding node indices
+     
+     #build dict that contains all neighbors buckets
+     side_m = np.array([0,1]) ; side_p = np.array([-1,0]) ; inside = np.array([-1,0,1])
+     array_neighbors = {i: [side_m if bucket_crd[i][dd] == 0
+                            else side_p if bucket_crd[i][dd] == n_buckets[dd]-1
+                            else inside for dd in range(ndim)] 
+                        for i in bucket}
+              
+     neighbors_buckets = {i: (i+array_neighbors[i][0]+
+                              n_buckets[0]*array_neighbors[i][1].reshape(-1,1) + 
+                              n_buckets[0]*n_buckets[1]*array_neighbors[i][2].reshape(-1,1,1)
+                              ).flatten() 
+                          for i in bucket}        
+     
+     nearest_neighbors = np.empty(len(slave_nodes))
+     
+     for id_b in bucket:            
+         #closest_node technique:
+         neighbor_master_nodes = np.array(sum([list(bucket_master.get(i,[])) for i in neighbors_buckets[id_b]],[]))
+         
+         if len(neighbor_master_nodes) == 0:
+             continue
+         
+         dist_slave_nodes = spatial.distance_matrix(mesh.nodes[slave_nodes[bucket[id_b]]] , mesh.nodes[neighbor_master_nodes])
+         trial_node_indice = dist_slave_nodes.argmin(axis=1)
+                                   
+         min_dist = np.take_along_axis(dist_slave_nodes, np.expand_dims(trial_node_indice, axis=-1), axis=-1).ravel()
+         nearest_neighbors[bucket[id_b]] = -1 + (min_dist <= max_dist) * (neighbor_master_nodes[trial_node_indice] + 1)
+                 
+     return [[] if nn == -1 else (mesh.elements == nn).sum(axis=1).nonzero()[0] for nn in nearest_neighbors]         
+
+
+
+def _nearest_node(self):
+    """Find a list of elements that may be in contact for all slave nodes.
+    
+    This method find the nearest neighbor of all slave nodes and return the
+    associated elements if the nearest_neighbor is near enough 
+    (criterion givien by the max_dist attribute). 
+    
+    Warning: Master and slave surfaces should be disjoint. If not it SelfContact should be used instead.
+
+    Returns
+    -------
+    possible_elements: list[list[int]]
+    possible_elements[i] is the list of indices of the master surface elements 
+    that may be in contact with the ith slave nodes 
+    are given in possible_elements[i]. If no element can be
+    in contact, possible_elements[i] is an empty list.
+    
+    """
+    possible_elements = []
+    for slave_node in self.slave_nodes:
+        dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)     
+        trial_node_indice = dist_slave_nodes.argmin()
+        if dist_slave_nodes[trial_node_indice] > self.max_dist: 
+            #to improve performance, ignore contact if distance to the closest node is to high
+            possible_elements.append([])     
+        else:
+            
+            nearest_neighbors = self.master_nodes[trial_node_indice]
+            # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
+            possible_elements.append( (self.mesh.elements == nearest_neighbors).sum(axis=1).nonzero()[0] )
+            # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]]) #very slow
+    
+    return possible_elements
 
 
 class SelfContact(Contact):
@@ -542,20 +695,25 @@ class SelfContact(Contact):
         
         super().__init__(nodes, mesh, normal_law, space, name)
 
-    def find_nearest_neighbors(self):
-        """Find the nearest master nodes for all slave nodes
+
+    def global_search(self):
+        """Find a list of elements that may be in contact for all slave nodes.
+        
+        This method find the nearest neighbor of all slave nodes and return the
+        associated elements if the nearest_neighbor is near enough 
+        (criterion givien by the max_dist attribute). 
 
         Returns
         -------
-        nearest_neighbor: list[int]
-        The index of the nearest master nodes of the ith slave nodes 
-        is given in nearest_neighbor[i]. Return -1 if no master nodes is near enough
-        (criterion givien by the max_dist attribute).
+        possible_elements: list[list[int]]
+        possible_elements[i] is the list of indices of the master surface elements 
+        that may be in contact with the ith slave nodes 
+        are given in possible_elements[i]. If no element can be
+        in contact, possible_elements[i] is an empty list.
         """
-        #special case here: slave_nodes = master_nodes
-        nearest_neighbors = []
+        possible_elements = []
         for id_nd,slave_node in enumerate(self.slave_nodes):
-            dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)     
+            dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)                             
             
             #get the indice with the minimal distance without considering the distance of slave_node between itself
             trial_nodes_indices = []
@@ -564,15 +722,52 @@ class SelfContact(Contact):
             
             if id_nd != len(self.master_nodes)-1:
                 trial_nodes_indices.append(dist_slave_nodes[id_nd+1:].argmin() + id_nd+1)
+            
+            trial_node_indice = trial_nodes_indices[np.argmin(dist_slave_nodes[trial_nodes_indices])]
 
-            trial_node_indice = np.min(trial_nodes_indices)
             if dist_slave_nodes[trial_node_indice] > self.max_dist: 
                 #to improve performance, ignore contact if distance to the closest node is to high
-                nearest_neighbors.append(-1)     
+                possible_elements.append([])     
             else:
-                nearest_neighbors.append(self.master_nodes[trial_node_indice])        
+                
+                nearest_neighbors = self.master_nodes[trial_node_indice]
+                possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
+                # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]])
         
-        return nearest_neighbors
+        return possible_elements
+            
+    
+    # def find_nearest_neighbors(self):
+    #     """Find the nearest master nodes for all slave nodes
+
+    #     Returns
+    #     -------
+    #     nearest_neighbor: list[int]
+    #     The index of the nearest master nodes of the ith slave nodes 
+    #     is given in nearest_neighbor[i]. Return -1 if no master nodes is near enough
+    #     (criterion givien by the max_dist attribute).
+    #     """
+    #     #special case here: slave_nodes = master_nodes
+    #     nearest_neighbors = []
+    #     for id_nd,slave_node in enumerate(self.slave_nodes):
+    #         dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)                             
+            
+    #         #get the indice with the minimal distance without considering the distance of slave_node between itself
+    #         trial_nodes_indices = []
+    #         if id_nd != 0:
+    #             trial_nodes_indices.append(dist_slave_nodes[:id_nd].argmin())
+            
+    #         if id_nd != len(self.master_nodes)-1:
+    #             trial_nodes_indices.append(dist_slave_nodes[id_nd+1:].argmin() + id_nd+1)
+
+    #         trial_node_indice = trial_nodes_indices[np.argmin(dist_slave_nodes[trial_nodes_indices])]
+    #         if dist_slave_nodes[trial_node_indice] > self.max_dist: 
+    #             #to improve performance, ignore contact if distance to the closest node is to high
+    #             nearest_neighbors.append(-1)     
+    #         else:
+    #             nearest_neighbors.append(self.master_nodes[trial_node_indice])        
+
+    #     return nearest_neighbors
             
 
 
