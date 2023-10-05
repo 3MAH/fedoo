@@ -20,17 +20,13 @@ Here are the main features:
 - And many other....
 
 
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| PyPI package         | [![PyPI version](https://badge.fury.io/py/fedoo.svg)](https://badge.fury.io/py/fedoo)                                                   |
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| Conda package        | [![Conda](https://anaconda.org/set3mah/fedoo/badges/version.svg)](https://anaconda.org/set3mah/fedoo)                                   |
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| Documentation        | [![Documentation](https://readthedocs.org/projects/fedoo/badge/?version=latest)](https://fedoo.readthedocs.io/en/latest/?badge=latest)  |
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| License              | [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)                                 |
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
-| Website              | [![Website](https://img.shields.io/badge/website-3MAH-blue)](https://3mah.github.io/)                                                   |
-+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+|               |                                                                                                                                        |
+|---------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| PyPI package  | [![PyPI version](https://badge.fury.io/py/fedoo.svg)](https://badge.fury.io/py/fedoo)                                                  |
+| Conda package | [![Conda](https://anaconda.org/set3mah/fedoo/badges/version.svg)](https://anaconda.org/set3mah/fedoo)                                  |
+| Documentation | [![Documentation](https://readthedocs.org/projects/fedoo/badge/?version=latest)](https://fedoo.readthedocs.io/en/latest/?badge=latest) |
+| License       | [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)                                |
+| Website       | [![Website](https://img.shields.io/badge/website-3MAH-blue)](https://3mah.github.io/)                                                  |
 
 
 
