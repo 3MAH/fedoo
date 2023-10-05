@@ -19,7 +19,6 @@ Here are the main features:
 - Geometrical non linearities
 - And many other....
 
-
 |               |                                                                                                                                        |
 |---------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | PyPI package  | [![PyPI version](https://badge.fury.io/py/fedoo.svg)](https://badge.fury.io/py/fedoo)                                                  |
@@ -29,17 +28,15 @@ Here are the main features:
 | Website       | [![Website](https://img.shields.io/badge/website-3MAH-blue)](https://3mah.github.io/)                                                  |
 
 
-
-
 Documentation
 --------------
-The [documentation](https://fedoo.readthedocs.io/en/latest/?badge=latest) is provided by readthedocs at:
-[https://fedoo.readthedocs.io](https://fedoo.readthedocs.io)
+The [documentation](https://fedoo.readthedocs.io/en/latest/?badge=latest) is provided by readthedocs at
+[https://fedoo.readthedocs.io](https://fedoo.readthedocs.io).
 
 
 Installation
 --------------
-Installation with pip including recommanded dependencices:
+Installation with pip including recommanded dependencies excepted simcoon:
 ```
 pip install fedoo[all]
 ```
@@ -49,7 +46,7 @@ Minimal installation with pip:
 pip install fedoo
 ```
 
-Installation with conda: 
+Installation with conda with recommanded dependencices (including simcoon): 
 ```
 conda install -c conda-forge -c set3mah fedoo
 ```
