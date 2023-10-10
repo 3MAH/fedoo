@@ -25,13 +25,16 @@ classifiers = [
 ]
 dependencies = [
     'numpy>=1.22.4',
-    'scipy',
-    'pypardiso'
+    'scipy'
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-all = ['fedoo[plot,dataio,test]']
+all = ['fedoo[solver,plot,dataio,test]']
+solver = [
+    'pypardiso ; platform_machine=="x86_64" or platform_machine=="x86"',
+    'scikit-umfpack ; platform_machine!="x86_64" and platform_machine!="x86"'
+]
 plot = [
     'matplotlib',
     'pyvista[io]'

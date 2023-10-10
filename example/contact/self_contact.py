@@ -39,7 +39,7 @@ surf = fd.mesh.extract_surface(mesh)
 # surf.plot_normals(5) #to check normals orientation
 
 # contact = fd.constraint.contact.SelfContact(surf, 'biliear')
-contact = fd.constraint.contact.SelfContact(surf, 'linear')
+contact = fd.constraint.contact.SelfContact(surf, 'linear', search_algorithm='bucket')
 contact.contact_search_once = True
 contact.eps_n = 1e6
 # contact.eps_a = 1e4

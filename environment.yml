@@ -8,7 +8,9 @@ dependencies:
   - python>=3.8
   - numpy>=1.22.4
   - scipy
-  - pypardiso
+  - pypardiso # [x86 or x86_64]
+  - scikit-umfpack # [(not x86) and (not x86_64)]
+  - vtk>=9.2
   - pyvista>=0.39
   - simcoon
   - pytest

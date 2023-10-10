@@ -53,6 +53,7 @@ surf = fd.mesh.extract_surface(mesh.extract_elements('disk')) #extract the surfa
 contact = fd.constraint.Contact(nodes_contact, surf)
 contact.contact_search_once = True
 contact.eps_n = 5e5
+contact.max_dist = 1
 
 mat = 1
 if mat == 0:
