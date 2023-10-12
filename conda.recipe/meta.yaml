@@ -6,12 +6,12 @@ source:
   git_url: https://github.com/3MAH/fedoo.git
   
 build:
-  noarch: python
-  script: pip install .
-
+  script: {{ PYTHON }} -m pip install . -vv
+  
 requirements:
   host:
-    - python
+    - python                                 # [build_platform != target_platform]
+    - cross-python_{{ target_platform }}     # [build_platform != target_platform]  
     - pip
   run:
     - python>=3.8
