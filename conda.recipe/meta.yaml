@@ -6,7 +6,7 @@ source:
   git_url: https://github.com/3MAH/fedoo.git
   
 build:
-  script: {{ PYTHON }} -m pip install . -vv
+  number: 0
   
 requirements:
   host:
