@@ -1,0 +1,24 @@
+name: Conda packaging osx
+
+on:
+  workflow_dispatch:
+
+jobs:           
+  macos:
+    name: MacOS
+    runs-on: "macos-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          activate-environment: packaging-osx
+      - name: Conda build for MacOS
+        shell: bash -l {0}
+        run: |
+          conda update --all        
+          conda install python=3.9 conda-build anaconda-client conda-verify
+          conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
+          anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
+          anaconda upload osx-64/*.tar.bz2 --force
+          anaconda logout     

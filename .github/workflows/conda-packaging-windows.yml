@@ -1,0 +1,22 @@
+name: Conda packaging windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: "windows-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+      - name: Conda build for Windows
+        shell: pwsh
+        run: |
+          conda install python=3.9 conda-build anaconda-client
+          conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
+          anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
+          anaconda upload win-64/*.tar.bz2 --force
+          anaconda logout
