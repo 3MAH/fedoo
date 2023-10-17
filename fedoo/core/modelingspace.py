@@ -241,7 +241,12 @@ class ModelingSpace:
        else:
            return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y']] + [0] for namevar in ['DispX','DispY']] + [[0,0,0]]
        
-                   
+    def op_div_u(self):
+        if self.ndim == 3:
+            return self.derivative('DispX', 'X') + self.derivative('DispY', 'Y') + self.derivative('DispZ', 'Z')
+        else:
+            return self.derivative('DispX', 'X') + self.derivative('DispY', 'Y')
+    
     def op_strain(self, InitialGradDisp = None):
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 

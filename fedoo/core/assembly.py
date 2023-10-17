@@ -125,7 +125,7 @@ class Assembly(AssemblyBase):
         nvar = self.space.nvar
         wf = self.weakform.get_weak_equation(self,self._pb)      
         
-        MatGaussianQuadrature = self._get_gaussian_quadrature_mat()        
+        mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()        
         mat_change_of_basis = self.get_change_of_basis_mat()        
         associatedVariables = self._get_associated_variables() #for element requiring many variable such as beam with disp and rot dof        
 
@@ -164,8 +164,8 @@ class Assembly(AssemblyBase):
                             
                     else: #virtual and real operators -> compute a matrix
                         var = wf.op[ii].u   
-                        if np.isscalar(coef_PG): coef_PG = coef_PG * np.ones_like(MatGaussianQuadrature.data)
-                        CoefMatrix = sparse.csr_matrix( (coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
+                        if np.isscalar(coef_PG): coef_PG = coef_PG * np.ones_like(mat_gaussian_quadrature.data)
+                        CoefMatrix = sparse.csr_matrix( (coef_PG, mat_gaussian_quadrature.indices, mat_gaussian_quadrature.indptr), shape = mat_gaussian_quadrature.shape)   
                         Mat    =  self._get_elementary_operator(wf.op[ii])[0]
                         
                         if blocks[var_vir][var] is None: 
@@ -217,7 +217,7 @@ class Assembly(AssemblyBase):
                             sum_coef = True
                             continue
                                     
-                    coef_PG = coef_PG_sum * MatGaussianQuadrature.data #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
+                    coef_PG = coef_PG_sum * mat_gaussian_quadrature.data #mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
     #                Matvir = (RowBlocMatrix(self._get_elementary_operator(wf.op_vir[ii]), nvar, var_vir, coef_vir) * mat_change_of_basis).T
                     #check how it appens with change of variable and rotation dof
                     
@@ -316,7 +316,7 @@ class Assembly(AssemblyBase):
                 if compute == 'vector' and wf.op[ii] is not 1: continue
             
                 if np.isscalar(wf.coef[ii]) or len(wf.coef[ii])==1: 
-                    coef_PG = wf.coef[ii] #MatGaussianQuadrature.data is the diagonal of MatGaussianQuadrature
+                    coef_PG = wf.coef[ii] #mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
                 else:
                     coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)                                                 
                 
@@ -327,7 +327,7 @@ class Assembly(AssemblyBase):
                 if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
                     continue
                 
-                coef_PG = coef_PG_sum * MatGaussianQuadrature.data 
+                coef_PG = coef_PG_sum * mat_gaussian_quadrature.data 
                             
                 coef_vir = [1] ; var_vir = [wf.op_vir[ii].u] #list in case there is an angular variable
                                
@@ -396,9 +396,9 @@ class Assembly(AssemblyBase):
     
                 if wf.op[ii] == 1: #only virtual operator -> compute a vector 
                     if np.isscalar(wf.coef[ii]): 
-                        VV = VV - wf.coef[ii]*Matvir * MatGaussianQuadrature.data
+                        VV = VV - wf.coef[ii]*Matvir * mat_gaussian_quadrature.data
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)*MatGaussianQuadrature.data                             
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)*mat_gaussian_quadrature.data                             
                         VV = VV - Matvir * (coef_PG)
                         
                 else: #virtual and real operators -> compute a matrix
@@ -410,10 +410,10 @@ class Assembly(AssemblyBase):
                     Mat    =  RowBlocMatrix(self._get_elementary_operator(wf.op[ii]), nvar, var, coef)         * mat_change_of_basis             
     
                     if np.isscalar(wf.coef[ii]): #and self.op_vir[ii] != 1: 
-                        MM = MM + wf.coef[ii]*Matvir * MatGaussianQuadrature * Mat  
+                        MM = MM + wf.coef[ii]*Matvir * mat_gaussian_quadrature * Mat  
                     else:
                         coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:],n_elm_gp)                    
-                        CoefMatrix = sparse.csr_matrix( (MatGaussianQuadrature.data*coef_PG, MatGaussianQuadrature.indices, MatGaussianQuadrature.indptr), shape = MatGaussianQuadrature.shape)   
+                        CoefMatrix = sparse.csr_matrix( (mat_gaussian_quadrature.data*coef_PG, mat_gaussian_quadrature.indices, mat_gaussian_quadrature.indptr), shape = mat_gaussian_quadrature.shape)   
                         MM = MM + Matvir * CoefMatrix * Mat                
 
 #            MM = MM.tocsr()
@@ -781,6 +781,7 @@ class Assembly(AssemblyBase):
         n_elm_gp = res.shape[0]//self.mesh.n_elements
         return np.reshape(res, (n_elm_gp,-1)).sum(0) / n_elm_gp
 
+
     def get_gp_results(self, operator, U, n_elm_gp = None):
         """
         Return some results at element Gauss points based on the finite element discretization of 
@@ -826,10 +827,51 @@ class Assembly(AssemblyBase):
             if np.isscalar(operator.coef[ii]): coef_PG = operator.coef[ii]                 
             else: coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
 
-            res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) * mat_change_of_basis * U)
+            if mat_change_of_basis is 1:                
+                res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) @ U)
+            else:
+                res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) @ (mat_change_of_basis @ U))
         
-        return res
+        return res #equivalent to self._get_assembled_operator(operator, n_elm_gp) @ U but more optimized
+
+
+    def _get_assembled_operator(self, operator, n_elm_gp = None):
+        #not very optimized (sum of RowBlocMatrix use scipy add operator that is not efficient (change sparse structure))
+        nvar = self.space.nvar
         
+        mesh = self.mesh 
+        elm_type = self.elm_type
+        if n_elm_gp is None: n_elm_gp = self.n_elm_gp
+        
+        mat_change_of_basis = self.get_change_of_basis_mat()
+        associatedVariables = self._get_associated_variables()    
+        
+        matrix = 0
+        for ii in range(len(operator.op)):
+            var = [operator.op[ii].u] ; coef = [1] 
+            
+            if var[0] in associatedVariables:
+                var.extend(associatedVariables[var[0]][0])
+                coef.extend(associatedVariables[var[0]][1])     
+    
+            assert operator.op_vir[ii]==1, "Operator virtual are only required to build FE operators, but not to get element results"
+
+            if mat_change_of_basis is 1:
+                M = RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef)
+            else: 
+                M = RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) * mat_change_of_basis
+                
+            if np.isscalar(operator.coef[ii]): 
+                M.data *= operator.coef[ii]
+                matrix += M
+            else: 
+                mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()        
+                coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
+                coef_matrix = sparse.csr_matrix( (coef_PG, mat_gaussian_quadrature.indices, mat_gaussian_quadrature.indptr), shape = mat_gaussian_quadrature.shape)  
+                matrix += coef_matrix @ M
+                            
+        return matrix
+
 
     def get_node_results(self, operator, U):
         """
@@ -866,40 +908,6 @@ class Assembly(AssemblyBase):
             
     def integrate_field(self, field, type_field = None):
         return self.mesh.inegrate_field(field, type_field, self.n_elm_gp)
-
-
-
-    # def GetStressTensor(self, U, constitutiveLaw, Type="Node"):
-    #     """
-    #     Not a static method.
-    #     Return the Stress Tensor of an assembly using the Voigt notation as a python list. 
-    #     The total displacement field and a ConstitutiveLaw have to be given.
-        
-    #     Can only be used for linear constitutive law. 
-    #     For non linear ones, use the GetStress method of the ConstitutiveLaw object.
-
-    #     Options : 
-    #     - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")
-
-    #     See get_node_results, get_element_results and get_gp_results.
-
-    #     example : 
-    #     S = SpecificAssembly.GetStressTensor(Problem.Problem.get_dof_solution('all'), SpecificConstitutiveLaw)
-    #     """
-    #     if isinstance(constitutiveLaw, str):
-    #         constitutiveLaw = ConstitutiveLaw.get_all()[constitutiveLaw]
-
-    #     if Type == "Node":
-    #         return StressTensorList([self.get_node_results(e, U) if e!=0 else np.zeros(self.mesh.n_nodes) for e in constitutiveLaw.GetStressOperator()])
-        
-    #     elif Type == "Element":
-    #         return StressTensorList([self.get_element_results(e, U) if e!=0 else np.zeros(self.mesh.n_elements) for e in constitutiveLaw.GetStressOperator()])
-        
-    #     elif Type == "GaussPoint":
-    #         return StressTensorList([self.get_gp_results(e, U) if e!=0 else np.zeros(self.n_gauss_points) for e in constitutiveLaw.GetStressOperator()])
-        
-    #     else:
-    #         assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
         
     
     def set_disp(self, disp):
@@ -1055,10 +1063,10 @@ class Assembly(AssemblyBase):
         dim = self.space.ndim
         mat_change_of_basis = self.get_change_of_basis_mat()
 
-        MatGaussianQuadrature = self._get_gaussian_quadrature_mat()
+        mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()
         associatedVariables = self._get_associated_variables()
         
-        #TODO: use the computeGlobalMatrix() method to compute sum(operator.coef[ii]*Matvir * MatGaussianQuadrature * Mat)
+        #TODO: use the computeGlobalMatrix() method to compute sum(operator.coef[ii]*Matvir * mat_gaussian_quadrature * Mat)
         #add options in computeGlobalMatrix() to (i): dont save the computed matrix, (ii): neglect the ChangeOfBasis Matrix
         res = 0        
         for ii in range(len(operator.op)):
@@ -1076,7 +1084,7 @@ class Assembly(AssemblyBase):
             Matvir =  RowBlocMatrix(self._get_elementary_operator(operator.op_vir[ii]), nvar, var_vir, coef_vir).T 
 
             if np.isscalar(operator.coef[ii]): #and self.op_vir[ii] != 1: 
-                res = res + operator.coef[ii]*Matvir * MatGaussianQuadrature * Mat * mat_change_of_basis * U   
+                res = res + operator.coef[ii]*Matvir * mat_gaussian_quadrature * Mat * mat_change_of_basis * U   
             else:
                 return NotImplemented                      
         
