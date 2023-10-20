@@ -1,0 +1,21 @@
+name: Conda packaging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  Linux:
+    name: Linux
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+      - name: Conda build for Linux
+        shell: bash -l {0}
+        run: |
+          conda install conda-build anaconda-client
+          anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
+          conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
+          anaconda upload noarch/*.tar.bz2 --force
