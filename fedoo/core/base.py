@@ -10,8 +10,12 @@ import scipy.sparse as sparse
 try: 
     from pypardiso import spsolve
     USE_PYPARDISO = True
-except: 
+except:     
     USE_PYPARDISO = False
+    try: 
+        from scikits import umfpack
+    except:
+        print('WARNING: no fast direct sparse solver has been found. Consider installing pypardiso or scikit-umfpack to improve computation performance')
 
 
 #=============================================================
@@ -230,6 +234,8 @@ class ProblemBase:
             space = ModelingSpace.get_active()
         self.__space = space
         
+        self.set_solver() #initialize solver properties
+        
         self.make_active()
 
 
@@ -274,7 +280,7 @@ class ProblemBase:
         return ProblemBase.active
         
     
-    def set_solver(self, solver: str, tol: float = 1e-5, precond: bool = True):
+    def set_solver(self, solver: str='direct', precond: bool=True, **kargs): #tol: float = 1e-5, precond: bool = True):
         """Define the solver for the linear system resolution.
         
         Parameters
@@ -282,30 +288,60 @@ class ProblemBase:
         solver: str
             Type of solver.        
             The possible choice are : 
-            * 'direct': direct solver based on the function scipy.sparse.linalg.spsolve
-            * 'cg': conjugate gradient based on the function scipy.sparse.linalg.cg
-        tol: float     
-            Convergence tolerance for conjugate gradient method (default = 1e-5).
-            This parameters is not used for direct solver.
-        precond: bool
-            use precond = False to desactivate the diagonal matrix preconditionning 
-            in the conjugate gradient method (default precond=True).    
+            * 'direct': direct solver. If pypardiso is installed, the pypardiso solver is used.
+                If not, the function scipy.sparse.linalg.spsolve is used instead. 
+                If sckikit-umfpack is installed, scipy will use the umfpack solver which is significantly
+                more efficient than the base scipy solver.
+            * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk' using the corresponding
+                iterative method from scipy.sparse.linalg. For instance, 'cg' is the conjugate gradient based on 
+                the function scipy.sparse.linalg.cg 
+            * 'pardiso': force the use of the pypardiso solver
+            * 'direct_scipy': force the use of the direct scipy solver (umfpack if installed)
+            * function: 
+                A user spsolve function that should have the signature res = solver(A,B,**kargs)
+                where A is a scipy sparse matrix and B a 1d numpy array. kargs may contains
+                optional parameters.
+        precond: bool, default = True
+            use precond = False to desactivate the diagonal matrix preconditionning. 
+            Only used for iterative method. 
         """
-        self.__solver = [solver.lower(), tol, precond]
+        return_info = False
+        if isinstance(solver, str):
+            if solver == 'direct':
+                if USE_PYPARDISO:
+                    solver_func = spsolve
+                else:
+                    solver_func = sparse.linalg.spsolve                          
+            elif solver in ['cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres', 'gcrotmk']: #use scipy solver
+                solver_func = eval('sparse.linalg.'+solver)
+                return_info = True
+            elif solver == 'pardiso':
+                if USE_PYPARDISO:
+                    solver_func = spsolve
+                else:
+                    raise NameError('pypardiso not installed. Use "pip install pypardiso".')
+            elif solver == 'direct_scipy':
+                solver_func = sparse.linalg.spsolve
+            else: 
+                raise NameError('Choosen solver not available')
+        else: #assume solver is a function
+            solver_func = solver
+                        
+        self.__solver = [solver, solver_func, kargs, return_info, precond]
         
         
     def _solve(self, A, B):
-        if self.__solver[0] == 'direct':
-            if USE_PYPARDISO == True:
-                return spsolve(A,B)
+        kargs = self.__solver[2]
+        if self.__solver[3]: #return_info = True
+            if self.__solver[4] and 'M' not in kargs: #precond
+                Mprecond = sparse.diags(1/A.diagonal(), 0)
+                res, info = self.__solver[1](A,B, M=Mprecond, **kargs) 
             else:
-                return sparse.linalg.spsolve(A,B)            
-        elif self.__solver[0] == 'cg':
-            if self.__solver[2] == True: Mprecond = sparse.diags(1/A.diagonal(), 0)
-            else: Mprecond = None
-            res, info = sparse.linalg.cg(A,B, tol=self.__solver[1], M=Mprecond) 
-            if info > 0: print('Warning: CG convergence to tolerance not achieved') 
+                res, info = self.__solver[1](A,B, **kargs) 
+            if info > 0: print(f'Warning: {self.__solver[0]} solver convergence to tolerance not achieved') 
             return res
+        else:            
+            return self.__solver[1](A,B, **kargs)
         
         
     @staticmethod
@@ -316,7 +352,7 @@ class ProblemBase:
     @property
     def solver(self):
         """Return the current solver used for the problem."""
-        return self.__solver[0]
+        return self.__solver[1]
     
     
     

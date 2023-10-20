@@ -6,19 +6,17 @@ source:
   git_url: https://github.com/3MAH/fedoo.git
   
 build:
-  number: 0
+  noarch: python
+  script: pip install .
   
 requirements:
   host:
-    - python                                 # [build_platform != target_platform]
-    - cross-python_{{ target_platform }}     # [build_platform != target_platform]  
+    - python
     - pip
   run:
     - python>=3.8
     - numpy>=1.22.4
     - scipy
-    - pypardiso # [x86 or x86_64]
-    - scikit-umfpack # [(not x86) and (not x86_64)]
     - vtk>=9.2
     - pyvista>=0.39
     - simcoon

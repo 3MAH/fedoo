@@ -71,4 +71,4 @@ from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
     
 from .importmesh import import_file, import_vtk, import_msh
 
-from .functions import extrude, extract_surface
+from .functions import extrude, extract_surface, change_elm_type

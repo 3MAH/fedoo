@@ -48,6 +48,8 @@ L_eff = fd.homogen.get_homogenized_stiffness(assemb, meshperio)
 # # from simcoon import simmit as sim
 # # print(sim.L_iso_props(L_eff)) #to check material properties
 
+assert 0
+
 import matplotlib.pyplot as plt
 
 from matplotlib import cm, colors
