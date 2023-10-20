@@ -307,6 +307,7 @@ class ProblemBase:
         """
         return_info = False
         if isinstance(solver, str):
+            solver = solver.lower()
             if solver == 'direct':
                 if USE_PYPARDISO:
                     solver_func = spsolve
