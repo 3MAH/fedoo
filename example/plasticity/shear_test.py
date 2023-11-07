@@ -45,8 +45,8 @@ elif mat == 1 or mat == 2:
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
-        props = np.array([[E, nu, alpha, Re,k,m]])
-        material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
+        props = np.array([E, nu, alpha, Re,k,m])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
         material.corate = 2
         # Material.SetMaskH([[] for i in range(6)])
     
@@ -83,7 +83,7 @@ if not(os.path.isdir('results')): os.mkdir('results')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
-results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
+results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Stress', 'Strain', 'Stress_vm', 'Statev', 'Wm'])
 
 # Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 
@@ -126,7 +126,7 @@ print(time()-start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot('Cauchy_vm', component = 0, show = True)
+results.plot('Stress_vm', component = 0, show = True)
 
 # ------------------------------------
 # Simple plot with default options and save to png
@@ -153,7 +153,7 @@ results.plot('Cauchy_vm', component = 0, show = True)
 # ------------------------------------
 # Write movie with moving camera
 # ------------------------------------
-# results.write_movie(res_dir+filename, 'Cauchy_vm', framerate = 5, quality = 5, rot_azimuth = 3, rot_elevation = 0.5)
+# results.write_movie(res_dir+filename, 'Stress_vm', framerate = 5, quality = 5, rot_azimuth = 2, rot_elevation = 0.5)
 
 # ------------------------------------
 # Plot time history
