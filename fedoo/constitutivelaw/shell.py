@@ -132,8 +132,8 @@ class ShellHomogeneous(ShellBase):
         
         return H    
                      
-    def get_stress(self, **kargs):
-        Strain = self.get_strain(**kargs)
+    def get_stress(self, assembly, **kargs):
+        Strain = self.get_strain(assembly, **kargs)
         Hplane = self.__material.get_elastic_matrix("2Dstress") #membrane rigidity matrix with plane stress assumption
         Stress = [sum([0 if Strain[j] is 0 else Strain[j]*Hplane[i][j] for j in range(4)]) for i in range(4)] #SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.get_elastic_matrix()                    

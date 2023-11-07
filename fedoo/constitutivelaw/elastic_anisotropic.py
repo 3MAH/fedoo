@@ -32,15 +32,15 @@ class ElasticAnisotropic(Mechanical3D):
 
 
     def update(self, assembly, pb):
-            #linear problem = no need to recompute tangent matrix if it has already been computed
-            if 'TangentMatrix' in assembly.sv: 
-                H = assembly.sv['TangentMatrix'] 
-            else:             
-                H = self.get_tangent_matrix(assembly)
-                assembly.sv['TangentMatrix'] = H
-            
-            TotalStrain = assembly.sv['Strain']        
-            assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+        #linear problem = no need to recompute tangent matrix if it has already been computed
+        if 'TangentMatrix' in assembly.sv: 
+            H = assembly.sv['TangentMatrix'] 
+        else:             
+            H = self.get_tangent_matrix(assembly)
+            assembly.sv['TangentMatrix'] = H
+        
+        TotalStrain = assembly.sv['Strain']        
+        assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
             
        
     def get_stress_from_strain(self, assembly, strain_tensor):     

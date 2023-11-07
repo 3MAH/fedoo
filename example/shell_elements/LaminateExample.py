@@ -17,7 +17,7 @@ F = -100
 
 geom_elm_type = 'quad4' #choose among 'tri3', 'tri6', 'quad4', 'quad9'
 plate_elm_type = 'p'+geom_elm_type #plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
-reduced_integration = 'auto' #choose among True, False and 'auto'. if True, use reduce integration for shear. 
+reduced_integration = 'auto' #choose among True, False and 'auto'. if True, use reduce integration for shear. if 'auto', depend on the order of the element
 save_results = True
 
 mat1 = fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'Mat1')
@@ -50,7 +50,7 @@ pb = fd.problem.Linear("plate")
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
 # res = pb.add_output('results/simplePlate', 'plate', ['Disp','Rot','Stress', 'Stress_vm'], output_type='Node', file_format ='vtk', position = -1)    
-res = pb.add_output('results/simplePlate', 'plate', ['Disp','Rot','Stress'], file_format ='npz', position = -1)    
+res = pb.add_output('results/laminate', 'plate', ['Disp','Rot','Stress'], file_format ='npz', position = -1)     #position = -1 for the lower face
 
 pb.bc.add('Dirichlet',nodes_left,'Disp',0) 
 pb.bc.add('Dirichlet',nodes_left,'Rot',0)
@@ -60,7 +60,7 @@ pb.bc.add('Neumann',node_right_center, 'DispZ',F)
 pb.apply_boundary_conditions()
 pb.solve()
 
-if save_results == True: 
+if save_results: 
     pb.save_results() #save in vtk
 
 #plot the stress distribution
