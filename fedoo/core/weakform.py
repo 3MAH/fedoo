@@ -137,12 +137,7 @@ class WeakFormBase:
     def reset(self):
         #function called if all the problem history is reseted.
         pass     
-      
     
-    def copy(self):
-        #function to copy a weakform at the initial state
-        raise NotImplementedError()
-      
         
     @staticmethod
     def nvar(self):

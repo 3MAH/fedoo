@@ -17,6 +17,7 @@ class _BlocSparse():
     def __init__(self, nbBlocRow, nbBlocCol,nbpg=None, savedBlocStructure = None, assume_sym = False):
         #savedBlocStructure are data from similar structured blocsparse that avoid time consuming operations
         self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
+        self.isempty = True
         if savedBlocStructure is None: 
             #array for bloc coo structure
             self.col = None
@@ -63,9 +64,11 @@ class _BlocSparse():
             #if self.__assume_sym, only compute bloc belonging to inf triangular matrix
             return
         
+        self.isempty = False
+        
         n_elm_gp = self.nbpg
         NnzColPerRowB = B.indptr[1] #number of non zero column per line for csr matrix B        
-            
+        
         if not isinstance(A, list):
             NnzColPerRowA = A.indptr[1] #number of non zero column per line for csr matrix A
             
@@ -86,9 +89,8 @@ class _BlocSparse():
                 if self.data[rowBloc][colBloc] is 0:                 
                     self.data[rowBloc][colBloc] = new_data
                 else:                
-                    self.data[rowBloc][colBloc] += new_data          
-
-                
+                    self.data[rowBloc][colBloc] += new_data
+                    
         else:
             NnzColPerRowA = A[0].indptr[1] #number of non zero column per line for csr matrix A
             listCoef = coef #alias
@@ -138,6 +140,8 @@ class _BlocSparse():
     def tocsr(self): #should be improved in some way, perhaps by using a cpp script 
         # import time
         # start=time.time()
+        if self.isempty: return 0
+        
         method =1
         if method == 0:
             assert not(self.__assume_sym), "method = 0 for sparse matrix building can't be used with the assume_sym option. Contact developer" 

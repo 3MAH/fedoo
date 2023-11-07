@@ -171,27 +171,6 @@ class ConstitutiveLaw:
     def update(self,assembly, pb):
         #function called to update the state of constitutive law 
         pass
-
-    
-    def copy(self, new_id = ""):
-        """
-        Return a raw copy of the constitutive law without keeping current internal variables.
-
-        Parameters
-        ----------
-        new_id : TYPE, optional
-            The name of the created constitutive law. The default is "".
-
-        Returns
-        -------
-        The copy of the constitutive law
-        """
-        new_cl = deepcopy(self)        
-        new_cl._ConstitutiveLaw__name = new_id
-        self.__dic[new_id] = new_cl
-        new_cl.reset()
-        return new_cl
-
     
     @staticmethod
     def get_all():

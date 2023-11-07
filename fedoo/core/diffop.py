@@ -55,17 +55,20 @@ class DiffOp:
             
     def __add__(self, A):
         if isinstance(A, DiffOp): return DiffOp(self.op+A.op, self.op_vir+A.op_vir, self.coef+A.coef)
-        elif A == 0: return self
-        else: return NotImplemented
+        elif  A is 0: return self
+        else: #A could be Number, np.ndarray, ...
+            return DiffOp(self.op+[1], self.op_vir+[1], self.coef+[A])
 
     def __sub__(self, A):  
         if isinstance(A, DiffOp): return DiffOp(self.op+A.op, self.op_vir+A.op_vir, self.coef+(-A).coef)
-        elif A == 0: return self
-        else: return NotImplemented
+        elif np.isscalar(A) and A == 0: return self
+        else: #A could be Number, np.ndarray, ...
+            return DiffOp(self.op+[1], self.op_vir+[1], self.coef+[-A])
 
-    def __rsub__(self, A):
-        if A == 0: return -self
-        else: return NotImplemented
+    def __rsub__(self, A):        
+        if np.isscalar(A) and A == 0: return -self
+        else: #A could be Number, np.ndarray, ...
+            return DiffOp([1]+self.op, [1]+self.op_vir, [A]+(-self).coef)
         
     def __neg__(self):    
         return(DiffOp(self.op,self.op_vir, [-cc for cc in self.coef]))
@@ -76,11 +79,11 @@ class DiffOp:
             res = DiffOp([],[],[])
             for ii in range(len(A.op)):
                 for jj in range(len(self.op)):
-                    if (A.op[ii] != 1 and self.op[jj] == 1): #si A contient un opérateur réel et self un virtuel
+                    if (A.op_vir[ii] == 1 and self.op[jj] == 1): #si A contient un opérateur réel et self un virtuel
                             res += DiffOp( [A.op[ii]], [self.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
-                    elif (A.op[ii] == 1 and self.op[jj] != 1): #si c'est l'inverse
+                    elif (A.op[ii] == 1 and self.op_vir[jj] == 1): #si c'est l'inverse
                             res += DiffOp( [self.op[ii]], [A.op_vir[jj]], [A.coef[ii]*self.coef[jj]] )
-                    else: raise NameError('Impossible operation')
+                    else: raise NameError('Impossible operation')                    
             return res
         else:  #isinstance(A, (Number, SeparatedArray)):        
             if  np.isscalar(A):
@@ -88,9 +91,6 @@ class DiffOp:
                 if A == 1: return self
             
             return DiffOp(self.op, self.op_vir, [A*cc for cc in self.coef])
-            # return DiffOp(self.op, self.op_vir, [A if (np.isscalar(cc) and cc == 1) else A*cc for cc in self.coef]) #should improve time but doesn't work. I don't know why
-#        else: 
-#            return NotImplemented
                     
     def __radd__(self, A):         
         return self+A

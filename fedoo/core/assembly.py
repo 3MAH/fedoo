@@ -96,6 +96,7 @@ class Assembly(AssemblyBase):
         self.sv = {}
         """ Dictionary of state variables associated to the current problem."""
         self.sv_start = {}
+        self.sv_type = {} #type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
         self._pb = None
     
@@ -150,7 +151,7 @@ class Assembly(AssemblyBase):
                 
                     if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                         coef_PG += wf.coef[ii]
-                    else: coef_PG = wf.coef[ii]   #coef_PG = nodal values (finite diffirences)
+                    else: coef_PG = wf.coef[ii]   #coef_PG = nodal values (finite differences)
                     
                     if ii < len(wf.op)-1 and intRef[ii] == intRef[ii+1]: #if operator similar to the next, continue 
                         continue
@@ -566,6 +567,7 @@ class Assembly(AssemblyBase):
         #remove all state variables
         self.sv = {} 
         self.sv_start = {}
+        self.sv_type = {}
 
     @staticmethod
     def delete_memory():
@@ -1127,7 +1129,7 @@ class Assembly(AssemblyBase):
 
     def copy(self, new_id = ""):
         """
-        Return a raw deep copy of the assembly without keeping current state (internal variable).
+        Return a raw copy of the assembly without keeping current state (internal variable).
 
         Parameters
         ----------
@@ -1137,10 +1139,8 @@ class Assembly(AssemblyBase):
         Returns
         -------
         The copy of the assembly
-        """
-        new_wf = self.weakform.copy()
-        
-        return Assembly(new_wf, self.mesh, self.elm_type, new_id)
+        """        
+        return Assembly(self.weakform, self.mesh, self.elm_type, new_id)
     
     @property
     def n_gauss_points(self):
