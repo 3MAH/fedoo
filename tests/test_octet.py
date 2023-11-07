@@ -81,7 +81,7 @@ pb.apply_boundary_conditions()
 
 # ---------------  Non linear solver--------------------------------------------
 pb.set_solver('CG') #conjugate gradient solver
-pb.nlsolve(dt=0.2, tmax=1, update_dt=False, ToleranceNR=0.1)
+pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.1)
 
 # --------------- Post-Treatment -----------------------------------------------
 # Get the stress and strain tensor (PG values)

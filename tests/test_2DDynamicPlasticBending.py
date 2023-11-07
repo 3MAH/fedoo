@@ -80,7 +80,7 @@ bc1 = pb.bc.add('Dirichlet',nodes_top1,'DispY', uimp)
 bc2 = pb.bc.add('Dirichlet',nodes_top2,'DispY', uimp)
 
 
-pb.nlsolve(dt = 0.2, tmax = 1, update_dt = False, ToleranceNR = 0.005)
+pb.nlsolve(dt = 0.2, tmax = 1, update_dt = False, tol_nr = 0.005)
 
 
 ################### step 2 ################################

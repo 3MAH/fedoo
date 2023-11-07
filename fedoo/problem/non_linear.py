@@ -40,8 +40,8 @@ class _NonLinearBase():
         self.__iter = 0
         self.__compteurOutput = 0
         
-        self.interval_output = None #save results every self.interval_output iter or time step if self.__saveOutputAtExactTime = True
-        self.__saveOutputAtExactTime = True
+        self.interval_output = None #save results every self.interval_output iter or time step if self.__save_at_exact_time = True
+        self.__save_at_exact_time = True
         self.err_num= 1e-8 #numerical error
     
     #Return the displacement components
@@ -94,7 +94,6 @@ class _NonLinearBase():
         #build and solve the linearized system with elastic rigidty matrix           
         self.updateA() #should be the elastic rigidity matrix
         self.updateD(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
-
         self.solve() 
 
 
@@ -135,7 +134,6 @@ class _NonLinearBase():
         #solve and update total displacement. A and D should up to date
         self.solve()
         self._dU += self.get_X()
-        # print(self._dU)
     
     def update(self, compute = 'all', updateWeakForm = True):   
         """
@@ -253,9 +251,9 @@ class _NonLinearBase():
 
     #     return E                   
     
-    def solve_time_increment(self, max_subiter = None, ToleranceNR = None): 
+    def solve_time_increment(self, max_subiter = None, tol_nr = None): 
         if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
-        if ToleranceNR is None: ToleranceNR = self.nr_parameters['tol'] 
+        if tol_nr is None: tol_nr = self.nr_parameters['tol'] 
        
         self.elastic_prediction()
         for subiter in range(max_subiter): #newton-raphson iterations
@@ -266,12 +264,12 @@ class _NonLinearBase():
             self.updateD() #required to compute the NR error
 
             #Check convergence     
-            normRes = self.NewtonRaphsonError()    
+            normRes = self.NewtonRaphsonError()  
 
             if self.print_info > 1:
                 print('     Subiter {} - Time: {:.5f} - Err: {:.5f}'.format(subiter, self.time+self.dtime, normRes))
 
-            if normRes < ToleranceNR: #convergence of the NR algorithm                    
+            if normRes < tol_nr: #convergence of the NR algorithm                    
                 #Initialize the next increment                    
                 # self.NewTimeIncrement()                                           
                 return 1, subiter, normRes
@@ -289,23 +287,26 @@ class _NonLinearBase():
 
     def nlsolve(self, **kargs):              
         #parameters
-        self.print_info = kargs.get('print_info',self.print_info)
-        max_subiter = kargs.get('max_subiter',self.nr_parameters['max_subiter'])
-        ToleranceNR = kargs.get('ToleranceNR',self.nr_parameters['tol'])
-        self.t0 = kargs.get('t0',self.t0) #time at the start of the time step
-        self.tmax = kargs.get('tmax',self.tmax) #time at the end of the time step
-        dt = kargs.get('dt',0.1) #initial time step
-        dt_min = kargs.get('dt_min',1e-6) #min time step
+        self.print_info = kargs.pop('print_info',self.print_info)
+        max_subiter = kargs.pop('max_subiter',self.nr_parameters['max_subiter'])
+        tol_nr = kargs.pop('tol_nr',self.nr_parameters['tol'])
+        self.t0 = kargs.pop('t0',self.t0) #time at the start of the time step
+        self.tmax = kargs.pop('tmax',self.tmax) #time at the end of the time step
+        dt = kargs.pop('dt',0.1) #initial time step
+        dt_min = kargs.pop('dt_min',1e-6) #min time step
         
-        self.__saveOutputAtExactTime = kargs.get('saveOutputAtExactTime',self.__saveOutputAtExactTime)
-        interval_output = kargs.get('interval_output',self.interval_output) # time step for output if saveOutputAtExactTime == 'True' (default) or  number of iter increments between 2 output 
-        update_dt = kargs.get('update_dt',True)
+        self.__save_at_exact_time = kargs.pop('save_at_exact_time',self.__save_at_exact_time)
+        interval_output = kargs.pop('interval_output',self.interval_output) # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output 
+        update_dt = kargs.pop('update_dt',True)
+        
+        if kargs: #not empty            
+            raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
         
         if interval_output is None:
-            if self.__saveOutputAtExactTime: interval_output = dt
+            if self.__save_at_exact_time: interval_output = dt
             else: interval_output = 1
         
-        if self.__saveOutputAtExactTime: next_time = self.t0 + interval_output
+        if self.__save_at_exact_time: next_time = self.t0 + interval_output
         else: next_time = self.tmax #next_time is the next exact time where the algorithm have to stop for output purpose
         
         self.init_bc_start_value()            
@@ -320,11 +321,11 @@ class _NonLinearBase():
         while self.time < self.tmax - self.err_num:                         
     
             save_results = (self.time != self.t0) and \
-                ((self.time == next_time) or (self.__saveOutputAtExactTime == False and self.__iter%interval_output == 0))
+                ((self.time == next_time) or (self.__save_at_exact_time == False and self.__iter%interval_output == 0))
 
             #update next_time                
             if self.time == next_time: 
-                # self.__saveOutputAtExactTime should be True 
+                # self.__save_at_exact_time should be True 
                 next_time = next_time + interval_output
                 if next_time > self.tmax - self.err_num: next_time = self.tmax
                 
@@ -340,7 +341,7 @@ class _NonLinearBase():
             
                 
             #self.solve_time_increment = Newton Raphson loop
-            convergence, nbNRiter, normRes = self.solve_time_increment(max_subiter, ToleranceNR)
+            convergence, nbNRiter, normRes = self.solve_time_increment(max_subiter, tol_nr)
             
             if (convergence) :
                 self.time = self.time + self.dtime #update time value 
