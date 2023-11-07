@@ -82,8 +82,22 @@ class _SymetricTensorList(list): #base class for StressTensorList and StrainTens
         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])  
 
     def asarray(self):
-        if self.array is None: 
-            return np.array(self)
+        if self.array is None:
+            try:
+                return np.array(self)
+            except ValueError: #fill zeros first
+                for i in range(6):
+                    if not(np.isscalar(self[i])):
+                        N = len(self[i]) #number of stress values
+                        break
+                
+                res = np.empty((6,N))
+                for i in range(6):
+                    if self[i] is 0:
+                        res[i] = np.zeros(N)
+                    else:
+                        res[i] = self[i]                
+                return res
         else: 
             return self.array    
 

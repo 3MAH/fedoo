@@ -44,17 +44,18 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             elif output_type.lower() == 'element': output_type = 'Element'
             elif output_type.lower() == 'gausspoint': output_type = 'GaussPoint'
             else: raise NameError("output_type should be either 'Node', 'Element' or 'GaussPoint'")
+
+        if isinstance(assemb, str): 
+            assemb = AssemblyBase.get_all()[assemb]
                 
         for i,res in enumerate(output_list):
             # output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
-            if res not in _available_output and res not in pb.space.list_variables() and res not in pb.space.list_vectors():
+            if res not in _available_output and res not in pb.space.list_variables() \
+                    and res not in pb.space.list_vectors() and res not in assemb.sv:
                 print("List of available output: ", _available_output)
                 raise NameError(res, "' doens't match to any available output")
                 
-        data_sav = {} #dict to keep data in memory that may be used more that one time
-
-        if isinstance(assemb, str): 
-            assemb = AssemblyBase.get_all()[assemb]  
+        data_sav = {} #dict to keep data in memory that may be used more that one time  
 
         if hasattr(assemb, 'list_assembly'): #AssemblySum object
             if assemb.assembly_output is None:
@@ -115,7 +116,10 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                     else: 
                         data_type = 'GaussPoint'
                 
-                data = np.array(data)                
+                try:
+                    data = data.asarray()
+                except:
+                    data = np.array(data)                
                                         
             elif res in ['PK2_vm', 'Kirchhoff_vm', 'Stress_vm']:
                 if res[:-3] in data_sav: 
@@ -200,6 +204,10 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 data = assemb.get_int_forces(pb.get_dof_solution(), 'global').T
                 # data = assemb.convert_data(data, None, output_type)
                 data_type = 'GaussPoint' #or 'Element' ? 
+            
+            elif res in sv:
+                data = sv[res]
+                data_type = assemb.sv_type.get(res, 'GaussPoint')                
             
             if output_type is not None and output_type != data_type:
                 data = assemb.convert_data(data, data_type, output_type)
