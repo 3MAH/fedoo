@@ -73,15 +73,15 @@ U = [pb.get_dof_solution('DispX')[:,:].reshape(-1), \
 U = np.array(U)
 
 TensorStrain = Assembly['Assembling'].get_strain(pb.get_dof_solution('all'), "Node")
-TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStressFromStrain(TensorStrain)
+TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].get_stress_from_strain(Assembly['Assembling'],TensorStrain)
 
 TensorStrain = util.StrainTensorList([s[:,:].reshape(-1) for s in TensorStrain])
 TensorStress = util.StressTensorList([s[:,:].reshape(-1) for s in TensorStress])
 
 data = DataSet(Mesh['FullMesh'])
 
-data.node_data['Stress'] = TensorStress.vtkFormat()
-data.node_data['Strain'] = TensorStrain.vtkFormat()
+data.node_data['Stress'] = TensorStress.vtk_format()
+data.node_data['Strain'] = TensorStrain.vtk_format()
 
 data.node_data['Disp'] = U
 data.plot('Stress', scale = 10000)

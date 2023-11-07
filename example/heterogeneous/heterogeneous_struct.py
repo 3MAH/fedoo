@@ -98,7 +98,7 @@ if method == 1:
     res2 = pb.get_results(assemb2, ['Stress','Strain', 'Disp'])
     
     pl = res2.plot(field_plot,component=component, show=False)
-    res1.plot(field_plot, component=component, plotter=pl)
+    res1.plot(field_plot, component=component, plotter=pl).show()
     # res2.plot(field_plot, 'Node',component=component)
     # res1.plot(field_plot, 'Node', component=component)
 

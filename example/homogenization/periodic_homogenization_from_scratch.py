@@ -156,8 +156,7 @@ else:
             DStress.append(stress)
             
             Fext2 = pb.get_ext_forces(include_mpc=False)
-            Fext2 = Fext2.reshape(3, -1)
-            assert 0
+            Fext2 = Fext2.reshape(3, -1)            
 
 
         elif dim == 2:
@@ -183,16 +182,6 @@ print('L_eff = ', L_eff)
 
 props_test_eff = sim.L_iso_props(L_eff)
 print('props', props_test_eff)
-
-
-
-
-
-
-
-
-assert 0
-
 
 
 import matplotlib.pyplot as plt

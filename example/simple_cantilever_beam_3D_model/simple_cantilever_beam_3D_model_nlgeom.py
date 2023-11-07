@@ -13,7 +13,7 @@ meshname = "Domain"
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw", nlgeom = 2)
+fd.weakform.StressEquilibrium("ElasticLaw", nlgeom = 'UL')
 
 #Assembly (print the time required for assembling)
 assemb = fd.Assembly.create("ElasticLaw", meshname, 'hex8', name="Assembling") 
