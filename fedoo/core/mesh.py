@@ -58,7 +58,15 @@ class Mesh(MeshBase):
     """
     
     
-    def __init__(self, nodes: np.ndarray[float], elements: np.ndarray[int]|None = None, elm_type: str = None, ndim: int|None = None, name: str = "") -> None:
+    def __init__(self, 
+                 nodes: np.ndarray[float], 
+                 elements: np.ndarray[int]|None = None, 
+                 elm_type: str = None, 
+                 node_sets:dict = {},
+                 element_sets:dict = {},
+                 ndim: int|None = None,
+                 name: str = "") -> None:
+        
         MeshBase.__init__(self, name)
         self.nodes = nodes #node coordinates     
         """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
@@ -66,9 +74,9 @@ class Mesh(MeshBase):
         """ List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
         """Type of the element (str). The type of the element should be coherent with the shape of elements."""
-        self.node_sets: dict = {} 
+        self.node_sets = node_sets 
         """Dict containing node sets associated to the mesh"""
-        self.element_sets: dict = {}
+        self.element_sets = element_sets
         """Dict containing element sets associated to the mesh"""
         self.local_frame: np.ndarray|None = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
 
@@ -1053,8 +1061,10 @@ class Mesh(MeshBase):
         return self._get_node2gausspoint_mat(n_elm_gp) @ self.nodes
 
     
-    def as_2d(self) -> 'Mesh':
+    def as_2d(self, inplace:bool = False) -> 'Mesh':
         """Return a view of the current mesh in 2D.
+        
+        If inplace is True (default=False), the current mesh is modified.
         
         Warning: this method don't check if the element type is compatible 
         with a 2d mesh. It only truncate or add zeros to the nodes list to force 
@@ -1068,10 +1078,15 @@ class Mesh(MeshBase):
                 nodes = np.column_stack((self.nodes, np.zeros(self.n_nodes)))
             else:
                 nodes = self.nodes[:,:2]
-            return Mesh(nodes, self.elements, self.elm_type)
+            if inplace: 
+                self.nodes = nodes
+                return self
+            return Mesh(nodes, self.elements, self.elm_type, self.node_sets, self.element_sets)
 
-    def as_3d(self) -> 'Mesh':
+    def as_3d(self, inplace:bool = False) -> 'Mesh':
         """Return a view of the current mesh in 3D.
+        
+        If inplace is True (default=False), the current mesh is modified.
         
         This method truncate or add zeros to the nodes list to force 
         a 3d mesh."""
@@ -1083,7 +1098,11 @@ class Mesh(MeshBase):
                 nodes = np.column_stack((self.nodes, np.zeros((self.n_nodes, 3-self.ndim))))
             else:
                 nodes = self.nodes[:,:3]
-            return Mesh(nodes, self.elements, self.elm_type)
+            if inplace:
+                self.nodes = nodes
+                return self
+            else:
+                return Mesh(nodes, self.elements, self.elm_type, self.node_sets, self.element_sets)
 
     
     @property

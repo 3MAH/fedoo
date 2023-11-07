@@ -85,18 +85,19 @@ def rectangle_mesh(nx=11, ny=11, x_min=0, x_max=1, y_min=0, y_max=1, elm_type = 
             
     elm = np.array(elm)
 
-    returned_mesh = Mesh(crd, elm, elm_type, ndim, name)
-    if elm_type != 'quad8':
-        N = returned_mesh.n_nodes
-        returned_mesh.add_node_set([nd for nd in range(nx)], 'bottom')
-        returned_mesh.add_node_set([nd for nd in range(N-nx,N)], 'top')
-        returned_mesh.add_node_set([nd for nd in range(0,N,nx)], 'left')
-        returned_mesh.add_node_set([nd for nd in range(nx-1,N,nx)], 'right')
+    if elm_type != 'quad8':        
+        N = len(crd)
+        node_sets = {'bottom': [nd for nd in range(nx)],
+                     'top': [nd for nd in range(N-nx,N)],
+                     'left': [nd for nd in range(0,N,nx)],
+                     'right': [nd for nd in range(nx-1,N,nx)]
+                     }
     else: 
+        node_sets = {}
         print('Warning: no boundary set of nodes defined for quad8 elements')    
 
-    return returned_mesh
-    
+    return Mesh(crd, elm, elm_type, node_sets, {}, ndim, name)
+        
 
 def grid_mesh_cylindric(nr=11, nt=11, r_min=0, r_max=1, theta_min=0, theta_max=1, elm_type = 'quad4', init_rep_loc = 0, ndim = None, name = ""):  
     """
@@ -138,7 +139,7 @@ def grid_mesh_cylindric(nr=11, nt=11, r_min=0, r_max=1, theta_min=0, theta_max=1
     r = m.nodes[:,0]
     theta = m.nodes[:,1]
     crd = np.c_[r*np.cos(theta) , r*np.sin(theta)] 
-    returned_mesh = Mesh(crd, m.elements, elm_type, ndim, name)
+    returned_mesh = Mesh(crd, m.elements, elm_type, ndim=ndim, name=name)
     returned_mesh.local_frame = m.local_frame
 
     if theta_min<theta_max: 
@@ -197,11 +198,8 @@ def line_mesh_1D(n_nodes=11, x_min=0, x_max=1, elm_type = 'lin2', name = ""):
         crd = np.c_[np.linspace(x_min,x_max,n_nodes)] #Nodes coordinates
         elm = np.c_[np.arange(0,n_nodes-3,3), np.arange(1,n_nodes-2,3), np.arange(2,n_nodes-1,3), np.arange(3,n_nodes,3)] #Elements 
 
-    returned_mesh = Mesh(crd, elm, elm_type, name=name)
-    returned_mesh.add_node_set([0], "left")
-    returned_mesh.add_node_set([n_nodes-1], "right")
-    
-    return returned_mesh
+    node_sets = {'left':[0], 'right':[n_nodes-1]}
+    return Mesh(crd, elm, elm_type, node_sets, name=name)
 
 
 def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type = 'lin2', ndim = None, name = ""):    
@@ -237,20 +235,12 @@ def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type = 'lin2', ndim = None, name
         # if ModelingSpace.get_dimension() in ['2Dplane', '2Dstress'] : dim = 2
         # else: dim = 3
         crd = np.c_[m.nodes, np.zeros((n_nodes,ndim-1))]
-        elm = m.elements
-        returned_mesh = Mesh(crd,elm,elm_type, name = name)
-        returned_mesh.add_node_set(m.node_sets["left"], "left")
-        returned_mesh.add_node_set(m.node_sets["right"], "right")
+        return Mesh(crd,m.elements,elm_type, m.node_sets, name = name)
     else: 
         m = line_mesh_1D(n_nodes,0.,1.,elm_type,name)    
         crd = m.nodes
         crd = (np.array(x_max)-np.array(x_min))*crd+np.array(x_min)
-        elm = m.elements
-        returned_mesh = Mesh(crd,elm,elm_type, name = name)
-        returned_mesh.add_node_set(m.node_sets["left"], "left")
-        returned_mesh.add_node_set(m.node_sets["right"], "right")
-        
-    return returned_mesh
+        return Mesh(crd,m.elements,elm_type, m.node_sets, name = name)        
     
 
 def line_mesh_cylindric(nt=11, r=1, theta_min=0, theta_max=3.14, elm_type = 'lin2', init_rep_loc = 0, ndim = None, name = ""):
@@ -291,9 +281,7 @@ def line_mesh_cylindric(nt=11, r=1, theta_min=0, theta_max=3.14, elm_type = 'lin
 
     crd = np.c_[r*np.cos(theta), r*np.sin(theta)]
         
-    returned_mesh = Mesh(crd,elm,elm_type, ndim, name)
-    returned_mesh.add_node_set(m.node_sets["left"], "left")
-    returned_mesh.add_node_set(m.node_sets["right"], "right")
+    returned_mesh = Mesh(crd,elm,elm_type,m.node_sets,{}, ndim, name)
     
     if init_rep_loc: 
         local_frame = np.array( [ [[np.sin(t),-np.cos(t)],[np.cos(t),np.sin(t)]] for t in theta ] ) 
@@ -372,12 +360,8 @@ def box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z
     N = np.shape(crd)[0]
     elm = np.array(elm)
     
-    returned_mesh = Mesh(crd, elm, elm_type, name = name)  
-    for i, ndSet in enumerate([right, left, top, bottom, front, back]):
-        ndSetId = ('right', 'left', 'top', 'bottom', 'front', 'back')[i]
-        returned_mesh.add_node_set(ndSet, ndSetId)
-                 
-    return returned_mesh
+    node_sets = {'right':right, 'left':left, 'top':top, 'bottom':bottom, 'front':front, 'back':back}
+    return Mesh(crd, elm, elm_type, node_sets, name = name)      
 
 
 def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', method = 0, ndim = None, name =""):
@@ -462,7 +446,7 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', met
         raise NameError("'quad8' elements are not implemented")
     
     elm = np.array(elm, dtype=int)
-    return Mesh(np.array(new_crd), elm, elm_type, ndim, name)
+    return Mesh(np.array(new_crd), elm, elm_type, ndim=ndim, name=name)
 
 
 def generate_nodes(mesh, N, data, type_gen = 'straight'):
