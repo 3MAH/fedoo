@@ -38,44 +38,46 @@ class FE2(Mechanical3D):
             self.__assembly = assemb
             
         self.list_problem = None
-                
+        
+        self.use_elastic_lt = True  #option to use the elastic tangeant matrix (in principle = initial tangent matrix) at the begining of each time step
+
         # self.__currentGradDisp = self.__initialGradDisp = 0        
             
-    def get_pk2(self):
-        return StressTensorList(self.__stress)
+    # def get_pk2(self):
+    #     return StressTensorList(self.__stress)
     
-    # def get_kirchhoff(self):
-    #     return StressTensorList(self.Kirchhoff.T)        
+    # # def get_kirchhoff(self):
+    # #     return StressTensorList(self.Kirchhoff.T)        
     
-    # def get_cauchy(self):
-    #     return StressTensorList(self.Cauchy.T)        
+    # # def get_cauchy(self):
+    # #     return StressTensorList(self.Cauchy.T)        
     
-    def get_strain(self, **kargs):
-        return StrainTensorList(self.__strain)
+    # def get_strain(self, **kargs):
+    #     return StrainTensorList(self.__strain)
            
-    # def get_statev(self):
-    #     return self.statev.T
+    # # def get_statev(self):
+    # #     return self.statev.T
 
-    def get_stress(self, **kargs): #same as GetPKII (used for small def)
-        return StressTensorList(self.__stress)
+    # def get_stress(self, **kargs): #same as GetPKII (used for small def)
+    #     return StressTensorList(self.__stress)
     
-    # def GetHelas (self):
-    #     # if self.__L is None:                
-    #     #     self.RunUmat(np.eye(3).T.reshape(1,3,3), np.eye(3).T.reshape(1,3,3), time=0., dtime=1.)
+    # # def GetHelas (self):
+    # #     # if self.__L is None:                
+    # #     #     self.RunUmat(np.eye(3).T.reshape(1,3,3), np.eye(3).T.reshape(1,3,3), time=0., dtime=1.)
 
-    #     return np.squeeze(self.L.transpose(1,2,0)) 
+    # #     return np.squeeze(self.L.transpose(1,2,0)) 
     
-    def get_wm(self):
-        return self.__Wm
+    # def get_wm(self):
+    #     return self.__Wm
     
-    def get_disp_grad(self):
-        if self.__currentGradDisp is 0: return 0
-        else: return self.__currentGradDisp
+    # def get_disp_grad(self):
+    #     if self.__currentGradDisp is 0: return 0
+    #     else: return self.__currentGradDisp
         
-    def get_tangent_matrix(self):
+    # def get_tangent_matrix(self):
         
-        H = np.squeeze(self.Lt.transpose(1,2,0))
-        return H
+    #     H = np.squeeze(self.Lt.transpose(1,2,0))
+    #     return H
         
     def NewTimeIncrement(self):
         # self.set_start() #in set_start -> set tangeant matrix to elastic
@@ -118,12 +120,13 @@ class FE2(Mechanical3D):
             self.list_problem = []
             self._list_volume = np.empty(nb_points)
             self._list_center = np.empty(nb_points, dtype=int)
-            self.L = np.empty((nb_points,6,6))
+            # self.L = np.empty((nb_points,6,6))
+            assembly.sv['TangentMatrix']=np.empty((nb_points,6,6))
+
                     
             print('-- Initialize micro problems --')
             for i in range(nb_points):
                 print("\r", str(i+1),'/',str(nb_points), end="")
-                
                 crd = self.list_mesh[i].nodes
                 type_el = self.list_mesh[i].elm_type
                 xmax = np.max(crd[:,0]) ; xmin = np.min(crd[:,0])
@@ -133,7 +136,7 @@ class FE2(Mechanical3D):
                 crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax]))/2           
                 self._list_volume[i] = (xmax-xmin)*(ymax-ymin)*(zmax-zmin) #total volume of the domain
         
-                if '_StrainNodes' in self.list_mesh[i].ListSetOfNodes():
+                if '_StrainNodes' in self.list_mesh[i].node_sets:
                     strain_nodes = self.list_mesh[i].node_sets['_StrainNodes']            
                 else:
                     strain_nodes = self.list_mesh[i].add_nodes(crd_center,2) #add virtual nodes for macro strain
@@ -148,23 +151,18 @@ class FE2(Mechanical3D):
                 meshperio = True
                 
                 #Shall add other conditions later on
-                if meshperio:
-                    DefinePeriodicBoundaryCondition(self.list_mesh[i],
+                pb_micro.bc.add(PeriodicBC(
                     [strain_nodes[0], strain_nodes[0], strain_nodes[0], strain_nodes[1], strain_nodes[1], strain_nodes[1]],
-                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = '_fe2_cell_'+str(i))
-                else:
-                    DefinePeriodicBoundaryConditionNonPerioMesh(self.list_mesh[i],
-                    [strain_nodes[0], strain_nodes[0], strain_nodes[0], strain_nodes[1], strain_nodes[1], strain_nodes[1]],
-                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], dim='3D', Problemname = '_fe2_cell_'+str(i))
+                    ['DispX',        'DispY',        'DispZ',       'DispX',         'DispY',        'DispZ'], 
+                    dim=3, meshperio=meshperio, name = '_fe2_cell_'+str(i)))
                     
-                pb_micro.BoundaryCondition('Dirichlet','DispX', 0, [self._list_center[i]])
-                pb_micro.BoundaryCondition('Dirichlet','DispY', 0, [self._list_center[i]])
-                pb_micro.BoundaryCondition('Dirichlet','DispZ', 0, [self._list_center[i]])
+                pb_micro.bc.add('Dirichlet',[self._list_center[i]],'Disp', 0)                
+                # self.list_assembly[i].initialize()
+                assembly.sv['TangentMatrix'][i] = get_homogenized_stiffness(self.list_assembly[i])
                 
-                self.L[i] = get_homogenized_stiffness(self.list_assembly[i])
-            
-            pb.MakeActive()
-            self.Lt = self.L.copy()
+            pb.make_active()
+            if self.use_elastic_lt: 
+                assembly.sv['ElasticMatrix'] = assembly.sv['TangentMatrix'].copy()
             
             self.__strain = np.zeros((6, nb_points))
             self.__stress = np.zeros((6, nb_points))
@@ -182,15 +180,14 @@ class FE2(Mechanical3D):
         strain_nodes = self.list_mesh[id_pb].node_sets['_StrainNodes']  
 
         pb.RemoveBC("Strain")
-        pb.BoundaryCondition('Dirichlet','DispX', strain[0][id_pb], [strain_nodes[0]], initialValue = self.__strain[0][id_pb], name = 'Strain') #EpsXX
-        pb.BoundaryCondition('Dirichlet','DispY', strain[1][id_pb], [strain_nodes[0]], initialValue = self.__strain[1][id_pb], name = 'Strain') #EpsYY
-        pb.BoundaryCondition('Dirichlet','DispZ', strain[2][id_pb], [strain_nodes[0]], initialValue = self.__strain[2][id_pb], name = 'Strain') #EpsZZ
-        pb.BoundaryCondition('Dirichlet','DispX', strain[3][id_pb], [strain_nodes[1]], initialValue = self.__strain[3][id_pb], name = 'Strain') #EpsXY
-        pb.BoundaryCondition('Dirichlet','DispY', strain[4][id_pb], [strain_nodes[1]], initialValue = self.__strain[4][id_pb], name = 'Strain') #EpsXZ
-        pb.BoundaryCondition('Dirichlet','DispZ', strain[5][id_pb], [strain_nodes[1]], initialValue = self.__strain[5][id_pb], name = 'Strain') #EpsYZ
+        pb.bc.add('Dirichlet',[strain_nodes[0]],'DispX', strain[0][id_pb], start_value = self.__strain[0][id_pb], name = 'Strain') #EpsXX
+        pb.bc.add('Dirichlet',[strain_nodes[1]],'DispX', strain[1][id_pb], start_value = self.__strain[1][id_pb], name = 'Strain') #EpsYY
+        pb.bc.add('Dirichlet',[strain_nodes[2]],'DispX', strain[2][id_pb], start_value = self.__strain[2][id_pb], name = 'Strain') #EpsZZ
+        pb.bc.add('Dirichlet',[strain_nodes[3]],'DispX', strain[3][id_pb], start_value = self.__strain[3][id_pb], name = 'Strain') #EpsXY
+        pb.bc.add('Dirichlet',[strain_nodes[4]],'DispX', strain[4][id_pb], start_value = self.__strain[4][id_pb], name = 'Strain') #EpsXZ
+        pb.bc.add('Dirichlet',[strain_nodes[5]],'DispX', strain[5][id_pb], start_value = self.__strain[5][id_pb], name = 'Strain') #EpsYZ
         
-        
-        pb.nlsolve(dt = dtime, tmax = dtime, update_dt = True, ToleranceNR = 0.05, print_info = 0)        
+        pb.nlsolve(dt = dtime, tmax = dtime, update_dt = True, tol_nr = 0.05, print_info = 0)        
         
         self.Lt[id_pb]= get_tangent_stiffness(pb.name)
         

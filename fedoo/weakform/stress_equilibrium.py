@@ -64,7 +64,6 @@ class StressEquilibrium(WeakFormBase):
         self.assembly_options['assume_sym'] = True     #internalForce weak form should be symmetric (if TangentMatrix is symmetric) -> need to be checked for general case
             
     def get_weak_equation(self, assembly, pb):
-        
         if self.nlgeom == 'TL': #add initial displacement effect 
             # assert 'DispGradient' in assembly.sv and 'PK2' in assembly.sv, ""
             # if not(hasattr(self.constitutivelaw, 'get_disp_grad')):
