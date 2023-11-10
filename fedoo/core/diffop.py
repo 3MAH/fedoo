@@ -125,7 +125,7 @@ class DiffOp:
             
         
     def sort(self):
-        nn = 50
+        nn = 50 #should be higher than the max number of variables, orders and coordinates
         intForSort = []
         for ii in range(len(self.op)):
             if self.op[ii] != 1 and self.op_vir != 1:
@@ -133,9 +133,9 @@ class DiffOp:
             elif self.op[ii] == 1:
                 if self.op_vir == 1: intForSort.append(-1)
                 else:
-                    intForSort.append(nn**6 + nn**6 *self.op_vir[ii].u + nn**7 * self.op_vir[ii].x + nn**8 * self.op_vir[ii].x) 
+                    intForSort.append(nn**6 + nn**6 *self.op_vir[ii].ordre + nn**7 * self.op_vir[ii].x + nn**8 * self.op_vir[ii].u) 
             else: #self.op_vir[ii] = 1
-                intForSort.append(nn**9 + nn**9 *self.op[ii].u + nn**10 * self.op[ii].x + nn**11 * self.op[ii].x) 
+                intForSort.append(nn**9 + nn**9 *self.op[ii].ordre + nn**10 * self.op[ii].x + nn**11 * self.op[ii].u) 
         
         sortedIndices = np.array(intForSort).argsort()
         self.coef = [self.coef[i] for i in sortedIndices]

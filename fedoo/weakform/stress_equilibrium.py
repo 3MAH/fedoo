@@ -155,6 +155,10 @@ class StressEquilibrium(WeakFormBase):
     def update_2(self, assembly, pb):
         if self.nlgeom == 'TL':
             assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+            if len(assembly.sv['TangentMatrix'].shape) == 2:
+                if len(assembly.sv['F'].shape) == 3:
+                    assembly.sv['TangentMatrix'] = assembly.sv['TangentMatrix'].reshape(6,6,-1) * np.ones((1,1,assembly.sv['F'].shape[2]))
+                
             assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), self._convert_Lt_tag)            
             # assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), "DsigmaDe_JaumannDD_2_DSDE")
 

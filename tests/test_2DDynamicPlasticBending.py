@@ -60,8 +60,6 @@ fd.Assembly.create("Inertia", "Domain", "quad4", name="MassAssembling")
 
 pb = fd.problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
 
-# Problem.set_solver('cg', precond = True)
-
 pb.set_nr_criterion("Displacement")
 # pb.set_nr_criterion("Work")
 # pb.set_nr_criterion("Force")

@@ -186,6 +186,14 @@ class ListConstitutiveLaw(ConstitutiveLaw):
         
         self._list_constitutivelaw = set(list_constitutivelaw) #remove duplicated cl
     
+    def __getitem__(self, item):
+        return list(self._list_constitutivelaw)[item]
+    
+    def __len__(self):
+        return len(self._list_constitutivelaw)
+
+    def __str__(self):
+        return str(self._list_constitutivelaw)        
     
     def initialize(self, assembly, pb):
         for cl in self._list_constitutivelaw:
@@ -273,6 +281,10 @@ class WeakFormSum(WeakFormBase):
     def update(self, assembly, pb):        
         for wf in self._list_weakform:
             wf.update(assembly, pb)
+            
+    def update_2(self, assembly, pb):        
+        for wf in self._list_weakform:
+            wf.update_2(assembly, pb)
     
     def to_start(self):
         #function called if the time step is reinitialized. Used to reset variables to the begining of the step
