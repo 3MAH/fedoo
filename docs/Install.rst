@@ -17,21 +17,22 @@ Installation using conda:
 
 The only required dependencies that are automatically installed with fedoo are:
 
-    * `Numpy <https://numpy.org/`_
+    * `Numpy <https://numpy.org/>`_
     
-    * `Scipy <https://scipy.org/`_ mainly for sparse matrices. 
+    * `Scipy <https://scipy.org/>`_ mainly for sparse matrices. 
 
 In addition, the conda package also includes some recommanded dependencies:
 
-    * `Simcoon <https://simcoon.readthedocs.io/en/latest/`_: brings a lot of features (finite strain, non-linear constitutive laws, ...).
+    * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_ 
+      brings a lot of features (finite strain, non-linear constitutive laws, ...).
 
-    * `PyVista <https://docs.pyvista.org/version/stable/>`_ for results visulisation and 
-        mesh utils.
+    * `PyVista <https://docs.pyvista.org/version/stable/>`_ 
+      for results visulisation and mesh utils.
         
 It is highly recommanded to also install a fast direct sparse matrix solver
 to improve performance :
 
-    * `Pypardiso <https://pypi.org/project/pypardiso/`_ for intel processors (binding to the pardiso solver)
+    * `Pypardiso <https://pypi.org/project/pypardiso/>`_ for intel processors (binding to the pardiso solver)
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_ 
 
@@ -51,3 +52,4 @@ Simcoon is available on conda only and can be installed with:
 .. code-block:: none
 
     $ conda install -c conda-forge -c set3mah simcoon
+    

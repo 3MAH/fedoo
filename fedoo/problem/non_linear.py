@@ -40,8 +40,8 @@ class _NonLinearBase():
         self.__iter = 0
         self.__compteurOutput = 0
         
-        self.interval_output = None #save results every self.interval_output iter or time step if self.__save_at_exact_time = True
-        self.__save_at_exact_time = True
+        self.interval_output = -1 #save results every self.interval_output iter or time step if self.save_at_exact_time = True
+        self.save_at_exact_time = True
         self.err_num= 1e-8 #numerical error
     
     #Return the displacement components
@@ -285,28 +285,74 @@ class _NonLinearBase():
         return 0, subiter, normRes
 
 
-    def nlsolve(self, **kargs):              
+    def nlsolve(self, dt: float = 0.1, update_dt: bool = True,
+                tmax: float|None = None, t0: float|None = None, 
+                dt_min: float = 1e-6, max_subiter: int|None = None,
+                tol_nr: float|None = None, print_info: int|None = None,
+                save_at_exact_time: bool|None = None, interval_output: int|float|None = None,
+                ) -> None:    
+        """Solve the non linear problem using the newton-raphson algorithm.
+        
+        Parameters
+        ----------
+        dt: float, default=0.1
+            Initial time increment
+        update_dt: bool, default = True
+            If True, the time increment may be modified during resolution:
+            * decrease if the solver has not converged
+            * increase if the solver has converged in one iteration.
+        tmax: float, optional.
+            Time at the end of the time step.             
+            If omitted, the attribute tmax is considered (default = 1.)
+            else, the attribute tmax is modified.             
+        t0: float, optional.
+            Time at the start of the time step. 
+            If omitted, the attribute t0 is considered (default = 0.)
+            else, the attribute t0 is modified.             
+        dt_min: float, default = 1e-6
+            Minimal time increment
+        max_subiter: int, optional
+            Maximal number of newton raphson iteration at for each time increment.
+            If omitted, the 'max_subiter' field in the nr_parameters attribute 
+            (ie nr_parameters['max_subiter']) is considered (default = 5).   
+        tol_nr: float, optional
+            Tolerance of the newton-raphson algorithm.
+            If omitted, the 'tol' field in the nr_parameters attribute 
+            (ie nr_parameters['tol']) is considered (default = 5e-3).
+        print_info : int, optional
+            Level of information printed to console. 
+            If 0, nothing is printed
+            If 1, iterations info are printed
+            If 2, iterations and newton-raphson sub iterations info are printed.
+            If omitted, the print_info attribute is considered (default = 1).               
+        save_at_exact_time: bool, optional
+            If True, the time increment is modified to stop at times defined by interval_output and allow to save results.
+            If omitted, the save_at_exact_time attribute is considered (default = True).
+            The given value is stored in the save_at_exact_time attribute.
+        interval_output: int|float, optional
+            Time step for output if save_at_exact_time is True (default) else number of iter increments between 2 output
+            If interval_output == -1, the results is saved at each initial time_step intervals or each increment depending on the save_at_exact_time value.
+            If omitted, the interval_output attribute is considred (default -1)
+        """          
+
         #parameters
-        self.print_info = kargs.pop('print_info',self.print_info)
-        max_subiter = kargs.pop('max_subiter',self.nr_parameters['max_subiter'])
-        tol_nr = kargs.pop('tol_nr',self.nr_parameters['tol'])
-        self.t0 = kargs.pop('t0',self.t0) #time at the start of the time step
-        self.tmax = kargs.pop('tmax',self.tmax) #time at the end of the time step
-        dt = kargs.pop('dt',0.1) #initial time step
-        dt_min = kargs.pop('dt_min',1e-6) #min time step
+        if tmax is not None: self.tmax = tmax
+        if t0 is not None: self.t0 = t0 #time at the start of the time step
+        if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
+        if tol_nr is None: tol_nr = self.nr_parameters['tol']
+        if print_info is None: print_info = self.print_info
+        if save_at_exact_time is not None: 
+            self.save_at_exact_time = save_at_exact_time
+        if interval_output is None: interval_output = self.interval_output # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output 
         
-        self.__save_at_exact_time = kargs.pop('save_at_exact_time',self.__save_at_exact_time)
-        interval_output = kargs.pop('interval_output',self.interval_output) # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output 
-        update_dt = kargs.pop('update_dt',True)
+        # if kargs: #not empty            
+        #    raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
         
-        if kargs: #not empty            
-            raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
-        
-        if interval_output is None:
-            if self.__save_at_exact_time: interval_output = dt
+        if interval_output == -1:
+            if self.save_at_exact_time: interval_output = dt
             else: interval_output = 1
         
-        if self.__save_at_exact_time: next_time = self.t0 + interval_output
+        if self.save_at_exact_time: next_time = self.t0 + interval_output
         else: next_time = self.tmax #next_time is the next exact time where the algorithm have to stop for output purpose
         
         self.init_bc_start_value()            
@@ -321,11 +367,11 @@ class _NonLinearBase():
         while self.time < self.tmax - self.err_num:                         
     
             save_results = (self.time != self.t0) and \
-                ((self.time == next_time) or (self.__save_at_exact_time == False and self.__iter%interval_output == 0))
+                ((self.time == next_time) or (self.save_at_exact_time == False and self.__iter%interval_output == 0))
 
             #update next_time                
             if self.time == next_time: 
-                # self.__save_at_exact_time should be True 
+                # self.save_at_exact_time should be True 
                 next_time = next_time + interval_output
                 if next_time > self.tmax - self.err_num: next_time = self.tmax
                 
