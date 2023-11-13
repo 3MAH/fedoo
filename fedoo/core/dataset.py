@@ -109,8 +109,8 @@ class DataSet():
         self.meshplot_gp = self.mesh_gp.to_pyvista()    
         
     
-    def plot(self, field: str|None = None, data_type: str|None = None,
-             component: int|str = 0, scale:float = 1, show:bool = True, 
+    def plot(self, field: str|None = None, component: int|str = 0,
+             data_type: str|None = None, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None, 
              node_labels: bool|list = False, element_labels: bool|list = False, 
              show_nodes: bool|float = False, show_normals: bool|float = False,
@@ -122,6 +122,12 @@ class DataSet():
         ----------
         field : str (optional)
             The name of the field to plot. If no name is given, plot only the mesh. 
+        component : int | str (default = 0)
+            The data component to plot in case of vector data.
+            component = 'vm' to plot the von-mises stress from a stress field.
+            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
+            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5 
+            for tensor components using the voigt notations.
         data_type : str in {'Node', 'Element', 'GaussPoint'} - Optional 
             The type of data to plot (defined at nodes, elements au gauss integration points).
             If the existing data doesn't match to the specified one, the data are converted before
@@ -130,12 +136,6 @@ class DataSet():
             elements at nodes. This allow a more smooth plot.
             It the type is not specified, look for any type of data and, if the data 
             is found, draw the field without conversion. 
-        component : int | str (default = 0)
-            The data component to plot in case of vector data.
-            component = 'vm' to plot the von-mises stress from a stress field.
-            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
-            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5 
-            for tensor components using the voigt notations.
         scale : float (default = 1)
             The scale factor used for the nodes displacement, using the 'Disp' vector field
             If scale = 0, the field is plotted on the underformed shape.            
@@ -210,7 +210,7 @@ class DataSet():
                 if show_nodes: 
                     #compute center (dont use meshplot to compute center because
                     #isolated nodes are removed -> may be annoying with show_nodes)
-                    crd = self.mesh.physical_nodes+self.node_data['Disp'].T[:n_physical_nodes]
+                    crd = self.mesh.physical_nodes + scale*self.node_data['Disp'].T[:n_physical_nodes]
                     center = 0.5*(crd.min(axis=0) + crd.max(axis=0))
                     if len(center) < 3:  center = np.hstack((center, np.zeros(3-len(center))))
                 else: 
@@ -229,7 +229,7 @@ class DataSet():
                 meshplot = self.meshplot                                    
             
             if 'Disp' in self.node_data and scale != 0:
-                meshplot.points = as_3d_coordinates(self.mesh.physical_nodes+self.node_data['Disp'].T[:n_physical_nodes])
+                meshplot.points = as_3d_coordinates(self.mesh.physical_nodes + scale*self.node_data['Disp'].T[:n_physical_nodes])
             else:
                 meshplot.points = as_3d_coordinates(self.mesh.physical_nodes)                
             
@@ -726,8 +726,8 @@ class MultiFrameDataSet(DataSet):
             DataSet.load(self, data,load_mesh)
 
 
-    def plot(self, field: str|None = None, data_type: str|None = None,
-             component: int|str = 0, scale:float = 1, show:bool = True, 
+    def plot(self, field: str|None = None, component: int|str = 0,
+             data_type: str|None = None, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None,
              node_labels: bool|list = False, element_labels: bool|list = False, 
              show_nodes: bool|float = False, plotter: object = None,
@@ -742,7 +742,13 @@ class MultiFrameDataSet(DataSet):
         Parameters
         ----------
         field : str (optional)
-            The name of the field to plot. If no name is given, plot only the mesh. 
+            The name of the field to plot. If no name is given, plot only the mesh.         
+        component : int | str (default = 0)
+            The data component to plot in case of vector data.
+            component = 'vm' to plot the von-mises stress from a stress field.
+            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
+            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5 
+            for tensor components using the voigt notations.
         data_type : str in {'Node', 'Element', 'GaussPoint'} - Optional 
             The type of data to plot (defined at nodes, elements au gauss integration points).
             If the existing data doesn't match to the specified one, the data are converted before
@@ -750,13 +756,7 @@ class MultiFrameDataSet(DataSet):
             For instance data_type = 'Node' make en average of data from adjacent 
             elements at nodes. This allow a more smooth plot.
             It the type is not specified, look for any type of data and, if the data 
-            is found, draw the field without conversion. 
-        component : int | str (default = 0)
-            The data component to plot in case of vector data.
-            component = 'vm' to plot the von-mises stress from a stress field.
-            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
-            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5 
-            for tensor components using the voigt notations.
+            is found, draw the field without conversion.             
         scale : float (default = 1)
             The scale factor used for the nodes displacement, using the 'Disp' vector field
             If scale = 0, the field is plotted on the underformed shape.            
@@ -803,7 +803,7 @@ class MultiFrameDataSet(DataSet):
     
         
     def write_movie(self, filename: str ='test', field: str|None = None, 
-                    data_type: str|None = None, component: int|str = 0, 
+                    component: int|str = 0, data_type: str|None = None, 
                     scale:float = 1, show_edges:bool = True, 
                     clim: list[float|None]|None = [None,None], 
                     show_nodes: bool|float = False, **kargs):
@@ -815,11 +815,11 @@ class MultiFrameDataSet(DataSet):
         filename : str
             Name of the videofile to write. 
         field : str (optional)
-            Name of the field to plot
+            Name of the field to plot        
+        component : int, str (default = 0)
+            The data component to plot in case of vector data
         data_type : str in {'Node', 'Element' or 'GaussPoint'}, optional
             Type of the data. By default, the data_type is determined automatically by scanning the data arrays. 
-        component : int, str (default = 0)
-            The data component to plot in case of vector data   
         scale : scalar (default = 1)
             The scale factor used for the nodes displacement, using the 'Disp' vector field
         show_edges : bool (default = True)
