@@ -257,8 +257,6 @@ class _NonLinearBase():
        
         self.elastic_prediction()
         for subiter in range(max_subiter): #newton-raphson iterations
-            if subiter > 0:
-                pass
             #update Stress and initial displacement and Update stiffness matrix
             self.update(compute = 'vector') #update the out of balance force vector
             self.updateD() #required to compute the NR error

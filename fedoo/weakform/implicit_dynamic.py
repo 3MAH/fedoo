@@ -32,6 +32,8 @@ class ImplicitDynamic(WeakFormBase):
         self.density = density
         self.__nlgeom = nlgeom
         
+        self.rayleigh_damping = None
+        
         self.assembly_options['assume_sym'] = True        
         
     def initialize(self, assembly, pb):
@@ -41,8 +43,8 @@ class ImplicitDynamic(WeakFormBase):
         assembly.sv_type['_DeltaDisp'] = 'Node'
         assembly.sv['Velocity'] = 0
         assembly.sv['Acceleration'] = 0
-        assembly.sv['Velocity_GP'] = [0,0,0]
-        assembly.sv['Acceleration_GP'] = [0,0,0]
+        assembly.sv['Velocity_GP'] = np.zeros((self.space.ndim,1))
+        assembly.sv['Acceleration_GP'] = np.zeros((self.space.ndim,1))
         assembly.sv['_DeltaDisp'] = 0
 
     def update(self, assembly, pb):
@@ -89,23 +91,87 @@ class ImplicitDynamic(WeakFormBase):
         dt = pb.dtime
                 
         if pb._dU is 0: #start of iteration
-            delta_disp = [0,0,0]
+            delta_disp = np.zeros((self.space.ndim,1))
         else:
             delta_disp = assembly.sv['_DeltaDisp_GP']
                     
         acceleration = assembly.sv['Acceleration_GP'] 
         velocity = assembly.sv['Velocity_GP'] 
 
-        diff_op = self.stiffness_weakform.get_weak_equation(assembly, pb)
+        if self.rayleigh_damping is None:
+            diff_op = self.stiffness_weakform.get_weak_equation(assembly, pb)
+            
+            # if delta_disp.shape[1] == 1: delta_disp = delta_disp.ravel()
+            # if acceleration.shape[1] == 1: acceleration = acceleration.ravel()
+            # if velocity.shape[1] == 1: velocity = velocity.ravel()            
+            # diff_op += sum([op_dU_vir[i]*( \
+            #         (op_dU[i]+delta_disp[i])*(self.density/(self.beta*dt**2)) -
+            #           velocity[i]*(self.density/(self.beta*dt)) -
+            #           acceleration[i] * (self.density*(0.5/self.beta - 1)) ) 
+            #           if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])
         
-        diff_op += sum([op_dU_vir[i]*( \
-                    (op_dU[i]-delta_disp[i])*(self.density/(self.beta*dt**2)) -
-                      velocity[i]*(self.density/(self.beta*dt)) -
-                      acceleration[i] * (self.density*(0.5/self.beta - 1)) ) 
-                      if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])
+            new_acceleration = (1/(self.beta*dt**2)) * (delta_disp - dt*velocity) + (1 - 0.5/self.beta)*acceleration #gp values
+            
+            diff_op += sum([op_dU_vir[i]*( op_dU[i]*(self.density/(self.beta*dt**2))
+                        + self.density*new_acceleration[i])
+                        if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])        
+        else:
+            #not working for now
+            new_acceleration = (1/(self.beta*dt**2)) * (delta_disp - dt*velocity) + (1 - 0.5/self.beta)*acceleration            
+            new_velocity = velocity + dt * ( (1-self.gamma)*acceleration + self.gamma*new_acceleration)
 
-        return diff_op
-    
+            # same as self.stiffness_weakform.get_weak_equation(assembly, pb) 
+            # but separate mat and vec weakforms to apply rayleigh damping
+            if self.nlgeom == 'TL': #add initial displacement effect 
+                eps = self.space.op_strain(assembly.sv['DispGradient'])
+                initial_stress = assembly.sv['PK2']
+            else: 
+                eps = self.space.op_strain()
+                initial_stress = assembly.sv['Stress'] #Stress = Cauchy for updated lagrangian method
+            
+            H = assembly.sv['TangentMatrix']
+            
+            sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+                    
+            stiffness_wf = sum([0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)])
+            
+            if initial_stress is not 0:   
+                if self.nlgeom:  
+                    stiffness_mat_wf = stiffness_wf + sum([0 if self.stiffness_weakform._nl_strain_op_vir[i] is 0 else \
+                                        self.stiffness_weakform._nl_strain_op_vir[i] * initial_stress[i] for i in range(6)])
+            
+                initial_stress_wf = sum([0 if eps[i] is 0 else \
+                                        eps[i].virtual * initial_stress[i] for i in range(6)])
+            
+            else: initial_stress_wf = 0
+
+
+            # includes rayleigh term for stiffness matrix            
+            diff_op = stiffness_wf * (1+self.rayleigh_damping[1]*self.gamma/(self.beta*dt))                        
+                        
+            diff_op += initial_stress_wf
+
+            # includes rayleigh term for the mass matrix             
+            diff_op += sum([op_dU_vir[i]*op_dU[i]*
+                            (self.density/(self.beta*dt**2)+
+                            (self.density*self.rayleigh_damping[0]*self.gamma)/(self.beta*dt))
+                            if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)]) 
+            
+            diff_op += sum([op_dU_vir[i]*(self.density*new_acceleration[i]
+                            + (self.density*self.rayleigh_damping[0])*new_velocity[i])                            
+                        if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])   
+            
+            #compute the weaform corresponding to rayleigh_damping[0]x[K]*new_velocity
+            #as we dont compute K explicitly, we need to update the weaform
+            ##### TODO
+            ### warning : need node values
+            if new_velocity.shape[1] == 1:
+                new_velocity = new_velocity*np.ones(assembly.n_gauss_points)
+            mat_sigma_velocity = [assembly.get_gp_results(sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]), new_velocity.ravel()) for i in range(6)]            
+            diff_op += sum([0 if eps[i] is 0 else \
+                            eps[i].virtual * mat_sigma_velocity[i] for i in range(6)])
+
+        return diff_op    
     
     @property
     def nlgeom(self):
@@ -205,7 +271,7 @@ class _NewmarkInteria(WeakFormBase):
     @property
     def nlgeom(self):
         return self.__nlgeom
-
+    
 
 def ImplicitDynamic2(constitutivelaw, density, beta, gamma, name = "", nlgeom = False, space = None):
     

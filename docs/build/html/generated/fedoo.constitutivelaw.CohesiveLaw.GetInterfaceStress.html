@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress &mdash; FEDOO  documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fedoo.constitutivelaw.CohesiveLaw.GetK" href="fedoo.constitutivelaw.CohesiveLaw.GetK.html" />
+    <link rel="prev" title="fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress" href="fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #24445C" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FEDOO
+              <img src="../_static/fedOOLogos_ss_fond.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../Overview.html">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../Overview.html#about">About</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Overview.html#main-features">Main features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Overview.html#road-map">Road map</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start.html">Quick Start</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#steps-to-define-and-solve-a-problem">Steps to define and solve a Problem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#import-library">Import library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#create-the-modeling-space">Create the modeling space</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#create-and-or-import-the-geometry-mesh">Create and/or import the geometry (mesh)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#create-weak-formulations">Create weak formulations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#create-global-matrix-assemblies">Create global matrix assemblies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#set-the-problem-and-the-solver">Set the Problem and the solver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#boundary-conditions">Boundary conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#solve-the-problem">Solve the Problem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../Quick_Start.html#analyse-and-export-results">Analyse and export results</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Mesh.html">Geometry and Mesh (<code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.mesh</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../Mesh.html#class-mesh">Class Mesh</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.Mesh.html">fedoo.Mesh</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.add_element_set.html">fedoo.Mesh.add_element_set</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.add_internal_nodes.html">fedoo.Mesh.add_internal_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.add_node_set.html">fedoo.Mesh.add_node_set</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.add_nodes.html">fedoo.Mesh.add_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.add_virtual_nodes.html">fedoo.Mesh.add_virtual_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.as_2d.html">fedoo.Mesh.as_2d</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.as_3d.html">fedoo.Mesh.as_3d</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.convert_data.html">fedoo.Mesh.convert_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.copy.html">fedoo.Mesh.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.data_to_gausspoint.html">fedoo.Mesh.data_to_gausspoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.deepcopy.html">fedoo.Mesh.deepcopy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.determine_data_type.html">fedoo.Mesh.determine_data_type</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.extract_elements.html">fedoo.Mesh.extract_elements</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.find_coincident_nodes.html">fedoo.Mesh.find_coincident_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.find_isolated_nodes.html">fedoo.Mesh.find_isolated_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.find_nodes.html">fedoo.Mesh.find_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.from_pyvista.html">fedoo.Mesh.from_pyvista</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.gausspoint_coordinates.html">fedoo.Mesh.gausspoint_coordinates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.get_all.html">fedoo.Mesh.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.get_element_local_frame.html">fedoo.Mesh.get_element_local_frame</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.get_elements_from_nodes.html">fedoo.Mesh.get_elements_from_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.init_interpolation.html">fedoo.Mesh.init_interpolation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.integrate_field.html">fedoo.Mesh.integrate_field</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.is_periodic.html">fedoo.Mesh.is_periodic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.merge_nodes.html">fedoo.Mesh.merge_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.nearest_node.html">fedoo.Mesh.nearest_node</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.plot.html">fedoo.Mesh.plot</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.plot_normals.html">fedoo.Mesh.plot_normals</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.read.html">fedoo.Mesh.read</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.remove_isolated_nodes.html">fedoo.Mesh.remove_isolated_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.remove_nodes.html">fedoo.Mesh.remove_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.reset_interpolation.html">fedoo.Mesh.reset_interpolation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.save.html">fedoo.Mesh.save</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.to_pyvista.html">fedoo.Mesh.to_pyvista</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.translate.html">fedoo.Mesh.translate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.bounding_box.html">fedoo.Mesh.bounding_box</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.element_centers.html">fedoo.Mesh.element_centers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.n_elements.html">fedoo.Mesh.n_elements</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.n_elm_nodes.html">fedoo.Mesh.n_elm_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.n_nodes.html">fedoo.Mesh.n_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.n_physical_nodes.html">fedoo.Mesh.n_physical_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.name.html">fedoo.Mesh.name</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.ndim.html">fedoo.Mesh.ndim</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.physical_nodes.html">fedoo.Mesh.physical_nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.nodes.html">fedoo.Mesh.nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.elements.html">fedoo.Mesh.elements</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.elm_type.html">fedoo.Mesh.elm_type</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.node_sets.html">fedoo.Mesh.node_sets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.Mesh.element_sets.html">fedoo.Mesh.element_sets</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../Mesh.html#mesh-manipulation-functions">Mesh manipulation functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.stack.html">fedoo.Mesh.stack</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../Mesh.html#import-export-fedoo-mesh-object">Import/Export Fedoo Mesh object</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.import_file.html">fedoo.mesh.import_file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.import_msh.html">fedoo.mesh.import_msh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.import_vtk.html">fedoo.mesh.import_vtk</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../Mesh.html#mesh-creation-functions">Mesh Creation Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.rectangle_mesh.html">fedoo.mesh.rectangle_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.box_mesh.html">fedoo.mesh.box_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.line_mesh_1D.html">fedoo.mesh.line_mesh_1D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.line_mesh.html">fedoo.mesh.line_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.line_mesh_cylindric.html">fedoo.mesh.line_mesh_cylindric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.grid_mesh_cylindric.html">fedoo.mesh.grid_mesh_cylindric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.hole_plate_mesh.html">fedoo.mesh.hole_plate_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.structured_mesh_2D.html">fedoo.mesh.structured_mesh_2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.mesh.generate_nodes.html">fedoo.mesh.generate_nodes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../ConstitutiveLaw.html">Constitutive Law (<code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.constitutivelaw</span></code>)</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../ConstitutiveLaw.html#solid-mechanical-constitutive-laws">Solid mechanical constitutive laws</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.html">fedoo.constitutivelaw.ElasticIsotrop</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.copy.html">fedoo.constitutivelaw.ElasticIsotrop.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.get_H_plane_stress.html">fedoo.constitutivelaw.ElasticIsotrop.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.get_all.html">fedoo.constitutivelaw.ElasticIsotrop.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.get_elastic_matrix.html">fedoo.constitutivelaw.ElasticIsotrop.get_elastic_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.get_stress_from_strain.html">fedoo.constitutivelaw.ElasticIsotrop.get_stress_from_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.get_tangent_matrix.html">fedoo.constitutivelaw.ElasticIsotrop.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.initialize.html">fedoo.constitutivelaw.ElasticIsotrop.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.local2global_H.html">fedoo.constitutivelaw.ElasticIsotrop.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.reset.html">fedoo.constitutivelaw.ElasticIsotrop.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.set_start.html">fedoo.constitutivelaw.ElasticIsotrop.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.to_start.html">fedoo.constitutivelaw.ElasticIsotrop.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.update.html">fedoo.constitutivelaw.ElasticIsotrop.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.G.html">fedoo.constitutivelaw.ElasticIsotrop.G</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.name.html">fedoo.constitutivelaw.ElasticIsotrop.name</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.E.html">fedoo.constitutivelaw.ElasticIsotrop.E</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticIsotrop.nu.html">fedoo.constitutivelaw.ElasticIsotrop.nu</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.html">fedoo.constitutivelaw.ElasticOrthotropic</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.copy.html">fedoo.constitutivelaw.ElasticOrthotropic.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.get_H_plane_stress.html">fedoo.constitutivelaw.ElasticOrthotropic.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.get_all.html">fedoo.constitutivelaw.ElasticOrthotropic.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.get_elastic_matrix.html">fedoo.constitutivelaw.ElasticOrthotropic.get_elastic_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.get_stress_from_strain.html">fedoo.constitutivelaw.ElasticOrthotropic.get_stress_from_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.get_tangent_matrix.html">fedoo.constitutivelaw.ElasticOrthotropic.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.initialize.html">fedoo.constitutivelaw.ElasticOrthotropic.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.local2global_H.html">fedoo.constitutivelaw.ElasticOrthotropic.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.reset.html">fedoo.constitutivelaw.ElasticOrthotropic.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.set_start.html">fedoo.constitutivelaw.ElasticOrthotropic.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.to_start.html">fedoo.constitutivelaw.ElasticOrthotropic.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.update.html">fedoo.constitutivelaw.ElasticOrthotropic.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticOrthotropic.name.html">fedoo.constitutivelaw.ElasticOrthotropic.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.html">fedoo.constitutivelaw.ElasticAnisotropic</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.copy.html">fedoo.constitutivelaw.ElasticAnisotropic.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.get_H_plane_stress.html">fedoo.constitutivelaw.ElasticAnisotropic.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.get_all.html">fedoo.constitutivelaw.ElasticAnisotropic.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.get_elastic_matrix.html">fedoo.constitutivelaw.ElasticAnisotropic.get_elastic_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.get_stress_from_strain.html">fedoo.constitutivelaw.ElasticAnisotropic.get_stress_from_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.get_tangent_matrix.html">fedoo.constitutivelaw.ElasticAnisotropic.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.initialize.html">fedoo.constitutivelaw.ElasticAnisotropic.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.local2global_H.html">fedoo.constitutivelaw.ElasticAnisotropic.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.reset.html">fedoo.constitutivelaw.ElasticAnisotropic.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.set_start.html">fedoo.constitutivelaw.ElasticAnisotropic.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.to_start.html">fedoo.constitutivelaw.ElasticAnisotropic.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.update.html">fedoo.constitutivelaw.ElasticAnisotropic.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElasticAnisotropic.name.html">fedoo.constitutivelaw.ElasticAnisotropic.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.html">fedoo.constitutivelaw.CompositeUD</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.copy.html">fedoo.constitutivelaw.CompositeUD.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_H_plane_stress.html">fedoo.constitutivelaw.CompositeUD.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_all.html">fedoo.constitutivelaw.CompositeUD.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_elastic_matrix.html">fedoo.constitutivelaw.CompositeUD.get_elastic_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_engineering_constants.html">fedoo.constitutivelaw.CompositeUD.get_engineering_constants</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_stress_from_strain.html">fedoo.constitutivelaw.CompositeUD.get_stress_from_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.get_tangent_matrix.html">fedoo.constitutivelaw.CompositeUD.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.initialize.html">fedoo.constitutivelaw.CompositeUD.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.local2global_H.html">fedoo.constitutivelaw.CompositeUD.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.reset.html">fedoo.constitutivelaw.CompositeUD.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.set_start.html">fedoo.constitutivelaw.CompositeUD.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.to_start.html">fedoo.constitutivelaw.CompositeUD.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.update.html">fedoo.constitutivelaw.CompositeUD.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CompositeUD.name.html">fedoo.constitutivelaw.CompositeUD.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.html">fedoo.constitutivelaw.ElastoPlasticity</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.ComputeStress.html">fedoo.constitutivelaw.ElastoPlasticity.ComputeStress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.GetHelas.html">fedoo.constitutivelaw.ElastoPlasticity.GetHelas</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.GetPlasticity.html">fedoo.constitutivelaw.ElastoPlasticity.GetPlasticity</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.GetPoissonRatio.html">fedoo.constitutivelaw.ElastoPlasticity.GetPoissonRatio</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.GetYieldStress.html">fedoo.constitutivelaw.ElastoPlasticity.GetYieldStress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.GetYoungModulus.html">fedoo.constitutivelaw.ElastoPlasticity.GetYoungModulus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.HardeningFunction.html">fedoo.constitutivelaw.ElastoPlasticity.HardeningFunction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.HardeningFunctionDerivative.html">fedoo.constitutivelaw.ElastoPlasticity.HardeningFunctionDerivative</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.NewTimeIncrement.html">fedoo.constitutivelaw.ElastoPlasticity.NewTimeIncrement</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.SetHardeningFunction.html">fedoo.constitutivelaw.ElastoPlasticity.SetHardeningFunction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.SetNewtonRaphsonTolerance.html">fedoo.constitutivelaw.ElastoPlasticity.SetNewtonRaphsonTolerance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.YieldFunction.html">fedoo.constitutivelaw.ElastoPlasticity.YieldFunction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.YieldFunctionDerivativeSigma.html">fedoo.constitutivelaw.ElastoPlasticity.YieldFunctionDerivativeSigma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.copy.html">fedoo.constitutivelaw.ElastoPlasticity.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_H_plane_stress.html">fedoo.constitutivelaw.ElastoPlasticity.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_all.html">fedoo.constitutivelaw.ElastoPlasticity.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_cauchy.html">fedoo.constitutivelaw.ElastoPlasticity.get_cauchy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_disp_grad.html">fedoo.constitutivelaw.ElastoPlasticity.get_disp_grad</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_pk2.html">fedoo.constitutivelaw.ElastoPlasticity.get_pk2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_strain.html">fedoo.constitutivelaw.ElastoPlasticity.get_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_stress.html">fedoo.constitutivelaw.ElastoPlasticity.get_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.get_tangent_matrix.html">fedoo.constitutivelaw.ElastoPlasticity.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.initialize.html">fedoo.constitutivelaw.ElastoPlasticity.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.local2global_H.html">fedoo.constitutivelaw.ElastoPlasticity.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.reset.html">fedoo.constitutivelaw.ElastoPlasticity.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.set_start.html">fedoo.constitutivelaw.ElastoPlasticity.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.to_start.html">fedoo.constitutivelaw.ElastoPlasticity.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.update.html">fedoo.constitutivelaw.ElastoPlasticity.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ElastoPlasticity.name.html">fedoo.constitutivelaw.ElastoPlasticity.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.FE2.html">fedoo.constitutivelaw.FE2</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.NewTimeIncrement.html">fedoo.constitutivelaw.FE2.NewTimeIncrement</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.copy.html">fedoo.constitutivelaw.FE2.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_H_plane_stress.html">fedoo.constitutivelaw.FE2.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_all.html">fedoo.constitutivelaw.FE2.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_disp_grad.html">fedoo.constitutivelaw.FE2.get_disp_grad</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_pk2.html">fedoo.constitutivelaw.FE2.get_pk2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_strain.html">fedoo.constitutivelaw.FE2.get_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_stress.html">fedoo.constitutivelaw.FE2.get_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_tangent_matrix.html">fedoo.constitutivelaw.FE2.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.get_wm.html">fedoo.constitutivelaw.FE2.get_wm</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.initialize.html">fedoo.constitutivelaw.FE2.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.local2global_H.html">fedoo.constitutivelaw.FE2.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.reset.html">fedoo.constitutivelaw.FE2.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.set_start.html">fedoo.constitutivelaw.FE2.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.to_start.html">fedoo.constitutivelaw.FE2.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.update.html">fedoo.constitutivelaw.FE2.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.FE2.name.html">fedoo.constitutivelaw.FE2.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.html">fedoo.constitutivelaw.Simcoon</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.copy.html">fedoo.constitutivelaw.Simcoon.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.get_H_plane_stress.html">fedoo.constitutivelaw.Simcoon.get_H_plane_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.get_all.html">fedoo.constitutivelaw.Simcoon.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.get_tangent_matrix.html">fedoo.constitutivelaw.Simcoon.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.initialize.html">fedoo.constitutivelaw.Simcoon.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.local2global_H.html">fedoo.constitutivelaw.Simcoon.local2global_H</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.reset.html">fedoo.constitutivelaw.Simcoon.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.set_start.html">fedoo.constitutivelaw.Simcoon.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.to_start.html">fedoo.constitutivelaw.Simcoon.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.update.html">fedoo.constitutivelaw.Simcoon.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Simcoon.name.html">fedoo.constitutivelaw.Simcoon.name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="reference internal" href="../ConstitutiveLaw.html#interface-mechanical-constitutive-laws">Interface mechanical constitutive laws</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.html">fedoo.constitutivelaw.CohesiveLaw</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress.html">fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.GetK.html">fedoo.constitutivelaw.CohesiveLaw.GetK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.GetRelativeDisp.html">fedoo.constitutivelaw.CohesiveLaw.GetRelativeDisp</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.NewTimeIncrement.html">fedoo.constitutivelaw.CohesiveLaw.NewTimeIncrement</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.copy.html">fedoo.constitutivelaw.CohesiveLaw.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.get_DamageVariable.html">fedoo.constitutivelaw.CohesiveLaw.get_DamageVariable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.get_all.html">fedoo.constitutivelaw.CohesiveLaw.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.get_tangent_matrix.html">fedoo.constitutivelaw.CohesiveLaw.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.initialize.html">fedoo.constitutivelaw.CohesiveLaw.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.reset.html">fedoo.constitutivelaw.CohesiveLaw.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.set_DamageVariable.html">fedoo.constitutivelaw.CohesiveLaw.set_DamageVariable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.set_start.html">fedoo.constitutivelaw.CohesiveLaw.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.to_start.html">fedoo.constitutivelaw.CohesiveLaw.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.update.html">fedoo.constitutivelaw.CohesiveLaw.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.updateDamageVariable.html">fedoo.constitutivelaw.CohesiveLaw.updateDamageVariable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.updateIrreversibleDamage.html">fedoo.constitutivelaw.CohesiveLaw.updateIrreversibleDamage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.CohesiveLaw.name.html">fedoo.constitutivelaw.CohesiveLaw.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.Spring.html">fedoo.constitutivelaw.Spring</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.ComputeInterfaceStress.html">fedoo.constitutivelaw.Spring.ComputeInterfaceStress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.GetInterfaceStress.html">fedoo.constitutivelaw.Spring.GetInterfaceStress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.GetK.html">fedoo.constitutivelaw.Spring.GetK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.GetRelativeDisp.html">fedoo.constitutivelaw.Spring.GetRelativeDisp</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.copy.html">fedoo.constitutivelaw.Spring.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.get_all.html">fedoo.constitutivelaw.Spring.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.get_tangent_matrix.html">fedoo.constitutivelaw.Spring.get_tangent_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.initialize.html">fedoo.constitutivelaw.Spring.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.reset.html">fedoo.constitutivelaw.Spring.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.set_start.html">fedoo.constitutivelaw.Spring.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.to_start.html">fedoo.constitutivelaw.Spring.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.update.html">fedoo.constitutivelaw.Spring.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.Spring.name.html">fedoo.constitutivelaw.Spring.name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../ConstitutiveLaw.html#shell-constitutive-laws">Shell constitutive laws</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.html">fedoo.constitutivelaw.ShellLaminate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix.html">fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix_FI.html">fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix_FI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix_RI.html">fedoo.constitutivelaw.ShellLaminate.GetShellRigidityMatrix_RI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.GetStressDistribution.html">fedoo.constitutivelaw.ShellLaminate.GetStressDistribution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.GetThickness.html">fedoo.constitutivelaw.ShellLaminate.GetThickness</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.Get_k.html">fedoo.constitutivelaw.ShellLaminate.Get_k</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.copy.html">fedoo.constitutivelaw.ShellLaminate.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.find_layer.html">fedoo.constitutivelaw.ShellLaminate.find_layer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.get_all.html">fedoo.constitutivelaw.ShellLaminate.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.get_strain.html">fedoo.constitutivelaw.ShellLaminate.get_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.get_stress.html">fedoo.constitutivelaw.ShellLaminate.get_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.initialize.html">fedoo.constitutivelaw.ShellLaminate.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.reset.html">fedoo.constitutivelaw.ShellLaminate.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.set_start.html">fedoo.constitutivelaw.ShellLaminate.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.to_start.html">fedoo.constitutivelaw.ShellLaminate.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.update.html">fedoo.constitutivelaw.ShellLaminate.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellLaminate.name.html">fedoo.constitutivelaw.ShellLaminate.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.html">fedoo.constitutivelaw.ShellHomogeneous</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetMaterial.html">fedoo.constitutivelaw.ShellHomogeneous.GetMaterial</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix.html">fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix_FI.html">fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix_FI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix_RI.html">fedoo.constitutivelaw.ShellHomogeneous.GetShellRigidityMatrix_RI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetStressDistribution.html">fedoo.constitutivelaw.ShellHomogeneous.GetStressDistribution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.GetThickness.html">fedoo.constitutivelaw.ShellHomogeneous.GetThickness</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.Get_k.html">fedoo.constitutivelaw.ShellHomogeneous.Get_k</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.copy.html">fedoo.constitutivelaw.ShellHomogeneous.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.get_all.html">fedoo.constitutivelaw.ShellHomogeneous.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.get_strain.html">fedoo.constitutivelaw.ShellHomogeneous.get_strain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.get_stress.html">fedoo.constitutivelaw.ShellHomogeneous.get_stress</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.initialize.html">fedoo.constitutivelaw.ShellHomogeneous.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.reset.html">fedoo.constitutivelaw.ShellHomogeneous.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.set_start.html">fedoo.constitutivelaw.ShellHomogeneous.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.to_start.html">fedoo.constitutivelaw.ShellHomogeneous.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.update.html">fedoo.constitutivelaw.ShellHomogeneous.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ShellHomogeneous.name.html">fedoo.constitutivelaw.ShellHomogeneous.name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../ConstitutiveLaw.html#thermal-constitutive-law">Thermal constitutive law</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.html">fedoo.constitutivelaw.ThermalProperties</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.copy.html">fedoo.constitutivelaw.ThermalProperties.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.get_all.html">fedoo.constitutivelaw.ThermalProperties.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.initialize.html">fedoo.constitutivelaw.ThermalProperties.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.reset.html">fedoo.constitutivelaw.ThermalProperties.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.set_start.html">fedoo.constitutivelaw.ThermalProperties.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.to_start.html">fedoo.constitutivelaw.ThermalProperties.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.update.html">fedoo.constitutivelaw.ThermalProperties.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constitutivelaw.ThermalProperties.name.html">fedoo.constitutivelaw.ThermalProperties.name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../WeakForm.html">Weak Formulation (<code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.weakform</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.html">fedoo.weakform.StressEquilibrium</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.copy.html">fedoo.weakform.StressEquilibrium.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.get_all.html">fedoo.weakform.StressEquilibrium.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.get_weak_equation.html">fedoo.weakform.StressEquilibrium.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.initialize.html">fedoo.weakform.StressEquilibrium.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.nvar.html">fedoo.weakform.StressEquilibrium.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.reset.html">fedoo.weakform.StressEquilibrium.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.set_start.html">fedoo.weakform.StressEquilibrium.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.sum.html">fedoo.weakform.StressEquilibrium.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.to_start.html">fedoo.weakform.StressEquilibrium.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.update.html">fedoo.weakform.StressEquilibrium.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.update_2.html">fedoo.weakform.StressEquilibrium.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.corate.html">fedoo.weakform.StressEquilibrium.corate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.name.html">fedoo.weakform.StressEquilibrium.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.space.html">fedoo.weakform.StressEquilibrium.space</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.StressEquilibrium.nlgeom.html">fedoo.weakform.StressEquilibrium.nlgeom</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.html">fedoo.weakform.SteadyHeatEquation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.copy.html">fedoo.weakform.SteadyHeatEquation.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.get_all.html">fedoo.weakform.SteadyHeatEquation.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.get_weak_equation.html">fedoo.weakform.SteadyHeatEquation.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.initialize.html">fedoo.weakform.SteadyHeatEquation.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.nvar.html">fedoo.weakform.SteadyHeatEquation.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.reset.html">fedoo.weakform.SteadyHeatEquation.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.set_start.html">fedoo.weakform.SteadyHeatEquation.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.sum.html">fedoo.weakform.SteadyHeatEquation.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.to_start.html">fedoo.weakform.SteadyHeatEquation.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.update.html">fedoo.weakform.SteadyHeatEquation.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.update_2.html">fedoo.weakform.SteadyHeatEquation.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.name.html">fedoo.weakform.SteadyHeatEquation.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.nlgeom.html">fedoo.weakform.SteadyHeatEquation.nlgeom</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.SteadyHeatEquation.space.html">fedoo.weakform.SteadyHeatEquation.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.HeatEquation.html">fedoo.weakform.HeatEquation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.html">fedoo.weakform.BeamEquilibrium</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.GetGeneralizedStress.html">fedoo.weakform.BeamEquilibrium.GetGeneralizedStress</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.copy.html">fedoo.weakform.BeamEquilibrium.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.get_all.html">fedoo.weakform.BeamEquilibrium.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.get_weak_equation.html">fedoo.weakform.BeamEquilibrium.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.initialize.html">fedoo.weakform.BeamEquilibrium.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.nvar.html">fedoo.weakform.BeamEquilibrium.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.reset.html">fedoo.weakform.BeamEquilibrium.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.set_start.html">fedoo.weakform.BeamEquilibrium.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.sum.html">fedoo.weakform.BeamEquilibrium.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.to_start.html">fedoo.weakform.BeamEquilibrium.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.update.html">fedoo.weakform.BeamEquilibrium.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.update_2.html">fedoo.weakform.BeamEquilibrium.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.name.html">fedoo.weakform.BeamEquilibrium.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.BeamEquilibrium.space.html">fedoo.weakform.BeamEquilibrium.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.PlateEquilibrium.html">fedoo.weakform.PlateEquilibrium</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.html">fedoo.weakform.PlateEquilibriumFI</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.GetGeneralizedStrainOperator.html">fedoo.weakform.PlateEquilibriumFI.GetGeneralizedStrainOperator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.copy.html">fedoo.weakform.PlateEquilibriumFI.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.get_all.html">fedoo.weakform.PlateEquilibriumFI.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.get_weak_equation.html">fedoo.weakform.PlateEquilibriumFI.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.initialize.html">fedoo.weakform.PlateEquilibriumFI.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.nvar.html">fedoo.weakform.PlateEquilibriumFI.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.reset.html">fedoo.weakform.PlateEquilibriumFI.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.set_start.html">fedoo.weakform.PlateEquilibriumFI.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.sum.html">fedoo.weakform.PlateEquilibriumFI.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.to_start.html">fedoo.weakform.PlateEquilibriumFI.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.update.html">fedoo.weakform.PlateEquilibriumFI.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.update_2.html">fedoo.weakform.PlateEquilibriumFI.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.name.html">fedoo.weakform.PlateEquilibriumFI.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumFI.space.html">fedoo.weakform.PlateEquilibriumFI.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.PlateEquilibriumSI.html">fedoo.weakform.PlateEquilibriumSI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.Inertia.html">fedoo.weakform.Inertia</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.copy.html">fedoo.weakform.Inertia.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.get_all.html">fedoo.weakform.Inertia.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.get_weak_equation.html">fedoo.weakform.Inertia.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.initialize.html">fedoo.weakform.Inertia.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.nvar.html">fedoo.weakform.Inertia.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.reset.html">fedoo.weakform.Inertia.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.set_start.html">fedoo.weakform.Inertia.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.sum.html">fedoo.weakform.Inertia.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.to_start.html">fedoo.weakform.Inertia.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.update.html">fedoo.weakform.Inertia.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.update_2.html">fedoo.weakform.Inertia.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.name.html">fedoo.weakform.Inertia.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.Inertia.space.html">fedoo.weakform.Inertia.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.weakform.InterfaceForce.html">fedoo.weakform.InterfaceForce</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.NewTimeIncrement.html">fedoo.weakform.InterfaceForce.NewTimeIncrement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.copy.html">fedoo.weakform.InterfaceForce.copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.get_all.html">fedoo.weakform.InterfaceForce.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.get_weak_equation.html">fedoo.weakform.InterfaceForce.get_weak_equation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.initialize.html">fedoo.weakform.InterfaceForce.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.nvar.html">fedoo.weakform.InterfaceForce.nvar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.reset.html">fedoo.weakform.InterfaceForce.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.set_start.html">fedoo.weakform.InterfaceForce.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.sum.html">fedoo.weakform.InterfaceForce.sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.to_start.html">fedoo.weakform.InterfaceForce.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.update.html">fedoo.weakform.InterfaceForce.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.updateInitialStress.html">fedoo.weakform.InterfaceForce.updateInitialStress</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.update_2.html">fedoo.weakform.InterfaceForce.update_2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.name.html">fedoo.weakform.InterfaceForce.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.weakform.InterfaceForce.space.html">fedoo.weakform.InterfaceForce.space</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Assembly.html">Class Assembly</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Problem.html">Problem (<code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.problem</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.problem.Linear.html">fedoo.problem.Linear</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.GetElasticEnergy.html">fedoo.problem.Linear.GetElasticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.GetNodalElasticEnergy.html">fedoo.problem.Linear.GetNodalElasticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.add_output.html">fedoo.problem.Linear.add_output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.apply_boundary_conditions.html">fedoo.problem.Linear.apply_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.change_assembly.html">fedoo.problem.Linear.change_assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_A.html">fedoo.problem.Linear.get_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_B.html">fedoo.problem.Linear.get_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_D.html">fedoo.problem.Linear.get_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_X.html">fedoo.problem.Linear.get_X</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_active.html">fedoo.problem.Linear.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_all.html">fedoo.problem.Linear.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_disp.html">fedoo.problem.Linear.get_disp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_dof_solution.html">fedoo.problem.Linear.get_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_ext_forces.html">fedoo.problem.Linear.get_ext_forces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_results.html">fedoo.problem.Linear.get_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.get_rot.html">fedoo.problem.Linear.get_rot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.init_bc_start_value.html">fedoo.problem.Linear.init_bc_start_value</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.make_active.html">fedoo.problem.Linear.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.reset.html">fedoo.problem.Linear.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.save_results.html">fedoo.problem.Linear.save_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_A.html">fedoo.problem.Linear.set_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_B.html">fedoo.problem.Linear.set_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_D.html">fedoo.problem.Linear.set_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_active.html">fedoo.problem.Linear.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_dof_solution.html">fedoo.problem.Linear.set_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.set_solver.html">fedoo.problem.Linear.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.solve.html">fedoo.problem.Linear.solve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.update.html">fedoo.problem.Linear.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.update_boundary_conditions.html">fedoo.problem.Linear.update_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.active.html">fedoo.problem.Linear.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.assembly.html">fedoo.problem.Linear.assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.n_dof.html">fedoo.problem.Linear.n_dof</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.name.html">fedoo.problem.Linear.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.results.html">fedoo.problem.Linear.results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.solver.html">fedoo.problem.Linear.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Linear.space.html">fedoo.problem.Linear.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.problem.NonLinear.html">fedoo.problem.NonLinear</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.NewtonRaphsonError.html">fedoo.problem.NonLinear.NewtonRaphsonError</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.NewtonRaphsonIncrement.html">fedoo.problem.NonLinear.NewtonRaphsonIncrement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.add_output.html">fedoo.problem.NonLinear.add_output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.apply_boundary_conditions.html">fedoo.problem.NonLinear.apply_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.change_assembly.html">fedoo.problem.NonLinear.change_assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.elastic_prediction.html">fedoo.problem.NonLinear.elastic_prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_A.html">fedoo.problem.NonLinear.get_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_B.html">fedoo.problem.NonLinear.get_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_D.html">fedoo.problem.NonLinear.get_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_X.html">fedoo.problem.NonLinear.get_X</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_active.html">fedoo.problem.NonLinear.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_all.html">fedoo.problem.NonLinear.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_disp.html">fedoo.problem.NonLinear.get_disp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_dof_solution.html">fedoo.problem.NonLinear.get_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_ext_forces.html">fedoo.problem.NonLinear.get_ext_forces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_results.html">fedoo.problem.NonLinear.get_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_rot.html">fedoo.problem.NonLinear.get_rot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.get_temp.html">fedoo.problem.NonLinear.get_temp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.init_bc_start_value.html">fedoo.problem.NonLinear.init_bc_start_value</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.initialize.html">fedoo.problem.NonLinear.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.make_active.html">fedoo.problem.NonLinear.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.nlsolve.html">fedoo.problem.NonLinear.nlsolve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.reset.html">fedoo.problem.NonLinear.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.save_results.html">fedoo.problem.NonLinear.save_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_A.html">fedoo.problem.NonLinear.set_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_B.html">fedoo.problem.NonLinear.set_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_D.html">fedoo.problem.NonLinear.set_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_active.html">fedoo.problem.NonLinear.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_dof_solution.html">fedoo.problem.NonLinear.set_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_nr_criterion.html">fedoo.problem.NonLinear.set_nr_criterion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_solver.html">fedoo.problem.NonLinear.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.set_start.html">fedoo.problem.NonLinear.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.solve.html">fedoo.problem.NonLinear.solve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.solve_time_increment.html">fedoo.problem.NonLinear.solve_time_increment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.to_start.html">fedoo.problem.NonLinear.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.update.html">fedoo.problem.NonLinear.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.updateA.html">fedoo.problem.NonLinear.updateA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.updateD.html">fedoo.problem.NonLinear.updateD</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.update_boundary_conditions.html">fedoo.problem.NonLinear.update_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.active.html">fedoo.problem.NonLinear.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.assembly.html">fedoo.problem.NonLinear.assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.n_dof.html">fedoo.problem.NonLinear.n_dof</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.name.html">fedoo.problem.NonLinear.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.results.html">fedoo.problem.NonLinear.results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.solver.html">fedoo.problem.NonLinear.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinear.space.html">fedoo.problem.NonLinear.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.problem.Newmark.html">fedoo.problem.Newmark</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.GetElasticEnergy.html">fedoo.problem.Newmark.GetElasticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.GetExternalForceWork.html">fedoo.problem.Newmark.GetExternalForceWork</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.GetKineticEnergy.html">fedoo.problem.Newmark.GetKineticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.GetNodalElasticEnergy.html">fedoo.problem.Newmark.GetNodalElasticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.GetVelocity.html">fedoo.problem.Newmark.GetVelocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.SetInitialAcceleration.html">fedoo.problem.Newmark.SetInitialAcceleration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.SetInitialDisplacement.html">fedoo.problem.Newmark.SetInitialDisplacement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.SetInitialVelocity.html">fedoo.problem.Newmark.SetInitialVelocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.SetRayleighDamping.html">fedoo.problem.Newmark.SetRayleighDamping</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.add_output.html">fedoo.problem.Newmark.add_output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.apply_boundary_conditions.html">fedoo.problem.Newmark.apply_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_A.html">fedoo.problem.Newmark.get_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_Acceleration.html">fedoo.problem.Newmark.get_Acceleration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_B.html">fedoo.problem.Newmark.get_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_D.html">fedoo.problem.Newmark.get_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_DampingPower.html">fedoo.problem.Newmark.get_DampingPower</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_X.html">fedoo.problem.Newmark.get_X</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_Xdot.html">fedoo.problem.Newmark.get_Xdot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_Xdotdot.html">fedoo.problem.Newmark.get_Xdotdot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_active.html">fedoo.problem.Newmark.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_all.html">fedoo.problem.Newmark.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_disp.html">fedoo.problem.Newmark.get_disp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_dof_solution.html">fedoo.problem.Newmark.get_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_ext_forces.html">fedoo.problem.Newmark.get_ext_forces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.get_results.html">fedoo.problem.Newmark.get_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.init_bc_start_value.html">fedoo.problem.Newmark.init_bc_start_value</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.initialize.html">fedoo.problem.Newmark.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.make_active.html">fedoo.problem.Newmark.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.save_results.html">fedoo.problem.Newmark.save_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_A.html">fedoo.problem.Newmark.set_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_B.html">fedoo.problem.Newmark.set_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_D.html">fedoo.problem.Newmark.set_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_active.html">fedoo.problem.Newmark.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_dof_solution.html">fedoo.problem.Newmark.set_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.set_solver.html">fedoo.problem.Newmark.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.solve.html">fedoo.problem.Newmark.solve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.update.html">fedoo.problem.Newmark.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.updateStiffness.html">fedoo.problem.Newmark.updateStiffness</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.update_boundary_conditions.html">fedoo.problem.Newmark.update_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.active.html">fedoo.problem.Newmark.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.n_dof.html">fedoo.problem.Newmark.n_dof</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.name.html">fedoo.problem.Newmark.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.results.html">fedoo.problem.Newmark.results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.solver.html">fedoo.problem.Newmark.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.Newmark.space.html">fedoo.problem.Newmark.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.html">fedoo.problem.NonLinearNewmark</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.GetVelocity.html">fedoo.problem.NonLinearNewmark.GetVelocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.NewtonRaphsonError.html">fedoo.problem.NonLinearNewmark.NewtonRaphsonError</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.NewtonRaphsonIncrement.html">fedoo.problem.NonLinearNewmark.NewtonRaphsonIncrement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.SetInitialAcceleration.html">fedoo.problem.NonLinearNewmark.SetInitialAcceleration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.SetInitialDisplacement.html">fedoo.problem.NonLinearNewmark.SetInitialDisplacement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.SetInitialVelocity.html">fedoo.problem.NonLinearNewmark.SetInitialVelocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.SetRayleighDamping.html">fedoo.problem.NonLinearNewmark.SetRayleighDamping</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.add_output.html">fedoo.problem.NonLinearNewmark.add_output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.apply_boundary_conditions.html">fedoo.problem.NonLinearNewmark.apply_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.change_assembly.html">fedoo.problem.NonLinearNewmark.change_assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.elastic_prediction.html">fedoo.problem.NonLinearNewmark.elastic_prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_A.html">fedoo.problem.NonLinearNewmark.get_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_Acceleration.html">fedoo.problem.NonLinearNewmark.get_Acceleration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_Assembly.html">fedoo.problem.NonLinearNewmark.get_Assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_B.html">fedoo.problem.NonLinearNewmark.get_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_D.html">fedoo.problem.NonLinearNewmark.get_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_X.html">fedoo.problem.NonLinearNewmark.get_X</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_active.html">fedoo.problem.NonLinearNewmark.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_all.html">fedoo.problem.NonLinearNewmark.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_disp.html">fedoo.problem.NonLinearNewmark.get_disp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_dof_solution.html">fedoo.problem.NonLinearNewmark.get_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_ext_forces.html">fedoo.problem.NonLinearNewmark.get_ext_forces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_results.html">fedoo.problem.NonLinearNewmark.get_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_rot.html">fedoo.problem.NonLinearNewmark.get_rot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.get_temp.html">fedoo.problem.NonLinearNewmark.get_temp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.init_bc_start_value.html">fedoo.problem.NonLinearNewmark.init_bc_start_value</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.initialize.html">fedoo.problem.NonLinearNewmark.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.make_active.html">fedoo.problem.NonLinearNewmark.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.nlsolve.html">fedoo.problem.NonLinearNewmark.nlsolve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.reset.html">fedoo.problem.NonLinearNewmark.reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.save_results.html">fedoo.problem.NonLinearNewmark.save_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_A.html">fedoo.problem.NonLinearNewmark.set_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_B.html">fedoo.problem.NonLinearNewmark.set_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_D.html">fedoo.problem.NonLinearNewmark.set_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_active.html">fedoo.problem.NonLinearNewmark.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_dof_solution.html">fedoo.problem.NonLinearNewmark.set_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_nr_criterion.html">fedoo.problem.NonLinearNewmark.set_nr_criterion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_solver.html">fedoo.problem.NonLinearNewmark.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.set_start.html">fedoo.problem.NonLinearNewmark.set_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.solve.html">fedoo.problem.NonLinearNewmark.solve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.solve_time_increment.html">fedoo.problem.NonLinearNewmark.solve_time_increment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.to_start.html">fedoo.problem.NonLinearNewmark.to_start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.update.html">fedoo.problem.NonLinearNewmark.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.updateA.html">fedoo.problem.NonLinearNewmark.updateA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.updateD.html">fedoo.problem.NonLinearNewmark.updateD</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.update_boundary_conditions.html">fedoo.problem.NonLinearNewmark.update_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.active.html">fedoo.problem.NonLinearNewmark.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.assembly.html">fedoo.problem.NonLinearNewmark.assembly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.n_dof.html">fedoo.problem.NonLinearNewmark.n_dof</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.name.html">fedoo.problem.NonLinearNewmark.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.results.html">fedoo.problem.NonLinearNewmark.results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.solver.html">fedoo.problem.NonLinearNewmark.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.NonLinearNewmark.space.html">fedoo.problem.NonLinearNewmark.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.html">fedoo.problem.ExplicitDynamic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.GetElasticEnergy.html">fedoo.problem.ExplicitDynamic.GetElasticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.GetKineticEnergy.html">fedoo.problem.ExplicitDynamic.GetKineticEnergy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.MassLumping.html">fedoo.problem.ExplicitDynamic.MassLumping</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetInitialAcceleration.html">fedoo.problem.ExplicitDynamic.SetInitialAcceleration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetInitialDisplacement.html">fedoo.problem.ExplicitDynamic.SetInitialDisplacement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetInitialVelocity.html">fedoo.problem.ExplicitDynamic.SetInitialVelocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetMassMatrix.html">fedoo.problem.ExplicitDynamic.SetMassMatrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetRayleighDamping.html">fedoo.problem.ExplicitDynamic.SetRayleighDamping</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.SetStiffnessMatrix.html">fedoo.problem.ExplicitDynamic.SetStiffnessMatrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.add_output.html">fedoo.problem.ExplicitDynamic.add_output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.apply_boundary_conditions.html">fedoo.problem.ExplicitDynamic.apply_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_A.html">fedoo.problem.ExplicitDynamic.get_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_B.html">fedoo.problem.ExplicitDynamic.get_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_D.html">fedoo.problem.ExplicitDynamic.get_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_DampingPower.html">fedoo.problem.ExplicitDynamic.get_DampingPower</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_X.html">fedoo.problem.ExplicitDynamic.get_X</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_Xdot.html">fedoo.problem.ExplicitDynamic.get_Xdot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_active.html">fedoo.problem.ExplicitDynamic.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_all.html">fedoo.problem.ExplicitDynamic.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_dof_solution.html">fedoo.problem.ExplicitDynamic.get_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_ext_forces.html">fedoo.problem.ExplicitDynamic.get_ext_forces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.get_results.html">fedoo.problem.ExplicitDynamic.get_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.init_bc_start_value.html">fedoo.problem.ExplicitDynamic.init_bc_start_value</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.initialize.html">fedoo.problem.ExplicitDynamic.initialize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.make_active.html">fedoo.problem.ExplicitDynamic.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.save_results.html">fedoo.problem.ExplicitDynamic.save_results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_A.html">fedoo.problem.ExplicitDynamic.set_A</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_B.html">fedoo.problem.ExplicitDynamic.set_B</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_D.html">fedoo.problem.ExplicitDynamic.set_D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_active.html">fedoo.problem.ExplicitDynamic.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_dof_solution.html">fedoo.problem.ExplicitDynamic.set_dof_solution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.set_solver.html">fedoo.problem.ExplicitDynamic.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.solve.html">fedoo.problem.ExplicitDynamic.solve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.update.html">fedoo.problem.ExplicitDynamic.update</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.updateStiffness.html">fedoo.problem.ExplicitDynamic.updateStiffness</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.update_boundary_conditions.html">fedoo.problem.ExplicitDynamic.update_boundary_conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.active.html">fedoo.problem.ExplicitDynamic.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.n_dof.html">fedoo.problem.ExplicitDynamic.n_dof</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.name.html">fedoo.problem.ExplicitDynamic.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.results.html">fedoo.problem.ExplicitDynamic.results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.solver.html">fedoo.problem.ExplicitDynamic.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.problem.ExplicitDynamic.space.html">fedoo.problem.ExplicitDynamic.space</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fedoo.core.base.ProblemBase.html">fedoo.core.base.ProblemBase</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.get_active.html">fedoo.core.base.ProblemBase.get_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.get_all.html">fedoo.core.base.ProblemBase.get_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.make_active.html">fedoo.core.base.ProblemBase.make_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.set_active.html">fedoo.core.base.ProblemBase.set_active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.set_solver.html">fedoo.core.base.ProblemBase.set_solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.active.html">fedoo.core.base.ProblemBase.active</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.name.html">fedoo.core.base.ProblemBase.name</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.solver.html">fedoo.core.base.ProblemBase.solver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.space.html">fedoo.core.base.ProblemBase.space</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.core.base.ProblemBase.bc.html">fedoo.core.base.ProblemBase.bc</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../boundary_conditions.html">Boundary conditions and constraints</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../boundary_conditions.html#basic-boundary-conditions">Basic boundary conditions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../boundary_conditions.html#dirichlet-and-neumann-boundary-conditions">Dirichlet and Neumann Boundary conditions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../boundary_conditions.html#multi-point-constraints">Multi Point Constraints</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MPC.html">fedoo.MPC</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../boundary_conditions.html#avdanced-bc-and-constraints">Avdanced BC and constraints</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constraint.PeriodicBC.html">fedoo.constraint.PeriodicBC</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.PeriodicBC.generate.html">fedoo.constraint.PeriodicBC.generate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.PeriodicBC.get_all.html">fedoo.constraint.PeriodicBC.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.PeriodicBC.initialize.html">fedoo.constraint.PeriodicBC.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.PeriodicBC.str_condensed.html">fedoo.constraint.PeriodicBC.str_condensed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.PeriodicBC.name.html">fedoo.constraint.PeriodicBC.name</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constraint.RigidTie.html">fedoo.constraint.RigidTie</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.RigidTie.generate.html">fedoo.constraint.RigidTie.generate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.RigidTie.get_all.html">fedoo.constraint.RigidTie.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.RigidTie.initialize.html">fedoo.constraint.RigidTie.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.RigidTie.str_condensed.html">fedoo.constraint.RigidTie.str_condensed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.RigidTie.name.html">fedoo.constraint.RigidTie.name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../boundary_conditions.html#contact">Contact</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constraint.Contact.html">fedoo.constraint.Contact</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.assemble_global_mat.html">fedoo.constraint.Contact.assemble_global_mat</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.bilinear_law.html">fedoo.constraint.Contact.bilinear_law</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.contact_search.html">fedoo.constraint.Contact.contact_search</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.delete_global_mat.html">fedoo.constraint.Contact.delete_global_mat</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.find_nearest_neighbors.html">fedoo.constraint.Contact.find_nearest_neighbors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.get_all.html">fedoo.constraint.Contact.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.get_global_matrix.html">fedoo.constraint.Contact.get_global_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.get_global_vector.html">fedoo.constraint.Contact.get_global_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.initialize.html">fedoo.constraint.Contact.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.linear_law.html">fedoo.constraint.Contact.linear_law</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.reset.html">fedoo.constraint.Contact.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.set_disp.html">fedoo.constraint.Contact.set_disp</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.set_start.html">fedoo.constraint.Contact.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.to_start.html">fedoo.constraint.Contact.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.update.html">fedoo.constraint.Contact.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.name.html">fedoo.constraint.Contact.name</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.space.html">fedoo.constraint.Contact.space</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.eps_a.html">fedoo.constraint.Contact.eps_a</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.eps_n.html">fedoo.constraint.Contact.eps_n</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.max_dist.html">fedoo.constraint.Contact.max_dist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.clearance.html">fedoo.constraint.Contact.clearance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.tol.html">fedoo.constraint.Contact.tol</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.contact_search_once.html">fedoo.constraint.Contact.contact_search_once</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.limit_soft_contact.html">fedoo.constraint.Contact.limit_soft_contact</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.Contact.sv.html">fedoo.constraint.Contact.sv</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fedoo.constraint.SelfContact.html">fedoo.constraint.SelfContact</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.assemble_global_mat.html">fedoo.constraint.SelfContact.assemble_global_mat</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.bilinear_law.html">fedoo.constraint.SelfContact.bilinear_law</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.contact_search.html">fedoo.constraint.SelfContact.contact_search</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.delete_global_mat.html">fedoo.constraint.SelfContact.delete_global_mat</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.find_nearest_neighbors.html">fedoo.constraint.SelfContact.find_nearest_neighbors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.get_all.html">fedoo.constraint.SelfContact.get_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.get_global_matrix.html">fedoo.constraint.SelfContact.get_global_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.get_global_vector.html">fedoo.constraint.SelfContact.get_global_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.initialize.html">fedoo.constraint.SelfContact.initialize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.linear_law.html">fedoo.constraint.SelfContact.linear_law</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.reset.html">fedoo.constraint.SelfContact.reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.set_disp.html">fedoo.constraint.SelfContact.set_disp</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.set_start.html">fedoo.constraint.SelfContact.set_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.to_start.html">fedoo.constraint.SelfContact.to_start</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.update.html">fedoo.constraint.SelfContact.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.name.html">fedoo.constraint.SelfContact.name</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.constraint.SelfContact.space.html">fedoo.constraint.SelfContact.space</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../post-treatment.html">Post-Treatment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../post-treatment.html#get-results-from-a-problem">Get results from a problem</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#class-dataset">Class DataSet</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.html">fedoo.DataSet</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#class-multiframedataset">Class MultiFrameDataSet</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.html">fedoo.MultiFrameDataSet</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../post-treatment.html#basic-operations">Basic operations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#plotting-results">Plotting results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.plot.html">fedoo.DataSet.plot</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.plot.html">fedoo.MultiFrameDataSet.plot</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.plot_history.html">fedoo.MultiFrameDataSet.plot_history</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.write_movie.html">fedoo.MultiFrameDataSet.write_movie</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#save-results">Save results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.save.html">fedoo.DataSet.save</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.savez.html">fedoo.DataSet.savez</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.savez_compressed.html">fedoo.DataSet.savez_compressed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.save_mesh.html">fedoo.DataSet.save_mesh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.to_csv.html">fedoo.DataSet.to_csv</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.to_excel.html">fedoo.DataSet.to_excel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.to_vtk.html">fedoo.DataSet.to_vtk</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.to_msh.html">fedoo.DataSet.to_msh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.save_all.html">fedoo.MultiFrameDataSet.save_all</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#read-results">Read results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.read_data.html">fedoo.read_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.read.html">fedoo.DataSet.read</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.DataSet.load.html">fedoo.DataSet.load</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fedoo.MultiFrameDataSet.load.html">fedoo.MultiFrameDataSet.load</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../post-treatment.html#advanced-operations">Advanced operations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../post-treatment.html#multiplot-feature">Multiplot feature</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Examples.html">Simple examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../Examples.html#plate-with-hole-in-tension">Plate with hole in tension</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../heterogeneous.html">Heterogeneous structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../heterogeneous.html#st-method">1st method:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../heterogeneous.html#nd-method">2nd method:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../heterogeneous.html#rd-method">3rd method:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../heterogeneous.html#full-example">Full example:</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #24445C" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FEDOO</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../ConstitutiveLaw.html">Constitutive Law (<code class="xref py py-mod docutils literal notranslate"><span class="pre">fedoo.constitutivelaw</span></code>)</a></li>
+          <li class="breadcrumb-item"><a href="fedoo.constitutivelaw.CohesiveLaw.html">fedoo.constitutivelaw.CohesiveLaw</a></li>
+      <li class="breadcrumb-item active">fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/generated/fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fedoo-constitutivelaw-cohesivelaw-getinterfacestress">
+<h1>fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress<a class="headerlink" href="#fedoo-constitutivelaw-cohesivelaw-getinterfacestress" title="Permalink to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress">
+<span class="sig-prename descclassname"><span class="pre">CohesiveLaw.</span></span><span class="sig-name descname"><span class="pre">GetInterfaceStress</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fedoo.constitutivelaw.CohesiveLaw.GetInterfaceStress" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress.html" class="btn btn-neutral float-left" title="fedoo.constitutivelaw.CohesiveLaw.ComputeInterfaceStress" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fedoo.constitutivelaw.CohesiveLaw.GetK.html" class="btn btn-neutral float-right" title="fedoo.constitutivelaw.CohesiveLaw.GetK" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Etienne Prulière.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

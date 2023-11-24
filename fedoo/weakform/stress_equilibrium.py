@@ -65,18 +65,12 @@ class StressEquilibrium(WeakFormBase):
             
     def get_weak_equation(self, assembly, pb):
         if self.nlgeom == 'TL': #add initial displacement effect 
-            # assert 'DispGradient' in assembly.sv and 'PK2' in assembly.sv, ""
-            # if not(hasattr(self.constitutivelaw, 'get_disp_grad')):
-            #     raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")                        
             eps = self.space.op_strain(assembly.sv['DispGradient'])
             initial_stress = assembly.sv['PK2']
-            # initial_stress = self.constitutivelaw.get_pk2()
         else: 
             eps = self.space.op_strain()
             initial_stress = assembly.sv['Stress'] #Stress = Cauchy for updated lagrangian method
-            # self.constitutivelaw.get_cauchy() #required for updated lagrangian method
         
-        # H = self.constitutivelaw.get_H(self._dimension)
         H = assembly.sv['TangentMatrix']
         
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -85,13 +79,13 @@ class StressEquilibrium(WeakFormBase):
         
         if initial_stress is not 0:   
             if self.nlgeom:  #this term doesnt seem to improve convergence !
-                DiffOp = DiffOp + sum([0 if self.__nl_strain_op_vir[i] is 0 else \
-                                    self.__nl_strain_op_vir[i] * initial_stress[i] for i in range(6)])
+                DiffOp = DiffOp + sum([0 if self._nl_strain_op_vir[i] is 0 else \
+                                    self._nl_strain_op_vir[i] * initial_stress[i] for i in range(6)])
 
             DiffOp = DiffOp + sum([0 if eps[i] is 0 else \
                                     eps[i].virtual * initial_stress[i] for i in range(6)])
 
-        return DiffOp
+        return DiffOp        
 
 
     def initialize(self, assembly, pb):
@@ -122,7 +116,7 @@ class StressEquilibrium(WeakFormBase):
                 nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]            
                 nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
             
-            self.__nl_strain_op_vir = nl_strain_op_vir
+            self._nl_strain_op_vir = nl_strain_op_vir
             
 
     def update(self, assembly, pb):
