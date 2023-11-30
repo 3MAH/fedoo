@@ -10,6 +10,7 @@ from fedoo.core.base import AssemblyBase
 # from fedoo.util.ExportData import ExportData 
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
 import os
+from zipfile import ZipFile, Path
 
 _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
                      'PKII_vm','PK2_vm','Krichoff_vm','Kirchhoff_vm','Cauchy_vm',
@@ -20,7 +21,7 @@ _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
                      'Disp', 'Rot', 'Temp', 'Strain', 'Statev', 'Stress', 'Stress_vm', 'Fext', 
                      'Wm', 'Fint', 'Fint_global']
 
-_available_format = ['vtk', 'msh', 'npz', 'npz_compressed', 'csv', 'xlsx']
+_available_format = ['fdz', 'vtk', 'msh', 'npz', 'npz_compressed', 'csv', 'xlsx']
 
 _label_dict = {'pkii':'PK2',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Stress',
                'pkii_vm':'PK2_vm','pk2_vm':'PK2_vm','kirchoff_vm':'Kirchhoff_vm','kirchhoff_vm':'Kirchhoff_vm','cauchy_vm':'Stress_vm',
@@ -230,16 +231,17 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.data_sets = {}
                 
-    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'npz', position = 1, save_mesh = True):
+    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'fdz', position = 1, save_mesh = True):
         
         dirname = os.path.dirname(filename)        
         # filename = os.path.basename(filename)
-        extension = os.path.splitext(filename)[1]
-        if extension == '': 
-            #if no extention -> create a new dir using filename as dirname
-            dirname = filename+'/'
-            filename = dirname+os.path.basename(filename)
+        extension = os.path.splitext(filename)[1]        
+        if extension == '':
             file_format = file_format.lower()
+            if file_format != 'fdz':                 
+                #if no extention -> create a new dir using filename as dirname
+                dirname = filename+'/'
+                filename = dirname+os.path.basename(filename)
         else: 
             #use extension as file format
             file_format = extension[1:].lower()
@@ -267,14 +269,21 @@ class _ProblemOutput:
                 
         new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)
-        
-        if save_mesh:
-            assemb.mesh.save(filename)
-        
-        # if file_format in ['npz', 'npz_compressed']:
+                        
+        # if file_format in ['npz', 'npz_compressed', 'fdz']:
         if not(filename in self.data_sets):
+            if file_format == 'fdz':
+                file = ZipFile(filename+'.fdz', 'w') #create a new zip file
+                assemb.mesh.save('_mesh_') #create temp '_mesh_.vtk' file            
+                file.write('_mesh_.vtk') #add '_mesh_.vtk' to the zip archive
+                os.remove('_mesh_.vtk') 
+                file.close()
+            elif save_mesh:
+                assemb.mesh.save(filename)
+                
             res = MultiFrameDataSet(assemb.mesh, [])
             self.data_sets[filename] = res
+
         else:
             res = self.data_sets[filename]
         return res
@@ -297,13 +306,12 @@ class _ProblemOutput:
             assemb = output['assembly']
             # material = assemb.weakform.GetConstitutiveLaw()
             
-            if comp_output is None:
-                filename_compl = ""
-            else: 
-                filename_compl = '_' + str(comp_output)
-            
-            if file_format in ['vtk', 'msh', 'npz', 'npz_compressed', 'csv', 'xlsx']:                
-                # filename = filename + filename_compl + '.' + file_format[0:3]
+            if file_format in _available_format: #if not ignored                             
+                if (comp_output is None) or (file_format == 'fdz'):
+                    filename_compl = ""
+                else: 
+                    filename_compl = '_' + str(comp_output)
+                        
                 full_filename = filename + filename_compl + '.' + file_format #filename including iter number and file format
                 
                 if not(full_filename in list_full_filename): 
@@ -317,10 +325,23 @@ class _ProblemOutput:
                     #else, the same file is used   
                     out = list_data[list_full_filename.index(full_filename)]                                                                             
             
-            #compute the results
-            res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)       
-            out.add_data(res)            
+                #compute the results
+                res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)       
+                out.add_data(res)            
         
         for i, out in enumerate(list_data): 
-            out.save(list_full_filename[i])           
-            self.data_sets[list_filename[i]].list_data.append(list_full_filename[i])
+            if list_file_format[i] == 'fdz':     
+                out.save('_mesh_.npz', False)                            
+                file = ZipFile(list_full_filename[i], 'a')
+                if comp_output is None:
+                    iter_name = 'iter_0'+'.npz'
+                else:
+                    iter_name = 'iter_'+str(comp_output)+'.npz'
+                file.write('_mesh_.npz', iter_name)
+                os.remove('_mesh_.npz')
+                file.close()
+                self.data_sets[list_filename[i]].list_data.append(Path(list_full_filename[i], iter_name))
+
+            else:
+                out.save(list_full_filename[i])           
+                self.data_sets[list_filename[i]].list_data.append(list_full_filename[i])

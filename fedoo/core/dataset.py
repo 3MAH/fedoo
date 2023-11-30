@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import os
-from zipfile import ZipFile, ZipExtFile
+from zipfile import ZipFile, Path
 from fedoo.core.mesh import Mesh
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
@@ -487,10 +487,10 @@ class DataSet():
             self.node_data = {k: v.T for k,v in data.point_data.items()}
             self.element_data = {k: v.T for k,v in data.cell_data.items()} 
             if load_mesh: Mesh.from_pyvista(data)
-        elif isinstance(data, ZipExtFile):
+        elif isinstance(data, Path):
             #used to load one iteration in fdz file
-            data = np.load(data)
-            self.load_dict(data)            
+            data = np.load(data.open('rb'))
+            self.load_dict(data)
         elif isinstance(data, str):
             #load from a file
             filename = data
@@ -1182,20 +1182,21 @@ def read_fdz(filename: str):
     if extension == '':         
         filename += '.fdz'
 
-    assert (os.path.isfile(filename), "File not found")
+    assert os.path.isfile(filename), "File not found"
     file = ZipFile(filename, 'r')        
     #pyvista cant read file object. So copy to disk read and remove.
     file.extract('_mesh_.vtk')                        
     mesh = Mesh.read('_mesh_.vtk')
     os.remove('_mesh_.vtk')
+    list_iter = file.namelist()
+    file.close()
       
     dataset = MultiFrameDataSet(mesh)
     i = 0
-    while 'iter_'+str(i)+'.npz' in file.namelist():
-        dataset.list_data.append(file.open('iter_'+str(i)+'.npz'))
+    while 'iter_'+str(i)+'.npz' in list_iter:
+        dataset.list_data.append(Path(filename,'iter_'+str(i)+'.npz'))
         i+=1
     
-    file.close()
     return dataset
 
 def as_3d_coordinates(crd):    

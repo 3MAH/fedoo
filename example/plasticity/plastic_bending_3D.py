@@ -91,7 +91,7 @@ if not(os.path.isdir('results')): os.mkdir('results')
 # res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
 # Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Cauchy', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 # res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])    
-res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm'])    
+res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm'], file_format = 'fdz')    
 
 
 ################### step 1 ################################
@@ -100,7 +100,7 @@ pb.bc.add('Dirichlet',nodes_bottomLeft,'Disp',0)
 pb.bc.add('Dirichlet',nodes_bottomRight,'DispY',0)
 bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
 
-pb.nlsolve(dt = 0.025, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.025, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.05)
 
 E = assemb.sv['Strain'] 
 # E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
