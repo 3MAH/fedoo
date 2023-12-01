@@ -415,7 +415,28 @@ class DataSet():
     
     def save(self, filename: str, save_mesh: bool = False) -> None:        
         """Save data to a file. 
-        File type is inferred from the extension of the filename.                
+        File type is inferred from the extension of the filename.  
+
+        The available file types are:
+            * 'fdz': A zipped archive containing the mesh using the 'vtk' format named '_mesh_.vtk',
+              and data from several iterations named 'iter_x.npz' where x is the iteration number
+              (x=0 for the 1st iteration). 
+            * 'vtk': The vtk format contains the mesh and the data in a single files. The gauss
+              points data are not included in the file. 
+              This format is efficient for a linear problem when we need only one time 
+              iteration. In case of multiple saved iterations, a directory is created and 
+              one vtk file is saved per iteration. The mesh is included in every file 
+              which is not memory efficient.
+            * 'msh': Format associated to gmsh. Have the same drawback as the vtk format for 
+              time depend results and missing gauss points data. The vtk format should be prefered.
+            * 'npz': Save data in a numpy file npz which doesn't include the mesh. The mesh
+              is generally saved beside in a raw vtk files without results. 
+            * 'npz_compressed': Same as npz with a compression of the zip archive.
+            * 'csv': Save DataSet that contains only one type of data 
+              (ie Node, Element or Gauss point data) in a csv file (need the library 
+              pandas installed).
+              The mesh is not included and may be saved beside in a vtk file. 
+            * 'xlsx': Same as csv but with the excel format.                 
         
         Parameters
         ----------
@@ -423,7 +444,7 @@ class DataSet():
             Name of the file including the path.         
         save_mesh : bool (default = False)
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
-            For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
+            For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.          
         """
         name, ext = os.path.splitext(filename)
         ext = ext.lower()
@@ -655,6 +676,13 @@ class DataSet():
                filename: str, 
                save_mesh: bool = False, 
                iteration: int = 0) -> None:
+        """Write a fdz file from the dataset. 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        """
         
         name, ext = os.path.splitext(filename)
         if ext == '': 
@@ -732,24 +760,25 @@ class MultiFrameDataSet(DataSet):
     
     def save_all(self, filename, file_format='fdz'):
         """Save all data from MultiFrameDataSet. 
-        If filename has no extension, a filename dir is created which contains 
-        the data files for each iteration (npz format by default).
-        if filename has an extension, the data files are saved using the given filename and format
-        simply adding the iteration number. 
-        The mesh is also saved in vtk format in the same directory.
+        
+        If filename has no extension, the format is given in the parameter file_format
+        (default = 'fdz'). 
+        If format is not 'fdz', the data files are saved using the given filename and format
+        simply adding the iteration number to the file name. The mesh is also saved in vtk format in the same directory.        
         """
         dirname = os.path.dirname(filename)        
         extension = os.path.splitext(filename)[1]
-        if extension == '': 
-            dirname = filename+'/'
-            filename = dirname+os.path.basename(filename)
+        if extension == '':
             file_format = file_format.lower()
+            if file_format != 'fdz':
+                dirname = filename+'/'
+                filename = dirname+os.path.basename(filename)
         else: 
             #use extension as file format
             file_format = extension[1:].lower()
             filename = os.path.splitext(filename)[0] #remove extension for the base name
-            
-        if dirname and not(os.path.isdir(dirname)): os.mkdir(dirname)
+        
+        if dirname and not(os.path.isdir(dirname)): os.mkdir(dirname)        
         if file_format == 'fdz':
             self.load(0)
             self.to_fdz(filename, True, 0)
@@ -1136,8 +1165,16 @@ class MultiFrameDataSet(DataSet):
         return len(self.list_data)
 
 
-def read_data(filename: str, file_format: str ="npz"):
+def read_data(filename: str, file_format: str ="fdz"):
+    """Read a file from a disk. 
     
+    The file may be a directory containing files from several iterations. 
+    The file format may be specified in the filename extension or using
+    the file_format parameter (default = fdz) if the filename has no extension.
+    
+    Available file format are 'fdz', 'vtk', 'npz' and 'npz_compressed'.
+    For 'npz' and 'npz_compressed' a vtk mesh with the same base name is also searched. 
+    """
     extension = os.path.splitext(filename)[1]
     if extension != '':
         #use extension as file format
@@ -1155,10 +1192,11 @@ def read_data(filename: str, file_format: str ="npz"):
         filename = os.path.splitext(filename)[0] #remove extension for the base name
             
     assert (os.path.isdir(dirname)), "File not found"
-    if os.path.isfile(filename+'.vtk'): 
+    if file_format[:3] == 'npz' and os.path.isfile(filename+'.vtk'): 
         mesh = Mesh.read(filename+'.vtk')
     else: 
         mesh = None    
+        
     if os.path.isfile(filename+'.'+file_format): 
         dataset = DataSet(mesh)
         dataset.load(filename+'.'+file_format)
@@ -1167,7 +1205,9 @@ def read_data(filename: str, file_format: str ="npz"):
     if os.path.isfile(filename+'_0.'+file_format): iter0= 0
     elif os.path.isfile(filename+'_1.'+file_format): iter0= 1
     else: raise NameError("File not found") 
-        
+    
+    if file_format == 'vtk': #read the mesh from the 1st iteration
+        mesh = Mesh.read(filename+'_'+str(iter0)+'.vtk') 
     dataset = MultiFrameDataSet(mesh)
     i = iter0
     while os.path.isfile(filename+'_'+str(i)+'.'+file_format):
@@ -1178,6 +1218,7 @@ def read_data(filename: str, file_format: str ="npz"):
             
 
 def read_fdz(filename: str):
+    """Read a fdz file unto a MultiFrameDataSet file."""
     extension = os.path.splitext(filename)[1]
     if extension == '':         
         filename += '.fdz'

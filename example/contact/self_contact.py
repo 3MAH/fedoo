@@ -123,44 +123,29 @@ print(time()-start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot('Stress',  'Node', component = 'vm', show = True, scale = 1)
-# results.plot('Stress',  'Node', component = 'XX', show = True, scale = 1, show_nodes=True)
-# results.plot('Stress',  'Node', component = 'XX', show = True, scale = 1, show_nodes=True,  node_labels =True)
-# results.plot('Fext',  'Node', component = 'X', show = True, scale = 1, show_nodes=True)
-
-
-# pb.save_results()
-# results.load(-1)
-
+results.plot('Stress', 'vm', 'Node', show = True, scale = 1)
+# results.plot('Stress', 'XX', 'Node', show = True, scale = 1, show_nodes=True)
+# results.plot('Stress', 'XX', 'Node', show = True, scale = 1, show_nodes=True,  node_labels =True)
+# results.plot('Fext', 'X', 'Node', show = True, scale = 1, show_nodes=True)
 
 # ------------------------------------
 # Simple plot with default options and save to png
 # ------------------------------------
-# pl = results.plot('Cauchy_vm', component = 0, show = False)
+# pl = results.plot('Stress', 0, show = False)
 # pl.show(screenshot = "test.png")
 
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-# results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
+# results.write_movie(res_dir+filename, 'Stress', 'vm', framerate = 5, quality = 5)
 
-results.write_movie(res_dir+filename, 'Stress', 'Node', component = 'vm', framerate = 24, quality = 10, clim=[0,1.5e3])
+results.write_movie(res_dir+filename, 'Stress', 'vm', 'Node', framerate = 24, quality = 10, clim=[0,1.5e3])
 
 # ------------------------------------
 # Save pdf plot
 # ------------------------------------
-# pl = results.plot(scalars = 'Cauchy_vm', show = False)
+# pl = results.plot('Stress', 'vm', show = False)
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-# ------------------------------------
-# Plot the automatically saved mesh
-# ------------------------------------
-# pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
-
-# ------------------------------------
-# Write movie with moving camera
-# ------------------------------------
-# results.write_movie(res_dir+filename, 'Cauchy_vm', framerate = 5, quality = 5, rot_azimuth = 3, rot_elevation = 0.5)
 
 # ------------------------------------
 # Plot time history

@@ -20,8 +20,10 @@ dependent problems, one can simply add some required output with the
 :py:meth:`fedoo.Problem.add_output` method. This create a :py:class:`MultiFrameDataSet` object 
 associated to the problem. Once the required outputs are defined for a problem, the 
 :py:meth:`fedoo.Problem.save_results` method allow to save the results at a given iteration
-into the :py:class:`MultiFrameDataSet`. In particular, for non linear problems
-solved using :py:meth:`Problem.nlsolve`, results are
+on disk using the choosent file format. The :py:class:`MultiFrameDataSet` keep the saved file in memory 
+(in the MultiFrameDataSet.list_data attribute) and can read the results for each of the saved 
+iteration. 
+For non linear problems solved using :py:meth:`Problem.nlsolve`, results are
 automatically saved at certain iteration dependending on the choosen parameters.
 
 Class DataSet
@@ -41,6 +43,40 @@ Class MultiFrameDataSet
    :template: custom-class-template.rst
 
    MultiFrameDataSet
+
+Save data to disk
+-----------------------
+
+Once a DataSet is created using for instance the :py:meth:`fedoo.Problem.get_results` method,
+the data can easily be saved on disk using for instance the 
+:py:meth:`fedoo.DataSet.save` method.
+
+The available file types are:
+    * 'fdz': A zipped archive containing the mesh using the 'vtk' format named '_mesh_.vtk',
+      and data from several iterations named 'iter_x.npz' where x is the iteration number
+      (x=0 for the 1st iteration). 
+    * 'vtk': The vtk format contains the mesh and the data in a single files. The gauss
+      points data are not included in the file. 
+      This format is efficient for a linear problem when we need only one time 
+      iteration. In case of multiple saved iterations, a directory is created and 
+      one vtk file is saved per iteration. The mesh is included in every file 
+      which is not memory efficient.
+    * 'msh': Format associated to gmsh. Have the same drawback as the vtk format for 
+      time depend results and missing gauss points data. The vtk format should be prefered.
+    * 'npz': Save data in a numpy file npz which doesn't include the mesh. The mesh
+      is generally saved beside in a raw vtk files without results. 
+    * 'npz_compressed': Same as npz with a compression of the zip archive.
+    * 'csv': Save DataSet that contains only one type of data 
+      (ie Node, Element or Gauss point data) in a csv file (needs the library pandas installed).
+      The mesh is not included and may be saved beside in a vtk file. 
+    * 'xlsx': Same as csv but with the excel format.                 
+
+
+Read data from disk
+-----------------------
+
+To read data saved on disk, use the function :py:func:`read_data`.
+
 
 Example
 --------------
