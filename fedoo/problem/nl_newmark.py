@@ -68,7 +68,7 @@ class _NonLinearNewmarkBase():
             DeltaDisp = self._dU
         
         D = self.__MassAssembly.get_global_matrix() * ( \
-                (1/(self.__Beta*dt**2))*DeltaDisp +   \
+                (-1/(self.__Beta*dt**2))*DeltaDisp +   \
                 (1/(self.__Beta*dt))   *self.__Velocity +   \
                 (0.5/self.__Beta - 1)               *self.__Acceleration) \
                 + self.__StiffnessAssembly.get_global_vector()

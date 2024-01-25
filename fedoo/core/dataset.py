@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import os
+from zipfile import ZipFile, Path
 from fedoo.core.mesh import Mesh
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
@@ -114,7 +115,9 @@ class DataSet():
              show_edges:bool = True, clim: list[float]|None = None, 
              node_labels: bool|list = False, element_labels: bool|list = False, 
              show_nodes: bool|float = False, show_normals: bool|float = False,
-             plotter: object = None, screenshot: str|None = None, **kargs) -> None:
+             plotter: object = None, screenshot: str|None = None, 
+             azimuth: float = 30., elevation: float = 15., roll: float = 0,
+             **kargs) -> None:
         
         """Plot a field on the surface of the associated mesh.                
         
@@ -159,7 +162,7 @@ class DataSet():
         show_normals : bool|float (default = False)
             Plot the face normals. If True, 
             the vectors are shown with a default magnitude.
-            If float, show_normas is the required magnitude.
+            If float, show_normals is the required magnitude.
             Only available for 1D or 2D mesh. 
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
             If pyvista.Plotter object, plot the mesh in the given plotter
@@ -168,8 +171,15 @@ class DataSet():
             If None: use the background plotter if available, or pyvista plotter if not.            
         screenshot: str, optional
             If defined, indicated a filename to save the plot.
+        azimuth: float, default = 30.
+            Azimuth angle of the camera around the scene (not used for 2D scene)
+        elevation: float, default = 15. 
+            Elevaltion angle of the camera around the scene (not used for 2D scene).
+        roll: float, default = 0
+            Roll angle of the camera. The default state (roll angle = 0.) is set
+            with the y direction on the up.
             
-        **kwargs: dict, optional
+        **kwargs: dict, default = 15.
             See pyvista.Plotter.add_mesh() in the document of pyvista for additional usefull options.
         """
         
@@ -192,8 +202,6 @@ class DataSet():
         if screenshot is None: screenshot = False #not used if show = False
         
         sargs=kargs.pop('scalar_bar_args', None)                         
-        azimuth = kargs.pop('azimuth',30)
-        elevation = kargs.pop('elevation',15)
         
         if data_type == 'GaussPoint':
             if self.meshplot_gp is None:
@@ -219,8 +227,6 @@ class DataSet():
             else:
                 meshplot.points = as_3d_coordinates(self.mesh_gp.nodes)
                 center = self.mesh.bounding_box.center
-            
-            
                                                                     
         else:            
             if self.meshplot is None: 
@@ -289,6 +295,7 @@ class DataSet():
         pl.camera.SetFocalPoint(center)
         pl.camera.position = tuple(center+np.array([0,0,2*meshplot.length]))
         pl.camera.up = tuple([0,1,0]) 
+        if roll != 0: pl.camera.Roll(roll)
         
         if ndim == 3:
             pl.camera.Azimuth(azimuth)
@@ -408,7 +415,28 @@ class DataSet():
     
     def save(self, filename: str, save_mesh: bool = False) -> None:        
         """Save data to a file. 
-        File type is inferred from the extension of the filename.                
+        File type is inferred from the extension of the filename.  
+
+        The available file types are:
+            * 'fdz': A zipped archive containing the mesh using the 'vtk' format named '_mesh_.vtk',
+              and data from several iterations named 'iter_x.npz' where x is the iteration number
+              (x=0 for the 1st iteration). 
+            * 'vtk': The vtk format contains the mesh and the data in a single files. The gauss
+              points data are not included in the file. 
+              This format is efficient for a linear problem when we need only one time 
+              iteration. In case of multiple saved iterations, a directory is created and 
+              one vtk file is saved per iteration. The mesh is included in every file 
+              which is not memory efficient.
+            * 'msh': Format associated to gmsh. Have the same drawback as the vtk format for 
+              time depend results and missing gauss points data. The vtk format should be prefered.
+            * 'npz': Save data in a numpy file npz which doesn't include the mesh. The mesh
+              is generally saved beside in a raw vtk files without results. 
+            * 'npz_compressed': Same as npz with a compression of the zip archive.
+            * 'csv': Save DataSet that contains only one type of data 
+              (ie Node, Element or Gauss point data) in a csv file (need the library 
+              pandas installed).
+              The mesh is not included and may be saved beside in a vtk file. 
+            * 'xlsx': Same as csv but with the excel format.                 
         
         Parameters
         ----------
@@ -416,25 +444,27 @@ class DataSet():
             Name of the file including the path.         
         save_mesh : bool (default = False)
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
-            For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
+            For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.          
         """
         name, ext = os.path.splitext(filename)
         ext = ext.lower()
+        if ext == '': 
+            ext = '.fdz'
+            filename = filename+ext
         if ext == '.vtk': 
             self.to_vtk(filename)
         elif ext == '.msh':
             self.to_msh(filename)
-        else:
-            if ext == '.npz':
-                self.savez(filename,save_mesh)
-            elif ext == '.npz_compressed':
-                self.savez_compressed(filename, save_mesh)
-            elif ext == '.csv':
-                self.to_csv(filename, save_mesh)              
-            elif ext == '.xlsx':
-                self.to_excel(filename, save_mesh)  
-            if save_mesh: 
-                self.save_mesh(filename)
+        elif ext == '.npz':
+            self.savez(filename,save_mesh)
+        elif ext == '.npz_compressed':
+            self.savez_compressed(filename, save_mesh)
+        elif ext == '.csv':
+            self.to_csv(filename, save_mesh)              
+        elif ext == '.xlsx':
+            self.to_excel(filename, save_mesh)  
+        elif ext == '.fdz':
+            self.to_fdz(filename, True) #create a new file and add the mesh
                 
                     
     def save_mesh(self, filename: str):
@@ -442,9 +472,8 @@ class DataSet():
         name, ext = os.path.splitext(filename)
         self.mesh.save(name)
         
-   
-    
-    def load(self, data: object, load_mesh: bool = False):
+       
+    def load(self, data: object, load_mesh: bool = False, iteration: int = 0):
         """Load data from a data object. 
         The old data are erased.
                 
@@ -458,11 +487,13 @@ class DataSet():
         * if type(data) is pyvista.UnstructuredGrid
             load data from a pyvista UnstructuredGrid object without copy 
         * if type(data) is str
-            load data from a file. Available extention are 'vtk', 'msh', 'npz' and
-            'npz_compressed'            
+            load data from a file. Available extention are 'vtk', 'msh', 'fdz', 'npz' 
+            and 'npz_compressed'            
         load_mesh : bool (default = False)
             If True, the mesh is loaded from the file (if the file contans a mesh). 
             If False, only the data are loaded.
+        iteration : int
+            iteration loaded if data is a fdz object.
         """
         if isinstance(data, dict):
             self.load_dict(data)
@@ -477,6 +508,10 @@ class DataSet():
             self.node_data = {k: v.T for k,v in data.point_data.items()}
             self.element_data = {k: v.T for k,v in data.cell_data.items()} 
             if load_mesh: Mesh.from_pyvista(data)
+        elif isinstance(data, Path):
+            #used to load one iteration in fdz file
+            data = np.load(data.open('rb'))
+            self.load_dict(data)
         elif isinstance(data, str):
             #load from a file
             filename = data
@@ -484,21 +519,28 @@ class DataSet():
             ext = ext.lower()
             if ext == '.vtk': 
                 #load_mesh ignored because the mesh already in the vtk file
-                if not(USE_PYVISTA):
-                    raise NameError("Pyvista not installed. Pyvista required to load vtk meshes.")
+                if not(USE_PYVISTA):                    raise NameError("Pyvista not installed. Pyvista required to load vtk meshes.")
                 DataSet.load(self,pv.read(filename))              
             elif ext == '.msh':
                 return NotImplemented
-            elif ext in ['.npz', '.npz_compressed']:
-                if load_mesh: 
-                    self.mesh = Mesh.read(os.path.splitext(filename)[0]+'.vtk')
+            elif ext in ['.npz', '.npz_compressed', '.fdz']:
+                if ext == '.fdz':
+                    file = ZipFile(filename, 'r')
+                    if f'iter_{iteration}.npz' in file.namelist():
+                        data = np.load(file.open(f'iter_{iteration}.npz'))
+                        #pyvista cant read file object. So copy to disk read and remove.
+                        file.extract('_mesh_.vtk')                        
+                        self.mesh = Mesh.read('_mesh_.vtk')
+                        os.remove('_mesh_.vtk')
+                    else:
+                        raise NameError(f'Specified iteration not found in the fdz {filename}.')
+                else:                    
+                    if load_mesh: 
+                        self.mesh = Mesh.read(os.path.splitext(filename)[0]+'.vtk')                
+                    data = np.load(filename)  
+                    
+                self.load_dict(data)
                 
-                data = np.load(filename)                
-                # self.load_dict(data)
-                self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
-                self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
-                self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}
-                self.scalar_data = {k[:-3]:v.item() for k,v in data.items() if k[-2:] == 'sc'}
             elif ext == '.csv':
                 return NotImplemented
             elif ext == '.xlsx':
@@ -516,7 +558,9 @@ class DataSet():
         self.node_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'nd'}
         self.element_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'el'}
         self.gausspoint_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'gp'}
-        self.scalar_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'sc'}
+        self.scalar_data = {k[:-3]:v.item() for k,v in data.items() if k[-2:] == 'sc'}
+        # self.scalar_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'sc'}
+        
                 
     def to_pandas(self) -> pandas.DataFrame:
         if USE_PANDA:
@@ -623,10 +667,40 @@ class DataSet():
         out = {k+'_nd':v for k,v in self.node_data.items()}
         out.update({k+'_el':v for k,v in self.element_data.items()})
         out.update({k+'_gp':v for k,v in self.gausspoint_data.items()})
-        out.update({k+'_sc':v for k,v in self.scalar_data.items()})
+        out.update({k+'_sc':np.array(v) for k,v in self.scalar_data.items()})
 
         return out
 
+
+    def to_fdz(self, 
+               filename: str, 
+               save_mesh: bool = False, 
+               iteration: int = 0) -> None:
+        """Write a fdz file from the dataset. 
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file including the path.
+        """
+        
+        name, ext = os.path.splitext(filename)
+        if ext == '': 
+            filename = filename+'.fdz'
+        self.savez('_mesh_', save_mesh)
+        if save_mesh:
+            file = ZipFile(filename, 'w')
+        else:
+            file = ZipFile(filename, 'a')
+            
+        file.write('_mesh_.npz', 'iter_'+str(iteration)+'.npz')
+        os.remove('_mesh_.npz')
+        if save_mesh:
+            file.write('_mesh_.vtk')            
+            os.remove('_mesh_.vtk')
+        file.close()
+        
+        
 
     def savez(self, filename: str, save_mesh: bool = False) -> None: 
         """Write a npz file using the numpy savez function. 
@@ -684,41 +758,49 @@ class MultiFrameDataSet(DataSet):
             self.load()
         return DataSet.__getitem__(self,items)
     
-    def save_all(self, filename, file_format='npz'):
+    def save_all(self, filename, file_format='fdz'):
         """Save all data from MultiFrameDataSet. 
-        If filename has no extension, a filename dir is created which contains 
-        the data files for each iteration (npz format by default).
-        if filename has an extension, the data files are saved using the given filename and format
-        simply adding the iteration number. 
-        The mesh is also saved in vtk format in the same directory.
+        
+        If filename has no extension, the format is given in the parameter file_format
+        (default = 'fdz'). 
+        If format is not 'fdz', the data files are saved using the given filename and format
+        simply adding the iteration number to the file name. The mesh is also saved in vtk format in the same directory.        
         """
         dirname = os.path.dirname(filename)        
         extension = os.path.splitext(filename)[1]
-        if extension == '': 
-            dirname = filename+'/'
-            filename = dirname+os.path.basename(filename)
+        if extension == '':
             file_format = file_format.lower()
+            if file_format != 'fdz':
+                dirname = filename+'/'
+                filename = dirname+os.path.basename(filename)
         else: 
             #use extension as file format
             file_format = extension[1:].lower()
             filename = os.path.splitext(filename)[0] #remove extension for the base name
-            
-        if not(os.path.isdir(dirname)): os.mkdir(dirname)
-        for i in range(len(self.list_data)):
-            self.load(i)
-            self.save(filename + '_' +str(i) + '.' + file_format)
-        self.save_mesh(filename + '.vtk')        
+        
+        if dirname and not(os.path.isdir(dirname)): os.mkdir(dirname)        
+        if file_format == 'fdz':
+            self.load(0)
+            self.to_fdz(filename, True, 0)
+            for i in range(1,len(self.list_data)):
+                self.load(i)
+                self.to_fdz(filename, False, i)
+        else:                  
+            for i in range(len(self.list_data)):
+                self.load(i)
+                self.save(filename + '_' +str(i) + '.' + file_format)
+            self.save_mesh(filename + '.vtk')        
         
     
     def load(self,data=-1, load_mesh = False): 
         if isinstance(data, int):         
             #data is the an iteration to load
             iteration = self.list_data.index(self.list_data[data])
+            if iteration < 0: iteration += len(self.list_data)
             if self.loaded_iter == iteration: 
                 return
-            if iteration > len(self.list_data): 
-                raise NameError("Number of iteration exeed the total number of registered data ({})".format(len(self.list_data)))
-            
+            if iteration > len(self.list_data) or iteration < 0: 
+                raise NameError("Number of iteration out of bounds")
             DataSet.load(self, self.list_data[iteration])
             self.loaded_iter = iteration
         
@@ -730,9 +812,10 @@ class MultiFrameDataSet(DataSet):
              data_type: str|None = None, scale:float = 1, show:bool = True, 
              show_edges:bool = True, clim: list[float]|None = None,
              node_labels: bool|list = False, element_labels: bool|list = False, 
-             show_nodes: bool|float = False, plotter: object = None,
-             screenshot: str|None = None, iteration: int|None = None, 
-             **kargs) -> None:
+             show_nodes: bool|float = False, show_normals: bool|float = False, 
+             plotter: object = None, screenshot: str|None = None, 
+             azimuth: float = 30., elevation: float = 15., roll: float = 0,
+             iteration: int|None = None, **kargs) -> None:
         
         """Plot a field on the surface of the associated mesh.         
         
@@ -777,6 +860,11 @@ class MultiFrameDataSet(DataSet):
         show_nodes : bool|float (default = False)
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
+        show_normals : bool|float (default = False)
+            Plot the face normals. If True, 
+            the vectors are shown with a default magnitude.
+            If float, show_normals is the required magnitude.
+            Only available for 1D or 2D mesh. 
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
             If pyvista.Plotter object, plot the mesh in the given plotter
             If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
@@ -784,6 +872,13 @@ class MultiFrameDataSet(DataSet):
             If None: use the background plotter if available, or pyvista plotter if not.            
         screenshot: str, optional
             If defined, indicated a filename to save the plot.
+        azimuth: float, default = 30.
+            Azimuth angle of the camera around the scene (not used for 2D scene)
+        elevation: float, default = 15. 
+            Elevaltion angle of the camera around the scene (not used for 2D scene).
+        roll: float, default = 0
+            Roll angle of the camera. The default state (roll angle = 0.) is set
+            with the y direction on the up.
         iteration : int (Optional)
             num of the iteration to plot. If None, the current iteration is plotted.
             If no current iteration is defined, the last iteration is loaded and plotted.
@@ -796,10 +891,10 @@ class MultiFrameDataSet(DataSet):
                 self.load(-1) #load last iteration
         else: 
             self.load(iteration)
-                
-        return DataSet.plot(self, field, data_type, component, scale, show, 
+        
+        return DataSet.plot(self, field, component, data_type, scale, show, 
                             show_edges, clim, node_labels, element_labels, 
-                            show_nodes, plotter, screenshot, **kargs)
+                            show_nodes, show_normals, plotter, screenshot, azimuth, elevation, roll, **kargs)
     
         
     def write_movie(self, filename: str ='test', field: str|None = None, 
@@ -1070,34 +1165,49 @@ class MultiFrameDataSet(DataSet):
         return len(self.list_data)
 
 
-def read_data(filename: str, file_format: str ="npz"):
+def read_data(filename: str, file_format: str ="fdz"):
+    """Read a file from a disk. 
     
-    dirname = os.path.dirname(filename)        
+    The file may be a directory containing files from several iterations. 
+    The file format may be specified in the filename extension or using
+    the file_format parameter (default = fdz) if the filename has no extension.
+    
+    Available file format are 'fdz', 'vtk', 'npz' and 'npz_compressed'.
+    For 'npz' and 'npz_compressed' a vtk mesh with the same base name is also searched. 
+    """
     extension = os.path.splitext(filename)[1]
+    if extension != '':
+        #use extension as file format
+        file_format = extension[1:].lower()
+    
+    if file_format == 'fdz':
+        return read_fdz(filename)
+    
+    dirname = os.path.dirname(filename)            
     if extension == '': 
         dirname = filename+'/'
         filename = dirname+os.path.basename(filename)
         file_format = file_format.lower()
     else: 
-        #use extension as file format
-        file_format = extension[1:].lower()
         filename = os.path.splitext(filename)[0] #remove extension for the base name
-        
+            
     assert (os.path.isdir(dirname)), "File not found"
-    
-    if os.path.isfile(filename+'.vtk'): 
+    if file_format[:3] == 'npz' and os.path.isfile(filename+'.vtk'): 
         mesh = Mesh.read(filename+'.vtk')
     else: 
-        mesh = None
-    
+        mesh = None    
+        
     if os.path.isfile(filename+'.'+file_format): 
         dataset = DataSet(mesh)
         dataset.load(filename+'.'+file_format)
         return dataset
+
     if os.path.isfile(filename+'_0.'+file_format): iter0= 0
-    elif os.path.isfile(filename+'_0.'+file_format): iter0= 1
+    elif os.path.isfile(filename+'_1.'+file_format): iter0= 1
     else: raise NameError("File not found") 
-        
+    
+    if file_format == 'vtk': #read the mesh from the 1st iteration
+        mesh = Mesh.read(filename+'_'+str(iter0)+'.vtk') 
     dataset = MultiFrameDataSet(mesh)
     i = iter0
     while os.path.isfile(filename+'_'+str(i)+'.'+file_format):
@@ -1105,8 +1215,30 @@ def read_data(filename: str, file_format: str ="npz"):
         i+=1
         
     return dataset
+            
+
+def read_fdz(filename: str):
+    """Read a fdz file unto a MultiFrameDataSet file."""
+    extension = os.path.splitext(filename)[1]
+    if extension == '':         
+        filename += '.fdz'
+
+    assert os.path.isfile(filename), "File not found"
+    file = ZipFile(filename, 'r')        
+    #pyvista cant read file object. So copy to disk read and remove.
+    file.extract('_mesh_.vtk')                        
+    mesh = Mesh.read('_mesh_.vtk')
+    os.remove('_mesh_.vtk')
+    list_iter = file.namelist()
+    file.close()
+      
+    dataset = MultiFrameDataSet(mesh)
+    i = 0
+    while 'iter_'+str(i)+'.npz' in list_iter:
+        dataset.list_data.append(Path(filename,'iter_'+str(i)+'.npz'))
+        i+=1
     
-    
+    return dataset
 
 def as_3d_coordinates(crd):    
     if crd.shape[1] < 3: 

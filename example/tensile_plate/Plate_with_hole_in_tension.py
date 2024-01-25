@@ -49,12 +49,12 @@ pl = pv.Plotter(shape=(2,2))
 # from pyvistaqt import BackgroundPlotter
 # pl = BackgroundPlotter(shape = (2,2))
 
-res.plot('Stress','Node','vm', plotter=pl)
+res.plot('Stress','vm','Node', plotter=pl)
 pl.subplot(1,0)
-res.plot('Stress','Node', 'XX', plotter=pl)
+res.plot('Stress','XX','Node', plotter=pl)
 pl.subplot(0,1)
-res.plot('Stress', 'Node', 'YY', plotter=pl)
+res.plot('Stress', 'YY', 'Node', plotter=pl)
 pl.subplot(1,1)
-res.plot('Stress', 'Node', 'XY', plotter=pl)
+res.plot('Stress', 'XY','Node',  plotter=pl)
 pl.show()
     

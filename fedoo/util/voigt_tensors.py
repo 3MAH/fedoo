@@ -194,12 +194,12 @@ class StressTensorList(_SymetricTensorList):
         return np.sqrt( 0.5 * ((self[0]-self[1])**2 + (self[1]-self[2])**2 + (self[0]-self[2])**2 \
                          + 6 * (self[3]**2 + self[4]**2 + self[5]**2) ) )
 
+    def to_strain(self):
         return StrainTensorList(self[:3] + [self[i]*2 for i in [3,4,5]])
         
     def to_stress(self):
         return self
     
-
 
 
 class StrainTensorList(_SymetricTensorList):

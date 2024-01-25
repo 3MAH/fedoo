@@ -120,37 +120,24 @@ print(time()-start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot('Stress',  'Node', component = 'vm', show = True, scale = 1, show_nodes=True)
-results.plot('Stress',  'Node', component = 'XX', show = True, scale = 1, show_nodes=True)
-# results.plot('Fext',  'Node', component = 'X', show = True, scale = 1, show_nodes=True)
+results.plot('Stress',  'vm', 'Node', show = True, scale = 1, show_nodes=True)
+results.plot('Stress',  'XX', 'Node', show = True, scale = 1, show_nodes=True)
+# results.plot('Fext',  'X', 'Node', show = True, scale = 1, show_nodes=True)
 
-results.plot('Disp', 'Node', component = 0, show = True, scale = 1, show_nodes=True)
-
-pb.save_results()
-results.load(-1)
+results.plot('Disp', 0, 'Node', show = True, scale = 1, show_nodes=True)
 
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-# results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
+# results.write_movie(res_dir+filename, 'Stress', 'vm', framerate = 5, quality = 5)
 
-results.write_movie(res_dir+filename, 'Stress', 'Node', component = 'XX', framerate = 24, quality = 5, clim = [-3e3, 3e3])
+results.write_movie(res_dir+filename, 'Stress', 'XX', 'Node', framerate = 24, quality = 5, clim = [-3e3, 3e3])
 
 # ------------------------------------
 # Save pdf plot
 # ------------------------------------
-# pl = results.plot(scalars = 'Cauchy_vm', show = False)
+# pl = results.plot('Stress', 'vm', show = False)
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-# ------------------------------------
-# Plot the automatically saved mesh
-# ------------------------------------
-# pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
-
-# ------------------------------------
-# Write movie with moving camera
-# ------------------------------------
-# results.write_movie(res_dir+filename, 'Cauchy_vm', framerate = 5, quality = 5, rot_azimuth = 3, rot_elevation = 0.5)
 
 # ------------------------------------
 # Plot time history
