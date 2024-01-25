@@ -171,6 +171,7 @@ class StressEquilibrium(WeakFormBase):
             if 'DStrain' in assembly.sv:
                 #rotate strain and stress -> need to be checked
                 assembly.sv['Strain'] = StrainTensorList(sim.rotate_strain_R(assembly.sv_start['Strain'].asarray(),assembly.sv['DR']) + assembly.sv['DStrain'])
+                assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
                 
                 #update cauchy stress 
                 if assembly.sv['Stress'] is not 0:
@@ -209,14 +210,23 @@ class StressEquilibrium(WeakFormBase):
         if value == "log":
             self._corate_func = _comp_log_strain
             self._convert_Lt_tag = "DsigmaDe_2_DSDE"
+        elif value == "log_inc":
+            self._corate_func = _comp_log_strain_inc
+            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
         elif value in ["gn", "green_naghdi"]:
             self._corate_func = _comp_gn_strain
             self._convert_Lt_tag = "DsigmaDe_2_DSDE"
         elif value == "jaumann":
             self._corate_func = _comp_jaumann_strain
             self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
+        elif value == "log_r":
+            self._corate_func = _comp_log_strain_R
+            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
+        elif value == "log_r_inc":
+            self._corate_func = _comp_log_strain_R_inc
+            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
         else: 
-            raise NameError('corate value not understood. Choose between "log", "green_naghdi" or "jaumann"')
+            raise NameError('corate value not understood. Choose between "log", "log_R", "green_naghdi" or "jaumann"')
         self._corate = value
     
     
@@ -270,6 +280,51 @@ def _comp_log_strain(wf, assembly, pb):
     (D,DR, Omega) = sim.objective_rate("log", assembly.sv_start['F'], F1, pb.dtime, False)
     assembly.sv['DR'] = DR
     assembly.sv['Strain'] = StrainTensorList(sim.Log_strain(F1, True, False))  
+
+def _comp_log_strain_inc(wf, assembly, pb):    
+    grad_values = assembly.sv['DispGradient']
+    eye_3 = np.empty((3,3,1), order='F')
+    eye_3[:,:,0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values)
+    assembly.sv['F'] = F1
+    if 'F' not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start['F'] = F0
+        
+    (DStrain, D,DR, Omega) = sim.objective_rate("log", assembly.sv_start['F'], F1, pb.dtime, True)
+    assembly.sv['DR'] = DR
+    assembly.sv['DStrain'] = StrainTensorList(DStrain)   
+
+def _comp_log_strain_R(wf, assembly, pb):    
+    grad_values = assembly.sv['DispGradient']
+    eye_3 = np.empty((3,3,1), order='F')
+    eye_3[:,:,0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values)
+    assembly.sv['F'] = F1
+    if 'F' not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start['F'] = F0
+        
+    (D,DR, Omega) = sim.objective_rate("log_R", assembly.sv_start['F'], F1, pb.dtime, False)
+    assembly.sv['DR'] = DR
+    assembly.sv['Strain'] = StrainTensorList(sim.Log_strain(F1, True, False))
+
+def _comp_log_strain_R_inc(wf, assembly, pb):    
+    grad_values = assembly.sv['DispGradient']
+    eye_3 = np.empty((3,3,1), order='F')
+    eye_3[:,:,0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values)
+    assembly.sv['F'] = F1
+    if 'F' not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start['F'] = F0
+        
+    (DStrain, D,DR, Omega) = sim.objective_rate("log_R", assembly.sv_start['F'], F1, pb.dtime, True)
+    assembly.sv['DR'] = DR
+    assembly.sv['DStrain'] = StrainTensorList(DStrain)  
 
 def _comp_jaumann_strain(wf, assembly, pb):    
     grad_values = assembly.sv['DispGradient']
