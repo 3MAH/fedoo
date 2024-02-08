@@ -9,14 +9,16 @@ import scipy.sparse.linalg
 import scipy.sparse as sparse
 try: 
     from pypardiso import spsolve
-    USE_PYPARDISO = True
+    USE_PYPARDISO = True    
 except:     
     USE_PYPARDISO = False
     try: 
-        from scikits import umfpack
+        from scikits.umfpack import spsolve
+        scipy.sparse.linalg.use_solver(assumeSortedIndicesbool = True)        
+        USE_UMFPACK = True
     except:
         print('WARNING: no fast direct sparse solver has been found. Consider installing pypardiso or scikit-umfpack to improve computation performance')
-
+        USE_UMFPACK = False
 
 #=============================================================
 # Base class for Mesh object
