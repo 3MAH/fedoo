@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul 13 16:09:45 2023
-
-@author: eprulier
-"""
 import numpy as np
 from fedoo.core.mesh import Mesh
 from fedoo.mesh.simple import line_mesh_1D
@@ -323,4 +317,8 @@ def change_elm_type(mesh, elm_type, name=""):
     # new_mesh = new_mesh.from_pyvista()
     return new_mesh
     
-    
+def quad2tri(mesh):
+    assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
+    crd = mesh.nodes
+    elm = mesh.elements
+    return Mesh(crd, np.vstack( [elm[:,0:3], elm[:,[0,2,3]]]), 'tri3')

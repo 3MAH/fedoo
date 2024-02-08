@@ -66,9 +66,11 @@ Mesh Creation Functions
 #     exec('from .'+module_name+' import *')
   
 from .simple import stack, rectangle_mesh, grid_mesh_cylindric, line_mesh_1D, \
-                    line_mesh, line_mesh_cylindric, box_mesh, structured_mesh_2D, \
-                    generate_nodes, hole_plate_mesh, disk_mesh, quad2tri
+                    line_mesh, line_mesh_cylindric, box_mesh
     
 from .importmesh import import_file, import_vtk, import_msh
 
-from .functions import extrude, extract_surface, change_elm_type
+from .functions import extrude, extract_surface, change_elm_type, quad2tri
+
+from .structured_mesh import structured_mesh_2D, generate_nodes, \
+                             hole_plate_mesh, disk_mesh
