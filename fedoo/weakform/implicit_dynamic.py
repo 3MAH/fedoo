@@ -89,16 +89,16 @@ class ImplicitDynamic(WeakFormBase):
         op_dU = self.space.op_disp() #displacement increment (incremental formulation)
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
         dt = pb.dtime
-                
-        if pb._dU is 0: #start of iteration
-            delta_disp = np.zeros((self.space.ndim,1))
-        else:
-            delta_disp = assembly.sv['_DeltaDisp_GP']
-                    
-        acceleration = assembly.sv['Acceleration_GP'] 
-        velocity = assembly.sv['Velocity_GP'] 
 
         if self.rayleigh_damping is None:
+            if pb._dU is 0: #start of iteration
+                delta_disp = np.zeros((self.space.ndim,1))
+            else:
+                delta_disp = assembly.sv['_DeltaDisp_GP']
+                        
+            acceleration = assembly.sv['Acceleration_GP'] 
+            velocity = assembly.sv['Velocity_GP'] 
+            
             diff_op = self.stiffness_weakform.get_weak_equation(assembly, pb)
             
             # if delta_disp.shape[1] == 1: delta_disp = delta_disp.ravel()
@@ -116,6 +116,15 @@ class ImplicitDynamic(WeakFormBase):
                         + self.density*new_acceleration[i])
                         if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])        
         else:
+            #need nodes values in this case
+            if pb._dU is 0: #start of iteration
+                delta_disp = np.zeros((self.space.ndim,1))
+            else:
+                delta_disp = assembly.sv['_DeltaDisp']
+                        
+            acceleration = assembly.sv['Acceleration'] 
+            velocity = assembly.sv['Velocity'] 
+            
             #not working for now
             new_acceleration = (1/(self.beta*dt**2)) * (delta_disp - dt*velocity) + (1 - 0.5/self.beta)*acceleration            
             new_velocity = velocity + dt * ( (1-self.gamma)*acceleration + self.gamma*new_acceleration)
@@ -163,13 +172,17 @@ class ImplicitDynamic(WeakFormBase):
             
             #compute the weaform corresponding to rayleigh_damping[0]x[K]*new_velocity
             #as we dont compute K explicitly, we need to update the weaform
-            ##### TODO
-            ### warning : need node values
+            #to get [K]*new_velocity (gauss point values), we need to compute the
+            #operator used to compute sigma and apply it to the nodal values of new_velocity
             if new_velocity.shape[1] == 1:
-                new_velocity = new_velocity*np.ones(assembly.n_gauss_points)
-            mat_sigma_velocity = [assembly.get_gp_results(sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]), new_velocity.ravel()) for i in range(6)]            
-            diff_op += sum([0 if eps[i] is 0 else \
-                            eps[i].virtual * mat_sigma_velocity[i] for i in range(6)])
+                new_velocity = new_velocity*np.ones(assembly.mesh.n_nodes)
+            op_sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
+            diff_op += sum([0 if (eps[i] is 0) or (op_sigma[i] is 0) else \
+                            eps[i].virtual * (self.rayleigh_damping[0]*assembly.get_gp_results(op_sigma[i], new_velocity.ravel())) for i in range(6)])
+
+            # mat_sigma_velocity = [0 if op_sigma[i] is 0 else assembly.get_gp_results(op_sigma[i], new_velocity.ravel()) for i in range(6)]            
+            # diff_op += sum([0 if eps[i] is 0 else \
+            #                 eps[i].virtual * mat_sigma_velocity[i] for i in range(6)])
 
         return diff_op    
     

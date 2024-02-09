@@ -73,12 +73,21 @@ class _NonLinearNewmarkBase():
                 (0.5/self.__Beta - 1)               *self.__Acceleration) \
                 + self.__StiffnessAssembly.get_global_vector()
         if self.__DampingAssembly is not 0:
-            assert 0, "Non linear Dynamic problem with damping needs to be checked"
-            #need to be cheched
             if self.__RayleighDamping is not None:
                 #In this case, self.__RayleighDamping = [alpha, beta]
                 DampMatrix = self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix() + self.__RayleighDamping[1] * self.__StiffnessAssembly.get_global_matrix() 
             else: DampMatrix = self.__DampingAssembly.get_global_matrix()
+
+            assert 0, "Non linear Dynamic problem with damping needs to be checked"
+            #need to be cheched
+            
+            
+            # new_velocity = dt * 0.5*(2 - self.gamma/self.beta)*acceleration +(ou -)
+            #                self.gamma/(self.beta*dt)) * delta_disp 
+            #                (1 - self.gamma/(self.beta))*velocity 
+            
+            # D += DampMatrix * (-new_velocity) 
+            #check if same as below
             
             D += DampMatrix * ( \
                 (self.__Gamma/(self.__Beta*dt))*DisplacementStart +   \

@@ -66,4 +66,19 @@ class ElasticAnisotropic(Mechanical3D):
 
     def get_elastic_matrix(self, dimension = "3D"):
         return self.get_tangent_matrix(None,dimension)
-
+    
+    # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
+    #     displacement = pb.get_dof_solution()                
+    #     if displacement is 0: 
+    #         return 0 #if displacement = 0, Strain = 0
+    #     else:
+    #         return assembly.get_strain(displacement, type_output)  
+    
+       
+    
+    
+    
+    
+     
+                        
+        

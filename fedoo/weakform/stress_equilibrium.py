@@ -90,8 +90,8 @@ class StressEquilibrium(WeakFormBase):
 
     def initialize(self, assembly, pb):
         #### Put the require field to zeros if they don't exist in the assembly
-        if 'Stress' not in assembly.sv: assembly.sv['Stress'] = 0
-        if 'Strain' not in assembly.sv: assembly.sv['Strain'] = 0
+        if 'Stress' not in assembly.sv: assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+        if 'Strain' not in assembly.sv: assembly.sv['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
         assembly.sv['DispGradient'] = 0
         
         if self.nlgeom:
@@ -172,6 +172,7 @@ class StressEquilibrium(WeakFormBase):
                 #rotate strain and stress -> need to be checked
                 assembly.sv['Strain'] = StrainTensorList(sim.rotate_strain_R(assembly.sv_start['Strain'].asarray(),assembly.sv['DR']) + assembly.sv['DStrain'])
                 assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+				#or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
                 
                 #update cauchy stress 
                 if assembly.sv['Stress'] is not 0:

@@ -138,12 +138,15 @@ class Simcoon(Mechanical3D):
         else:
             de = assembly.sv['Strain'] - assembly.sv_start['Strain']
         
-        if 'Stress' not in assembly.sv or assembly.sv['Stress'] is 0: 
-            assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+        # if 'Stress' not in assembly.sv or assembly.sv['Stress'] is 0: 
+        #     assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
         
-        if assembly.sv_start['Strain'] is 0: 
-            assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
-                  
+        # if assembly.sv_start['Strain'] is 0: 
+        #     assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+        
+        if 'Temp' in assembly.sv: temp = assembly.sv['Temp']
+        else: temp = None
+        
         (stress, assembly.sv['Statev'], assembly.sv['Wm'], assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, assembly.sv_start['Strain'].array, de.array, assembly.sv_start['Stress'].array, assembly.sv['DR'], self.props, assembly.sv_start['Statev'], pb.time, pb.dtime, assembly.sv_start['Wm'])                        
         assembly.sv['Stress'] = StressTensorList(stress)
 
