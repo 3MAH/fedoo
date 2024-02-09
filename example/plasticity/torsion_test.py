@@ -20,19 +20,15 @@ filename = 'torsion_test'
 res_dir = 'results/'
 
 # mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
-mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
-# mesh = fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")['tet4']
+# mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
+mesh = fd.mesh.import_file('../../util/meshes/octet_truss_2.msh', name = "Domain")['tet4']
 
 crd = mesh.nodes 
 
 mat = 1
 if mat == 0:
-    props = np.array([[E, nu, alpha]])
-    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    # Material.SetMaskH([[] for i in range(6)])
-    # mask = [[3,4,5] for i in range(3)]
-    # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    # Material.SetMaskH(mask)
+    props = np.array([E, nu, alpha])
+    material = fd.constitutivelaw.Simcoon("ELISO", props, name='ConstitutiveLaw')
 elif mat == 1 or mat == 2:
     Re = 300
     k=1000 #1500
@@ -49,12 +45,11 @@ else:
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name ="wf")
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name ="wf")
 # WeakForm.StressEquilibriumUL("ConstitutiveLaw")
 
-
 # fd.Assembly.create("ConstitutiveLaw", mesh, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-fd.Assembly.create("wf", mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create("wf", mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 #node set for boundary conditions
 left = mesh.find_nodes('X',0)
@@ -70,7 +65,7 @@ var_cd = ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ']
 
 pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 20)
+pb.set_nr_criterion("Displacement", err0 = 1, tol = 1e-3, max_subiter = 5)
 
 # Problem.set_nr_criterion("Displacement")
 # Problem.set_nr_criterion("Work")
@@ -82,7 +77,7 @@ if not(os.path.isdir('results')): os.mkdir('results')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
 results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm', 'Fext'])
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm', 'Fext'])
+# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Fext'])
 
 # Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
 

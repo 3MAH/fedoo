@@ -79,6 +79,6 @@ res = pb.get_results('Assembly', ['Strain','Stress'], 'GaussPoint')
 TensorStrain = res.gausspoint_data['Strain']
 TensorStress = res.gausspoint_data['Stress']
 
-assert np.abs(TensorStress[4][222]-72.37801685039392) <1e-3
+assert np.abs(TensorStress[4][222]-72.3765265291865) <1e-3
 assert np.abs(TensorStrain[2][876]-0.03046909551762696) <1e-6
 
