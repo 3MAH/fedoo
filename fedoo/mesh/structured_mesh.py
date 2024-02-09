@@ -148,10 +148,11 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
         nt is the number of nodes of the half of an exterior edge
     length, height : int,float
         The length and height of the plate (default : 100).
-    radius : int,float
+    radius : int,float, tuple
         The radius of the hole (default : 20).
+        If tuple = (a,b), a and b are the ellipse radius along x and y axis.
 
-    elm_type : {'quad4', 'quad9', 'tri3', 'tri6'}
+    elm_type : {'quad4', 'quad9', 'tri3', 'tri6', 'quad8'}
         The type of the element generated (default='quad4')
     Sym : bool 
         Sym = True, if only the returned mesh assume symetric condition and 
