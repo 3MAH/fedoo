@@ -39,9 +39,13 @@ class ElasticAnisotropic(Mechanical3D):
             H = self.get_tangent_matrix(assembly)
             assembly.sv['TangentMatrix'] = H
         
-        TotalStrain = assembly.sv['Strain']        
-        assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
-            
+        if 'DStrain' in assembly.sv:
+            total_strain = assembly.sv['Strain'] + assembly.sv['DStrain']
+        else:
+            total_strain = assembly.sv['Strain']
+        
+        assembly.sv['Stress'] = StressTensorList([sum([total_strain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
+        
        
     def get_stress_from_strain(self, assembly, strain_tensor):     
         H = self.get_tangent_matrix(assembly)
@@ -62,19 +66,4 @@ class ElasticAnisotropic(Mechanical3D):
 
     def get_elastic_matrix(self, dimension = "3D"):
         return self.get_tangent_matrix(None,dimension)
-    
-    # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
-    #     displacement = pb.get_dof_solution()                
-    #     if displacement is 0: 
-    #         return 0 #if displacement = 0, Strain = 0
-    #     else:
-    #         return assembly.get_strain(displacement, type_output)  
-    
-       
-    
-    
-    
-    
-     
-                        
-        
+

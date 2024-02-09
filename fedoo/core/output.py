@@ -265,7 +265,7 @@ class _ProblemOutput:
         
         if isinstance(assemb, str): assemb = AssemblyBase.get_all()[assemb]     
         
-        if not(os.path.isdir(dirname)): os.mkdir(dirname)
+        if not(os.path.isdir(dirname)) and dirname != '': os.mkdir(dirname)
                 
         new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
         self.__list_output.append(new_output)
