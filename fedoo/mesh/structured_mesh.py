@@ -82,8 +82,8 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', met
         for j in range(0,ny-2,2):
             elm += [[grid[i,j],grid[i+2,j],grid[i,j+2], grid[i+1,j],grid[i+1,j+1],grid[i,j+1]] for i in range(0,nx-2,2)]
             elm += [[grid[i+2,j],grid[i+2,j+2],grid[i,j+2], grid[i+2,j+1],grid[i+1,j+2],grid[i+1,j+1]] for i in range(0,nx-2,2)]
-    elif elm_type == 'quad8':
-        raise NameError("'quad8' elements are not implemented")
+    else:
+        raise NameError("'{}' elements are not implemented".format(elm_type))
     
     elm = np.array(elm, dtype=int)
     return Mesh(np.array(new_crd), elm, elm_type, ndim=ndim, name=name)
@@ -169,30 +169,38 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     line_mesh : 1D mesh of a line    
     rectangle_mesh : Surface mesh of a rectangle
     """   
-    if elm_type == 'quad9': 
+    if elm_type in ['quad9', 'tri6']: 
         nr = nr//2*2+1 #in case nr is not initially odd
         nt = nt//2*2+1 #in case nt is not initially odd
     elif elm_type == 'quad8': 
         return change_elm_type(
-                 hole_plate_mesh(nr, nt, length, height, radius, 'quad9', sym, include_node_sets, ndim, name),
-                 'quad8',
-               )
-    elif elm_type == 'tri3': 
-        return quad2tri(hole_plate_mesh(nr, nt, length, height, radius, 'quad4', sym, include_node_sets, ndim, name))
-    # elif elm_type == 'tri6': return change_elm_type(quad2tri(m), elm_type)    
-    elif elm_type != 'quad4': raise NameError('Non compatible element shape')
+                  hole_plate_mesh(nr, nt, length, height, radius, 'quad9', sym, include_node_sets, ndim, name),
+                  'quad8',
+                )
+    elif elm_type not in ['quad4', 'tri3']: raise NameError('Non compatible element shape')
+    
+    if isinstance(radius, tuple):
+        ellipse = True
+        ellipse_radius = np.array(radius)
+        radius = 1
+    else: ellipse = False
+        
     
     L = length/2
     h = height/2
     m = Mesh(np.array([[radius,0],[L,0],[L,h],[0,h],[0,radius],[radius*np.cos(np.pi/4),radius*np.sin(np.pi/4)]]))
+    edge4 = generate_nodes(m,nt,(5,0,(0,0)), type_gen = 'circular')
+    edge7 = generate_nodes(m,nt,(5,4,(0,0)), type_gen = 'circular')
+    if ellipse: 
+        m.nodes[edge4]*=ellipse_radius
+        m.nodes[edge7[1:]]*=ellipse_radius
+            
     edge1 = generate_nodes(m,nr,(0,1))
     edge2 = generate_nodes(m,nt,(1,2))
     edge3 = generate_nodes(m,nr,(2,5))
-    edge4 = generate_nodes(m,nt,(5,0,(0,0)), type_gen = 'circular')
     
     edge5 = generate_nodes(m,nr,(4,3))
     edge6 = generate_nodes(m,nt,(3,2))
-    edge7 = generate_nodes(m,nt,(5,4,(0,0)), type_gen = 'circular')
     
     m = structured_mesh_2D(m, edge1, edge2, edge3, edge4, elm_type = elm_type, method=3)
     m = structured_mesh_2D(m, edge5, edge6, edge3, edge7, elm_type = elm_type, method=3, ndim = ndim, name=name)
@@ -233,15 +241,21 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     
 
 def disk_mesh(radius=0.5, nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""):
-    m = hole_plate_mesh(nx, ny, 0.5*radius, 0.5*radius, radius, elm_type = 'quad4')
+    if elm_type == 'quad8': 
+        return change_elm_type(
+                  disk_mesh(radius, nx, ny, 'quad9', ndim, name),
+                  'quad8',
+                )
+    m = hole_plate_mesh(nx, ny, 0.5*radius, 0.5*radius, radius, elm_type)
     hole_edge = m.node_sets['hole_edge']
 
     m = structured_mesh_2D(m, m.node_sets['right'], 
                            m.node_sets['top'][::-1],
                            m.node_sets['left'][::-1],
-                           m.node_sets['bottom'], elm_type = 'quad4', ndim = ndim, name=name)
+                           m.node_sets['bottom'], elm_type, ndim = ndim, name=name)
     m.node_sets = {'boundary': hole_edge}
     
-    if elm_type == 'quad4': return m
-    elif elm_type == 'tri3': return quad2tri(m)
-    else: raise NameError('Non compatible element shape')
+    return m
+    # if elm_type == 'quad4': return m
+    # elif elm_type == 'tri3': return quad2tri(m)
+    # else: raise NameError('Non compatible element shape')
