@@ -140,14 +140,22 @@ class Problem(ProblemBase):
             # else:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
             
-            if self.__D is 0:
-                self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
+            
+            if len(self._dof_free) != 0:                           
+                if self.__D is 0:
+                    self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B - self.__A@ self._Xbc)  )   
+                else:
+                    self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self._Xbc)  )                   
+                           
+                self.__X = self.__MatCB * self.__X[self._dof_free]  + self._Xbc
             else:
-                self.__X[self._dof_free]  = self._solve(self.__MatCB.T @ self.__A @ self.__MatCB , self.__MatCB.T @ (self.__B + self.__D - self.__A@ self._Xbc)  )                   
-                       
-            self.__X = self.__MatCB * self.__X[self._dof_free]  + self._Xbc
+                self.__X[:] = self._Xbc[:]
+            
+            #compute matrix conditionment. Uncomment for debug purpose
+            # lambda_min = sparse.linalg.eigs(self.__MatCB.T @ self.__A @ self.__MatCB , 1, which="SM", return_eigenvectors=False)       
+            # lambda_max = sparse.linalg.eigs(self.__MatCB.T @ self.__A @ self.__MatCB , 1, which="LM", return_eigenvectors=False)     
+            # print('cond: ', lambda_max/lambda_min)
 
-                
         elif len(self.__A.shape) == 1: #A is a diagonal matrix stored as a vector containing diagonal values 
             #No need to account for boundary condition here because the matrix is diagonal and the resolution is direct
             
