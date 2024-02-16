@@ -78,9 +78,9 @@ class StressEquilibrium(WeakFormBase):
         DiffOp = sum([0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)])
         
         if initial_stress is not 0:   
-            if self.nlgeom:  #this term doesnt seem to improve convergence !
-                DiffOp = DiffOp + sum([0 if self._nl_strain_op_vir[i] is 0 else \
-                                    self._nl_strain_op_vir[i] * initial_stress[i] for i in range(6)])
+            # if self.nlgeom:  #this term doesnt seem to improve convergence !
+            #     DiffOp = DiffOp + sum([0 if self._nl_strain_op_vir[i] is 0 else \
+            #                         self._nl_strain_op_vir[i] * initial_stress[i] for i in range(6)])
 
             DiffOp = DiffOp + sum([0 if eps[i] is 0 else \
                                     eps[i].virtual * initial_stress[i] for i in range(6)])
@@ -174,23 +174,12 @@ class StressEquilibrium(WeakFormBase):
                 assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 				#or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
                 
-                #update cauchy stress 
-                if assembly.sv['Stress'] is not 0:
-                    stress = assembly.sv['Stress'].asarray() 
-                    assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
-                    if self.nlgeom == 'TL':
-                        assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
-                        
-            
-            #### debug test - should do nothing -> to delete  ####
-            if self.nlgeom == 'UL':
-                # if updated lagragian method -> reset the mesh to the begining of the increment
-                assembly.set_disp(pb.get_disp())               
-                if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                    del assembly._saved_change_of_basis_mat[assembly.current.mesh] 
-                
-                assembly.current.compute_elementary_operators()            
-            ### end ###
+            #update cauchy stress 
+            if assembly.sv['DispGradient'] is not 0: #True when the problem have been updated once
+                stress = assembly.sv['Stress'].asarray() 
+                assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+                if self.nlgeom == 'TL':
+                    assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
 
     @property
     def corate(self):
@@ -229,31 +218,7 @@ class StressEquilibrium(WeakFormBase):
         else: 
             raise NameError('corate value not understood. Choose between "log", "log_R", "green_naghdi" or "jaumann"')
         self._corate = value
-    
-    
-    
-    # def copy(self, new_id = ""):
-    #     """
-    #     Return a raw deep copy of the weak form without keeping current state (internal variable).
-
-    #     Parameters
-    #     ----------
-    #     new_id : TYPE, optional
-    #         The name of the created constitutive law. The default is "".
-
-    #     Returns
-    #     -------
-    #     The copy of the weakform
-    #     """
-    #     new_cl = self.constitutivelaw.copy()
-        
-    #     return StressEquilibrium(new_cl, name = "", nlgeom = self.nlgeom, space = self.space)
-    
-
-
-
-        
-        
+           
 #funtions to compute strain
 def _comp_linear_strain(wf, assembly, pb):    
     #only compatible with standard FE assembly. compatible with simcoon umat
