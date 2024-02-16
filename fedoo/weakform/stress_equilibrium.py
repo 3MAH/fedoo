@@ -90,8 +90,8 @@ class StressEquilibrium(WeakFormBase):
 
     def initialize(self, assembly, pb):
         #### Put the require field to zeros if they don't exist in the assembly
-        if 'Stress' not in assembly.sv: assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
-        if 'Strain' not in assembly.sv: assembly.sv['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+        if 'Stress' not in assembly.sv: assembly.sv['Stress'] = 0
+        if 'Strain' not in assembly.sv: assembly.sv['Strain'] = 0
         assembly.sv['DispGradient'] = 0
         
         if self.nlgeom:
@@ -154,8 +154,6 @@ class StressEquilibrium(WeakFormBase):
                     assembly.sv['TangentMatrix'] = assembly.sv['TangentMatrix'].reshape(6,6,-1) * np.ones((1,1,assembly.sv['F'].shape[2]))
                 
             assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), self._convert_Lt_tag)            
-            # assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), "DsigmaDe_JaumannDD_2_DSDE")
-
         
     def to_start(self, assembly, pb):    
         if self.nlgeom == 'UL':
@@ -172,14 +170,13 @@ class StressEquilibrium(WeakFormBase):
                 #rotate strain and stress -> need to be checked
                 assembly.sv['Strain'] = StrainTensorList(sim.rotate_strain_R(assembly.sv_start['Strain'].asarray(),assembly.sv['DR']) + assembly.sv['DStrain'])
                 assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
-				#or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
                 
-                #update cauchy stress 
-                if assembly.sv['Stress'] is not 0:
-                    stress = assembly.sv['Stress'].asarray() 
-                    assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
-                    if self.nlgeom == 'TL':
-                        assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+            #update cauchy stress 
+            if assembly.sv['Stress'] is not 0:
+                stress = assembly.sv['Stress'].asarray() 
+                assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+                if self.nlgeom == 'TL':
+                    assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
                         
             
             #### debug test - should do nothing -> to delete  ####
