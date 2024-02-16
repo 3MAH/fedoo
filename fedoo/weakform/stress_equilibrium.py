@@ -174,12 +174,12 @@ class StressEquilibrium(WeakFormBase):
                 assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 				#or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
                 
-                #update cauchy stress 
-                if assembly.sv['Stress'] is not 0:
-                    stress = assembly.sv['Stress'].asarray() 
-                    assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
-                    if self.nlgeom == 'TL':
-                        assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
+            #update cauchy stress 
+            if assembly.sv['Stress'] is not 0:
+                stress = assembly.sv['Stress'].asarray() 
+                assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+                if self.nlgeom == 'TL':
+                    assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
                         
             
             #### debug test - should do nothing -> to delete  ####
