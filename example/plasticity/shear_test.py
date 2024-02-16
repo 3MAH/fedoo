@@ -12,7 +12,7 @@ start = time()
 
 fd.ModelingSpace("3D")
 
-NLGEOM = 2
+NLGEOM = 'UL'
 #Units: N, mm, MPa
 h = 1
 w = 1
@@ -33,13 +33,9 @@ crd = mesh.nodes
 
 mat =1
 if mat == 0:
-    props = np.array([[E, nu, alpha]])
-    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
+    props = np.array([E, nu, alpha])
+    material = fd.constitutivelaw.Simcoon("ELISO", props, name='ConstitutiveLaw')
     material.corate = 2
-    # Material.SetMaskH([[] for i in range(6)])
-    # mask = [[3,4,5] for i in range(3)]
-    # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    # Material.SetMaskH(mask)
 elif mat == 1 or mat == 2:
     Re = 300
     k=1000 #1500
@@ -47,13 +43,6 @@ elif mat == 1 or mat == 2:
     if mat == 1:
         props = np.array([E, nu, alpha, Re,k,m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
-        material.corate = 2
-        # Material.SetMaskH([[] for i in range(6)])
-    
-        # mask = [[3,4,5] for i in range(3)]
-        # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-        # Material.SetMaskH(mask)
-
     elif mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
         material.SetHardeningFunction('power', H=k, beta=m)
@@ -104,7 +93,7 @@ pb.bc.add('Dirichlet',nodes_top, ['DispY', 'DispZ'], 0)
 pb.bc.add('Dirichlet',nodes_top, 'DispX', uimp)
 
 
-pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.05)
 
 E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
 
@@ -137,7 +126,7 @@ results.plot('Stress_vm', component = 0, show = True)
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-# results.write_movie('Cauchy_vm', filename = res_dir+filename, framerate = 5, quality = 5)
+# results.write_movie(res_dir+filename, 'Stress', 'vm', framerate = 5, quality = 5)
 
 # ------------------------------------
 # Save pdf plot

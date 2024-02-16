@@ -186,10 +186,12 @@ class _NonLinearBase():
         For Force and Work error criterion, the problem must be updated
         (Update method).
         """
+        norm_type = np.inf
         dof_free = self._dof_free
+        if len(dof_free) == 0: return 0
         if self._err0 is None: # if self._err0 is None -> initialize the value of err0  
             if self.nr_parameters['criterion'] == 'Displacement':                     
-                self._err0 = np.max(np.abs((self._U + self._dU)[dof_free])) #Displacement criterion
+                self._err0 = np.linalg.norm((self._U + self._dU)[dof_free], norm_type) #Displacement criterion
                 if self._err0 == 0: 
                     self._err0 = 1                
                     return 1
@@ -197,16 +199,17 @@ class _NonLinearBase():
             else:
                 self._err0 = 1
                 self._err0 = self.NewtonRaphsonError() 
-                return 1                
+                return 1
         else: 
             if self.nr_parameters['criterion'] == 'Displacement': 
-                return np.max(np.abs(self.get_X()[dof_free]))/self._err0  #Displacement criterion
+                # return np.max(np.abs(self.get_X()[dof_free]))/self._err0  #Displacement criterion
+                return np.linalg.norm(self.get_X()[dof_free], norm_type)/self._err0  #Displacement criterion
             elif self.nr_parameters['criterion'] == 'Force': #Force criterion              
-                if self.get_D() is 0: return np.max(np.abs(self.get_B()[dof_free]))/self._err0 
-                else: return np.max(np.abs(self.get_B()[dof_free]+self.get_D()[dof_free]))/self._err0                     
+                if self.get_D() is 0: return np.linalg.norm(self.get_B()[dof_free], norm_type)/self._err0 
+                else: return np.linalg.norm(self.get_B()[dof_free]+self.get_D()[dof_free], norm_type)/self._err0                     
             else: #self.nr_parameters['criterion'] == 'Work': #work criterion
-                if self.get_D() is 0: return np.max(np.abs(self.get_X()[dof_free]) * np.abs(self.get_B()[dof_free]))/self._err0 
-                else: return np.max(np.abs(self.get_X()[dof_free]) * np.abs(self.get_B()[dof_free]+self.get_D()[dof_free]))/self._err0 
+                if self.get_D() is 0: return np.linalg.norm(self.get_X()[dof_free] * self.get_B()[dof_free], norm_type)/self._err0 
+                else: return np.linalg.norm(self.get_X()[dof_free] * (self.get_B()[dof_free]+self.get_D()[dof_free]), norm_type)/self._err0 
    
     def set_nr_criterion(self, criterion = 'Displacement', **kargs):
         """
@@ -338,7 +341,7 @@ class _NonLinearBase():
         if t0 is not None: self.t0 = t0 #time at the start of the time step
         if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
         if tol_nr is None: tol_nr = self.nr_parameters['tol']
-        if print_info is None: print_info = self.print_info
+        if print_info is not None: self.print_info = print_info
         if save_at_exact_time is not None: 
             self.save_at_exact_time = save_at_exact_time
         if interval_output is None: interval_output = self.interval_output # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output 
@@ -364,8 +367,7 @@ class _NonLinearBase():
              
         while self.time < self.tmax - self.err_num:                         
     
-            save_results = (self.time != self.t0) and \
-                ((self.time == next_time) or (self.save_at_exact_time == False and self.__iter%interval_output == 0))
+            save_results = ((self.time == next_time) or (self.save_at_exact_time == False and self.__iter%interval_output == 0))
 
             #update next_time                
             if self.time == next_time: 

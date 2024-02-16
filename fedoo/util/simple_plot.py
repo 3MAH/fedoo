@@ -97,7 +97,7 @@ def mesh_plot_2d(mesh, disp=None, data=None, data_min=None,data_max=None, scale_
             patches = []
             
             for i in range(len(elm)):        
-                polygon = Polygon(crd_scaled[elm[i,0:4],0:2], True)
+                polygon = Polygon(crd_scaled[elm[i,0:4],0:2], closed=True)
                 patches.append(polygon)                      
             
             p = PatchCollection(patches, edgecolors='k', fc='None', lw =0.5, alpha=1)            
@@ -171,9 +171,9 @@ def field_plot_2d(assemb, disp, dataname =None, component=0, data_min=None,data_
     # TensorStress = ConstitutiveLaw.get_all()[Matname].GetStressFromStrain(TensorStrain)
 
     TensorStrain = assemb_visu.get_strain(U, "GaussPoint", nlgeom = False)       
-    TensorStress = wf.GetConstitutiveLaw().GetStressFromStrain(TensorStrain)
-    TensorStrain = TensorStrain.Convert(assemb_visu, ConvertTo = "Node")
-    TensorStress = TensorStress.Convert(assemb_visu, ConvertTo = "Node")
+    TensorStress = wf.constitutivelaw.get_stress_from_strain(assemb_visu, TensorStrain)
+    TensorStrain = TensorStrain.convert(assemb_visu, convert_to = "Node")
+    TensorStress = TensorStress.convert(assemb_visu, convert_to = "Node")
 
     
     try:

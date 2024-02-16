@@ -148,6 +148,18 @@ class Simcoon(Mechanical3D):
         else: temp = None
         
         (stress, assembly.sv['Statev'], assembly.sv['Wm'], assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, assembly.sv_start['Strain'].array, de.array, assembly.sv_start['Stress'].array, assembly.sv['DR'], self.props, assembly.sv_start['Statev'], pb.time, pb.dtime, assembly.sv_start['Wm'])                        
+        
+        
+        #### TEST ######
+        # assembly.sv['TangentMatrix'][:,:3] = assembly.sv['TangentMatrix'][:,:3] + stress.reshape(6,1,-1)
+        # F = np.transpose(assembly.sv['F'], (2,0,1))
+        # J = np.linalg.det(F)  
+        # print(J.min()) 
+        # assembly.sv['TangentMatrix'] = (1/J)*assembly.sv['TangentMatrix']
+        # stress /= J
+        # assembly.sv['TangentMatrix'] = 5*assembly.sv['TangentMatrix']
+        #### END TEST #####
+        
         assembly.sv['Stress'] = StressTensorList(stress)
         # to check the symetriy of the tangentmatrix :
         # print(np.abs(assembly.sv['TangentMatrix'] - assembly.sv['TangentMatrix'].transpose((1,0,2))).max()) 

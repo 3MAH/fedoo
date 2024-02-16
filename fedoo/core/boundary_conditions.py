@@ -170,7 +170,7 @@ class ListBC(BCBase):
           Define some standard boundary conditions (Dirichlet of Neumann BC), using
           the BoundaryCondition.create staticmethod, and add it at the end of the list. 
         
-          Same agruments as the BoundaryCondition.create static method.         
+          Same agruments as the :py:meth:`fedoo.BoundaryCondition.create` static method.         
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
             self.append(args[0])
@@ -182,6 +182,16 @@ class ListBC(BCBase):
             return bc
 
     def mpc(self, *args, **kargs):
+        """
+        Add a linear multi-point constraint to the list of boundary conditions.
+        
+        This method is equivalent to use the method add with a MPC object:
+         
+          >>> boundary_conditions.add(fd.MPC(*args, **kargs))
+         
+        The arguments are the same as the :py:class:`fedoo.MPC` constructor.
+
+        """
         self.append(MPC(*args, **kargs))
 
     def initialize(self, problem):
@@ -491,15 +501,15 @@ class MPC(BCBase):
             MPC([12,15], ['Disp_X', 'Disp_Z'], [4, -2], 7)
         
         Parameters
-        ----------        
+        ----------       
+        list_node_sets : list of str or list of list of int (or array)
+            List of node_set names (list of str) or list of node indexes (list of list of int) 
         list_variables : list of str, or list of int
             list of variable names (list of str) or list of variable ranks (list of int)
         list_factors : list of scalars or numpy array
             list of factor (MPC). 
             To define several mpc at once, it is possible to give an array of factors, where
-            each line is associated to a signe mpc. 
-        list_node_sets : list of str or list of list of int (or array)
-            List of node_set names (list of str) or list of node indexes (list of list of int) 
+            each line is associated to a signe mpc.         
         constant : scalar, optional
             constant value on the MPC equation 
             if not specified, no constant value. 
@@ -515,9 +525,14 @@ class MPC(BCBase):
         name : str, optional
             Define an name for the Boundary Conditions. Default is "". The same name may be used for several BC.
 
-        Remark  
+        Notes  
         -------
-        To define many MPC in one operation, use array where each line define a single MPC
+        
+          * To define many MPC in one operation, use array where each line define a single MPC
+          * In fedoo, the mpc are applied with an elimination method. 
+            The first dof specified in list_node_sets[0] and list_variable[0] 
+            is the slave dof and will eliminated from the linear system. No other 
+            boundary conditions should be applied on this dof.
         """
         BCBase.__init__(self, name)
         self.bc_type = 'MPC'
