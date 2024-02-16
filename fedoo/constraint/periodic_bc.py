@@ -301,37 +301,38 @@ class PeriodicBC(BCBase):
                     np.lexsort((crd[face_Zp, 0], crd[face_Zp, 1].round(decimal_round)))
                 ]
 
+            self.face_Zm = face_Zm
+            self.face_Zp = face_Zp      
+
+            self.edge_XmZm = edge_XmZm
+            self.edge_YmZm = edge_YmZm
+            self.edge_XpZm = edge_XpZm
+            self.edge_XpZp = edge_XpZp
+
+            self.edge_XmZp = edge_XmZp
+            self.edge_YpZm = edge_YpZm
+            self.edge_YpZp = edge_YpZp
+            self.edge_YmZp = edge_YmZp
+
+            self.corner_XmYmZm = corner_XmYmZm
+            self.corner_XmYmZp = corner_XmYmZp
+            self.corner_XmYpZm = corner_XmYpZm
+            self.corner_XmYpZp = corner_XmYpZp
+
+            self.corner_XpYmZm = corner_XpYmZm
+            self.corner_XpYmZp = corner_XpYmZp
+            self.corner_XpYpZm = corner_XpYpZm
+            self.corner_XpYpZp = corner_XpYpZp                
+
         self.face_Xm = face_Xm
         self.face_Ym = face_Ym
-        self.face_Zm = face_Zm
         self.face_Xp = face_Xp
         self.face_Yp = face_Yp
-        self.face_Zp = face_Zp
 
         self.edge_XmYm = edge_XmYm
-        self.edge_XmZm = edge_XmZm
-        self.edge_YmZm = edge_YmZm
         self.edge_XpYm = edge_XpYm
-
         self.edge_XpYp = edge_XpYp
         self.edge_XmYp = edge_XmYp
-        self.edge_XpZm = edge_XpZm
-        self.edge_XpZp = edge_XpZp
-
-        self.edge_XmZp = edge_XmZp
-        self.edge_YpZm = edge_YpZm
-        self.edge_YpZp = edge_YpZp
-        self.edge_YmZp = edge_YmZp
-
-        self.corner_XmYmZm = corner_XmYmZm
-        self.corner_XmYmZp = corner_XmYmZp
-        self.corner_XmYpZm = corner_XmYpZm
-        self.corner_XmYpZp = corner_XmYpZp
-
-        self.corner_XpYmZm = corner_XpYmZm
-        self.corner_XpYmZp = corner_XpYmZp
-        self.corner_XpYpZm = corner_XpYpZm
-        self.corner_XpYpZp = corner_XpYpZp
 
         self.d_rve = d_rve
 
@@ -352,36 +353,45 @@ class PeriodicBC(BCBase):
         var_cd = self.var_cd
 
         sc = self.shear_coef
-        dx = self.d_rve[0]
-        dy = self.d_rve[1]
-        dz = self.d_rve[2]
 
+        dx = self.d_rve[0]
         face_Xm = self.face_Xm
-        face_Ym = self.face_Ym
-        face_Zm = self.face_Zm
         face_Xp = self.face_Xp
-        face_Yp = self.face_Yp
-        face_Zp = self.face_Zp
-        edge_XmYm = self.edge_XmYm
-        edge_XmZm = self.edge_XmZm
-        edge_YmZm = self.edge_YmZm
-        edge_XpYm = self.edge_XpYm
-        edge_XpYp = self.edge_XpYp
-        edge_XmYp = self.edge_XmYp
-        edge_XpZm = self.edge_XpZm
-        edge_XpZp = self.edge_XpZp
-        edge_XmZp = self.edge_XmZp
-        edge_YpZm = self.edge_YpZm
-        edge_YpZp = self.edge_YpZp
-        edge_YmZp = self.edge_YmZp
-        corner_XmYmZm = self.corner_XmYmZm
-        corner_XmYmZp = self.corner_XmYmZp
-        corner_XmYpZm = self.corner_XmYpZm
-        corner_XmYpZp = self.corner_XmYpZp
-        corner_XpYmZm = self.corner_XpYmZm
-        corner_XpYmZp = self.corner_XpYmZp
-        corner_XpYpZm = self.corner_XpYpZm
-        corner_XpYpZp = self.corner_XpYpZp
+
+        if self.dim > 1:        
+            dy = self.d_rve[1]
+
+            face_Ym = self.face_Ym
+            face_Yp = self.face_Yp
+
+            edge_XmYm = self.edge_XmYm
+            edge_XpYm = self.edge_XpYm
+            edge_XpYp = self.edge_XpYp
+            edge_XmYp = self.edge_XmYp
+
+        if self.dim > 2:        
+            dz = self.d_rve[2]
+
+            face_Zm = self.face_Zm
+            face_Zp = self.face_Zp
+
+            edge_XmZm = self.edge_XmZm
+            edge_YmZm = self.edge_YmZm
+            edge_XpZm = self.edge_XpZm
+            edge_XpZp = self.edge_XpZp
+            edge_XmZp = self.edge_XmZp
+            edge_YpZm = self.edge_YpZm
+            edge_YpZp = self.edge_YpZp
+            edge_YmZp = self.edge_YmZp
+
+            corner_XmYmZm = self.corner_XmYmZm
+            corner_XmYmZp = self.corner_XmYmZp
+            corner_XmYpZm = self.corner_XmYpZm
+            corner_XmYpZp = self.corner_XmYpZp
+            corner_XpYmZm = self.corner_XpYmZm
+            corner_XpYmZp = self.corner_XpYmZp
+            corner_XpYpZm = self.corner_XpYpZm
+            corner_XpYpZp = self.corner_XpYpZp
 
         res = ListBC()
         # face_Xm/Xp faces (DispX)
