@@ -112,7 +112,7 @@ class RigidTie(BCBase):
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
                 
-        mesh = problem.mesh                     
+        mesh = problem.mesh
         var_cd = self.var_cd
         node_cd = self.node_cd #node_cd[0] -> node defining center of rotation
         list_nodes = self.list_nodes
@@ -135,17 +135,27 @@ class RigidTie(BCBase):
         sin = np.sin(angles)
         cos = np.cos(angles)
         
-        # R = Rotation.from_euler("XYZ", angles).as_matrix()
+        
+        
+        R = Rotation.from_euler("XYZ", angles).as_matrix()
         # #or        
         # R2 = np.array([[cos[1]*cos[2], -cos[1]*sin[2], sin[1]],
         #           [cos[0]*sin[2] + cos[2]*sin[0]*sin[1], cos[0]*cos[2]-sin[0]*sin[1]*sin[2], -cos[1]*sin[0]],
         #           [sin[0]*sin[2] - cos[0]*cos[2]*sin[1], cos[2]*sin[0]+cos[0]*sin[1]*sin[2], cos[0]*cos[1]]] )
         
-                    
-        
         #approche globale :
         # crd = mesh.nodes + problem.get_disp()
         # Uini = (crd - crd[0]) @ R.T + disp_ref #node disp at the begining of the iteration
+        
+        # Correct displacement of slave nodes to be consistent with the master nodes
+        new_disp = (mesh.nodes[list_nodes] - mesh.nodes[node_cd[0]]) @ R.T + mesh.nodes[node_cd[0]] + disp_ref - mesh.nodes[list_nodes] 
+        
+        if problem._dU is not 0:
+            if problem._U is not 0:
+                problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T - problem._U.reshape(3,-1)[:,list_nodes]
+            else:
+                problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T
+        
         
         #approche incrémentale: 
         
