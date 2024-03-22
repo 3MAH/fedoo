@@ -51,6 +51,7 @@ class ReadINP:
                 crd = np.array([inp[line].split() for line in range(nline+1,keyword[k+1][0])], dtype = float) 
                 NodeNumber = crd[:,0]
                 NodeCoordinate = crd[:,1:]
+                print(NodeCoordinate)
                 
                 # numnode0 = int(msh[0].split()[0]) #0 or 1, in the mesh format the first node is 0
                 # #a conversion is required if the msh file begin with another number
@@ -60,14 +61,13 @@ class ReadINP:
             elif key[0:8] == '*element': 
                 celltype = key[8:].strip()[4:].replace('=','').strip()
     
-                if celltype in ['cpe3', 'cps3', 'cpe3h']: 
+                if celltype[:4] in ['cpe3', 'cps3']: #, 'cpe3h' 
                     fedooElm = 'tri3'
-                elif celltype in ['cpe4', 'cpe4h', 'cpe4i', 'cpe4ih', 'cpe4r', 'cpe4rh',  
-                                  'cps4', 'cps4i', 'cps4r']: 
+                elif celltype[:4] in ['cpe4','cps4']: #'cpe4h', 'cpe4i', 'cpe4ih', 'cpe4r', 'cpe4rh', 'cps4i', 'cps4r'
                     fedooElm = 'quad4'
-                elif celltype in ['cpe6', 'cpe6h', 'cpe6m', 'cpe6mh', 'cps6', 'cps6m']:
+                elif celltype[:4] in ['cpe6', 'cps6']: #'cpe6h', 'cpe6m', 'cpe6mh','cps6m'
                     fedooElm = 'tri6'
-                elif celltype in ['cpe8', 'cpe8h', 'cpe8r', 'cpe8rh', 'cps8', 'cps8r']:
+                elif celltype[:4] in ['cpe8', 'cps8']: #'cpe8h', 'cpe8r', 'cpe8rh', 'cps8r' 
                     fedooElm = 'quad8'    
                 elif celltype[:4] in ['c3d4']: 
                     fedooElm = 'tet4'
@@ -152,11 +152,11 @@ class ReadINP:
             else: importedMeshName = meshname+str(count)
             
             elm = self.__ConvertNode(dict_elm['ElementTable'])
-            Mesh(self.__NodeCoordinate, elm, dict_elm['ElementType'], name = importedMeshName) 
+            mesh = Mesh(self.__NodeCoordinate, elm, dict_elm['ElementType'], name = importedMeshName) 
             #add set of nodes
             for SetOfId in self.__NodeSet:
                 NodeIndexes = self.__NodeSet[SetOfId]
-                Mesh.get_all()[importedMeshName].add_node_set(self.__ConvertNode(NodeIndexes),SetOfId)
+                mesh.add_node_set(self.__ConvertNode(NodeIndexes),SetOfId)
             
             ElementNumber = dict_elm['ElementNumber']
             ConvertElementDict = dict(zip(ElementNumber, list(range(0,len(ElementNumber)))))        
@@ -164,8 +164,9 @@ class ReadINP:
             for SetOfId in self.__ElementSet:
                 ElementIndexes = self.__ElementSet[SetOfId]
                 Temp = ConvertElement(ElementIndexes)                
-                Mesh.get_all()[importedMeshName].add_element_set(Temp[Temp != None].astype(int),SetOfId)                    
-
+                mesh.add_element_set(Temp[Temp != None].astype(int),SetOfId)                    
+        
+        return mesh
     # def applyBoundaryCondition(self, Problemname = "MainProblem"):
     #     for listVar in self.__Equation:
     #         eq = np.array(self.__Equation[listVar])

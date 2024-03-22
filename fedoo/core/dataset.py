@@ -794,8 +794,9 @@ class MultiFrameDataSet(DataSet):
     
     def load(self,data=-1, load_mesh = False): 
         if isinstance(data, int):         
-            #data is the an iteration to load
-            iteration = self.list_data.index(self.list_data[data])
+            #data is an iteration to load
+            # iteration = self.list_data.index(self.list_data[data])
+            iteration = data
             if iteration < 0: iteration += len(self.list_data)
             if self.loaded_iter == iteration: 
                 return
@@ -1052,20 +1053,18 @@ class MultiFrameDataSet(DataSet):
                 data = self.mesh_gp.convert_data(data, convert_from='GaussPoint', convert_to='Node', n_elm_gp=len(data)//self.mesh.n_elements)
                 if 'Disp' in self.node_data:                    
                     U = ((self.node_data['Disp'].reshape(ndim,-1).T[self.mesh.elements.ravel()]).T).T
-                    new_crd = as_3d_coordinates(crd + scale*U)
+                    meshplot.points = as_3d_coordinates(crd + scale*U)
                 
                 if show_nodes: 
                     if 'Disp' in self.node_data:
                         crd_points = as_3d_coordinates(self.mesh.physical_nodes + scale*self.node_data['Disp'].T[:n_physical_nodes])
             else:            
                 if 'Disp' in self.node_data:
-                    new_crd =  as_3d_coordinates(crd + scale*self.node_data['Disp'].T[:n_physical_nodes])
-                    crd_points = new_crd #alias
+                    meshplot.points =  as_3d_coordinates(crd + scale*self.node_data['Disp'].T[:n_physical_nodes])
+                    crd_points = meshplot.points #alias
                 
                 if data_type == 'Node':
                     data = data[:n_physical_nodes]                
-                
-            meshplot.points = new_crd                                      
             
             if i == 0:                                                                                            
                 pl.add_mesh(meshplot, scalars = data, show_edges = show_edges, scalar_bar_args=sargs, cmap="jet", clim = clim,  **kargs)

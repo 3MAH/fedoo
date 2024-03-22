@@ -1028,6 +1028,11 @@ class Mesh(MeshBase):
         return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
 
 
+    def get_volume(self):
+        """Compute the total volume of the mesh (or surface for 2D meshes)."""
+        return sum(self._get_gaussian_quadrature_mat().data)
+        
+
     def reset_interpolation(self) -> None:
         """Remove all the saved data related to field interpolation. 
         This method should be used when modifying the element table or when removing or adding nodes.

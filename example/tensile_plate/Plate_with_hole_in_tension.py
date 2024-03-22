@@ -10,6 +10,7 @@ fd.ModelingSpace("2Dstress")
 mesh = fd.mesh.import_file('plate_with_hole.msh').as_2d()
 # 
 #alternative mesh below (uncomment the line)
+# mesh = fd.mesh.hole_plate_mesh()
 # mesh = fd.mesh.rectangle_mesh(nx=101, ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, elm_type='quad4')
 
 #Material definition
