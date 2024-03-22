@@ -70,7 +70,7 @@ pb.bc.add('Dirichlet', [StrainNodes[1]], 'Disp', [E[3], E[4], E[5]])  # EpsXY, E
 pb.apply_boundary_conditions()
 
 # ---------------  Non linear solver--------------------------------------------
-pb.set_solver('CG') #conjugate gradient solver
+# pb.set_solver('CG') #conjugate gradient solver
 pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.1)
 
 # --------------- Post-Treatment -----------------------------------------------

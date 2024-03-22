@@ -264,7 +264,19 @@ class RigidTie2D(BCBase):
                 
         sin = np.sin(angles)
         cos = np.cos(angles)
+        
+        # warning add correction with the rotation matrix
+        # R = ???        
+        # # Correct displacement of slave nodes to be consistent with the master nodes
+        # new_disp = (mesh.nodes[list_nodes] - mesh.nodes[node_cd[0]]) @ R.T + mesh.nodes[node_cd[0]] + disp_ref - mesh.nodes[list_nodes] 
+        
+        # if problem._dU is not 0:
+        #     if problem._U is not 0:
+        #         problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T - problem._U.reshape(3,-1)[:,list_nodes]
+        #     else:
+        #         problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T
                 
+        
         #approche incrémentale: 
         
         # dR_drx = np.array([[0, 0, 0],

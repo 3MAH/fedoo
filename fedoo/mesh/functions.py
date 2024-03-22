@@ -262,6 +262,13 @@ def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
     return Mesh(crd, elm, type_elm, name =name)                        
 
 
+def quad2tri(mesh):
+    assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
+    crd = mesh.nodes
+    elm = mesh.elements
+    return Mesh(crd, np.vstack( [elm[:,0:3], elm[:,[0,2,3]]]), 'tri3')
+
+
 def change_elm_type(mesh, elm_type, name=""):
     """
     Attempt to change the type of element of the given mesh with the given elm_type.
@@ -288,6 +295,12 @@ def change_elm_type(mesh, elm_type, name=""):
     meshes.
     
     """
+    if mesh.elm_type == 'quad4':
+        if elm_type == 'tri3':
+            return quad2tri(mesh)
+        if elm_type == 'tri6':
+            return change_elm_type(quad2tri(mesh), elm_type)
+        
     elm_ref = get_element(mesh.elm_type)(0)
     xi_nd = get_node_elm_coordinates(elm_type)
     
@@ -317,8 +330,3 @@ def change_elm_type(mesh, elm_type, name=""):
     # new_mesh = new_mesh.from_pyvista()
     return new_mesh
     
-def quad2tri(mesh):
-    assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
-    crd = mesh.nodes
-    elm = mesh.elements
-    return Mesh(crd, np.vstack( [elm[:,0:3], elm[:,[0,2,3]]]), 'tri3')

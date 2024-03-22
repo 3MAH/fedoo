@@ -1,19 +1,16 @@
-from fedoo import *
+from fedoo import fd
 import numpy as np
 import time
 from simcoon import simmit as sim
 import os
 
 #--------------- Pre-Treatment --------------------------------------------------------
-ModelingSpace("3D")
+fd.ModelingSpace("3D")
 
-mesh.import_file('../../util/meshes/octet_surf.msh', meshname = "Domain")
-
-meshname = "Domain2"
+mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh')['tet4']
 
 umat_name = 'ELISO'
-props = np.array([[1e5, 0.3, 1]])
-nstatev = 1
+props = np.array([1e5, 0.3, 1]) # 
 
 L = sim.L_iso(1e5, 0.3, 'Enu')
 props_test = sim.L_iso_props(L)

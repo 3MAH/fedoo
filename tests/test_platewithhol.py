@@ -44,9 +44,9 @@ res = pb.get_results("Assembly", ['Stress_vm','Strain'], 'Node')
 
 U = pb.get_disp()
 
-assert U[0,22] == 0.1
-assert np.abs(U[1,22] +0.01962855744173) < 1e-10
-assert np.abs(res.node_data['Stress_vm'][53]-175.50126302014) < 1e-10
+assert U[0,40] == 0.1
+assert np.abs(U[1,40] +0.01962855744173) < 1e-10
+assert np.abs(res.node_data['Stress_vm'][282]-175.50126302014) < 1e-10
 
 # res.plot('Stress_vm')
 # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")

@@ -36,7 +36,7 @@ _label_dict = {'pkii':'PK2',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhoff
 #  {'pkii':', save_mesh = FalsePKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',
 # 'stress':'Stress', 'strain':'Strain', 'disp':'Disp', 'rot':'Rot'} #use to get label associated with some outputs
 
-def _get_results(pb, assemb, output_list, output_type=None, position = 1):
+def _get_results(pb, assemb, output_list, output_type=None, position = 1, element_set = None, include_mesh = True):
         
         if isinstance(output_list, str): output_list = [output_list]                
 
@@ -66,7 +66,13 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
                 
         sv = assemb.sv #state variables associated to the assembly
         
-        result = DataSet(assemb.mesh)
+        if include_mesh:
+            if element_set is None:
+                result = DataSet(assemb.mesh)
+            else:
+                result = DataSet(assemb.mesh.extract_elements(element_set))
+                if isinstance(element_set, str):
+                    element_set = assemb.mesh.element_sets[element_set]
                     
         for res in output_list:   
             if res in pb.space.list_variables() or res in pb.space.list_vectors():
@@ -217,9 +223,20 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1):
             if data_type == 'Node':
                 result.node_data[res] = data
             elif data_type == 'Element':
-                result.element_data[res] = data
+                if element_set is None:
+                    result.element_data[res] = data
+                else:
+                    result.element_data[res] = data.T[element_set].T
             elif data_type == 'GaussPoint':
-                result.gausspoint_data[res] = data
+                if element_set is None:
+                    result.gausspoint_data[res] = data
+                else:
+                    if data.ndim==1:
+                        data = data.reshape(-1, assemb.mesh.n_elements)  
+                        result.gausspoint_data[res] = data[:,element_set].ravel()
+                    else: #data.ndim ==2
+                        data = data.reshape(data.shape[0], -1, assemb.mesh.n_elements)
+                        result.gausspoint_data[res] = data[:,:, element_set].reshape(data.shape[0], -1)                        
         
         if hasattr(pb, 'time'): result.scalar_data['Time'] = pb.time
         
@@ -231,7 +248,7 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.data_sets = {}
                 
-    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'fdz', position = 1, save_mesh = True):
+    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'fdz', position = 1, save_mesh = True, element_set = None):
         
         dirname = os.path.dirname(filename)        
         # filename = os.path.basename(filename)
@@ -267,7 +284,7 @@ class _ProblemOutput:
         
         if not(os.path.isdir(dirname)) and dirname != '': os.mkdir(dirname)
                 
-        new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position}
+        new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position, 'element_set': element_set}
         self.__list_output.append(new_output)
                         
         # if file_format in ['npz', 'npz_compressed', 'fdz']:
@@ -301,7 +318,8 @@ class _ProblemOutput:
             filename = output['filename']
             file_format = output['file_format'].lower()
             output_type = output['type'] #'Node', 'Element' or 'GaussPoint'
-            position = output['position']                              
+            position = output['position']                          
+            element_set = output['element_set']
             
             assemb = output['assembly']
             # material = assemb.weakform.GetConstitutiveLaw()
@@ -319,14 +337,17 @@ class _ProblemOutput:
                     list_filename.append(filename)
                     list_full_filename.append(full_filename)
                     list_file_format.append(file_format)
-                    out = DataSet(assemb.mesh)                  
+                    if element_set is None:
+                        out = DataSet(assemb.mesh)
+                    else:
+                        out = DataSet(assemb.mesh.extract_elements(element_set))
                     list_data.append(out)                        
                 else: 
                     #else, the same file is used   
                     out = list_data[list_full_filename.index(full_filename)]                                                                             
             
                 #compute the results
-                res = _get_results(pb, assemb, output['list'],output_type,position)#, file_format)       
+                res = _get_results(pb, assemb, output['list'],output_type,position, element_set, False)
                 out.add_data(res)            
         
         for i, out in enumerate(list_data): 

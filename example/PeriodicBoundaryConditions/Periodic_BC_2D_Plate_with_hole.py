@@ -68,7 +68,6 @@ Exy = 0.1
 
 #Add some multipoint constraint for periodic conditions associated to the defined strain dof
 pb.bc.add(fd.constraint.PeriodicBC([StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY']))
-# fd.homogen.DefinePeriodicBoundaryCondition(mesh, [StrainNodes[0], StrainNodes[1], StrainNodes[0]], ['DispX', 'DispY', 'DispY'], dim='2D')
 
 #Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
 pb.bc.add('Dirichlet',[StrainNodes[0]], 'DispX', Exx) #EpsXX
@@ -92,54 +91,22 @@ pb.solve()
 #------------------------------------------------------------------------------
 # Post-treatment
 #------------------------------------------------------------------------------
-#plot the deformed mesh with the shear stress (component=5)
-fd.util.field_plot_2d("Assembling", disp = pb.get_dof_solution(), dataname = 'stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
+res = pb.get_results("Assembling", ['Disp','Stress'])
+
+#plot the deformed mesh with the shear stress (component=3). 
+res.plot('Stress', 'XY', 'Node')
+# simple matplotlib alternative if pyvista is not installed:
+#fd.util.field_plot_2d("Assembling", disp = pb.get_dof_solution(), dataname = 'Stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
 
 # print the macroscopic strain tensor and stress tensor
 print('Strain tensor ([Exx, Eyy, Exy]): ', [pb.get_disp('DispX')[-2], pb.get_disp('DispY')[-1], pb.get_disp('DispY')[-2]])
 #Compute the mean stress 
 #Get the stress tensor (PG values)
 
-# Surf = Assembly.get_all()['Assembling'].integrate_field(np.ones_like(TensorStress[0])) #surface of domain without the void (hole)
+# mesh.get_volume() #surface of domain without the void (hole)
 Surf = (xmax-xmin)*(ymax-ymin) #total surface of the domain
-MeanStress = [1/Surf*fd.Assembly['Assembling'].integrate_field(TensorStress[i]) for i in [0,1,5]]
+MeanStress = [1/Surf*mesh.integrate_field(res['Stress'][i]) for i in [0,1,3]]
 
 print('Stress tensor ([Sxx, Syy, Sxy]): ', MeanStress)
 
-# print(ConstitutiveLaw.get_all()['ElasticLaw'].GetH())
-
-#------------------------------------------------------------------------------
-#Optional: Compute and write data in a vtk file (for visualization with paraview for instance)
-#------------------------------------------------------------------------------
-
-# #Get the stress tensor (nodal values)
-# TensorStrain = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Nodal")       
-# TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
-
-# #Get the stress tensor (element values)
-# TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(Problem.get_disp(), "Element")       
-# TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
-
-# # Get the principal directions (vectors on nodes)
-# PrincipalStress, PrincipalDirection = TensorStress.GetPrincipalStress()
-
-# #Get the displacement vector on nodes for export to vtk
-# U = np.reshape(Problem.get_dof_solution('all'),(2,-1)).T
-# N = Mesh.get_all()[meshname].n_nodes
-# U = np.c_[U,np.zeros(N)]
-
-# #write the vtk file                     
-# OUT = Util.ExportData(meshname)
-# OUT.addNodeData(U,'Displacement')
-# OUT.addNodeData(TensorStress.vtkFormat(),'Stress')
-# OUT.addElmData(TensorStressEl.vtkFormat(),'Stress')
-# OUT.addNodeData(TensorStrain.vtkFormat(),'Strain')
-# OUT.addElmData(TensorStrainEl.vtkFormat(),'Strain')
-# OUT.addNodeData(TensorStress.vonMises(),'VMStress')
-# OUT.addElmData(TensorStressEl.vonMises(),'VMStress')
-# OUT.addNodeData(PrincipalStress,'PrincipalStress')
-# OUT.addNodeData(PrincipalDirection[0],'DirPrincipal1')
-# OUT.addNodeData(PrincipalDirection[1],'DirPrincipal2')
-# OUT.toVTK("plate_with_hole_in_tension_BC.vtk")
-# print('Result file "Periodic_BC_2D_Plate_with_hole.vtk" written in the active directory')
 

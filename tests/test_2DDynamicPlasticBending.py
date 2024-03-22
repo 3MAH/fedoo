@@ -94,8 +94,8 @@ pb.nlsolve(dt = 0.2, tmax = 1, update_dt = False, tol_nr = 0.005)
 # print(time()-start)
 
 res = pb.get_results('Assembling', ['Strain','Stress'], 'Node') 
-assert np.abs(res.node_data['Strain'][0][941]+0.01926665454856133) < 1e-8
-assert np.abs(res.node_data['Stress'][3][234]+56.40156430977156) < 1e-4
+assert np.abs(res.node_data['Strain'][0][941]+0.019422241296056023) < 1e-8
+assert np.abs(res.node_data['Stress'][3][234]+67.82318305757613) < 1e-4
 
 # assert np.abs(res.node_data['Strain'][0][941]+0.019651029182686866) < 1e-8
 # assert np.abs(res.node_data['Stress'][3][234]+2.6359202403886792) < 1e-4

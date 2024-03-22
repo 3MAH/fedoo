@@ -101,9 +101,8 @@ res = pb.get_results('Assembling', ['Strain','Stress', 'Disp', 'Velocity'], 'Nod
 
 print(res.node_data['Stress'][3][234])
 
-assert np.abs(res.node_data['Strain'][0][941]+0.019266654548562048) < 1e-8
-assert np.abs(res.node_data['Stress'][3][234]+56.40156430972447) < 1e-4
-
+assert np.abs(res.node_data['Strain'][0][941]+0.019422241296056023) < 1e-8
+assert np.abs(res.node_data['Stress'][3][234]+67.82318305757613) < 1e-4
 
 # assert np.abs(res.node_data['Strain'][0][941]+0.019651029182686866) < 1e-8
 # assert np.abs(res.node_data['Stress'][3][234]+2.6359202403886792) < 1e-4

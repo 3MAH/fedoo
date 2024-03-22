@@ -101,14 +101,14 @@ class Problem(ProblemBase):
             i = self.space.variable_rank(name)
             return vector[i*n : (i+1)*n]   
 
-    def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='fdz', position = 1):
-        return self._problem_output.add_output(filename, assemblyname, output_list, output_type, file_format, position)            
+    def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='fdz', position = 1, element_set = None):
+        return self._problem_output.add_output(filename, assemblyname, output_list, output_type, file_format, position, element_set)  
 
     def save_results(self, iterOutput=None):
         self._problem_output.save_results(self, iterOutput)
 
-    def get_results(self, assemb, output_list, output_type=None, position = 1):        
-        return _get_results(self, assemb, output_list, output_type, position)
+    def get_results(self, assemb, output_list, output_type=None, position = 1, element_set = None):        
+        return _get_results(self, assemb, output_list, output_type, position, element_set)
 
     def set_A(self,A):
         self.__A = A     
