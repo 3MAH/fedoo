@@ -73,6 +73,8 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1, elemen
                 result = DataSet(assemb.mesh.extract_elements(element_set))
                 if isinstance(element_set, str):
                     element_set = assemb.mesh.element_sets[element_set]
+        else:
+            result = DataSet()
                     
         for res in output_list:   
             if res in pb.space.list_variables() or res in pb.space.list_vectors():
@@ -248,7 +250,7 @@ class _ProblemOutput:
         self.__list_output = [] #a list containint dictionnary with defined output
         self.data_sets = {}
                 
-    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'fdz', position = 1, save_mesh = True, element_set = None):
+    def add_output(self, filename, assemb, output_list, output_type=None, file_format = 'fdz', position = 1, element_set = None, save_mesh = True):
         
         dirname = os.path.dirname(filename)        
         # filename = os.path.basename(filename)
@@ -263,7 +265,6 @@ class _ProblemOutput:
             #use extension as file format
             file_format = extension[1:].lower()
             filename = os.path.splitext(filename)[0] #remove extension for the base name
-             
         
         if file_format not in _available_format:
             print("WARNING: '", file_format, "' doens't match to any available file format")
@@ -282,6 +283,11 @@ class _ProblemOutput:
         
         if isinstance(assemb, str): assemb = AssemblyBase.get_all()[assemb]     
         
+        if element_set is None:
+            mesh = assemb.mesh
+        else:
+            mesh = assemb.mesh.extract_elements(element_set)
+        
         if not(os.path.isdir(dirname)) and dirname != '': os.mkdir(dirname)
                 
         new_output = {'filename': filename, 'assembly': assemb, 'type': output_type, 'list': output_list, 'file_format': file_format.lower(), 'position': position, 'element_set': element_set}
@@ -291,14 +297,15 @@ class _ProblemOutput:
         if not(filename in self.data_sets):
             if file_format == 'fdz':
                 file = ZipFile(filename+'.fdz', 'w') #create a new zip file
-                assemb.mesh.save('_mesh_') #create temp '_mesh_.vtk' file            
+                mesh.save('_mesh_') #create temp '_mesh_.vtk' file  
+                          
                 file.write('_mesh_.vtk') #add '_mesh_.vtk' to the zip archive
                 os.remove('_mesh_.vtk') 
                 file.close()
             elif save_mesh:
-                assemb.mesh.save(filename)
-                
-            res = MultiFrameDataSet(assemb.mesh, [])
+                mesh.save(filename)
+
+            res = MultiFrameDataSet(mesh, [])
             self.data_sets[filename] = res
 
         else:
@@ -337,10 +344,14 @@ class _ProblemOutput:
                     list_filename.append(filename)
                     list_full_filename.append(full_filename)
                     list_file_format.append(file_format)
-                    if element_set is None:
-                        out = DataSet(assemb.mesh)
-                    else:
-                        out = DataSet(assemb.mesh.extract_elements(element_set))
+                    
+                    
+                    #### If no problems occure, deleate the commented line                    
+                    out = DataSet()
+                    #out = DataSet(assemb.mesh)
+                                               
+                        
+                        
                     list_data.append(out)                        
                 else: 
                     #else, the same file is used   

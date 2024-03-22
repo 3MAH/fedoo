@@ -174,15 +174,6 @@ nb_iter = 2*nb_iter
 
 ### Simple movie output
 # res_m.write_movie('stress_field.mp4', 'Stress_vm')
-<<<<<<< HEAD
-=======
-#add disp field to the th field
-for i in range(res_th.n_iter):
-    res_th.load(i)
-    res_m.load(i)
-    res_th.node_data['Disp'] = res_m.node_data['Disp']
-    res_th.to_fdz(filename_res+'_th', False, i)
->>>>>>> 5615c7ff0894704a78217ea8cfa0980c5c0441c0
 # res_th.write_movie('temp_field.mp4', 'Temp')
 
 
