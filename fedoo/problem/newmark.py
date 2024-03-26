@@ -1,14 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
-# from fedoo.pgd.ProblemPGD import ProblemPGD
 
-# #dynamical inheritance. The class is generated inside a function
-# def Newmark(StiffnessAssembling, MassAssembling , Beta, Gamma, TimeStep, DampingAssembling = 0, name = "MainProblem"):
-
-#     if hasattr(StiffnessAssembling.mesh, 'GetListMesh'): libBase = ProblemPGD
-#     else: libBase = Problem
-    
 class _NewmarkBase():    
     """
     Define a Newmark problem

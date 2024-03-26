@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Nov 28 15:15:15 2019
-
-@author: Etienne
-"""
-
 import numpy as np
 from scipy import sparse
 from numbers import Number 

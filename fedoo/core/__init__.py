@@ -1,7 +1,27 @@
-# import pkgutil
+from .modelingspace import ModelingSpace
+from .base import ConstitutiveLaw
+from .mesh import Mesh
+from .weakform import WeakForm
+from .assembly import Assembly
+from .dataset import (
+    DataSet, 
+    MultiFrameDataSet, 
+    read_data,                      
+)
+from .boundary_conditions import BoundaryCondition, MPC, ListBC
+from .problem import Problem
 
-# for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
-#     module = loader.find_module(module_name).load_module(module_name)
-#     exec('from .'+module_name+' import *')
 
-# from .assembly import Assembly #<- generate an error ????
+__all__ = [
+    "Mesh",
+    "Assembly",
+    "ConstitutiveLaw",
+    "WeakForm",
+    "ModelingSpace",
+    "DataSet",
+    "MultiFrameDataSet",
+    "read_data",
+    "BoundaryCondition",
+    "MPC",
+    "ListBC",
+]

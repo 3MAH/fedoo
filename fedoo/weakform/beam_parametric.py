@@ -1,6 +1,7 @@
+#### move to the PGD directory
+
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.weakform import WeakFormBase
-from fedoo.pgd.MeshPGD import MeshPGD
 from fedoo.pgd.SeparatedArray import SeparatedOnes
 
 import numpy as np

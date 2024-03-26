@@ -1,5 +1,3 @@
-#simcoon compatible
-
 from fedoo.core.base import AssemblyBase
 from fedoo.core.weakform import _AssemblyOptions, WeakFormBase
 from fedoo.core.assembly_sum import AssemblySum

@@ -1,7 +1,6 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
-# from fedoo.pgd.ProblemPGD import ProblemPGD
 import scipy.sparse as sparse
 
     

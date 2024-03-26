@@ -1,5 +1,5 @@
-from fedoo.pgd.SeparatedArray import SeparatedArray
-from fedoo.core.mesh import Mesh as MeshFEM
+# from fedoo.pgd.SeparatedArray import SeparatedArray
+from fedoo.core.mesh import Mesh
 #from fedoo.pgd.MeshPGD import MeshPGD
 import numpy as np
 
@@ -65,8 +65,8 @@ def global_local_frame(NumberOfPoints):
     return LocalFrame([np.eye(3) for i in range(NumberOfPoints)])
 
 def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
-    if isinstance(crd, MeshFEM):
-       crd = MeshFEM.nodes               
+    if isinstance(crd, Mesh):
+       crd = Mesh.nodes               
             
     localFrame = np.zeros((len(crd), dim, dim))
     if dim == 3:        
@@ -87,33 +87,40 @@ def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
         localFrame[:, 1, 0] = -localFrame[:,0, 1]
         localFrame[:, 1, 1] = localFrame[:,0, 0]
     return localFrame.view(LocalFrame)
+
+
+# MOVE separated_local_frame to the pgd folder
+
+# def separated_local_frame(localFrame, mesh, dimensions = ('X','Y','Z')):
+#     """
+#     Permit to automatically assign the localFrame to the appropriate submesh of the mesh object
+#     Generate a local frame under the form of the (3,3) shaped array dedicated of SeparatedArray objects
+#     This functions work only if the local frame is restricted to one subspace.
+#     """    
     
-def separated_local_frame(localFrame, mesh, dimensions = ('X','Y','Z')):
-    """
-    Permit to automatically assign the localFrame to the appropriate submesh of the mesh object
-    Generate a local frame under the form of the (3,3) shaped array dedicated of SeparatedArray objects
-    This functions work only if the local frame is restricted to one subspace.
-    """    
+#     dim = localFrame.shape[-1]
+#     idmesh = mesh.FindCoordinatename(dimensions[0])
+#     if idmesh != mesh.FindCoordinatename(dimensions[1]): raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh".format(dimensions[0], dimensions[1]))
+#     if dim == 3: 
+#         if idmesh != mesh.FindCoordinatename(dimensions[3]):  raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh. Consider using a 2D local frame.".format(dimensions[0], dimensions[2]))
+
+#     id_crd = []
+#     for label in dimensions:
+#         if label == 'X': id_crd.append(0)
+#         elif label == 'Y': id_crd.append(1)
+#         elif label == 'Z': id_crd.append(2)
+#         else: raise NameError("Coordinates for local frame should be 'X', 'Y' or 'Z'. '{}' unknown.".format(label))            
+
+#     newLocalFrame = np.zeros((3, 3), dtype =object) #the resulting local frame is always in dim = 3
+
+#     for j in range(dim):
+#         for i in range(dim):                        
+#             newLocalFrame[i,id_crd[j]] = SeparatedArray([np.c_[localFrame[:,i,j]] if k==idmesh else np.array([[1.]]) for k in range(mesh.get_dimension())])
+#     return newLocalFrame
     
-    dim = localFrame.shape[-1]
-    idmesh = mesh.FindCoordinatename(dimensions[0])
-    if idmesh != mesh.FindCoordinatename(dimensions[1]): raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh".format(dimensions[0], dimensions[1]))
-    if dim == 3: 
-        if idmesh != mesh.FindCoordinatename(dimensions[3]):  raise NameError("'{}' and '{}' coordinates should be associated to the same subMesh. Consider using a 2D local frame.".format(dimensions[0], dimensions[2]))
-
-    id_crd = []
-    for label in dimensions:
-        if label == 'X': id_crd.append(0)
-        elif label == 'Y': id_crd.append(1)
-        elif label == 'Z': id_crd.append(2)
-        else: raise NameError("Coordinates for local frame should be 'X', 'Y' or 'Z'. '{}' unknown.".format(label))            
-
-    newLocalFrame = np.zeros((3, 3), dtype =object) #the resulting local frame is always in dim = 3
-
-    for j in range(dim):
-        for i in range(dim):                        
-            newLocalFrame[i,id_crd[j]] = SeparatedArray([np.c_[localFrame[:,i,j]] if k==idmesh else np.array([[1.]]) for k in range(mesh.get_dimension())])
-    return newLocalFrame
+    
+    
+    
     
     
 #   TODO: Not finished

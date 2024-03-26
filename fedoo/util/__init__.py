@@ -5,6 +5,6 @@
 #     exec('from .'+module_name+' import *')
 
     
-from .voigt_tensors import StrainTensorList, StressTensorList
-from .simple_plot import mesh_plot_2d, field_plot_2d
-from .abaqus_inp import ReadINP
+# from .voigt_tensors import StrainTensorList, StressTensorList
+# from .simple_plot import mesh_plot_2d, field_plot_2d
+# from .abaqus_inp import ReadINP

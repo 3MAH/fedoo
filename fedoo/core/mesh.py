@@ -3,7 +3,6 @@
 from __future__ import annotations
 import numpy as np
 
-# from fedoo.util.Coordinate import Coordinate
 from fedoo.core.base import MeshBase
 from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from fedoo.util.test_periodicity import is_periodic

@@ -28,9 +28,9 @@ except ImportError:
     
 try:
     import pandas
-    USE_PANDA = True
+    USE_PANDAS = True
 except ImportError:
-    USE_PANDA = False
+    USE_PANDAS = False
 
 class DataSet():
     """
@@ -563,7 +563,7 @@ class DataSet():
         
                 
     def to_pandas(self) -> pandas.DataFrame:
-        if USE_PANDA:
+        if USE_PANDAS:
             out = {}
             n_data_type = (self.node_data != {}) + (self.element_data != {}) + \
                           (self.gausspoint_data != {})
@@ -611,7 +611,7 @@ class DataSet():
         save_mesh : bool (default = False)
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
         """
-        if USE_PANDA:    
+        if USE_PANDAS:    
             self.to_pandas().to_csv(filename)    
             if save_mesh: self.save_mesh(filename)      
         else: 
@@ -630,7 +630,7 @@ class DataSet():
         save_mesh : bool (default = False)
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
         """
-        if USE_PANDA:
+        if USE_PANDAS:
             self.to_pandas().to_excel(filename)          
             if save_mesh: self.save_mesh(filename)      
         else: 
