@@ -23,6 +23,8 @@ class SteadyHeatEquation(WeakFormBase):
             name = thermal_constitutivelaw.name
             
         WeakFormBase.__init__(self,name,space)
+        if self.space._dimension == '2Daxi':
+            raise NotImplementedError
         
         self.space.new_variable("Temp") #temperature
         

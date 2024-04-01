@@ -18,6 +18,7 @@ class ModelingSpace:
             * '2D' or '2Dplane': general 2D problems, with default coordinates 'X' and 'Y' and plane strain assumption
             * '3D' for 3D problems with default coordinates 'X', 'Y' and 'Z'
             * '2Dstress': same as '2D' but using plane stress assumption for mechanical problems
+            * '2Daxi': same as '2D' but using axisymmetric assumption for mechanical problems 
         name: str, default = 'Main'
             The name of the modeling space
             
@@ -33,7 +34,8 @@ class ModelingSpace:
         # assert name not in ModelingSpace.__dic, str(name) + " already exist. Delete it first."
         assert isinstance(dimension,str) , "The dimension value must be a string: '2D', '3D', '2Dplane' or '2Dstress'."
         if dimension == "2D": dimension = "2Dplane"
-        assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress", "Dimension must be '2D', '3D', 2Dplane' or '2Dstress'"        
+        assert dimension=="3D" or dimension=="2Dplane" or dimension=="2Dstress" \
+            or dimension=="2Daxi", "Dimension must be '2D', '3D', 2Dplane', '2Dstress' or '2Daxi'"        
         
         #Static attributs 
         ModelingSpace._active = self
@@ -60,7 +62,7 @@ class ModelingSpace:
         if dimension == "3D":
             self.__ndim = 3
             self.new_coordinate('Z')
-        if dimension == "2Dplane" or dimension == "2Dstress":
+        if dimension in ["2Dplane", "2Dstress", "2Daxi"]:
             self.__ndim = 2                    
        
 
@@ -240,7 +242,7 @@ class ModelingSpace:
            return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y','Z']] for namevar in ['DispX','DispY','DispZ']]
        else:
            return [[self.derivative(namevar, namecoord) for namecoord in ['X','Y']] + [0] for namevar in ['DispX','DispY']] + [[0,0,0]]
-       
+          
     def op_div_u(self):
         if self.ndim == 3:
             return self.derivative('DispX', 'X') + self.derivative('DispY', 'Y') + self.derivative('DispZ', 'Z')

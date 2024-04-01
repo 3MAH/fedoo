@@ -70,7 +70,18 @@ class StressEquilibrium(WeakFormBase):
         else: 
             eps = self.space.op_strain()
             initial_stress = assembly.sv['Stress'] #Stress = Cauchy for updated lagrangian method
-        
+            
+            if self.space._dimension == "2Daxi": 
+                mesh = assembly.current.mesh  
+                rr = mesh.convert_data(mesh.nodes[:,0], 'Node', 'GaussPoint')
+                
+                eps[2] = self.space.variable('DispX') * np.divide(
+                        1, rr, 
+                        out=np.zeros_like(rr), 
+                        where=rr!=0
+                        ) #put zero if X==0 (division by 0) 
+                # eps[2] = self.space.variable('DispX') * (1/rr)
+            
         H = assembly.sv['TangentMatrix']
         
         sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
@@ -85,6 +96,9 @@ class StressEquilibrium(WeakFormBase):
             DiffOp = DiffOp + sum([0 if eps[i] is 0 else \
                                     eps[i].virtual * initial_stress[i] for i in range(6)])
 
+        if self.space._dimension == '2Daxi':
+            DiffOp = DiffOp * ((2*np.pi)*rr)
+            
         return DiffOp        
 
 
@@ -103,20 +117,22 @@ class StressEquilibrium(WeakFormBase):
         
             if self.nlgeom == 'TL': 
                 assembly.sv['PK2'] = 0
+                if self.space._dimension == '2Daxi':
+                    raise NameError("'2Daxi' ModelingSpace is not implemented with total lagrangian formulation. Use update lagrangian instead.")
                                     
             #initialize non linear operator for strain
-            op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
-            if self.space.ndim == "3D":        
-                #nl_strain_op_vir = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
-                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(3)]) for i in range(3)] 
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(3)])]  
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][0] for k in range(3)])]
-                nl_strain_op_vir += [sum([op_grad_du[k][1].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][1] for k in range(3)])]
-            else:
-                nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]            
-                nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
+            # op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
+            # if self.space.ndim == "3D":        
+            #     #nl_strain_op_vir = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
+            #     nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(3)]) for i in range(3)] 
+            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(3)])]  
+            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][0] for k in range(3)])]
+            #     nl_strain_op_vir += [sum([op_grad_du[k][1].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][1] for k in range(3)])]
+            # else:
+            #     nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]            
+            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
             
-            self._nl_strain_op_vir = nl_strain_op_vir
+            # self._nl_strain_op_vir = nl_strain_op_vir
             
 
     def update(self, assembly, pb):
@@ -136,8 +152,17 @@ class StressEquilibrium(WeakFormBase):
             assembly.sv['Strain'] = 0
         else:
             grad_values = assembly.get_grad_disp(displacement, "GaussPoint")
-            assembly.sv['DispGradient'] = grad_values
-        
+            if self.space._dimension == '2Daxi':
+                mesh = assembly.current.mesh
+                # grad_values[2][2] = mesh.convert_data(pb.get_disp()[0]/mesh.nodes[:,0], 'Node')                
+                eps_tt = np.divide(
+                    pb.get_disp()[0], mesh.nodes[:,0], 
+                    out=np.zeros(mesh.n_nodes), 
+                    where=mesh.nodes[:,0]!=0
+                    ) #put zero if X==0 (division by 0) 
+                grad_values[2][2] = mesh.convert_data(eps_tt, 'Node', 'GaussPoint')
+                
+            assembly.sv['DispGradient'] = grad_values        
             
             #Compute the strain required for the constitutive law.             
             if self.nlgeom:
