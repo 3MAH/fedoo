@@ -71,7 +71,7 @@ class Contact(AssemblyBase):
             if self.mesh.elements.shape[1] == 2:
                 max_edge_size = np.linalg.norm(self.mesh.nodes[self.mesh.elements[:,1]]-self.mesh.nodes[self.mesh.elements[:,0]], axis=1).max()
             elif self.mesh.elements.shape[1] == 3:
-                max_edge_size = np.max([np.max(np.linalg.norm(self.mesh.nodes[self.mesh.elements[:,ind[1]]]-self.mesh.nodes[self.mesh.elements[:,ind[0]]]), axis=1)
+                max_edge_size = np.max([np.linalg.norm(self.mesh.nodes[self.mesh.elements[:,ind[1]]]-self.mesh.nodes[self.mesh.elements[:,ind[0]]], axis=1).max()
                                         for ind in [[0,1], [1,2], [2,0]]])
             else:
                 return NotImplemented            

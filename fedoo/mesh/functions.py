@@ -184,12 +184,11 @@ def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
     if isinstance(extrude_path, Mesh): 
         mesh1 = extrude_path
     else:
-        if np.isscalar(extrude_path):
-            if mesh.elm_type == 'lin3': elm_type = 'lin3'
-            else: elm_type = 'lin2'
-                
+        if mesh.elm_type == 'lin3': elm_type = 'lin3'
+        else: elm_type = 'lin2'            
+        if np.isscalar(extrude_path):            
             mesh1 = line_mesh_1D(n_nodes, x_min=0, x_max=extrude_path, elm_type = elm_type, name = "")
-        elif isinstance(extrude_path, tuple) and len(tuple) == 2: #assume iterable 
+        elif isinstance(extrude_path, tuple) and len(extrude_path) == 2: #assume iterable 
             mesh1 = line_mesh_1D(n_nodes, x_min=extrude_path[0], x_max=extrude_path[1], elm_type = elm_type, name = "")
         else:
             raise NameError('extrude_path argument not understood. ')

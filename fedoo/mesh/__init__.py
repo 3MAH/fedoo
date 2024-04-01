@@ -73,4 +73,5 @@ from .importmesh import import_file, import_vtk, import_msh
 from .functions import extrude, extract_surface, change_elm_type, quad2tri
 
 from .structured_mesh import structured_mesh_2D, generate_nodes, \
-                             hole_plate_mesh, disk_mesh
+                             hole_plate_mesh, disk_mesh, \
+                             hollow_disk_mesh

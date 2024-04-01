@@ -107,7 +107,9 @@ def generate_nodes(mesh, N, data, type_gen = 'straight'):
         Number of generated nodes.
     data : list or tuple
         if type_gen == 'straight', data should contain the indices of the starting (data[0]) and ending (data[1]).
-        if type_gen == 'circular', data should contain the indices of the starting (data[0]) and ending (data[1]) nodes and the coordinates of the center of the circle (data[2])
+        if type_gen == 'circular', data should contain the indices 
+            of the starting (data[0]) and ending (data[1]) nodes and the coordinates of the center of the circle 
+            (data[2]). The nodes are generated using a trigonometric rotation.
     type_gen : str in {'straight', 'circular'}
         Type of line generated. The default is 'straight'.
 
@@ -132,6 +134,9 @@ def generate_nodes(mesh, N, data, type_gen = 'straight'):
         # (crd[nd1]-c)
         theta_min = np.arctan2(crd[nd1,1]-c[1],crd[nd1,0]-c[0])
         theta_max = np.arctan2(crd[nd2,1]-c[1],crd[nd2,0]-c[0])
+        # print(theta_min)
+        # print(theta_max)
+        if theta_max<=theta_min: theta_max += 2*np.pi
         m = line_mesh_cylindric(N, R, theta_min, theta_max) #circular mesh
         listNodes = mesh.add_nodes(m.nodes[1:-1]+c)
         return np.array([nd1]+list(listNodes)+[nd2])
@@ -148,7 +153,7 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
         nt is the number of nodes of the half of an exterior edge
     length, height : int,float
         The length and height of the plate (default : 100).
-    radius : int,float, tuple
+    radius : int, float, tuple
         The radius of the hole (default : 20).
         If tuple = (a,b), a and b are the ellipse radius along x and y axis.
 
@@ -190,7 +195,7 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     L = length/2
     h = height/2
     m = Mesh(np.array([[radius,0],[L,0],[L,h],[0,h],[0,radius],[radius*np.cos(np.pi/4),radius*np.sin(np.pi/4)]]))
-    edge4 = generate_nodes(m,nt,(5,0,(0,0)), type_gen = 'circular')
+    edge4 = generate_nodes(m,nt,(0,5,(0,0)), type_gen = 'circular')[::-1]
     edge7 = generate_nodes(m,nt,(5,4,(0,0)), type_gen = 'circular')
     if ellipse: 
         m.nodes[edge4]*=ellipse_radius
@@ -241,12 +246,19 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     return m
     
 
-def disk_mesh(radius=0.5, nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""):
+def disk_mesh(radius=1., nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""):
     if elm_type == 'quad8': 
         return change_elm_type(
                   disk_mesh(radius, nx, ny, 'quad9', ndim, name),
                   'quad8',
                 )
+    
+    if isinstance(radius, tuple):
+        ellipse = True
+        ellipse_radius = np.array(radius)
+        radius = 1
+    else: ellipse = False
+    
     m = hole_plate_mesh(nx, ny, 0.5*radius, 0.5*radius, radius, elm_type)
     hole_edge = m.node_sets['hole_edge']
 
@@ -256,7 +268,28 @@ def disk_mesh(radius=0.5, nx=11, ny=11, elm_type = 'quad4', ndim = None, name ="
                            m.node_sets['bottom'], elm_type, ndim = ndim, name=name)
     m.node_sets = {'boundary': hole_edge}
     
+    if ellipse:
+        m.nodes *= ellipse_radius
+    
     return m
     # if elm_type == 'quad4': return m
     # elif elm_type == 'tri3': return quad2tri(m)
     # else: raise NameError('Non compatible element shape')
+
+
+def hollow_disk_mesh(radius=1., thickness=0.1, nr=5, nt=41, elm_type = 'quad4', ndim = None, name=""):
+    r_int = radius-thickness #intern radius
+    assert r_int>0, "thickness should be lower than radius"
+    
+    m = Mesh(np.array([[radius,0],[r_int,0]]))
+    
+    nt = nt//4*4+1 #to ensure a symetric mesh about x and y axes
+    
+    edge_ext = generate_nodes(m,nt,(0,0,(0,0)), type_gen = 'circular')
+    edge_int = generate_nodes(m,nt,(1,1,(0,0)), type_gen = 'circular')[::-1] #clockwise orientation
+    edge_radius = generate_nodes(m,nr,(0,1))
+    
+    m = structured_mesh_2D(m, edge_ext, edge_radius, edge_int, edge_radius[::-1], elm_type = elm_type, method=2)
+    return m    
+    
+   

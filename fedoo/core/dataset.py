@@ -352,8 +352,8 @@ class DataSet():
             normals = self.mesh.get_element_local_frame()[:,-1]
             
             if ndim <3: 
-                normals = np.column_stack((normals, np.zeros((self.n_elements,3-ndim)))) 
-                centers = np.column_stack((self.element_centers, np.zeros((self.n_elements,3-ndim)))) 
+                normals = np.column_stack((normals, np.zeros((self.mesh.n_elements,3-ndim)))) 
+                centers = np.column_stack((self.mesh.element_centers, np.zeros((self.mesh.n_elements,3-ndim)))) 
            
             pl.add_arrows(
                 centers, normals, mag=show_normals, show_scalar_bar=False

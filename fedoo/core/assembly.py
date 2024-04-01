@@ -967,7 +967,7 @@ class Assembly(AssemblyBase):
         Options : 
         - Type :"Node", "Element" or "GaussPoint" integration (default : "Node")
         """        
-        grad_operator = self.space.op_grad_u()        
+        grad_operator = self.space.op_grad_u()
 
         if Type == "Node":
             return [ [self.get_node_results(op, U) if op != 0 else np.zeros(self.mesh.n_nodes) for op in line_op] for line_op in grad_operator]
