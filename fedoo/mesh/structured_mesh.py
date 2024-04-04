@@ -292,4 +292,59 @@ def hollow_disk_mesh(radius=1., thickness=0.1, nr=5, nt=41, elm_type = 'quad4', 
     m = structured_mesh_2D(m, edge_ext, edge_radius, edge_int, edge_radius[::-1], elm_type = elm_type, method=2)
     return m    
     
-   
+
+def I_shape_mesh(height, width, web_thickness, flange_thickness, size_elm, elm_type = 'quad4', ndim = None, name=""):    
+    a = web_thickness/2 ; b = height/2 - flange_thickness
+    
+    m = Mesh(np.array([[-a,-b],[a,-b],[a,b],[-a,b],
+                       [-a,height/2], [a,height/2], [-a,-height/2], [a,-height/2],
+                       [-width/2,height/2], [-width/2,b], [width/2,height/2], [width/2,b],
+                       [-width/2,-height/2], [-width/2,-b], [width/2,-height/2], [width/2,-b]]))
+    
+    nx_web = int(2*a//size_elm) ; ny_web = int(2*b//size_elm)
+    edges = [generate_nodes(m,nx_web,(0,1)),
+             generate_nodes(m,ny_web,(1,2)),
+             generate_nodes(m,nx_web,(2,3)),
+             generate_nodes(m,ny_web,(3,0))]    
+    m = structured_mesh_2D(m, edges[0], edges[1], edges[2], edges[3], elm_type = elm_type)
+    
+    ny_flange = int(flange_thickness // size_elm)
+    edges_top = [edges[2][::-1], #(3,2)
+                generate_nodes(m,ny_flange,(2,5)),
+                generate_nodes(m,nx_web,(5,4)),
+                generate_nodes(m,ny_flange,(4,3))]    
+    m = structured_mesh_2D(m, edges_top[0], edges_top[1], edges_top[2], edges_top[3], elm_type = elm_type)
+
+    edges_bottom = [edges[0], #(0,1)
+                generate_nodes(m,ny_flange,(1,7)),
+                generate_nodes(m,nx_web,(7,6)),
+                generate_nodes(m,ny_flange,(6,0))]    
+    m = structured_mesh_2D(m, edges_bottom[0], edges_bottom[1], edges_bottom[2], edges_bottom[3], elm_type = elm_type)
+
+    nx_flange = int((width-web_thickness) //(2* size_elm)) 
+    edges_topl = [edges_top[3][::-1], #(3,4)
+                generate_nodes(m,nx_flange,(4,8)),
+                generate_nodes(m,ny_flange,(8,9)),
+                generate_nodes(m,nx_flange,(9,3))]    
+    m = structured_mesh_2D(m, edges_topl[0], edges_topl[1], edges_topl[2], edges_topl[3], elm_type = elm_type)
+
+    edges_topl = [edges_top[1], #(2,5)
+                generate_nodes(m,nx_flange,(5,10)),
+                generate_nodes(m,ny_flange,(10,11)),
+                generate_nodes(m,nx_flange,(11,2))]    
+    m = structured_mesh_2D(m, edges_topl[0], edges_topl[1], edges_topl[2], edges_topl[3], elm_type = elm_type)
+
+    edges_topb = [edges_bottom[1], #(1,7)
+                generate_nodes(m,nx_flange,(7,14)),
+                generate_nodes(m,ny_flange,(14,15)),
+                generate_nodes(m,nx_flange,(15,1))]    
+    m = structured_mesh_2D(m, edges_topb[0], edges_topb[1], edges_topb[2], edges_topb[3], elm_type = elm_type)
+    
+    edges_topb = [edges_bottom[3], #(6,0)
+                generate_nodes(m,nx_flange,(0,13)),
+                generate_nodes(m,ny_flange,(13,12)),
+                generate_nodes(m,nx_flange,(12,6))]    
+    m = structured_mesh_2D(m, edges_topb[0], edges_topb[1], edges_topb[2], edges_topb[3], elm_type = elm_type)
+
+
+    return m

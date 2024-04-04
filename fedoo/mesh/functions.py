@@ -154,7 +154,7 @@ def extract_surface(mesh):
     
     return Mesh(mesh.nodes, surf_elements, face_elm_type)
 
-def extrude(mesh, extrude_path, n_nodes, use_local_frame = False, name = ""):
+def extrude(mesh, extrude_path, n_nodes=11, use_local_frame = False, name = ""):
     """
     Build a volume or surface mesh from the extrusion of a surface or wire mesh. 
     

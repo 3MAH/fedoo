@@ -733,8 +733,8 @@ class DataSet():
         
 
     @staticmethod
-    def read(filename: str, file_format: str="npz") -> DataSet|MultiFrameDataSet:
-        return read_data(filename, file_format="npz")
+    def read(filename: str, file_format: str="fdz") -> DataSet|MultiFrameDataSet:
+        return read_data(filename, file_format="fdz")
 
     @property
     def dict_data(self) -> dict:
@@ -743,13 +743,16 @@ class DataSet():
 
 class MultiFrameDataSet(DataSet):
     
-    def __init__(self, mesh = None, list_data = []):
+    def __init__(self, mesh = None, list_data = None):
         
-        if not(isinstance(list_data, list)):
-            list_data = [list_data]
-        self.list_data = list_data                        
-        self.loaded_iter = None
+        if list_data is None:
+            self.list_data = []
+        elif isinstance(list_data, list):
+            self.list_data = list_data
+        else:
+            self.list_data = [list_data]                    
         
+        self.loaded_iter = None        
         DataSet.__init__(self,mesh)                        
     
     

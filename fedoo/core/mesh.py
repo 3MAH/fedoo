@@ -599,6 +599,44 @@ class Mesh(MeshBase):
 
         else:
             raise NameError("selection_criterion should be a string'")
+            
+            
+    def find_elements(self, selection_criterion: str, value: float = 0, tol: float = 1e-6, 
+                      select_by: str = 'centers', all_nodes: bool = True):
+        """Return a list of elements from a given selection criterion
+                
+        Parameters
+        ----------
+        selection_criterion : str
+            selection criterion used to select the returned elements.
+            See :py:meth:`fedoo.Mesh.find_nodes` for available criterion.
+        value : scalar or list of scalar of numpy array
+            value used for the selection criterion. 
+            See :py:meth:`fedoo.Mesh.find_nodes` for details.    
+        tol : float
+            Tolerance of the given criterion. Ignored if selection_criterion 
+            is an arbitrary expression
+        select_by : str in {'centers', 'nodes'}, default = 'centers'
+            - if 'centers'(default), the element is selected if its center verify the criterion. 
+            - if 'nodes', the element is selected if one node or all its nodes verify the criterion.
+              depending of all_nodes.
+        all_nodes: bool, default = True
+            Only used if select_by == 'nodes'.
+            If True, get elements whose all nodes verify the criterion.
+            If False, get elements that have at least 1 node verifying the criterion. 
+        
+        Returns
+        -------
+        List of element index        
+        """
+        if select_by == 'centers':
+            return Mesh(self.element_centers).find_nodes(selection_criterion, value, tol)
+        elif select_by == 'nodes':
+            return self.get_elements_from_nodes(self.find_nodes(selection_criterion, value, tol), all_nodes)
+        else: 
+            raise ValueError("select_by should be in {'centers', 'nodes'}")
+        
+        
 
     def _eval_expr(self, expr): #evaluate an expression within the find_nodes method
         i=i_start = 0
