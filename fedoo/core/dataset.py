@@ -361,7 +361,7 @@ class DataSet():
         
         
         if screenshot: 
-            name, ext = os.path.splitext(screenshot)
+            ext = os.path.splitext(screenshot)[1]
             ext = ext.lower()
             if ext in ['.pdf', '.svg', '.eps', '.ps', '.tex']:
                 pl.save_graphic(screenshot)
@@ -446,7 +446,7 @@ class DataSet():
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
             For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.          
         """
-        name, ext = os.path.splitext(filename)
+        ext = os.path.splitext(filename)[1]
         ext = ext.lower()
         if ext == '': 
             ext = '.fdz'
@@ -469,7 +469,7 @@ class DataSet():
                     
     def save_mesh(self, filename: str):
         """Save the mesh using a vtk file. The extension of filename is ignored and modified to '.vtk'."""
-        name, ext = os.path.splitext(filename)
+        name = os.path.splitext(filename)[0]
         self.mesh.save(name)
         
        
@@ -515,11 +515,11 @@ class DataSet():
         elif isinstance(data, str):
             #load from a file
             filename = data
-            name, ext = os.path.splitext(filename)
+            ext = os.path.splitext(filename)[1]
             ext = ext.lower()
             if ext == '.vtk': 
                 #load_mesh ignored because the mesh already in the vtk file
-                if not(USE_PYVISTA):                    raise NameError("Pyvista not installed. Pyvista required to load vtk meshes.")
+                if not(USE_PYVISTA): raise NameError("Pyvista not installed. Pyvista required to load vtk meshes.")
                 DataSet.load(self,pv.read(filename))              
             elif ext == '.msh':
                 return NotImplemented
@@ -637,18 +637,56 @@ class DataSet():
             raise NameError('Pandas lib need to be installed for excel export.')        
 
         
-    def to_vtk(self, filename: str) -> None:
-        """Write vtk file with the mesh and associated data (gausspoint data not included). 
+    def to_vtk(self, filename: str, 
+               binary: bool = True, 
+               gp_data_to_node: bool = True) -> None:
+        """Write vtk file with the mesh and associated data.
+        
+        Gauss Point data are interpolated as Node data because 
+        vtk don't support gauss point data.
         
         Parameters
         ----------
         filename : str
             Name of the file including the path.
+        binary : bool, optional
+            If True, write as binary. Otherwise, write as ASCII.
+        gp_data_to_node : bool, default = True
+            If True, the Gauss Point data are interpolated as Node data.
+            If False, the Gauss Point data are ignored (vtk file don't have Gauss Point Data)
         """
-        from fedoo.util.mesh_writer import write_vtk
-        write_vtk(self, filename)
+        if USE_PYVISTA:
+            binary = True
+            ext = os.path.splitext(filename)[1]
+            if ext == '': filename = filename + '.vtk'
+            self.to_pyvista(gp_data_to_node).save(filename, binary)
+        else:
+            from fedoo.util.mesh_writer import write_vtk
+            write_vtk(self, filename, gp_data_to_node)
 
+
+    def to_pyvista(self, gp_data_to_node: bool = True):
+        if self.mesh is not None:
+            pv_data = self.mesh.to_pyvista()
+
+            for key, val in self.node_data.items():
+                pv_data.point_data[key] = val.T
+                
+            for key,val in self.element_data.items():
+                pv_data.cell_data[key] = val.T
         
+            for key,val in self.scalar_data.items():
+                pv_data.field_data[key] = val
+        
+            if gp_data_to_node:
+                for key in self.gausspoint_data:
+                    pv_data.point_data[key] = self.get_data(key, data_type='Node').T
+            
+            return pv_data
+        else:
+            raise TypeError("Mesh should be defined befort converted to pyvista object")
+                
+
     def to_msh(self, filename: str) -> None:
         """Write a msh (gmsh format) file with the mesh and associated data 
         (gausspoint data not included). 
@@ -792,7 +830,8 @@ class MultiFrameDataSet(DataSet):
             for i in range(len(self.list_data)):
                 self.load(i)
                 self.save(filename + '_' +str(i) + '.' + file_format)
-            self.save_mesh(filename + '.vtk')        
+            if file_format not in ['vtk', 'msh']:
+                self.save_mesh(filename + '.vtk')    
         
     
     def load(self,data=-1, load_mesh = False): 
@@ -899,8 +938,8 @@ class MultiFrameDataSet(DataSet):
         return DataSet.plot(self, field, component, data_type, scale, show, 
                             show_edges, clim, node_labels, element_labels, 
                             show_nodes, show_normals, plotter, screenshot, azimuth, elevation, roll, **kargs)
-    
         
+    
     def write_movie(self, filename: str ='test', field: str|None = None, 
                     component: int|str = 0, data_type: str|None = None, 
                     scale:float = 1, show_edges:bool = True, 
@@ -1078,7 +1117,8 @@ class MultiFrameDataSet(DataSet):
                 if clim is None: 
                     pl.update_scalar_bar_range([data.min(), data.max()])
                 
-                pl.update_scalars(data, meshplot)                
+                meshplot[meshplot.active_scalars_name] = data
+                # pl.update_scalars(data, meshplot) #deprecated             
                 if show_nodes: mesh_points.points = crd_points
     
             if rot_azimuth: 
@@ -1192,9 +1232,9 @@ def read_data(filename: str, file_format: str ="fdz"):
         file_format = file_format.lower()
     else: 
         filename = os.path.splitext(filename)[0] #remove extension for the base name
-            
-    assert (os.path.isdir(dirname)), "File not found"
-    if file_format[:3] == 'npz' and os.path.isfile(filename+'.vtk'): 
+        
+    assert dirname == '' or (os.path.isdir(dirname)), "File not found"
+    if file_format[:3] in ['npz', 'vtk'] and os.path.isfile(filename+'.vtk'): 
         mesh = Mesh.read(filename+'.vtk')
     else: 
         mesh = None    

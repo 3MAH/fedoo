@@ -1,7 +1,7 @@
 import numpy as np
 from fedoo.core.mesh import Mesh
 
-def write_vtk(dataset, filename = 'test.vtk'):
+def write_vtk(dataset, filename = 'test.vtk', gp_data_to_node = True):
     # if multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
         
     datatype = 'UNSTRUCTURED_GRID'
@@ -59,9 +59,17 @@ def write_vtk(dataset, filename = 'test.vtk'):
     ret += [cell_type for i in range(mesh.n_elements)]
 
     #POINT_DATA
-    if len(dataset.node_data) > 0:        
+    #Convert gausspoint data to node data if gp_data_to_node == True
+    if gp_data_to_node:
+        node_data = {}
+        for field in dataset.gausspoint_data:
+            node_data[field] = dataset.get_data(field, data_type='Node')
+        node_data.update(dataset.node_data)
+    else:
+        node_data = dataset.node_data
+    if len(node_data) > 0:        
         ret += ['POINT_DATA {}'.format(mesh.n_nodes)]
-        for data_name, data in dataset.node_data.items():
+        for data_name, data in node_data.items():
             # only scalar for now Vector and Tensor data may be developped
             if len(np.shape(data)) == 1: #Scalar data
                 ret += ['SCALARS {} float 1'.format(data_name)]
@@ -112,7 +120,7 @@ def write_vtk(dataset, filename = 'test.vtk'):
     f.close()
     
 
-def write_msh(dataset, filename = 'test.msh'):
+def write_msh(dataset, filename = 'test.msh', gp_data_to_node = True):
     # if self.multi_mesh == True: raise NotImplementedError('multi_mesh not implemented')
 
     mesh = dataset.mesh
@@ -174,7 +182,17 @@ def write_msh(dataset, filename = 'test.msh'):
         ret += [' '.join([str(el), type_el, '2', '1', str(GeometricalEntity[el])]+[str(nd) for nd in elm[el]])  for el in range(mesh.n_elements)]
     ret += ['$EndElements']
     
-    for data_name, data in dataset.node_data.items():
+    
+    #Convert gausspoint data to node data if gp_data_to_node == True
+    if gp_data_to_node:
+        node_data = {}
+        for field in dataset.gausspoint_data:
+            node_data[field] = dataset.get_data(field, data_type='Node')
+        node_data.update(dataset.node_data)
+    else:
+        node_data = dataset.node_data
+    
+    for data_name, data in node_data.items():
         ret += ['$NodeData', '1', data_name]  #NumerOfStringTag, Name of Data
         if len(np.shape(data)) == 1: #Scalar data
             ret += ['1', '0.0', '3', '0', '1', str(mesh.n_nodes)] #NumberOfRealTag, time value, NumberOfIntegerTag, time step, number of scalar component (1, 3 or 9), Number of Nodes
