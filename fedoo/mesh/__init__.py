@@ -14,6 +14,12 @@ Class Mesh
 
    Mesh
 
+The best way to read a mesh from a file (vtk file recommanded) 
+is to use the constructor :py:meth:`fedoo.Mesh.read`. 
+A fedoo Mesh can also be imported from
+compatible pyvista mesh types (unstructured grid and polydata)
+with :py:meth:`fedoo.Mesh.from_pyvista` and :py:meth:`fedoo.Mesh.to_pyvista`. 
+
 
 .. currentmodule:: fedoo.mesh
 
@@ -24,7 +30,10 @@ Mesh manipulation functions
    :toctree: generated/
    
    stack
-
+   extrude
+   extract_surface
+   change_elm_type
+   quad2tri
 
 .. _importmesh:
 
@@ -44,16 +53,20 @@ Import/Export Fedoo Mesh object
 Mesh Creation Functions
 ===============================
 
+
 .. autosummary::
    :toctree: generated/
    
    rectangle_mesh 
    box_mesh
+   disk_mesh
+   hole_plate_mesh
+   hollow_disk_mesh
+   I_shape_mesh
    line_mesh_1D
    line_mesh
    line_mesh_cylindric
-   grid_mesh_cylindric   
-   hole_plate_mesh         
+   grid_mesh_cylindric            
    structured_mesh_2D
    generate_nodes    
 """
@@ -74,4 +87,4 @@ from .functions import extrude, extract_surface, change_elm_type, quad2tri
 
 from .structured_mesh import structured_mesh_2D, generate_nodes, \
                              hole_plate_mesh, disk_mesh, \
-                             hollow_disk_mesh
+                             hollow_disk_mesh, I_shape_mesh

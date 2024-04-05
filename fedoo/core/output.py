@@ -302,13 +302,14 @@ class _ProblemOutput:
                 file.write('_mesh_.vtk') #add '_mesh_.vtk' to the zip archive
                 os.remove('_mesh_.vtk') 
                 file.close()
-            elif save_mesh:
+            elif save_mesh and (file_format not in ['vtk', 'msh']):
                 mesh.save(filename)
 
             res = MultiFrameDataSet(mesh, [])
             self.data_sets[filename] = res
 
         else:
+            #### TODO: use full_filename (with extension) instead of filename to avoid confusion for same file with different extensions
             res = self.data_sets[filename]
         return res
 
@@ -345,13 +346,7 @@ class _ProblemOutput:
                     list_full_filename.append(full_filename)
                     list_file_format.append(file_format)
                     
-                    
-                    #### If no problems occure, deleate the commented line                    
-                    out = DataSet()
-                    #out = DataSet(assemb.mesh)
-                                               
-                        
-                        
+                    out = DataSet(assemb.mesh)
                     list_data.append(out)                        
                 else: 
                     #else, the same file is used   

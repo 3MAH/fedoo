@@ -293,7 +293,7 @@ def hollow_disk_mesh(radius=1., thickness=0.1, nr=5, nt=41, elm_type = 'quad4', 
     return m    
     
 
-def I_shape_mesh(height, width, web_thickness, flange_thickness, size_elm, elm_type = 'quad4', ndim = None, name=""):    
+def I_shape_mesh(height=10, width=10, web_thickness=2, flange_thickness=2, size_elm=0.2, elm_type = 'quad4', ndim = None, name=""):
     a = web_thickness/2 ; b = height/2 - flange_thickness
     
     m = Mesh(np.array([[-a,-b],[a,-b],[a,b],[-a,b],

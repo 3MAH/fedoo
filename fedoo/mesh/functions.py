@@ -262,6 +262,17 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame = False, name = ""):
 
 
 def quad2tri(mesh):
+    """Change the type of element of a mesh from 'quad4' to 'tri3'.
+
+    Parameters
+    ----------
+    mesh : fedoo.Mesh        
+        The mesh to modify
+
+    Returns
+    -------
+    fedoo.Mesh
+    """
     assert mesh.elm_type == 'quad4', "element shape should be 'quad4' for quad2tri"
     crd = mesh.nodes
     elm = mesh.elements
