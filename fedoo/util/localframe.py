@@ -61,8 +61,8 @@ class LocalFrame(np.ndarray):
         else: return np.asarray(new)
                
         
-def global_local_frame(NumberOfPoints):    
-    return LocalFrame([np.eye(3) for i in range(NumberOfPoints)])
+def global_local_frame(n_points):    
+    return LocalFrame([np.eye(3) for i in range(n_points)])
 
 def GenerateCylindricalLocalFrame(crd, axis=2, origin = [0,0,0], dim=3):
     if isinstance(crd, Mesh):

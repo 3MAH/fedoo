@@ -31,7 +31,5 @@ Each of these functions creates an object that is derived from a base class "Pro
 import pkgutil
 
 for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
-    module = loader.find_module(module_name).load_module(module_name)
+    # module = loader.find_module(module_name).load_module(module_name)
     exec('from .'+module_name+' import *')
-
-# from .Problem_NonLinearStatic import NonLinearStatic
