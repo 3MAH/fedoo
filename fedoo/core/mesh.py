@@ -20,6 +20,17 @@ except:
 class Mesh(MeshBase):    
     """
     Fedoo Mesh object.
+    
+    A fedoo mesh can be initialized with the following constructors:        
+    
+      * :py:meth:`fedoo.Mesh.read` to load a mesh from a file (vtk file recommanded).
+      * :py:meth:`fedoo.Mesh.from_pyvista` to build a mesh from pyvista 
+        UnstructuredGrid or PolyData objects
+      * the Mesh constructor describes bellow to build a Mesh by directly 
+        setting its attributes (node coordinates, elements list, element type, ...)
+    
+    Some :ref:`mesh creation functions <build_simple_mesh>` are also available in 
+    fedoo to build simple structured meshes. 
         
     Parameters
     ----------
@@ -34,15 +45,6 @@ class Mesh(MeshBase):
         Dimension of the mesh. By default, ndim is deduced from the nodes coordinates using ndim = nodes.shape[1]    
     name: str
         The name of the mesh
-        
-    
-    Notes
-    --------------------------
-    
-    It is also possible to build a mesh using the following static methods:
-      * :py:meth:`fedoo.Mesh.read` to load a mesh from a file 
-      * :py:meth:`fedoo.Mesh.from_pyvista` to build a mesh from pyvista UnstructuredGrid object 
-    
     
     Example
     --------
@@ -61,8 +63,8 @@ class Mesh(MeshBase):
                  nodes: np.ndarray[float], 
                  elements: np.ndarray[int]|None = None, 
                  elm_type: str = None, 
-                 node_sets:dict = {},
-                 element_sets:dict = {},
+                 node_sets:dict|None = None,
+                 element_sets:dict|None = None,
                  ndim: int|None = None,
                  name: str = "") -> None:
         
@@ -73,12 +75,16 @@ class Mesh(MeshBase):
         """ List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
         """Type of the element (str). The type of the element should be coherent with the shape of elements."""
+        
+        if node_sets is None: node_sets = {}
         self.node_sets = node_sets 
         """Dict containing node sets associated to the mesh"""
+        
+        if element_sets is None: element_sets = {}
         self.element_sets = element_sets
         """Dict containing element sets associated to the mesh"""
+        
         self.local_frame: np.ndarray|None = None #contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
-
         self._n_physical_nodes: int|None = None #if None, the number of physical_nodes is the same as n_nodes
 
         if ndim is None: ndim = self.nodes.shape[1]
@@ -1149,6 +1155,15 @@ class Mesh(MeshBase):
     
     @property
     def physical_nodes(self) -> np.ndarray[float]:
+        """ Get the node coordinates of the physical_nodes. 
+        
+        If no virtual nodes has been added using the add_virtual_nodes method
+        physical_nodes return the entire node list (ie the nodes attribute). 
+        
+        This property is equivalent to:     
+        
+          >>> mesh.nodes[:n_physical_nodes]
+        """        
         if self._n_physical_nodes is None:
             return self.nodes
         else: 
@@ -1163,6 +1178,17 @@ class Mesh(MeshBase):
     
     @property
     def n_physical_nodes(self) -> int:
+        """
+        Number of physical nodes in the mesh. 
+        
+        If no virtual nodes has been added using the add_virtual_nodes method
+        The property n_physical_nodes has the same value than n_nodes.
+        
+        The virtual nodes should be inserted at the end of the node list. 
+        The coordinates of physical nodes can be extracted by:             
+        
+          >>> mesh.nodes[:n_physical_nodes]
+        """
         if self._n_physical_nodes is None:
             return self.n_nodes
         else: 

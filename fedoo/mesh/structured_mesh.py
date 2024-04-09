@@ -5,11 +5,49 @@ from fedoo.mesh.functions import quad2tri, change_elm_type
 
 
 def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', method = 0, ndim = None, name =""):
-#     #edge1 and edge3 should have the same lenght 
-#     #edge2 and edge4 should have the same lenght
-#     #last node of edge1 should be the first of edge2 and so on...
-#     if no name is defined, the name is the same as crd
+    """Create a 2D structured grid from 4 edges. 
     
+    This function build a 2D structured mesh from the ordered position of nodes 
+    defining the 4 edges. 
+    
+    Parameters
+    ----------
+    data: Mesh|np.ndarray[float]
+        may be a fedoo Mesh object or a numpy array containing the node 
+        coordinates.
+    edge1, edge2, edge3, edge4: list[int]|np.ndarray[int]
+        ordered node indices of the 4 edges defining the structured surface.
+        The node indices should be given considering the following rules:            
+            
+        - the node indices must be sorted from the first node on the edge to 
+          the last in the order in which they are encountered.   
+        - edges 1 and 3 are opposite faces and must have the same length 
+          (same number of nodes).
+        - edge2 and edge4 must also have the same length.
+        - last node of edge1 should be the first of edge2, last node of
+          edge2 should be the first of edge3 and so on...
+          
+    elm_type: {'quad4', 'quad9', 'tri3', 'tri6'}, default = 'quad4'
+        The type of the element generated.
+    method: int, default = 0
+        The method used to generate inside nodes:
+        
+        - if method == 0: intesection of lines drawn between nodes of oposite edges.
+        - if method == 1: nodes are regularly distributed between edge1 and edge3 
+          and moved in the perpendicular direction to be as closed as possible 
+          to a regular distribution between edge2 and edge4
+        - if method == 2: nodes are regularly distributed between edge1 and edge3
+          without correction for the perpendicular direction. 
+        - if method == 3: nodes are regularly distributed between edge2 and edge4 
+          without correction for the perpendicular direction.
+          
+    ndim: int, optional
+        dimension of the generated mesh. Default = assert from the given 
+        data.        
+    name: str, optional
+        Name of the returned mesh. If "" and data is a Mesh, the name is the same
+        as data.name.
+    """
     if hasattr(data,'elm_type'): #data is a mesh        
         if data.elements is None: elm = []
         else: 
@@ -35,7 +73,7 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', met
     
     for i in range(1,len(x1)-1):  
         if method == 0:     
-            #intesection of lines dawn between nodes of oposite edges             
+            #intesection of lines drawn between nodes of oposite edges             
             pos = ( (x1[i,0]*x3[i,1]-x1[i,1]*x3[i,0])*(x2-x4)-(x1[i]-x3[i])*(x2[:,0]*x4[:,1]-x2[:,1]*x4[:,0]).reshape(-1,1) ) \
                 / ( (x1[i,0]-x3[i,0])*(x2[:,1]-x4[:,1])-(x1[i,1]-x3[i,1])*(x2[:,0]-x4[:,0]) ).reshape(-1,1)                
             # px= ( (x1[i]*y3[i]-y1[i]*x3[i])*(x2-x4)-(x1[i]-x3[i])*(x2*y4-y2*x4) ) / ( (x1[i]-x3[i])*(y2-y4)-(y1[i]-y3[i])*(x2-x4) )         
@@ -56,7 +94,7 @@ def structured_mesh_2D(data, edge1, edge2, edge3, edge4, elm_type = 'quad4', met
             #pos is modified only in the direction vec
             pos = np.sum(vec * dpos, axis=1).reshape(-1,1)*vec + pos1
         elif method == 2:
-            #nodes are regularly distributed between edge1 and  edge3
+            #nodes are regularly distributed between edge1 and edge3
             pos = x1[i]*(1-coef2) + x3[i]*coef2
         elif method == 3:
             #nodes are regularly distributed between edge 2 and edge4
@@ -93,7 +131,7 @@ def generate_nodes(mesh, N, data, type_gen = 'straight'):
     """
     Add regularly espaced nodes to an existing mesh between to existing nodes.
     
-    This function serve to generated structured meshes. 
+    This function serves to generated structured meshes. 
     To create a 2D stuctured mesh: 
         - Create and mesh with only sigular nodes that will serve to build the edges
         - Use the generate_nodes functions to add some nodes to the edge
@@ -101,16 +139,16 @@ def generate_nodes(mesh, N, data, type_gen = 'straight'):
 
     Parameters
     ----------
-    mesh : Mesh
+    mesh: Mesh
         the existing mesh
-    N : int
+    N: int
         Number of generated nodes.
-    data : list or tuple
+    data: list or tuple
         if type_gen == 'straight', data should contain the indices of the starting (data[0]) and ending (data[1]).
         if type_gen == 'circular', data should contain the indices 
             of the starting (data[0]) and ending (data[1]) nodes and the coordinates of the center of the circle 
             (data[2]). The nodes are generated using a trigonometric rotation.
-    type_gen : str in {'straight', 'circular'}
+    type_gen: str in {'straight', 'circular'}
         Type of line generated. The default is 'straight'.
 
     Returns
@@ -148,7 +186,7 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
 
     Parameters
     ----------
-    nr, nt : int
+    nr, nt: int
         Numbers of nodes in the radial and tangent direction from the hole (default = 11). 
         nt is the number of nodes of the half of an exterior edge
     length, height : int,float
@@ -157,14 +195,18 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
         The radius of the hole (default : 20).
         If tuple = (a,b), a and b are the ellipse radius along x and y axis.
 
-    elm_type : {'quad4', 'quad9', 'tri3', 'tri6', 'quad8'}
+    elm_type: {'quad4', 'quad9', 'tri3', 'tri6', 'quad8'}
         The type of the element generated (default='quad4')
-    Sym : bool 
+    Sym: bool 
         Sym = True, if only the returned mesh assume symetric condition and 
         only the quarter of the plate is returned (default=False)
     include_node_sets : bool
         if True (default), the boundary nodes are included in the mesh node_sets dict.
-        
+    ndim: int, optional
+        dimension of the generated mesh. By default, the returned mesh will be in 2d.
+    name: str, optional
+        Name of the returned mesh. 
+    
     Returns
     -------
     Mesh
@@ -172,8 +214,8 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     
     See Also
     --------
-    line_mesh : 1D mesh of a line    
-    rectangle_mesh : Surface mesh of a rectangle
+    line_mesh: 1D mesh of a line    
+    rectangle_mesh: Surface mesh of a rectangle
     """   
     if elm_type in ['quad9', 'tri6']: 
         nr = nr//2*2+1 #in case nr is not initially odd
@@ -246,10 +288,38 @@ def hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, elm_type = 
     return m
     
 
-def disk_mesh(radius=1., nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""):
+def disk_mesh(radius=1., nr=11, nt=11, elm_type = 'quad4', ndim = None, name =""):
+    """
+    Create a surface mesh of a disk or an ellipse  
+
+    Parameters
+    ----------
+    radius : float, tuple
+        The radius of the disk (default : 1).
+        If tuple = (a,b), a and b are the ellipse radius along x and y axis.
+    nr, nt: int, default = 11.
+        number of nodes in the radial (nr) and tangential (nt) directions used
+        to build the mesh. nr and nt are not the total nodes in each direction.
+    elm_type: {'quad4', 'quad9', 'tri3', 'tri6', 'quad8'}
+        The type of the element generated (default='quad4')
+    ndim: int, optional
+        dimension of the generated mesh. By default, the returned mesh will be in 2d.
+    name: str, optional
+        Name of the returned mesh. 
+    
+    Returns
+    -------
+    Mesh
+        The generated geometry in Mesh format. See the Mesh class for more details.        
+    
+    See Also
+    --------
+    hole_plate_mesh: Mesh of a plate with a hole
+    hollow_disk_mesh: Mesh of a hollow disk
+    """ 
     if elm_type == 'quad8': 
         return change_elm_type(
-                  disk_mesh(radius, nx, ny, 'quad9', ndim, name),
+                  disk_mesh(radius, nr, nt, 'quad9', ndim, name),
                   'quad8',
                 )
     
@@ -259,7 +329,7 @@ def disk_mesh(radius=1., nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""
         radius = 1
     else: ellipse = False
     
-    m = hole_plate_mesh(nx, ny, 0.5*radius, 0.5*radius, radius, elm_type)
+    m = hole_plate_mesh(nr, nt, 0.5*radius, 0.5*radius, radius, elm_type)
     hole_edge = m.node_sets['hole_edge']
 
     m = structured_mesh_2D(m, m.node_sets['right'], 
@@ -272,12 +342,37 @@ def disk_mesh(radius=1., nx=11, ny=11, elm_type = 'quad4', ndim = None, name =""
         m.nodes *= ellipse_radius
     
     return m
-    # if elm_type == 'quad4': return m
-    # elif elm_type == 'tri3': return quad2tri(m)
-    # else: raise NameError('Non compatible element shape')
 
 
 def hollow_disk_mesh(radius=1., thickness=0.1, nr=5, nt=41, elm_type = 'quad4', ndim = None, name=""):
+    """
+    Create a surface mesh of an hollow disk or an ellipse  
+
+    Parameters
+    ----------
+    radius: float, default = 1
+        The radius of the disk (default : 1).
+    thickness: float, default = 0.1
+        The thickness of the hollow disk
+    nr, nt: int, default: nr = 5, nt=41.
+        number of nodes in the radial (nr) and tangential (nt) directions.
+    elm_type: {'quad4', 'quad9', 'tri3', 'tri6'}
+        The type of the element generated (default='quad4')
+    ndim: int, optional
+        dimension of the generated mesh. By default, the returned mesh will be in 2d.
+    name: str, optional
+        Name of the returned mesh. 
+    
+    Returns
+    -------
+    Mesh
+        The generated geometry in Mesh format. See the Mesh class for more details.        
+    
+    See Also
+    --------
+    rectangle_mesh: Mesh of a retangle
+    disk_mesh: Mesh of a disk or an ellipse
+    """ 
     r_int = radius-thickness #intern radius
     assert r_int>0, "thickness should be lower than radius"
     
@@ -294,6 +389,38 @@ def hollow_disk_mesh(radius=1., thickness=0.1, nr=5, nt=41, elm_type = 'quad4', 
     
 
 def I_shape_mesh(height=10, width=10, web_thickness=2, flange_thickness=2, size_elm=0.2, elm_type = 'quad4', ndim = None, name=""):
+    """
+    Create the mesh of a I.  
+
+    Parameters
+    ----------
+    height: float, default = 10
+        Total height of the I
+    width: float, default = 10
+        Total width of the I
+    web_thickness: float, default = 2
+        Web thickness
+    flange_thickness: float, default = 2
+        Flange thickness
+    size_elm, default = 0.2
+        Size of the edge of an element.
+    elm_type: {'quad4', 'quad9', 'tri3', 'tri6'}
+        The type of the element generated (default='quad4')
+    ndim: int, optional
+        dimension of the generated mesh. By default, the returned mesh will be in 2d.
+    name: str, optional
+        Name of the returned mesh. 
+    
+    Returns
+    -------
+    Mesh
+        The generated geometry in Mesh format. See the Mesh class for more details.        
+    
+    See Also
+    --------
+    rectangle_mesh: Mesh of a retangle
+    disk_mesh: Mesh of a disk or an ellipse
+    """ 
     a = web_thickness/2 ; b = height/2 - flange_thickness
     
     m = Mesh(np.array([[-a,-b],[a,-b],[a,b],[-a,b],
