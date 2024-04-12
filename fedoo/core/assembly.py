@@ -134,8 +134,14 @@ class Assembly(AssemblyBase):
             #sl contains list of slice object that contains the dimension for each variable
             #size of VV and sl must be redefined for case with change of basis
             VV = 0
-            nbNodes = self.mesh.n_nodes            
-            sl = [slice(i*nbNodes, (i+1)*nbNodes) for i in range(nvar)] 
+            
+            #number of col for each bloc
+            if mat_change_of_basis is 1:                
+                n_bloc_cols = self.mesh.n_nodes 
+            else:
+                n_bloc_cols = self.mesh.n_elements*self.mesh.n_elm_nodes
+                # or: mat_change_of_basis.shape[0]//nvar 
+            sl = [slice(i*n_bloc_cols, (i+1)*n_bloc_cols) for i in range(nvar)]                 
             
             if n_elm_gp == 0: #if finite difference elements, don't use BlocSparse                              
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
@@ -158,7 +164,7 @@ class Assembly(AssemblyBase):
                     assert wf.op_vir[ii].ordre == 0, "This weak form is not compatible with finite difference mesh"
                     
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector which is the nodal values
-                        if VV is 0: VV = np.zeros((self.mesh.n_nodes * nvar))
+                        if VV is 0: VV = np.zeros((n_bloc_cols * nvar))
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - (coef_PG) 
                             
                     else: #virtual and real operators -> compute a matrix
@@ -242,9 +248,12 @@ class Assembly(AssemblyBase):
                         coef_vir.extend(associatedVariables[var_vir[0]][1])   
                     
                     if wf.op[ii] == 1: #only virtual operator -> compute a vector 
-                        if VV is 0: VV = np.zeros((self.mesh.n_nodes * nvar))
+                        if VV is 0: VV = np.zeros((n_bloc_cols * nvar))
                         for i in range(len(Matvir)):
-                            VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
+                            try:
+                                VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[i].T * (coef_PG) #this line may be optimized
+                            except:
+                                pass
                             
                     else: #virtual and real operators -> compute a matrix                                         
                         coef = [1] ; var = [wf.op[ii].u] #list in case there is an angular variable                
@@ -424,71 +433,82 @@ class Assembly(AssemblyBase):
     
    
     def get_change_of_basis_mat(self):
+        ### change of basis treatment for beam or plate elements
+        ### Compute the change of basis matrix for vector defined in self.space.list_vectors()
         if not(self._use_local_csys): return 1
         
         mesh = self.mesh
-        if mesh not in Assembly._saved_change_of_basis_mat:        
-            ### change of basis treatment for beam or plate elements
-            ### Compute the change of basis matrix for vector defined in self.space.list_vectors()
-            mat_change_of_basis = 1
-            compute_mat_change_of_basis = False
+        
+        if mesh in Assembly._saved_change_of_basis_mat:  
+            return Assembly._saved_change_of_basis_mat[mesh]
+        
+        mat_change_of_basis = 1
+        compute_mat_change_of_basis = False
 
-            n_nd = mesh.n_nodes
-            n_el = mesh.n_elements
-            elm = mesh.elements
-            n_elm_nodes = np.shape(elm)[1]            
-            crd = mesh.nodes
-            dim = self.space.ndim
-            local_frame = mesh.local_frame
-            elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
-    #        xi_nd = elmRefGeom.xi_nd
-            xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes) 
+        n_nd = mesh.n_nodes
+        n_el = mesh.n_elements
+        elm = mesh.elements
+        n_elm_nodes = np.shape(elm)[1]            
+        dim = self.space.ndim
+        local_frame = mesh.local_frame
 
-            if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
-                for nameVector in self.space.list_vectors():
-                    if compute_mat_change_of_basis == False:
-                        range_n_elm_nodes = np.arange(n_elm_nodes) 
-                        compute_mat_change_of_basis = True
-                        nvar = self.space.nvar
-                        listGlobalVector = []  ; listScalarVariable = list(range(nvar))
+        if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
+            for nameVector in self.space.list_vectors():
+                if compute_mat_change_of_basis == False:
+                    range_n_elm_nodes = np.arange(n_elm_nodes) 
+                    compute_mat_change_of_basis = True
+                    nvar = self.space.nvar
+                    listGlobalVector = []  ; listScalarVariable = list(range(nvar))
 #                        mat_change_of_basis = sparse.lil_matrix((nvar*n_el*n_elm_nodes, nvar*n_nd)) #lil is very slow because it change the sparcity of the structure
-                    listGlobalVector.append(self.space.get_vector(nameVector)) #vector that need to be change in local coordinate            
-                    listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
-                #Data to build mat_change_of_basis with coo sparse format
-                if compute_mat_change_of_basis:
-                    rowMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
-                    colMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
-                    dataMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
-                    local_frame_el = elmRefGeom.GetLocalFrame(crd[elm], xi_nd, local_frame) #array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
-                    for ivec, vec in enumerate(listGlobalVector):
-                        # dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el[:,:,:dim,:dim]                  
-                        dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el                  
-                        rowMCB[ivec*n_el:(ivec+1)*n_el] = np.arange(n_el).reshape(-1,1,1,1) + range_n_elm_nodes.reshape(1,-1,1,1)*n_el + np.array(vec).reshape(1,1,-1,1)*(n_el*n_elm_nodes)
-                        colMCB[ivec*n_el:(ivec+1)*n_el] = elm.reshape(n_el,n_elm_nodes,1,1) + np.array(vec).reshape(1,1,1,-1)*n_nd        
-    
-                    if len(listScalarVariable) > 0:
-                        #add the component from scalar variables (ie variable not requiring a change of basis)
-                        dataMCB = np.hstack( (dataMCB.reshape(-1), np.ones(len(listScalarVariable)*n_el*n_elm_nodes) )) #no change of variable so only one value adding in dataMCB
-
-                        rowMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
-                        colMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
-                        for ivar, var in enumerate(listScalarVariable):
-                            rowMCB_loc[ivar*n_el:(ivar+1)*n_el] = np.arange(n_el).reshape(-1,1) + range_n_elm_nodes.reshape(1,-1)*n_el + var*(n_el*n_elm_nodes)
-                            colMCB_loc[ivar*n_el:(ivar+1)*n_el] = elm + var*n_nd        
-                        
-                        rowMCB = np.hstack( (rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
-                        colMCB = np.hstack( (colMCB.reshape(-1), colMCB_loc.reshape(-1)))
-                        
-                        mat_change_of_basis = sparse.coo_matrix((dataMCB,(rowMCB,colMCB)), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))                   
-                    else:
-                        mat_change_of_basis = sparse.coo_matrix((dataMCB.reshape(-1),(rowMCB.reshape(-1),colMCB.reshape(-1))), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))
+                listGlobalVector.append(self.space.get_vector(nameVector)) #vector that need to be change in local coordinate            
+                listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
+            #Data to build mat_change_of_basis with coo sparse format
+            if compute_mat_change_of_basis:
+                ### to test        
+                if self.n_elm_gp not in mesh._elm_interpolation:
+                    mesh.init_interpolation(self.n_elm_gp)
+                            
+                elmRefGeom = mesh._elm_interpolation[self.n_elm_gp]              
+                # elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
+                #### end to test 
                     
-                    mat_change_of_basis = mat_change_of_basis.tocsr()                     
-            
-            Assembly._saved_change_of_basis_mat[mesh] = mat_change_of_basis   
-            return mat_change_of_basis
+                #        xi_nd = elmRefGeom.xi_nd
+                xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes) 
+                
+                rowMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                colMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                dataMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
+                local_frame_el = elmRefGeom.GetLocalFrame(mesh.nodes[mesh._elements_geom], xi_nd, local_frame) #array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
 
-        return Assembly._saved_change_of_basis_mat[mesh]
+                for ivec, vec in enumerate(listGlobalVector):
+                    # dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el[:,:,:dim,:dim]                  
+                    dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el                  
+                    rowMCB[ivec*n_el:(ivec+1)*n_el] = np.arange(n_el).reshape(-1,1,1,1) + range_n_elm_nodes.reshape(1,-1,1,1)*n_el + np.array(vec).reshape(1,1,-1,1)*(n_el*n_elm_nodes)
+                    colMCB[ivec*n_el:(ivec+1)*n_el] = elm.reshape(n_el,n_elm_nodes,1,1) + np.array(vec).reshape(1,1,1,-1)*n_nd        
+
+                if len(listScalarVariable) > 0:
+                    #add the component from scalar variables (ie variable not requiring a change of basis)
+                    dataMCB = np.hstack( (dataMCB.reshape(-1), np.ones(len(listScalarVariable)*n_el*n_elm_nodes) )) #no change of variable so only one value adding in dataMCB
+
+                    rowMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
+                    colMCB_loc = np.empty((len(listScalarVariable)*n_el, n_elm_nodes))
+                    for ivar, var in enumerate(listScalarVariable):
+                        rowMCB_loc[ivar*n_el:(ivar+1)*n_el] = np.arange(n_el).reshape(-1,1) + range_n_elm_nodes.reshape(1,-1)*n_el + var*(n_el*n_elm_nodes)
+                        colMCB_loc[ivar*n_el:(ivar+1)*n_el] = elm + var*n_nd        
+                    
+                    rowMCB = np.hstack( (rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
+                    colMCB = np.hstack( (colMCB.reshape(-1), colMCB_loc.reshape(-1)))
+                    
+                    mat_change_of_basis = sparse.coo_matrix((dataMCB,(rowMCB,colMCB)), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))                   
+                else:
+                    mat_change_of_basis = sparse.coo_matrix((dataMCB.reshape(-1),(rowMCB.reshape(-1),colMCB.reshape(-1))), shape=(n_el*n_elm_nodes*nvar, n_nd*nvar))
+                
+                mat_change_of_basis = mat_change_of_basis.tocsr()                     
+        
+        Assembly._saved_change_of_basis_mat[mesh] = mat_change_of_basis   
+        return mat_change_of_basis
+
+        
 
  
     def initialize(self, pb):
@@ -625,7 +645,7 @@ class Assembly(AssemblyBase):
             mesh.init_interpolation(n_elm_gp)
         
         mesh._compute_gaussian_quadrature_mat(n_elm_gp) 
-        elmRefGeom = mesh._elm_interpolation[n_elm_gp]                 
+        elmRefGeom = mesh._elm_interpolation[n_elm_gp]
         
         
         #-------------------------------------------------------------------
@@ -668,7 +688,7 @@ class Assembly(AssemblyBase):
                 nb_dir_deriv = derivativePG.shape[-2] 
             nop = nb_dir_deriv+1 #nombre d'opérateur à discrétiser
     
-            NbDoFperNode = np.shape(elmRef.ShapeFunctionPG)[-1]//n_interpol_nodes
+            NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1]//n_interpol_nodes
             
             data = [[np.empty((n_elements, n_elm_gp, n_elm_nodes)) for j in range(NbDoFperNode)] for i in range(nop)] 
     

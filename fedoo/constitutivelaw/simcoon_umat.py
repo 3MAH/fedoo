@@ -153,6 +153,9 @@ class Simcoon(Mechanical3D):
         except: #for compatibility with old version of simcoon
             (stress, assembly.sv['Statev'], assembly.sv['Wm'], assembly.sv['TangentMatrix']) = sim.umat(self.umat_name, assembly.sv_start['Strain'].array, de.array, assembly.sv_start['Stress'].array, assembly.sv['DR'], self.props, assembly.sv_start['Statev'], pb.time, pb.dtime, assembly.sv_start['Wm'])
         
+        
+        # work only in global local frame
+        
         #### TEST ######
         # assembly.sv['TangentMatrix'][:,:3] = assembly.sv['TangentMatrix'][:,:3] + stress.reshape(6,1,-1)
         # F = np.transpose(assembly.sv['F'], (2,0,1))
@@ -167,43 +170,13 @@ class Simcoon(Mechanical3D):
         # to check the symetriy of the tangentmatrix :
         # print(np.abs(assembly.sv['TangentMatrix'] - assembly.sv['TangentMatrix'].transpose((1,0,2))).max()) 
 
-        # displacement = pb.get_dof_solution()
-
-        # #tranpose for compatibility with simcoon
-        # if displacement is 0: 
-        #     self.__currentGradDisp = 0
-        #     F1 = np.empty((3,3,assembly.n_gauss_points), order="F"); F1[...] = np.eye(3).reshape(3,3,1)
-        # else:   
-        #     self.__currentGradDisp = np.array(assembly.get_grad_disp(displacement, "GaussPoint"))            
-
-        #     #F0.strides and F1.strides should be [n_cols*n_rows*8, 8, n_rows*8] for compatibiliy with the sim.RunUmat_fedoo function
-        #     F1 = np.add(np.eye(3).reshape(3,3,1), self.__currentGradDisp, order='F').transpose(2,0,1)                        
-            
-        # self.compute_Detot(dtime, F1)  
-        
-        
-        # # test = np.array(assembly.get_strain(pb.get_dof_solution(), "GaussPoint", False)).T #linearized strain tensor
-        # # print( (self.etot+self.Detot - test).max() )
-        
-
-        # self.Run(dtime)
-        #     #linear problem = no need to recompute tangent matrix if it has already been computed
-        #     if 'TangentMatrix' in assembly.sv: 
-        #         H = assembly.sv['TangentMatrix'] 
-        #     else:             
-        #         H = self.get_tangent_matrix(assembly)
-        #         assembly.sv['TangentMatrix'] = H
-            
-        #     TotalStrain = assembly.sv['Strain']        
-        #     assembly.sv['Stress'] = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
-                
         
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:
             assembly.sv['TangentMatrix'] = assembly.sv['ElasticMatrix']
         	
         
-    def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
+    def get_tangent_matrix(self, assembly, dimension=None): 
     
         if dimension is None: dimension = assembly.space.get_dimension()
         
@@ -217,17 +190,7 @@ class Simcoon(Mechanical3D):
     # def get_elastic_matrix(self, dimension = "3D"):
     #     return self.get_tangent_matrix(None,dimension)
         
-    
-    # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
-    #     displacement = pb.get_dof_solution()                
-    #     if displacement is 0: 
-    #         return 0 #if displacement = 0, Strain = 0
-    #     else:
-    #         return assembly.get_strain(displacement, type_output)  
-    
-       
-    
-    
+
     
     
      

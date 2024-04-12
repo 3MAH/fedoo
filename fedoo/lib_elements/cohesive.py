@@ -6,7 +6,7 @@ from fedoo.lib_elements.quadrangle import Quad4
 class Cohesive1D(Element):
     name = 'cohesive1d'
     default_n_gp = 1
-    n_nodes = 1
+    n_nodes = 2
     
     def __init__(self, n_elm_gp=1, **kargs):
         self.n_elm_gp = 1 #pas de point de gauss pour les éléments cohésifs car pas de point d'intégration
@@ -28,7 +28,8 @@ class Cohesive1D(Element):
 class Cohesive2D(Element1DGeom2, Element1D):
     name = 'cohesive2d'
     default_n_gp = 2
-    n_nodes = 2
+    n_nodes = 4
+    local_csys = True
     
     def __init__(self,n_elm_gp=2, **kargs):
         """
@@ -51,7 +52,8 @@ class Cohesive2D(Element1DGeom2, Element1D):
 class Cohesive3D(Quad4): # à vérifier
     name = 'cohesive3d'
     default_n_gp = 4
-    n_nodes = 4
+    n_nodes = 8
+    local_csys = True
 
     def __init__(self,n_elm_gp=4, **kargs):
         """
@@ -69,6 +71,34 @@ class Cohesive3D(Quad4): # à vérifier
         return np.c_[ -0.25*(1-xi)*(1-eta) , -0.25*(1+xi)*(1-eta) , -0.25*(1+xi)*(1+eta) , -0.25*(1-xi)*(1+eta), 0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta) ]
     def ShapeFunctionDerivative(self, vec_xi): #quad4 shape functions based on the mean values from two adjacent nodes 
         return [ 0.5*np.array([ [0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1]), 0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0]), 0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) for xi in vec_xi]
+
+
+
+#a tester avec une interpolation du plan moyen de l'élément
+class Quad4Interface(Quad4):
+    name = 'quad4interface'
+    default_n_gp = 4
+    n_nodes = 8
+    
+    def __init__(self, n_elm_gp=4, **kargs):
+        self.xi_nd =  np.c_[[-1. , 1., 1., -1., -1., 1., 1., -1.],\
+                            [-1. , -1., 1., 1., -1., -1., 1., 1.]]
+        self.n_elm_gp = n_elm_gp
+        Quad4.__init__(self, n_elm_gp)
+            
+    #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
+    #vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
+    #vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
+    def ShapeFunction(self, vec_xi):
+        xi = vec_xi[:,0] ; eta = vec_xi[:,1]
+        return 0.5 * np.c_[ 0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta),  0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta)]
+    def ShapeFunctionDerivative(self, vec_xi): 
+        return [ 0.5*np.array([[0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1]), 0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , 
+                               [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0]), 0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) 
+                for xi in vec_xi]        
+
+
+
 #    def GeometricalShapeFunction(self, vec_xi):
 #        xi = vec_xi[:,0] ; eta = vec_xi[:,1]
 #        return 0.5 * np.c_[ 0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta),  0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta)]

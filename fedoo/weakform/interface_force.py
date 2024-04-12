@@ -10,20 +10,18 @@ class InterfaceForce(WeakFormBase):
     
     Parameters
     ----------
-    CurrentConstitutiveLaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
+    constitutivelaw: str or ConstitutiveLaw
+        Interface constitutive law (ConstitutiveLaw object or name)
+        (:mod:`fedoo.constitutivelaw`)
+    name: str, optional
         name of the WeakForm     
     nlgeom: bool (default = False)
         For future development
         If True, return a NotImplemented Error
     """
-    def __init__(self, CurrentConstitutiveLaw, name = "", nlgeom = False):
-        if isinstance(CurrentConstitutiveLaw, str):
-            CurrentConstitutiveLaw = ConstitutiveLaw.get_all()[CurrentConstitutiveLaw]
-
-        if name == "":
-            name = CurrentConstitutiveLaw.name
+    def __init__(self, constitutivelaw, name = "", nlgeom = False,  space = None):
+        if isinstance(constitutivelaw, str):
+            constitutivelaw = ConstitutiveLaw[constitutivelaw]
             
         WeakFormBase.__init__(self,name)
         
@@ -35,43 +33,40 @@ class InterfaceForce(WeakFormBase):
         else: #2D assumed
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
                
-        self.__ConstitutiveLaw = CurrentConstitutiveLaw
+        self.constitutivelaw = constitutivelaw
         self.__InitialStressVector = 0
         
         if nlgeom == True:
             raise NameError('nlgeom non implemented for Interface force')
         self.__nlgeom = nlgeom
+        
+        self.assembly_options['assume_sym'] = False #symetric ?
 
-    def updateInitialStress(self,InitialStressVector):                                                
-        self.__InitialStressVector = InitialStressVector
-
-    def update(self, assembly, pb, dtime):
+    def update(self, assembly, pb):
         #function called when the problem is updated (NR loop or time increment)
         #- No nlgeom effect for now
         #- Change in constitutive law (internal variable)
-        self.updateInitialStress(self.__ConstitutiveLaw.GetInterfaceStress())
         
         if self.__nlgeom: #need to be modifed for nlgeom
-            if not(hasattr(self.__ConstitutiveLaw, 'GetCurrentGradDisp')):
+            if not(hasattr(self.constitutivelaw, 'GetCurrentGradDisp')):
                 raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
-            self.__InitialGradDispTensor = self.__ConstitutiveLaw.get_disp_grad()
+            self.__InitialGradDispTensor = self.constitutivelaw.get_disp_grad()
         
 
-    def to_start(self):
-        self.__ConstitutiveLaw.to_start()
+    # def to_start(self, assembly, pb):
+    #     pass
 
-    def NewTimeIncrement(self):
-        self.__ConstitutiveLaw.NewTimeIncrement()
+    # def set_start(self, assembly, pb):
+    #     pass
 
-    def reset(self):
-        self.__ConstitutiveLaw.reset()
-        self.__InitialStressVector = 0
+    # def reset(self):
+    #     pass
 
     def get_weak_equation(self, assembly, pb):
         
         ### Operator for Interface Stress Operator ###
         dim = self.space.ndim
-        K = self.__ConstitutiveLaw.GetK()
+        K = assembly.sv['TangentMatrix']
         
         U = self.space.op_disp() #relative displacement if used with cohesive element
         U_vir = [u.virtual for u in U]
@@ -79,9 +74,11 @@ class InterfaceForce(WeakFormBase):
         
         DiffOp = sum([0 if U[i]==0 else U[i].virtual * F[i] for i in range(dim)])    
         
-        if self.__InitialStressVector is not 0:    
+        initial_stress = assembly.sv['InterfaceStress']
+        
+        if initial_stress is not 0:    
             DiffOp = DiffOp + sum([0 if U_vir[i] is 0 else \
-                                   U_vir[i] * self.__InitialStressVector[i] for i in range(dim)])
+                                   U_vir[i] * initial_stress[i] for i in range(dim)])
 
         return DiffOp
 

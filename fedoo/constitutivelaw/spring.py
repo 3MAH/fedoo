@@ -27,26 +27,31 @@ class Spring(ConstitutiveLaw):
     #Use with WeakForm.InterfaceForce
     def __init__(self, Kx=0, Ky = 0, Kz = 0, name =""):        
         ConstitutiveLaw.__init__(self, name) # heritage        
-        self.__parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}  
-        self._InterfaceStress = 0           
+        self.parameters = {'Kx':Kx, 'Ky':Ky, 'Kz':Kz}  
+        # self._InterfaceStress = 0           
 
-    def GetRelativeDisp(self):
-        return self.__Delta
+    def initialize(self, assembly, pb):
+        assembly.sv['InterfaceStress'] = 0 #Interface Stress
+        assembly.sv['TangentMatrix'] = self.get_K()
 
-    def GetInterfaceStress(self):
-        return self._InterfaceStress
+
+    # def GetRelativeDisp(self):
+    #     return self.__Delta
+
+    # def GetInterfaceStress(self):
+    #     return self._InterfaceStress
 
     def get_tangent_matrix(self):
-        return [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]     
+        return [[self.parameters['Kx'], 0, 0], [0, self.parameters['Ky'], 0], [0,0,self.parameters['Kz']]]     
     
-    def GetK(self):
-        return self.__ChangeBasisK(self.get_tangent_matrix())
+    def get_K(self):
+        return self.local2global_K(self.get_tangent_matrix())
     
-    def __ChangeBasisK(self, K):
+    def local2global_K(self, K):
         #Change of basis capability for spring type laws on the form : ForceVector = K * DispVector
-        if self._ConstitutiveLaw__localFrame is not None:
+        if self.local_frame  is not None:
             #building the matrix to change the basis of the stress and the strain
-            B = self._ConstitutiveLaw__localFrame     
+            B = self.local_frame      
 
             if len(B.shape) == 3:    
                 Binv = np.transpose(B, [2,1,0])
@@ -66,44 +71,17 @@ class Spring(ConstitutiveLaw):
             
         return K
 
-    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):
-       #nlgeom not implemented
-       pass
-
-    def update(self,assembly, pb, dtime):            
-        #dtime not used for this law
-        
+    def update(self,assembly, pb):                    
         displacement = pb.get_dof_solution()
-        if displacement is 0: self._InterfaceStress = self.__Delta = 0
+        K = self.get_K()
+        assembly.sv['TangentMatrix'] = K
+        if displacement is 0: assembly.sv['InterfaceStress'] = assembly.sv['RelativeDisp'] = 0
         else:
             op_delta = assembly.space.op_disp() #relative displacement = disp if used with cohesive element
-            self.__Delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
+            delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
+            assembly.sv['RelativeDisp'] = delta
         
-            self.ComputeInterfaceStress(self.__Delta)        
-
-    # def GetOperartorDelta(self): #operator to get the relative displacement
-    #     U, U_vir = get_DispOperator()  
-    #     return U 
+            #Compute interface stress
+            dim = len(delta)
+            assembly.sv['InterfaceStress'] = [sum([delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
         
-    def ComputeInterfaceStress(self, Delta, dtime = None): 
-        #Delta is the relative displacement vector
-        K = self.GetK()
-        dim = len(Delta)
-        self._InterfaceStress = [sum([Delta[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #list of 3 objects        
-    
-
-
-#    def GetStressOperator(self, localFrame=None): # methode virtuel
-#    
-#        U, U_vir = get_DispOperator()
-#        
-#        if self._ConstitutiveLaw__localFrame is None:
-#            if GetNumberOfDimensions() == "3D":        # tester si contrainte plane ou def plane              
-#                return [U[0] * self.__parameters['Kx'], U[1] * self.__parameters['Ky'], U[2] * self.__parameters['Kz']]
-#            else:
-#                return [U[0] * self.__parameters['Kx'], U[1] * self.__parameters['Ky'], 0]
-#        else: 
-#            #TODO test if it work in 2D and add the 2D case if needed
-#            K = [[self.__parameters['Kx'], 0, 0], [0, self.__parameters['Ky'], 0], [0,0,self.__parameters['Kz']]]
-#            K= self._ConstitutiveLaw__ChangeBasisK(K)
-#            return [sum([U[j]*K[i][j] for j in range(3)]) for i in range(3)]

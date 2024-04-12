@@ -14,30 +14,6 @@ class Mechanical3D(ConstitutiveLaw):
         ConstitutiveLaw.__init__(self,name)
         # self._stress = 0 #current stress (pk2 if nlgeom) at integration points
         # self._grad_disp = 0 #current grad_disp at integration points
-        
-    # def get_pk2(self):
-    #     return NotImplemented
-        
-    # def get_kirchhoff(self):
-    #     return NotImplemented        
-    
-    # def get_cauchy(self):
-    #     return NotImplemented        
-    
-    # def get_strain(self):
-    #     return NotImplemented
-           
-    # def get_statev(self):
-    #     return NotImplemented
-
-    # def get_wm(self):
-    #     return NotImplemented
-
-    # def get_stress(self, **kargs): #same as GetPKII (used for small def)
-    #     return NotImplemented
-    
-    # def get_disp_grad(self): #use if nlgeom == True
-    #     return NotImplemented
     
     def initialize(self, assembly, pb):
         pass
@@ -52,8 +28,8 @@ class Mechanical3D(ConstitutiveLaw):
         #function called to update the state of constitutive law 
         # assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
         
-    def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
-        return NotImplemented
+    # def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis) 
+    #     return NotImplemented
     
     # def get_H(self, assembly, dimension = None): #Tangent Matrix in global coordinate system (apply change of basis) + account for dimension of the problem
     #     if dimension is None: dimension = assembly.space.get_dimension()
@@ -70,10 +46,11 @@ class Mechanical3D(ConstitutiveLaw):
     def get_H_plane_stress(self, H):
         """
         Convert a full 3D tangent matrix H in an equivalent behavior in 2D with the plane stress assumption.        
+        
         Parameters
         ----------
         H : TYPE
-            DESCRIPTION.
+            Full 3D tangent matrix
 
         Returns
         -------

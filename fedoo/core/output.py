@@ -102,19 +102,6 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1, elemen
                             else: assert 0
                         except: 
                             raise NameError('Field "{}" not available'.format(res))
-                    
-                    # if res in ['PK2']:
-                    #     data = sv['PK2']
-                    # elif res == 'Stress':
-                    #     #stress for small displacement
-                    #     data = sv['Stress']
-                    #     # data = material.get_stress(position = position)
-                    # elif res == 'Kirchhoff':
-                    #     data = sv['Stress']
-                    # elif res == 'Cauchy':
-                    #     data = material.get_cauchy()
-                    # elif res == 'Strain':
-                    #     data = material.get_strain(position = position)                                                
                                                             
                     #keep data in memory in case it may be used later for vm, pc or pdir stress computation
                     data_sav[res] = data
@@ -135,16 +122,6 @@ def _get_results(pb, assemb, output_list, output_type=None, position = 1, elemen
                     data=data_sav[res[:-3]]
                 else:
                     data = sv[res[:-3]]
-                    
-                    # if res in ['PKII_vm','PK2_vm']:
-                    #     data = material.get_pk2()
-                    # elif res == 'Stress_vm':
-                    #     data = material.get_stress(position = position)
-                    # elif res == 'Kirchhoff_vm':
-                    #     data = material.get_kirchhoff()
-                    # elif res == 'Cauchy_vm':
-                    #     data = material.get_cauchy()
-
                     data_sav[res[:-3]] = data                                                     
 
                 data = data.von_mises()

@@ -35,9 +35,6 @@ class StressEquilibrium(WeakFormBase):
     def __init__(self, constitutivelaw, name = "", nlgeom = False, space = None):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw[constitutivelaw]
-
-        if name == "":
-            name = constitutivelaw.name
             
         WeakFormBase.__init__(self,name, space)
         

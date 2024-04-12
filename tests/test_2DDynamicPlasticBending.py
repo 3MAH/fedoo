@@ -43,7 +43,7 @@ elif mat == 1:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name = "weakform")
 
 #note set for boundary conditions
 nodes_bottomLeft = np.where((crd[:,0]==0) * (crd[:,1]==0))[0]
@@ -52,7 +52,7 @@ nodes_bottomRight = np.where((crd[:,0]==L) * (crd[:,1]==0))[0]
 nodes_top1 = np.where((crd[:,0]==L/4) * (crd[:,1]==h))[0]
 nodes_top2 = np.where((crd[:,0]==3*L/4) * (crd[:,1]==h))[0]
 
-fd.Assembly.create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create("weakform", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 #Mass matrix
 fd.weakform.Inertia(rho,"Inertia")

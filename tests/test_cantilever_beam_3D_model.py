@@ -12,10 +12,10 @@ mesh = fd.mesh.box_mesh(nx=11, ny=5, nz=5, x_min=0, x_max=1000, y_min=0, y_max=1
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw", name="weakform")
 
 #Assembly (print the time required for assembling)
-fd.Assembly.create("ElasticLaw", 'Domain', 'hex8', name="Assembling") 
+fd.Assembly.create("weakform", 'Domain', 'hex8', name="Assembling") 
 
 #Type of problem 
 pb = fd.problem.Linear("Assembling")
