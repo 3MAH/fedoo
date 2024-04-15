@@ -59,3 +59,12 @@ Installation with conda with recommanded dependencices (including simcoon):
 ```
 conda install -c conda-forge -c set3mah fedoo
 ```
+In mac OS make sure to use scikit-umfpack, the best way to take the most of MacOs accelerate framework is to install numpy from sources first:
+```
+pip install cython pybind11
+pip install --no-binary :all: numpy
+```
+The conda package is restricted to version 0.33, which is not compatible with the latest versions of numpy
+```
+pip install scikit-umpack>=0.41 
+```
