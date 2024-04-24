@@ -924,7 +924,12 @@ class Mesh(MeshBase):
         #Initialise the geometrical interpolation
         #-------------------------------------------------------------------   
         # elm_interpol = get_element(self.elm_type)(n_elm_gp, mesh=self) #initialise element interpolation
-        elm_interpol = get_element(self.elm_type)(n_elm_gp) #initialise element interpolation
+        elm_interpol = get_element(self.elm_type)
+        if hasattr(elm_interpol, 'geometry_elm'):
+            elm_interpol = elm_interpol.geometry_elm
+        
+        elm_interpol = elm_interpol(n_elm_gp) #initialise element interpolation
+
         n_interpol_nodes = elm_interpol.n_nodes #len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_interpol_nodes = n_elm_nd
 
         elm_geom = self.elements[:,:n_interpol_nodes] #element table restrictied to geometrical dof

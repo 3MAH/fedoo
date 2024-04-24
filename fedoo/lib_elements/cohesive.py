@@ -1,7 +1,8 @@
 import numpy as np
 from numpy import linalg
 from fedoo.lib_elements.element_base import Element, Element1DGeom2, Element1D
-from fedoo.lib_elements.quadrangle import Quad4
+from fedoo.lib_elements.quadrangle import ElementQuadrangle
+from fedoo.lib_elements.element_list import CombinedElement
 
 class Cohesive1D(Element):
     name = 'cohesive1d'
@@ -25,11 +26,11 @@ class Cohesive1D(Element):
 #    def GeometricalShapeFunction(self,xi): 
 #        return 0.5*np.array([[1., 1.] for x in xi])
     
-class Cohesive2D(Element1DGeom2, Element1D):
-    name = 'cohesive2d'
+class Lin2InterfaceJump(Element1DGeom2, Element1D):
+    name = 'lin2interface_jump'
     default_n_gp = 2
     n_nodes = 4
-    local_csys = True
+    # local_csys = True
     
     def __init__(self,n_elm_gp=2, **kargs):
         """
@@ -49,11 +50,11 @@ class Cohesive2D(Element1DGeom2, Element1D):
 #    def GeometricalShapeFunction(self,xi): 
 #        return 0.5*np.c_[xi, 1-xi, xi, 1-xi]
 
-class Cohesive3D(Quad4): # à vérifier
-    name = 'cohesive3d'
+class Quad4InterfaceJump(ElementQuadrangle): # à vérifier
+    name = 'quad4interface_jump'
     default_n_gp = 4
     n_nodes = 8
-    local_csys = True
+    # local_csys = True
 
     def __init__(self,n_elm_gp=4, **kargs):
         """
@@ -61,7 +62,10 @@ class Cohesive3D(Quad4): # à vérifier
         [0, 1, 2, 3] is a quad4 defining the face on the negative side of the cohesive zone
         [4, 5, 6, 7] is a quad4 defining the face on the positive side of the cohesive zone
         """
-        Quad4.__init__(self, n_elm_gp, **kargs)
+        self.xi_nd =  np.c_[[-1. , 1., 1., -1., -1., 1., 1., -1.],\
+                            [-1. , -1., 1., 1., -1., -1., 1., 1.]]
+        self.n_elm_gp = n_elm_gp
+        ElementQuadrangle.__init__(self, n_elm_gp)
                         
     #Dans les fonctions suivantes vec_xi contient une liste de points dans le repère de référence (xi, eta)
     #vec_xi[:,0] -> liste des valeurs de xi pour chaque point (points de gauss en général)
@@ -73,10 +77,27 @@ class Cohesive3D(Quad4): # à vérifier
         return [ 0.5*np.array([ [0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1]), 0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0]), 0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) for xi in vec_xi]
 
 
+class Lin2MeanPlane(Element1D):
+    #define the mean plane between two lin2 elements defining an interface (used for cohesive elements).
+    name = 'lin2meanplane'
+    default_n_gp = 2
+    n_nodes = 4
+    
+    def __init__(self, n_elm_gp=4, **kargs):
+        self.xi_nd =  np.c_[[0., 1., 0., 1.]]        
+        self.n_elm_gp = n_elm_gp
+        Element1D.__init__(self, n_elm_gp)
+    
+    #Dans les fonctions suivantes, xi doit toujours être une matrice colonne      
+    def ShapeFunction(self,xi): 
+        return 0.5 * np.c_[(1-xi), xi, (1-xi), xi]
+    def ShapeFunctionDerivative(self,xi):               
+        return [0.5 * np.array([[-1., 1., -1., 1.]]) for x in xi] 
 
-#a tester avec une interpolation du plan moyen de l'élément
-class Quad4Interface(Quad4):
-    name = 'quad4interface'
+
+class Quad4MeanPlane(ElementQuadrangle):
+    #interpolate the mean plane between two quad4 elements, used for an interface element (cohesive)
+    name = 'quad4meanplane'
     default_n_gp = 4
     n_nodes = 8
     
@@ -84,7 +105,7 @@ class Quad4Interface(Quad4):
         self.xi_nd =  np.c_[[-1. , 1., 1., -1., -1., 1., 1., -1.],\
                             [-1. , -1., 1., 1., -1., -1., 1., 1.]]
         self.n_elm_gp = n_elm_gp
-        Quad4.__init__(self, n_elm_gp)
+        ElementQuadrangle.__init__(self, n_elm_gp)
             
     #In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     #vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
@@ -97,33 +118,9 @@ class Quad4Interface(Quad4):
                                [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0]), 0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) 
                 for xi in vec_xi]        
 
+Quad4Interface = CombinedElement("quad4interface", Quad4InterfaceJump, default_n_gp = 4, local_csys = True)
+Quad4Interface.geometry_elm = Quad4MeanPlane
 
+Lin2Interface = CombinedElement("lin2interface", Lin2InterfaceJump, default_n_gp = 4, local_csys = True)
+Lin2Interface.geometry_elm = Lin2MeanPlane
 
-#    def GeometricalShapeFunction(self, vec_xi):
-#        xi = vec_xi[:,0] ; eta = vec_xi[:,1]
-#        return 0.5 * np.c_[ 0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta),  0.25*(1-xi)*(1-eta) , 0.25*(1+xi)*(1-eta) , 0.25*(1+xi)*(1+eta) , 0.25*(1-xi)*(1+eta)]
-#    def ShapeFunctionDerivative_quad4(self, vec_xi): 
-#        return [ np.array([ [0.25*(xi[1]-1), 0.25*(1-xi[1]), 0.25*(1+xi[1]), -0.25*(1+xi[1])] , [0.25*(xi[0]-1), -0.25*(1+xi[0]), 0.25*(1+xi[0]), 0.25*(1-xi[0])] ]) for xi in vec_xi]      
-
-    
-#    def ComputeJacobianMatrix(self,vec_x, vec_xi):
-#        """
-#        Calcul le Jacobien aux points de gauss dans le cas d'un élément isoparamétrique (c'est à dire que les mêmes fonctions de forme sont utilisées)
-#        vec_x est un tabeau dont les lignes donnent les coordonnées de chacun des noeuds de l'éléments
-#        vec_xi est un tableau dont les lignes donnent les coordonnées dans le repère de référence où on souhaite avoir le jacobien (en général pg)
-#        Calcul le jacobien dans self.JacobianMatrix le jacobien sous la forme [[dx/dxi, dy/dxi, ...], [dx/deta, dy/deta, ...], ...]
-#        Renvoie le déterminant du jacobien
-#        """      
-#        vec_x_quad = 0.5*(vec_x[0:4]+vec_x[4:8])
-#        
-#        dnn_xi = self.ShapeFunctionDerivative_quad4(vec_xi)        
-#        self.JacobianMatrix = [np.dot(dnn,vec_x_quad) for dnn in dnn_xi]         
-#        
-#        if np.shape(self.JacobianMatrix[0])[0] == np.shape(self.JacobianMatrix[0])[1]:
-#            self.detJ = [abs(linalg.det(J)) for J in self.JacobianMatrix]
-#        else: #l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence         
-#            if np.shape(self.JacobianMatrix[0])[0] == 1: self.detJ = [linalg.norm(J) for J in self.JacobianMatrix]
-#            else: #On doit avoir np.shape(JacobianMatrix)[0]=2 (l'elm de ref est défini en 2D) et np.shape(JacobianMatrix)[1]=3  (l'espace réel est 3D)
-#                self.detJ = [np.sqrt(abs(J[0,1]*J[1,2]-J[0,2]*J[1,1])**2 +\
-#                             abs(J[0,2]*J[1,0]-J[1,2]*J[0,0])**2 +\
-#                             abs(J[0,0]*J[1,1]-J[1,0]*J[0,1])**2 ) for J in self.JacobianMatrix]

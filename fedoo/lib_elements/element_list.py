@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import linalg
 # from fedoo.lib_elements.beam import *
-from fedoo.lib_elements.cohesive import *
+# from fedoo.lib_elements.cohesive import *
 from fedoo.lib_elements.hexahedron import *
 from fedoo.lib_elements.line import *
 # from fedoo.lib_elements.plate import *
@@ -12,28 +12,15 @@ from fedoo.lib_elements.wedge import *
 from fedoo.lib_elements.finite_difference_1d import *
 
 _dict_elements = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
-            'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
+            # 'cohesive1d':Cohesive1D, 'lin2interface':Lin2Interface, 'quad4interface':Quad4Interface,
             'tri3':Tri3,'tri6':Tri6,'tri3bubble':Tri3Bubble,
             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
             'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,
             'wed6': Wed6, 'wed15':Wed15, 'wed18': Wed18,                        
             'parameter':Parameter, 'node':Node}
-
-# _dict_elements = {'lin2':Lin2, 'lin3':Lin3, 'lin2bubble':Lin2Bubble, 'lin3bubble':Lin3Bubble,
-#             'cohesive1d':Cohesive1D, 'cohesive2d':Cohesive2D, 'cohesive3d':Cohesive3D,
-#             'tri3':Tri3,'tri6':Tri6,'tri3bubble':Tri3Bubble,
-#             'quad4':Quad4,'quad8':Quad8,'quad9':Quad9,
-#             'tet4':Tet4,'tet10':Tet10,'hex8':Hex8,'hex20':Hex20,                        
-#             'beam':Beam, 'beamfcq':BeamFCQ, 'bernoullibeam':BernoulliBeam,
-#             'parameter':Parameter, 'node':Node,
-#             'pquad4':pquad4, 'ptri3':ptri3, 'pquad8':pquad8, 'ptri6':ptri6, 'pquad9':pquad9,
-#             'bernoullibeam_rot': BernoulliBeam_rot, 'bernoullibeam_disp': BernoulliBeam_disp,
-#             'beamfcq_lin2':BeamFCQ_lin2, 'beamfcq_rot':BeamFCQ_rot,'beamfcq_disp':BeamFCQ_disp,
-#             'beam_dispy':Beam_dispY,'beam_dispz':Beam_dispZ,
-#             'beam_rotz':Beam_rotZ, 'beam_roty':Beam_rotY}
     
 _dict_default_n_gp = {'lin2':2, 'lin3':3, 'lin2bubble':2, 'lin3bubble':3,'lin4':4,
-        'cohesive1d':1, 'cohesive2d':2, 'cohesive3d':4,
+        'cohesive1d':1, 'cohesive2d':2, 'quad4interface':4,
         'tri3':3,'tri6':4,'tri3bubble':3,
         'quad4':4,'quad8':9,'quad9':9,
         'tet4':4,'tet10':15,'hex8':8,'hex20':27, 
@@ -60,13 +47,16 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                                       [0. , 0., 1.]]            
         elif nNd_elm == 6: return np.c_[[0. , 1., 0., 0.5, 0.5, 0. ],\
                                         [0. , 0., 1., 0. , 0.5, 0.5]]
-    elif element in ['quad4','quad8','quad9','cohesive2d']:
+    elif element in ['quad4','quad8','quad9']:
         if nNd_elm == 4: return np.c_[[-1. , 1., 1., -1.],\
                                       [-1. , -1., 1., 1.]]
         elif nNd_elm == 8: return np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1.],\
                                         [-1. , -1., 1., 1. ,-1., 0., 1., 0.]]
         elif nNd_elm == 9: return np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1., 0.],\
                                         [-1. , -1., 1., 1. ,-1., 0., 1., 0., 0.]]
+    elif element in ['quad4interface']:
+        if nNd_elm == 8: return np.c_[[-1. , 1., 1., -1., -1., 1., 1., -1.],\
+                                      [-1. , -1., 1., 1., -1., -1., 1., 1.]]            
     elif element in ['tet4','tet10']: 
         if nNd_elm == 4: return np.c_[[0. , 0. , 0. , 1.],\
                                       [1. , 0. , 0. , 0.],\
@@ -133,7 +123,8 @@ class CombinedElement: #element that use several interpolation depending on the 
     def __init__(self, name, base_elm, **kargs):         
         assert isinstance(name, str), "Element name should be a str."
         if isinstance(base_elm, str): base_elm = _dict_elements[base_elm]
-        self.base_elm = base_elm
+        self.base_elm = base_elm #element for variables not defined in associated_variables
+        self.geometry_elm = base_elm #element used for geometrical interpolation (default = same as base_elm)
         self.name = name
         self.default_n_gp = kargs.get('default_n_gp', base_elm.default_n_gp)
         self.n_nodes = kargs.get('n_nodes', base_elm.n_nodes)
@@ -164,43 +155,3 @@ class CombinedElement: #element that use several interpolation depending on the 
         return list_elm_type
     
     
-
-
-
-
-# def get_node_elm_coordinates(element, nNd_elm=None):
-#     #return xi_nd ie the position of nodes in the element local coordinate
-#     if element in ['lin2', 'lin3', 'lin2Bubble', 'lin3Bubble','cohesive2D']:
-#         if nNd_elm == 2: return np.c_[[0., 1.]]
-#         elif nNd_elm == 3: return np.c_[[0., 1., 0.5]]
-#     elif element in ['tri3','tri6','tri3Bubble']:
-#         if nNd_elm == 3: return np.c_[[0. , 1., 0.],\
-#                                       [0. , 0., 1.]]            
-#         elif nNd_elm == 6: return np.c_[[0. , 1., 0., 0.5, 0.5, 0. ],\
-#                                         [0. , 0., 1., 0. , 0.5, 0.5]]
-#     elif element in ['quad4','quad8','quad9','cohesive2D']:
-#         if nNd_elm == 4: return np.c_[[-1. , 1., 1., -1.],\
-#                                       [-1. , -1., 1., 1.]]
-#         elif nNd_elm == 8: return np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1.],\
-#                                         [-1. , -1., 1., 1. ,-1., 0., 1., 0.]]
-#         elif nNd_elm == 9: return np.c_[[-1. , 1. , 1., -1., 0., 1., 0.,-1., 0.],\
-#                                         [-1. , -1., 1., 1. ,-1., 0., 1., 0., 0.]]
-#     elif element in ['tet4','tet10']: 
-#         if nNd_elm == 4: return np.c_[[0. , 0. , 0. , 1.],\
-#                                       [1. , 0. , 0. , 0.],\
-#                                       [0. , 1. , 0. , 0.]]
-#         elif nNd_elm == 10: 
-#             return np.c_[[0. , 0. , 0. , 1. , 0. , 0. , 0. , 0.5 , 0.5 , 0.5],\
-#                          [1. , 0. , 0. , 0. , 0.5 , 0. , 0.5 , 0.5 , 0. , 0.],\
-#                          [0. , 1. , 0. , 0. , 0.5 , 0.5 , 0. , 0. , 0.5 , 0.]]        
-#     elif element in ['hex8','hex20']:
-#         if nNd_elm == 8:
-#             return np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1.],\
-#                                [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1.],\
-#                                [-1. , -1. , -1., -1. ,  1.,  1. , 1. , 1.]]
-#         elif nNd_elm == 20:
-#             return np.c_[[-1. ,  1. , 1. , -1. , -1.,  1. , 1. ,-1. , 0. ,  1. , 0. , -1. , -1.,  1. , 1. ,-1. , 0.,  1. , 0. ,-1.],\
-#                                [-1. , -1. , 1. ,  1. , -1., -1. , 1. , 1. , -1. , 0. , 1. ,  0. , -1., -1. , 1. , 1. , -1.,  0. , 1. ,0.],\
-#                                [-1. , -1. , -1., -1. ,  1.,  1. , 1. , 1. , -1. , -1. , -1., -1. ,  0.,  0. , 0. , 0. , 1.,  1. , 1. ,1.]]            
-#     elif element in ['cohesive1D']:
-#         return np.c_[[0., 0.]] #The values are arbitrary, only the size is important

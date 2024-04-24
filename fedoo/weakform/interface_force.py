@@ -34,30 +34,62 @@ class InterfaceForce(WeakFormBase):
             self.space.new_vector('Disp' , ('DispX', 'DispY'))
                
         self.constitutivelaw = constitutivelaw
-        self.__InitialStressVector = 0
-        
-        if nlgeom == True:
-            raise NameError('nlgeom non implemented for Interface force')
-        self.__nlgeom = nlgeom
-        
+
+        self.nlgeom = nlgeom #geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)                
+        """Method used to treat the geometric non linearities. 
+            * Set to False if geometric non linarities are ignored (default). 
+            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
+            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
+        """
+                
         self.assembly_options['assume_sym'] = False #symetric ?
 
+    def initialize(self, assembly, pb):
+        if self.nlgeom: 
+            if self.nlgeom is True: 
+                self.nlgeom = 'UL'                
+            elif isinstance(self.nlgeom, str): 
+                self.nlgeom =self.nlgeom.upper()
+                if self.nlgeom != 'UL':
+                    raise NotImplementedError(f'{self.nlgeom} nlgeom not implemented for Interface force.')
+            else:
+                raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
+        
     def update(self, assembly, pb):
         #function called when the problem is updated (NR loop or time increment)
-        #- No nlgeom effect for now
-        #- Change in constitutive law (internal variable)
+        #Nlgeom implemented only for updated lagragian formulation
         
-        if self.__nlgeom: #need to be modifed for nlgeom
-            if not(hasattr(self.constitutivelaw, 'GetCurrentGradDisp')):
-                raise NameError("The actual constitutive law is not compatible with NonLinear Internal Force weak form")            
-            self.__InitialGradDispTensor = self.constitutivelaw.get_disp_grad()
-        
+        if self.nlgeom == 'UL':
+            # if updated lagragian method -> update the mesh and recompute elementary op
+            assembly.set_disp(pb.get_disp())               
+            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+                        
+            assembly.current.compute_elementary_operators()           
 
-    # def to_start(self, assembly, pb):
-    #     pass
-
+    def to_start(self, assembly, pb):    
+        if self.nlgeom == 'UL':
+            # if updated lagragian method -> reset the mesh to the begining of the increment
+            assembly.set_disp(pb.get_disp())               
+            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+                del assembly._saved_change_of_basis_mat[assembly.current.mesh] 
+            
+            assembly.current.compute_elementary_operators()            
+    
     # def set_start(self, assembly, pb):
-    #     pass
+#         if self.nlgeom:
+#             if 'DStrain' in assembly.sv:
+#                 #rotate strain and stress -> need to be checked
+#                 assembly.sv['Strain'] = StrainTensorList(sim.rotate_strain_R(assembly.sv_start['Strain'].asarray(),assembly.sv['DR']) + assembly.sv['DStrain'])
+#                 assembly.sv['DStrain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
+# 				#or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
+                
+#             #update cauchy stress 
+#             if assembly.sv['DispGradient'] is not 0: #True when the problem have been updated once
+#                 stress = assembly.sv['Stress'].asarray() 
+#                 assembly.sv['Stress'] = StressTensorList(sim.rotate_stress_R(stress, assembly.sv['DR']))
+#                 if self.nlgeom == 'TL':
+#                     assembly.sv['PK2'] = assembly.sv['Stress'].cauchy_to_pk2(assembly.sv['F'])
 
     # def reset(self):
     #     pass
@@ -72,15 +104,15 @@ class InterfaceForce(WeakFormBase):
         U_vir = [u.virtual for u in U]
         F = [sum([U[j]*K[i][j] for j in range(dim)]) for i in range(dim)] #Interface stress operator
         
-        DiffOp = sum([0 if U[i]==0 else U[i].virtual * F[i] for i in range(dim)])    
+        diff_op = sum([0 if U[i]==0 else U_vir[i] * F[i] for i in range(dim)])    
         
         initial_stress = assembly.sv['InterfaceStress']
         
         if initial_stress is not 0:    
-            DiffOp = DiffOp + sum([0 if U_vir[i] is 0 else \
+            diff_op = diff_op + sum([0 if U_vir[i] is 0 else \
                                    U_vir[i] * initial_stress[i] for i in range(dim)])
 
-        return DiffOp
+        return diff_op
 
 
 
