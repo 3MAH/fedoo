@@ -71,9 +71,12 @@ for computeShear in range(3):
     assert np.abs(Mext[2][0]+F*L)<1e-10 #Mf = 20
     
     #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-    results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
-    IntMoment = results[:,3:]
-    IntForce = results[:,0:3]    
+    # results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
+    # IntMoment = results[:,3:]
+    # IntForce = results[:,0:3]
+    results = pb.get_results("beam", 'BeamStress')['BeamStress']
+    IntMoment = results[3:]
+    IntForce = results[:3]
     
     U = np.reshape(pb.get_dof_solution('all'),(6,-1)).T
     Theta = U[:nodes_right[0]+1,3:]              

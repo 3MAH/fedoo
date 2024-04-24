@@ -108,15 +108,23 @@ class StressEquilibrium(WeakFormBase):
         if self.nlgeom:
             if not(USE_SIMCOON):
                 raise NameError('Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)')
-            
-            if isinstance(self.nlgeom, str): self.nlgeom =self.nlgeom.upper()
-            if self.nlgeom is True: self.nlgeom = 'UL'             
+            if self.nlgeom is True: 
+                self.nlgeom = 'UL'                
+            elif isinstance(self.nlgeom, str): 
+                self.nlgeom =self.nlgeom.upper()                
+                if self.nlgeom == 'TL': 
+                    assembly.sv['PK2'] = 0
+                    if self.space._dimension == '2Daxi':
+                        raise NotImplementedError("'2Daxi' ModelingSpace is not implemented with total lagrangian formulation. Use update lagrangian instead.")
+                elif self.nlgeom != 'UL':
+                    raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
+            else:
+                raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
+
         
-            if self.nlgeom == 'TL': 
-                assembly.sv['PK2'] = 0
-                if self.space._dimension == '2Daxi':
-                    raise NameError("'2Daxi' ModelingSpace is not implemented with total lagrangian formulation. Use update lagrangian instead.")
-                                    
+            
+        
+                                                
             #initialize non linear operator for strain
             # op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
             # if self.space.ndim == "3D":        

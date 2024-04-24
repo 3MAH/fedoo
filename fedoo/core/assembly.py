@@ -578,9 +578,10 @@ class Assembly(AssemblyBase):
         """
         self.weakform.reset()            
         if self.weakform.constitutivelaw is not None:
-            self.weakform.constitutivelaw.reset()
+            self.weakform.constitutivelaw.reset()            
         self.delete_global_mat()
-        self.current.delete_global_mat()
+        # self.current.delete_global_mat()
+        self.current = self 
         
         #remove all state variables
         self.sv = {} 
@@ -1032,7 +1033,7 @@ class Assembly(AssemblyBase):
 #        """
 #        
 ##        operator = self.weakform.get_weak_equation(self.mesh)
-#        operator = self.weakform.GetGeneralizedStress()
+#        operator = self.weakform.get_generalized_stress()
 #        res = [self.get_element_results(operator[i], U) for i in range(5)]
 #        return res
 #        
@@ -1068,7 +1069,6 @@ class Assembly(AssemblyBase):
 
     def get_int_forces(self, U, CoordinateSystem = 'global'): 
         """
-        Not a static method.
         Only available for 2 nodes beam element
         Return the element internal Forces and moments related to a specific assembly considering the DOF solution given in U.
         Return array whose columns are Fx, Fy, Fz, Mx, My and Mz. 

@@ -44,44 +44,60 @@ class _NonLinearBase():
         self.save_at_exact_time = True
         self.err_num= 1e-8 #numerical error
     
-    #Return the displacement components
-    def get_disp(self,name='Disp'):    
+    def get_disp(self,name='Disp'): 
+        """Return the displacement components.
+
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the variable to return. For instance, if name == 'DispX'
+            return only the X component of displacement.
+
+        Returns
+        -------
+        numpy.ndarray            
+        """
         if self._dU is 0: return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)    
     
-    #Return the rotation components
-    def get_rot(self,name='Rot'):    
+    def get_rot(self,name='Rot'):
+        """Return the rotation components.
+
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the variable to return. For instance, if name == 'RotX'
+            return only the X component of rotation.
+
+        Returns
+        -------
+        numpy.ndarray            
+        """
         if self._dU is 0: return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)    
 
-    #Return the Temperature
-    def get_temp(self):    
+    def get_temp(self):
+        """Return the nodal temperature field."""
         if self._dU is 0: return self._get_vect_component(self._U, 'Temp')
         return self._get_vect_component(self._U + self._dU, 'Temp')    
     
     #Return all the dof for every variable under a vector form
     def get_dof_solution(self,name='all'):
         if self._dU is 0: return self._get_vect_component(self._U, name)
-        return self._get_vect_component(self._U + self._dU, name)        
-    
-    # def get_ext_forces(self, name = 'all'):
-    #     return self._get_vect_component(-self.get_D(), name)        
+        return self._get_vect_component(self._U + self._dU, name)              
     
     def updateA(self):
         #dt not used for static problem
         self.set_A(self.__assembly.current.get_global_matrix())
     
     def updateD(self,start=False):            
-        #dt and start not used for static problem
+        #not used for static problem
         self.set_D(self.__assembly.current.get_global_vector()) 
     
     def initialize(self):   
-        """
-        """
         self.__assembly.initialize(self)
-        # self.set_A(self.__assembly.current.get_global_matrix())
-        # self.set_D(self.__assembly.current.get_global_vector())
-        
     
     def elastic_prediction(self):
         #update the boundary conditions with the time variation
@@ -234,25 +250,7 @@ class _NonLinearBase():
                 raise NameError("Newton Raphson parameters should be in ['err0', 'tol', 'max_subiter']")                
 
             self.nr_parameters[key] = kargs[key]
-           
-    
-    # def GetElasticEnergy(self): #only work for classical FEM
-    #     """
-    #     returns : sum (0.5 * U.transposed * K * U)
-    #     """
-
-    #     return sum( 0.5*self.get_X().transpose() * self.get_A() * self.get_X() )
-
-    # def GetNodalElasticEnergy(self):
-    #     """
-    #     returns : 0.5 * K * U . U
-    #     """
-
-    #     E = 0.5*self.get_X().transpose() * self.get_A() * self.get_X()
-
-    #     E = np.reshape(E,(3,-1)).T
-
-    #     return E                   
+                      
     
     def solve_time_increment(self, max_subiter = None, tol_nr = None): 
         if max_subiter is None: max_subiter = self.nr_parameters['max_subiter']
@@ -417,6 +415,25 @@ class _NonLinearBase():
                     raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
         
         self.set_start(True)
+
+
+    # def GetElasticEnergy(self): #only work for classical FEM
+    #     """
+    #     returns : sum (0.5 * U.transposed * K * U)
+    #     """
+
+    #     return sum( 0.5*self.get_X().transpose() * self.get_A() * self.get_X() )
+
+    # def GetNodalElasticEnergy(self):
+    #     """
+    #     returns : 0.5 * K * U . U
+    #     """
+
+    #     E = 0.5*self.get_X().transpose() * self.get_A() * self.get_X()
+
+    #     E = np.reshape(E,(3,-1)).T
+
+    #     return E       
         
     
     @property

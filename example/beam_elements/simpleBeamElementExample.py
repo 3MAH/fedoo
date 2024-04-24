@@ -69,9 +69,12 @@ print('RX at the free extremity: ' + str(results[0][nodes_right[0]]))
 print('RZ at the free extremity: ' + str(results[2][nodes_right[0]]))
 
 #Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
-IntMoment = results[:,3:]
-IntForce = results[:,0:3]
+# results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
+# IntMoment = results[:,3:]
+# IntForce = results[:,0:3]
+results = pb.get_results("beam", 'BeamStress')['BeamStress']
+IntMoment = np.array(results[3:])
+IntForce = np.array(results[:3])
 
 U = np.reshape(pb.get_dof_solution('all'),(6,-1)).T
 Theta = U[:nodes_right[0]+1,3:]              

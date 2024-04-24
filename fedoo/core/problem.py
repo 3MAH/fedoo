@@ -60,7 +60,7 @@ class Problem(ProblemBase):
         self.__D = D
 
 
-        self.__X = np.ndarray( self.n_dof ) #empty array
+        self.__X = 0 #np.ndarray( self.n_dof ) #empty array
         self._Xbc = 0
 
         self._dof_slave = np.array([])
@@ -129,6 +129,8 @@ class Problem(ProblemBase):
         self.__D = D        
 
     def solve(self, **kargs):
+        if self.__X is 0: self.__X = np.ndarray( self.n_dof ) #empty array
+        
         if len(self.__A.shape) == 2: #A is a matrix        
             if len(self._dof_slave) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
              # to delete after a careful validation of the other case
