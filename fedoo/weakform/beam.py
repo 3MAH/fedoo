@@ -202,6 +202,25 @@ class BeamEquilibrium(WeakFormBase):
                     assembly.sv['_NodesRotationMatrix'] = nodes_rotmat 
                     assembly.current._element_local_frame = rigid_rotmat.reshape(mesh.n_elements, -1, self.space.ndim, self.space.ndim)
                     
+                    #update rot values and dirichlet boundary conditions
+                    
+                    rot_var = self.space.get_vector('Rot')
+                    ### WARNING only work if vectors are contigous in the variable order
+                    if pb._U is 0: 
+                        pb._dU[rot_var[0]*assembly.mesh.n_nodes:(rot_var[0]+3)*assembly.mesh.n_nodes] \
+                            = (Rotation.from_matrix(nodes_rotmat).as_rotvec().T).ravel() 
+                    else: 
+                        pb._dU[rot_var[0]*assembly.mesh.n_nodes:(rot_var[0]+3)*assembly.mesh.n_nodes] \
+                            = (Rotation.from_matrix(nodes_rotmat).as_rotvec().T).ravel() \
+                            - pb._U[rot_var[0]*assembly.mesh.n_nodes:(rot_var[0]+3)*assembly.mesh.n_nodes] 
+                            
+                    for bc in pb.bc.list_all():
+                        if bc.bc_type == 'Dirichlet': 
+                            if bc.variable in rot_var:
+                                # if bc._dof_index[0] == 605:
+                                #     print(bc.get_true_value(pb._t_fact))
+                                pb._Xbc[bc._dof_index] = bc.get_true_value(pb._t_fact) - pb.get_dof_solution()[bc._dof_index] 
+                                
                 
                 #compute the beam strain at gausspoint
                 assembly.sv['BeamStrain'] = [0 if Ke[i] is 0 or op is 0 else assembly.current.get_gp_results(op, dof_local, use_local_dof = True)                                              
@@ -218,20 +237,21 @@ class BeamEquilibrium(WeakFormBase):
     def to_start(self, assembly, pb):    
         if self.nlgeom == 'UL':
             # if updated lagragian method -> reset the mesh to the begining of the increment
-            assembly.set_disp(pb.get_disp())                        
-            assembly.current._element_local_frame = assembly.sv_start['RigidRotationMat'].reshape(assembly.current.mesh.n_elements, -1, self.space.ndim, self.space.ndim)
+            assembly.set_disp(pb.get_disp())  
+            if self.space.ndim == 3:                      
+                assembly.current._element_local_frame = assembly.sv_start['RigidRotationMat'].reshape(assembly.current.mesh.n_elements, -1, self.space.ndim, self.space.ndim)
             
     
     def set_start(self, assembly, pb):
         if self.nlgeom and self.space.ndim == 3: #only UL for now
             #update rot dof because 
             pass
-            if pb.get_dof_solution() is not 0:
-                #update rotation vector values
-                ### WARNING only work if vectors are contigous in the variable order
-                var = self.space.variable_rank('RotX')
-                pb._U[var*assembly.mesh.n_nodes:(var+3)*assembly.mesh.n_nodes] = \
-                    (Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec().T).ravel()
+            # if pb.get_dof_solution() is not 0:
+            #     #update rotation vector values
+            #     ### WARNING only work if vectors are contigous in the variable order
+            #     var = self.space.variable_rank('RotX')
+            #     pb._U[var*assembly.mesh.n_nodes:(var+3)*assembly.mesh.n_nodes] = \
+            #         (Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec().T).ravel()
                 # print(Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec().T - pb.get_rot())
             # rot_dof = Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec()
             

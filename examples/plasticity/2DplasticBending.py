@@ -10,7 +10,7 @@ start = time()
 
 fd.ModelingSpace("2Dplane")
 
-NLGEOM =False
+NLGEOM =True
 typeBending = '3nodes' #'3nodes' or '4nodes'
 #Units: N, mm, MPa
 h = 2
@@ -66,6 +66,8 @@ if mat == 0:
     res = pb.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Stress', 'Strain'], output_type='Node', file_format ='vtk')
 elif mat == 1:
     res = pb.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')
+    # elm_set = mesh.get_elements_from_nodes(mesh.find_nodes('X<8'))
+    # res = pb.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'], element_set = elm_set )
 
 ################### step 1 ################################
 tmax = 1
