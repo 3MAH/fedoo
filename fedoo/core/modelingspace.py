@@ -169,9 +169,15 @@ class ModelingSpace:
         if name not in self._variable.keys():
             self._variable[name] = self._nvar
             self._nvar +=1
-        
-        # return DiffOp(self._variable[name])
 
+
+    def variable_alias(self, alias_name, var_name):
+        """Create an alias of an existing variable."""
+        assert isinstance(var_name,str) , "The variable must be a string"
+        assert alias_name[:2] != '__', "Names of variable should not begin by '__'"
+        
+        self._variable[alias_name] = self.variable_rank(var_name)        
+        
 
     def variable_rank(self,name):
         """

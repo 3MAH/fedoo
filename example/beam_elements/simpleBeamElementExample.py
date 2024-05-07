@@ -5,9 +5,10 @@
 import fedoo as fd
 import numpy as np
 
-fd.ModelingSpace("3D")
 E = 1e5 
 nu = 0.3
+
+fd.ModelingSpace("3D")
 fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 
 #circular section 
@@ -40,7 +41,7 @@ if computeShear == 0:
     fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, name = "WFbeam") #by default k=0 i.e. no shear effect
     fd.Assembly.create("WFbeam", "beam", "bernoulliBeam", name="beam")    
 elif computeShear == 1:
-    fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k,name = "WFbeam")
+    fd.weakform.BeamEquilibrium("ElasticLaw", Section, Jx, Iyy, Izz, k=k, name = "WFbeam")
     fd.Assembly.create("WFbeam", "beam", "beam", name="beam")
 else:  #computeShear = 2
     fd.Mesh['beam'].add_internal_nodes(1) #adding one internal nodes per element (this node has no geometrical sense)
@@ -52,7 +53,6 @@ pb = fd.problem.Linear("beam")
 pb.bc.add('Dirichlet',nodes_left,['Disp','Rot'],0)
 pb.bc.add('Neumann',nodes_right,'DispY',F)
 
-pb.apply_boundary_conditions()
 pb.solve()
 
 #Post treatment               

@@ -120,10 +120,6 @@ class StressEquilibrium(WeakFormBase):
                     raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
             else:
                 raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
-
-        
-            
-        
                                                 
             #initialize non linear operator for strain
             # op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
@@ -143,11 +139,7 @@ class StressEquilibrium(WeakFormBase):
     def update(self, assembly, pb):
         if self.nlgeom == 'UL':
             # if updated lagragian method -> update the mesh and recompute elementary op
-            assembly.set_disp(pb.get_disp())               
-            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
-                        
-            assembly.current.compute_elementary_operators()        
+            assembly.set_disp(pb.get_disp())                  
 
         displacement = pb.get_dof_solution()
         

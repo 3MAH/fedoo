@@ -19,7 +19,7 @@ _available_output = ['PKII',   'PK2',   'Kirchoff',   'Kirchhoff',   'Cauchy',
                      'PKII_pdir2', 'PK2_pdir2', 'Kirchoff_pdir2', 'Kirchhoff_pdir2', 'Cauchy_pdir2', 'Stress_pdir2',
                      'PKII_pdir3', 'PK2_pdir3', 'Kirchoff_pdir3', 'Kirchhoff_pdir3', 'Cauchy_pdir3', 'Stress_pdir3',
                      'Disp', 'Rot', 'Temp', 'Strain', 'Statev', 'Stress', 'Stress_vm', 'Fext', 
-                     'Wm', 'Fint', 'Fint_global']
+                     'Wm', 'Fint', 'Fint_global', 'beamstrain', 'beamstress']
 
 _available_format = ['fdz', 'vtk', 'msh', 'npz', 'npz_compressed', 'csv', 'xlsx']
 
@@ -30,7 +30,7 @@ _label_dict = {'pkii':'PK2',   'pk2':'PK2',   'kirchoff':'Kirchhoff', 'kirchhoff
                'pkii_pdir2':'PK2_pdir2', 'pk2_pdir2':'PK2_pdir2', 'kirchoff_pdir2':'Kirchhoff_pdir2', 'kirchhoff_pdir2':'Kirchhoff_pdir2', 'cauchy_pdir2':'Stress_pdir2', 'stress_pdir2':'Stress_pdir2',
                'pkii_pdir3':'PK2_pdir3', 'pk2_pdir3':'PK2_pdir3', 'kirchoff_pdir3':'Kirchhoff_pdir3', 'kirchhoff_pdir3':'Kirchhoff_pdir3', 'cauchy_pdir3':'Stress_pdir1', 'stress_pdir3':'Stress_pdir3',
                'disp':'Disp', 'rot':'Rot', 'temp':'Temp', 'strain':'Strain', 'statev':'Statev', 'stress':'Stress', 'stress_vm':'Stress_vm', 'fext':'Fext', 
-               'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global' 
+               'wm':'Wm', 'fint':'Fint', 'fint_global':'Fint_global', 'beamstrain': 'BeamStrain', 'beamstress': 'BeamStress'
 }
 
 #  {'pkii':', save_mesh = FalsePKII', 'pk2':'PKII', 'kirchoff':'Kirchhoff', 'kirchhoff':'Kirchhoff', 'cauchy':'Cauchy',

@@ -79,6 +79,7 @@ class Assembly(AssemblyBase):
         if elm_type == "": elm_type = mesh.elm_type
         self.elm_type= elm_type.lower()
         self._use_local_csys = self._test_if_local_csys()
+        self._element_local_frame = None
 
         self.n_elm_gp = kargs.pop('n_elm_gp', None)
         if self.n_elm_gp is None: 
@@ -454,6 +455,7 @@ class Assembly(AssemblyBase):
 
         if 'X' in mesh.crd_name and 'Y' in mesh.crd_name: #if not in physical space, no change of variable                
             for nameVector in self.space.list_vectors():
+                # if compute_mat_change_of_basis == False and len(self.space.get_vector(nameVector))>1:
                 if compute_mat_change_of_basis == False:
                     range_n_elm_nodes = np.arange(n_elm_nodes) 
                     compute_mat_change_of_basis = True
@@ -464,21 +466,22 @@ class Assembly(AssemblyBase):
                 listScalarVariable = [i for i in listScalarVariable if not(i in listGlobalVector[-1])] #scalar variable that doesnt need to be converted
             #Data to build mat_change_of_basis with coo sparse format
             if compute_mat_change_of_basis:
-                ### to test        
-                if self.n_elm_gp not in mesh._elm_interpolation:
-                    mesh.init_interpolation(self.n_elm_gp)
-                            
-                elmRefGeom = mesh._elm_interpolation[self.n_elm_gp]              
-                # elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
-                #### end to test 
+                # get element local basis
+                if self._element_local_frame is None:                     
+                    if self.n_elm_gp not in mesh._elm_interpolation:
+                        mesh.init_interpolation(self.n_elm_gp)
+                                
+                    elmRefGeom = mesh._elm_interpolation[self.n_elm_gp]              
+                    # elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
                     
-                #        xi_nd = elmRefGeom.xi_nd
-                xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes) 
+                    xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes) 
+                    local_frame_el = elmRefGeom.GetLocalFrame(mesh.nodes[mesh._elements_geom], xi_nd, local_frame) #array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
+                else:
+                    local_frame_el = self._element_local_frame
                 
                 rowMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
                 colMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
                 dataMCB = np.empty((len(listGlobalVector)*n_el, n_elm_nodes, dim,dim))
-                local_frame_el = elmRefGeom.GetLocalFrame(mesh.nodes[mesh._elements_geom], xi_nd, local_frame) #array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
 
                 for ivec, vec in enumerate(listGlobalVector):
                     # dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el[:,:,:dim,:dim]                  
@@ -803,7 +806,7 @@ class Assembly(AssemblyBase):
         return np.reshape(res, (n_elm_gp,-1)).sum(0) / n_elm_gp
 
 
-    def get_gp_results(self, operator, U, n_elm_gp = None):
+    def get_gp_results(self, operator, U, n_elm_gp = None, use_local_dof = False):
         """
         Return some results at element Gauss points based on the finite element discretization of 
         a differential operator on a mesh being given the dof results and the type of elements.
@@ -811,20 +814,21 @@ class Assembly(AssemblyBase):
         Parameters
         ----------           
         operator: DiffOp
-            Differential operator defining the required results
-         
+            Differential operator defining the required results         
         U: numpy.ndarray
             Vector containing all the DoF solution 
-            
+        use_local_dof: bool, default: False
+            if True, U is interpreted as local dof for each node in element
+            The dof should be ordered so that U.reshape(mesh.n_elm_nodes, space.nvar, mesh.n_elements)[i,var,el]
+            gives the value of the variable var (variable indice) for the ith nodes of the element el.
+        
         Return: numpy.ndarray
             A Vector containing the values on each point of gauss for each element. 
             The vector lenght is the number of element time the number of Gauss points per element
-        """
-        
+        """        
         #TODO : can be accelerated by avoiding RowBlocMatrix (need to be checked) -> For each elementary 
-        # 1 - at the very begining, compute Uloc = mat_change_of_basis * U 
-        # 2 - reshape Uloc to separate each var Uloc = Uloc.reshape(var, -1)
-        # 3 - in the loop : res += coef_PG * (Assembly._get_elementary_operator(mesh, operator.op[ii], elm_type, n_elm_gp) , nvar, var, coef) * Uloc[var]
+        # 1 - reshape U to separate each var U = U.reshape(var, -1)
+        # 2 - in the loop : res += coef_PG * (Assembly._get_elementary_operator(mesh, operator.op[ii], elm_type, n_elm_gp) , nvar, var, coef) * U[var]
         
         res = 0
         nvar = self.space.nvar
@@ -833,7 +837,11 @@ class Assembly(AssemblyBase):
         elm_type = self.elm_type
         if n_elm_gp is None: n_elm_gp = self.n_elm_gp
         
-        mat_change_of_basis = self.get_change_of_basis_mat()
+        if not(use_local_dof):
+            mat_change_of_basis = self.get_change_of_basis_mat()            
+            if mat_change_of_basis is not 1:
+                U = mat_change_of_basis @ U #U local
+            
         associatedVariables = self._get_associated_variables()    
         
         for ii in range(len(operator.op)):
@@ -848,11 +856,8 @@ class Assembly(AssemblyBase):
             if np.isscalar(operator.coef[ii]): coef_PG = operator.coef[ii]                 
             else: coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
 
-            if mat_change_of_basis is 1:                
-                res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) @ U)
-            else:
-                res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) @ (mat_change_of_basis @ U))
-        
+            res += coef_PG * (RowBlocMatrix(self._get_elementary_operator(operator.op[ii], n_elm_gp) , nvar, var, coef) @ U)
+
         return res #equivalent to self._get_assembled_operator(operator, n_elm_gp) @ U but more optimized
 
 
@@ -896,8 +901,6 @@ class Assembly(AssemblyBase):
 
     def get_node_results(self, operator, U):
         """
-        Not a Static Method.
-
         Return some node results based on the finite element discretization of 
         a differential operator on a mesh being given the dof results and the type of elements.
         
@@ -944,6 +947,14 @@ class Assembly(AssemblyBase):
                 self.current = new_assembly
             else: 
                 self.current.mesh.nodes = new_crd
+                
+                if self.current.mesh in self._saved_change_of_basis_mat:
+                    del self._saved_change_of_basis_mat[self.current.mesh]
+                
+                for k in tuple(self._saved_elementary_operators): 
+                    if k[0] == self.current.mesh:
+                        self._saved_elementary_operators.pop(k)
+
                 
     def get_strain(self, U, Type="Node", nlgeom = None):
         """
