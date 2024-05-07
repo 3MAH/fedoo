@@ -16,7 +16,8 @@ Welcome to FEDOO's documentation!
    Problem
    boundary_conditions
    post-treatment
-   Examples
+   simple_examples
+   examples/index
    heterogeneous
 
 Indices and tables

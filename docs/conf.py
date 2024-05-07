@@ -27,7 +27,8 @@ master_doc = 'index'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 
-              'sphinx.ext.napoleon', 'sphinx.ext.autosummary']
+              'sphinx.ext.napoleon', 'sphinx.ext.autosummary',
+              'sphinx_gallery.gen_gallery']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -55,7 +56,6 @@ html_theme = 'sphinx_rtd_theme'
 # html_theme = 'sphinxdoc'
 html_logo = '_static/fedOOLogos_ss_fond.png'
 
-
 html_theme_options = {
     # 'canonical_url': 'https://microgen.readthedocs.io/en/latest/',
     # 'logo_only': False,
@@ -76,3 +76,11 @@ html_theme_options = {
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# -- Options for sphinx gallery for examples automatic generation -------------------------------------------------
+sphinx_gallery_conf = {
+    # path to your examples scripts
+    "examples_dirs": ["../examples/"],
+    # path where to save gallery generated examples
+    "gallery_dirs": ["examples"],
+}
