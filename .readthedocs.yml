@@ -19,7 +19,8 @@ build:
     post_create_environment:
       # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
       # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
-      - pip uninstall -y vtk
+      # - pip uninstall -y vtk
+      - conda remove --force vtk
       - pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
 
 # Build documentation in the docs/ directory with Sphinx
@@ -33,9 +34,9 @@ sphinx:
 
 
 # Set the Python version and requirements
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - doc
+# python:
+#   install:
+#     - method: pip
+#       path: .
+#       extra_requirements:
+#         - doc
