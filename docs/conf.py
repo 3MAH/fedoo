@@ -83,7 +83,7 @@ import pyvista
 pyvista.OFF_SCREEN = True
 # necessary when building the sphinx gallery
 pyvista.BUILDING_GALLERY = True
-pyvista.set_jupyter_backend(None)
+#pyvista.set_jupyter_backend(None)
 
 sphinx_gallery_conf = {
     # path to your examples scripts
