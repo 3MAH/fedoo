@@ -85,4 +85,5 @@ sphinx_gallery_conf = {
     "gallery_dirs": ["examples"],
     # Pattern to search for example files
     "filename_pattern": r"\.py",
+    "image_scrapers": ('pyvista', "matplotlib"),
 }

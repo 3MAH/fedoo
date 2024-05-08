@@ -1,6 +1,10 @@
-#
-# Simple canteleaver beam using different kind of elements
-#
+"""
+Beam Element Canteleaver Beam
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Simple canteleaver beam example using different kind of elements
+
+"""
 
 import fedoo as fd
 import numpy as np

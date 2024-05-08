@@ -1,3 +1,8 @@
+"""
+Canteleaver Beam using 3D wedge elements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""
+
 import fedoo as fd
 import numpy as np
 import time

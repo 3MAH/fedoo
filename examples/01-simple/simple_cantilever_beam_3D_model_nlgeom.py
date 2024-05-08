@@ -1,3 +1,9 @@
+"""
+3D Canteleaver Beam with geometric nonlinearities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""
+
+
 import fedoo as fd
 import numpy as np
 import time

@@ -1,3 +1,11 @@
+"""
+2D plate with hole in tension
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Simple example of a plate with hole in tension with 2D plane stress assumption. 
+"""
+
+
 import fedoo as fd 
 import numpy as np
 import time

@@ -1,3 +1,8 @@
+"""
+Canteleaver Beam using 3D hexahedral elements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""
+
 import fedoo as fd
 import numpy as np
 import time
