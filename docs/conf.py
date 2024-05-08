@@ -78,6 +78,13 @@ html_theme_options = {
 html_static_path = ['_static']
 
 # -- Options for sphinx gallery for examples automatic generation -------------------------------------------------
+
+import pyvista
+pyvista.OFF_SCREEN = True
+# necessary when building the sphinx gallery
+pyvista.BUILDING_GALLERY = True
+pyvista.set_jupyter_backend(None)
+
 sphinx_gallery_conf = {
     # path to your examples scripts
     "examples_dirs": ["../examples/"],
@@ -87,3 +94,4 @@ sphinx_gallery_conf = {
     "filename_pattern": r"\.py",
     "image_scrapers": ('pyvista', "matplotlib"),
 }
+
