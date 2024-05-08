@@ -12,6 +12,17 @@ build:
   os: "ubuntu-22.04"
   tools:
     python: "mambaforge-22.9"
+    # python: "3.11"
+
+  # following to avoid pyvista opengl error
+  jobs:
+    post_create_environment:
+      # install MODFLOW6 and related executables (notebooks need them)
+      - get-modflow :python
+      # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
+      # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
+      - pip uninstall -y vtk
+      - pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
