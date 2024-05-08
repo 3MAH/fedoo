@@ -17,8 +17,6 @@ build:
   # following to avoid pyvista opengl error
   jobs:
     post_create_environment:
-      # install MODFLOW6 and related executables (notebooks need them)
-      - get-modflow :python
       # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
       # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
       - pip uninstall -y vtk
@@ -32,3 +30,12 @@ sphinx:
 # python:
 #   install:
 #   - requirements: docs/requirements.txt
+
+
+# Set the Python version and requirements
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - doc
