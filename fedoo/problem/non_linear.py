@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem

@@ -84,14 +84,6 @@ U = np.reshape(pb.get_dof_solution('all'),(6,-1)).T
 Theta = U[:nodes_right[0]+1,3:]              
 U = U[:nodes_right[0]+1,0:3]
 
-#save in a vtk file
-# OUT = Util.ExportData('beam')
-# OUT.addNodeData(U,'Displacement')
-# OUT.addNodeData(Theta,'Rotation')
-# OUT.addElmData(IntForce,'Internal_Force')
-# OUT.addElmData(IntMoment,'Internal_Moment')
-# OUT.toVTK("simpleBeamElementExample.vtk")
-
 sol = F*L**3/(3*E*Izz)
 if computeShear != 0 and k != 0:
     G = E/(1+nu)/2
