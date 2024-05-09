@@ -5,65 +5,71 @@
 Simple example of a plate with hole in tension with 2D plane stress assumption. 
 """
 
-
-import fedoo as fd 
-import numpy as np
-import time
+import fedoo as fd
 import pyvista as pv
 
-#--------------- Pre-Treatment --------------------------------------------------------
+# Define 2d modeling space using plane stress assumption
 fd.ModelingSpace("2Dstress")
 
-# read a mesh that is initialy in 3D (3 coordinates) and remove the 3rd coordinates
-mesh = fd.mesh.import_file('plate_with_hole.msh').as_2d()
-# 
-#alternative mesh below (uncomment the line)
-# mesh = fd.mesh.hole_plate_mesh()
-# mesh = fd.mesh.rectangle_mesh(nx=101, ny=101, x_min=-50, x_max=50, y_min=-50, y_max=50, elm_type='quad4')
+#Generate a simple structured mesh "Domain" (plate with a hole).
+mesh = fd.mesh.hole_plate_mesh(nr=11, nt=11, length=100, height=100, radius=20, \
+   elm_type = 'quad4', sym=False, name ="Domain")
 
-#Material definition
-fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw")
+# or read from a mesh that is initialy in 3D (3 coordinates) and remove the 3rd coordinates
+# mesh = fd.mesh.import_file('plate_with_hole.msh').as_2d()
+    
+#Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
+fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw')
 
-#Assembly
-fd.Assembly.create("ElasticLaw", mesh, name="Assembling") 
+#Create the weak formulation of the mechanical equilibrium equation
+fd.weakform.StressEquilibrium("ElasticLaw", name = "WeakForm")
 
-#Type of problem 
-pb = fd.problem.Linear("Assembling")
+#Create a global assembly
+fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True)
 
-#Boundary conditions
+#Define a new static problem
+pb = fd.problem.Linear("Assembly")
 
 #Definition of the set of nodes for boundary conditions
-mesh.add_node_set(mesh.find_nodes('X', mesh.bounding_box.xmin), 'left')
-mesh.add_node_set(mesh.find_nodes('X', mesh.bounding_box.xmax), 'right')
+left = mesh.find_nodes('X',mesh.bounding_box.xmin)
+right = mesh.find_nodes('X',mesh.bounding_box.xmax)
 
+#Boundary conditions
+# pb.bc.add('Dirichlet', left, 'Disp',    0 )
+# #symetry condition on bottom edge (ux = 0)
+# pb.bc.add('Dirichlet', right, 'DispY',  0 )
+# pb.bc.add('Dirichlet', right, 'DispX', 1 )
+
+# displacement on left (ux=-0.1mm)
 pb.bc.add('Dirichlet', "left", 'DispX',-5e-1)
+# displacement on right (ux=0.1mm)
 pb.bc.add('Dirichlet', "right", 'DispX', 5e-1)
+# y displacement set in one node to avoid rigid body motion
 pb.bc.add('Dirichlet',[0], 'DispY',0)
 
-pb.apply_boundary_conditions()
-
-#--------------- Solve --------------------------------------------------------
-pb.set_solver('CG')
-t0 = time.time() 
-print('Solving...')
+#Solve problem
 pb.solve()
-print('Done in ' +str(time.time()-t0) + ' seconds')
 
-#--------------- Post-Treatment -----------------------------------------------
-res = pb.get_results("Assembling", ['Disp', 'Stress','Strain'], 'Node')
+#extract the results from the Assembly object
+results = pb.get_results("Assembly", ["Stress", "Disp", "Strain"])
+
+###############################################################################
+# Plot results:
+# The pyvista subplot capability is used to plot in the same figure:
+#   - The Von-Mises stress
+#   - The XX, YY, XY component of stress tensor
+
 pl = pv.Plotter(shape=(2,2))
 
 ### to use the background plotter, uncomment the following lines ###
 # from pyvistaqt import BackgroundPlotter
 # pl = BackgroundPlotter(shape = (2,2))
 
-res.plot('Stress','vm','Node', plotter=pl)
+results.plot('Stress','vm','Node', plotter=pl)
 pl.subplot(1,0)
-res.plot('Stress','XX','Node', plotter=pl)
+results.plot('Stress','XX','Node', plotter=pl)
 pl.subplot(0,1)
-res.plot('Stress', 'YY', 'Node', plotter=pl)
+results.plot('Stress', 'YY', 'Node', plotter=pl)
 pl.subplot(1,1)
-res.plot('Stress', 'XY','Node',  plotter=pl)
+results.plot('Stress', 'XY','Node',  plotter=pl)
 pl.show()
-    

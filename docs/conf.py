@@ -85,6 +85,9 @@ pyvista.OFF_SCREEN = True
 pyvista.BUILDING_GALLERY = True
 #pyvista.set_jupyter_backend(None)
 
+# -- Sphinx Gallery Options
+from sphinx_gallery.sorting import FileNameSortKey
+
 sphinx_gallery_conf = {
     # path to your examples scripts
     "examples_dirs": ["../examples/"],
@@ -92,6 +95,8 @@ sphinx_gallery_conf = {
     "gallery_dirs": ["examples"],
     # Pattern to search for example files
     "filename_pattern": r"\.py",
+    # Sort gallery example by file name instead of number of lines (default)
+    "within_subsection_order": FileNameSortKey,
     "image_scrapers": ('pyvista', "matplotlib"),
 }
 
