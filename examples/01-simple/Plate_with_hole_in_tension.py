@@ -4,8 +4,7 @@
 
 Simple example of a plate with hole in tension with 2D plane stress assumption. 
 """
-
-import fedoo as fd
+import fedoo as fd 
 import pyvista as pv
 
 # Define 2d modeling space using plane stress assumption
@@ -24,6 +23,13 @@ fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw')
 #Create the weak formulation of the mechanical equilibrium equation
 fd.weakform.StressEquilibrium("ElasticLaw", name = "WeakForm")
 
+#Material definition
+fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
+fd.weakform.StressEquilibrium("ElasticLaw", name="Weakform")
+
+#Assembly
+fd.Assembly.create("Weakform", mesh, name="Assembling") 
+
 #Create a global assembly
 fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True)
 
@@ -34,12 +40,6 @@ pb = fd.problem.Linear("Assembly")
 left = mesh.find_nodes('X',mesh.bounding_box.xmin)
 right = mesh.find_nodes('X',mesh.bounding_box.xmax)
 
-#Boundary conditions
-# pb.bc.add('Dirichlet', left, 'Disp',    0 )
-# #symetry condition on bottom edge (ux = 0)
-# pb.bc.add('Dirichlet', right, 'DispY',  0 )
-# pb.bc.add('Dirichlet', right, 'DispX', 1 )
-
 # displacement on left (ux=-0.1mm)
 pb.bc.add('Dirichlet', "left", 'DispX',-5e-1)
 # displacement on right (ux=0.1mm)
@@ -48,6 +48,7 @@ pb.bc.add('Dirichlet', "right", 'DispX', 5e-1)
 pb.bc.add('Dirichlet',[0], 'DispY',0)
 
 #Solve problem
+pb.set_solver('CG')
 pb.solve()
 
 #extract the results from the Assembly object
