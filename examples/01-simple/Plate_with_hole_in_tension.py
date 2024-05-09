@@ -4,11 +4,8 @@
 
 Simple example of a plate with hole in tension with 2D plane stress assumption. 
 """
-
-
 import fedoo as fd 
 import numpy as np
-import time
 import pyvista as pv
 
 #--------------- Pre-Treatment --------------------------------------------------------
@@ -23,10 +20,10 @@ mesh = fd.mesh.import_file('plate_with_hole.msh').as_2d()
 
 #Material definition
 fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw", name="Weakform")
 
 #Assembly
-fd.Assembly.create("ElasticLaw", mesh, name="Assembling") 
+fd.Assembly.create("Weakform", mesh, name="Assembling") 
 
 #Type of problem 
 pb = fd.problem.Linear("Assembling")
@@ -45,10 +42,7 @@ pb.apply_boundary_conditions()
 
 #--------------- Solve --------------------------------------------------------
 pb.set_solver('CG')
-t0 = time.time() 
-print('Solving...')
 pb.solve()
-print('Done in ' +str(time.time()-t0) + ' seconds')
 
 #--------------- Post-Treatment -----------------------------------------------
 res = pb.get_results("Assembling", ['Disp', 'Stress','Strain'], 'Node')
