@@ -68,12 +68,9 @@ else:
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
-# WeakForm.InternalForceUL("ConstitutiveLaw")
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
 
-
-# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-solid_assembly = fd.Assembly.create("ConstitutiveLaw", mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+solid_assembly = fd.Assembly.create(wf, mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 assembly = fd.Assembly.sum(solid_assembly, contact)
 # assembly = solid_assembly
@@ -101,7 +98,6 @@ pb.set_nr_criterion("Displacement", err0 = None, tol = 5e-3, max_subiter = 5)
 
 # pb.nlsolve(dt = 0.001, tmax = 1, update_dt = False, print_info = 2, interval_output = 0.001)
 pb.nlsolve(dt = 0.01, tmax = 1, update_dt = True, print_info = 1, interval_output = 0.01)
-
 
 E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
 

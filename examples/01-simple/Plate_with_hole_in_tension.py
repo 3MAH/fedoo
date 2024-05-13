@@ -23,15 +23,8 @@ fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name = 'ElasticLaw')
 #Create the weak formulation of the mechanical equilibrium equation
 fd.weakform.StressEquilibrium("ElasticLaw", name = "WeakForm")
 
-#Material definition
-fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw", name="Weakform")
-
-#Assembly
-fd.Assembly.create("Weakform", mesh, name="Assembling") 
-
 #Create a global assembly
-fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange = True)
+fd.Assembly.create("WeakForm", mesh, name="Assembly") 
 
 #Define a new static problem
 pb = fd.problem.Linear("Assembly")

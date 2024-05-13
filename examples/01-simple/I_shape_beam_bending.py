@@ -9,10 +9,10 @@ import numpy as np
 ###############################################################################
 # Geometry and Mesh
 # ~~~~~~~~~~~~~~~~~~
-# Create a mesh of a beam with I-shaped cross-section.
-# For that we create an I-shape using profil using
-# linear triangle elements 'tri3'. The we extrude the profil, to create
-# a 3d geometry based on wedge elements 'wed6'.
+# In this example, a mesh is created with an I-shaped cross-section.
+# First, an I-shape profil is built using linear triangle elements 'tri3'. 
+# The 'extrude' function is then used to create
+# the 3d geometry based on wedge elements 'wed6'.
 
 #Build a I shaped beam profil
 profil = fd.mesh.structured_mesh.I_shape_mesh(10,10,2,2,1,'tri3')

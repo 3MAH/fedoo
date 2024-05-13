@@ -201,6 +201,7 @@ class DataSet():
     
         if screenshot is None: screenshot = False #not used if show = False
         
+        return_cpos = kargs.pop('return_cpos', False)
         sargs=kargs.pop('scalar_bar_args', None)                         
         
         if data_type == 'GaussPoint':
@@ -226,7 +227,7 @@ class DataSet():
                     center = meshplot.center                
             else:
                 meshplot.points = as_3d_coordinates(self.mesh_gp.nodes)
-                center = self.mesh.bounding_box.center
+                center = self.mesh.as_3d().bounding_box.center
                                                                     
         else:            
             if self.meshplot is None: 
@@ -371,7 +372,7 @@ class DataSet():
             return pl
         
         if not(backgroundplotter) and show:                
-            return pl.show(return_cpos = True)
+            return pl.show(return_cpos = return_cpos)
             
         return pl
         

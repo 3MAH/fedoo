@@ -3,7 +3,6 @@ Beam Element Canteleaver Beam
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Simple canteleaver beam example using different kind of elements
-
 """
 
 import fedoo as fd
@@ -72,10 +71,6 @@ print('Moment MZ at the clamped extermity: ' + str(results[5][0]))
 print('RX at the free extremity: ' + str(results[0][nodes_right[0]]))
 print('RZ at the free extremity: ' + str(results[2][nodes_right[0]]))
 
-#Get the generalized force in local coordinates (use 'global to get it in global coordinates)
-# results = fd.Assembly['beam'].get_int_forces(pb.get_dof_solution('all'), 'local')
-# IntMoment = results[:,3:]
-# IntForce = results[:,0:3]
 results = pb.get_results("beam", 'BeamStress')['BeamStress']
 IntMoment = np.array(results[3:])
 IntForce = np.array(results[:3])

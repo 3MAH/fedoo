@@ -24,13 +24,13 @@ StrainNodes = mesh.add_nodes(2) #add virtual nodes for macro strain
 
 #Material definition
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3, name = 'ElasticLaw')
-fd.weakform.StressEquilibrium("ElasticLaw")
+wf = fd.weakform.StressEquilibrium("ElasticLaw")
 
 #Assembly
-fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling") 
+fd.Assembly.create(wf, mesh, type_el, name="Assembly") 
 
 #Type of problem 
-pb = fd.problem.Linear("Assembling")
+pb = fd.problem.Linear("Assembly")
 
 
 #Boundary conditions
@@ -93,11 +93,11 @@ if output_VTK == 1:
     TensorStressEl = fd.Assembly.convert_data(TensorStress, meshname, convertTo = "Element")
     
     # #Get the stress tensor (nodal values)
-    # TensorStrain = Assembly.get_all()['Assembling'].get_strain(pb.get_disp(), "Nodal")       
+    # TensorStrain = Assembly.get_all()['Assembly'].get_strain(pb.get_disp(), "Nodal")       
     # TensorStress = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrain)
     
     # #Get the stress tensor (element values)
-    # TensorStrainEl = Assembly.get_all()['Assembling'].get_strain(pb.get_disp(), "Element")       
+    # TensorStrainEl = Assembly.get_all()['Assembly'].get_strain(pb.get_disp(), "Element")       
     # TensorStressEl = ConstitutiveLaw.get_all()['ElasticLaw'].GetStress(TensorStrainEl)
     
     # Get the principal directions (vectors on nodes)

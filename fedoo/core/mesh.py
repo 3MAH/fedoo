@@ -529,7 +529,7 @@ class Mesh(MeshBase):
         -------
         The index of the nearest node to X 
         """
-        return np.linalg.norm(self.nodes-X, axis=1).argmin()
+        return np.linalg.norm(self.physical_nodes-X, axis=1).argmin()
     
         
     def find_nodes(self, selection_criterion: str, value: float = 0, tol: float = 1e-6) -> np.ndarray[int]:
@@ -579,22 +579,23 @@ class Mesh(MeshBase):
           >>> mesh.find_nodes("(X>0.2 and X<0.5) or Y>0.4") 
         """
         assert np.isscalar(tol), "tol should be a scalar"
+        nodes = self.physical_nodes
         if selection_criterion in ['X','Y','Z']:
             assert np.isscalar(value), "value should be a scalar for selection_criterion = " + selection_criterion
             if selection_criterion == 'X':
-                return np.where(np.abs(self.nodes[:,0]-value) < tol)[0]
+                return np.where(np.abs(nodes[:,0]-value) < tol)[0]
             elif selection_criterion == 'Y':
-                return np.where(np.abs(self.nodes[:,1]-value) < tol)[0]
+                return np.where(np.abs(nodes[:,1]-value) < tol)[0]
             elif selection_criterion == 'Z':
-                return np.where(np.abs(self.nodes[:,2]-value) < tol)[0]
+                return np.where(np.abs(nodes[:,2]-value) < tol)[0]
         elif selection_criterion == 'XY':
-            return np.where(np.linalg.norm(self.nodes[:,:2]-value, axis=1) < tol)[0]
+            return np.where(np.linalg.norm(nodes[:,:2]-value, axis=1) < tol)[0]
         elif selection_criterion == 'XZ':
-            return np.where(np.linalg.norm(self.nodes[:,::2]-value, axis=1) < tol)[0]
+            return np.where(np.linalg.norm(nodes[:,::2]-value, axis=1) < tol)[0]
         elif selection_criterion == 'YZ':
-            return np.where(np.linalg.norm(self.nodes[:,1:]-value, axis=1) < tol)[0]        
+            return np.where(np.linalg.norm(nodes[:,1:]-value, axis=1) < tol)[0]        
         elif selection_criterion.lower() == 'point':
-            return np.where(np.linalg.norm(self.nodes-value, axis=1) < tol)[0]
+            return np.where(np.linalg.norm(nodes-value, axis=1) < tol)[0]
         elif isinstance(selection_criterion, str):
             #assume arbitrary expression
             expr = selection_criterion.replace('and', '&')\
@@ -687,7 +688,7 @@ class Mesh(MeshBase):
                     value = float(expr[i:i_end])
                 
                 crd_indices = {'X':0,'Y':1,'Z':2}[expr[i_start]]
-                new_res = test_op(self.nodes[:,crd_indices],value)
+                new_res = test_op(self.physical_nodes[:,crd_indices],value)
             else:
                 raise NameError('Invalid expression')
             

@@ -46,7 +46,6 @@ pb.solve()
 U = pb.get_disp()
 
 #Get the stress and strain tensor at nodes
-
 res = pb.get_results(assembly, ['Stress', 'Strain'], 'Node')
 stress = res['Stress']
 strain = res['Strain']
