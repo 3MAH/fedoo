@@ -1,18 +1,16 @@
 import fedoo as fd
 import numpy as np
-from time import time
 import os
 import pylab as plt
 from numpy import linalg
 import pyvista as pv
 from pyvistaqt import BackgroundPlotter
 
-start = time()
 #--------------- Pre-Treatment --------------------------------------------------------
 
 fd.ModelingSpace("3D")
 
-NLGEOM = 2
+NLGEOM = True
 #Units: N, mm, MPa
 h = 1
 w = 1
@@ -42,14 +40,9 @@ elif mat == 1 or mat == 2:
     k=1000 #1500
     m=0.3 #0.25
     if mat == 1:
-        props = np.array([[E, nu, alpha, Re,k,m]])
-        material = fd.constitutivelaw.Simcoon("EPICP", props, 8, name='ConstitutiveLaw')
-        material.corate = 2
-        # material.SetMaskH([[] for i in range(6)])
-    
-        # mask = [[3,4,5] for i in range(3)]
-        # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-        # material.SetMaskH(mask)
+        props = np.array([E, nu, alpha, Re,k,m])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
+        # material.corate = 'log'
 
     elif mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
@@ -57,13 +50,7 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-
-
-
-#### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
-# WeakForm.StressEquilibriumUL("ConstitutiveLaw")
-
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
 
 
 #note set for boundary conditions
@@ -75,7 +62,7 @@ node_center = mesh.nearest_node([0.5,0.5,0.5])
 StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro strain
 
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create(wf, meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling")
 # pb.set_solver('cg', precond = True)
@@ -87,8 +74,7 @@ pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-pb.add_output('results/rot_test', 'Assembling', ['Disp', 'Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='npz')    
-# pb.add_output('results/bendingPlastic3D', 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
+res = pb.add_output('results/rot_test', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'])    
 
 
 # Add periodic BC
@@ -120,7 +106,7 @@ pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispZ', grad_u[2,2]) #EpsZZ
 
 # pb.apply_boundary_conditions()
 
-pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, intervalOutput = 0.05)
+pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.05)
 
 # pb.solve()
 # pb.save_results()
@@ -135,8 +121,6 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 # bc = pb.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
 
 # pb.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
-
-print(time()-start)
 
 
 ### plot with pyvista
@@ -161,15 +145,13 @@ sargs = dict(
     # n_colors= 10
 )
 
-res = np.load('results/rot_test'+'_{}.npz'.format(0))
-for item in res:
-    if item[-4:] == 'Node':
-        if len(res[item]) == meshplot.n_points:
-            meshplot.point_data[item[:-5]] = res[item]
-        else:
-            meshplot.point_data[item[:-5]] = res[item].T
-    else:
-        meshplot.cell_data[item] = res[item].T
+res.load(0)
+for item in res.node_data:
+    meshplot.point_data[item] = res.node_data[item].T
+for item in res.gausspoint_data:
+    meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
+for item in res.element_data:
+    meshplot.cell_data[item] = res.element_data[item].T
 
 # # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
 # #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
@@ -187,25 +169,24 @@ actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strai
 
 def change_iter(value):
     global actor 
-    
+    print(int(value))
     pl.remove_actor(actor)
 
-    # print(int(value))    
-    res = np.load('results/rot_test'+'_{}.npz'.format(int(value)))
-    for item in res:
-        if item[-4:] == 'Node':
-            if len(res[item]) == meshplot.n_points:
-                meshplot.point_data[item[:-5]] = res[item]
-            else:
-                meshplot.point_data[item[:-5]] = res[item].T
-        else:
-            meshplot.cell_data[item] = res[item].T
+    res = np.load(int(value))
+    for item in res.node_data:
+        meshplot.point_data[item] = res.node_data[item].T
+    for item in res.gausspoint_data:
+        meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
+    for item in res.element_data:
+        meshplot.cell_data[item] = res.element_data[item].T
     
     # pl.update_scalars(scalars, mesh=None, render=True)
     # pl.update_scalars(res['Strain_Node'][0])
     # pl.update()
     
     actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+    # pl.update()
+
             
 # slider = pl.add_slider_widget(
 

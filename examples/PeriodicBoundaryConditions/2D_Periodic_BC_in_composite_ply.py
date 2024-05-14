@@ -1,5 +1,6 @@
 import fedoo as fd
 import numpy as np
+from fedoo.util.abaqus_inp import *
 import time
 
 #------------------------------------------------------------------------------
@@ -18,7 +19,7 @@ fd.ModelingSpace("3D")
 # INP = Util.ReadINP('Job-1.inp')
 
 #warning: this mesh is not periodic and should be replaced by a better one !
-INP = fd.util.ReadINP('cell_taffetas.inp') 
+INP = ReadINP('cell_taffetas.inp') 
 mesh = INP.toMesh()
 
 E_fiber = 250e3
@@ -58,12 +59,12 @@ fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 #------------------------------------------------------------------------------
 #Mechanical weak formulation
 #------------------------------------------------------------------------------
-fd.weakform.StressEquilibrium("ElasticLaw")
+wf = fd.weakform.StressEquilibrium("ElasticLaw")
 
 #------------------------------------------------------------------------------
 #Global Matrix assembly
 #------------------------------------------------------------------------------
-assemb = fd.Assembly.create("ElasticLaw", mesh) 
+assemb = fd.Assembly.create(wf, mesh) 
 
 #------------------------------------------------------------------------------
 #Static problem based on the just defined assembly

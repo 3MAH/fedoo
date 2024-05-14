@@ -931,7 +931,7 @@ class Assembly(AssemblyBase):
         
             
     def integrate_field(self, field, type_field = None):
-        return self.mesh.inegrate_field(field, type_field, self.n_elm_gp)
+        return self.mesh.integrate_field(field, type_field, self.n_elm_gp)
         
     
     def set_disp(self, disp):

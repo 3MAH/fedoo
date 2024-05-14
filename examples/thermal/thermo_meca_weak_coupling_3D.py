@@ -43,7 +43,7 @@ c = 0.500 #J/kg/K
 rho = 7800 #kg/m2
 thermal_law = fd.constitutivelaw.ThermalProperties(K, c, rho, name='ThermalLaw')
 wf_th = fd.weakform.HeatEquation("ThermalLaw", space = thermal_space)
-assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling_T")    
+assemb = fd.Assembly.create(wf_th, meshname, name="Assembling_T")    
 
 pb_th = fd.problem.NonLinear("Assembling_T")
 
@@ -74,9 +74,9 @@ elif mat == 1 or mat == 2:
 else:
     mechancial_law = fd.constitutivelaw.ElasticIsotrop(E, nu, name='MechanicalLaw')
 
-fd.weakform.StressEquilibrium("MechanicalLaw", nlgeom = NLGEOM)
+wf_mech = fd.weakform.StressEquilibrium("MechanicalLaw", nlgeom = NLGEOM)
 
-fd.Assembly.create("MechanicalLaw", meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create(wf_mech, meshname, name="Assembling_M")     #uses MeshChange=True when the mesh change during the time
 
 pb_m = fd.problem.NonLinear("Assembling_M")
 # pb_m.set_solver('cg', precond = True)

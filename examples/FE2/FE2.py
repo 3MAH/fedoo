@@ -37,7 +37,7 @@ micro_cells = fd.constitutivelaw.FE2(micro_assembly, name='FEM')
 fd.weakform.StressEquilibrium("FEM", name = "WeakForm") 
 
 #Create a global assembly
-fd.Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
+macro_assembly = fd.Assembly.create("WeakForm", "macro", name="Assembly", MeshChange = True) 
 
 #Define a new static problem
 pb = fd.problem.NonLinear("Assembly")
@@ -45,14 +45,12 @@ pb = fd.problem.NonLinear("Assembly")
 
 #create a 'result' folder and set the desired ouputs
 if not(os.path.isdir('results')): os.mkdir('results')
-pb.add_output('results/FE2', 'Assembly', ['Disp', 'Stress', 'Strain', 'Stress_vm', 'Wm'], output_type='Node', file_format ='vtk')    
-pb.add_output('results/FE2', 'Assembly', ['Stress', 'Stress', 'Stress_vm'], output_type='Element', file_format ='vtk')    
+res = pb.add_output('results/FE2', 'Assembly', ['Disp', 'Stress', 'Strain', 'Wm'])    
 
 #output result for a random micro cell (here for the 5th integration point)
 #Warning : the results of micro_cells are automatically saved at each NR iteration (several iteration per time iteration)
-# Problem.initialize(0) #to build prolems
-# micro_cells.list_problem[5].add_output('results/micro_cell', micro_cells.list_assembly[5], ['disp', 'stress', 'strain', 'stress_vm'], output_type='Node', file_format ='vtk')    
-
+pb.initialize()
+res_micro = micro_cells.list_problem[5].add_output('results/micro_cell', micro_cells.list_assembly[5], ['Disp', 'Stress', 'Strain'])    
 
 #Definition of the set of nodes for boundary conditions
 crd = mesh_macro.nodes
@@ -68,12 +66,6 @@ pb.bc.add('Dirichlet',bottom, 'DispY', 0)
 #displacement on right (ux=0.1mm)
 pb.bc.add('Dirichlet',right , 'DispX', 0.1) 
 
-pb.apply_boundary_conditions()
-
 #Solve problem
 pb.nlsolve()
 
-#---------- Post-Treatment ----------
-#Get the stress tensor, strain tensor, and displacement (nodal values)
-res_nd = pb.get_results("Assembly", ['Stress_VM','Strain'], 'Node')
-U = pb.get_disp()

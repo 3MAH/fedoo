@@ -1,6 +1,5 @@
 #derive de ConstitutiveLaw
-#This law should be used with an InternalForce WeakForm
-
+#This law should be used with an StressEquilibrium WeakForm
 
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
@@ -79,35 +78,34 @@ class FE2(Mechanical3D):
     #     H = np.squeeze(self.Lt.transpose(1,2,0))
     #     return H
         
-    def NewTimeIncrement(self):
-        # self.set_start() #in set_start -> set tangeant matrix to elastic
+    # def NewTimeIncrement(self):
+    #     # self.set_start() #in set_start -> set tangeant matrix to elastic
         
-        #save variable at the begining of the Time increment
-        self.__initialGradDisp = self.__currentGradDisp
-        self.Lt = self.L.copy()
+    #     #save variable at the begining of the Time increment
+    #     self.__initialGradDisp = self.__currentGradDisp
+    #     self.Lt = self.L.copy()
 
     
-    def to_start(self):
-        # self.to_start()         
-        self.__currentGradDisp = self.__initialGradDisp  
-        self.Lt = self.L.copy()
+    # def to_start(self):
+    #     # self.to_start()         
+    #     self.__currentGradDisp = self.__initialGradDisp  
+    #     self.Lt = self.L.copy()
     
-    def reset(self):
-        """
-        reset the constitutive law (time history)
-        """
-        #a modifier
-        self.__currentGradDisp = self.__initialGradDisp = 0
-        # self.__Statev = None
-        self.__currentStress = None #lissStressTensor object describing the last computed stress (GetStress method)
-        # self.__currentGradDisp = 0
-        # self.__F0 = None
+    # def reset(self):
+    #     """
+    #     reset the constitutive law (time history)
+    #     """
+    #     #a modifier
+    #     self.__currentGradDisp = self.__initialGradDisp = 0
+    #     # self.__Statev = None
+    #     self.__currentStress = None #lissStressTensor object describing the last computed stress (GetStress method)
+    #     # self.__currentGradDisp = 0
+    #     # self.__F0 = None
 
     
-    def initialize(self, assembly, pb, t0 = 0., nlgeom=False):  
-        self.nlgeom = nlgeom            
+    def initialize(self, assembly, pb):  
         if self.list_problem is None:  #only initialize once
-            nb_points = assembly.n_elm_gp * assembly.mesh.n_elements
+            nb_points = assembly.n_gauss_points
             
             #Definition of the set of nodes for boundary conditions
             if not(isinstance(self.__mesh, list)):            
@@ -121,7 +119,7 @@ class FE2(Mechanical3D):
             self._list_volume = np.empty(nb_points)
             self._list_center = np.empty(nb_points, dtype=int)
             # self.L = np.empty((nb_points,6,6))
-            assembly.sv['TangentMatrix']=np.empty((nb_points,6,6))
+            assembly.sv['TangentMatrix']=np.empty((6,6,nb_points))
 
                     
             print('-- Initialize micro problems --')
@@ -158,72 +156,57 @@ class FE2(Mechanical3D):
                     
                 pb_micro.bc.add('Dirichlet',[self._list_center[i]],'Disp', 0)                
                 # self.list_assembly[i].initialize()
-                assembly.sv['TangentMatrix'][i] = get_homogenized_stiffness(self.list_assembly[i])
-                
+                assembly.sv['TangentMatrix'][:,:,i] = get_homogenized_stiffness(self.list_assembly[i])
+            
             pb.make_active()
             if self.use_elastic_lt: 
                 assembly.sv['ElasticMatrix'] = assembly.sv['TangentMatrix'].copy()
             
-            self.__strain = np.zeros((6, nb_points))
-            self.__stress = np.zeros((6, nb_points))
-            self.__Wm = np.zeros((4, nb_points))
+            assembly.sv['Strain'] = StrainTensorList(np.zeros((6, nb_points)))
+            assembly.sv['Stress'] = StressTensorList(np.zeros((6, nb_points)))
+            assembly.sv['Wm'] = np.zeros((4, nb_points))
     
             print('')
 
-    def _update_pb(self, id_pb):
-        dtime = self.__dtime
-        strain = self.__new_strain
+
+    def set_start(self, assembly, pb):
+        if self.use_elastic_lt:
+            assembly.sv['TangentMatrix'] = assembly.sv['ElasticMatrix']
+
+    def _update_pb(self, id_pb, assembly_macro, pb_macro):
+        strain = assembly_macro.sv['Strain']
+        strain_start = assembly_macro.sv_start['Strain']
         nb_points = len(self.list_problem)
         pb = self.list_problem[id_pb]
 
         print("\r", str(id_pb+1),'/',str(nb_points), end="")
         strain_nodes = self.list_mesh[id_pb].node_sets['_StrainNodes']  
 
-        pb.RemoveBC("Strain")
-        pb.bc.add('Dirichlet',[strain_nodes[0]],'DispX', strain[0][id_pb], start_value = self.__strain[0][id_pb], name = 'Strain') #EpsXX
-        pb.bc.add('Dirichlet',[strain_nodes[1]],'DispX', strain[1][id_pb], start_value = self.__strain[1][id_pb], name = 'Strain') #EpsYY
-        pb.bc.add('Dirichlet',[strain_nodes[2]],'DispX', strain[2][id_pb], start_value = self.__strain[2][id_pb], name = 'Strain') #EpsZZ
-        pb.bc.add('Dirichlet',[strain_nodes[3]],'DispX', strain[3][id_pb], start_value = self.__strain[3][id_pb], name = 'Strain') #EpsXY
-        pb.bc.add('Dirichlet',[strain_nodes[4]],'DispX', strain[4][id_pb], start_value = self.__strain[4][id_pb], name = 'Strain') #EpsXZ
-        pb.bc.add('Dirichlet',[strain_nodes[5]],'DispX', strain[5][id_pb], start_value = self.__strain[5][id_pb], name = 'Strain') #EpsYZ
+        pb.bc.remove("Strain")
+        pb.bc.add('Dirichlet',[strain_nodes[0]],'DispX', strain[0][id_pb], start_value = strain_start[0][id_pb], name = 'Strain') #EpsXX
+        pb.bc.add('Dirichlet',[strain_nodes[0]],'DispY', strain[1][id_pb], start_value = strain_start[1][id_pb], name = 'Strain') #EpsYY
+        pb.bc.add('Dirichlet',[strain_nodes[0]],'DispZ', strain[2][id_pb], start_value = strain_start[2][id_pb], name = 'Strain') #EpsZZ
+        pb.bc.add('Dirichlet',[strain_nodes[1]],'DispX', strain[3][id_pb], start_value = strain_start[3][id_pb], name = 'Strain') #EpsXY
+        pb.bc.add('Dirichlet',[strain_nodes[1]],'DispY', strain[4][id_pb], start_value = strain_start[4][id_pb], name = 'Strain') #EpsXZ
+        pb.bc.add('Dirichlet',[strain_nodes[1]],'DispZ', strain[5][id_pb], start_value = strain_start[5][id_pb], name = 'Strain') #EpsYZ
         
-        pb.nlsolve(dt = dtime, tmax = dtime, update_dt = True, tol_nr = 0.05, print_info = 0)        
+        pb.nlsolve(dt = pb_macro.dtime, tmax = pb_macro.dtime, update_dt = True, tol_nr = 0.05, print_info = 0)        
         
-        self.Lt[id_pb]= get_tangent_stiffness(pb.name)
+        assembly_macro.sv['TangentMatrix'][:,:,id_pb]= get_tangent_stiffness(pb.name)
         
-        material = self.list_assembly[id_pb].weakform.GetConstitutiveLaw()
-        stress_field = material.get_stress()
-        self.__stress[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].integrate_field(stress_field[i]) for i in range(6)])
+        stress_field = self.list_assembly[id_pb].sv['Stress'] #computed micro stress
+        #integrate micro stress to get the macro one
+        assembly_macro.sv['Stress'].asarray()[:,id_pb] = np.array([1/self._list_volume[id_pb]*self.list_assembly[id_pb].integrate_field(stress_field[i]) for i in range(6)])
     
-        Wm_field = material.Wm
-        self.__Wm[:,id_pb] = (1/self._list_volume[id_pb]) * self.list_assembly[id_pb].integrate_field(Wm_field)
+        Wm_field = self.list_assembly[id_pb].sv['Wm']
+        assembly_macro.sv['Wm'][:,id_pb] = (1/self._list_volume[id_pb]) * self.list_assembly[id_pb].integrate_field(Wm_field)
 
 
-    def update(self,assembly, pb, dtime):   
+    def update(self,assembly, pb):
         displacement = pb.get_dof_solution()
 
-        if displacement is 0: 
-            self.__currentGradDisp = 0
-            self.__currentSigma = 0                        
-        else:
-            self.__currentGradDisp = assembly.get_grad_disp(displacement, "GaussPoint")
-
-            grad_values = self.__currentGradDisp
-            if self.nlgeom == False:
-                strain  = [grad_values[i][i] for i in range(3)] 
-                strain += [grad_values[0][1] + grad_values[1][0], grad_values[0][2] + grad_values[2][0], grad_values[1][2] + grad_values[2][1]]
-            else:            
-                strain  = [grad_values[i][i] + 0.5*sum([grad_values[k][i]**2 for k in range(3)]) for i in range(3)] 
-                strain += [grad_values[0][1] + grad_values[1][0] + sum([grad_values[k][0]*grad_values[k][1] for k in range(3)])] 
-                strain += [grad_values[0][2] + grad_values[2][0] + sum([grad_values[k][0]*grad_values[k][2] for k in range(3)])]
-                strain += [grad_values[1][2] + grad_values[2][1] + sum([grad_values[k][1]*grad_values[k][2] for k in range(3)])]
-
         #resolution of the micro problem at each gauss points
-        self.__new_strain = strain
-        self.__dtime = dtime
         nb_points = len(self.list_problem)
-        self.__stress = np.empty((6,nb_points))
-        self.__Wm = np.empty((4,nb_points))
         
         print('-- Update micro cells --')
         
@@ -231,22 +214,6 @@ class FE2(Mechanical3D):
         #     pool.map(self._update_pb, range(nb_points))
             
         for id_pb in range(nb_points):
-            self._update_pb(id_pb)
-
-        self.__strain = strain
-        # self.__strain = StrainTensorList(strain)
-        # self.__stress = StressTensorList([stress[i] for i in range(6)])        
-        # self.__Wm = Wm
+            self._update_pb(id_pb, assembly, pb)
         
         print('')
-
-       
-            # H = self.GetH()
-        
-            # self.__currentSigma = StressTensorList([sum([TotalStrain[j]*assembly.convert_data(H[i][j]) for j in range(6)]) for i in range(6)]) #H[i][j] are converted to gauss point excepted if scalar
-
-        
-
-        # self.Run(dtime)
-
-        # (DRloc , listDR, Detot, statev) = self.Run(dtime)

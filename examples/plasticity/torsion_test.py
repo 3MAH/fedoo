@@ -42,11 +42,7 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-
-
-#### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM, name ="wf")
-# WeakForm.StressEquilibriumUL("ConstitutiveLaw")
 
 # fd.Assembly.create("ConstitutiveLaw", mesh, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 assemb = fd.Assembly.create("wf", mesh, name="Assembling")     #uses MeshChange=True when the mesh change during the time

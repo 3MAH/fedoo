@@ -1074,7 +1074,7 @@ class Mesh(MeshBase):
             if type_field == 'GaussPoint': n_elm_gp = len(field)//self.n_elements
             else: n_elm_gp = get_default_n_gp(self.elm_type)               
                             
-        return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp))
+        return sum(self._get_gaussian_quadrature_mat(n_elm_gp) @ self.data_to_gausspoint(field,n_elm_gp).T)
 
 
     def get_volume(self):

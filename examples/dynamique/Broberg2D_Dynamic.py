@@ -49,10 +49,10 @@ mesh.nodes = mesh.nodes[:,:2]
 fd.constitutivelaw.ElasticIsotrop(E, nu, name = 'ElasticLaw')
 
 # ecriture des formes faibles
-fd.weakform.StressEquilibrium("ElasticLaw")
+fd.weakform.StressEquilibrium("ElasticLaw", name = "StressEquilibrium")
 fd.weakform.Inertia(rho,"Inertia")
 
-fd.Assembly.create("ElasticLaw", mesh, "tri3", name="StiffAssembling")
+fd.Assembly.create("StressEquilibrium", mesh, "tri3", name="StiffAssembling")
 fd.Assembly.create("Inertia",    mesh, "tri3", name="MassAssembling")
 
 length = mesh.bounding_box.size_x

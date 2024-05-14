@@ -81,8 +81,8 @@ else:
     material = fd.constitutivelaw.ElasticAnisotropic(L, name = 'ElasticLaw')
         
     #Assembly
-    fd.weakform.StressEquilibrium("ElasticLaw")
-    assemb = fd.Assembly.create("ElasticLaw", mesh, type_el, name="Assembling")
+    wf = fd.weakform.StressEquilibrium("ElasticLaw")
+    assemb = fd.Assembly.create(wf, mesh, type_el, name="Assembling")
     
     #Type of problem
     pb = fd.problem.Linear("Assembling")

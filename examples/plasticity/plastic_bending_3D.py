@@ -75,7 +75,7 @@ else:
 
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 # assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling")     
+assemb = fd.Assembly.create(wf, meshname, 'hex8', name="Assembling")     
 
 
 pb = fd.problem.NonLinear("Assembling")

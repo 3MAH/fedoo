@@ -50,7 +50,7 @@ else:
     nodes_top2 = mesh.find_nodes(f'X=={3*L/4} and Y=={h}')  
     top_center = np.hstack((nodes_top1, nodes_top2))
 
-fd.Assembly.create("ConstitutiveLaw", "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create(wf, "Domain", 'quad4', name="Assembling", MeshChange = False)     #uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling") #incremental non linear problems
 

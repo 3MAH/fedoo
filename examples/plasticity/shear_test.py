@@ -49,15 +49,10 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
 
-
-
-#### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
-# WeakForm.StressEquilibriumUL("ConstitutiveLaw")
-
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-fd.Assembly.create("ConstitutiveLaw", meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
+fd.Assembly.create(wf, meshname, name="Assembling")     #uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
@@ -72,10 +67,7 @@ if not(os.path.isdir('results')): os.mkdir('results')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
 # results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
-results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Stress', 'Strain', 'Stress_vm', 'Statev', 'Wm'])
-
-# Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
-
+results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'])
 
 ################### step 1 ################################
 #node sets for boundary conditions
@@ -115,7 +107,7 @@ print(time()-start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot('Stress_vm', component = 0, show = True)
+results.plot('Stress', component = 0, show = True)
 
 # ------------------------------------
 # Simple plot with default options and save to png
