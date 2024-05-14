@@ -16,9 +16,10 @@ Welcome to FEDOO's documentation!
    Problem
    boundary_conditions
    post-treatment
-   simple_examples
    examples/index
    heterogeneous
+   .. simple_examples -> a effacer
+   
 
 Indices and tables
 ==================

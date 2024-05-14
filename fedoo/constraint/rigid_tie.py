@@ -261,7 +261,7 @@ class RigidTie2D(BCBase):
             dof_ref  = np.array([problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd])
                 
         disp_ref = dof_ref[:2] #reference displacement
-        angles = dof_ref[3] #rotation Z angle
+        angles = dof_ref[2] #rotation Z angle
                 
         sin = np.sin(angles)
         cos = np.cos(angles)

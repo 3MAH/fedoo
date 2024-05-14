@@ -30,11 +30,7 @@ mat =1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
     material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    material.corate = 2
-    # material.SetMaskH([[] for i in range(6)])
-    mask = [[3,4,5] for i in range(3)]
-    mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    material.SetMaskH(mask)
+    material.corate = 'log'
 elif mat == 1 or mat == 2:
     Re = 300
     k=1000 #1500
@@ -123,118 +119,102 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 # pb.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 
 
-### plot with pyvista
+# ### plot with pyvista and slider
 
 
 
-meshplot = mesh.to_pyvista()
-# meshplot = pv.read('results/bendingPlastic3D_15.vtk')
-# meshplot = pv.read('results/rot_test.vtk')
-# meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
+# meshplot = mesh.to_pyvista()
+# # meshplot = pv.read('results/bendingPlastic3D_15.vtk')
+# # meshplot = pv.read('results/rot_test.vtk')
+# # meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
 
-# pl = pv.Plotter()
-pl = BackgroundPlotter()
+# # pl = pv.Plotter()
+# pl = BackgroundPlotter()
 
-pl.set_background('White')
+# pl.set_background('White')
 
-sargs = dict(
-    interactive=True,
-    title_font_size=20,
-    label_font_size=16,
-    color='Black',
-    # n_colors= 10
-)
+# sargs = dict(
+#     interactive=True,
+#     title_font_size=20,
+#     label_font_size=16,
+#     color='Black',
+#     # n_colors= 10
+# )
 
-res.load(0)
-for item in res.node_data:
-    meshplot.point_data[item] = res.node_data[item].T
-for item in res.gausspoint_data:
-    meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
-for item in res.element_data:
-    meshplot.cell_data[item] = res.element_data[item].T
+# res.load(0)
+# for item in res.node_data:
+#     meshplot.point_data[item] = res.node_data[item].T
+# for item in res.gausspoint_data:
+#     meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
+# for item in res.element_data:
+#     meshplot.cell_data[item] = res.element_data[item].T
 
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
+# # # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
+# # #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
+# # #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
+# # # pl.camera_position = cpos
 
-# global actor 
-# actor = pl.add_axes(color='Black', interactive = True)
-
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+# # global actor 
+# # actor = pl.add_axes(color='Black', interactive = True)
 
 
-def change_iter(value):
-    global actor 
-    print(int(value))
-    pl.remove_actor(actor)
+# # # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
+# actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
 
-    res = np.load(int(value))
-    for item in res.node_data:
-        meshplot.point_data[item] = res.node_data[item].T
-    for item in res.gausspoint_data:
-        meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
-    for item in res.element_data:
-        meshplot.cell_data[item] = res.element_data[item].T
+
+# def change_iter(value):
+#     global actor 
+#     print(int(value))
+#     pl.remove_actor(actor)
+
+#     res = np.load(int(value))
+#     for item in res.node_data:
+#         meshplot.point_data[item] = res.node_data[item].T
+#     for item in res.gausspoint_data:
+#         meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
+#     for item in res.element_data:
+#         meshplot.cell_data[item] = res.element_data[item].T
     
-    # pl.update_scalars(scalars, mesh=None, render=True)
-    # pl.update_scalars(res['Strain_Node'][0])
-    # pl.update()
+#     # pl.update_scalars(scalars, mesh=None, render=True)
+#     # pl.update_scalars(res['Strain_Node'][0])
+#     # pl.update()
     
-    actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-    # pl.update()
+#     actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
+#     # pl.update()
 
             
-# slider = pl.add_slider_widget(
+# # slider = pl.add_slider_widget(
+
+# #     change_iter,
+
+# #     [0, 20],
+
+# #     title="Iter",
+
+# #     title_opacity=0.5,
+
+# #     title_color="red",
+
+# #     fmt="%0.9f",
+
+# #     title_height=0.08,
+    
+# #     style = 'modern',
+
+# # )
+
+# slider = pl.add_text_slider_widget(
 
 #     change_iter,
 
-#     [0, 20],
-
-#     title="Iter",
-
-#     title_opacity=0.5,
-
-#     title_color="red",
-
-#     fmt="%0.9f",
-
-#     title_height=0.08,
+#     [str(i) for i in range(20)],
     
 #     style = 'modern',
 
 # )
 
-slider = pl.add_text_slider_widget(
-
-    change_iter,
-
-    [str(i) for i in range(20)],
-    
-    style = 'modern',
-
-)
-
-pl.show()
-# cpos = pl.show(return_cpos = True)
-# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-
-
-#ANIMATE
-
-   
-    
-    
-    
-    
-
-
-
-
-
+# pl.show()
+# # cpos = pl.show(return_cpos = True)
+# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
