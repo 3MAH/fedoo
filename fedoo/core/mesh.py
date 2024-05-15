@@ -134,7 +134,7 @@ class Mesh(MeshBase):
             if isinstance(pvmesh, pv.PolyData):
                 pvmesh = pvmesh.cast_to_unstructured_grid()
                 
-            if len(pvmesh.cells_dict) != 1: return NotImplemented
+            if len(pvmesh.cells_dict) != 1: raise NotImplementedError
             
             elm_type =  {3:'lin2', #pv._vtk.VTK_LINE
                          5:'tri3', #pv._vtk.VTK_TRIANGLE
