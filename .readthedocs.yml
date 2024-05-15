@@ -20,7 +20,6 @@ build:
       # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
       # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
       # - pip uninstall -y vtk
-      - conda install -c conda-forge -c set3mah simcoon
       - conda remove --force vtk
       - pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
       
