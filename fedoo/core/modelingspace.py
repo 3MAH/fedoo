@@ -192,6 +192,8 @@ class ModelingSpace:
         """
         Return the name of the variable associated to a given rank
         """
+        # as dict keep insertion order since python 3.7, this function 
+        # should never returned an alias name
         return list(self._variable.keys())[list(self._variable.values()).index(rank)]
 
 

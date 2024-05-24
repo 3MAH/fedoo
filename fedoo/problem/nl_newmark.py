@@ -117,7 +117,7 @@ class _NonLinearNewmarkBase():
         #     self.__DampingAssembly.to_start()          
 
 
-    def set_start(self,save_results=False):             
+    def set_start(self,save_results=False, callback = None):             
         dt = self.dtime ### dt is the time step of the previous increment       
         if self._dU is not 0: 
             #update velocity and acceleration
@@ -135,9 +135,14 @@ class _NonLinearNewmarkBase():
         #     self.__DampingAssembly.set_start(self,dt)   
             
         #Save results            
-        if save_results and self._dU is not 0: 
-            self.save_results(self.__compteurOutput)                              
-            self.__compteurOutput += 1     
+        if self._dU is not 0:
+            if save_results: 
+                self.save_results(self.__compteurOutput)                              
+                self.__compteurOutput += 1     
+            
+            if callback is not None:
+                if self.exec_callback_at_each_iter or save_results:
+                    callback(self)
        
         
     

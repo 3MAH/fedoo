@@ -341,11 +341,14 @@ class _NonLinearBase():
             Time step for output if save_at_exact_time is True (default) else number of iter increments between 2 output
             If interval_output == -1, the results is saved at each initial time_step intervals or each increment depending on the save_at_exact_time value.
             If omitted, the interval_output attribute is considred (default -1)
-        callback: function
-        
-        exec_callback_at_each_iter
-    
-    
+        callback: function, optional
+            The callback function is executed automatically during the non linear resolution.
+            By default, the callback function is executed when output is requested 
+            (defined by the interval_output argument). If
+            exec_callback_at_each_iter is True, the callback function is excuted
+            at each time iteration.
+        exec_callback_at_each_iter, bool, default = False
+            If True, the callback function is executed after each time iteration.    
         """          
 
         #parameters
