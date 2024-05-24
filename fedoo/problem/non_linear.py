@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from typing import Callable, Any
     
 class _NonLinearBase():
     
@@ -43,6 +44,7 @@ class _NonLinearBase():
         
         self.interval_output = -1 #save results every self.interval_output iter or time step if self.save_at_exact_time = True
         self.save_at_exact_time = True
+        self.exec_callback_at_each_iter = False
         self.err_num= 1e-8 #numerical error
     
     def get_disp(self,name='Disp'): 
@@ -124,18 +126,22 @@ class _NonLinearBase():
         self._dU += self.get_X()
         
         
-    def set_start(self,save_results=False):
+    def set_start(self,save_results=False, callback = None):
         #dt not used for static problem
         if self._dU is not 0: 
             self._U += self._dU
             self._dU = 0                
             self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
             self.__assembly.set_start(self)    
-            
+                                    
             #Save results            
             if save_results: 
                 self.save_results(self.__compteurOutput)                              
                 self.__compteurOutput += 1     
+            
+            if callback is not None:
+                if self.exec_callback_at_each_iter or save_results:
+                    callback(self)
         else:
             self._err0 = self.nr_parameters['err0'] #initial error for NR error estimation
             self.__assembly.set_start(self)    
@@ -290,6 +296,8 @@ class _NonLinearBase():
                 dt_min: float = 1e-6, max_subiter: int|None = None,
                 tol_nr: float|None = None, print_info: int|None = None,
                 save_at_exact_time: bool|None = None, interval_output: int|float|None = None,
+                callback: Callable[[Problem,...], None]|None = None,
+                exec_callback_at_each_iter: bool|None = None,
                 ) -> None:    
         """Solve the non linear problem using the newton-raphson algorithm.
         
@@ -333,6 +341,11 @@ class _NonLinearBase():
             Time step for output if save_at_exact_time is True (default) else number of iter increments between 2 output
             If interval_output == -1, the results is saved at each initial time_step intervals or each increment depending on the save_at_exact_time value.
             If omitted, the interval_output attribute is considred (default -1)
+        callback: function
+        
+        exec_callback_at_each_iter
+    
+    
         """          
 
         #parameters
@@ -343,6 +356,8 @@ class _NonLinearBase():
         if print_info is not None: self.print_info = print_info
         if save_at_exact_time is not None: 
             self.save_at_exact_time = save_at_exact_time
+        if exec_callback_at_each_iter is not None:
+            self.exec_callback_at_each_iter = exec_callback_at_each_iter
         if interval_output is None: interval_output = self.interval_output # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output 
         
         # if kargs: #not empty            
@@ -382,7 +397,7 @@ class _NonLinearBase():
             if restart:
                 restart = False
             else:                
-                self.set_start(save_results)   
+                self.set_start(save_results, callback)   
             
                 
             #self.solve_time_increment = Newton Raphson loop
@@ -415,7 +430,7 @@ class _NonLinearBase():
                 else: 
                     raise NameError('Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True'.format(normRes))   
         
-        self.set_start(True)
+        self.set_start(True, callback)
 
 
     # def GetElasticEnergy(self): #only work for classical FEM
