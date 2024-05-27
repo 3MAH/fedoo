@@ -364,7 +364,6 @@ class Mesh(MeshBase):
             
         where meshObject is the Mesh object containing merged coincidentNodes.
         """
-        n_nodes = self.n_nodes
         decimal_round = int(-np.log10(tol)-1)
         crd = self.nodes.round(decimal_round) #round coordinates to match tolerance
         if self.ndim == 3:
