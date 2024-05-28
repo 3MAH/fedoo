@@ -13,7 +13,7 @@ get a mesh and the set of elements associated to each material.
 Such a mesh could be generated for instance with microgen from the set 3mah
 or using the gmsh library. 
 
-As sake of example, lets build a simple heterogeneous mesh  with fedoo functions:
+As sake of example, lets build a simple heterogeneous mesh with fedoo functions:
 a 2D square with a round inclusion.
 
 
@@ -39,21 +39,21 @@ a 2D square with a round inclusion.
     
 Now we would like to assign different constitutive laws for the matrix and for the inclusion.
 
-There is 3 methods to do this in fedoo.
+There are 3 methods to do this in fedoo.
 
 
 1st method: 
 ==============================
 
-Most of constitutive laws accept to be given array of material properties 
-instead of scalar values. The array of properties are interpreted depending on 
-the array dimensions as:
+Most of constitutive laws accept to be given arrays of material properties 
+instead of scalar values. The arrays of properties are interpreted depending on 
+their dimensions as:
     - gauss points values
     - element values
     - node values
 
-Of course the array shape have to be consistend with the mesh dimensions when creating
-the Assembly. 
+Of course the array shapes have to be consistend with the mesh dimensions when
+creating the Assembly. 
 
 .. code-block:: python    
 
@@ -75,11 +75,11 @@ material behavior is the same for all phases.
 2nd method: 
 ==============================
 
-The classing way of defining heterogeneous constitutive laws is to 
+The classic way of defining heterogeneous constitutive laws is to 
 define several distinct assemblies and to build an AssemblySum object containing the 
 addition of the two assemblies. 
-For that purpose, the mesh need to be splited into sub-mesh containing only the elements
-associated to one phase, but that point to the same nodes list. 
+For that purpose, the mesh need to be splited into sub-meshes containing only 
+the elements associated to one phase, but that point to the same nodes list. 
 The Mesh class propose a method dedicated to this operation: 
 :py:meth:`fedoo.Mesh.extract_elements`.
 
@@ -112,10 +112,10 @@ To allow for a more compact writting, and avoiding the sum of assemblies, fedoo 
 a built-in constitutive law dedicated to heterogeneous material:
 :py:class:`fedoo.constitutivelaw.heterogeneous.Heterogeneous`
 
-This class allow to define one material as the combination of several materials 
+This class allows to define one material as the combination of several materials 
 associated to sets of elements. The code is shorter and more easy to read. 
 
-This methods seems to be very slightly less efficient thant method 2 (to be confirmed), but the 
+This methods seems to be very slightly less efficient than method 2 (to be confirmed), but the 
 difference is barely visisble though and shouldn't be a real matter for everyone. 
 
 .. code-block:: python    

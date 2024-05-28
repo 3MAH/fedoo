@@ -101,8 +101,8 @@ class Problem(ProblemBase):
             i = self.space.variable_rank(name)
             return vector[i*n : (i+1)*n]   
 
-    def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='fdz', position = 1, element_set = None):
-        return self._problem_output.add_output(filename, assemblyname, output_list, output_type, file_format, position, element_set)  
+    def add_output(self, filename, assemblyname, output_list, output_type=None, file_format ='fdz', compressed=False, position = 1, element_set = None, save_mesh = True):
+        return self._problem_output.add_output(filename, assemblyname, output_list, output_type, file_format, compressed, position, element_set, save_mesh)  
 
     def save_results(self, iterOutput=None):
         self._problem_output.save_results(self, iterOutput)
