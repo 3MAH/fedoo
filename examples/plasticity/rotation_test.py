@@ -1,114 +1,147 @@
-import fedoo as fd
-import numpy as np
 import os
+
+import numpy as np
 import pylab as plt
-from numpy import linalg
 import pyvista as pv
+from numpy import linalg
 from pyvistaqt import BackgroundPlotter
 
-#--------------- Pre-Treatment --------------------------------------------------------
+import fedoo as fd
+
+import fedoo as fd
+
+# --------------- Pre-Treatment --------------------------------------------------------
 
 fd.ModelingSpace("3D")
 
 NLGEOM = True
-#Units: N, mm, MPa
+# Units: N, mm, MPa
 h = 1
 w = 1
 L = 1
 E = 200e3
-nu=0.3
-alpha = 1e-5 #???
+nu = 0.3
+alpha = 1e-5  # ???
 meshname = "Domain"
 uimp = 2
 
-fd.mesh.box_mesh(nx=5, ny=5, nz=5, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
+fd.mesh.box_mesh(
+    nx=5,
+    ny=5,
+    nz=5,
+    x_min=0,
+    x_max=L,
+    y_min=0,
+    y_max=h,
+    z_min=0,
+    z_max=w,
+    elm_type="hex8",
+    name=meshname,
+)
 mesh = fd.Mesh[meshname]
 
-crd = mesh.nodes 
+crd = mesh.nodes
 
-mat =1
+mat = 1
 if mat == 0:
     props = np.array([[E, nu, alpha]])
-    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name='ConstitutiveLaw')
-    material.corate = 'log'
+    material = fd.constitutivelaw.Simcoon("ELISO", props, 1, name="ConstitutiveLaw")
+    material.corate = "log"
 elif mat == 1 or mat == 2:
     Re = 300
-    k=1000 #1500
-    m=0.3 #0.25
+    k = 1000  # 1500
+    m = 0.3  # 0.25
     if mat == 1:
-        props = np.array([E, nu, alpha, Re,k,m])
-        material = fd.constitutivelaw.Simcoon("EPICP", props, name='ConstitutiveLaw')
+        props = np.array([E, nu, alpha, Re, k, m])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
         # material.corate = 'log'
 
     elif mat == 2:
-        material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='ConstitutiveLaw')
-        material.SetHardeningFunction('power', H=k, beta=m)
+        material = fd.constitutivelaw.ElastoPlasticity(
+            E, nu, Re, name="ConstitutiveLaw"
+        )
+        material.SetHardeningFunction("power", H=k, beta=m)
 else:
-    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='ConstitutiveLaw')
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
 
 
-#note set for boundary conditions
-nodes_bottom = mesh.find_nodes('Y',0)
-nodes_top = mesh.find_nodes('Y',1)
+# note set for boundary conditions
+nodes_bottom = mesh.find_nodes("Y", 0)
+nodes_top = mesh.find_nodes("Y", 1)
 
-node_center = mesh.nearest_node([0.5,0.5,0.5])
+node_center = mesh.nearest_node([0.5, 0.5, 0.5])
 
-StrainNodes = mesh.add_nodes(crd[node_center],3) #add virtual nodes for macro strain
+StrainNodes = mesh.add_nodes(crd[node_center], 3)  # add virtual nodes for macro strain
 
 # Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create(wf, meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create(
+    wf, meshname, "hex8", name="Assembling", MeshChange=False, n_elm_gp=8
+)  # uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling")
 # pb.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0 = 1, tol = 5e-3, max_subiter = 5)
+pb.set_nr_criterion("Displacement", err0=1, tol=5e-3, max_subiter=5)
 
 # pb.set_nr_criterion("Displacement")
 # pb.set_nr_criterion("Work")
 # pb.set_nr_criterion("Force")
 
-#create a 'result' folder and set the desired ouputs
-if not(os.path.isdir('results')): os.mkdir('results')
-res = pb.add_output('results/rot_test', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'])    
+# create a 'result' folder and set the desired ouputs
+if not (os.path.isdir("results")):
+    os.mkdir("results")
+res = pb.add_output(
+    "results/rot_test", "Assembling", ["Disp", "Stress", "Strain", "Statev", "Wm"]
+)
 
 
 # Add periodic BC
-list_strain_nodes = [[StrainNodes[0], StrainNodes[0], StrainNodes[0]],
-                     [StrainNodes[1], StrainNodes[1], StrainNodes[1]],
-                     [StrainNodes[2], StrainNodes[2], StrainNodes[2]]]
-list_strain_var = [['DispX', 'DispY', 'DispZ'] for i in range(3)]
+list_strain_nodes = [
+    [StrainNodes[0], StrainNodes[0], StrainNodes[0]],
+    [StrainNodes[1], StrainNodes[1], StrainNodes[1]],
+    [StrainNodes[2], StrainNodes[2], StrainNodes[2]],
+]
+list_strain_var = [["DispX", "DispY", "DispZ"] for i in range(3)]
 
-bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var, dim=3) 
+bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3)
 pb.bc.add(bc_periodic)
 
 ################### step 1 ################################
 
 tmax = 1
 
-theta = np.pi/2
-grad_u = np.array([[np.cos(theta)-1,-np.sin(theta),0], [np.sin(theta),np.cos(theta)-1,0], [0,0,0]])
+theta = np.pi / 2
+grad_u = np.array(
+    [
+        [np.cos(theta) - 1, -np.sin(theta), 0],
+        [np.sin(theta), np.cos(theta) - 1, 0],
+        [0, 0, 0],
+    ]
+)
 
-pb.bc.add('Dirichlet',node_center, 'Disp',0)
-pb.bc.add('Dirichlet',[StrainNodes[0]],'DispX', grad_u[0,0]) #EpsXX
-pb.bc.add('Dirichlet',[StrainNodes[0]], 'DispY', grad_u[0,1]) #EpsYY
-pb.bc.add('Dirichlet',[StrainNodes[0]],'DispZ', grad_u[0,2]) #EpsZZ
-pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispX', grad_u[1,0]) #EpsXX
-pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispY', grad_u[1,1]) #EpsYY
-pb.bc.add('Dirichlet',[StrainNodes[1]], 'DispZ', grad_u[1,2]) #EpsZZ
-pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispX', grad_u[2,0]) #EpsXX
-pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispY', grad_u[2,1]) #EpsYY
-pb.bc.add('Dirichlet',[StrainNodes[2]], 'DispZ', grad_u[2,2]) #EpsZZ
+pb.bc.add("Dirichlet", node_center, "Disp", 0)
+pb.bc.add("Dirichlet", [StrainNodes[0]], "DispX", grad_u[0, 0])  # EpsXX
+pb.bc.add("Dirichlet", [StrainNodes[0]], "DispY", grad_u[0, 1])  # EpsYY
+pb.bc.add("Dirichlet", [StrainNodes[0]], "DispZ", grad_u[0, 2])  # EpsZZ
+pb.bc.add("Dirichlet", [StrainNodes[1]], "DispX", grad_u[1, 0])  # EpsXX
+pb.bc.add("Dirichlet", [StrainNodes[1]], "DispY", grad_u[1, 1])  # EpsYY
+pb.bc.add("Dirichlet", [StrainNodes[1]], "DispZ", grad_u[1, 2])  # EpsZZ
+pb.bc.add("Dirichlet", [StrainNodes[2]], "DispX", grad_u[2, 0])  # EpsXX
+pb.bc.add("Dirichlet", [StrainNodes[2]], "DispY", grad_u[2, 1])  # EpsYY
+pb.bc.add("Dirichlet", [StrainNodes[2]], "DispZ", grad_u[2, 2])  # EpsZZ
 
 # pb.apply_boundary_conditions()
 
-pb.nlsolve(dt = 0.05, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.05)
+pb.nlsolve(dt=0.05, tmax=1, update_dt=False, print_info=1, interval_output=0.05)
 
 # pb.solve()
 # pb.save_results()
 
 
-E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
+E = np.array(
+    fd.Assembly["Assembling"].get_strain(pb.get_dof_solution(), "GaussPoint", False)
+).T
 
 # ################### step 2 ################################
 # bc.Remove()
@@ -120,7 +153,6 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 
 
 # ### plot with pyvista and slider
-
 
 
 # meshplot = mesh.to_pyvista()
@@ -154,7 +186,7 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 # # #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
 # # # pl.camera_position = cpos
 
-# # global actor 
+# # global actor
 # # actor = pl.add_axes(color='Black', interactive = True)
 
 
@@ -164,7 +196,7 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 
 
 # def change_iter(value):
-#     global actor 
+#     global actor
 #     print(int(value))
 #     pl.remove_actor(actor)
 
@@ -175,15 +207,15 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 #         meshplot.point_data[item] = res.get_data(item, data_type = 'Node').T
 #     for item in res.element_data:
 #         meshplot.cell_data[item] = res.element_data[item].T
-    
+
 #     # pl.update_scalars(scalars, mesh=None, render=True)
 #     # pl.update_scalars(res['Strain_Node'][0])
 #     # pl.update()
-    
+
 #     actor = pl.add_mesh(meshplot.warp_by_vector('Disp',factor = 1), scalars = 'Strain', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
 #     # pl.update()
 
-            
+
 # # slider = pl.add_slider_widget(
 
 # #     change_iter,
@@ -199,7 +231,7 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 # #     fmt="%0.9f",
 
 # #     title_height=0.08,
-    
+
 # #     style = 'modern',
 
 # # )
@@ -209,7 +241,7 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 #     change_iter,
 
 #     [str(i) for i in range(20)],
-    
+
 #     style = 'modern',
 
 # )
@@ -217,4 +249,3 @@ E = np.array(fd.Assembly['Assembling'].get_strain(pb.get_dof_solution(), "GaussP
 # pl.show()
 # # cpos = pl.show(return_cpos = True)
 # # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-

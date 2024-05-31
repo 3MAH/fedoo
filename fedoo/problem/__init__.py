@@ -1,35 +1,45 @@
-"""
+"""Problem module.
+
 =============================================
 Problem (:mod:`fedoo.problem`)
 =============================================
 
-Fedoo allow to solve several kinds of Problems that are defined in the Problem library. 
+Fedoo allow to solve several kinds of Problems that are defined in the Problem library.
 
-To create a new Problem, use one of the following function: 
+To create a new Problem, use one of the following function:
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
-   Linear   
+   Linear
    NonLinear
    Newmark
    NonLinearNewmark
-   ExplicitDynamic   
+   ExplicitDynamic
 
-Each of these functions creates an object that is derived from a base class "ProblemBase".
+Each of these functions creates an object that is derived from a \
+   base class "ProblemBase".
 
 .. currentmodule:: fedoo.core.base
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
-   ProblemBase   
+   ProblemBase
 """
 
-import pkgutil
+from .explicit_dynamic import ExplicitDynamic
+from .linear import Linear
+from .newmark import Newmark
+from .nl_newmark import NonLinearNewmark
+from .non_linear import NonLinear
 
-for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
-    # module = loader.find_module(module_name).load_module(module_name)
-    exec('from .'+module_name+' import *')
+__all__ = [
+    "Linear",
+    "NonLinear",
+    "Newmark",
+    "NonLinearNewmark",
+    "ExplicitDynamic",
+]

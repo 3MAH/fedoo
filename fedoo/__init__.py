@@ -1,10 +1,5 @@
-from ._version import __version__
-
-from .core import *
-from . import constitutivelaw
-from . import weakform
-from . import mesh
-from . import problem
+from . import constitutivelaw, constraint, core, homogen, mesh, problem, weakform
+from .core import Assembly, ConstitutiveLaw, Mesh, ModelingSpace, Problem, WeakForm
 
 
 class get_config:
