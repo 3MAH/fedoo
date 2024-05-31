@@ -1,4 +1,4 @@
-"""Constitutive Law.
+"""Constitutive Law module.
 
 =========================================================
 Constitutive Law (:mod:`fedoo.constitutivelaw`)

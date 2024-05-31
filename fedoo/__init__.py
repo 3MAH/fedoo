@@ -1,5 +1,18 @@
 from . import constitutivelaw, constraint, core, homogen, mesh, problem, weakform
-from .core import Assembly, ConstitutiveLaw, Mesh, ModelingSpace, Problem, WeakForm
+from ._version import __version__
+from .core import (
+    MPC,
+    Assembly,
+    ConstitutiveLaw,
+    DataSet,
+    ListBC,
+    Mesh,
+    ModelingSpace,
+    MultiFrameDataSet,
+    Problem,
+    WeakForm,
+    read_data,
+)
 
 
 class get_config:
