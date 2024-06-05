@@ -248,7 +248,7 @@ class DistributedForce(Assembly):
             else:
                 self.weakform.distributed_force = [
                     pb.t_fact * (f - self.initial_force[i]) +
-                    self.initial_force for i, f in enumerate(self.force)
+                    self.initial_force[i] for i, f in enumerate(self.force)
                 ]
 
     def to_start(self, pb: ProblemBase):

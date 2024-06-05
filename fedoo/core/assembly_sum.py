@@ -49,6 +49,15 @@ class AssemblySum(AssemblyBase):
         self.__assembly_output = kargs.get('assembly_output', None)
         if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
                         
+    def __add__(self, another_assembly):
+        if isinstance(another_assembly, AssemblySum):
+            return AssemblySum(self.list_assembly +
+                               another_assembly.list_assembly
+                               )
+        else:
+            return AssemblySum(self.list_assembly +
+                               [another_assembly]
+                               )
     
     def assemble_global_mat(self,compute='all'):
         if self._reload == 'all': 
