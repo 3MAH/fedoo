@@ -160,7 +160,7 @@ def extract_surface(
             node_set
         ).all(axis=1)
         surf_elements = surf_elements[mask]
-        ind_element = surf_elements[mask]
+        ind_element = ind_element[mask]
 
     if element_set is not None:
         if isinstance(element_set, str):
@@ -168,7 +168,7 @@ def extract_surface(
 
         mask = np.isin(ind_element, element_set)
         surf_elements = surf_elements[mask]
-        ind_element = surf_elements[mask]
+        ind_element = ind_element[mask]
 
     # Check if normal are well defined (outside the volume)
     # idea: compute the distance of a point that belong the elm but
