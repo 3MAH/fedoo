@@ -90,6 +90,18 @@ ____________________________________________
 Avdanced BC and constraints
 ==============================
 
+Distributed loads are applied to a Problem by building
+dedicated assembly objects. To add them to a problem, 
+one should add the constraint assembly to the assembly
+defining the stiffness matrix.
+
+.. autosummary::
+    :toctree: generated/
+    :template: custom-class-template.rst
+    
+    fedoo.constraint.DistributedForce
+    fedoo.constraint.Pressure
+    fedoo.contraint.SurfaceForce
 
 Some advanced constraints base on multiple linearized MPC are available in fedoo. 
 They can be created and add to the problem with the pb.bc.add method.
@@ -99,7 +111,8 @@ They can be created and add to the problem with the pb.bc.add method.
    :template: custom-class-template.rst
 
    fedoo.constraint.PeriodicBC
-   fedoo.constraint.RigidTie 
+   fedoo.constraint.RigidTie
+   fedoo.constraint.RigidTie2D
    
    
 Contact
