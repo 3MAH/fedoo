@@ -83,13 +83,8 @@ class StressEquilibrium(WeakFormBase):
             ]  # Stress = Cauchy for updated lagrangian method
 
             if self.space._dimension == "2Daxi":
-                mesh = assembly.current.mesh
-                rr = mesh.convert_data(mesh.nodes[:, 0], 
-                                       "Node", 
-                                       "GaussPoint",
-                                       n_elm_gp = assembly.n_elm_gp
-                                       )
-                
+                rr = assembly.sv["_R_gausspoints"]
+
                 # nlgeom = False
                 eps[2] = self.space.variable("DispX") * np.divide(
                     1, rr, out=np.zeros_like(rr), where=rr != 0
@@ -137,6 +132,14 @@ class StressEquilibrium(WeakFormBase):
                 np.zeros((6, assembly.n_gauss_points), order="F")
             )
         assembly.sv["DispGradient"] = 0
+
+        if self.space._dimension == "2Daxi":
+            assembly.sv["_R_gausspoints"] = assembly.mesh.convert_data(
+                                   assembly.mesh.nodes[:, 0],
+                                   "Node",
+                                   "GaussPoint",
+                                   n_elm_gp=assembly.n_elm_gp
+                                   )
 
         if self.nlgeom:
             if not (USE_SIMCOON):
@@ -206,6 +209,8 @@ class StressEquilibrium(WeakFormBase):
                                        "Node", 
                                        "GaussPoint",
                                        n_elm_gp = assembly.n_elm_gp)
+                
+                assembly.sv["_R_gausspoints"] = rr
                 # grad_values[2][2] = mesh.convert_data(pb.get_disp()[0]/mesh.nodes[:,0], 'Node')
                 grad_values[2][2] = np.divide(
                     mesh.convert_data(pb.get_disp()[0], "Node", "GaussPoint", n_elm_gp = assembly.n_elm_gp),
@@ -247,10 +252,6 @@ class StressEquilibrium(WeakFormBase):
         if self.nlgeom == "UL":
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
-            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
-
-            assembly.current.compute_elementary_operators()
 
     def set_start(self, assembly, pb):
         if self.nlgeom:

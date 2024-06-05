@@ -109,11 +109,10 @@ class Element1D(Element):
 
     def ComputeDetJacobian(self,vec_x, vec_xi):
         dnn_xi = self.ShapeFunctionDerivative(vec_xi)
-        self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
-                
-#        np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0)
+        # self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        self.JacobianMatrix = np.linalg.norm(np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0), axis=3)[...,np.newaxis]
 #        self.JacobianMatrix = [linalg.norm(np.dot(dnn,vec_x)) for dnn in dnn_xi] #dx_dxi avec x tangeant à l'élément (repère local élémentaire)
-        self.detJ = self.JacobianMatrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar   
+        self.detJ = self.JacobianMatrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar
         
     def ComputeJacobianMatrix(self, vec_x, vec_xi = None, localFrame = None): 
         """
@@ -121,7 +120,7 @@ class Element1D(Element):
         The jacobian is computed along the axis of the 1D element 
         """        
         if vec_xi is None: vec_xi = self.xi_pg
-        self.ComputeDetJacobian(vec_x, vec_xi)        
+        self.ComputeDetJacobian(vec_x, vec_xi)
         self.inverseJacobian = 1./self.JacobianMatrix #dxi_dx
 #        self.inverseJacobian = [np.array([1./J]) for J in self.JacobianMatrix] #dxi_dx                                    
 

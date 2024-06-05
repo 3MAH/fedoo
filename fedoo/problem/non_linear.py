@@ -112,13 +112,7 @@ class _NonLinearBase:
 
     def elastic_prediction(self):
         # update the boundary conditions with the time variation
-        time_end = self.time + self.dtime
-        t_fact = (time_end - self.t0) / (
-            self.tmax - self.t0
-        )  # adimensional time
-        t_fact_old = (self.time - self.t0) / (self.tmax - self.t0)
-
-        self.apply_boundary_conditions(t_fact, t_fact_old)
+        self.apply_boundary_conditions(self.t_fact, self.t_fact_old)
 
         # build and solve the linearized system with elastic rigidty matrix
         self.updateA()  # should be the elastic rigidity matrix
@@ -488,7 +482,14 @@ class _NonLinearBase:
             else:
                 self.dtime = dt
 
+            # adimensional time for boundary conditions
+            time_end = self.time + self.dtime
+            self.t_fact = (time_end - self.t0) / (self.tmax - self.t0)
+            self.t_fact_old = (self.time - self.t0) / (self.tmax - self.t0)
+
             if restart:
+                # reset internal variables, update Stress, initial displacement and assemble global matrix at previous time
+                self.to_start()
                 restart = False
             else:
                 self.set_start(save_results, callback)
@@ -528,8 +529,6 @@ class _NonLinearBase:
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
-                    # reset internal variables, update Stress, initial displacement and assemble global matrix at previous time
-                    self.to_start()
                     restart = True
                     continue
                 else:
