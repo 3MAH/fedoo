@@ -101,7 +101,7 @@ defining the stiffness matrix.
     
     fedoo.constraint.DistributedForce
     fedoo.constraint.Pressure
-    fedoo.contraint.SurfaceForce
+    fedoo.constraint.SurfaceForce
 
 Some advanced constraints base on multiple linearized MPC are available in fedoo. 
 They can be created and add to the problem with the pb.bc.add method.
