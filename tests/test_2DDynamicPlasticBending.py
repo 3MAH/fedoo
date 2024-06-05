@@ -12,7 +12,7 @@ start = time()
 
 fd.ModelingSpace("2Dplane")
 
-NLGEOM =  'TL'
+NLGEOM = 'TL'
 #Units: N, mm, MPa
 h = 2
 w = 10
@@ -26,7 +26,7 @@ uimp = -0.5
 fd.mesh.rectangle_mesh(nx=101, ny=11,x_min=0, x_max=L, y_min=0, y_max=h, elm_type = 'quad4', name = "Domain")
 mesh = fd.Mesh["Domain"]
 
-crd = mesh.nodes 
+crd = mesh.nodes
 
 mat =1
 if mat == 0:

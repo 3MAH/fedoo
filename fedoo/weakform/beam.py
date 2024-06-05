@@ -154,7 +154,7 @@ class BeamEquilibrium(WeakFormBase):
                         element_vectors_old = initial_element_vectors
                         assembly.sv['RigidRotationMat'] = assembly.mesh.get_element_local_frame() 
                         assembly.sv['_NodesRotationMatrix'] = np.tile(np.eye(3), (assembly.mesh.n_nodes,1,1))
-                        assembly.sv['_InitialElementVectors'] = initial_element_vectors                        
+                        assembly.sv['_InitialElementVectors'] = initial_element_vectors
                                         
                     #coordinates of vector between node 1 and 2 for each element
                     element_vectors = mesh.nodes[mesh.elements[:,1]]-mesh.nodes[mesh.elements[:,0]] 
@@ -173,7 +173,7 @@ class BeamEquilibrium(WeakFormBase):
                     rigid_rotmat[:,0] = element_vectors/np.linalg.norm(element_vectors, axis=1).reshape(-1,1)
                     rigid_rotmat[:,1] = np.cross(rigid_rotmat_trial[:,2],rigid_rotmat[:,0])
                     rigid_rotmat[:,1] /= np.linalg.norm(rigid_rotmat[:,1], axis=1).reshape(-1,1)
-                    rigid_rotmat[:,2] = np.cross(rigid_rotmat[:,0], rigid_rotmat[:,1])                                                            
+                    rigid_rotmat[:,2] = np.cross(rigid_rotmat[:,0], rigid_rotmat[:,1])
                     
                     #compute local dof vector
                     #compute u2, rot1 and rot2, ie the rot dof at node 1 and 2
@@ -184,7 +184,7 @@ class BeamEquilibrium(WeakFormBase):
                     rot2 = Rotation.from_matrix(rigid_rotmat @ nodes_rotmat[mesh.elements[:,1]]).as_rotvec()
                     
                     #longitunal displacement in local coordinates (u2y=0)     
-                    u2x = np.linalg.norm(element_vectors, axis = 1) - np.linalg.norm(initial_element_vectors, axis = 1)                     
+                    u2x = np.linalg.norm(element_vectors, axis = 1) - np.linalg.norm(initial_element_vectors, axis = 1)
 
                     #build the local dof vector
                     dof_local = np.zeros(self.space.nvar*mesh.n_elm_nodes*mesh.n_elements)
@@ -264,14 +264,13 @@ class BeamEquilibrium(WeakFormBase):
 
         initial_stress = assembly.sv['BeamStress']
         
-        if initial_stress is not 0:    
+        if initial_stress is not 0:
             diff_op = diff_op + sum([eps[i].virtual * initial_stress[i] if eps[i] != 0 else 0 for i in range(6)])
 
         return diff_op
 
-
     def _get_generalized_stress_op(self):
-        #only for post treatment
-        eps = self.space.op_beam_strain()         
+        # only for post treatment
+        eps = self.space.op_beam_strain()
         Ke = self.properties.get_beam_rigidity()
         return [eps[i] * Ke[i] for i in range(6)]

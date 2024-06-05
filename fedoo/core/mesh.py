@@ -39,9 +39,9 @@ class Mesh(MeshBase):
         Elements table. elements[i] define the nodes associated to the ith element.
     elm_type: str
         Type of the element. The type of the element should be coherent with the shape of elements.
-    ndim:
+    ndim: int, optional:
         Dimension of the mesh. By default, ndim is deduced from the nodes coordinates using ndim = nodes.shape[1]
-    name: str
+    name: str, optional
         The name of the mesh
 
     Example
@@ -848,6 +848,8 @@ class Mesh(MeshBase):
     def deepcopy(self, name: str = "") -> "Mesh":
         """Make a deep copy of the mesh.
 
+        A shallow copy is kept for element_sets and node_sets.
+
         Parameters
         ----------
         name : str
@@ -861,6 +863,8 @@ class Mesh(MeshBase):
             self.nodes.copy(),
             self.elements.copy(),
             self.elm_type,
+            self.node_sets,
+            self.element_sets,
             self.ndim,
             name,
         )
@@ -881,7 +885,7 @@ class Mesh(MeshBase):
         -------
         The copied Mesh object.
         """
-        return Mesh(self.nodes, self.elements, self.elm_type, self.ndim, name)
+        return Mesh(self.nodes, self.elements, self.elm_type, self.node_sets, self.element_sets, self.ndim, name)
 
     def to_pyvista(self):
         if self.ndim != 3:
@@ -1173,9 +1177,9 @@ class Mesh(MeshBase):
         if data.shape[-1] == n_elm_gp * self.n_elements:
             data_type = "GaussPoint"
             test += 1
-        assert (
-            test
-        ), "Error: data doesn't match with the number of nodes, number of elements or number of gauss points."
+        if not(test):
+            raise ValueError("data doesn't match with the number of nodes, \
+                             number of elements or number of gauss points.")
         if test > 1:
             (
                 "Warning: kind of data is confusing. "

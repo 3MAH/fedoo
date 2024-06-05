@@ -132,8 +132,7 @@ class Problem(ProblemBase):
         if self.__X is 0: self.__X = np.ndarray( self.n_dof ) #empty array
         
         if len(self.__A.shape) == 2: #A is a matrix        
-            if len(self._dof_slave) == 0: print('Warning: no dirichlet boundary conditions applied. "Problem.apply_boundary_conditions()" is probably missing')          
-             # to delete after a careful validation of the other case
+            # to delete after a careful validation of the other case
             # self.__X[self._dof_slave] = self._Xbc[self._dof_slave]
             
             # Temp = self.__A[:,self._dof_slave].dot(self.__X[self._dof_slave])
