@@ -77,8 +77,8 @@ numpy.show_config()
 to check this, and use either *MKL* or *Accelerate* implementation of BLAS
 
 Also, make sure that the default number of threads is not leading to performance degradations: using explicit nu,ber of threads might help, see below for extensive control of threads number
-'''
-# Set the number of OpenMP threads
+```
+#Set the number of OpenMP threads
 import os
 
 os.environ["OMP_NUM_THREADS"] = "8"  # export OMP_NUM_THREADS=4
@@ -86,4 +86,4 @@ os.environ["OPENBLAS_NUM_THREADS"] = "8"  # export OPENBLAS_NUM_THREADS=8
 os.environ["MKL_NUM_THREADS"] = "8"  # export MKL_NUM_THREADS=8
 os.environ["VECLIB_MAXIMUM_THREADS"] = "8"  # export VECLIB_MAXIMUM_THREADS=8
 os.environ["NUMEXPR_NUM_THREADS"] = "8"  # export NUMEXPR_NUM_THREADS=8
-'''
+```
