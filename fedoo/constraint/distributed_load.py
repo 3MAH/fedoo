@@ -40,13 +40,14 @@ class Pressure(Assembly):
         Initial value of the pressure.
         Used only to define the initial pressure condition
         for non linear problems.
-    nlgeom: bool, str in {'UL', 'TL'}
+    nlgeom: bool, str in {'UL', 'TL'}, optional
         If True, the geometrical non linearities are activate when used in the
         context of NonLinearProblems (default updated lagrangian method)
         such as :mod:`fedoo.problem.NonLinearStatic` or
         :mod:`fedoo.problem.NonLinearNewmark`
         If nlgeom == 'UL' the updated lagrangian method is used (same as True)
         If nlgeom == 'TL' the total lagrangian method is used
+        If not defined, the problem.nlgeom attribute is used instead.
     name: str, optional
         Name of the created assembly.
 
@@ -81,7 +82,7 @@ class Pressure(Assembly):
         surface_mesh: Mesh,
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         self.pressure = pressure
@@ -110,7 +111,7 @@ class Pressure(Assembly):
         node_set: np.typing.ArrayLike[int] | str,
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         """Create a pressure assembly from a node set.
@@ -129,7 +130,7 @@ class Pressure(Assembly):
         element_set: np.typing.ArrayLike[int] | str,
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         """Create a pressure assembly from an element set.
@@ -212,7 +213,7 @@ class DistributedForce(Assembly):
         mesh: Mesh,
         force: list | np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         self.force = force
@@ -223,10 +224,6 @@ class DistributedForce(Assembly):
         self.nlgeom = nlgeom
         wf = DistributedLoad(self.force, nlgeom=self.nlgeom)
         Assembly.__init__(self, wf, mesh, name=name)
-        if nlgeom == "TL":
-            raise NotImplementedError(
-                "TL not implemented for distributed loads"
-            )
 
     def set_start(self, pb: ProblemBase):
         """Start a new time increment."""
@@ -271,7 +268,7 @@ class SurfaceForce(DistributedForce):
         node_set: np.typing.ArrayLike[int] | str,
         force: np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         """Create a SurfaceForce assembly from an node set.
@@ -292,7 +289,7 @@ class SurfaceForce(DistributedForce):
         element_set: np.typing.ArrayLike[int] | str,
         force: np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
-        nlgeom: bool = True,
+        nlgeom: bool | None = None,
         name: str = "",
     ):
         """Create a SurfaceForce assembly from an element set.

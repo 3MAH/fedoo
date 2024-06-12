@@ -8,6 +8,7 @@ class _LinearBase():
         if isinstance(assembly,str):
             assembly = Assembly.get_all()[assembly]
             
+        self.nlgeom=False
         assembly.initialize(self)                         
         A = assembly.get_global_matrix()
         B = 0             

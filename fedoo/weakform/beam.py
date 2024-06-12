@@ -67,6 +67,7 @@ class BeamEquilibrium(WeakFormBase):
     def initialize(self, assembly, pb):
         assembly.sv['BeamStrain'] = 0
         assembly.sv['BeamStress'] = 0
+        
         if self.nlgeom: 
             if self.nlgeom is True: 
                 self.nlgeom = 'UL'                

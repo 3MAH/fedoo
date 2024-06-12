@@ -10,6 +10,7 @@ import numpy as np
 if TYPE_CHECKING:
     from fedoo.core.base import AssemblyBase, ProblemBase
     from fedoo.core.diffop import DiffOp
+    from fedoo.core.modelingspace import ModelingSpace
 
 
 class ExternalPressure(WeakFormBase):
@@ -23,7 +24,11 @@ class ExternalPressure(WeakFormBase):
     """
 
     def __init__(
-        self, pressure: float | np.ndarray, name="", nlgeom=False, space=None
+        self,
+        pressure: float | np.ndarray,
+        name: str = "",
+        nlgeom: bool | None = False,
+        space: ModelingSpace | None = None
     ):
         WeakFormBase.__init__(self, name, space)
 
@@ -74,13 +79,17 @@ class ExternalPressure(WeakFormBase):
 
     def initialize(self, assembly: AssemblyBase, pb: ProblemBase):
         """Initialize the weakform for given assembly and pb."""
+
+        # initialize the nlgeom value in assembly._nlgeom
+        self._initialize_nlgeom(assembly, pb)
+
         assembly.sv["Normals"] = assembly.current.mesh.get_element_local_frame(
             n_elm_gp=assembly.n_elm_gp
         )[:, -1]  # normal should be the last axis
 
     def update(self, assembly: AssemblyBase, pb: ProblemBase):
         """Update the weakform for given assembly and pb."""
-        if self.nlgeom == "UL":
+        if assembly._nlgeom == "UL":
             # updated lagragian method -> update the mesh
             assembly.set_disp(pb.get_disp())
 
@@ -90,7 +99,7 @@ class ExternalPressure(WeakFormBase):
 
     def to_start(self, assembly: AssemblyBase, pb: ProblemBase):
         """Reset the weakform to the begining of the time iteration."""
-        if self.nlgeom == "UL":
+        if assembly._nlgeom == "UL":
             # updated lagragian method -> update the mesh
             assembly.set_disp(pb.get_disp())
 
@@ -109,7 +118,7 @@ class DistributedLoad(WeakFormBase):
 
     def __init__(
         self,
-        distributed_force: list | np.typing.ArrayLike,
+        distributed_force: list,
         name="", nlgeom=False,
         space=None
     ):
@@ -151,14 +160,20 @@ class DistributedLoad(WeakFormBase):
                  for i, u in enumerate(vec_u)]
             )
 
+    def initialize(self, assembly: AssemblyBase, pb: ProblemBase):
+        """Initialize the weakform for given assembly and pb."""
+
+        # initialize the nlgeom value in assembly._nlgeom
+        self._initialize_nlgeom(assembly, pb)
+
     def update(self, assembly: AssemblyBase, pb: ProblemBase):
         """Update the weakform for given assembly and pb."""
-        if self.nlgeom == "UL":
+        if assembly._nlgeom == "UL":
             # updated lagragian method -> update the mesh
             assembly.set_disp(pb.get_disp())
 
     def to_start(self, assembly: AssemblyBase, pb: ProblemBase):
         """Reset the weakform to the begining of the time iteration."""
-        if self.nlgeom == "UL":
+        if assembly._nlgeom == "UL":
             # updated lagragian method -> update the mesh
             assembly.set_disp(pb.get_disp())

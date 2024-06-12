@@ -8,20 +8,24 @@ try:
     from simcoon import simmit as sim
 
     USE_SIMCOON = True
-except ImportError:
+except ModuleNotFoundError:
     USE_SIMCOON = False
 
 import numpy as np
 
 
 class StressEquilibrium(WeakFormBase):
-    """
-    Weak formulation of the mechanical equilibrium equation for solid models (without volume force).
+    """Weak formulation of the mechanical equilibrium equation for solids.
 
-    * This weak form can be used for solid in 3D or using a 2D plane assumption (plane strain or plane stress).
-    * May include initial stress depending on the ConstitutiveLaw.
-    * This weak form accepts geometrical non linearities (with nlgeom = True, 'UL' or 'TL'). In this case the initial displacement is also considered.
-    * For Non-Linear Problem (material or geometrical non linearities), it is strongly recomanded to use the :mod:`fedoo.constitutivelaw.Simcoon` Constitutive Law
+    The main point to consider are:
+      * This weak form can be used for solid in 3D or using a 2D plane
+        assumption (plane strain or plane stress).
+      * Include initial stress for non linear problems or if defined in
+        the associated assembly.
+      * This weak form accepts geometrical non linearities if simcoon is
+        installed. (nlgeom should be in {True, 'UL', 'TL'}. In this case
+        the initial displacement is also
+        considered.
 
     Parameters
     ----------
@@ -29,16 +33,21 @@ class StressEquilibrium(WeakFormBase):
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
     name: str
         name of the WeakForm
-    nlgeom: bool (default = False), 'UL' or 'TL'
-        If True, the geometrical non linearities are activate when used in the context of NonLinearProblems (default updated lagrangian method)
-        such as :mod:`fedoo.problem.NonLinearStatic` or :mod:`fedoo.problem.NonLinearNewmark`
-        If nlgeom == 'UL' the updated lagrangian method is used (same as True)
-        If nlgeom == 'TL' the total lagrangian method is used
+    nlgeom: bool, 'UL' or 'TL', optional
+        If True, the geometrical non linearities are activate based on the
+        updated lagrangian method. This parameters is used only in the
+        context of NonLinearProblems such as
+        :mod:`fedoo.problem.NonLinearStatic` or
+        :mod:`fedoo.problem.NonLinearNewmark`.
+        If nlgeom == 'UL' the updated lagrangian method is used (same as True).
+        If nlgeom == 'TL' the total lagrangian method is used.
+        If not defined, the problem.nlgeom parameter is used instead.
     space: ModelingSpace
-        Modeling space associated to the weakform. If None is specified, the active ModelingSpace is considered.
+        Modeling space associated to the weakform. If None is specified,
+        the active ModelingSpace is considered.
     """
 
-    def __init__(self, constitutivelaw, name="", nlgeom=False, space=None):
+    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw[constitutivelaw]
 
@@ -54,26 +63,27 @@ class StressEquilibrium(WeakFormBase):
 
         self.constitutivelaw = constitutivelaw
 
-        # default option for non linear
         self.nlgeom = nlgeom
-        """Method used to treat the geometric non linearities. 
-            * Set to False if geometric non linarities are ignored (default). 
-            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
-            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
+        """Method used to treat the geometric non linearities.
+            * Set to False if geometric non linarities are ignored.
+            * Set to True or 'UL' to use the updated lagrangian method
+              (update the mesh)
+            * Set to 'TL' to use the total lagrangian method (base on the
+              initial mesh with initial displacement effet)
         """
 
-        self.corate = "log_inc"  
-        # 'log': logarithmic strain, 'jaumann': jaumann strain, 'green_naghdi', 'gn'...
+        self.corate = "log"
+        # 'log': logarithmic strain, 'jaumann': jaumann strain,
+        # or 'green_naghdi', 'gn', 'log_inc'...
 
-        self.assembly_options[
-            "assume_sym"
-        ] = True
+        self.assembly_options["assume_sym"] = True
         # internalForce weak form should be symmetric
         # (if TangentMatrix is symmetric)
         # -> need to be checked for general case
 
     def get_weak_equation(self, assembly, pb):
-        if self.nlgeom == "TL":  # add initial displacement effect
+        """Get the weak equation related to the current problem state."""
+        if assembly._nlgeom == "TL":  # add initial displacement effect
             eps = self.space.op_strain(assembly.sv["DispGradient"])
             initial_stress = assembly.sv["PK2"]
         else:
@@ -89,7 +99,7 @@ class StressEquilibrium(WeakFormBase):
                 eps[2] = self.space.variable("DispX") * np.divide(
                     1, rr, out=np.zeros_like(rr), where=rr != 0
                 )  # put zero if X==0 (division by 0)
-                ## eps[2] = self.space.variable('DispX') * (1/rr)                
+                # eps[2] = self.space.variable('DispX') * (1/rr)
 
         H = assembly.sv["TangentMatrix"]
 
@@ -103,7 +113,8 @@ class StressEquilibrium(WeakFormBase):
         )
 
         if initial_stress is not 0:
-            # if self.nlgeom:  # this term doesnt seem to improve convergence !
+            # this term doesnt seem to improve convergence !
+            # if assembly._nlgeom:
             #     DiffOp = DiffOp + \
             #         sum([0 if self._nl_strain_op_vir[i] == 0 else
             #              self._nl_strain_op_vir[i] * initial_stress[i]
@@ -122,7 +133,14 @@ class StressEquilibrium(WeakFormBase):
         return DiffOp
 
     def initialize(self, assembly, pb):
-        #### Put the require field to zeros if they don't exist in the assembly
+        """Initialize the weakform at the begining of a problem."""
+        # TO DO: change stress initialization to remove initial stress
+        # term in the global vector assembly
+
+        # initialize nlgeom value in assembly._nlgeom
+        self._initialize_nlgeom(assembly, pb)
+
+        # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
             assembly.sv["Stress"] = StressTensorList(
                 np.zeros((6, assembly.n_gauss_points), order="F")
@@ -135,53 +153,41 @@ class StressEquilibrium(WeakFormBase):
 
         if self.space._dimension == "2Daxi":
             assembly.sv["_R_gausspoints"] = assembly.mesh.convert_data(
-                                   assembly.mesh.nodes[:, 0],
-                                   "Node",
-                                   "GaussPoint",
-                                   n_elm_gp=assembly.n_elm_gp
-                                   )
+                assembly.mesh.nodes[:, 0],
+                "Node",
+                "GaussPoint",
+                n_elm_gp=assembly.n_elm_gp,
+            )
 
-        if self.nlgeom:
+        if assembly._nlgeom:
             if not (USE_SIMCOON):
-                raise NameError(
-                    "Simcoon library need to be installed to deal with geometric non linearities (nlgeom = True)"
+                raise ModuleNotFoundError(
+                    "Simcoon library need to be installed to deal with \
+                     geometric non linearities (nlgeom = True)"
                 )
-            if self.nlgeom is True:
-                self.nlgeom = "UL"
-            elif isinstance(self.nlgeom, str):
-                self.nlgeom = self.nlgeom.upper()
-                if self.nlgeom == "TL":
-                    assembly.sv["PK2"] = 0
-                    if self.space._dimension == "2Daxi":
-                        raise NotImplementedError(
-                            "'2Daxi' ModelingSpace is not implemented with total lagrangian formulation. Use update lagrangian instead."
-                        )
-                elif self.nlgeom != "UL":
-                    raise TypeError(
-                        "nlgeom should be in {'TL', 'UL', True, False}"
+            if assembly._nlgeom == "TL":
+                assembly.sv["PK2"] = 0
+                if self.space._dimension == "2Daxi":
+                    raise NotImplementedError(
+                        "'2Daxi' ModelingSpace is not implemented with \
+                         total lagrangian formulation. Use update \
+                         lagrangian instead."
                     )
-            else:
-                raise TypeError(
-                    "nlgeom should be in {'TL', 'UL', True, False}"
-                )
 
             # initialize non linear operator for strain
-            # op_grad_du = self.space.op_grad_u() #grad of displacement increment in the context of incremental problems
-            # if self.space.ndim == "3D":
-            #     #nl_strain_op_vir = 0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj)) using voigt notation and with a 2 factor on non diagonal terms
-            #     nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(3)]) for i in range(3)]
-            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(3)])]
-            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][0] for k in range(3)])]
-            #     nl_strain_op_vir += [sum([op_grad_du[k][1].virtual*op_grad_du[k][2] + op_grad_du[k][2].virtual*op_grad_du[k][1] for k in range(3)])]
-            # else:
-            #     nl_strain_op_vir = [sum([op_grad_du[k][i].virtual*op_grad_du[k][i] for k in range(2)]) for i in range(2)] + [0]
-            #     nl_strain_op_vir += [sum([op_grad_du[k][0].virtual*op_grad_du[k][1] + op_grad_du[k][1].virtual*op_grad_du[k][0] for k in range(2)])] + [0,0]
-
-            # self._nl_strain_op_vir = nl_strain_op_vir
+            # don't improve the convergence, but kept in case it may be usefull
+            # later.
+            # self._init_nl_strain_op_vir()
 
     def update(self, assembly, pb):
-        if self.nlgeom == "UL":
-            # if updated lagragian method -> update the mesh and recompute elementary op
+        """Update the weakform to the current state.
+
+        This method is applyed before the update of constutive law (stress and
+        stiffness matrix).
+        """
+        if assembly._nlgeom == "UL":
+            # if updated lagragian method
+            # -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())
 
         displacement = pb.get_dof_solution()
@@ -194,7 +200,6 @@ class StressEquilibrium(WeakFormBase):
             grad_values = assembly.get_grad_disp(displacement, "GaussPoint")
             if self.space._dimension == "2Daxi":
                 # mesh = assembly.current.mesh
-                # # grad_values[2][2] = mesh.convert_data(pb.get_disp()[0]/mesh.nodes[:,0], 'Node')
                 # eps_tt = np.divide(
                 #     pb.get_disp()[0],
                 #     mesh.nodes[:, 0],
@@ -205,15 +210,23 @@ class StressEquilibrium(WeakFormBase):
                 #     eps_tt, "Node", "GaussPoint"
                 # )
                 mesh = assembly.current.mesh
-                rr = mesh.convert_data(mesh.nodes[:, 0], 
-                                       "Node", 
-                                       "GaussPoint",
-                                       n_elm_gp = assembly.n_elm_gp)
-                
+                rr = mesh.convert_data(
+                    mesh.nodes[:, 0],
+                    "Node",
+                    "GaussPoint",
+                    n_elm_gp=assembly.n_elm_gp,
+                )
+
                 assembly.sv["_R_gausspoints"] = rr
-                # grad_values[2][2] = mesh.convert_data(pb.get_disp()[0]/mesh.nodes[:,0], 'Node')
+                # grad_values[2][2] = mesh.convert_data(
+                #     pb.get_disp()[0]/mesh.nodes[:, 0], 'Node')
                 grad_values[2][2] = np.divide(
-                    mesh.convert_data(pb.get_disp()[0], "Node", "GaussPoint", n_elm_gp = assembly.n_elm_gp),
+                    mesh.convert_data(
+                        pb.get_disp()[0],
+                        "Node",
+                        "GaussPoint",
+                        n_elm_gp=assembly.n_elm_gp,
+                    ),
                     rr,
                     out=np.zeros_like(rr),
                     where=rr != 0,
@@ -222,13 +235,18 @@ class StressEquilibrium(WeakFormBase):
             assembly.sv["DispGradient"] = grad_values
 
             # Compute the strain required for the constitutive law.
-            if self.nlgeom:
+            if assembly._nlgeom:
                 self._corate_func(self, assembly, pb)
             else:
                 _comp_linear_strain(self, assembly, pb)
 
     def update_2(self, assembly, pb):
-        if self.nlgeom == "TL":
+        """Update the weakform to the current state.
+
+        This method is applyed after the constutive law update (stress and
+        stiffness matrix).
+        """
+        if assembly._nlgeom == "TL":
             assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                 assembly.sv["F"]
             )
@@ -246,15 +264,17 @@ class StressEquilibrium(WeakFormBase):
                 assembly.sv["Stress"].asarray(),
                 self._convert_Lt_tag,
             )
-            # assembly.sv['TangentMatrix'] = sim.Lt_convert(assembly.sv['TangentMatrix'], assembly.sv['F'], assembly.sv['Stress'].asarray(), "DsigmaDe_JaumannDD_2_DSDE")
 
     def to_start(self, assembly, pb):
-        if self.nlgeom == "UL":
-            # if updated lagragian method -> reset the mesh to the begining of the increment
+        """Reset the current time increment."""
+        if assembly._nlgeom == "UL":
+            # if updated lagragian method -> reset the mesh to the begining
+            # of the increment
             assembly.set_disp(pb.get_disp())
 
     def set_start(self, assembly, pb):
-        if self.nlgeom:
+        """Start a new time increment."""
+        if assembly._nlgeom:
             if "DStrain" in assembly.sv:
                 # rotate strain and stress -> need to be checked
                 assembly.sv["Strain"] = StrainTensorList(
@@ -267,7 +287,8 @@ class StressEquilibrium(WeakFormBase):
                 assembly.sv["DStrain"] = StrainTensorList(
                     np.zeros((6, assembly.n_gauss_points), order="F")
                 )
-            # or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a nul sum
+            # or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a
+            # nul sum
 
             # update cauchy stress
             if (
@@ -277,21 +298,71 @@ class StressEquilibrium(WeakFormBase):
                 assembly.sv["Stress"] = StressTensorList(
                     sim.rotate_stress_R(stress, assembly.sv["DR"])
                 )
-                if self.nlgeom == "TL":
+                if assembly._nlgeom == "TL":
                     assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                         assembly.sv["F"]
                     )
 
+    # def _init_nl_strain_op_vir(self):
+    #     # initialize non linear operator for strain
+    #     # don't improve the convergence, but kept in case it may be usefull
+    #     # later.
+
+    #     op_grad_du = self.space.op_grad_u()
+    #     # grad of displacement increment in incremental problems
+
+    #     if self.space.ndim == "3D":
+    #         # using voigt notation and with a 2 factor on non diagonal terms:
+    #         # nl_strain_op_vir =
+    #         #      0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj))
+    #         nl_strain_op_vir = [
+    #             sum([op_grad_du[k][i].virtual * op_grad_du[k][i]
+    #                  for k in range(3)])
+    #             for i in range(3)
+    #         ]
+    #         nl_strain_op_vir += [
+    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][1]
+    #                  + op_grad_du[k][1].virtual * op_grad_du[k][0]
+    #                  for k in range(3)])
+    #         ]
+    #         nl_strain_op_vir += [
+    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][2]
+    #                  + op_grad_du[k][2].virtual * op_grad_du[k][0]
+    #                  for k in range(3)])
+    #         ]
+    #         nl_strain_op_vir += [
+    #             sum([op_grad_du[k][1].virtual * op_grad_du[k][2]
+    #                  + op_grad_du[k][2].virtual * op_grad_du[k][1]
+    #                  for k in range(3)])
+    #         ]
+    #     else:
+    #         nl_strain_op_vir = [
+    #             sum([op_grad_du[k][i].virtual * op_grad_du[k][i]
+    #                  for k in range(2)])
+    #             for i in range(2)
+    #         ] + [0]
+    #         nl_strain_op_vir += [
+    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][1]
+    #                  + op_grad_du[k][1].virtual * op_grad_du[k][0]
+    #                  for k in range(2)])
+    #         ] + [0, 0]
+
+    #     self._nl_strain_op_vir = nl_strain_op_vir
+
     @property
     def corate(self):
-        """
-        Properties defining the way strain is treated in finite strain problem (using a weakform with nlgeom = True)
-        corate can take the following str values:
-            * "log" (default): exact logarithmic strain (strain is recomputed at each iteration)
-            * "jaumann": Strain using the Jaumann derivative (strain is incremented)
-            * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative (strain is incremented)
-        if nlgeom is False, this property has no effect.
+        """Corotational strain mesure for strain.
 
+        Properties defining the way strain is treated in finite strain problem
+        (using a weakform with nlgeom = True)
+        corate can take the following str values:
+            * "log" (default): exact logarithmic strain (strain is recomputed
+              at each iteration)
+            * "jaumann": Strain using the Jaumann derivative (strain is
+              incremented)
+            * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative
+              (strain is incremented)
+        if nlgeom is False, this property has no effect.
         """
         return self._corate
 
@@ -318,7 +389,8 @@ class StressEquilibrium(WeakFormBase):
             self._convert_Lt_tag = "DsigmaDe_2_DSDE"
         else:
             raise NameError(
-                'corate value not understood. Choose between "log", "log_R", "green_naghdi" or "jaumann"'
+                'corate value not understood. Choose between "log", "log_R", \
+                "green_naghdi" or "jaumann"'
             )
         self._corate = value
 
@@ -331,9 +403,9 @@ def _comp_linear_strain(wf, assembly, pb):
     ), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv["DispGradient"]
 
-    strain = np.empty(
-        (6, len(grad_values[0][0])), order="F"
-    ) # order = F for compatibility with simcoon without performance loss in other cases
+    strain = np.empty((6, len(grad_values[0][0])), order="F")
+    # order = F for compatibility with simcoon without performance loss
+    # in other cases
     strain[0:3] = [grad_values[i][i] for i in range(3)]
     strain[3] = grad_values[0][1] + grad_values[1][0]
     strain[4] = grad_values[0][2] + grad_values[2][0]
@@ -474,7 +546,7 @@ def _comp_gl_strain(wf, assembly, pb):
     else:
         grad_values = assembly.sv["DispGradient"]
         # GL strain tensor
-        # possibility to be improve from simcoon functions 
+        # possibility to be improve from simcoon functions
         # to get the logarithmic strain tensor...
         strain = [
             grad_values[i][i]

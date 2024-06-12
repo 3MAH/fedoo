@@ -6,7 +6,7 @@ from typing import Callable, Any
 
 
 class _NonLinearBase:
-    def __init__(self, assembly, name="MainProblem"):
+    def __init__(self, assembly, nlgeom=False, name="MainProblem"):
         if isinstance(assembly, str):
             assembly = Assembly.get_all()[assembly]
 
@@ -39,6 +39,7 @@ class _NonLinearBase:
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
+        self.nlgeom = nlgeom
         self.t0 = 0
         self.tmax = 1
         self.__iter = 0

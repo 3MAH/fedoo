@@ -91,6 +91,27 @@ class WeakFormBase:
         else: 
             return NotImplemented
 
+    def _initialize_nlgeom(self, assembly, pb):
+        if self.nlgeom is None:
+            nlgeom = pb.nlgeom
+        else:
+            nlgeom = self.nlgeom
+
+        if isinstance(nlgeom, bool):
+            if nlgeom:
+                assembly._nlgeom = 'UL'
+            else:
+                assembly._nlgeom = False
+            return
+        else:
+            if isinstance(nlgeom, str):
+                assembly._nlgeom = nlgeom.upper()
+                if assembly._nlgeom in ["UL", "TL"]:
+                    return
+
+        raise ValueError(
+            "nlgeom should be in {'TL', 'UL', True, False}"
+        )
 
     @staticmethod
     def sum(wf1, wf2):
@@ -98,8 +119,7 @@ class WeakFormBase:
             return wf1 + wf2
         else:
             return NotImplemented
-    
-    
+
     def get_weak_equation(self, assembly):
         return NotImplemented
             
