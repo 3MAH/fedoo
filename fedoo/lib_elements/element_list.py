@@ -1,17 +1,18 @@
 import numpy as np
 from numpy import linalg
 
+from fedoo.lib_elements.finite_difference_1d import Node, Parameter
+
 # from fedoo.lib_elements.beam import *
 # from fedoo.lib_elements.cohesive import *
-from fedoo.lib_elements.hexahedron import *
-from fedoo.lib_elements.line import *
+from fedoo.lib_elements.hexahedron import Hex8, Hex20
+from fedoo.lib_elements.line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
+from fedoo.lib_elements.quadrangle import Quad4, Quad8, Quad9
 
 # from fedoo.lib_elements.plate import *
-from fedoo.lib_elements.tetrahedron import *
-from fedoo.lib_elements.triangle import *
-from fedoo.lib_elements.quadrangle import *
-from fedoo.lib_elements.wedge import *
-from fedoo.lib_elements.finite_difference_1d import *
+from fedoo.lib_elements.tetrahedron import Tet4, Tet10
+from fedoo.lib_elements.triangle import Tri3, Tri3Bubble, Tri6
+from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
 _dict_elements = {
     "lin2": Lin2,

@@ -1,7 +1,9 @@
-import fedoo as fd
-import numpy as np
-from fedoo.util.abaqus_inp import *
 import time
+
+import numpy as np
+
+import fedoo as fd
+from fedoo.util.abaqus_inp import ReadINP
 
 # ------------------------------------------------------------------------------
 # Défine inplane 2D periodic boundary conditions for a composite ply using a 3D

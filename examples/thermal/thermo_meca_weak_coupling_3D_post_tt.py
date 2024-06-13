@@ -1,10 +1,12 @@
-from fedoo import *
-import numpy as np
-from time import time
 import os
+from time import time
+
+import numpy as np
 import pylab as plt
-from numpy import linalg
 import pyvista as pv
+from numpy import linalg
+
+from fedoo import Mesh
 
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
