@@ -1,35 +1,37 @@
 # derive de ConstitutiveLaw
 # This law should be used with an InternalForce WeakForm
 
-USE_SIMCOON = False
-if USE_SIMCOON:
-    try:
-        from simcoon import simmit as sim
+try:
+    from simcoon import simmit as sim
 
-        USE_SIMCOON = True
-    except:
-        USE_SIMCOON = False
-        print(
-            "WARNING: Simcoon library not found. The simcoon constitutive law is disabled."
-        )
+    USE_SIMCOON = True
+except Exception:
+    USE_SIMCOON = False
+    print(
+        "WARNING: Simcoon library not found. The simcoon constitutive law is disabled."
+    )
 
 if USE_SIMCOON:
-    from fedoo.core.base import MeshBase as Mesh
-    from fedoo.constitutivelaw.umat_simcoon import Simcoon
-    from fedoo.weakform.stress_equilibrium import StressEquilibrium
-    from fedoo.core.assembly import Assembly
-    from fedoo.problem.non_linear import NonLinear
+    import os
+    import re
+    import time
+
+    import numpy as np
+    import pandas as pd
+
+    from fedoo.constitutivelaw.simcoon_umat import Simcoon
 
     # from fedoo.core.base import BoundaryCondition
     from fedoo.constraint.periodic_bc import (
         PeriodicBC,
-    )  # , DefinePeriodicBoundaryConditionNonPerioMesh
+    )
+    from fedoo.core.assembly import Assembly
+    from fedoo.core.base import MeshBase as Mesh
+
+    # , DefinePeriodicBoundaryConditionNonPerioMesh
     from fedoo.homogen.tangent_stiffness import get_tangent_stiffness
-    import numpy as np
-    import os
-    import re
-    import time
-    import pandas as pd
+    from fedoo.problem.non_linear import NonLinear
+    from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
     def Read_outputfile(path_data, outputdat_file):
         file = path_data + "/" + outputdat_file
