@@ -12,9 +12,7 @@ def hole_plate_mesh(
     plate_height: float = 100,
     hole_radius: float = 20,
 ) -> fd.Mesh:
-    assert (
-        plate_width == plate_height
-    ), "Plate height and width must be the same"
+    assert plate_width == plate_height, "Plate height and width must be the same"
     mesh = fd.mesh.hole_plate_mesh(
         (n_nodes_x // 2) + 1,
         (n_nodes_y // 2) + 1,

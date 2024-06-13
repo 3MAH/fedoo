@@ -16,9 +16,7 @@ class _NonLinearBase:
         # D = assembling.get_global_vector() #initial stress vector
         D = 0  # initial stress vector #will be initialized later
         self.print_info = 1  # print info of NR convergence during solve
-        self._U = (
-            0  # displacement at the end of the previous converged increment
-        )
+        self._U = 0  # displacement at the end of the previous converged increment
         self._dU = 0  # displacement increment
 
         self._err0 = None  # initial error for NR error estimation
@@ -44,9 +42,7 @@ class _NonLinearBase:
         self.__iter = 0
         self.__compteurOutput = 0
 
-        self.interval_output = (
-            -1
-        )  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
+        self.interval_output = -1  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
@@ -113,9 +109,7 @@ class _NonLinearBase:
     def elastic_prediction(self):
         # update the boundary conditions with the time variation
         time_end = self.time + self.dtime
-        t_fact = (time_end - self.t0) / (
-            self.tmax - self.t0
-        )  # adimensional time
+        t_fact = (time_end - self.t0) / (self.tmax - self.t0)  # adimensional time
         t_fact_old = (self.time - self.t0) / (self.tmax - self.t0)
 
         self.apply_boundary_conditions(t_fact, t_fact_old)
@@ -162,9 +156,7 @@ class _NonLinearBase:
 
     def to_start(self):
         self._dU = 0
-        self._err0 = self.nr_parameters[
-            "err0"
-        ]  # initial error for NR error estimation
+        self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
 
     def NewtonRaphsonIncrement(self):
@@ -201,9 +193,7 @@ class _NonLinearBase:
         self._U = 0
         self._dU = 0
 
-        self._err0 = self.nr_parameters[
-            "err0"
-        ]  # initial error for NR error estimation
+        self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.t0 = 0
         self.tmax = 1
         self.__iter = 0
@@ -230,9 +220,7 @@ class _NonLinearBase:
         dof_free = self._dof_free
         if len(dof_free) == 0:
             return 0
-        if (
-            self._err0 is None
-        ):  # if self._err0 is None -> initialize the value of err0
+        if self._err0 is None:  # if self._err0 is None -> initialize the value of err0
             if self.nr_parameters["criterion"] == "Displacement":
                 self._err0 = np.linalg.norm(
                     (self._U + self._dU)[dof_free], norm_type
@@ -249,14 +237,12 @@ class _NonLinearBase:
             if self.nr_parameters["criterion"] == "Displacement":
                 # return np.max(np.abs(self.get_X()[dof_free]))/self._err0  #Displacement criterion
                 return (
-                    np.linalg.norm(self.get_X()[dof_free], norm_type)
-                    / self._err0
+                    np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
                 )  # Displacement criterion
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
                 if self.get_D() is 0:
                     return (
-                        np.linalg.norm(self.get_B()[dof_free], norm_type)
-                        / self._err0
+                        np.linalg.norm(self.get_B()[dof_free], norm_type) / self._err0
                     )
                 else:
                     return (
@@ -279,9 +265,7 @@ class _NonLinearBase:
                     return (
                         np.linalg.norm(
                             self.get_X()[dof_free]
-                            * (
-                                self.get_B()[dof_free] + self.get_D()[dof_free]
-                            ),
+                            * (self.get_B()[dof_free] + self.get_D()[dof_free]),
                             norm_type,
                         )
                         / self._err0
@@ -324,9 +308,7 @@ class _NonLinearBase:
         self.elastic_prediction()
         for subiter in range(max_subiter):  # newton-raphson iterations
             # update Stress and initial displacement and Update stiffness matrix
-            self.update(
-                compute="vector"
-            )  # update the out of balance force vector
+            self.update(compute="vector")  # update the out of balance force vector
             self.updateD()  # required to compute the NR error
 
             # Check convergence
@@ -439,9 +421,7 @@ class _NonLinearBase:
         if exec_callback_at_each_iter is not None:
             self.exec_callback_at_each_iter = exec_callback_at_each_iter
         if interval_output is None:
-            interval_output = (
-                self.interval_output
-            )  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
+            interval_output = self.interval_output  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
 
         # if kargs: #not empty
         #    raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
@@ -455,9 +435,7 @@ class _NonLinearBase:
         if self.save_at_exact_time:
             next_time = self.t0 + interval_output
         else:
-            next_time = (
-                self.tmax
-            )  # next_time is the next exact time where the algorithm have to stop for output purpose
+            next_time = self.tmax  # next_time is the next exact time where the algorithm have to stop for output purpose
 
         self.init_bc_start_value()
 
@@ -470,8 +448,7 @@ class _NonLinearBase:
 
         while self.time < self.tmax - self.err_num:
             save_results = (self.time == next_time) or (
-                self.save_at_exact_time == False
-                and self.__iter % interval_output == 0
+                self.save_at_exact_time == False and self.__iter % interval_output == 0
             )
 
             # update next_time

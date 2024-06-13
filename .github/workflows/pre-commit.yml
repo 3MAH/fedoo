@@ -9,41 +9,9 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
 
-    permissions:
-      # Give the default GITHUB_TOKEN write permission to commit and push the
-      # added or changed files to the repository.
-      contents: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch all history for branches
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-
-      - name: Run pre-commit
-        id: pre-commit
-        uses: pre-commit/action@v3.0.1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
-        continue-on-error: true
-
-      - name: Check for changes
-        id: git_diff
-        run: |
-          git diff --exit-code || echo "has_changes=true" >> $GITHUB_ENV
-
-      - name: Commit and push changes
-        if: env.has_changes == 'true'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Apply pre-commit hooks"
-          git push origin HEAD:${{ github.head_ref }}
-
-      - name: Fail if pre-commit failed
-        if: steps.pre-commit.outcome == 'failure'
-        run: exit 1
