@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout branch
+        run: git checkout ${{ github.ref }}
       - uses: actions/setup-python@v5
       - uses: pre-commit/action@v3.0.1
         with:
@@ -27,7 +29,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Apply pre-commit fixes"
-          git push
+          git push origin HEAD:${{ github.ref }}
 
       - name: Fail if pre-commit failed
         if: steps.pre-commit.outcome == 'failure'
