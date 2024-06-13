@@ -4,6 +4,7 @@ Created on Thu Jan 23 15:27:43 2020
 
 @author: Etienne
 """
+
 # from fedoo.core.base   import ProblemBase
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
@@ -112,9 +113,7 @@ class RigidTie(BCBase):
     def generate(self, problem, t_fact=1, t_fact_old=None):
         mesh = problem.mesh
         var_cd = self.var_cd
-        node_cd = (
-            self.node_cd
-        )  # node_cd[0] -> node defining center of rotation
+        node_cd = self.node_cd  # node_cd[0] -> node defining center of rotation
         list_nodes = self.list_nodes
 
         # rot_center = node_cd[0]
@@ -131,10 +130,7 @@ class RigidTie(BCBase):
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
-                [
-                    problem.get_dof_solution()[dof] + problem._Xbc[dof]
-                    for dof in dof_cd
-                ]
+                [problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd]
             )
 
         disp_ref = dof_ref[:3]  # reference displacement
@@ -335,9 +331,7 @@ class RigidTie2D(BCBase):
     def generate(self, problem, t_fact=1, t_fact_old=None):
         mesh = problem.mesh
         var_cd = self.var_cd
-        node_cd = (
-            self.node_cd
-        )  # node_cd[0] -> node defining center of rotation
+        node_cd = self.node_cd  # node_cd[0] -> node defining center of rotation
         list_nodes = self.list_nodes
 
         # rot_center = node_cd[0]
@@ -352,10 +346,7 @@ class RigidTie2D(BCBase):
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
-                [
-                    problem.get_dof_solution()[dof] + problem._Xbc[dof]
-                    for dof in dof_cd
-                ]
+                [problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd]
             )
 
         disp_ref = dof_ref[:2]  # reference displacement

@@ -33,9 +33,7 @@ class _BlocSparse:
             self.col = savedBlocStructure["col"]
             self.row = savedBlocStructure["row"]
             self.blocShape = savedBlocStructure["blocShape"]
-            self.Matrix_convertCOOtoCSR = savedBlocStructure[
-                "Matrix_convertCOOtoCSR"
-            ]
+            self.Matrix_convertCOOtoCSR = savedBlocStructure["Matrix_convertCOOtoCSR"]
             self.indices_csr = savedBlocStructure["indices_csr"]
             self.indptr_csr = savedBlocStructure["indptr_csr"]
 
@@ -82,11 +80,9 @@ class _BlocSparse:
                     B.data.reshape(-1, 1, NnzColPerRowB)
                 )  # at each PG we build a nbNode x nbNode matrix
             else:
-                new_data = (
-                    coef * A.data.reshape(-1, NnzColPerRowA, 1)
-                ).reshape(n_elm_gp, -1, NnzColPerRowA).transpose(
-                    (1, 2, 0)
-                ) @ B.data.reshape(
+                new_data = (coef * A.data.reshape(-1, NnzColPerRowA, 1)).reshape(
+                    n_elm_gp, -1, NnzColPerRowA
+                ).transpose((1, 2, 0)) @ B.data.reshape(
                     n_elm_gp, -1, NnzColPerRowB
                 ).transpose(
                     1, 0, 2
@@ -97,9 +93,9 @@ class _BlocSparse:
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
-                self.data[rowBloc][colBloc][
-                    :, list_ind_row, list_ind_row
-                ] += new_data.sum(axis=2)
+                self.data[rowBloc][colBloc][:, list_ind_row, list_ind_row] += (
+                    new_data.sum(axis=2)
+                )
             else:
                 if self.data[rowBloc][colBloc] is 0:
                     self.data[rowBloc][colBloc] = new_data
@@ -129,25 +125,19 @@ class _BlocSparse:
                     B.data.reshape(-1, 1, NnzColPerRowB)
                 )  # at each PG we build a nbNode x nbNode matrix
             else:
-                new_data = coef_A_data.reshape(
-                    n_elm_gp, -1, NnzColPerRowA
-                ).transpose((1, 2, 0)) @ B.data.reshape(
-                    n_elm_gp, -1, NnzColPerRowB
-                ).transpose(
+                new_data = coef_A_data.reshape(n_elm_gp, -1, NnzColPerRowA).transpose(
+                    (1, 2, 0)
+                ) @ B.data.reshape(n_elm_gp, -1, NnzColPerRowB).transpose(
                     1, 0, 2
                 )  # at each element we build a nbNode x nbNode matrix
 
-            if (
-                mat_lumping
-            ):  # only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
+            if mat_lumping:  # only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
                 if self.data[rowBloc][colBloc] is 0:
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
-                self.data[rowBloc][colBloc][
-                    :, list_ind_row, list_ind_row
-                ] += new_data.sum(
-                    axis=2
+                self.data[rowBloc][colBloc][:, list_ind_row, list_ind_row] += (
+                    new_data.sum(axis=2)
                 )  # set value only to diag terms
             else:
                 if self.data[rowBloc][colBloc] is 0:
@@ -172,9 +162,7 @@ class _BlocSparse:
                 NelA = A.shape[0] // self.nbpg
                 NelB = B.shape[0] // self.nbpg
                 self.row = (
-                    A.indices[0 : NelA * NnzColPerRowA].reshape(
-                        NelA, NnzColPerRowA, 1
-                    )
+                    A.indices[0 : NelA * NnzColPerRowA].reshape(NelA, NnzColPerRowA, 1)
                     @ np.ones((1, NnzColPerRowB), np.int32)
                 ).ravel()
                 self.col = (
@@ -311,8 +299,7 @@ class _BlocSparse:
                     [
                         sparse.csr_matrix(
                             (
-                                self.Matrix_convertCOOtoCSR
-                                @ self.data[i][j].ravel(),
+                                self.Matrix_convertCOOtoCSR @ self.data[i][j].ravel(),
                                 self.indices_csr,
                                 self.indptr_csr,
                             ),
@@ -320,9 +307,7 @@ class _BlocSparse:
                             copy=False,
                         )
                         if self.data[i][j] is not 0
-                        else sparse.csr_matrix(
-                            (self.blocShape[0], self.blocShape[1])
-                        )
+                        else sparse.csr_matrix((self.blocShape[0], self.blocShape[1]))
                         for j in range(self.nbBlocCol)
                     ]
                     for i in range(self.nbBlocRow)
@@ -491,9 +476,7 @@ def bloc_matrix(M, nb_bloc, position):
     M = M.tocsr()
 
     indptr = np.zeros(np.shape(M)[0] * nb_bloc[0] + 1, dtype=int)
-    indptr[
-        var_vir * np.shape(M)[0] : (var_vir + 1) * np.shape(M)[0] + 1
-    ] = M.indptr
+    indptr[var_vir * np.shape(M)[0] : (var_vir + 1) * np.shape(M)[0] + 1] = M.indptr
     indptr[(var_vir + 1) * np.shape(M)[0] + 1 :] = indptr[
         (var_vir + 1) * np.shape(M)[0]
     ]
@@ -521,9 +504,7 @@ def ColumnBlocMatrix(listBloc, nb_bloc, position):
     for var in range(nb_bloc):
         if var in position:
             Mat = listBloc[position.index(var)]
-            indptr[var * NbRowPerBloc : (var + 1) * NbRowPerBloc + 1] = (
-                Mat.indptr + ind
-            )
+            indptr[var * NbRowPerBloc : (var + 1) * NbRowPerBloc + 1] = Mat.indptr + ind
             ind += len(Mat.indices)
         else:
             indptr[var * NbRowPerBloc : (var + 1) * NbRowPerBloc + 1] = ind
@@ -537,9 +518,7 @@ def ColumnBlocMatrix(listBloc, nb_bloc, position):
 def RowBlocMatrix(listBloc, nb_bloc, position, coef):
     return sum(
         [
-            bloc_matrix(
-                coef[ii] * listBloc[ii], (1, nb_bloc), (0, position[ii])
-            )
+            bloc_matrix(coef[ii] * listBloc[ii], (1, nb_bloc), (0, position[ii]))
             for ii in range(len(listBloc))
         ]
     )

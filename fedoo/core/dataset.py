@@ -76,18 +76,10 @@ class DataSet:
             elif data_type == "scalar":
                 self.scalar_data = data
             elif data_type == "all":
-                self.node_data = {
-                    k: v for k, v in data.items() if k[-2:] == "nd"
-                }
-                self.element_data = {
-                    k: v for k, v in data.items() if k[-2:] == "el"
-                }
-                self.gausspoint_data = {
-                    k: v for k, v in data.items() if k[-2:] == "gp"
-                }
-                self.scalar_data = {
-                    k: v for k, v in data.items() if k[-2:] == "sc"
-                }
+                self.node_data = {k: v for k, v in data.items() if k[-2:] == "nd"}
+                self.element_data = {k: v for k, v in data.items() if k[-2:] == "el"}
+                self.gausspoint_data = {k: v for k, v in data.items() if k[-2:] == "gp"}
+                self.scalar_data = {k: v for k, v in data.items() if k[-2:] == "sc"}
 
         self.meshplot = None
         self.meshplot_gp = None  # a mesh with discontinuity between each element to plot gauss points field
@@ -114,12 +106,8 @@ class DataSet:
         crd = self.mesh.nodes
         elm = self.mesh.elements
         nodes_gp = crd[elm.ravel()]
-        element_gp = np.arange(elm.shape[0] * elm.shape[1]).reshape(
-            -1, elm.shape[1]
-        )
-        self.mesh_gp = self.mesh.__class__(
-            nodes_gp, element_gp, self.mesh.elm_type
-        )
+        element_gp = np.arange(elm.shape[0] * elm.shape[1]).reshape(-1, elm.shape[1])
+        self.mesh_gp = self.mesh.__class__(nodes_gp, element_gp, self.mesh.elm_type)
         self.meshplot_gp = self.mesh_gp.to_pyvista()
 
     def plot(
@@ -253,9 +241,7 @@ class DataSet:
                     ).T
                 ).T
                 # meshplot.point_data['Disp'] = U
-                meshplot.points = as_3d_coordinates(
-                    self.mesh_gp.nodes + scale * U
-                )
+                meshplot.points = as_3d_coordinates(self.mesh_gp.nodes + scale * U)
 
                 if show_nodes:
                     # compute center (dont use meshplot to compute center because
@@ -291,9 +277,7 @@ class DataSet:
             if data_type == "Node":
                 data = data[:n_physical_nodes]
 
-            center = 0.5 * (
-                meshplot.points.min(axis=0) + meshplot.points.max(axis=0)
-            )
+            center = 0.5 * (meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
 
         backgroundplotter = True
         if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
@@ -342,9 +326,7 @@ class DataSet:
         # center = meshplot.center
 
         pl.camera.SetFocalPoint(center)
-        pl.camera.position = tuple(
-            center + np.array([0, 0, 2 * meshplot.length])
-        )
+        pl.camera.position = tuple(center + np.array([0, 0, 2 * meshplot.length]))
         pl.camera.up = tuple([0, 1, 0])
         if roll != 0:
             pl.camera.Roll(roll)
@@ -438,9 +420,7 @@ class DataSet:
                     )
                 )
 
-            pl.add_arrows(
-                centers, normals, mag=show_normals, show_scalar_bar=False
-            )
+            pl.add_arrows(centers, normals, mag=show_normals, show_scalar_bar=False)
 
         # required to avoid bug for non adapted clipping range
         pl.camera.reset_clipping_range()
@@ -460,9 +440,7 @@ class DataSet:
 
         return pl
 
-    def get_data(
-        self, field, component=None, data_type=None, return_data_type=False
-    ):
+    def get_data(self, field, component=None, data_type=None, return_data_type=False):
         if data_type is None:  # search if field exist somewhere
             if field in self.node_data:
                 data_type = "Node"
@@ -487,9 +465,7 @@ class DataSet:
                 )
 
         if (
-            component is not None
-            and not (np.isscalar(data))
-            and len(data.shape) > 1
+            component is not None and not (np.isscalar(data)) and len(data.shape) > 1
         ):  # if data is scalar or 1d array, component ignored
             if component == "norm":
                 data = np.linalg.norm(data, axis=0)
@@ -649,9 +625,7 @@ class DataSet:
                         )
                 else:
                     if load_mesh:
-                        self.mesh = Mesh.read(
-                            os.path.splitext(filename)[0] + ".vtk"
-                        )
+                        self.mesh = Mesh.read(os.path.splitext(filename)[0] + ".vtk")
                     data = np.load(filename)
 
                 self.load_dict(data)
@@ -670,15 +644,9 @@ class DataSet:
         """Load data from a dict generated with the to_dict method.
         The old data are erased."""
         self.node_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "nd"}
-        self.element_data = {
-            k[:-3]: v for k, v in data.items() if k[-2:] == "el"
-        }
-        self.gausspoint_data = {
-            k[:-3]: v for k, v in data.items() if k[-2:] == "gp"
-        }
-        self.scalar_data = {
-            k[:-3]: v.item() for k, v in data.items() if k[-2:] == "sc"
-        }
+        self.element_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "el"}
+        self.gausspoint_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "gp"}
+        self.scalar_data = {k[:-3]: v.item() for k, v in data.items() if k[-2:] == "sc"}
         # self.scalar_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'sc'}
 
     def to_pandas(self) -> pandas.DataFrame:
@@ -698,9 +666,7 @@ class DataSet:
                 if len(v.shape) == 1:
                     out[k] = v
                 elif len(v.shape) == 2:
-                    out.update(
-                        {k + "_" + str(i): v[i] for i in range(v.shape[0])}
-                    )
+                    out.update({k + "_" + str(i): v[i] for i in range(v.shape[0])})
                 else:
                     return NotImplemented
 
@@ -708,9 +674,7 @@ class DataSet:
                 if len(v.shape) == 1:
                     out[k] = v
                 elif len(v.shape) == 2:
-                    out.update(
-                        {k + "_" + str(i): v[i] for i in range(v.shape[0])}
-                    )
+                    out.update({k + "_" + str(i): v[i] for i in range(v.shape[0])})
                 else:
                     return NotImplemented
 
@@ -718,9 +682,7 @@ class DataSet:
                 if len(v.shape) == 1:
                     out[k] = v
                 elif len(v.shape) == 2:
-                    out.update(
-                        {k + "_" + str(i): v[i] for i in range(v.shape[0])}
-                    )
+                    out.update({k + "_" + str(i): v[i] for i in range(v.shape[0])})
                 else:
                     return NotImplemented
 
@@ -764,9 +726,7 @@ class DataSet:
             if save_mesh:
                 self.save_mesh(filename)
         else:
-            raise NameError(
-                "Pandas lib need to be installed for excel export."
-            )
+            raise NameError("Pandas lib need to be installed for excel export.")
 
     def to_vtk(
         self, filename: str, binary: bool = True, gp_data_to_node: bool = True
@@ -812,15 +772,11 @@ class DataSet:
 
             if gp_data_to_node:
                 for key in self.gausspoint_data:
-                    pv_data.point_data[key] = self.get_data(
-                        key, data_type="Node"
-                    ).T
+                    pv_data.point_data[key] = self.get_data(key, data_type="Node").T
 
             return pv_data
         else:
-            raise TypeError(
-                "Mesh should be defined befort converted to pyvista object"
-            )
+            raise TypeError("Mesh should be defined befort converted to pyvista object")
 
     def to_msh(self, filename: str) -> None:
         """Write a msh (gmsh format) file with the mesh and associated data
@@ -840,9 +796,7 @@ class DataSet:
         out = {k + "_nd": v for k, v in self.node_data.items()}
         out.update({k + "_el": v for k, v in self.element_data.items()})
         out.update({k + "_gp": v for k, v in self.gausspoint_data.items()})
-        out.update(
-            {k + "_sc": np.array(v) for k, v in self.scalar_data.items()}
-        )
+        out.update({k + "_sc": np.array(v) for k, v in self.scalar_data.items()})
 
         return out
 
@@ -911,9 +865,7 @@ class DataSet:
             self.save_mesh(filename)
 
     @staticmethod
-    def read(
-        filename: str, file_format: str = "fdz"
-    ) -> DataSet | MultiFrameDataSet:
+    def read(filename: str, file_format: str = "fdz") -> DataSet | MultiFrameDataSet:
         return read_data(filename, file_format="fdz")
 
     @property
@@ -1304,14 +1256,12 @@ class MultiFrameDataSet(DataSet):
                     if "Disp" in self.node_data:
                         crd_points = as_3d_coordinates(
                             self.mesh.physical_nodes
-                            + scale
-                            * self.node_data["Disp"].T[:n_physical_nodes]
+                            + scale * self.node_data["Disp"].T[:n_physical_nodes]
                         )
             else:
                 if "Disp" in self.node_data:
                     meshplot.points = as_3d_coordinates(
-                        crd
-                        + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                        crd + scale * self.node_data["Disp"].T[:n_physical_nodes]
                     )
                     crd_points = meshplot.points  # alias
 
@@ -1391,9 +1341,7 @@ class MultiFrameDataSet(DataSet):
             t, data = self.get_history(["Time", field], [None, indice])
             plt.plot(t, data)
         else:
-            raise NameError(
-                "Matplotlib should be installed to plot the data history"
-            )
+            raise NameError("Matplotlib should be installed to plot the data history")
 
     def get_all_frame_lim(self, field, component=0, data_type=None, scale=1):
         ndim = self.mesh.ndim
@@ -1403,18 +1351,14 @@ class MultiFrameDataSet(DataSet):
 
         for i in range(0, self.n_iter):
             self.load(i)
-            data = self.get_data(field, component, data_type)[
-                :n_physical_nodes
-            ]
+            data = self.get_data(field, component, data_type)[:n_physical_nodes]
             clim = [
                 np.min([data.min(), clim[0]]),
                 np.max([data.max(), clim[1]]),
             ]
 
             if "Disp" in self.node_data:
-                new_crd = (
-                    crd + scale * self.node_data["Disp"].T[:n_physical_nodes]
-                )
+                new_crd = crd + scale * self.node_data["Disp"].T[:n_physical_nodes]
 
                 new_Xmin = new_crd.min(axis=0)
                 new_Xmax = new_crd.max(axis=0)
@@ -1422,12 +1366,8 @@ class MultiFrameDataSet(DataSet):
                     Xmin = new_Xmin
                     Xmax = new_Xmax
                 else:
-                    Xmin = [
-                        np.min([Xmin[i], new_Xmin[i]]) for i in range(ndim)
-                    ]
-                    Xmax = [
-                        np.max([Xmax[i], new_Xmax[i]]) for i in range(ndim)
-                    ]
+                    Xmin = [np.min([Xmin[i], new_Xmin[i]]) for i in range(ndim)]
+                    Xmax = [np.max([Xmax[i], new_Xmax[i]]) for i in range(ndim)]
 
         if "Disp" not in self.node_data:
             Xmin = self.mesh.bounding_box[0]
@@ -1464,9 +1404,7 @@ def read_data(filename: str, file_format: str = "fdz"):
         filename = dirname + os.path.basename(filename)
         file_format = file_format.lower()
     else:
-        filename = os.path.splitext(filename)[
-            0
-        ]  # remove extension for the base name
+        filename = os.path.splitext(filename)[0]  # remove extension for the base name
 
     assert dirname == "" or (os.path.isdir(dirname)), "File not found"
     if file_format[:3] in ["npz", "vtk"] and os.path.isfile(filename + ".vtk"):

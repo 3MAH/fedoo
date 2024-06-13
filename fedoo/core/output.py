@@ -156,15 +156,11 @@ def _get_results(
             print("List of available output: ", _available_output)
             raise NameError(res, "' doens't match to any available output")
 
-    data_sav = (
-        {}
-    )  # dict to keep data in memory that may be used more that one time
+    data_sav = {}  # dict to keep data in memory that may be used more that one time
 
     if hasattr(assemb, "list_assembly"):  # AssemblySum object
         if assemb.assembly_output is None:
-            raise NameError(
-                "AssemblySum objects can't be used to extract outputs"
-            )
+            raise NameError("AssemblySum objects can't be used to extract outputs")
         else:
             assemb = assemb.assembly_output
 
@@ -339,12 +335,10 @@ def _get_results(
                     data = data.reshape(-1, assemb.mesh.n_elements)
                     result.gausspoint_data[res] = data[:, element_set].ravel()
                 else:  # data.ndim ==2
-                    data = data.reshape(
-                        data.shape[0], -1, assemb.mesh.n_elements
+                    data = data.reshape(data.shape[0], -1, assemb.mesh.n_elements)
+                    result.gausspoint_data[res] = data[:, :, element_set].reshape(
+                        data.shape[0], -1
                     )
-                    result.gausspoint_data[res] = data[
-                        :, :, element_set
-                    ].reshape(data.shape[0], -1)
 
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time
@@ -354,9 +348,7 @@ def _get_results(
 
 class _ProblemOutput:
     def __init__(self):
-        self.__list_output = (
-            []
-        )  # a list containint dictionnary with defined output
+        self.__list_output = []  # a list containint dictionnary with defined output
         self.data_sets = {}
 
     def add_output(
@@ -532,6 +524,4 @@ class _ProblemOutput:
 
             else:
                 out.save(list_full_filename[i], compressed=list_compressed[i])
-                self.data_sets[list_filename[i]].list_data.append(
-                    list_full_filename[i]
-                )
+                self.data_sets[list_filename[i]].list_data.append(list_full_filename[i])

@@ -1,6 +1,7 @@
 """Base classes for principles objects.
 Should not be used, excepted to create inherited classes.
 """
+
 from copy import deepcopy
 from fedoo.core.modelingspace import ModelingSpace
 
