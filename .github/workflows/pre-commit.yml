@@ -14,6 +14,7 @@ jobs:
       - uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
+        continue-on-error: true
 
       - name: Check for changes
         id: git_diff
@@ -27,3 +28,7 @@ jobs:
           git add .
           git commit -m "Apply pre-commit fixes"
           git push
+
+      - name: Fail if pre-commit failed
+        if: steps.pre-commit.outcome == 'failure'
+        run: exit 1
