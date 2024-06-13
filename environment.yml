@@ -13,7 +13,7 @@ dependencies:
   - vtk>=9.2
   - pyvista>=0.39
   - simcoon
-  # - pandas
   - pytest
+  - pytest-xdist
   - sphinx_rtd_theme
   - sphinx-gallery
