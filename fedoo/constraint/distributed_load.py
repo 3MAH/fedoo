@@ -91,9 +91,7 @@ class Pressure(Assembly):
         wf = ExternalPressure(self.pressure, nlgeom=self.nlgeom)
         Assembly.__init__(self, wf, surface_mesh, name=name)
         if nlgeom == "TL":
-            raise NotImplementedError(
-                "TL not implemented for distributed loads"
-            )
+            raise NotImplementedError("TL not implemented for distributed loads")
 
     def set_start(self, pb: ProblemBase):
         """Start a new time increment."""
@@ -231,21 +229,18 @@ class DistributedForce(Assembly):
             if isinstance(self.force, np.ndarray):
                 self.weakform.distributed_force = pb.t_fact * self.force
             else:
-                self.weakform.distributed_force = [
-                    pb.t_fact * f for f in self.force
-                ]
+                self.weakform.distributed_force = [pb.t_fact * f for f in self.force]
         else:
             if isinstance(self.force, np.ndarray) and isinstance(
                 self.initial_force, np.ndarray
             ):
                 self.weakform.distributed_force = (
-                    pb.t_fact * (self.force - self.initial_force)
-                    + self.initial_force
+                    pb.t_fact * (self.force - self.initial_force) + self.initial_force
                 )
             else:
                 self.weakform.distributed_force = [
-                    pb.t_fact * (f - self.initial_force[i]) +
-                    self.initial_force[i] for i, f in enumerate(self.force)
+                    pb.t_fact * (f - self.initial_force[i]) + self.initial_force[i]
+                    for i, f in enumerate(self.force)
                 ]
 
     def to_start(self, pb: ProblemBase):
@@ -279,9 +274,7 @@ class SurfaceForce(DistributedForce):
         See :py:class:`SurfaceForce` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, node_set=node_set)
-        return DistributedForce(
-            surface_mesh, force, initial_force, nlgeom, name
-        )
+        return DistributedForce(surface_mesh, force, initial_force, nlgeom, name)
 
     @staticmethod
     def from_elements(
@@ -300,6 +293,4 @@ class SurfaceForce(DistributedForce):
         See :py:class:`SurfaceForce` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, element_set=element_set)
-        return DistributedForce(
-            surface_mesh, force, initial_force, nlgeom, name
-        )
+        return DistributedForce(surface_mesh, force, initial_force, nlgeom, name)

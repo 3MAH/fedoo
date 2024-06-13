@@ -5,17 +5,17 @@ Constitutive Law (:mod:`fedoo.constitutivelaw`)
 
 .. currentmodule:: fedoo.constitutivelaw
 
-The constitutive law module include several classical mechancical 
-constitutive laws. These laws are required to create some weak formulations. 
+The constitutive law module include several classical mechancical
+constitutive laws. These laws are required to create some weak formulations.
 
-The ConstitutiveLaw library contains the following classes: 
+The ConstitutiveLaw library contains the following classes:
 
 Solid mechanical constitutive laws
 ======================================
 
 These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium`
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
@@ -25,14 +25,14 @@ These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium
    CompositeUD
    ElastoPlasticity
    FE2
-   Simcoon   
+   Simcoon
 
 Interface mechanical constitutive laws
 ======================================
 
 These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium`
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
@@ -44,19 +44,19 @@ Shell constitutive laws
 
 These laws should be associated with :py:class:`fedoo.weakform.PlateEquilibrium`
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
    ShellLaminate
-   ShellHomogeneous 
-   
+   ShellHomogeneous
+
 Thermal constitutive law
 ======================================
 
 These laws should be associated with :py:class:`fedoo.weakform.HeatEquation` or  :py:class:`fedoo.weakform.SteadyHeatEquation`
 
-.. autosummary::   
+.. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
@@ -64,11 +64,8 @@ These laws should be associated with :py:class:`fedoo.weakform.HeatEquation` or 
 
 """
 
-
 import pkgutil
 
-for loader, module_name, is_pkg in  pkgutil.walk_packages(__path__):
+for loader, module_name, is_pkg in pkgutil.walk_packages(__path__):
     # module = loader.find_module(module_name).load_module(module_name)
-    exec('from .'+module_name+' import *')
-
-    
+    exec("from ." + module_name + " import *")

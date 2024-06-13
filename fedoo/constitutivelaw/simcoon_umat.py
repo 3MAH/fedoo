@@ -241,7 +241,7 @@ class Simcoon(Mechanical3D):
         elif umat_name == "SMAMC":
             nvariants = self.props[
                 0, 8
-            ] # should be the same for all gauss_points. If not, needs several assemblies
+            ]  # should be the same for all gauss_points. If not, needs several assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
@@ -258,9 +258,7 @@ class Simcoon(Mechanical3D):
             DR[...] = np.eye(3).reshape(3, 3, 1)
             assembly.sv["DR"] = DR
 
-            assembly.sv["Wm"] = np.zeros(
-                (4, assembly.n_gauss_points), order="F"
-            )
+            assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
             # )

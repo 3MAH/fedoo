@@ -76,9 +76,7 @@ def extract_surface(
         n_face_nodes_for_sort = 2
         face_elm_type = "lin3"
         dim = 1
-    elif (mesh.elm_type == "tri3") or (
-        reduce_order and mesh.elm_type == "tri6"
-    ):
+    elif (mesh.elm_type == "tri3") or (reduce_order and mesh.elm_type == "tri6"):
         faces_in_elm = [[0, 1], [1, 2], [2, 0]]
         n_face_nodes = n_face_nodes_for_sort = 2
         face_elm_type = "lin2"
@@ -89,9 +87,7 @@ def extract_surface(
         n_face_nodes_for_sort = 2
         face_elm_type = "lin3"
         dim = 1
-    elif mesh.elm_type == "tet4" or (
-        reduce_order and mesh.elm_type == "tet10"
-    ):
+    elif mesh.elm_type == "tet4" or (reduce_order and mesh.elm_type == "tet10"):
         faces_in_elm = [[0, 1, 2], [1, 2, 3], [2, 3, 0], [3, 0, 1]]
         n_face_nodes = n_face_nodes_for_sort = 3
         face_elm_type = "tri3"
@@ -143,22 +139,16 @@ def extract_surface(
     test = np.sort(list_faces[:, :n_face_nodes_for_sort], axis=1)
 
     dump, list_faces_index, counts = np.unique(
-        test,
-        axis=0,
-        return_index=True,
-        return_counts=True
+        test, axis=0, return_index=True, return_counts=True
     )
     list_faces_index = list_faces_index[counts == 1]
     surf_elements = list_faces[list_faces_index]
-    ind_element = list_faces_index//n_faces_in_elm
+    ind_element = list_faces_index // n_faces_in_elm
 
     if node_set is not None:
         if isinstance(node_set, str):
             node_set = mesh.node_sets[node_set]
-        mask = np.isin(
-            surf_elements[:, :n_face_nodes_for_sort],
-            node_set
-        ).all(axis=1)
+        mask = np.isin(surf_elements[:, :n_face_nodes_for_sort], node_set).all(axis=1)
         surf_elements = surf_elements[mask]
         ind_element = ind_element[mask]
 
@@ -200,8 +190,7 @@ def extract_surface(
                 1
                 / length
                 * (
-                    (mesh.nodes[nodes_inside] - elm_nodes_crd[:, 0, :])
-                    * tangent_axis
+                    (mesh.nodes[nodes_inside] - elm_nodes_crd[:, 0, :]) * tangent_axis
                 ).sum(axis=1)
             )
         else:  # dim == 2
@@ -213,13 +202,9 @@ def extract_surface(
                     (surf_elements[:, :3], surf_elements[:, [0, 2, 3]])
                 ).reshape(-1, 3)
                 # surf_elements = np.vstack((surf_elements[:, :3], surf_elements[:,[0,2,3]]))
-                nodes_inside = np.column_stack(
-                    (nodes_inside, nodes_inside)
-                ).reshape(-1)
+                nodes_inside = np.column_stack((nodes_inside, nodes_inside)).reshape(-1)
 
-            element_face = get_element("tri3")(
-                1
-            )  # compute orienation from tri3 only
+            element_face = get_element("tri3")(1)  # compute orienation from tri3 only
             # element_face = get_element(face_elm_type)(1)
             elm_nodes_crd = mesh.nodes[surf_elements[:, :3]]
             # tangent1 = elm_nodes_crd[:,1,:] - elm_nodes_crd[:,0,:]
@@ -233,9 +218,9 @@ def extract_surface(
                 (tangent @ tangent.transpose([0, 2, 1])),
                 np.sum(
                     (
-                        (
-                            mesh.nodes[nodes_inside] - elm_nodes_crd[:, 0, :]
-                        ).reshape(-1, 1, 3)
+                        (mesh.nodes[nodes_inside] - elm_nodes_crd[:, 0, :]).reshape(
+                            -1, 1, 3
+                        )
                         * tangent
                     ),
                     axis=2,
@@ -245,29 +230,25 @@ def extract_surface(
             # local_frame = element_face.GetLocalFrame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
             # normal_axis = local_frame[:,0,-1]
             normal_axis = np.cross(tangent[:, 0, :], tangent[:, 1, :])
-            normal_axis = normal_axis / np.linalg.norm(
-                normal_axis, axis=1
-            ).reshape(-1, 1)
+            normal_axis = normal_axis / np.linalg.norm(normal_axis, axis=1).reshape(
+                -1, 1
+            )
 
         # for all elements
         shape_func_val = element_face.ShapeFunction(vec_xi)
-        contact_points = (
-            shape_func_val[:, np.newaxis, :] @ elm_nodes_crd
-        ).squeeze()
+        contact_points = (shape_func_val[:, np.newaxis, :] @ elm_nodes_crd).squeeze()
         # or equivalent :
         # contact_points = np.sum(shape_func_val[..., np.newaxis] * surf.nodes[surf.elements], axis = 1)
         # or (only for 1D element)
         # contact_points = shape_func_val[:,0].reshape(-1,1)*surf.nodes[surf.elements[:,0]]+  \
         #                  shape_func_val[:,1].reshape(-1,1)*surf.nodes[surf.elements[:,1]]
-        g = ((mesh.nodes[nodes_inside] - contact_points) * normal_axis).sum(
-            axis=1
-        )
+        g = ((mesh.nodes[nodes_inside] - contact_points) * normal_axis).sum(axis=1)
         mask = np.where(g > 0)[0]  # where normal need to be revered
         if dim == 1:
             surf_elements[mask, :2] = surf_elements[mask, 1::-1]
         else:
             surf_elements[mask, :n_face_nodes_for_sort] = surf_elements[
-                mask, n_face_nodes_for_sort - 1::-1
+                mask, n_face_nodes_for_sort - 1 :: -1
             ]
             if face_elm_type == "tri6":
                 surf_elements[mask, n_face_nodes_for_sort:] = surf_elements[
@@ -275,7 +256,7 @@ def extract_surface(
                 ]
             elif face_elm_type in ["quad8", "quad9"]:
                 surf_elements[
-                    mask, n_face_nodes_for_sort:n_face_nodes_for_sort + 4
+                    mask, n_face_nodes_for_sort : n_face_nodes_for_sort + 4
                 ] = surf_elements[np.c_[mask], [6, 5, 4, 7]]
 
             # surf_elements[mask, n_face_nodes_for_sort:] = surf_elements[mask, -1:-n_face_nodes_for_sort-1:-1]
@@ -350,20 +331,20 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
             type_elm = "quad4"
             dim_mesh1 = 1
             for i in range(mesh.n_elements):
-                elm[i * n_el1:(i + 1) * n_el1, [0, 1]] = (
+                elm[i * n_el1 : (i + 1) * n_el1, [0, 1]] = (
                     mesh1.elements + mesh.elements[i, 0] * mesh1.n_nodes
                 )
-                elm[i * n_el1:(i + 1) * n_el1, [3, 2]] = (
+                elm[i * n_el1 : (i + 1) * n_el1, [3, 2]] = (
                     mesh1.elements + mesh.elements[i, 1] * mesh1.n_nodes
                 )
         elif mesh1.elm_type == "quad4":
             dim_mesh1 = 2
             type_elm = "hex8"
             for i in range(mesh.n_elements):
-                elm[i * n_el1:(i + 1) * n_el1, 0:n_elm_nd1] = (
+                elm[i * n_el1 : (i + 1) * n_el1, 0:n_elm_nd1] = (
                     mesh1.elements + mesh.elements[i, 0] * mesh1.n_nodes
                 )
-                elm[i * n_el1:(i + 1) * n_el1, n_elm_nd1:2 * n_elm_nd1] = (
+                elm[i * n_el1 : (i + 1) * n_el1, n_elm_nd1 : 2 * n_elm_nd1] = (
                     mesh1.elements + mesh.elements[i, 1] * mesh1.n_nodes
                 )
         else:
@@ -379,13 +360,13 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
             for i in range(
                 mesh.n_elements
             ):  # éléments 1D à 3 noeuds (pour le moment uniquement pour générer des éléments quad9)
-                elm[i * n_el1:(i + 1) * n_el1, [0, 4, 1]] = (
+                elm[i * n_el1 : (i + 1) * n_el1, [0, 4, 1]] = (
                     mesh1.elements + mesh.elements[i, 0] * mesh1.n_nodes
                 )
-                elm[i * n_el1:(i + 1) * n_el1, [7, 8, 5]] = (
+                elm[i * n_el1 : (i + 1) * n_el1, [7, 8, 5]] = (
                     mesh1.elements + mesh.elements[i, 1] * mesh1.n_nodes
                 )
-                elm[i * n_el1:(i + 1) * n_el1, [3, 6, 2]] = (
+                elm[i * n_el1 : (i + 1) * n_el1, [3, 6, 2]] = (
                     mesh1.elements + mesh.elements[i, 2] * mesh1.n_nodes
                 )
         else:
@@ -400,7 +381,7 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
                 elm[i::n_el1, 0:n_elm_nd0] = (
                     mesh.elements * mesh1.n_nodes + mesh1.elements[i, 0]
                 )
-                elm[i::n_el1, n_elm_nd0: 2 * n_elm_nd0] = (
+                elm[i::n_el1, n_elm_nd0 : 2 * n_elm_nd0] = (
                     mesh.elements * mesh1.n_nodes + mesh1.elements[i, 1]
                 )
         else:
@@ -415,7 +396,7 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
                 elm[i::n_el1, 0:n_elm_nd0] = (
                     mesh.elements * mesh1.n_nodes + mesh1.elements[i, 0]
                 )
-                elm[i::n_el1, n_elm_nd0: 2 * n_elm_nd0] = (
+                elm[i::n_el1, n_elm_nd0 : 2 * n_elm_nd0] = (
                     mesh.elements * mesh1.n_nodes + mesh1.elements[i, 1]
                 )
     else:
@@ -436,11 +417,9 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
             np.tile(mesh1.nodes[:, :dim_mesh1], (mesh.n_nodes, 1)),
         ]
     elif dim_mesh == 1:  # dim_mesh is the thickness
-        crd = np.zeros(
-            (mesh1.n_nodes * mesh.n_nodes, np.shape(mesh1.nodes)[1])
-        )
+        crd = np.zeros((mesh1.n_nodes * mesh.n_nodes, np.shape(mesh1.nodes)[1]))
         for i in range(mesh.n_nodes):
-            crd[i * mesh1.n_nodes:(i + 1) * mesh1.n_nodes, :] = (
+            crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
                 mesh1.nodes + mesh1.local_frame[:, -1, :] * mesh.nodes[i][0]
             )
     else:
@@ -461,9 +440,7 @@ def quad2tri(mesh):
     -------
     fedoo.Mesh
     """
-    assert (
-        mesh.elm_type == "quad4"
-    ), "element shape should be 'quad4' for quad2tri"
+    assert mesh.elm_type == "quad4", "element shape should be 'quad4' for quad2tri"
     crd = mesh.nodes
     elm = mesh.elements
     return Mesh(crd, np.vstack([elm[:, 0:3], elm[:, [0, 2, 3]]]), "tri3")
@@ -511,7 +488,7 @@ def change_elm_type(mesh, elm_type, name=""):
             name=name,
         )
 
-    xi_nd = xi_nd[elm_ref.n_nodes:]
+    xi_nd = xi_nd[elm_ref.n_nodes :]
     shape_func_val = elm_ref.ShapeFunction(xi_nd)
 
     new_nodes_crd = shape_func_val @ mesh.nodes[mesh.elements]
@@ -522,17 +499,13 @@ def change_elm_type(mesh, elm_type, name=""):
     )
     new_nodes_ind = new_nodes_ind.reshape(mesh.n_elements, -1)
 
-    new_elm = np.empty(
-        (mesh.n_elements, elm_ref.n_nodes + len(xi_nd)), dtype=int
-    )
+    new_elm = np.empty((mesh.n_elements, elm_ref.n_nodes + len(xi_nd)), dtype=int)
     new_elm[:, : elm_ref.n_nodes] = mesh.elements
-    new_elm[:, elm_ref.n_nodes:] = new_nodes_ind
+    new_elm[:, elm_ref.n_nodes :] = new_nodes_ind
 
     new_mesh = Mesh(new_nodes, new_elm, elm_type, name=name)
 
-    new_mesh.merge_nodes(
-        new_mesh.find_coincident_nodes()
-    )  # very slow strategy
+    new_mesh.merge_nodes(new_mesh.find_coincident_nodes())  # very slow strategy
 
     # ○r using pyvista. try to see if it is more efficient
     # new_mesh = new_mesh.to_pyvista().clean(tol=1e-6, remove_unused_points=False)

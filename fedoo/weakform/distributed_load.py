@@ -2,6 +2,7 @@
 
 This file is part of the fedoo finite element code.
 """
+
 from __future__ import annotations
 from fedoo.core.weakform import WeakFormBase
 from typing import TYPE_CHECKING
@@ -28,7 +29,7 @@ class ExternalPressure(WeakFormBase):
         pressure: float | np.ndarray,
         name: str = "",
         nlgeom: bool | None = False,
-        space: ModelingSpace | None = None
+        space: ModelingSpace | None = None,
     ):
         WeakFormBase.__init__(self, name, space)
 
@@ -52,9 +53,7 @@ class ExternalPressure(WeakFormBase):
               (base on the initial mesh with initial displacement effet)
         """
 
-    def get_weak_equation(
-        self, assembly: AssemblyBase, pb: ProblemBase
-    ) -> DiffOp:
+    def get_weak_equation(self, assembly: AssemblyBase, pb: ProblemBase) -> DiffOp:
         """Return the weak equation related to the current state."""
         vec_u = self.space.op_disp()
         normals = assembly.sv["Normals"]
@@ -62,19 +61,23 @@ class ExternalPressure(WeakFormBase):
         if self.space._dimension == "2Daxi":
             mesh = assembly.current.mesh
             rr = mesh.convert_data(
-                 mesh.nodes[:, 0],
-                 "Node",
-                 "GaussPoint",
-                 n_elm_gp=normals.shape[0]//mesh.n_elements
-                 )
+                mesh.nodes[:, 0],
+                "Node",
+                "GaussPoint",
+                n_elm_gp=normals.shape[0] // mesh.n_elements,
+            )
             return sum(
-                [u.virtual * ((normals[:, i] * rr) * (2*np.pi*self.pressure))
-                 for i, u in enumerate(vec_u)]
+                [
+                    u.virtual * ((normals[:, i] * rr) * (2 * np.pi * self.pressure))
+                    for i, u in enumerate(vec_u)
+                ]
             )
         else:
             return sum(
-                [u.virtual * (normals[:, i]*self.pressure)
-                 for i, u in enumerate(vec_u)]
+                [
+                    u.virtual * (normals[:, i] * self.pressure)
+                    for i, u in enumerate(vec_u)
+                ]
             )
 
     def initialize(self, assembly: AssemblyBase, pb: ProblemBase):
@@ -116,12 +119,7 @@ class DistributedLoad(WeakFormBase):
     :py:meth:`fd.constraint.SurfaceForce`.
     """
 
-    def __init__(
-        self,
-        distributed_force: list,
-        name="", nlgeom=False,
-        space=None
-    ):
+    def __init__(self, distributed_force: list, name="", nlgeom=False, space=None):
         WeakFormBase.__init__(self, name, space)
 
         self.space.new_variable("DispX")
@@ -135,29 +133,28 @@ class DistributedLoad(WeakFormBase):
         self.distributed_force = distributed_force
         self.nlgeom = nlgeom
 
-    def get_weak_equation(
-        self, assembly: AssemblyBase, pb: ProblemBase
-    ) -> DiffOp:
+    def get_weak_equation(self, assembly: AssemblyBase, pb: ProblemBase) -> DiffOp:
         """Return the weak equation related to the current state."""
         vec_u = self.space.op_disp()
 
         if self.space._dimension == "2Daxi":
             mesh = assembly.current.mesh
             rr = mesh.convert_data(
-                 mesh.nodes[:, 0],
-                 "Node",
-                 "GaussPoint",
-                )
+                mesh.nodes[:, 0],
+                "Node",
+                "GaussPoint",
+            )
             # perhaps distributed_force should be converted to gauss_point
             # to be compatible with rr
             return sum(
-                [u.virtual * ((self.distributed_force[i] * rr) * (-2*np.pi))
-                 for i, u in enumerate(vec_u)]
+                [
+                    u.virtual * ((self.distributed_force[i] * rr) * (-2 * np.pi))
+                    for i, u in enumerate(vec_u)
+                ]
             )
         else:
             return sum(
-                [-u.virtual * self.distributed_force[i]
-                 for i, u in enumerate(vec_u)]
+                [-u.virtual * self.distributed_force[i] for i, u in enumerate(vec_u)]
             )
 
     def initialize(self, assembly: AssemblyBase, pb: ProblemBase):

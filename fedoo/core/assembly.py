@@ -52,9 +52,7 @@ class Assembly(AssemblyBase):
     _saved_change_of_basis_mat = {}
     # _saved_node2gausspoint_mat = {}
     # _saved_gausspoint2node_mat = {}
-    _saved_associated_variables = (
-        {}
-    )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+    _saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def __init__(self, weakform, mesh="", elm_type="", name="", **kargs):
         if isinstance(weakform, str):
@@ -97,23 +95,21 @@ class Assembly(AssemblyBase):
                 "n_elm_gp", elm_type, get_default_n_gp(elm_type, mesh)
             )
 
-        self.assume_sym = weakform.assembly_options.get(
-            "assume_sym", elm_type, False
-        )
-        self.mat_lumping = weakform.assembly_options.get(
-            "mat_lumping", elm_type, False
-        )
+        self.assume_sym = weakform.assembly_options.get("assume_sym", elm_type, False)
+        self.mat_lumping = weakform.assembly_options.get("mat_lumping", elm_type, False)
 
         self._saved_bloc_structure = None  # use to save data about the sparse structure and avoid time consuming recomputation
-        self._assembly_method = "new"  # _assembly_method = 'old' and 'very_old' only used for debug purpose
-        self.__factorize_op = True  # option for debug purpose (should be set to True for performance)
+        self._assembly_method = (
+            "new"  # _assembly_method = 'old' and 'very_old' only used for debug purpose
+        )
+        self.__factorize_op = (
+            True  # option for debug purpose (should be set to True for performance)
+        )
 
         self.sv = {}
         """ Dictionary of state variables associated to the current problem."""
         self.sv_start = {}
-        self.sv_type = (
-            {}
-        )  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
+        self.sv_type = {}  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
         self._pb = None
 
@@ -165,14 +161,9 @@ class Assembly(AssemblyBase):
             else:
                 n_bloc_cols = self.mesh.n_elements * self.mesh.n_elm_nodes
                 # or: mat_change_of_basis.shape[0]//nvar
-            sl = [
-                slice(i * n_bloc_cols, (i + 1) * n_bloc_cols)
-                for i in range(nvar)
-            ]
+            sl = [slice(i * n_bloc_cols, (i + 1) * n_bloc_cols) for i in range(nvar)]
 
-            if (
-                n_elm_gp == 0
-            ):  # if finite difference elements, don't use BlocSparse
+            if n_elm_gp == 0:  # if finite difference elements, don't use BlocSparse
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
                 self._saved_bloc_structure = (
                     0  # don't save block structure for finite difference mesh
@@ -241,9 +232,7 @@ class Assembly(AssemblyBase):
 
                 blocks = [
                     [
-                        b
-                        if b is not None
-                        else sparse.csr_matrix((nbNodes, nbNodes))
+                        b if b is not None else sparse.csr_matrix((nbNodes, nbNodes))
                         for b in blocks_row
                     ]
                     for blocks_row in blocks
@@ -260,10 +249,14 @@ class Assembly(AssemblyBase):
                 )
                 listMatvir = listCoef_PG = None
 
-                sum_coef = False  # bool that indicate if operator are the same and can be sum
+                sum_coef = (
+                    False  # bool that indicate if operator are the same and can be sum
+                )
 
                 if hasattr(self.weakform, "_list_mat_lumping"):
-                    change_mat_lumping = True  # use different mat_lumping option for each operator
+                    change_mat_lumping = (
+                        True  # use different mat_lumping option for each operator
+                    )
                 else:
                     change_mat_lumping = False
                     mat_lumping = self.mat_lumping
@@ -290,14 +283,10 @@ class Assembly(AssemblyBase):
                         # if n_elm_gp == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii]
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(
-                            wf.coef[ii][:], n_elm_gp
-                        )
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
-                    if (
-                        sum_coef
-                    ):  # if same operator as previous with different coef, add the two coef
+                    if sum_coef:  # if same operator as previous with different coef, add the two coef
                         coef_PG_sum += coef_PG
                         sum_coef = False
                     else:
@@ -309,9 +298,7 @@ class Assembly(AssemblyBase):
                         if (
                             not (change_mat_lumping)
                             or mat_lumping
-                            == self.weakform._list_mat_lumping[
-                                sorted_indices[ii + 1]
-                            ]
+                            == self.weakform._list_mat_lumping[sorted_indices[ii + 1]]
                         ):
                             sum_coef = True
                             continue
@@ -328,8 +315,7 @@ class Assembly(AssemblyBase):
                         listMatvir is not None
                     ):  # factorization of real operator (sum of virtual operators)
                         listMatvir = [
-                            listMatvir[j] + [Matvir[j]]
-                            for j in range(len(Matvir))
+                            listMatvir[j] + [Matvir[j]] for j in range(len(Matvir))
                         ]
                         listCoef_PG = listCoef_PG + [coef_PG]
 
@@ -369,16 +355,14 @@ class Assembly(AssemblyBase):
                         var_vir.extend(associatedVariables[var_vir[0]][0])
                         coef_vir.extend(associatedVariables[var_vir[0]][1])
 
-                    if (
-                        wf.op[ii] == 1
-                    ):  # only virtual operator -> compute a vector
+                    if wf.op[ii] == 1:  # only virtual operator -> compute a vector
                         if VV is 0:
                             VV = np.zeros((n_bloc_cols * nvar))
                         for i in range(len(Matvir)):
                             try:
-                                VV[sl[var_vir[i]]] = VV[
-                                    sl[var_vir[i]]
-                                ] - coef_vir[i] * Matvir[i].T * (
+                                VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[
+                                    i
+                                ] * Matvir[i].T * (
                                     coef_PG
                                 )  # this line may be optimized
                             except:
@@ -386,9 +370,7 @@ class Assembly(AssemblyBase):
 
                     else:  # virtual and real operators -> compute a matrix
                         coef = [1]
-                        var = [
-                            wf.op[ii].u
-                        ]  # list in case there is an angular variable
+                        var = [wf.op[ii].u]  # list in case there is an angular variable
                         if var[0] in associatedVariables:
                             var.extend(associatedVariables[var[0]][0])
                             coef.extend(associatedVariables[var[0]][1])
@@ -431,9 +413,7 @@ class Assembly(AssemblyBase):
                     self.global_matrix = MM.tocsr()  # format csr
                 else:
                     self.global_matrix = (
-                        mat_change_of_basis.T
-                        * MM.tocsr()
-                        * mat_change_of_basis
+                        mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
                 if VV is 0:
@@ -449,9 +429,7 @@ class Assembly(AssemblyBase):
         elif (
             _assembly_method == "old"
         ):  # keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases
-            intRef = (
-                wf.sort()
-            )  # intRef = list of integer for compareason (same int = same operator with different coef)
+            intRef = wf.sort()  # intRef = list of integer for compareason (same int = same operator with different coef)
 
             if (
                 self.mesh,
@@ -489,9 +467,7 @@ class Assembly(AssemblyBase):
             MM.row = saveOperator[
                 "rowBlocSparse"
             ]  # row indices for bloc to build coo matrix with BlocSparse
-            MM.blocShape = saveOperator[
-                "blocShape"
-            ]  # shape of one bloc in BlocSparse
+            MM.blocShape = saveOperator["blocShape"]  # shape of one bloc in BlocSparse
 
             # sl contains list of slice object that contains the dimension for each variable
             # size of VV and sl must be redefined for case with change of basis
@@ -510,9 +486,7 @@ class Assembly(AssemblyBase):
                         ii
                     ]  # mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
                 else:
-                    coef_PG = self.mesh.data_to_gausspoint(
-                        wf.coef[ii][:], n_elm_gp
-                    )
+                    coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
 
                 if (
                     ii > 0 and intRef[ii] == intRef[ii - 1]
@@ -529,9 +503,7 @@ class Assembly(AssemblyBase):
                 coef_PG = coef_PG_sum * mat_gaussian_quadrature.data
 
                 coef_vir = [1]
-                var_vir = [
-                    wf.op_vir[ii].u
-                ]  # list in case there is an angular variable
+                var_vir = [wf.op_vir[ii].u]  # list in case there is an angular variable
 
                 if var_vir[0] in associatedVariables:
                     var_vir.extend(associatedVariables[var_vir[0]][0])
@@ -542,17 +514,13 @@ class Assembly(AssemblyBase):
                     if VV is 0:
                         VV = np.zeros((self.mesh.n_nodes * nvar))
                     for i in range(len(Matvir)):
-                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[
+                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[
                             i
-                        ] * Matvir[i].T * (
-                            coef_PG
-                        )  # this line may be optimized
+                        ].T * (coef_PG)  # this line may be optimized
 
                 else:  # virtual and real operators -> compute a matrix
                     coef = [1]
-                    var = [
-                        wf.op[ii].u
-                    ]  # list in case there is an angular variable
+                    var = [wf.op[ii].u]  # list in case there is an angular variable
                     if var[0] in associatedVariables:
                         var.extend(associatedVariables[var[0]][0])
                         coef.extend(associatedVariables[var[0]][1])
@@ -572,8 +540,7 @@ class Assembly(AssemblyBase):
                     else:
                         MatvirT_Mat = None
                         saveOperator[tuplename] = [
-                            [None for i in range(len(var))]
-                            for j in range(len(var_vir))
+                            [None for i in range(len(var))] for j in range(len(var_vir))
                         ]
                         Matvir = self._get_elementary_operator(wf.op_vir[ii])
                         Mat = self._get_elementary_operator(wf.op[ii])
@@ -588,9 +555,7 @@ class Assembly(AssemblyBase):
                                     var[i],
                                 )
                             else:
-                                saveOperator[tuplename][j][
-                                    i
-                                ] = MM.addToBlocATB(
+                                saveOperator[tuplename][j][i] = MM.addToBlocATB(
                                     Matvir[j],
                                     Mat[i],
                                     (coef[i] * coef_vir[j]) * coef_PG,
@@ -607,9 +572,7 @@ class Assembly(AssemblyBase):
                     self.global_matrix = MM.toCSR()  # format csr
                 else:
                     self.global_matrix = (
-                        mat_change_of_basis.T
-                        * MM.toCSR()
-                        * mat_change_of_basis
+                        mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
                 if VV is 0:
@@ -630,9 +593,7 @@ class Assembly(AssemblyBase):
                     continue
 
                 coef_vir = [1]
-                var_vir = [
-                    wf.op_vir[ii].u
-                ]  # list in case there is an angular variable
+                var_vir = [wf.op_vir[ii].u]  # list in case there is an angular variable
                 if var_vir[0] in associatedVariables:
                     var_vir.extend(associatedVariables[var_vir[0]][0])
                     coef_vir.extend(associatedVariables[var_vir[0]][1])
@@ -649,26 +610,17 @@ class Assembly(AssemblyBase):
 
                 if wf.op[ii] == 1:  # only virtual operator -> compute a vector
                     if np.isscalar(wf.coef[ii]):
-                        VV = (
-                            VV
-                            - wf.coef[ii]
-                            * Matvir
-                            * mat_gaussian_quadrature.data
-                        )
+                        VV = VV - wf.coef[ii] * Matvir * mat_gaussian_quadrature.data
                     else:
                         coef_PG = (
-                            self.mesh.data_to_gausspoint(
-                                wf.coef[ii][:], n_elm_gp
-                            )
+                            self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
                             * mat_gaussian_quadrature.data
                         )
                         VV = VV - Matvir * (coef_PG)
 
                 else:  # virtual and real operators -> compute a matrix
                     coef = [1]
-                    var = [
-                        wf.op[ii].u
-                    ]  # list in case there is an angular variable
+                    var = [wf.op[ii].u]  # list in case there is an angular variable
                     if var[0] in associatedVariables:
                         var.extend(associatedVariables[var[0]][0])
                         coef.extend(associatedVariables[var[0]][1])
@@ -684,17 +636,9 @@ class Assembly(AssemblyBase):
                     )
 
                     if np.isscalar(wf.coef[ii]):  # and self.op_vir[ii] != 1:
-                        MM = (
-                            MM
-                            + wf.coef[ii]
-                            * Matvir
-                            * mat_gaussian_quadrature
-                            * Mat
-                        )
+                        MM = MM + wf.coef[ii] * Matvir * mat_gaussian_quadrature * Mat
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(
-                            wf.coef[ii][:], n_elm_gp
-                        )
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
                         CoefMatrix = sparse.csr_matrix(
                             (
                                 mat_gaussian_quadrature.data * coef_PG,
@@ -751,9 +695,7 @@ class Assembly(AssemblyBase):
                     self.space.get_vector(nameVector)
                 )  # vector that need to be change in local coordinate
                 listScalarVariable = [
-                    i
-                    for i in listScalarVariable
-                    if not (i in listGlobalVector[-1])
+                    i for i in listScalarVariable if not (i in listGlobalVector[-1])
                 ]  # scalar variable that doesnt need to be converted
             # Data to build mat_change_of_basis with coo sparse format
             if compute_mat_change_of_basis:
@@ -765,21 +707,15 @@ class Assembly(AssemblyBase):
                     elmRefGeom = mesh._elm_interpolation[self.n_elm_gp]
                     # elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
 
-                    xi_nd = get_node_elm_coordinates(
-                        mesh.elm_type, n_elm_nodes
-                    )
+                    xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes)
                     local_frame_el = elmRefGeom.GetLocalFrame(
                         mesh.nodes[mesh._elements_geom], xi_nd, local_frame
                     )  # array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
                 else:
                     local_frame_el = self._element_local_frame
 
-                rowMCB = np.empty(
-                    (len(listGlobalVector) * n_el, n_elm_nodes, dim, dim)
-                )
-                colMCB = np.empty(
-                    (len(listGlobalVector) * n_el, n_elm_nodes, dim, dim)
-                )
+                rowMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
+                colMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
                 dataMCB = np.empty(
                     (len(listGlobalVector) * n_el, n_elm_nodes, dim, dim)
                 )
@@ -790,8 +726,7 @@ class Assembly(AssemblyBase):
                     rowMCB[ivec * n_el : (ivec + 1) * n_el] = (
                         np.arange(n_el).reshape(-1, 1, 1, 1)
                         + range_n_elm_nodes.reshape(1, -1, 1, 1) * n_el
-                        + np.array(vec).reshape(1, 1, -1, 1)
-                        * (n_el * n_elm_nodes)
+                        + np.array(vec).reshape(1, 1, -1, 1) * (n_el * n_elm_nodes)
                     )
                     colMCB[ivec * n_el : (ivec + 1) * n_el] = (
                         elm.reshape(n_el, n_elm_nodes, 1, 1)
@@ -803,34 +738,22 @@ class Assembly(AssemblyBase):
                     dataMCB = np.hstack(
                         (
                             dataMCB.reshape(-1),
-                            np.ones(
-                                len(listScalarVariable) * n_el * n_elm_nodes
-                            ),
+                            np.ones(len(listScalarVariable) * n_el * n_elm_nodes),
                         )
                     )  # no change of variable so only one value adding in dataMCB
 
-                    rowMCB_loc = np.empty(
-                        (len(listScalarVariable) * n_el, n_elm_nodes)
-                    )
-                    colMCB_loc = np.empty(
-                        (len(listScalarVariable) * n_el, n_elm_nodes)
-                    )
+                    rowMCB_loc = np.empty((len(listScalarVariable) * n_el, n_elm_nodes))
+                    colMCB_loc = np.empty((len(listScalarVariable) * n_el, n_elm_nodes))
                     for ivar, var in enumerate(listScalarVariable):
                         rowMCB_loc[ivar * n_el : (ivar + 1) * n_el] = (
                             np.arange(n_el).reshape(-1, 1)
                             + range_n_elm_nodes.reshape(1, -1) * n_el
                             + var * (n_el * n_elm_nodes)
                         )
-                        colMCB_loc[ivar * n_el : (ivar + 1) * n_el] = (
-                            elm + var * n_nd
-                        )
+                        colMCB_loc[ivar * n_el : (ivar + 1) * n_el] = elm + var * n_nd
 
-                    rowMCB = np.hstack(
-                        (rowMCB.reshape(-1), rowMCB_loc.reshape(-1))
-                    )
-                    colMCB = np.hstack(
-                        (colMCB.reshape(-1), colMCB_loc.reshape(-1))
-                    )
+                    rowMCB = np.hstack((rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
+                    colMCB = np.hstack((colMCB.reshape(-1), colMCB_loc.reshape(-1)))
 
                     mat_change_of_basis = sparse.coo_matrix(
                         (dataMCB, (rowMCB, colMCB)),
@@ -953,9 +876,7 @@ class Assembly(AssemblyBase):
         # Assembly._saved_gaussian_quadrature_mat = {}
         # Assembly._saved_node2gausspoint_mat = {}
         # Assembly._saved_gausspoint2node_mat = {}
-        Assembly._saved_associated_variables = (
-            {}
-        )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+        Assembly._saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def compute_elementary_operators(
         self, n_elm_gp=None
@@ -985,16 +906,16 @@ class Assembly(AssemblyBase):
             mesh._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.identity(
                 OP[0][0].shape[0], "d", format="csr"
             )  # No gaussian quadrature in this case : nodal identity matrix
-            mesh._saved_gausspoint2node_mat[
-                n_elm_gp
-            ] = 1  # no need to translate between pg and nodes because no pg
+            mesh._saved_gausspoint2node_mat[n_elm_gp] = (
+                1  # no need to translate between pg and nodes because no pg
+            )
             mesh._saved_node2gausspoint_mat[n_elm_gp] = 1
-            Assembly._saved_change_of_basis_mat[
-                mesh
-            ] = 1  # No change of basis:  mat_change_of_basis = 1 #this line could be deleted because the coordinate should in principle defined as 'global'
-            Assembly._saved_elementary_operators[
-                (mesh, elm_type, n_elm_gp)
-            ] = OP  # elmRef.computeOperator(nodes,elements)
+            Assembly._saved_change_of_basis_mat[mesh] = (
+                1  # No change of basis:  mat_change_of_basis = 1 #this line could be deleted because the coordinate should in principle defined as 'global'
+            )
+            Assembly._saved_elementary_operators[(mesh, elm_type, n_elm_gp)] = (
+                OP  # elmRef.computeOperator(nodes,elements)
+            )
             return
 
         # -------------------------------------------------------------------
@@ -1041,15 +962,12 @@ class Assembly(AssemblyBase):
         for elm_type in list_elm_type:
             elmRef = elm_type(n_elm_gp, elmGeom=elmRefGeom, assembly=self)
 
-            n_interpol_nodes = (
-                elmRef.n_nodes
-            )  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
+            n_interpol_nodes = elmRef.n_nodes  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
 
             nb_dir_deriv = 0
             if hasattr(elmRef, "ShapeFunctionDerivativePG"):
                 derivativePG = (
-                    elmRefGeom.inverseJacobian
-                    @ elmRef.ShapeFunctionDerivativePG
+                    elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
                 )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = nb_dir_deriv + 1  # nombre d'opérateur à discrétiser
@@ -1071,9 +989,7 @@ class Assembly(AssemblyBase):
                     (-1, n_elm_gp, n_interpol_nodes)
                 )  # same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv + 1][j][
-                        :, :, :n_interpol_nodes
-                    ] = derivativePG[
+                    data[dir_deriv + 1][j][:, :, :n_interpol_nodes] = derivativePG[
                         ...,
                         dir_deriv,
                         j * n_interpol_nodes : (j + 1) * n_interpol_nodes,
@@ -1096,9 +1012,7 @@ class Assembly(AssemblyBase):
                     i + 1
                 ]  # as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
-            Assembly._saved_elementary_operators[
-                (mesh, elm_type.name, n_elm_gp)
-            ] = data
+            Assembly._saved_elementary_operators[(mesh, elm_type.name, n_elm_gp)] = data
 
     def _get_elementary_operator(self, deriv, n_elm_gp=None):
         # Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
@@ -1117,9 +1031,7 @@ class Assembly(AssemblyBase):
                 .name
             )
 
-        if not (
-            (mesh, elm_type, n_elm_gp) in Assembly._saved_elementary_operators
-        ):
+        if not ((mesh, elm_type, n_elm_gp) in Assembly._saved_elementary_operators):
             self.compute_elementary_operators(n_elm_gp)
 
         data = Assembly._saved_elementary_operators[(mesh, elm_type, n_elm_gp)]
@@ -1271,9 +1183,7 @@ class Assembly(AssemblyBase):
             if np.isscalar(operator.coef[ii]):
                 coef_PG = operator.coef[ii]
             else:
-                coef_PG = self.mesh.data_to_gausspoint(
-                    operator.coef[ii][:], n_elm_gp
-                )
+                coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
 
             res += coef_PG * (
                 RowBlocMatrix(
@@ -1322,9 +1232,7 @@ class Assembly(AssemblyBase):
             else:
                 M = (
                     RowBlocMatrix(
-                        self._get_elementary_operator(
-                            operator.op[ii], n_elm_gp
-                        ),
+                        self._get_elementary_operator(operator.op[ii], n_elm_gp),
                         nvar,
                         var,
                         coef,
@@ -1337,9 +1245,7 @@ class Assembly(AssemblyBase):
                 matrix += M
             else:
                 mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()
-                coef_PG = self.mesh.data_to_gausspoint(
-                    operator.coef[ii][:], n_elm_gp
-                )
+                coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
                 coef_matrix = sparse.csr_matrix(
                     (
                         coef_PG,
@@ -1379,9 +1285,7 @@ class Assembly(AssemblyBase):
         if isinstance(data, (StrainTensorList, StressTensorList)):
             return data.convert(self, convert_from, convert_to)
 
-        return self.mesh.convert_data(
-            data, convert_from, convert_to, self.n_elm_gp
-        )
+        return self.mesh.convert_data(data, convert_from, convert_to, self.n_elm_gp)
 
     def integrate_field(self, field, type_field=None):
         return self.mesh.integrate_field(field, type_field, self.n_elm_gp)
@@ -1441,8 +1345,7 @@ class Assembly(AssemblyBase):
             ]
         else:
             Strain = [
-                GradValues[i][i]
-                + 0.5 * sum([GradValues[k][i] ** 2 for k in range(3)])
+                GradValues[i][i] + 0.5 * sum([GradValues[k][i] ** 2 for k in range(3)])
                 for i in range(3)
             ]
             Strain += [
@@ -1508,9 +1411,7 @@ class Assembly(AssemblyBase):
                 for line_op in grad_operator
             ]
         else:
-            assert (
-                0
-            ), "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
+            assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
 
     #     def get_ext_forces(self, U, nvar=None):
     #         """
@@ -1752,8 +1653,7 @@ class Assembly(AssemblyBase):
         elm_type = elm_type.lower()
 
         if (
-            hasattr(weakform, "list_weakform")
-            and weakform.assembly_options is None
+            hasattr(weakform, "list_weakform") and weakform.assembly_options is None
         ):  # WeakFormSum object
             list_weakform = weakform.list_weakform
 
@@ -1789,42 +1689,30 @@ class Assembly(AssemblyBase):
                 list_assembly = []
                 for prop in list_diff_prop:
                     l_wf = [
-                        list_weakform[i]
-                        for i, p in enumerate(list_prop)
-                        if p == prop
+                        list_weakform[i] for i, p in enumerate(list_prop) if p == prop
                     ]  # list_weakform with compatible properties
                     if len(l_wf) == 1:
-                        wf = l_wf[
-                            0
-                        ]  # standard weakform. No WeakFormSum required
+                        wf = l_wf[0]  # standard weakform. No WeakFormSum required
                     else:
                         # create a new WeakFormSum object
-                        wf = WeakFormSum(
-                            l_wf
-                        )  # to modify : add automatic name
+                        wf = WeakFormSum(l_wf)  # to modify : add automatic name
                         # define the assembly_options of the new weakform
                         wf.assembly_options = _AssemblyOptions()
                         wf.assembly_options["n_elm_gp", elm_type] = prop[0]
                         wf.assembly_options["assume_sym", elm_type] = prop[1]
                         wf.assembly_options["mat_lumping", elm_type] = [
-                            w.assembly_options.get(
-                                "mat_lumping", elm_type, False
-                            )
+                            w.assembly_options.get("mat_lumping", elm_type, False)
                             for w in l_wf
                         ]
 
-                    list_assembly.append(
-                        Assembly(wf, mesh, elm_type, "", **kargs)
-                    )
+                    list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
                     if list_weakform[0] in l_wf:
                         assembly_output = list_assembly[
                             -1
                         ]  # by default, the assembly used for output is the one assocaited to the 1st weakform
 
             # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
-            kargs["assembly_output"] = kargs.get(
-                "assembly_output", assembly_output
-            )
+            kargs["assembly_output"] = kargs.get("assembly_output", assembly_output)
             return AssemblySum(list_assembly, name, **kargs)
 
         return Assembly(weakform, mesh, elm_type, name, **kargs)
