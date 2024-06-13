@@ -1,31 +1,31 @@
 name: Build and Test
 
-on: 
+on:
   push:
     branches:
-      - '*'
+      - "*"
 
   pull_request:
     branches:
-      - '*'
+      - "*"
 
   schedule:
-    - cron: '0 0 * * *'
-    
+    - cron: "0 0 * * *"
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
-          
+
       - name: Setup Mambaforge
         uses: conda-incubator/setup-miniconda@v2
         with:
-            miniforge-variant: Mambaforge
-            miniforge-version: latest
-            activate-environment: fedoo
-            use-mamba: true
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          activate-environment: fedoo
+          use-mamba: true
 
       - name: Get Date
         id: get-date
@@ -49,10 +49,7 @@ jobs:
       - name: Install
         shell: bash -l {0}
         run: pip install .
-          
+
       - name: Test
         shell: bash -l {0}
-        run: |
-          cd tests
-          python run_tests.py
-
+        run: pytest tests
