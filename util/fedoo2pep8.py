@@ -4,48 +4,58 @@
 ###pep8 name converter for fedoo
 
 import os, fnmatch
+
+
 def findReplace(dirs, find, replace, filePattern):
     for directory in dirs:
         for path, dirs, files in os.walk(os.path.abspath(directory)):
             for filename in fnmatch.filter(files, filePattern):
                 if filename not in ["fedoo2pep8.py", "fedoo2pep8_script.py"]:
                     filepath = os.path.join(path, filename)
-                    with open(filepath, encoding='utf-8') as f:
+                    with open(filepath, encoding="utf-8") as f:
                         s = f.read()
                     s = s.replace(find, replace)
-                    with open(filepath, "w", encoding='utf-8') as f:
+                    with open(filepath, "w", encoding="utf-8") as f:
                         f.write(s)
 
+
 def findReplace_change(directories, find, replace, change_type=0, filePattern="*.py"):
-    #change_type = 0 - change ( ... ) by [ ... ] after the name
-    for directory in directories: 
+    # change_type = 0 - change ( ... ) by [ ... ] after the name
+    for directory in directories:
         for path, dirs, files in os.walk(os.path.abspath(directory)):
             for filename in fnmatch.filter(files, filePattern):
                 if filename not in ["fedoo2pep8.py", "fedoo2pep8_script.py"]:
                     filepath = os.path.join(path, filename)
-                    with open(filepath, encoding='utf-8') as f:
+                    with open(filepath, encoding="utf-8") as f:
                         s = f.read()
-    
+
                     ind_start = s.find(find)
                     while ind_start != -1:
                         ind_end = ind_start + len(find)
-                        if change_type ==0 and (s[ind_end] == "(" or s[ind_end+1] == "("):
-                            ind_end = s.find(")", ind_end)+1
-                            
-                            change_s = s[ind_start:ind_end].replace(find, replace).replace("(","[").replace(")","]")
-                        
-                            s = s[:ind_start] + change_s + s[ind_end:]                            
-                        else: 
-                            assert 0, 'error, check the file'
-                        ind_start = s.find(find)                
-                    
-                    with open(filepath, "w", encoding='utf-8') as f:
+                        if change_type == 0 and (
+                            s[ind_end] == "(" or s[ind_end + 1] == "("
+                        ):
+                            ind_end = s.find(")", ind_end) + 1
+
+                            change_s = (
+                                s[ind_start:ind_end]
+                                .replace(find, replace)
+                                .replace("(", "[")
+                                .replace(")", "]")
+                            )
+
+                            s = s[:ind_start] + change_s + s[ind_end:]
+                        else:
+                            assert 0, "error, check the file"
+                        ind_start = s.find(find)
+
+                    with open(filepath, "w", encoding="utf-8") as f:
                         f.write(s)
+
 
 dirs = ["../fedoo"]
 # dirs = ["../tests"]
 rep = {}
-
 
 
 # rep[".GetActive()"] = ".get_active()"
@@ -66,14 +76,11 @@ rep = {}
 # rep["fedoo.util.dataset"] = "fedoo.core.dataset"
 
 
-
-
 # rep["SeparatedLocalFrame"] = "separated_local_frame"
 # rep["GlobalLocalFrame"] = "global_local_frame"
 
 
-#Problem
-
+# Problem
 
 
 # rep["GetDisp("] = "get_disp("
@@ -85,9 +92,6 @@ rep = {}
 # rep["SaveResults"] = "save_results"
 # rep["GetResults"] = "get_results"
 # rep["ApplyBoundaryCondition"] = "apply_boundary_conditions"
-
-
-
 
 
 # rep["GetBC"] = "get_bc"
@@ -107,8 +111,6 @@ rep = {}
 # rep["GetNodalElasticEnergy"] = "get_nodal_elastic_energy"
 
 
-
-
 # rep["SetA"] = "set_A"
 # rep["GetA"] = "get_A"
 # rep["SetB"] = "set_B"
@@ -122,9 +124,6 @@ rep = {}
 # rep["SetDoFSolution"] = "set_dof_solution" #usefull ???
 
 
-
-
-
 # rep["SetInitialBCToCurrent"] = "set_initial_bc_to_current"
 # rep["GetVectorComponent"] = "get_vector_component"
 
@@ -134,7 +133,6 @@ rep = {}
 # rep["__Xdotdot"] = "__velocity"
 # rep["__Acceleration"] = "__acceleration"
 # rep["__Velocity"] = "__velocity"
-
 
 
 # rep["SetInitialDisplacement"] = "set_initial_displacement"
@@ -182,10 +180,10 @@ rep = {}
 # rep["get_disp_gradient("] = "get_disp_grad("
 #     if self.__currentGradDisp is 0: return 0
 #     else: return self.__currentGradDisp
-    
+
 # def GetTangentMatrix(self):
 
-    
+
 # rep["SolveTimeIncrement"] = "solve_time_increment"
 # rep["GetDoFSolution"] = "get_dof_solution"
 # rep["NewtonRaphsonIncrement"] = "nr_increment"
@@ -200,14 +198,7 @@ for key in rep:
 
 assert 0
 
-#WeakForm 
-
-
-
-
-
-
-
+# WeakForm
 
 
 #### TODO remove Xdot and Xdotdot from newmark problems
@@ -215,11 +206,8 @@ assert 0
 # rep["GetXdotdot"] = "get_Xdotdot"
 
 
-
-
-
 # ========================
 # Script changes that should be done by hand
 # ========================
-#- Bounding box retrun a class with xmin, xmax, ymin, ... and center properties
+# - Bounding box retrun a class with xmin, xmax, ymin, ... and center properties
 #  This is not compatible with the previous syntax

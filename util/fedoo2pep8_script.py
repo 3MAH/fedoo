@@ -4,43 +4,54 @@
 ###pep8 name converter for fedoo
 
 import os, fnmatch
+
+
 def findReplace(dirs, find, replace, filePattern):
     for directory in dirs:
         for path, dirs, files in os.walk(os.path.abspath(directory)):
             for filename in fnmatch.filter(files, filePattern):
                 if filename not in ["fedoo2pep8.py", "fedoo2pep8_script.py"]:
                     filepath = os.path.join(path, filename)
-                    with open(filepath, encoding='utf-8') as f:
+                    with open(filepath, encoding="utf-8") as f:
                         s = f.read()
                     s = s.replace(find, replace)
-                    with open(filepath, "w", encoding='utf-8') as f:
+                    with open(filepath, "w", encoding="utf-8") as f:
                         f.write(s)
 
+
 def findReplace_change(directories, find, replace, change_type=0, filePattern="*.py"):
-    #change_type = 0 - change ( ... ) by [ ... ] after the name
-    for directory in directories: 
+    # change_type = 0 - change ( ... ) by [ ... ] after the name
+    for directory in directories:
         for path, dirs, files in os.walk(os.path.abspath(directory)):
             for filename in fnmatch.filter(files, filePattern):
                 if filename not in ["fedoo2pep8.py", "fedoo2pep8_script.py"]:
                     filepath = os.path.join(path, filename)
-                    with open(filepath, encoding='utf-8') as f:
+                    with open(filepath, encoding="utf-8") as f:
                         s = f.read()
-    
+
                     ind_start = s.find(find)
                     while ind_start != -1:
                         ind_end = ind_start + len(find)
-                        if change_type ==0 and (s[ind_end] == "(" or s[ind_end+1] == "("):
-                            ind_end = s.find(")", ind_end)+1
-                            
-                            change_s = s[ind_start:ind_end].replace(find, replace).replace("(","[").replace(")","]")
-                        
+                        if change_type == 0 and (
+                            s[ind_end] == "(" or s[ind_end + 1] == "("
+                        ):
+                            ind_end = s.find(")", ind_end) + 1
+
+                            change_s = (
+                                s[ind_start:ind_end]
+                                .replace(find, replace)
+                                .replace("(", "[")
+                                .replace(")", "]")
+                            )
+
                             s = s[:ind_start] + change_s + s[ind_end:]
-                        else: 
-                            assert 0, 'error, check the file'
-                        ind_start = s.find(find)                
-                    
-                    with open(filepath, "w", encoding='utf-8') as f:
+                        else:
+                            assert 0, "error, check the file"
+                        ind_start = s.find(find)
+
+                    with open(filepath, "w", encoding="utf-8") as f:
                         f.write(s)
+
 
 dirs = ["../example", "../tests"]
 # dirs = ["../tests"]
@@ -59,7 +70,7 @@ rep = {}
 # rep[".FindNodes"] = ".find_nodes"
 # rep[".Translate"] = ".translate"
 # rep["GetNearestNode"] = "nearest_node"
-# rep["GetBoundingBox"] = "bounding_box" 
+# rep["GetBoundingBox"] = "bounding_box"
 # rep[".GetCoordinateID()"] = ".crd_name"
 
 # rep["AddInternalNodes"] = "add_internal_nodes"
@@ -97,17 +108,15 @@ rep = {}
 # findReplace_change(dirs, ".GetSetOfElements", ".element_sets", 0)
 
 
-
-
-#==================================================
+# ==================================================
 # Assembly module
-#==================================================
+# ==================================================
 # rep["GetMatrixChangeOfBasis"] = "get_change_of_basis_mat"
 # rep["DeleteMemory"] = "delete_memory"
 # rep["computeMatrixMethod"] = "_assembly_method"
 # rep["ComputeGlobalMatrix"] = "assemble_global_mat"
 # rep[".GetMesh()"] = ".mesh"
-# # SetMesh non modifié 
+# # SetMesh non modifié
 # rep[".GetWeakForm()"] = ".weakform"
 # rep[".Initialize"] = ".initialize"
 # rep[".GetNumberOfGaussPoints()"] = ".n_elm_gp"
@@ -123,20 +132,20 @@ rep = {}
 # rep["GetInternalForces"] = "get_int_forces"
 # rep["DetermineDataType"] = "determine_data_type"
 # rep["deleteGlobalMatrix"] = "delete_global_mat"
-# rep["GetMatrix"] = "global_matrix"     
-# rep["GetVector"] = "global_vector"      
+# rep["GetMatrix"] = "global_matrix"
+# rep["GetVector"] = "global_vector"
 # rep["Assembly.Create"] = "Assembly.create"
 
 
-#==================================================
+# ==================================================
 # Util module
-#==================================================
+# ==================================================
 # rep["Util.ProblemDimension"] = "ModelingSpace"
 
 
-#==================================================
+# ==================================================
 # Change module name
-#==================================================
+# ==================================================
 # rep["fd.ConstitutiveLaw"] = "fd.constitutivelaw"
 # rep["fd.WeakForm"] = "fd.weakform"
 # rep["fd.Assembly"] = "fd.assembly"
@@ -145,9 +154,9 @@ rep = {}
 # rep["fd.PGD"] = "fd.pgd"
 
 
-#==================================================
-#Problem
-#==================================================
+# ==================================================
+# Problem
+# ==================================================
 
 # rep["GetActive"] = "get_active"
 # rep["SetActive"] = "set_active"
@@ -170,19 +179,18 @@ rep = {}
 # rep["SetNewtonRaphsonErrorCriterion"] = "set_nr_criterion"
 # rep["GetDoFSolution"] = "get_dof_solution"
 
-#==================================================
-#WeakForm
-#==================================================
+# ==================================================
+# WeakForm
+# ==================================================
 rep["InternalForce"] = "StressEquilibrium"
 
 
-#==================================================
-#Other
-#==================================================
+# ==================================================
+# Other
+# ==================================================
 # rep["arrayStressTensor"] = "StressTensorArray"
 # rep["listStressTensor"] = "StressTensorList"
 # rep["listStrainTensor"] = "StrainTensorList"
-
 
 
 for key in rep:
@@ -190,7 +198,7 @@ for key in rep:
 
 assert 0
 
-#WeakForm 
+# WeakForm
 
 
 rep["GetDisp"] = "get_disp"
@@ -228,18 +236,17 @@ rep["GetMesh"] = "get_mesh"
 
 
 rep["GetDoFSolution"] = "get_dof_solution"
-rep["SetDoFSolution"] = "set_dof_solution" #usefull ???
+rep["SetDoFSolution"] = "set_dof_solution"  # usefull ???
 
 rep["SetInitialBCToCurrent"] = "set_initial_bc_to_current"
 rep["GetVectorComponent"] = "get_vector_component"
 
-rep["GetVelocity"] = "get_velocity" #deprecated
-rep["GetAcceleration"] = "get_acceleration" #deprecated
+rep["GetVelocity"] = "get_velocity"  # deprecated
+rep["GetAcceleration"] = "get_acceleration"  # deprecated
 rep["__Xdot"] = "__acceleration"
 rep["__Xdotdot"] = "__velocity"
 rep["__Acceleration"] = "__acceleration"
 rep["__Velocity"] = "__velocity"
-
 
 
 rep["SetInitialDisplacement"] = "set_initial_displacement"
@@ -264,16 +271,15 @@ rep["Reset"] = "reset"
 rep[".Update"] = ".update"
 rep["def Update"] = "def update"
 
-rep["UniqueBoundaryCondition"] = "qsdfqsfhjqsdljkfdhqsdlkfjhqsdflkhjqsddlqjksh" #save UniqueBoundaryCondition
+rep["UniqueBoundaryCondition"] = (
+    "qsdfqsfhjqsdljkfdhqsdlkfjhqsdflkhjqsddlqjksh"  # save UniqueBoundaryCondition
+)
 rep["BoundaryCondition"] = "boundary_condition"
-rep["qsdfqsfhjqsdljkfdhqsdlkfjhqsdflkhjqsddlqjksh"] = "UniqueBoundaryCondition" #reload UniqueBoundaryCondition
+rep["qsdfqsfhjqsdljkfdhqsdlkfjhqsdflkhjqsddlqjksh"] = (
+    "UniqueBoundaryCondition"  # reload UniqueBoundaryCondition
+)
 
 rep["Solve"] = "solve"
-
-
-
-
-
 
 
 #### TODO remove Xdot and Xdotdot from newmark problems
@@ -281,11 +287,8 @@ rep["Solve"] = "solve"
 # rep["GetXdotdot"] = "get_Xdotdot"
 
 
-
-
-
 # ========================
 # Script changes that should be done by hand
 # ========================
-#- Bounding box retrun a class with xmin, xmax, ymin, ... and center properties
+# - Bounding box retrun a class with xmin, xmax, ymin, ... and center properties
 #  This is not compatible with the previous syntax

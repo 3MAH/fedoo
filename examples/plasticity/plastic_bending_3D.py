@@ -6,105 +6,124 @@ import pylab as plt
 from numpy import linalg
 
 start = time()
-#--------------- Pre-Treatment --------------------------------------------------------
+# --------------- Pre-Treatment --------------------------------------------------------
 
 fd.ModelingSpace("3D")
 
-NLGEOM = 'UL'
-typeBending = '3nodes' #'3nodes' or '4nodes'
-#Units: N, mm, MPa
+NLGEOM = "UL"
+typeBending = "3nodes"  #'3nodes' or '4nodes'
+# Units: N, mm, MPa
 h = 2
 w = 10
 L = 16
 E = 200e3
-nu=0.3
-alpha = 1e-5 #???
+nu = 0.3
+alpha = 1e-5  # ???
 meshname = "Domain"
 uimp = -8
 
-mesh = fd.mesh.box_mesh(nx=21, ny=7, nz=7, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = meshname)
+mesh = fd.mesh.box_mesh(
+    nx=21,
+    ny=7,
+    nz=7,
+    x_min=0,
+    x_max=L,
+    y_min=0,
+    y_max=h,
+    z_min=0,
+    z_max=w,
+    elm_type="hex8",
+    name=meshname,
+)
 
-crd = mesh.nodes 
+crd = mesh.nodes
 
-mat =1
+mat = 1
 if mat == 0:
     props = np.array([E, nu, alpha])
-    material = fd.constitutivelaw.Simcoon("ELISO", props, name='constitutivelaw')
+    material = fd.constitutivelaw.Simcoon("ELISO", props, name="constitutivelaw")
     # material.SetMaskH([[] for i in range(6)])
     # mask = [[3,4,5] for i in range(3)]
     # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
     # material.SetMaskH(mask)
 elif mat == 1 or mat == 2:
     Re = 300
-    k=1000 #1500
-    m=0.3 #0.25
+    k = 1000  # 1500
+    m = 0.3  # 0.25
     if mat == 1:
-        props = np.array([E, nu, alpha, Re,k,m])
-        material = fd.constitutivelaw.Simcoon("EPICP", props, name='constitutivelaw')
+        props = np.array([E, nu, alpha, Re, k, m])
+        material = fd.constitutivelaw.Simcoon("EPICP", props, name="constitutivelaw")
         # material.corate = 2
         # material.SetMaskH([[] for i in range(6)])
-    
+
         # mask = [[3,4,5] for i in range(3)]
         # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
         # material.SetMaskH(mask)
 
     elif mat == 2:
-        material = fd.constitutivelaw.ElastoPlasticity(E,nu,Re, name='constitutivelaw')
-        material.SetHardeningFunction('power', H=k, beta=m)
+        material = fd.constitutivelaw.ElastoPlasticity(
+            E, nu, Re, name="constitutivelaw"
+        )
+        material.SetHardeningFunction("power", H=k, beta=m)
 else:
-    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name='constitutivelaw')
-
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="constitutivelaw")
 
 
 #### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
-wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom = NLGEOM)
+wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom=NLGEOM)
 wf.corate = "green_naghdi"
 
 
-#note set for boundary conditions
-nodes_bottomLeft = mesh.find_nodes('XY',(0,0))
-nodes_bottomRight = mesh.find_nodes('XY',(L,0))
+# note set for boundary conditions
+nodes_bottomLeft = mesh.find_nodes("XY", (0, 0))
+nodes_bottomRight = mesh.find_nodes("XY", (L, 0))
 
-if typeBending == '3nodes':
-    nodes_topCenter = mesh.find_nodes('XY',(L/2,h))
+if typeBending == "3nodes":
+    nodes_topCenter = mesh.find_nodes("XY", (L / 2, h))
     # nodes_topCenter = np.where((crd[:,0]==L/2) * (crd[:,1]==h))[0]
-else: 
-    nodes_top1 = mesh.find_nodes('XY',(L/4,h))
-    nodes_top2 = mesh.find_nodes('XY',(3*L/4,h))
+else:
+    nodes_top1 = mesh.find_nodes("XY", (L / 4, h))
+    nodes_top2 = mesh.find_nodes("XY", (3 * L / 4, h))
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 # assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create(wf, meshname, 'hex8', name="Assembling")     
+assemb = fd.Assembly.create(wf, meshname, "hex8", name="Assembling")
 
 
 pb = fd.problem.NonLinear("Assembling")
 # pb.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0 = None, tol = 5e-3, max_subiter = 5)
+pb.set_nr_criterion("Displacement", err0=None, tol=5e-3, max_subiter=5)
 
 # Problem.set_nr_criterion("Displacement")
 # pb.set_nr_criterion("Work")
 # Problem.set_nr_criterion("Force")
 
-#create a 'result' folder and set the desired ouputs
-if not(os.path.isdir('results')): os.mkdir('results')
-# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')    
-# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Cauchy', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')    
-# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])    
-res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm'], file_format = 'fdz')    
+# create a 'result' folder and set the desired ouputs
+if not (os.path.isdir("results")):
+    os.mkdir("results")
+# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')
+# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Cauchy', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
+# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
+res = pb.add_output(
+    "results/bendingPlastic3D",
+    "Assembling",
+    ["Disp", "Cauchy", "Strain", "Cauchy_vm"],
+    file_format="fdz",
+)
 
 
 ################### step 1 ################################
 tmax = 1
-pb.bc.add('Dirichlet',nodes_bottomLeft,'Disp',0)
-pb.bc.add('Dirichlet',nodes_bottomRight,'DispY',0)
-bc = pb.bc.add('Dirichlet',nodes_topCenter,'DispY', uimp)
+pb.bc.add("Dirichlet", nodes_bottomLeft, "Disp", 0)
+pb.bc.add("Dirichlet", nodes_bottomRight, "DispY", 0)
+bc = pb.bc.add("Dirichlet", nodes_topCenter, "DispY", uimp)
 
-pb.nlsolve(dt = 0.025, tmax = 1, update_dt = False, print_info = 1, interval_output = 0.05)
+pb.nlsolve(dt=0.025, tmax=1, update_dt=False, print_info=1, interval_output=0.05)
 
-E = assemb.sv['Strain'] 
+E = assemb.sv["Strain"]
 # E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
-# 
+#
 # ################### step 2 ################################
 # bc.Remove()
 # #We set initial condition to the applied force to relax the load
@@ -113,7 +132,7 @@ E = assemb.sv['Strain']
 
 # Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
 
-print(time()-start)
+print(time() - start)
 
 
 ### plot with pyvista
@@ -123,7 +142,7 @@ print(time()-start)
 # from pyvistaqt import BackgroundPlotter
 # plotter = BackgroundPlotter()
 
-res.plot('Stress',component = 'vm')
+res.plot("Stress", component="vm")
 
 # res.plot('Statev', 'Node', component = 1)
 # res.write_movie('test', 'Stress', component=0)
@@ -155,19 +174,3 @@ res.plot('Stress',component = 'vm')
 
 # cpos = pl.show(return_cpos = True)
 # # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-
-
-
-   
-    
-    
-    
-    
-
-
-
-
-
-
