@@ -46,13 +46,16 @@ jobs:
           CACHE_NUMBER: 0
         id: cache
 
-      - name: Update environment Unix
-        run: mamba env update -n fedoo -f environment.yml
-        if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
+      # - name: Update environment Unix
+      #   run: mamba env update -n fedoo -f environment.yml
+      #   if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
 
-      - name: Update environment Windows
+      # - name: Update environment Windows
+      #   run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 set3mah::simcoon pytest pytest-xdist
+      #   if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+
+      - name: Debug tests (without scikit-umfpack)
         run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 set3mah::simcoon pytest pytest-xdist
-        if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
 
       - name: Install
         shell: bash -l {0}
