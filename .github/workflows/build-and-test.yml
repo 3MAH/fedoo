@@ -29,7 +29,16 @@ jobs:
           generate-run-shell: true
           micromamba-version: "1.5.8-0" # any version from https://github.com/mamba-org/micromamba-releases
           # environment-file: environment.yml
-          create-args: python=${{ matrix.python-version }}
+          environment-name: fedoo
+          create-args: >-
+            python=${{ matrix.python-version }}
+            numpy
+            scipy
+            pypardiso
+            pyvista
+            set3mah::simcoon
+            pytest
+            pytest-xdist
           init-shell: powershell bash
           download-micromamba: true
           cache-environment: false
@@ -43,13 +52,32 @@ jobs:
       #   run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 set3mah::simcoon pytest pytest-xdist
       #   if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
 
-      - name: Debug tests (without scikit-umfpack)
-        run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 set3mah::simcoon pytest pytest-xdist
+      # - name: Debug tests (without scikit-umfpack)
+      #   if: runner.os != 'Windows'
+      #   run: conda install -y
+      #   shell: micromamba-shell {0}
+
+      # - name: Debug tests (without scikit-umfpack)
+      #   if: runner.os == 'Windows'
+      #   run: conda install -y
+      #   shell: pwsh
 
       - name: Install
-        shell: bash -l {0}
+        if: runner.os != 'Windows'
+        shell: micromamba-shell {0}
         run: pip install .
 
       - name: Test
-        shell: bash -l {0}
+        if: runner.os != 'Windows'
+        shell: micromamba-shell {0}
+        run: pytest tests -n auto
+
+      - name: Install
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pip install .
+
+      - name: Test
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: pytest tests -n auto
