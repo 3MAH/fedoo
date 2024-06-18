@@ -2,16 +2,14 @@ import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
 
-from fedoo.pgd.SeparatedArray import *
-from fedoo.pgd.SeparatedOperator import *
-
 # from fedoo.pgd.problemPGD.BoundaryConditionPGD import *
 from fedoo.core.base import ProblemBase
 from fedoo.core.boundary_conditions import BoundaryCondition
-from fedoo.problem.linear import _LinearBase
+from fedoo.pgd.SeparatedArray import SeparatedArray, SeparatedOnes, SeparatedZeros
 from fedoo.problem.explicit_dynamic import _ExplicitDynamicBase
-from fedoo.problem.non_linear import _NonLinearBase
+from fedoo.problem.linear import _LinearBase
 from fedoo.problem.newmark import _NewmarkBase
+from fedoo.problem.non_linear import _NonLinearBase
 
 # ===============================================================================
 # Classes permettant de définir un problème sous forme discrète (forme séparée)

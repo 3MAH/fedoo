@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import sparse
-from fedoo.lib_elements.element_base import *
+
+
+from fedoo.lib_elements.element_base import Element
 
 
 class FiniteDifference1D(Element):

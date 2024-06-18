@@ -1,4 +1,6 @@
-"""
+"""WeakForm module.
+
+=============================================
 Weak Formulation (:mod:`fedoo.weakform`)
 =============================================
 
@@ -34,8 +36,36 @@ The WeakForm library contains the following classes:
    ExternalPressure
 """
 
-import pkgutil
+from .beam import BeamEquilibrium
+from .beam_parametric import ParametricBeam, ParametricBernoulliBeam
+from .heat_equation import HeatEquation, SteadyHeatEquation, TemperatureTimeDerivative
+from .implicit_dynamic import ImplicitDynamic, ImplicitDynamic2
+from .inertia import Inertia
+from .interface_force import InterfaceForce
+from .plate import (
+    PlateEquilibrium,
+    PlateEquilibriumFI,
+    PlateEquilibriumSI,
+    PlateKirchhoffLoveEquilibrium,
+    PlateShearEquilibrium,
+)
+from .stress_equilibrium import StressEquilibrium
 
-for loader, module_name, is_pkg in pkgutil.walk_packages(__path__):
-    # module = loader.find_module(module_name).load_module(module_name)
-    exec("from ." + module_name + " import *")
+__all__ = [
+    "BeamEquilibrium",
+    "Inertia",
+    "InterfaceForce",
+    "PlateEquilibrium",
+    "PlateEquilibriumFI",
+    "PlateEquilibriumSI",
+    "PlateKirchhoffLoveEquilibrium",
+    "PlateShearEquilibrium",
+    "StressEquilibrium",
+    "HeatEquation",
+    "SteadyHeatEquation",
+    "TemperatureTimeDerivative",
+    "ImplicitDynamic",
+    "ImplicitDynamic2",
+    "ParametricBeam",
+    "ParametricBernoulliBeam",
+]

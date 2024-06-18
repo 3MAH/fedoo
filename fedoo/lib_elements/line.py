@@ -1,5 +1,6 @@
 import numpy as np
-from fedoo.lib_elements.element_base import *
+
+from fedoo.lib_elements.element_base import Element1D, Element1DGeom2
 
 
 class Lin2(Element1DGeom2, Element1D):
