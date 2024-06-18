@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Mambaforge
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -46,9 +46,13 @@ jobs:
           CACHE_NUMBER: 0
         id: cache
 
-      - name: Update environment
+      - name: Update environment Unix
         run: mamba env update -n fedoo -f environment.yml
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'windows-latest'
+
+      - name: Update environment Windows
+        run: mamba install -n fedoo python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 simcoon pytest pytest-xdist
+        if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'windows-latest'
 
       - name: Install
         shell: bash -l {0}
