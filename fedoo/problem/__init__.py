@@ -1,4 +1,5 @@
-"""
+"""Problem module.
+
 =============================================
 Problem (:mod:`fedoo.problem`)
 =============================================
@@ -17,7 +18,8 @@ To create a new Problem, use one of the following function:
    NonLinearNewmark
    ExplicitDynamic
 
-Each of these functions creates an object that is derived from a base class "ProblemBase".
+Each of these functions creates an object that is derived from a \
+   base class "ProblemBase".
 
 .. currentmodule:: fedoo.core.base
 
@@ -28,8 +30,16 @@ Each of these functions creates an object that is derived from a base class "Pro
    ProblemBase
 """
 
-import pkgutil
+from .explicit_dynamic import ExplicitDynamic
+from .linear import Linear
+from .newmark import Newmark
+from .nl_newmark import NonLinearNewmark
+from .non_linear import NonLinear
 
-for loader, module_name, is_pkg in pkgutil.walk_packages(__path__):
-    # module = loader.find_module(module_name).load_module(module_name)
-    exec("from ." + module_name + " import *")
+__all__ = [
+    "Linear",
+    "NonLinear",
+    "Newmark",
+    "NonLinearNewmark",
+    "ExplicitDynamic",
+]

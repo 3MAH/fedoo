@@ -1,18 +1,23 @@
-from fedoo.core.base import AssemblyBase
-from fedoo.core.weakform import _AssemblyOptions, WeakFormBase
-from fedoo.core.assembly_sum import AssemblySum
-from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-from fedoo.core.mesh import Mesh
-from fedoo.lib_elements.element_list import *
+from copy import copy
+
+import numpy as np
+from scipy import sparse
+
+from fedoo.core._sparsematrix import RowBlocMatrix
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core._sparsematrix import (
     _BlocSparseOld as BlocSparseOld,
 )  # required for 'old' _assembly_method
-from fedoo.core._sparsematrix import RowBlocMatrix
-
-from scipy import sparse
-import numpy as np
-from copy import copy
+from fedoo.core.assembly_sum import AssemblySum
+from fedoo.core.base import AssemblyBase
+from fedoo.core.mesh import Mesh
+from fedoo.core.weakform import WeakFormBase, _AssemblyOptions
+from fedoo.lib_elements.element_list import (
+    get_default_n_gp,
+    get_element,
+    get_node_elm_coordinates,
+)
+from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
 class Assembly(AssemblyBase):

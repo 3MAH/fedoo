@@ -1,5 +1,7 @@
 import numpy as np
-from fedoo.lib_elements.element_base import *
+
+
+from fedoo.lib_elements.element_base import Element
 
 
 class ElementHexahedron(Element):
