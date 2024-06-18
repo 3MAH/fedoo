@@ -51,7 +51,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
 
       - name: Update environment Windows
-        run: mamba install -n fedoo python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 simcoon pytest pytest-xdist
+        run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 simcoon pytest pytest-xdist
         if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
 
       - name: Install
