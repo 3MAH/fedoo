@@ -306,7 +306,7 @@ class Problem(ProblemBase):
 
         self.__MatCB = sparse.coo_matrix(
             (data, (row, col)), shape=(nvar * n, len(dof_free))
-        ).tocsr()
+        ).tocsc() #so that self.__MatCB.T is csr
 
         self.__B = F
         self._dof_slave = dof_slave
