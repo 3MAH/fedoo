@@ -30,6 +30,4 @@ test:
   requires:
     - pytest
   commands:
-    - cd $SRC_DIR/tests
-    - $PYTHON run_tests.py
-  
+    - pytest tests
