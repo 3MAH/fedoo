@@ -17,7 +17,7 @@ def test_thermal3D():
     # Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname)
     # Mesh.import_file('octet_surf.msh', meshname = "Domain")
     # Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-    gyroid = Path(__file__).parent / "../util/meshes/gyroid.msh"
+    gyroid = Path(__file__).resolve().parent / "../util/meshes/gyroid.msh"
     fd.mesh.import_file(str(gyroid), name="Domain")
 
     mesh = fd.Mesh[meshname]
