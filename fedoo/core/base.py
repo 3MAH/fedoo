@@ -352,7 +352,7 @@ class ProblemBase:
           >>> mpiexec -n 4 python petsc_examples.py -mpi_linear_solver_server -ksp_type cg -pc_type bjacobi
 
           A performance gain may be observed for very large problems, but
-          this method should be avoid for probem with moderate size.
+          this method should be avoid for problem with moderate size.
 
         Examples
         --------
