@@ -15,7 +15,7 @@ def test_octet():
 
     # Import the mesh generated with Microgen
     octet_truss = (
-        Path(__file__).resolve().parent / "../util/meshes/octet_truss.msh"
+        Path(__file__).resolve().parent / "octet_truss.msh"
     )
     fd.mesh.import_file(str(octet_truss), name="Domain")
 
