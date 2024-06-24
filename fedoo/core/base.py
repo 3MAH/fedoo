@@ -1,11 +1,10 @@
 """Base classes for principles objects.
+
 Should not be used, excepted to create inherited classes.
 """
 
-from copy import deepcopy
 from fedoo.core.modelingspace import ModelingSpace
 
-import numpy as np
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 
@@ -15,7 +14,7 @@ try:
 
     USE_PYPARDISO = True
     USE_UMFPACK = False
-except:
+except ModuleNotFoundError:
     USE_PYPARDISO = False
     try:
         from scikits.umfpack import spsolve
@@ -29,6 +28,7 @@ except:
              computation performance"
         )
         USE_UMFPACK = False
+
 
 def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
@@ -55,14 +55,17 @@ class MeshBase:
             MeshBase.__dic[self.__name] = self
 
     def __class_getitem__(cls, item):
+        """Get the mesh whose name is item."""
         return cls.__dic[item]
 
     @property
     def name(self):
+        """Name of the mesh."""
         return self.__name
 
     @staticmethod
     def get_all():
+        """Return a dict with all the known Mesh (with a name)."""
         return MeshBase.__dic
 
 
@@ -91,47 +94,57 @@ class AssemblyBase:
         self.__space = space
 
     def __class_getitem__(cls, item):
+        """Get the assembly whose name is item."""
         return cls.__dic[item]
 
     def get_global_matrix(self):
+        """Get the last computed global matrix."""
         if self.global_matrix is None:
             self.assemble_global_mat()
         return self.global_matrix
 
     def get_global_vector(self):
+        """Get the last computed global vector."""
         if self.global_vector is None:
             self.assemble_global_mat()
         return self.global_vector
 
     def assemble_global_mat(self, compute="all"):
+        """Launch the assembly of global matrix."""
         # needs to be defined in inherited classes
         pass
 
     def delete_global_mat(self):
-        """
-        Delete Global Matrix and Global Vector related to the assembly.
+        """Delete Global Matrix and Global Vector related to the assembly.
+
         This method allow to force a new assembly
         """
         self.global_matrix = None
         self.global_vector = None
 
     def set_start(self, pb):
+        """Begin a new time iteration."""
         pass
 
     def to_start(self, pb):
+        """Restart the current time iteration."""
         pass
 
     def initialize(self, pb):
+        """Initialize the assembly for the current problem."""
         pass
 
     def update(self, pb, compute="all"):
+        """Update the assembly for the current problem state."""
         pass
 
     def reset(self):
+        """Reset the assembly."""
         pass
 
     @staticmethod
     def get_all():
+        """Return a dict with all the known Assembly (with a name)."""
         return AssemblyBase.__dic
 
     # @staticmethod
@@ -144,10 +157,12 @@ class AssemblyBase:
 
     @property
     def space(self):
+        """Modeling space associated to the assembly."""
         return self.__space
 
     @property
     def name(self):
+        """Name of the assembly if defined."""
         return self.__name
 
 
@@ -163,41 +178,47 @@ class ConstitutiveLaw:
         assert isinstance(name, str), "An name must be a string"
         self.__name = name
         self.local_frame = None
-        self._dimension = None  
-        # str or None to specify a space and associated model 
+        self._dimension = None
+        # str or None to specify a space and associated model
         # (for instance "2Dstress" for plane stress)
 
         ConstitutiveLaw.__dic[self.__name] = self
 
     def __class_getitem__(cls, item):
+        """Get the constitutive law whose name is item."""
         return cls.__dic[item]
 
     def reset(self):
-        # function called to restart a problem (reset all internal variables)
+        """Reset the constitutive law.
+
+        This function is called when a problem is reset.
+        """
         pass
 
     def set_start(self, assembly, pb):
-        # function called when the time is increased. 
+        """Begin a new time iteration."""
         pass
 
     def to_start(self, assembly, pb):
-        # function called if the time step is reinitialized. 
+        """Restart the current time iteration."""
         pass
 
     def initialize(self, assembly, pb):
-        # function called to initialize the constutive law
+        """Initialize the constitutive law for the current problem."""
         pass
 
     def update(self, assembly, pb):
-        # function called to update the state of constitutive law
+        """Update the constitutive law for the current problem state."""
         pass
 
     @staticmethod
     def get_all():
+        """Return a dict with all the known ConstitutiveLaw (with a name)."""
         return ConstitutiveLaw.__dic
 
     @property
     def name(self):
+        """Name of the constitutive law."""
         return self.__name
 
 
@@ -259,10 +280,7 @@ class ProblemBase:
 
     @staticmethod
     def set_active(name):
-        """
-        Static method.
-        Define the active Problem from its name.
-        """
+        """Define the active Problem from its name."""
         if isinstance(name, ProblemBase):
             ProblemBase.active = name
         elif name in ProblemBase.__dic:
@@ -272,10 +290,7 @@ class ProblemBase:
 
     @staticmethod
     def get_active():
-        """
-        Static method.
-        Return the active Problem.
-        """
+        """Return the active Problem."""
         return ProblemBase.active
 
     def set_solver(
@@ -288,30 +303,30 @@ class ProblemBase:
         solver: str, ufunc
             Type of solver.
             The possible choice are :
-            * 'direct': direct solver. If pypardiso is installed, the 
-              pypardiso solver is used. If not, the function 
+            * 'direct': direct solver. If pypardiso is installed, the
+              pypardiso solver is used. If not, the function
               scipy.sparse.linalg.spsolve is used instead.
-              If sckikit-umfpack is installed, scipy will use the umfpack 
-              solver which is significantly more efficient than the base 
+              If sckikit-umfpack is installed, scipy will use the umfpack
+              solver which is significantly more efficient than the base
               scipy solver.
-            * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk' 
-              using the corresponding iterative method from 
-              scipy.sparse.linalg. For instance, 'cg' is the conjugate 
+            * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk'
+              using the corresponding iterative method from
+              scipy.sparse.linalg. For instance, 'cg' is the conjugate
               gradient based on the function scipy.sparse.linalg.cg.
             * 'pardiso': force the use of the pypardiso solver
-            * 'direct_scipy': force the use of the direct scipy solver 
+            * 'direct_scipy': force the use of the direct scipy solver
               (umfpack if installed)
-            * 'petsc': use the petsc methods (iterative or direct). petsc4py 
+            * 'petsc': use the petsc methods (iterative or direct). petsc4py
               should be installed.
-            * function: A user spsolve function that should have the signature 
+            * function: A user spsolve function that should have the signature
               res = solver(A,B,**kargs).
               where A is a scipy sparse matrix and B a 1d numpy array.
               kargs may contains optional parameters.
         kargs: optional parameters depending on the type of solver
             precond: bool
-              Use precond = False to desactivate the diagonal matrix 
+              Use precond = False to desactivate the diagonal matrix
               preconditionning for scipy iterative methods.
-              If this parametre is not given, the precoditionning is activated 
+              If this parametre is not given, the precoditionning is activated
               if M is not given.
             M: {sparse matrix, ndarray, LinearOperator}
               Preconditioner for A used for scipy iterative methods.
@@ -323,33 +338,31 @@ class ProblemBase:
               See the petsc documentation for available preconditioners.
             pc_factor_mat_solver_type: str
               Petsc solver for matrix factorization when applicable.
-              See the petsc documentation for details about this parameter.          
+              See the petsc documentation for details about this parameter.
 
         Notes
         -----
-        * To change the many available petsc options, the 
-          petsc4py.PETSc.Options dict should be imported and modified 
+        * To change the many available petsc options, the
+          petsc4py.PETSc.Options dict should be imported and modified
           (see example below).
         * To use the petsc with MPI parallelization (PCMPI), the script
-          mpi4py needs to be installed, and the script should be launch in 
+          mpi4py needs to be installed, and the script should be launch in
           command line using mpiexec. For instance:
-          
+
           >>> mpiexec -n 4 python petsc_examples.py -mpi_linear_solver_server -ksp_type cg -pc_type bjacobi
-          
+
           A performance gain may be observed for very large problems, but
           this method should be avoid for probem with moderate size.
-          
+
         Examples
         --------
-
           >>> # Use the scipy cg solver without preconditioner
           >>> pb.set_solver('cg', precond=False, rtol=1e-4)
           >>>
-          >>> # Use the petsc cg solver with jacobi preconditioner and modify 
+          >>> # Use the petsc cg solver with jacobi preconditioner and modify
           >>> # the rtol default parameter.
           >>> pb.set_solver('petsc', solver_type='cg', pc_type='jacobi')
-          >>> from petsc4py.PETSc import Optionsd should
-          be used 
+          >>> from petsc4py.PETSc import Options
           >>> petsc_opt = Options()
           >>> petsc_opt['ksp_rtol'] = 1e-4
           >>>
@@ -376,7 +389,7 @@ class ProblemBase:
             ]:  # use scipy solver
                 solver_func = eval("sparse.linalg." + solver)
                 return_info = True
-                precond = kargs.pop('precond', True)
+                precond = kargs.pop("precond", True)
             elif solver == "petsc":
                 global USE_PETSC, PETSc
                 if USE_PETSC is None:
@@ -385,6 +398,7 @@ class ProblemBase:
                     except ModuleNotFoundError:
                         raise ModuleNotFoundError("PETSc is not installed.")
                     import sys
+
                     petsc4py.init(sys.argv)
                     from petsc4py import PETSc
                 USE_PETSC = True
@@ -434,31 +448,34 @@ class ProblemBase:
         return self.__solver[1]
 
 
-def _solver_petsc(A, 
-                  B, 
-                  solver_type='bcgs', 
-                  pc_type='eisenstat', 
-                  pc_factor_mat_solver_type=None, 
-                  **kargs
-    ):
-    A_petsc = PETSc.Mat().createAIJWithArrays(A.shape, (A.indptr, A.indices, A.data))    
+def _solver_petsc(
+    A,
+    B,
+    solver_type="bcgs",
+    pc_type="eisenstat",
+    pc_factor_mat_solver_type=None,
+    **kargs,
+):
+    A_petsc = PETSc.Mat().createAIJWithArrays(
+        A.shape, (A.indptr, A.indices, A.data)
+    )
     B_petsc = PETSc.Vec().createWithArray(B)
     ksp = PETSc.KSP()
-    ksp.create(comm=A_petsc.getComm())    
-    ksp.setType(solver_type)        
+    ksp.create(comm=A_petsc.getComm())
+    ksp.setType(solver_type)
     pc = ksp.getPC()
-    pc.setType(pc_type)       
+    pc.setType(pc_type)
     if pc_factor_mat_solver_type is not None:
         pc.setFactorSolverType(pc_factor_mat_solver_type)
-    
+
     ksp.setOperators(A_petsc)
     ksp.setFromOptions()
 
     res = A_petsc.createVecLeft()
     ksp.setUp()
 
-    if isinstance(A,(sparse.csr_array, sparse.csr_matrix)):
+    if isinstance(A, (sparse.csr_array, sparse.csr_matrix)):
         ksp.solve(B_petsc, res)
-    elif isinstance(A,(sparse.csc_array, sparse.csc_matrix)):
+    elif isinstance(A, (sparse.csc_array, sparse.csc_matrix)):
         ksp.solveTranspose(B_petsc, res)
     return res
