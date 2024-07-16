@@ -27,99 +27,25 @@ class ElementHexahedron(Element):
             return np.c_[xi, eta, zeta]
         elif n_elm_gp == 27:
             a = 0.7745966692414834
-            b = 0.5555555555555556
-            c = 0.8888888888888888
             xi = np.c_[
                 [
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    -a,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    a,
-                    a,
-                    a,
-                    a,
-                    a,
-                    a,
-                    a,
-                    a,
-                    a,
+                    -a, -a, -a, -a, -a, -a, -a, -a, -a,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    a, a, a, a, a, a, a, a, a,
                 ]
             ]
             eta = np.c_[
                 [
-                    -a,
-                    -a,
-                    -a,
-                    0.0,
-                    0.0,
-                    0.0,
-                    a,
-                    a,
-                    a,
-                    -a,
-                    -a,
-                    -a,
-                    0.0,
-                    0.0,
-                    0.0,
-                    a,
-                    a,
-                    a,
-                    -a,
-                    -a,
-                    -a,
-                    0.0,
-                    0.0,
-                    0.0,
-                    a,
-                    a,
-                    a,
+                    -a, -a, -a, 0.0, 0.0, 0.0, a, a, a,
+                    -a, -a, -a, 0.0, 0.0, 0.0, a, a, a,
+                    -a, -a, -a, 0.0, 0.0, 0.0, a, a, a,
                 ]
             ]
             zeta = np.c_[
                 [
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
-                    -a,
-                    0.0,
-                    a,
+                    -a, 0.0, a, -a, 0.0, a, -a, 0.0, a,
+                    -a, 0.0, a, -a, 0.0, a, -a, 0.0, a,
+                    -a, 0.0, a, -a, 0.0, a, -a, 0.0, a,
                 ]
             ]
             return np.c_[xi, eta, zeta]
@@ -249,6 +175,28 @@ class Hex8(ElementHexahedron):
             for xi in vec_xi
         ]
 
+class Hex8r(Hex8):
+    name = "hex8r"
+    default_n_gp = 1
+    n_nodes = 8
+
+    # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta, zeta)
+    # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
+    # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
+    # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
+    def ShapeFunction(self, vec_xi):
+        # return mean value for all gp
+        return 0.125 * np.ones((len(vec_xi), 8))
+
+    def ShapeFunctionDerivative(self, vec_xi):
+        return [
+            0.125 * np.array([
+                [-1, 1, 1, -1, -1, 1, 1, -1],
+                [-1, -1, 1, 1, -1, -1, 1, 1],
+                [-1, -1, -1, -1, 1, 1, 1, 1],
+            ])
+            for xi in vec_xi
+        ]
 
 class Hex20(ElementHexahedron):
     name = "hex20"
@@ -256,74 +204,27 @@ class Hex20(ElementHexahedron):
     n_nodes = 20
 
     def __init__(self, n_elm_gp=27, **kargs):
-        self.xi_nd = np.c_[
-            [
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                0.0,
-                1.0,
-                0.0,
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                0.0,
-                1.0,
-                0.0,
-                -1.0,
-            ],
-            [
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                0.0,
-                1.0,
-                0.0,
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                -1.0,
-                0.0,
-                1.0,
-                0.0,
-            ],
-            [
-                -1.0,
-                -1.0,
-                -1.0,
-                -1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                -1.0,
-                -1.0,
-                -1.0,
-                -1.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-            ],
-        ]
+        self.xi_nd = np.array([[-1., -1., -1.],
+                               [1., -1., -1.],
+                               [1.,  1., -1.],
+                               [-1.,  1., -1.],
+                               [-1., -1.,  1.],
+                               [1., -1.,  1.],
+                               [1.,  1.,  1.],
+                               [-1.,  1.,  1.],
+                               [0., -1., -1.],
+                               [1.,  0., -1.],
+                               [0.,  1., -1.],
+                               [-1.,  0., -1.],
+                               [0., -1.,  1.],
+                               [1.,  0.,  1.],
+                               [0.,  1.,  1.],
+                               [-1.,  0.,  1.],
+                               [-1., -1.,  0.],
+                               [1., -1.,  0.],
+                               [1.,  1.,  0.],
+                               [-1.,  1.,  0.]])
+
         self.n_elm_gp = n_elm_gp
         ElementHexahedron.__init__(self, n_elm_gp)
 
@@ -348,14 +249,14 @@ class Hex20(ElementHexahedron):
             0.25 * (1 - eta**2) * (1 + xi) * (1 - zeta),
             0.25 * (1 - xi**2) * (1 + eta) * (1 - zeta),
             0.25 * (1 - eta**2) * (1 - xi) * (1 - zeta),
-            0.25 * (1 - zeta**2) * (1 - xi) * (1 - eta),
-            0.25 * (1 - zeta**2) * (1 + xi) * (1 - eta),
-            0.25 * (1 - zeta**2) * (1 + xi) * (1 + eta),
-            0.25 * (1 - zeta**2) * (1 - xi) * (1 + eta),
             0.25 * (1 - xi**2) * (1 - eta) * (1 + zeta),
             0.25 * (1 - eta**2) * (1 + xi) * (1 + zeta),
             0.25 * (1 - xi**2) * (1 + eta) * (1 + zeta),
             0.25 * (1 - eta**2) * (1 - xi) * (1 + zeta),
+            0.25 * (1 - zeta**2) * (1 - xi) * (1 - eta),
+            0.25 * (1 - zeta**2) * (1 + xi) * (1 - eta),
+            0.25 * (1 - zeta**2) * (1 + xi) * (1 + eta),
+            0.25 * (1 - zeta**2) * (1 - xi) * (1 + eta),            
         ]
 
     def ShapeFunctionDerivative(self, vec_xi):
@@ -399,14 +300,14 @@ class Hex20(ElementHexahedron):
                         0.25 * (1 - xi[1] ** 2) * (1 - xi[2]),
                         -0.5 * xi[0] * (1 + xi[1]) * (1 - xi[2]),
                         -0.25 * (1 - xi[1] ** 2) * (1 - xi[2]),
-                        -0.25 * (1 - xi[1]) * (1 - xi[2] ** 2),
-                        0.25 * (1 - xi[1]) * (1 - xi[2] ** 2),
-                        0.25 * (1 + xi[1]) * (1 - xi[2] ** 2),
-                        -0.25 * (1 + xi[1]) * (1 - xi[2] ** 2),
                         -0.5 * xi[0] * (1 - xi[1]) * (1 + xi[2]),
                         0.25 * (1 - xi[1] ** 2) * (1 + xi[2]),
                         -0.5 * xi[0] * (1 + xi[1]) * (1 + xi[2]),
                         -0.25 * (1 - xi[1] ** 2) * (1 + xi[2]),
+                        -0.25 * (1 - xi[1]) * (1 - xi[2] ** 2),
+                        0.25 * (1 - xi[1]) * (1 - xi[2] ** 2),
+                        0.25 * (1 + xi[1]) * (1 - xi[2] ** 2),
+                        -0.25 * (1 + xi[1]) * (1 - xi[2] ** 2),
                     ],
                     [
                         0.125
@@ -445,14 +346,14 @@ class Hex20(ElementHexahedron):
                         -0.5 * xi[1] * (1 + xi[0]) * (1 - xi[2]),
                         0.25 * (1 - xi[0] ** 2) * (1 - xi[2]),
                         -0.5 * xi[1] * (1 - xi[0]) * (1 - xi[2]),
-                        -0.25 * (1 - xi[0]) * (1 - xi[2] ** 2),
-                        -0.25 * (1 + xi[0]) * (1 - xi[2] ** 2),
-                        0.25 * (1 + xi[0]) * (1 - xi[2] ** 2),
-                        0.25 * (1 - xi[0]) * (1 - xi[2] ** 2),
                         -0.25 * (1 - xi[0] ** 2) * (1 + xi[2]),
                         -0.5 * xi[1] * (1 + xi[0]) * (1 + xi[2]),
                         0.25 * (1 - xi[0] ** 2) * (1 + xi[2]),
                         -0.5 * xi[1] * (1 - xi[0]) * (1 + xi[2]),
+                        -0.25 * (1 - xi[0]) * (1 - xi[2] ** 2),
+                        -0.25 * (1 + xi[0]) * (1 - xi[2] ** 2),
+                        0.25 * (1 + xi[0]) * (1 - xi[2] ** 2),
+                        0.25 * (1 - xi[0]) * (1 - xi[2] ** 2),
                     ],
                     [
                         0.125
@@ -491,14 +392,14 @@ class Hex20(ElementHexahedron):
                         -0.25 * (1 + xi[0]) * (1 - xi[1] ** 2),
                         -0.25 * (1 - xi[0] ** 2) * (1 + xi[1]),
                         -0.25 * (1 - xi[0]) * (1 - xi[1] ** 2),
-                        -0.5 * xi[2] * (1 - xi[0]) * (1 - xi[1]),
-                        -0.5 * xi[2] * (1 + xi[0]) * (1 - xi[1]),
-                        -0.5 * xi[2] * (1 + xi[0]) * (1 + xi[1]),
-                        -0.5 * xi[2] * (1 - xi[0]) * (1 + xi[1]),
                         0.25 * (1 - xi[0] ** 2) * (1 - xi[1]),
                         0.25 * (1 + xi[0]) * (1 - xi[1] ** 2),
                         0.25 * (1 - xi[0] ** 2) * (1 + xi[1]),
                         0.25 * (1 - xi[0]) * (1 - xi[1] ** 2),
+                        -0.5 * xi[2] * (1 - xi[0]) * (1 - xi[1]),
+                        -0.5 * xi[2] * (1 + xi[0]) * (1 - xi[1]),
+                        -0.5 * xi[2] * (1 + xi[0]) * (1 + xi[1]),
+                        -0.5 * xi[2] * (1 - xi[0]) * (1 + xi[1]),
                     ],
                 ]
             )

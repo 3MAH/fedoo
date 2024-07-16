@@ -103,7 +103,9 @@ def extract_surface(
         n_face_nodes_for_sort = 3
         face_elm_type = "tri6"
         dim = 2
-    elif mesh.elm_type == "hex8" or (mesh.elm_type == "hex20"):
+    elif (mesh.elm_type == "hex8" or
+          (reduce_order and mesh.elm_type == "hex20")
+          ):
         faces_in_elm = [
             [0, 1, 2, 3],
             [5, 4, 7, 6],
@@ -118,11 +120,11 @@ def extract_surface(
     elif mesh.elm_type == "hex20":
         faces_in_elm = [
             [0, 1, 2, 3, 8, 9, 10, 11],
-            [5, 4, 7, 6, 16, 19, 18, 17],
-            [0, 4, 5, 1, 12, 16, 13, 8],
-            [2, 6, 7, 3, 14, 18, 15, 10],
-            [1, 5, 6, 2, 13, 17, 14, 9],
-            [4, 0, 3, 7, 12, 11, 15, 16],
+            [5, 4, 7, 6, 12, 15, 14, 13],
+            [0, 4, 5, 1, 16, 12, 17, 8],
+            [2, 6, 7, 3, 18, 14, 19, 10],
+            [1, 5, 6, 2, 17, 13, 18, 9],
+            [4, 0, 3, 7, 16, 11, 19, 15],
         ]
         n_face_nodes = 8
         n_face_nodes_for_sort = 4

@@ -18,11 +18,6 @@ def write_vtk(dataset, filename="test.vtk", gp_data_to_node=True):
 
     elm = mesh.elements[:, : int(nb_nd_elm)]
 
-    if type_elm == "hex20":
-        elm = elm[
-            :, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 12, 13, 14, 15]
-        ]  # convert node order from fedoo mesh to vtk
-
     cell_type = {
         "lin2": "3",
         "tri3": "5",
@@ -152,6 +147,11 @@ def write_msh(dataset, filename="test.msh", gp_data_to_node=True):
 
     if type_elm == "tet10":
         elm = elm[:, [1, 2, 3, 4, 5, 6, 7, 9, 8]]
+    elif type_elm == "hex20":
+        elm = elm[
+            :, [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 16,
+                9, 17, 10, 18, 19, 12, 15, 13, 14]
+        ]  # convert node order from fedoo mesh to vtk
 
     type_el = {
         "lin2": "1",

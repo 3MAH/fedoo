@@ -388,6 +388,12 @@ def import_msh(
                 type_elm == "tet10"
             ):  # swap axes to account for different numbering schemes
                 elm[:, [8, 9]] = elm[:, [9, 8]]
+            elif (
+                type_elm == "hex20"
+            ):  # change order to account for different numbering schemes
+                elm[:, 9:20] = elm[:,
+                                   [11, 13, 9, 16, 18, 19, 17, 10, 12, 14, 15]
+                                   ]
 
             GeometricalEntity = []
             for geom in list_geom:

@@ -155,7 +155,7 @@ class Assembly(AssemblyBase):
         )  # for element requiring many variable such as beam with disp and rot dof
 
         if _assembly_method == "new":
-            intRef, sorted_indices = wf.sort()
+            same_op_as_next, sorted_indices = wf.sort()
             # sl contains list of slice object that contains the dimension for each variable
             # size of VV and sl must be redefined for case with change of basis
             VV = 0
@@ -186,9 +186,7 @@ class Assembly(AssemblyBase):
                     if compute == "vector" and wf.op[ii] is not 1:
                         continue
 
-                    if (
-                        ii > 0 and intRef[ii] == intRef[ii - 1]
-                    ):  # if same operator as previous with different coef, add the two coef
+                    if ii>0 and same_op_as_next[ii-1]:  # if same operator as previous with different coef, add the two coef
                         coef_PG += wf.coef[ii]
                     else:
                         coef_PG = wf.coef[
@@ -196,7 +194,7 @@ class Assembly(AssemblyBase):
                         ]  # coef_PG = nodal values (finite differences)
 
                     if (
-                        ii < len(wf.op) - 1 and intRef[ii] == intRef[ii + 1]
+                        ii < len(wf.op) - 1 and same_op_as_next[ii]
                     ):  # if operator similar to the next, continue
                         continue
 
@@ -298,7 +296,7 @@ class Assembly(AssemblyBase):
                         coef_PG_sum = coef_PG
 
                     if (
-                        ii < len(wf.op) - 1 and intRef[ii] == intRef[ii + 1]
+                        ii < len(wf.op) - 1 and same_op_as_next[ii]
                     ):  # if operator similar to the next, continue
                         if (
                             not (change_mat_lumping)
@@ -433,7 +431,9 @@ class Assembly(AssemblyBase):
 
         elif (
             _assembly_method == "old"
-        ):  # keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases
+        ):  
+            # keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases
+            # Don't work with alias variables
             intRef = wf.sort()  # intRef = list of integer for compareason (same int = same operator with different coef)
 
             if (
@@ -455,7 +455,7 @@ class Assembly(AssemblyBase):
                 list_elm_type = [
                     element.get_elm_type(self.space.variable_name(i))
                     for i in range(nvar)
-                ]
+                ] # will not work for alias variable...
             else:
                 list_elm_type = [self.elm_type for i in range(nvar)]
 
@@ -696,12 +696,16 @@ class Assembly(AssemblyBase):
                     listGlobalVector = []
                     listScalarVariable = list(range(nvar))
                 #                        mat_change_of_basis = sparse.lil_matrix((nvar*n_el*n_elm_nodes, nvar*n_nd)) #lil is very slow because it change the sparcity of the structure
-                listGlobalVector.append(
-                    self.space.get_vector(nameVector)
-                )  # vector that need to be change in local coordinate
-                listScalarVariable = [
-                    i for i in listScalarVariable if not (i in listGlobalVector[-1])
-                ]  # scalar variable that doesnt need to be converted
+
+                rank_vector = self.space.get_rank_vector(nameVector)
+                if rank_vector[0] not in listGlobalVector:
+                    # ignore alias vectors. just test the 1st var
+                    listGlobalVector.append(rank_vector)  
+                    # vector that need to be change in local coordinate
+                    listScalarVariable = [
+                        i for i in listScalarVariable 
+                        if not (i in listGlobalVector[-1])
+                    ]  # scalar variable that doesnt need to be converted
             # Data to build mat_change_of_basis with coo sparse format
             if compute_mat_change_of_basis:
                 # get element local basis
@@ -1028,11 +1032,11 @@ class Assembly(AssemblyBase):
 
         elm_type = self.elm_type
         mesh = self.mesh
-
+        
         if hasattr(get_element(elm_type), "get_elm_type"):
             elm_type = (
                 get_element(elm_type)
-                .get_elm_type(self.space.variable_name(deriv.u))
+                .get_elm_type(deriv.u_name)
                 .name
             )
 
@@ -1072,6 +1076,7 @@ class Assembly(AssemblyBase):
     def _get_associated_variables(
         self,
     ):  # associated variables (rotational dof for C1 elements) of elm_type
+        # based on variable rank, ie dont make differences between alias
         elm_type = self.elm_type
         if elm_type not in Assembly._saved_associated_variables:
             objElement = get_element(elm_type)

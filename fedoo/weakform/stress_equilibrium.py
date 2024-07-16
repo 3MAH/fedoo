@@ -88,6 +88,11 @@ class StressEquilibrium(WeakFormBase):
             initial_stress = assembly.sv["PK2"]
         else:
             eps = self.space.op_strain()
+            if assembly.elm_type in ["hex8sri"]:
+                eps[0] = eps[0] - self.space.derivative("DispX", "X") + self.space.derivative("_DispX", "X")
+                eps[1] = eps[1] - self.space.derivative("DispY", "Y") + self.space.derivative("_DispY", "Y")
+                eps[2] = eps[2] - self.space.derivative("DispZ", "Z") + self.space.derivative("_DispZ", "Z")
+
             initial_stress = assembly.sv[
                 "Stress"
             ]  # Stress = Cauchy for updated lagrangian method
@@ -179,6 +184,24 @@ class StressEquilibrium(WeakFormBase):
             # later.
             # self._init_nl_strain_op_vir()
 
+        # check if a a separated disp vector should be used
+        if assembly.elm_type in ["hex8sri"]:
+            if assembly._nlgeom == "TL":
+                raise NotImplementedError(f'{assembly.elm_type} not \
+                                          implemented with total lagrangian \
+                                          formulation')
+            self.space.variable_alias("_DispX", "DispX")
+            self.space.variable_alias("_DispY", "DispY")
+            if self.space.ndim == 3:
+                self.space.variable_alias("_DispZ", "DispZ")
+                self.space.new_vector(
+                    "_Disp", ("_DispX", "_DispY", "_DispZ")
+                )
+            else:
+                self.space.new_vector(
+                    "_Disp", ("_DispX", "_DispY")
+                )
+
     def update(self, assembly, pb):
         """Update the weakform to the current state.
 
@@ -247,12 +270,16 @@ class StressEquilibrium(WeakFormBase):
         stiffness matrix).
         """
         if assembly._nlgeom == "TL":
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
+            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
+                assembly.sv["F"]
+            )
             if len(assembly.sv["TangentMatrix"].shape) == 2:
                 if len(assembly.sv["F"].shape) == 3:
-                    assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(
-                        6, 6, -1
-                    ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
+                    assembly.sv["TangentMatrix"] = assembly.sv[
+                        "TangentMatrix"
+                    ].reshape(6, 6, -1) * np.ones(
+                        (1, 1, assembly.sv["F"].shape[2])
+                    )
 
             assembly.sv["TangentMatrix"] = sim.Lt_convert(
                 assembly.sv["TangentMatrix"],
@@ -394,7 +421,9 @@ class StressEquilibrium(WeakFormBase):
 # funtions to compute strain
 def _comp_linear_strain(wf, assembly, pb):
     # not compatible with PGD assembly.
-    assert not (wf.nlgeom), "the current strain measure isn't adapted for finite strain"
+    assert not (
+        wf.nlgeom
+    ), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv["DispGradient"]
 
     strain = np.empty((6, len(grad_values[0][0])), order="F")
@@ -519,7 +548,9 @@ def _comp_gn_strain(wf, assembly, pb):
 def _comp_linear_strain_pgd(wf, assembly, pb):
     # may be compatible with other methods like PGD
     # but not compatible with simcoon
-    assert not (wf.nlgeom), "the current strain measure isn't adapted for finite strain"
+    assert not (
+        wf.nlgeom
+    ), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv["DispGradient"]
 
     strain = [grad_values[i][i] for i in range(3)]
@@ -541,7 +572,8 @@ def _comp_gl_strain(wf, assembly, pb):
         # possibility to be improve from simcoon functions
         # to get the logarithmic strain tensor...
         strain = [
-            grad_values[i][i] + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
+            grad_values[i][i]
+            + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
             for i in range(3)
         ]
         strain += [

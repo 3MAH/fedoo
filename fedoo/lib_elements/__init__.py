@@ -41,7 +41,7 @@ from .finite_difference_1d import (
     Node,
     Parameter,
 )
-from .hexahedron import ElementHexahedron, Hex8, Hex20
+from .hexahedron import ElementHexahedron, Hex8, Hex20, Hex8r
 from .line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
 from .plate import pquad4, pquad8, pquad9, ptri3, ptri6
 from .quadrangle import ElementQuadrangle, Quad4, Quad8, Quad9

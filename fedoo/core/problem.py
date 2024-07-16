@@ -96,7 +96,7 @@ class Problem(ProblemBase):
         n = self.mesh.n_nodes
 
         if name in self.space.list_vectors():
-            vec = self.space.get_vector(name)
+            vec = self.space.get_rank_vector(name)
             i = vec[0]  # rank of the 1rst variable of the vector
             dim = len(vec)
             return vector.reshape(-1, n)[i : i + dim]

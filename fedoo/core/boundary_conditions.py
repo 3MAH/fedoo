@@ -358,7 +358,7 @@ class BoundaryCondition(BCBase):
                 try:
                     variable = [
                         space.variable_name(var_rank)
-                        for var_rank in space.get_vector(variable)
+                        for var_rank in space.get_rank_vector(variable)
                     ]
                 except:
                     raise NameError("Unknown variable name")

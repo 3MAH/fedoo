@@ -49,13 +49,16 @@ class ModelingSpace:
         self.__name = name
 
         # coordinates
-        self._coordinate = {}  # dic containing all the coordinate related to the modeling space
+        self._coordinate = (
+            {}
+        )  # dic containing all the coordinate related to the modeling space
         self._ncrd = 0
 
         # variables
         self._variable = {}  # attribut statique de la classe
         self._nvar = 0
-        self._vector = {}
+        self._vector = {}  # dic of vectors containing the variable name
+        self._rank_vector = {}  # dict of vectors containing the var rank
 
         # dimension
         if dimension == "2D":
@@ -144,7 +147,9 @@ class ModelingSpace:
         """
         Return the rank (int) of a coordinate associated to a given name (str)
         """
-        return list(self._coordinate.keys())[list(self._variable.values()).index(rank)]
+        return list(self._coordinate.keys())[
+            list(self._variable.values()).index(rank)
+        ]
 
     def list_coordinates(self):
         """return a list containing all the coordinates name"""
@@ -170,7 +175,9 @@ class ModelingSpace:
     def variable_alias(self, alias_name, var_name):
         """Create an alias of an existing variable."""
         assert isinstance(var_name, str), "The variable must be a string"
-        assert alias_name[:2] != "__", "Names of variable should not begin by '__'"
+        assert (
+            alias_name[:2] != "__"
+        ), "Names of variable should not begin by '__'"
 
         self._variable[alias_name] = self.variable_rank(var_name)
 
@@ -188,18 +195,27 @@ class ModelingSpace:
         """
         # as dict keep insertion order since python 3.7, this function
         # should never returned an alias name
-        return list(self._variable.keys())[list(self._variable.values()).index(rank)]
+        return list(self._variable.keys())[
+            list(self._variable.values()).index(rank)
+        ]
 
     def new_vector(self, name, list_variables):
         """
         Define a vector name from a list Of Variables. 3 variables are required in 3D and 2 variables in 2D.
         In listOfVariales, the first variable is assumed to be associated to the coordinate 'X', the second to 'Y', and the third to 'Z'
         """
-        self._vector[name] = [self.variable_rank(var) for var in list_variables]
+        self._vector[name] = list_variables
+        self._rank_vector[name] = [
+            self.variable_rank(var) for var in list_variables
+        ]
 
     def get_vector(self, name):
         """Return the vector (list of ndim variable ranks) associated with the given name."""
         return self._vector[name]
+
+    def get_rank_vector(self, name):
+        """Return the vector (list of ndim variable ranks) associated with the given name."""
+        return self._rank_vector[name]
 
     @property
     def nvar(self):
@@ -217,16 +233,23 @@ class ModelingSpace:
     def derivative(self, u, x=0, ordre=1, decentrement=0, vir=0):
         """Return a simple DiffOp containing only a derivative."""
         if isinstance(u, str):
-            u = self.variable_rank(u)
+            u_rank = self.variable_rank(u)
+        elif isinstance(u, int):
+            u_rank = u
+            u = self.variable_name(u)
+
         if isinstance(x, str):
             x = self.coordinate_rank(x)
-        return DiffOp(u, x, ordre, decentrement, vir)
+        return DiffOp(u_rank, x, ordre, decentrement, vir, u)
 
     def variable(self, u):
         """Return a simple DiffOp containing only the given variable."""
         if isinstance(u, str):
-            u = self.variable_rank(u)
-        return DiffOp(u)
+            u_rank = self.variable_rank(u)
+        elif isinstance(u, int):
+            u_rank = u
+            u = self.variable_name(u)
+        return DiffOp(u_rank, u_name=u)
 
     # ===================================================
     # build usefull list of operators
@@ -234,14 +257,39 @@ class ModelingSpace:
     def op_grad_u(self):
         if self.ndim == 3:
             return [
-                [self.derivative(namevar, namecoord) for namecoord in ["X", "Y", "Z"]]
+                [
+                    self.derivative(namevar, namecoord)
+                    for namecoord in ["X", "Y", "Z"]
+                ]
                 for namevar in ["DispX", "DispY", "DispZ"]
             ]
         else:
             return [
-                [self.derivative(namevar, namecoord) for namecoord in ["X", "Y"]] + [0]
+                [
+                    self.derivative(namevar, namecoord)
+                    for namecoord in ["X", "Y"]
+                ]
+                + [0]
                 for namevar in ["DispX", "DispY"]
             ] + [[0, 0, 0]]
+
+    def op_div(self, vec_name):
+        """Return a DiffOp containing the divergence of the given vector."""
+        if self.ndim == 3:
+            return [
+                self.derivative(var, crd)
+                for var, crd in zip(self._vector[vec_name], ("X", "Y", "Z"))
+            ]
+        elif self.ndim == 2:
+            return [
+                self.derivative(var, crd)
+                for var, crd in zip(self._vector[vec_name], ("X", "Y"))
+            ]
+        elif self.ndim == 1:
+            return [
+                self.derivative(var, crd)
+                for var, crd in zip(self._vector[vec_name], ("X"))
+            ]
 
     def op_div_u(self):
         if self.ndim == 3:
@@ -251,7 +299,9 @@ class ModelingSpace:
                 + self.derivative("DispZ", "Z")
             )
         else:
-            return self.derivative("DispX", "X") + self.derivative("DispY", "Y")
+            return self.derivative("DispX", "X") + self.derivative(
+                "DispY", "Y"
+            )
 
     def op_strain(self, InitialGradDisp=None):
         # InitialGradDisp = StrainOperator.__InitialGradDisp
@@ -286,7 +336,10 @@ class ModelingSpace:
                 eps = [
                     GradOperator[i][i]
                     + sum(
-                        [GradOperator[k][i] * InitialGradDisp[k][i] for k in range(2)]
+                        [
+                            GradOperator[k][i] * InitialGradDisp[k][i]
+                            for k in range(2)
+                        ]
                     )
                     for i in range(2)
                 ]
@@ -308,7 +361,10 @@ class ModelingSpace:
                 eps = [
                     GradOperator[i][i]
                     + sum(
-                        [GradOperator[k][i] * InitialGradDisp[k][i] for k in range(3)]
+                        [
+                            GradOperator[k][i] * InitialGradDisp[k][i]
+                            for k in range(3)
+                        ]
                     )
                     for i in range(3)
                 ]
@@ -351,7 +407,9 @@ class ModelingSpace:
     def op_beam_strain(self):
         epsX = self.derivative("DispX", "X")  # dérivée en repère locale
         xsiZ = self.derivative("RotZ", "X")  # flexion autour de Z
-        gammaY = self.derivative("DispY", "X") - self.variable("RotZ")  # shear/Y
+        gammaY = self.derivative("DispY", "X") - self.variable(
+            "RotZ"
+        )  # shear/Y
 
         if self.__ndim == 2:
             eps = [epsX, gammaY, 0, 0, 0, xsiZ]
@@ -359,7 +417,9 @@ class ModelingSpace:
         else:  # assume ndim == 3
             xsiX = self.derivative("RotX", "X")  # torsion autour de X
             xsiY = self.derivative("RotY", "X")  # flexion autour de Y
-            gammaZ = self.derivative("DispZ", "X") + self.variable("RotY")  # shear/Z
+            gammaZ = self.derivative("DispZ", "X") + self.variable(
+                "RotY"
+            )  # shear/Z
 
             eps = [epsX, gammaY, gammaZ, xsiX, xsiY, xsiZ]
 
