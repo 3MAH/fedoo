@@ -1,14 +1,22 @@
+import os
+
+n_threads = 4
+os.environ["OMP_NUM_THREADS"] = f"{n_threads}"  # export OMP_NUM_THREADS=4
+os.environ["OPENBLAS_NUM_THREADS"] = f"{n_threads}"  # export OPENBLAS_NUM_THREADS=4
+os.environ["MKL_NUM_THREADS"] = f"{n_threads}"  # export MKL_NUM_THREADS=6
+os.environ["VECLIB_MAXIMUM_THREADS"] = f"{n_threads}"  # export VECLIB_MAXIMUM_THREADS=4
+os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"  # export NUMEXPR_NUM_THREADS=6
+
 import fedoo as fd
 import numpy as np
 from time import time
-import os
 import pylab as plt
 from numpy import linalg
 
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
 
-fd.ModelingSpace("3D")
+space = fd.ModelingSpace("3D")
 
 NLGEOM = "UL"
 typeBending = "3nodes"  #'3nodes' or '4nodes'
@@ -42,10 +50,6 @@ mat = 1
 if mat == 0:
     props = np.array([E, nu, alpha])
     material = fd.constitutivelaw.Simcoon("ELISO", props, name="constitutivelaw")
-    # material.SetMaskH([[] for i in range(6)])
-    # mask = [[3,4,5] for i in range(3)]
-    # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-    # material.SetMaskH(mask)
 elif mat == 1 or mat == 2:
     Re = 300
     k = 1000  # 1500
@@ -53,13 +57,6 @@ elif mat == 1 or mat == 2:
     if mat == 1:
         props = np.array([E, nu, alpha, Re, k, m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name="constitutivelaw")
-        # material.corate = 2
-        # material.SetMaskH([[] for i in range(6)])
-
-        # mask = [[3,4,5] for i in range(3)]
-        # mask+= [[0,1,2,4,5], [0,1,2,3,5], [0,1,2,3,4]]
-        # material.SetMaskH(mask)
-
     elif mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(
             E, nu, Re, name="constitutivelaw"
@@ -68,11 +65,9 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="constitutivelaw")
 
-
-#### trouver pourquoi les deux fonctions suivantes ne donnent pas la même chose !!!!
 wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom=NLGEOM)
 wf.corate = "green_naghdi"
-
+wf.fbar = True
 
 # note set for boundary conditions
 nodes_bottomLeft = mesh.find_nodes("XY", (0, 0))
@@ -142,7 +137,7 @@ print(time() - start)
 # from pyvistaqt import BackgroundPlotter
 # plotter = BackgroundPlotter()
 
-res.plot("Stress", component="vm")
+res.plot("Stress", component="XY", data_type='GaussPoint')
 
 # res.plot('Statev', 'Node', component = 1)
 # res.write_movie('test', 'Stress', component=0)

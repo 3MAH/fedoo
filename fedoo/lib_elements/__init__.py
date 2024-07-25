@@ -48,6 +48,7 @@ from .quadrangle import ElementQuadrangle, Quad4, Quad8, Quad9
 from .tetrahedron import ElementTetrahedron, Tet4, Tet10
 from .triangle import ElementTriangle, Tri3, Tri3Bubble, Tri6
 from .wedge import ElementWedge, Wed6, Wed15, Wed18
+from .incompressible import hex8sri
 
 __all__ = [
     "Beam",

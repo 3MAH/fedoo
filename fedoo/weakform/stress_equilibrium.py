@@ -24,8 +24,10 @@ class StressEquilibrium(WeakFormBase):
         the associated assembly.
       * This weak form accepts geometrical non linearities if simcoon is
         installed. (nlgeom should be in {True, 'UL', 'TL'}. In this case
-        the initial displacement is also
-        considered.
+        the initial displacement is also considered and several different
+        corotational formulation may be used by setting the corate attribute.
+      * For nearly incompressible material, the F-bar method should be used
+        by setting the fbar attribute to True.
 
     Parameters
     ----------
@@ -76,6 +78,8 @@ class StressEquilibrium(WeakFormBase):
         # 'log': logarithmic strain, 'jaumann': jaumann strain,
         # or 'green_naghdi', 'gn', 'log_inc'...
 
+        self.fbar = False  # by default, the fbar stabilization is not used
+
         self.assembly_options["assume_sym"] = True
         # internalForce weak form should be symmetric
         # (if TangentMatrix is symmetric)
@@ -88,11 +92,6 @@ class StressEquilibrium(WeakFormBase):
             initial_stress = assembly.sv["PK2"]
         else:
             eps = self.space.op_strain()
-            if assembly.elm_type in ["hex8sri"]:
-                eps[0] = eps[0] - self.space.derivative("DispX", "X") + self.space.derivative("_DispX", "X")
-                eps[1] = eps[1] - self.space.derivative("DispY", "Y") + self.space.derivative("_DispY", "Y")
-                eps[2] = eps[2] - self.space.derivative("DispZ", "Z") + self.space.derivative("_DispZ", "Z")
-
             initial_stress = assembly.sv[
                 "Stress"
             ]  # Stress = Cauchy for updated lagrangian method
@@ -184,24 +183,6 @@ class StressEquilibrium(WeakFormBase):
             # later.
             # self._init_nl_strain_op_vir()
 
-        # check if a a separated disp vector should be used
-        if assembly.elm_type in ["hex8sri"]:
-            if assembly._nlgeom == "TL":
-                raise NotImplementedError(f'{assembly.elm_type} not \
-                                          implemented with total lagrangian \
-                                          formulation')
-            self.space.variable_alias("_DispX", "DispX")
-            self.space.variable_alias("_DispY", "DispY")
-            if self.space.ndim == 3:
-                self.space.variable_alias("_DispZ", "DispZ")
-                self.space.new_vector(
-                    "_Disp", ("_DispX", "_DispY", "_DispZ")
-                )
-            else:
-                self.space.new_vector(
-                    "_Disp", ("_DispX", "_DispY")
-                )
-
     def update(self, assembly, pb):
         """Update the weakform to the current state.
 
@@ -214,53 +195,17 @@ class StressEquilibrium(WeakFormBase):
             assembly.set_disp(pb.get_disp())
 
         displacement = pb.get_dof_solution()
-
-        if displacement is 0:
+        if np.isscalar(displacement) and displacement == 0:
             assembly.sv["DispGradient"] = 0
             assembly.sv["Stress"] = 0
             assembly.sv["Strain"] = 0
         else:
-            grad_values = assembly.get_grad_disp(displacement, "GaussPoint")
-            if self.space._dimension == "2Daxi":
-                # mesh = assembly.current.mesh
-                # eps_tt = np.divide(
-                #     pb.get_disp()[0],
-                #     mesh.nodes[:, 0],
-                #     out=np.zeros(mesh.n_nodes),
-                #     where=mesh.nodes[:, 0] != 0,
-                # )  # put zero if X==0 (division by 0)
-                # grad_values[2][2] = mesh.convert_data(
-                #     eps_tt, "Node", "GaussPoint"
-                # )
-                mesh = assembly.current.mesh
-                rr = mesh.convert_data(
-                    mesh.nodes[:, 0],
-                    "Node",
-                    "GaussPoint",
-                    n_elm_gp=assembly.n_elm_gp,
-                )
-
-                assembly.sv["_R_gausspoints"] = rr
-                # grad_values[2][2] = mesh.convert_data(
-                #     pb.get_disp()[0]/mesh.nodes[:, 0], 'Node')
-                grad_values[2][2] = np.divide(
-                    mesh.convert_data(
-                        pb.get_disp()[0],
-                        "Node",
-                        "GaussPoint",
-                        n_elm_gp=assembly.n_elm_gp,
-                    ),
-                    rr,
-                    out=np.zeros_like(rr),
-                    where=rr != 0,
-                )  # put zero if X==0 (division by 0)
-
-            assembly.sv["DispGradient"] = grad_values
-
             # Compute the strain required for the constitutive law.
             if assembly._nlgeom:
+                self._comp_F(assembly, displacement)
                 self._corate_func(self, assembly, pb)
             else:
+                _comp_grad_disp(assembly, displacement)
                 _comp_linear_strain(self, assembly, pb)
 
     def update_2(self, assembly, pb):
@@ -373,6 +318,25 @@ class StressEquilibrium(WeakFormBase):
     #     self._nl_strain_op_vir = nl_strain_op_vir
 
     @property
+    def fbar(self):
+        """Set to True to use the F-bar method.
+
+        The F-bar method should be used to stabilized constitutive laws with
+        nearly incompressible behavior.
+        """
+        return self._fbar
+
+    @fbar.setter
+    def fbar(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("bool expeted for fbar")
+        self._fbar = value
+        if value:
+            self._comp_F = _comp_Fbar
+        else:
+            self._comp_F = _comp_F
+
+    @property
     def corate(self):
         """Corotational strain mesure for strain.
 
@@ -411,11 +375,100 @@ class StressEquilibrium(WeakFormBase):
             self._corate_func = _comp_log_strain_R_inc
             self._convert_Lt_tag = "DsigmaDe_2_DSDE"
         else:
-            raise NameError(
+            raise ValueError(
                 'corate value not understood. Choose between "log", "log_R", \
                 "green_naghdi" or "jaumann"'
             )
         self._corate = value
+
+
+# function to compute the displacement gradient
+def _comp_grad_disp(assembly, displacement):
+    grad_values = assembly.get_grad_disp(displacement, "GaussPoint")
+    if assembly.space._dimension == "2Daxi":
+        # mesh = assembly.current.mesh
+        # eps_tt = np.divide(
+        #     pb.get_disp()[0],
+        #     mesh.nodes[:, 0],
+        #     out=np.zeros(mesh.n_nodes),
+        #     where=mesh.nodes[:, 0] != 0,
+        # )  # put zero if X==0 (division by 0)
+        # grad_values[2][2] = mesh.convert_data(
+        #     eps_tt, "Node", "GaussPoint"
+        # )
+        mesh = assembly.current.mesh
+        rr = mesh.convert_data(
+            mesh.nodes[:, 0],
+            "Node",
+            "GaussPoint",
+            n_elm_gp=assembly.n_elm_gp,
+        )
+
+        assembly.sv["_R_gausspoints"] = rr
+        # grad_values[2][2] = mesh.convert_data(
+        #     pb.get_disp()[0]/mesh.nodes[:, 0], 'Node')
+
+        rank_dispx = assembly.space.variable_rank('DispX')
+        n = mesh.n_nodes
+        grad_values[2][2] = np.divide(
+            mesh.convert_data(
+                displacement[rank_dispx*n:(rank_dispx+1)*n],
+                "Node",
+                "GaussPoint",
+                n_elm_gp=assembly.n_elm_gp,
+            ),
+            rr,
+            out=np.zeros_like(rr),
+            where=rr != 0,
+        )  # put zero if X==0 (division by 0)
+    assembly.sv["DispGradient"] = grad_values
+    return grad_values
+
+
+# function to compute F tensor (required nl corate function used with simcoon)
+def _comp_F(assembly, displacement):
+    grad_values = _comp_grad_disp(assembly, displacement)
+
+    eye_3 = np.empty((3, 3, 1), order="F")
+    eye_3[:, :, 0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values, order="F")
+    assembly.sv["F"] = F1
+    if "F" not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start["F"] = F0
+
+
+def _comp_Fbar(assembly, displacement):
+    # funciton to compute F tensor using the Fbar stabilization for
+    # nearly incompressible materials
+    grad_values = _comp_grad_disp(assembly, displacement)
+
+    eye_3 = np.empty((3, 3, 1), order="F")
+    eye_3[:, :, 0] = np.eye(3)
+    F1 = np.add(eye_3, grad_values, order="F")
+
+    J = np.linalg.det(F1.transpose((2,0,1)))
+
+    # grad_values_center = [
+    #     [
+    #         assembly.get_gp_results(op, displacement, n_elm_gp=1)
+    #         if op != 0
+    #         else np.zeros(assembly.mesh.n_elements)
+    #         for op in line_op
+    #     ] for line_op in assembly.space.op_grad_u()
+    # ]
+    # Jcenter = np.linalg.det(
+    #     np.add(eye_3, grad_values_center).transpose((2,0,1))
+    # )
+    Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
+    F1 = F1 * ((Jcenter/J.reshape(assembly.n_elm_gp, -1)).reshape(-1)**(1/3))
+
+    assembly.sv["F"] = F1
+    if "F" not in assembly.sv_start:
+        F0 = np.empty_like(F1)
+        F0[...] = eye_3
+        assembly.sv_start["F"] = F0
 
 
 # funtions to compute strain
@@ -437,16 +490,7 @@ def _comp_linear_strain(wf, assembly, pb):
 
 
 def _comp_log_strain(wf, assembly, pb):
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (D, DR, Omega) = sim.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, False
     )
@@ -455,16 +499,7 @@ def _comp_log_strain(wf, assembly, pb):
 
 
 def _comp_log_strain_inc(wf, assembly, pb):
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (DStrain, D, DR, Omega) = sim.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, True
     )
@@ -473,16 +508,7 @@ def _comp_log_strain_inc(wf, assembly, pb):
 
 
 def _comp_log_strain_R(wf, assembly, pb):
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (D, DR, Omega) = sim.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, False
     )
@@ -491,16 +517,7 @@ def _comp_log_strain_R(wf, assembly, pb):
 
 
 def _comp_log_strain_R_inc(wf, assembly, pb):
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (DStrain, D, DR, Omega) = sim.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, True
     )
@@ -509,16 +526,7 @@ def _comp_log_strain_R_inc(wf, assembly, pb):
 
 
 def _comp_jaumann_strain(wf, assembly, pb):
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (DStrain, D, DR, Omega) = sim.objective_rate(
         "jaumann", assembly.sv_start["F"], F1, pb.dtime, True
     )
@@ -528,16 +536,7 @@ def _comp_jaumann_strain(wf, assembly, pb):
 
 def _comp_gn_strain(wf, assembly, pb):
     # green_naghdi corate
-    grad_values = assembly.sv["DispGradient"]
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values)
-    assembly.sv["F"] = F1
-    if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
-
+    F1 = assembly.sv["F"]
     (DStrain, D, DR, Omega) = sim.objective_rate(
         "green_naghdi", assembly.sv_start["F"], F1, pb.dtime, True
     )
@@ -545,50 +544,50 @@ def _comp_gn_strain(wf, assembly, pb):
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
 
 
-def _comp_linear_strain_pgd(wf, assembly, pb):
-    # may be compatible with other methods like PGD
-    # but not compatible with simcoon
-    assert not (
-        wf.nlgeom
-    ), "the current strain measure isn't adapted for finite strain"
-    grad_values = assembly.sv["DispGradient"]
+# def _comp_linear_strain_pgd(wf, assembly, pb):
+#     # may be compatible with other methods like PGD
+#     # but not compatible with simcoon
+#     assert not (
+#         wf.nlgeom
+#     ), "the current strain measure isn't adapted for finite strain"
+#     grad_values = assembly.sv["DispGradient"]
 
-    strain = [grad_values[i][i] for i in range(3)]
-    strain += [
-        grad_values[0][1] + grad_values[1][0],
-        grad_values[0][2] + grad_values[2][0],
-        grad_values[1][2] + grad_values[2][1],
-    ]
-    assembly.sv["Strain"] = StrainTensorList(strain)
+#     strain = [grad_values[i][i] for i in range(3)]
+#     strain += [
+#         grad_values[0][1] + grad_values[1][0],
+#         grad_values[0][2] + grad_values[2][0],
+#         grad_values[1][2] + grad_values[2][1],
+#     ]
+#     assembly.sv["Strain"] = StrainTensorList(strain)
 
 
-def _comp_gl_strain(wf, assembly, pb):
-    # not compatible with simcoon
-    if not (wf.nlgeom):
-        return _comp_linear_strain_pgd(wf, assembly, pb)
-    else:
-        grad_values = assembly.sv["DispGradient"]
-        # GL strain tensor
-        # possibility to be improve from simcoon functions
-        # to get the logarithmic strain tensor...
-        strain = [
-            grad_values[i][i]
-            + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
-            for i in range(3)
-        ]
-        strain += [
-            grad_values[0][1]
-            + grad_values[1][0]
-            + sum([grad_values[k][0] * grad_values[k][1] for k in range(3)])
-        ]
-        strain += [
-            grad_values[0][2]
-            + grad_values[2][0]
-            + sum([grad_values[k][0] * grad_values[k][2] for k in range(3)])
-        ]
-        strain += [
-            grad_values[1][2]
-            + grad_values[2][1]
-            + sum([grad_values[k][1] * grad_values[k][2] for k in range(3)])
-        ]
-        return StrainTensorList(strain)
+# def _comp_gl_strain(wf, assembly, pb):
+#     # not compatible with simcoon
+#     if not (wf.nlgeom):
+#         return _comp_linear_strain_pgd(wf, assembly, pb)
+#     else:
+#         grad_values = assembly.sv["DispGradient"]
+#         # GL strain tensor
+#         # possibility to be improve from simcoon functions
+#         # to get the logarithmic strain tensor...
+#         strain = [
+#             grad_values[i][i]
+#             + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
+#             for i in range(3)
+#         ]
+#         strain += [
+#             grad_values[0][1]
+#             + grad_values[1][0]
+#             + sum([grad_values[k][0] * grad_values[k][1] for k in range(3)])
+#         ]
+#         strain += [
+#             grad_values[0][2]
+#             + grad_values[2][0]
+#             + sum([grad_values[k][0] * grad_values[k][2] for k in range(3)])
+#         ]
+#         strain += [
+#             grad_values[1][2]
+#             + grad_values[2][1]
+#             + sum([grad_values[k][1] * grad_values[k][2] for k in range(3)])
+#         ]
+#         return StrainTensorList(strain)
