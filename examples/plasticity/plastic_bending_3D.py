@@ -1,11 +1,11 @@
 import os
 
 n_threads = 4
-os.environ["OMP_NUM_THREADS"] = f"{n_threads}"  # export OMP_NUM_THREADS=4
-os.environ["OPENBLAS_NUM_THREADS"] = f"{n_threads}"  # export OPENBLAS_NUM_THREADS=4
-os.environ["MKL_NUM_THREADS"] = f"{n_threads}"  # export MKL_NUM_THREADS=6
-os.environ["VECLIB_MAXIMUM_THREADS"] = f"{n_threads}"  # export VECLIB_MAXIMUM_THREADS=4
-os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"  # export NUMEXPR_NUM_THREADS=6
+os.environ["OMP_NUM_THREADS"] = f"{n_threads}"
+os.environ["OPENBLAS_NUM_THREADS"] = f"{n_threads}"
+os.environ["MKL_NUM_THREADS"] = f"{n_threads}"
+os.environ["VECLIB_MAXIMUM_THREADS"] = f"{n_threads}"
+os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"
 
 import fedoo as fd
 import numpy as np
@@ -88,6 +88,7 @@ assemb = fd.Assembly.create(wf, meshname, "hex8", name="Assembling")
 
 pb = fd.problem.NonLinear("Assembling")
 # pb.set_solver('cg', precond = True)
+# pb.set_solver('petsc', solver_type='preonly', pc_type='lu', pc_factor_mat_solver_type='mumps')
 pb.set_nr_criterion("Displacement", err0=None, tol=5e-3, max_subiter=5)
 
 # Problem.set_nr_criterion("Displacement")

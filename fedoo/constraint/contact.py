@@ -207,7 +207,7 @@ class Contact(AssemblyBase):
             data_T2 = []
 
         first_indices_disp = (
-            np.array(self.space.get_vector("Disp")).reshape(-1, 1) * surf.n_nodes
+            np.array(self.space.get_rank_vector("Disp")).reshape(-1, 1) * surf.n_nodes
         )  # column vector with the first indice for each disp component
         n_dof_contact = (surf.elements.shape[1] + 1) * len(
             first_indices_disp
