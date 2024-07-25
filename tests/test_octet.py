@@ -14,9 +14,7 @@ def test_octet():
     fd.ModelingSpace("3D")
 
     # Import the mesh generated with Microgen
-    octet_truss = (
-        Path(__file__).resolve().parent / "octet_truss.msh"
-    )
+    octet_truss = Path(__file__).resolve().parent / "octet_truss.msh"
     fd.mesh.import_file(str(octet_truss), name="Domain")
 
     # Get the imported mesh
@@ -37,14 +35,10 @@ def test_octet():
     m = 0.25
     alpha = 1e-5
     props = np.array([1e5, 0.3, alpha, Re, k, m])
-    material = fd.constitutivelaw.Simcoon(
-        "EPICP", props, name="ConstitutiveLaw"
-    )
+    material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
 
     # Create the weak formulation of the mechanical equilibrium equation
-    wf = fd.weakform.StressEquilibrium(
-        "ConstitutiveLaw", name="WeakForm", nlgeom=False
-    )
+    wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", name="WeakForm", nlgeom=False)
 
     # Assembly
     assemb = fd.Assembly.create("WeakForm", "Domain2", "tet4", name="Assembly")
@@ -82,9 +76,7 @@ def test_octet():
     #                    ['DispX', 'DispY', 'DispZ'],
     #                    ['DispY', 'DispZ', 'DispZ']]
 
-    bc_periodic = fd.constraint.PeriodicBC(
-        list_strain_nodes, list_strain_var, dim=3
-    )
+    bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3)
     pb.bc.add(bc_periodic)
 
     # fixed point on the center to avoid rigid body motion

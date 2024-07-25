@@ -1,4 +1,4 @@
-# doesn't seem to work. Not imported by default. 
+# doesn't seem to work. Not imported by default.
 # use with hex8sri elements
 
 from fedoo.weakform.stress_equilibrium import StressEquilibrium

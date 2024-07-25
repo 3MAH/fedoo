@@ -112,11 +112,7 @@ class DiffOp:
             else:
                 self.op_vir = [_Derivative(u, x, ordre, decentrement, u_name)]
                 self.op = [1]
-        elif (
-            isinstance(u, list)
-            and isinstance(x, list)
-            and isinstance(ordre, list)
-        ):
+        elif isinstance(u, list) and isinstance(x, list) and isinstance(ordre, list):
             self.op = u
             self.op_vir = x
             self.coef = ordre
@@ -125,9 +121,7 @@ class DiffOp:
 
     def __add__(self, A):
         if isinstance(A, DiffOp):
-            return DiffOp(
-                self.op + A.op, self.op_vir + A.op_vir, self.coef + A.coef
-            )
+            return DiffOp(self.op + A.op, self.op_vir + A.op_vir, self.coef + A.coef)
         elif np.isscalar(A) and A == 0:
             return self
         else:  # A could be Number, np.ndarray, ...
@@ -135,9 +129,7 @@ class DiffOp:
 
     def __sub__(self, A):
         if isinstance(A, DiffOp):
-            return DiffOp(
-                self.op + A.op, self.op_vir + A.op_vir, self.coef + (-A).coef
-            )
+            return DiffOp(self.op + A.op, self.op_vir + A.op_vir, self.coef + (-A).coef)
         elif np.isscalar(A) and A == 0:
             return self
         else:  # A could be Number, np.ndarray, ...
@@ -166,9 +158,7 @@ class DiffOp:
                             [self.op_vir[jj]],
                             [A.coef[ii] * self.coef[jj]],
                         )
-                    elif (
-                        A.op[ii] == 1 and self.op_vir[jj] == 1
-                    ):  # si c'est l'inverse
+                    elif A.op[ii] == 1 and self.op_vir[jj] == 1:  # si c'est l'inverse
                         res += DiffOp(
                             [self.op[ii]],
                             [A.op_vir[jj]],
@@ -222,10 +212,7 @@ class DiffOp:
                 op_vir_str = "v" + str(self.op_vir[ii].u)
             else:
                 op_vir_str = (
-                    "dv"
-                    + str(self.op_vir[ii].u)
-                    + "/dx"
-                    + str(self.op_vir[ii].x)
+                    "dv" + str(self.op_vir[ii].u) + "/dx" + str(self.op_vir[ii].x)
                 )
             if ii != 0:
                 res += " + "
@@ -241,7 +228,7 @@ class DiffOp:
         same_as_next = [
             self._getitem_sorting(sorted_indices[i])
             == self._getitem_sorting(sorted_indices[i + 1])
-            for i in range(0, len(self)-1)
+            for i in range(0, len(self) - 1)
         ]
         self.coef = [self.coef[i] for i in sorted_indices]
         self.op = [self.op[i] for i in sorted_indices]

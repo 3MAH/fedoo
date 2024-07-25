@@ -186,7 +186,9 @@ class Assembly(AssemblyBase):
                     if compute == "vector" and wf.op[ii] is not 1:
                         continue
 
-                    if ii>0 and same_op_as_next[ii-1]:  # if same operator as previous with different coef, add the two coef
+                    if (
+                        ii > 0 and same_op_as_next[ii - 1]
+                    ):  # if same operator as previous with different coef, add the two coef
                         coef_PG += wf.coef[ii]
                     else:
                         coef_PG = wf.coef[
@@ -429,9 +431,7 @@ class Assembly(AssemblyBase):
             if self._saved_bloc_structure is None:
                 self._saved_bloc_structure = MM.get_BlocStructure()
 
-        elif (
-            _assembly_method == "old"
-        ):  
+        elif _assembly_method == "old":
             # keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases
             # Don't work with alias variables
             intRef = wf.sort()  # intRef = list of integer for compareason (same int = same operator with different coef)
@@ -455,7 +455,7 @@ class Assembly(AssemblyBase):
                 list_elm_type = [
                     element.get_elm_type(self.space.variable_name(i))
                     for i in range(nvar)
-                ] # will not work for alias variable...
+                ]  # will not work for alias variable...
             else:
                 list_elm_type = [self.elm_type for i in range(nvar)]
 
@@ -700,11 +700,10 @@ class Assembly(AssemblyBase):
                 rank_vector = self.space.get_rank_vector(nameVector)
                 if rank_vector[0] not in listGlobalVector:
                     # ignore alias vectors. just test the 1st var
-                    listGlobalVector.append(rank_vector)  
+                    listGlobalVector.append(rank_vector)
                     # vector that need to be change in local coordinate
                     listScalarVariable = [
-                        i for i in listScalarVariable 
-                        if not (i in listGlobalVector[-1])
+                        i for i in listScalarVariable if not (i in listGlobalVector[-1])
                     ]  # scalar variable that doesnt need to be converted
             # Data to build mat_change_of_basis with coo sparse format
             if compute_mat_change_of_basis:
@@ -1032,13 +1031,9 @@ class Assembly(AssemblyBase):
 
         elm_type = self.elm_type
         mesh = self.mesh
-        
+
         if hasattr(get_element(elm_type), "get_elm_type"):
-            elm_type = (
-                get_element(elm_type)
-                .get_elm_type(deriv.u_name)
-                .name
-            )
+            elm_type = get_element(elm_type).get_elm_type(deriv.u_name).name
 
         if not ((mesh, elm_type, n_elm_gp) in Assembly._saved_elementary_operators):
             self.compute_elementary_operators(n_elm_gp)

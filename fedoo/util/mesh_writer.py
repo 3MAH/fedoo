@@ -149,8 +149,7 @@ def write_msh(dataset, filename="test.msh", gp_data_to_node=True):
         elm = elm[:, [1, 2, 3, 4, 5, 6, 7, 9, 8]]
     elif type_elm == "hex20":
         elm = elm[
-            :, [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 16,
-                9, 17, 10, 18, 19, 12, 15, 13, 14]
+            :, [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 16, 9, 17, 10, 18, 19, 12, 15, 13, 14]
         ]  # convert node order from fedoo mesh to vtk
 
     type_el = {

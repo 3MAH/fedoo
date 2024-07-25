@@ -138,7 +138,7 @@ print(time() - start)
 # from pyvistaqt import BackgroundPlotter
 # plotter = BackgroundPlotter()
 
-res.plot("Stress", component="XY", data_type='GaussPoint')
+res.plot("Stress", component="XY", data_type="GaussPoint")
 
 # res.plot('Statev', 'Node', component = 1)
 # res.write_movie('test', 'Stress', component=0)

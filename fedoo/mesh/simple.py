@@ -484,24 +484,37 @@ def box_mesh(
                 nx * (j + 1) + i + 1 + (k * nx * ny) + nx * ny,
                 nx * (j + 1) + i + (k * nx * ny) + nx * ny,
                 nx * ny * nz + (nx - 1) * j + i + k * (nx - 1) * ny,
-                nx * j + i + 1 + nx * ny * nz
+                nx * j
+                + i
+                + 1
+                + nx * ny * nz
                 + (nx - 1) * ny * nz
                 + (nz - 1) * nx * ny
                 + (k * nx * (ny - 1)),
                 nx * ny * nz + (nx - 1) * (j + 1) + i + k * (nx - 1) * ny,
-                nx * j + i + nx * ny * nz
+                nx * j
+                + i
+                + nx * ny * nz
                 + (nx - 1) * ny * nz
                 + (nz - 1) * nx * ny
                 + (k * nx * (ny - 1)),
                 nx * ny * nz + (nx - 1) * ny + (nx - 1) * j + i + k * (nx - 1) * ny,
-                nx * j + i + 1 + nx * ny * nz
+                nx * j
+                + i
+                + 1
+                + nx * ny * nz
                 + (nx - 1) * ny * nz
                 + (nz - 1) * nx * ny
-                + nx * (ny - 1) + (k * nx * (ny - 1)),
-                nx * ny * nz + (nx - 1) * ny
-                + (nx - 1) * (j + 1) + i
+                + nx * (ny - 1)
+                + (k * nx * (ny - 1)),
+                nx * ny * nz
+                + (nx - 1) * ny
+                + (nx - 1) * (j + 1)
+                + i
                 + k * (nx - 1) * ny,
-                nx * j + i + nx * ny * nz
+                nx * j
+                + i
+                + nx * ny * nz
                 + (nx - 1) * ny * nz
                 + (nz - 1) * nx * ny
                 + nx * (ny - 1)
