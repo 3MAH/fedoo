@@ -314,6 +314,14 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     typeBC = "Neumann"
 
     pb_post_tt.apply_boundary_conditions()
+    if pb.space.nvar > 3: #case 
+        for var in range(3, pb.space.nvar):
+            pb.bc.add(
+                "Dirichlet", [StrainNodes[0]], pb.space.variable_name(var), 0
+            )
+            pb.bc.add(
+                "Dirichlet", [StrainNodes[1]], pb.space.variable_name(var), 0
+            )
 
     for i in range(6):
         pb_post_tt.bc.add(

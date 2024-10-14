@@ -203,13 +203,13 @@ we can plot the stress results after the example :ref:`example_plate_with_hole`:
     # or using the backgroundplotter:
     # from pyvistaqt import BackgroundPlotter
     # pl = BackgroundPlotter(shape = (2,2))
-    results.plot('Stress','Node','vm', plotter=pl)
+    results.plot('Stress', 'vm', 'Node', plotter=pl)
     pl.subplot(1,0)
-    results.plot('Stress','Node', 'XX', plotter=pl)
+    results.plot('Stress', 'XX', 'Node', plotter=pl)
     pl.subplot(0,1)
-    results.plot('Stress', 'Node', 'YY', plotter=pl)
+    results.plot('Stress', 'YY', 'Node', plotter=pl)
     pl.subplot(1,1)
-    results.plot('Stress', 'Node', 'XY', plotter=pl)
+    results.plot('Stress', 'XY', 'Node', plotter=pl)
     pl.show()
 
 .. image:: ./_static/examples/multiplot.png

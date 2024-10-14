@@ -1,5 +1,7 @@
 """Some functions that build or modify fedoo Mesh objects."""
 
+from __future__ import annotations
+
 import numpy as np
 from fedoo.core.mesh import Mesh
 from fedoo.mesh.simple import line_mesh_1D

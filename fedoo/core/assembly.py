@@ -210,7 +210,7 @@ class Assembly(AssemblyBase):
                     ):  # only virtual operator -> compute a vector which is the nodal values
                         if VV is 0:
                             VV = np.zeros((n_bloc_cols * nvar))
-                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - (coef_PG)
+                        VV[sl[var_vir[ii]]] = VV[sl[var_vir[ii]]] - (coef_PG)
 
                     else:  # virtual and real operators -> compute a matrix
                         var = wf.op[ii].u
@@ -237,7 +237,7 @@ class Assembly(AssemblyBase):
 
                 blocks = [
                     [
-                        b if b is not None else sparse.csr_matrix((nbNodes, nbNodes))
+                        b if b is not None else sparse.csr_matrix((self.mesh.n_nodes, self.mesh.n_nodes))
                         for b in blocks_row
                     ]
                     for blocks_row in blocks

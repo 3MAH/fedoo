@@ -121,7 +121,7 @@ The boundaries are automatically stored as set of nodes ('left', 'right', 'top',
     nodes_left = fd.Mesh['Domain'].node_sets["left"]
     nodes_right = fd.Mesh['Domain'].node_sets["right"]
 
-An easy way to get a set of nodes from the position of nodes is to use the :py:meth:`fedoo.Mesh.find` method.
+An easy way to get a set of nodes from the position of nodes is to use the :py:meth:`fedoo.Mesh.find_nodes` method.
 For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
 
 .. code-block:: python
