@@ -56,8 +56,6 @@ if method == 0:
     # if '_perturbation' in fd.Problem.get_all():
     #     del fd.Problem.get_all()['_perturbation']
     L_eff = fd.homogen.get_homogenized_stiffness(assemb, meshperio)
-elif method == 1:
-    L_eff = fd.homogen.get_homogenized_stiffness_2(mesh, L, meshperio=meshperio)
 else:
     type_el = mesh.elm_type
     # type_el = 'hex20'
@@ -383,6 +381,7 @@ cbar = plt.colorbar(
     fraction=0.06,
     pad=-0.1,
     ticks=[Emin, Eavg, Emax],
+    ax=ax,
 )
 
 cbar.ax.tick_params(labelsize="large")
