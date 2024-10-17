@@ -27,7 +27,7 @@ mesh = fd.mesh.hole_plate_mesh(
 # mesh = fd.mesh.import_file('plate_with_hole.msh').as_2d()
 
 # Define an elastic isotropic material with E = 2e5MPa et nu = 0.3 (steel)
-fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name="ElasticLaw")
+material = fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name="ElasticLaw")
 
 # Create the weak formulation of the mechanical equilibrium equation
 fd.weakform.StressEquilibrium("ElasticLaw", name="WeakForm")

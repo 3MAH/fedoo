@@ -4,7 +4,7 @@
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.constitutivelaw.elastic_anisotropic import ElasticAnisotropic
 
-import scipy as sp
+import numpy as np
 
 
 class ElasticOrthotropic(ElasticAnisotropic):
@@ -54,20 +54,20 @@ class ElasticOrthotropic(ElasticAnisotropic):
         nuXZ = self.nuxz
         nuXY = self.nuxy
 
-        #        S = sp.array([[1/EX    , -nuXY/EX, -nuXZ/EX, 0    , 0    , 0    ], \
+        #        S = np.array([[1/EX    , -nuXY/EX, -nuXZ/EX, 0    , 0    , 0    ], \
         #                      [-nuXY/EX, 1/EY    , -nuYZ/EY, 0    , 0    , 0    ], \
         #                      [-nuXZ/EX, -nuYZ/EY, 1/EZ    , 0    , 0    , 0    ], \
         #                      [0       , 0       , 0       , 1/GXY, 0    , 0    ], \
         #                      [0       , 0       , 0       , 0    , 1/GXZ, 0    ], \
         #                      [0       , 0       , 0       , 0    , 0    , 1/GYZ]])
-        #        H = linalg.inv(S) #H  = sp.zeros((6,6), dtype='object')
+        #        H = linalg.inv(S) #H  = np.zeros((6,6), dtype='object')
 
-        if isinstance(EX, float):
-            H = sp.empty((6, 6))
-        elif isinstance(EX, (sp.ndarray, list)):
-            H = sp.zeros((6, 6, len(EX)))
+        if np.isscalar(EX):
+            H = np.zeros((6, 6))
+        elif isinstance(EX, (np.ndarray, list)):
+            H = np.zeros((6, 6, len(EX)))
         else:
-            H = sp.zeros((6, 6), dtype="object")
+            H = np.zeros((6, 6), dtype="object")
 
         nuYX = nuXY * EY / EX
         nuZX = nuXZ * EZ / EX
@@ -90,7 +90,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         H[4, 4] = GXZ
         H[5, 5] = GYZ
 
-        H = self.local2global_H(self._H)
+        H = self.local2global_H(H)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
         else:

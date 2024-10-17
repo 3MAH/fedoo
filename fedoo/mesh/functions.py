@@ -226,6 +226,7 @@ def extract_surface(
                         * tangent
                     ),
                     axis=2,
+                    keepdims=True,
                 ),
             )
 
