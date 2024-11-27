@@ -258,6 +258,12 @@ class Simcoon(Mechanical3D):
             DR[...] = np.eye(3).reshape(3, 3, 1)
             assembly.sv["DR"] = DR
 
+            F = np.empty((3, 3, assembly.n_gauss_points), order="F")
+            F[...] = np.eye(3).reshape(3, 3, 1)
+
+            if assembly._nlgeom:
+                assembly.sv["F"] = F
+
             assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
@@ -270,6 +276,8 @@ class Simcoon(Mechanical3D):
                     self.umat_name,
                     zeros_6,
                     zeros_6,
+                    np.eye(3, order="F"),
+                    np.eye(3, order="F"),
                     zeros_6,
                     np.eye(3, order="F"),
                     self.props[:, 0],
@@ -284,6 +292,8 @@ class Simcoon(Mechanical3D):
                     self.umat_name,
                     zeros_6,
                     zeros_6,
+                    F,
+                    F,
                     zeros_6,
                     DR,
                     self.props,
@@ -313,7 +323,7 @@ class Simcoon(Mechanical3D):
         else:
             temp = None
 
-        try:
+        if assembly._nlgeom:
             (
                 stress,
                 assembly.sv["Statev"],
@@ -323,6 +333,8 @@ class Simcoon(Mechanical3D):
                 self.umat_name,
                 assembly.sv_start["Strain"].array,
                 de.array,
+                assembly.sv_start["F"],
+                assembly.sv["F"],
                 assembly.sv_start["Stress"].array,
                 assembly.sv["DR"],
                 self.props,
@@ -332,7 +344,8 @@ class Simcoon(Mechanical3D):
                 assembly.sv_start["Wm"],
                 temp,
             )
-        except:  # for compatibility with old version of simcoon
+        else:
+
             (
                 stress,
                 assembly.sv["Statev"],
@@ -342,6 +355,8 @@ class Simcoon(Mechanical3D):
                 self.umat_name,
                 assembly.sv_start["Strain"].array,
                 de.array,
+                np.array([]),
+                np.array([]),
                 assembly.sv_start["Stress"].array,
                 assembly.sv["DR"],
                 self.props,
@@ -349,6 +364,7 @@ class Simcoon(Mechanical3D):
                 pb.time,
                 pb.dtime,
                 assembly.sv_start["Wm"],
+                temp,
             )
 
         # work only in global local frame
