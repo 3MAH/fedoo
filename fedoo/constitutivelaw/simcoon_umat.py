@@ -258,10 +258,9 @@ class Simcoon(Mechanical3D):
             DR[...] = np.eye(3).reshape(3, 3, 1)
             assembly.sv["DR"] = DR
 
-            F = np.empty((3, 3, assembly.n_gauss_points), order="F")
-            F[...] = np.eye(3).reshape(3, 3, 1)
-
             if assembly._nlgeom:
+                F = np.empty((3, 3, assembly.n_gauss_points), order="F")
+                F[...] = np.eye(3).reshape(3, 3, 1)
                 assembly.sv["F"] = F
 
             assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
@@ -270,30 +269,43 @@ class Simcoon(Mechanical3D):
             # )
 
             # Launch the UMAT to compute the elastic matrix in "TangentMatrix"
-            if self.props.shape[1] == 1:
-                zeros_6 = np.zeros(6)
+            zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
+            try:
+                if assembly._nlgeom:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        F,
+                        F,
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+                else:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        np.array([]),
+                        np.array([]),
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+            except: #for compatility with previous simcoon versions
                 (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
                     self.umat_name,
                     zeros_6,
                     zeros_6,
-                    np.eye(3, order="F"),
-                    np.eye(3, order="F"),
-                    zeros_6,
-                    np.eye(3, order="F"),
-                    self.props[:, 0],
-                    np.zeros(self.n_statev),
-                    0,
-                    0,
-                    np.zeros(4),
-                )
-            else:
-                zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
-                (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                    self.umat_name,
-                    zeros_6,
-                    zeros_6,
-                    F,
-                    F,
                     zeros_6,
                     DR,
                     self.props,
@@ -323,7 +335,50 @@ class Simcoon(Mechanical3D):
         else:
             temp = None
 
-        if assembly._nlgeom:
+        try:
+            if assembly._nlgeom:
+                (
+                    stress,
+                    assembly.sv["Statev"],
+                    assembly.sv["Wm"],
+                    assembly.sv["TangentMatrix"],
+                ) = sim.umat(
+                    self.umat_name,
+                    assembly.sv_start["Strain"].array,
+                    de.array,
+                    assembly.sv_start["F"],
+                    assembly.sv["F"],
+                    assembly.sv_start["Stress"].array,
+                    assembly.sv["DR"],
+                    self.props,
+                    assembly.sv_start["Statev"],
+                    pb.time,
+                    pb.dtime,
+                    assembly.sv_start["Wm"],
+                    temp,
+                )
+            else:
+                (
+                    stress,
+                    assembly.sv["Statev"],
+                    assembly.sv["Wm"],
+                    assembly.sv["TangentMatrix"],
+                ) = sim.umat(
+                    self.umat_name,
+                    assembly.sv_start["Strain"].array,
+                    de.array,
+                    np.array([]),
+                    np.array([]),
+                    assembly.sv_start["Stress"].array,
+                    assembly.sv["DR"],
+                    self.props,
+                    assembly.sv_start["Statev"],
+                    pb.time,
+                    pb.dtime,
+                    assembly.sv_start["Wm"],
+                    temp,
+                )
+        except: #for compatibility with previous simcoon versions
             (
                 stress,
                 assembly.sv["Statev"],
@@ -333,30 +388,6 @@ class Simcoon(Mechanical3D):
                 self.umat_name,
                 assembly.sv_start["Strain"].array,
                 de.array,
-                assembly.sv_start["F"],
-                assembly.sv["F"],
-                assembly.sv_start["Stress"].array,
-                assembly.sv["DR"],
-                self.props,
-                assembly.sv_start["Statev"],
-                pb.time,
-                pb.dtime,
-                assembly.sv_start["Wm"],
-                temp,
-            )
-        else:
-
-            (
-                stress,
-                assembly.sv["Statev"],
-                assembly.sv["Wm"],
-                assembly.sv["TangentMatrix"],
-            ) = sim.umat(
-                self.umat_name,
-                assembly.sv_start["Strain"].array,
-                de.array,
-                np.array([]),
-                np.array([]),
                 assembly.sv_start["Stress"].array,
                 assembly.sv["DR"],
                 self.props,
