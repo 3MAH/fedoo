@@ -229,6 +229,14 @@ class StressEquilibrium(WeakFormBase):
                 self._convert_Lt_tag,
             )
 
+        if assembly._nlgeom == "UL":
+            assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                assembly.sv["TangentMatrix"],
+                assembly.sv["F"],
+                assembly.sv["Stress"].asarray(),
+                self._convert_Lt_tag,
+            )
+
     def to_start(self, assembly, pb):
         """Reset the current time increment."""
         if assembly._nlgeom == "UL":
@@ -351,31 +359,59 @@ class StressEquilibrium(WeakFormBase):
 
     @corate.setter
     def corate(self, value):
-        value = value.lower()
-        if value == "log":
-            self._corate_func = _comp_log_strain
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "log_inc":
-            self._corate_func = _comp_log_strain_inc
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value in ["gn", "green_naghdi"]:
-            self._corate_func = _comp_gn_strain
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "jaumann":
-            self._corate_func = _comp_jaumann_strain
-            self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
-        elif value == "log_r":
-            self._corate_func = _comp_log_strain_R
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "log_r_inc":
-            self._corate_func = _comp_log_strain_R_inc
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        else:
-            raise ValueError(
-                'corate value not understood. Choose between "log", "log_R", \
-                "green_naghdi" or "jaumann"'
-            )
-        self._corate = value
+        if self.nlgeom == "UL":
+            value = value.lower()
+            if value == "log":
+                self._corate_func = _comp_log_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value == "log_inc":
+                self._corate_func = _comp_log_strain_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value in ["gn", "green_naghdi"]:
+                self._corate_func = _comp_gn_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_GreenNaghdiDD"
+            elif value == "jaumann":
+                self._corate_func = _comp_jaumann_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_JaumannDD"
+            elif value == "log_r":
+                self._corate_func = _comp_log_strain_R
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value == "log_r_inc":
+                self._corate_func = _comp_log_strain_R_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            else:
+                raise ValueError(
+                    'corate value not understood. Choose between "log", "log_R", \
+                    "green_naghdi" or "jaumann"'
+                )
+            self._corate = value
+
+        if self.nlgeom == "TL":
+            value = value.lower()
+            if value == "log":
+                self._corate_func = _comp_log_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_inc":
+                self._corate_func = _comp_log_strain_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value in ["gn", "green_naghdi"]:
+                self._corate_func = _comp_gn_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "jaumann":
+                self._corate_func = _comp_jaumann_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_r":
+                self._corate_func = _comp_log_strain_R
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_r_inc":
+                self._corate_func = _comp_log_strain_R_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            else:
+                raise ValueError(
+                    'corate value not understood. Choose between "log", "log_R", \
+                    "green_naghdi" or "jaumann"'
+                )
+            self._corate = value
 
 
 # function to compute the displacement gradient
