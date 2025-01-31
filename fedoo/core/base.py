@@ -8,31 +8,53 @@ from fedoo.core.modelingspace import ModelingSpace
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 
-USE_PETSC = None
 try:
     from pypardiso import spsolve
 
     USE_PYPARDISO = True
     USE_UMFPACK = False
+    USE_PETSC = False
 except ModuleNotFoundError:
     USE_PYPARDISO = False
+
+if not USE_PYPARDISO:
+    try:
+        import petsc4py
+
+        USE_PYPARDISO = False
+        USE_UMFPACK = False
+        USE_PETSC = True
+    except ModuleNotFoundError:
+        USE_PETSC = False
+
+if not USE_PYPARDISO and not USE_PETSC:
     try:
         from scikits.umfpack import spsolve
 
         scipy.sparse.linalg.use_solver(assumeSortedIndicesbool=True)
+        USE_PYPARDISO = False
         USE_UMFPACK = True
-    except ImportError:
-        print(
-            "WARNING: no fast direct sparse solver has been found. \
-             Consider installing pypardiso or scikit-umfpack to improve \
-             computation performance"
-        )
+        USE_PETSC = False
+    except ModuleNotFoundError:
         USE_UMFPACK = False
+
+if not USE_PYPARDISO and not USE_PETSC and not USE_UMFPACK:
+    raise ImportError(
+        "WARNING: no fast direct sparse solver has been found. "
+        "Consider installing pypardiso, petsc, or scikit-umfpack to improve "
+        "computation performance"
+    )
 
 
 def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
         from pypardiso import spsolve
+    if config_dict["USE_PETSC"]:
+        import petsc4py
+        import sys
+
+        petsc4py.init(sys.argv)
+        from petsc4py import PETSc
     if config_dict["USE_UMFPACK"]:
         from scikits.umfpack import spsolve
 
@@ -45,7 +67,7 @@ def _reload_external_solvers(config_dict):
 class MeshBase:
     """Base class for Mesh object."""
 
-    __dic = {}
+    __dic: dict[str, "MeshBase"] = {}
 
     def __init__(self, name=""):
         assert isinstance(name, str), "name must be a string"
@@ -75,7 +97,7 @@ class MeshBase:
 class AssemblyBase:
     """Base class for Assembly object."""
 
-    __dic = {}
+    __dic: dict[str, "AssemblyBase"] = {}
 
     def __init__(self, name="", space=None):
         assert isinstance(name, str), "An name must be a string"
@@ -172,7 +194,7 @@ class AssemblyBase:
 class ConstitutiveLaw:
     """Base class for constitutive laws (cf constitutive law lib)."""
 
-    __dic = {}
+    __dic: dict[str, "ConstitutiveLaw"] = {}
 
     def __init__(self, name=""):
         assert isinstance(name, str), "An name must be a string"
@@ -376,8 +398,19 @@ class ProblemBase:
             if solver == "direct":
                 if USE_PYPARDISO:
                     solver_func = spsolve
+                    print(
+                        f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
+                    )
+                elif USE_PETSC:
+                    solver_func = _solver_petsc
+                    print(
+                        f"Problem {self.name} : direct solver : PETSC solver has been utilized with standard options : petsc_solver = 'bcgs', pc_type='eisenstat' "
+                    )
                 else:
                     solver_func = sparse.linalg.spsolve
+                    print(
+                        f"Problem {self.name} : direct solver : Scipy direct solver has been utilized : if SCIPY-UMFPACK is installed, it will be used"
+                    )
             elif solver in [
                 "cg",
                 "bicg",
@@ -391,17 +424,18 @@ class ProblemBase:
                 return_info = True
                 precond = kargs.pop("precond", True)
             elif solver == "petsc":
-                global USE_PETSC, PETSc
-                if USE_PETSC is None:
-                    try:
-                        import petsc4py
-                    except ModuleNotFoundError:
-                        raise ModuleNotFoundError("PETSc is not installed.")
+                global PETSc
+
+                if USE_PETSC:
                     import sys
 
                     petsc4py.init(sys.argv)
                     from petsc4py import PETSc
-                USE_PETSC = True
+                else:
+                    raise NameError(
+                        'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
+                    )
+
                 solver_func = _solver_petsc
             elif solver == "pardiso":
                 if USE_PYPARDISO:
