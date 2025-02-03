@@ -137,6 +137,61 @@ class Simcoon(Mechanical3D):
                 "X1": slice(20, 26),
                 "X2": slice(26, 32),
             }
+        elif umat_name == "EPCHG":
+            self.n_statev = 9 + 12 * int(self.props[6]) #n_kin_hard
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "G": 2,
+                "alpha": 3,
+                "sigmaY": 4,
+                "N_iso_hard": 5,
+                "N_kin_hard": 6,
+                "criteria": 7,
+            }
+            for i in range(int(self.props[5])): #n_iso_hard
+                self.props_label.update({"Q_" + str(i): 8 + 2 * i})
+                self.props_label.update({"b_" + str(i): 8 + 2 * i + 1})
+            for i in range(int(self.props[6])): #n_kin_hard
+                self.props_label.update({"C_" + str(i): 8 + int(self.props[5]) * 2 + i * 2})
+                self.props_label.update({"D_" + str(i): 8 + int(self.props[5]) * 2 + i * 2 + 1})
+            match int(self.props[7]):
+                case 0: #Mises
+                    pass
+                case 1: #Hill
+                    self.props_label.update({"F_hill": 8 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"G_hill": 9 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"H_hill": 10 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"L_hill": 11 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"M_hill": 12 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"N_hill": 13 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                case 2: #Deshpande-Fleck-Ashby
+                    self.props_label.update({"F_dfa": 8 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"G_dfa": 9 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"H_dfa": 10 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"L_dfa": 11 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"M_dfa": 12 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"N_dfa": 13 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"K_dfa": 14 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                case 3: #Anisotropic
+                    self.props_label.update({"P11": 8 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P22": 9 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P33": 10 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P12": 11 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P13": 12 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P23": 13 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P44": 14 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P55": 15 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+                    self.props_label.update({"P66": 16 + int(self.props[5]) * 2 + int(self.props[6]) * 2})
+            self.statev_label = {
+                "T": 0,
+                "P": 1,
+                "EP": slice(2, 8),
+                "HP": 8,
+            }
+            for i in range(int(self.props[6])):
+                self.statev_label.update({"a" + str(i): slice(9+12*i, 15+12*i)})
+                self.statev_label.update({"X" + str(i): slice(15+12*i, 21+12*i)})
         elif umat_name == "SMAUT":
             self.n_statev = 16
             self.props_label = {}
