@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 if not USE_PYPARDISO:
     try:
         import petsc4py
+        from petsc4py import PETSc
 
         USE_PYPARDISO = False
         USE_UMFPACK = False
@@ -402,6 +403,7 @@ class ProblemBase:
                         f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
                     )
                 elif USE_PETSC:
+                    global PETSc
                     solver_func = _solver_petsc
                     print(
                         f"Problem {self.name} : direct solver : PETSC solver has been utilized with standard options : petsc_solver = 'bcgs', pc_type='eisenstat' "
@@ -429,8 +431,10 @@ class ProblemBase:
                 if USE_PETSC:
                     import sys
 
-                    petsc4py.init(sys.argv)
+                    import petsc4py
                     from petsc4py import PETSc
+
+                    petsc4py.init(sys.argv)
                 else:
                     raise NameError(
                         'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
