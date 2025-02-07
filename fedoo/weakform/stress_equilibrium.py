@@ -143,6 +143,8 @@ class StressEquilibrium(WeakFormBase):
 
         # initialize nlgeom value in assembly._nlgeom
         self._initialize_nlgeom(assembly, pb)
+        self.nlgeom = assembly._nlgeom
+        self.corate = self._corate  # to force the setter function
 
         # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
@@ -359,6 +361,7 @@ class StressEquilibrium(WeakFormBase):
 
     @corate.setter
     def corate(self, value):
+        self._corate = value
         if self.nlgeom == "UL":
             value = value.lower()
             if value == "log":
@@ -384,7 +387,6 @@ class StressEquilibrium(WeakFormBase):
                     'corate value not understood. Choose between "log", "log_R", \
                     "green_naghdi" or "jaumann"'
                 )
-            self._corate = value
 
         if self.nlgeom == "TL":
             value = value.lower()
@@ -411,7 +413,6 @@ class StressEquilibrium(WeakFormBase):
                     'corate value not understood. Choose between "log", "log_R", \
                     "green_naghdi" or "jaumann"'
                 )
-            self._corate = value
 
 
 # function to compute the displacement gradient
