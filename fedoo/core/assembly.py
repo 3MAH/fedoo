@@ -116,6 +116,8 @@ class Assembly(AssemblyBase):
         self.sv_start = {}
         self.sv_type = {}  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
+        self._nlgeom = None
+
         self._pb = None
 
     def __add__(self, another_assembly):
