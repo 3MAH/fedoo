@@ -43,7 +43,9 @@ class _NonLinearBase:
         self.__iter = 0
         self.__compteurOutput = 0
 
-        self.interval_output = -1  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
+        self.interval_output = (
+            -1
+        )  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
@@ -418,7 +420,9 @@ class _NonLinearBase:
         if exec_callback_at_each_iter is not None:
             self.exec_callback_at_each_iter = exec_callback_at_each_iter
         if interval_output is None:
-            interval_output = self.interval_output  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
+            interval_output = (
+                self.interval_output
+            )  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
 
         # if kargs: #not empty
         #    raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
@@ -432,7 +436,9 @@ class _NonLinearBase:
         if self.save_at_exact_time:
             next_time = self.t0 + interval_output
         else:
-            next_time = self.tmax  # next_time is the next exact time where the algorithm have to stop for output purpose
+            next_time = (
+                self.tmax
+            )  # next_time is the next exact time where the algorithm have to stop for output purpose
 
         self.init_bc_start_value()
 
