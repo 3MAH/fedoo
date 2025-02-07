@@ -404,7 +404,7 @@ class Simcoon(Mechanical3D):
             DR[...] = np.eye(3).reshape(3, 3, 1)
             assembly.sv["DR"] = DR
 
-            if pb.nlgeom:
+            if assembly._nlgeom:
                 F = np.empty((3, 3, assembly.n_gauss_points), order="F")
                 F[...] = np.eye(3).reshape(3, 3, 1)
                 assembly.sv["F"] = F
@@ -416,29 +416,42 @@ class Simcoon(Mechanical3D):
 
             # Launch the UMAT to compute the elastic matrix in "TangentMatrix"
             zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
-            print(f"pb.non_linear {pb.nlgeom}")
-            if pb.nlgeom:
+            try:
+                if assembly._nlgeom:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        F,
+                        F,
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+                else:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        np.array([]),
+                        np.array([]),
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+            except: #for compatility with previous simcoon versions
                 (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
                     self.umat_name,
                     zeros_6,
                     zeros_6,
-                    F,
-                    F,
-                    zeros_6,
-                    DR,
-                    self.props,
-                    assembly.sv["Statev"],
-                    0,
-                    0,
-                    assembly.sv["Wm"],
-                )
-            else:
-                (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                    self.umat_name,
-                    zeros_6,
-                    zeros_6,
-                    np.array([]),
-                    np.array([]),
                     zeros_6,
                     DR,
                     self.props,
