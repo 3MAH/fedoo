@@ -80,7 +80,7 @@ class ElasticAnisotropic(Mechanical3D):
 
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
     #     displacement = pb.get_dof_solution()
-    #     if displacement is 0:
+    #     if np.isscalar(displacement) and displacement == 0:
     #         return 0 #if displacement = 0, Strain = 0
     #     else:
     #         return assembly.get_strain(displacement, type_output)
