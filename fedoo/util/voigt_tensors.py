@@ -61,12 +61,12 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         list.__init__(self, l)
 
     def __add__(self, tensor_list):
-        if tensor_list is 0:
+        if np.isscalar(tensor_list) and tensor_list == 0:
             return self
         return self.__class__(self.asarray() + tensor_list.asarray())
 
     def __sub__(self, tensor_list):
-        if tensor_list is 0:
+        if np.isscalar(tensor_list) and tensor_list == 0:
             return self
         return self.__class__(self.asarray() - tensor_list.asarray())
 
@@ -108,7 +108,7 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
 
                 res = np.empty((6, N))
                 for i in range(6):
-                    if self[i] is 0:
+                    if np.isscalar(self[i]) and self[i] == 0:
                         res[i] = np.zeros(N)
                     else:
                         res[i] = self[i]
@@ -159,7 +159,7 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
                 N = len(self[i])  # number of stress values
                 break
         for i in range(6):
-            if self[i] is 0:
+            if np.isscalar(self[i]) and self[i] == 0:
                 self[i] = np.zeros(N)
 
     def convert(self, assemb, convert_from=None, convert_to="GaussPoint"):
