@@ -126,7 +126,7 @@ class RigidTie(BCBase):
 
         # dof_ref  = [problem._Xbc[dof] if dof in problem.dof_blocked else problem._X[dof] for dof in dof_cd]
         # dof_ref  = [problem.get_dof_solution()[dof] + problem._Xbc[dof] if dof in problem.dof_blocked else problem.get_dof_solution()[dof] for dof in dof_cd]
-        if problem.get_dof_solution() is 0:
+        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
@@ -342,7 +342,7 @@ class RigidTie2D(BCBase):
             for i in range(len(var_cd))
         ]
 
-        if problem.get_dof_solution() is 0:
+        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
