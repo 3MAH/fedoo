@@ -210,7 +210,7 @@ class Assembly(AssemblyBase):
                     if (
                         wf.op[ii] == 1
                     ):  # only virtual operator -> compute a vector which is the nodal values
-                        if VV is 0:
+                        if np.isscalar(VV) and VV == 0:
                             VV = np.zeros((n_bloc_cols * nvar))
                         VV[sl[var_vir[ii]]] = VV[sl[var_vir[ii]]] - (coef_PG)
 
@@ -239,7 +239,9 @@ class Assembly(AssemblyBase):
 
                 blocks = [
                     [
-                        b if b is not None else sparse.csr_matrix((self.mesh.n_nodes, self.mesh.n_nodes))
+                        b
+                        if b is not None
+                        else sparse.csr_matrix((self.mesh.n_nodes, self.mesh.n_nodes))
                         for b in blocks_row
                     ]
                     for blocks_row in blocks
@@ -363,7 +365,7 @@ class Assembly(AssemblyBase):
                         coef_vir.extend(associatedVariables[var_vir[0]][1])
 
                     if wf.op[ii] == 1:  # only virtual operator -> compute a vector
-                        if VV is 0:
+                        if np.isscalar(VV) and VV == 0:
                             VV = np.zeros((n_bloc_cols * nvar))
                         for i in range(len(Matvir)):
                             try:
@@ -423,7 +425,7 @@ class Assembly(AssemblyBase):
                         mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
-                if VV is 0:
+                if np.isscalar(VV) and VV == 0:
                     self.global_vector = 0
                 elif mat_change_of_basis is 1:
                     self.global_vector = VV  # numpy array
@@ -518,7 +520,7 @@ class Assembly(AssemblyBase):
 
                 if wf.op[ii] == 1:  # only virtual operator -> compute a vector
                     Matvir = self._get_elementary_operator(wf.op_vir[ii])
-                    if VV is 0:
+                    if np.isscalar(VV) and VV == 0:
                         VV = np.zeros((self.mesh.n_nodes * nvar))
                     for i in range(len(Matvir)):
                         VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[
@@ -582,7 +584,7 @@ class Assembly(AssemblyBase):
                         mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
-                if VV is 0:
+                if np.isscalar(VV) and VV == 0:
                     self.global_vector = 0
                 elif mat_change_of_basis is 1:
                     self.global_vector = VV  # numpy array
@@ -1298,7 +1300,7 @@ class Assembly(AssemblyBase):
         return self.mesh.integrate_field(field, type_field, self.n_elm_gp)
 
     def set_disp(self, disp):
-        if disp is 0:
+        if np.isscalar(disp) and disp == 0:
             self.current = self
         else:
             new_crd = self.mesh.nodes + disp.T
