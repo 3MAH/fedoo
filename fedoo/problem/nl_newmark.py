@@ -81,9 +81,8 @@ class _NonLinearNewmarkBase:
         dt = self.dtime
         if start:
             DeltaDisp = 0  # DeltaDisp = Disp-DispStart = 0 for the 1st increment
-            if (
-                (np.isscalar(self.__Velocity) and self.__Velocity == 0) and 
-                (np.isscalar(self.__Acceleration) and self.__Acceleration == 0) and
+            if (np.isscalar(self.__Velocity) and self.__Velocity == 0) and (
+                np.isscalar(self.__Acceleration) and self.__Acceleration == 0
             ):
                 self.set_D(0)
                 return
