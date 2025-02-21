@@ -69,7 +69,7 @@ class _SubSV:
     def __getitem__(self, k):
         # assume sv values are defined on gauss points.
         # perhaps it may be usefull to allow other definitions
-        if self.sv[k] is 0:
+        if np.isscalar(self.sv[k]) and self.sv[k] == 0:
             return 0
         elset = (
             np.array(self.elset)
@@ -96,7 +96,7 @@ class _SubSV:
             if k not in self.copied_fields:
                 self.sv[k] = deepcopy(self.sv[k])
                 self.copied_fields.add(k)
-            if self.sv[k] is 0:
+            if np.isscalar(self.sv[k]) and self.sv[k] == 0:
                 del self.sv[k]
                 self.__setitem__(k, v)
 
@@ -268,7 +268,7 @@ class Heterogeneous(Mechanical3D):
 
     # def ComputeStrain(self, assembly, pb, nlgeom, type_output='GaussPoint'):
     #     displacement = pb.get_dof_solution()
-    #     if displacement is 0:
+    #     if np.isscalar(displacement) and displacement == 0:
     #         return 0 #if displacement = 0, Strain = 0
     #     else:
     #         return assembly.get_strain(displacement, type_output)
