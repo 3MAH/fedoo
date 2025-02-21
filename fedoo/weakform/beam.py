@@ -106,7 +106,7 @@ class BeamEquilibrium(WeakFormBase):
             # assembly.current.compute_elementary_operators()
 
         dof = pb.get_dof_solution()  # displacement and rotation node values
-        if dof is 0:
+        if np.isscalar(dof) and dof == 0:
             assembly.sv["BeamStrain"] = assembly.sv["BeamStress"] = 0
         else:
             op_beam_strain = assembly.space.op_beam_strain()
@@ -281,7 +281,7 @@ class BeamEquilibrium(WeakFormBase):
 
                     rot_var = self.space.get_vector("Rot")
                     ### WARNING only work if vectors are contigous in the variable order
-                    if pb._U is 0:
+                    if np.isscalar(pb._U) and pb._U == 0:
                         pb._dU[
                             rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             * assembly.mesh.n_nodes
