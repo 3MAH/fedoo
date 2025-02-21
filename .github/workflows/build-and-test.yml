@@ -8,43 +8,71 @@ on:
     branches: [ master ]
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-13", "windows-latest"]
+        python-version: ["3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Setup Mambaforge
-        uses: conda-incubator/setup-miniconda@v2
+      - uses: mamba-org/setup-micromamba@v1
         with:
-          miniforge-variant: Mambaforge
-          miniforge-version: latest
-          activate-environment: fedoo
-          use-mamba: true
+          generate-run-shell: true
+          micromamba-version: "1.5.8-0" # any version from https://github.com/mamba-org/micromamba-releases
+          # environment-file: environment.yml
+          environment-name: fedoo
+          create-args: >-
+            python=${{ matrix.python-version }}
+            numpy
+            scipy
+            pypardiso
+            pyvista
+            set3mah::simcoon
+            pytest
+            pytest-xdist
+          init-shell: powershell bash
+          download-micromamba: true
+          cache-environment: false
+          post-cleanup: "all"
 
-      - name: Get Date
-        id: get-date
-        run: echo "::set-output name=today::$(/bin/date -u '+%Y%m%d')"
-        shell: bash
+      # - name: Update environment Unix
+      #   run: mamba env update -n fedoo -f environment.yml
+      #   if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
 
-      - name: Cache Conda env
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.CONDA }}/envs
-          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
-        env:
-          # Increase this value to reset cache if environment.yml has not changed
-          CACHE_NUMBER: 0
-        id: cache
+      # - name: Update environment Windows
+      #   run: conda install -y python>=3.8 numpy>=1.22.4 scipy pypardiso pyvista>=0.39 set3mah::simcoon pytest pytest-xdist
+      #   if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
 
-      - name: Update environment
-        run: mamba env update -n fedoo -f environment.yml
-        if: steps.cache.outputs.cache-hit != 'true'
+      # - name: Debug tests (without scikit-umfpack)
+      #   if: runner.os != 'Windows'
+      #   run: conda install -y
+      #   shell: micromamba-shell {0}
+
+      # - name: Debug tests (without scikit-umfpack)
+      #   if: runner.os == 'Windows'
+      #   run: conda install -y
+      #   shell: pwsh
 
       - name: Install
-        shell: bash -l {0}
+        if: runner.os != 'Windows'
+        shell: micromamba-shell {0}
         run: pip install .
 
       - name: Test
-        shell: bash -l {0}
+        if: runner.os != 'Windows'
+        shell: micromamba-shell {0}
+        run: pytest tests -n auto
+
+      - name: Install
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pip install .
+
+      - name: Test
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: pytest tests -n auto
