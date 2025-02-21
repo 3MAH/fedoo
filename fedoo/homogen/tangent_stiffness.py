@@ -53,6 +53,7 @@ def get_homogenized_stiffness(assemb, meshperio=True, **kargs):
 
     return C
 
+
 def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     #################### PERTURBATION METHODE #############################
     solver = kargs.get("solver", "direct")
@@ -76,7 +77,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     if ndim == 3:
         BC_perturb = np.eye(6)
         # BC_perturb[3:6,3:6] *= 2 #2xEXY
-    else: #ndim == 2
+    else:  # ndim == 2
         BC_perturb = np.eye(3)
 
     DStrain = []
@@ -94,10 +95,12 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
         remove_strain = True
         A = pb.get_A().copy()
 
-        raise NotImplementedError('A bug has been identified in this function.\
-                                  Contact a developer if you need it.')
+        raise NotImplementedError(
+            "A bug has been identified in this function.\
+                                  Contact a developer if you need it."
+        )
         # bug to solve: the resize is not sufficient. It affect the node numbering
-        A.resize(np.array(pb.get_A().shape) + 2*pb.space.nvar)
+        A.resize(np.array(pb.get_A().shape) + 2 * pb.space.nvar)
     # StrainNodes=[len(crd),len(crd)+1] #last 2 nodes
 
     if "_perturbation" in pb.get_all() and Problem["_perturbation"].mesh is not mesh:
@@ -170,7 +173,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
                 for var in pb_post_tt.space.list_variables()
                 if var not in ["DispX", "DispY", "DispZ"]
             ],
-            0
+            0,
         )
     if ndim == 2:
         pb_post_tt.bc.add("Dirichlet", [StrainNodes[1]], "DispY", 0)
@@ -253,7 +256,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
                         ]
                     )
                 )
-            else: #ndim == 2
+            else:  # ndim == 2
                 DStrain.append(
                     np.array(
                         [

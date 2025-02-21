@@ -36,7 +36,7 @@ class ProblemPGD(ProblemBase):
         self.__A = A
         # if self.__A != 0: self.__A.tocsr() #just in case A is in another format as csr
 
-        if B is 0:
+        if np.isscalar(B) and B == 0:
             self.__B = self._new_vect_dof()
         else:
             self.__B = B
@@ -403,7 +403,7 @@ class ProblemPGD(ProblemBase):
                         else:
                             assert 0, "Dimension doesn't match"
 
-                if F is 0:
+                if np.isscalar(F) and F == 0:
                     if isinstance(Value, (float, int, np.floating)):
                         Fadd = SeparatedZeros(shapeX)
                         # for d in range(meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value

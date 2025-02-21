@@ -108,7 +108,7 @@ class ImplicitDynamic(WeakFormBase):
         dt = pb.dtime
 
         if self.rayleigh_damping is None:
-            if pb._dU is 0:  # start of iteration
+            if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
                 delta_disp = np.zeros((self.space.ndim, 1))
             else:
                 delta_disp = assembly.sv["_DeltaDisp_GP"]
@@ -145,7 +145,7 @@ class ImplicitDynamic(WeakFormBase):
             )
         else:
             # need nodes values in this case
-            if pb._dU is 0:  # start of iteration
+            if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
                 delta_disp = np.zeros((self.space.ndim, 1))
             else:
                 delta_disp = assembly.sv["_DeltaDisp"]
@@ -362,7 +362,7 @@ class _NewmarkInteria(WeakFormBase):
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
         dt = pb.dtime
 
-        if pb._dU is 0:  # start of iteration
+        if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
             delta_disp = [0, 0, 0]
         else:
             delta_disp = assembly.sv["_DeltaDisp_GP"]

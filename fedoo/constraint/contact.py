@@ -676,7 +676,7 @@ class Contact(AssemblyBase):
         # voir eq 9.35 et 9.36 (page 241 du pdf) avec def 9.18 et 9.19 page 239
 
     def set_disp(self, disp):
-        if disp is 0:
+        if np.isscalar(disp) and disp == 0:
             self.current = self
         else:
             new_crd = self.mesh.nodes + disp.T
@@ -1335,7 +1335,7 @@ class NodeContact(AssemblyBase):
         # voir eq 9.35 et 9.36 (page 241 du pdf) avec def 9.18 et 9.19 page 239
 
     def set_disp(self, disp):
-        if disp is 0:
+        if np.isscalar(disp) and disp == 0:
             self.current = self
         else:
             new_crd = self.mesh.nodes + disp.T

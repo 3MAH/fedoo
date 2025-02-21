@@ -129,7 +129,7 @@ class DataSet:
         elevation: float = 15.0,
         roll: float = 0,
         title: str | None = None,
-        title_size: float = 18.,
+        title_size: float = 18.0,
         window_size: list = None,
         **kargs,
     ) -> None:
@@ -326,12 +326,14 @@ class DataSet:
             pl.camera.Azimuth(azimuth)
             pl.camera.Elevation(elevation)
 
-        #default sargs values
+        # default sargs values
         if sargs is None and field is not None:  # default value
             if multiplot:
                 # scalarbar can't be interactive in multiplot
                 sargs = dict(
-                    label_font_size=int(pl.window_size[1]/pl.renderers.shape[1]*0.6/22),
+                    label_font_size=int(
+                        pl.window_size[1] / pl.renderers.shape[1] * 0.6 / 22
+                    ),
                     color="Black",
                     position_x=0.2,
                     width=0.6,
@@ -346,10 +348,10 @@ class DataSet:
                     # n_colors= 10
                 )
 
-        if multiplot and 'title' not in sargs:
-            #title use as scalar_bar id required to plot several scalar bar
-            sargs['title'] = f"{pl.renderers.active_index}"
-            sargs['title_font_size']=1
+        if multiplot and "title" not in sargs:
+            # title use as scalar_bar id required to plot several scalar bar
+            sargs["title"] = f"{pl.renderers.active_index}"
+            sargs["title_font_size"] = 1
 
         if field is None:
             meshplot.active_scalars_name = None
@@ -380,11 +382,9 @@ class DataSet:
                 )
 
             if title is None:
-                title=f"{field}_{component}"
+                title = f"{field}_{component}"
 
-            pl.add_text(
-                title, name="name", color="Black", font_size=title_size
-            )
+            pl.add_text(title, name="name", color="Black", font_size=title_size)
 
         pl.add_axes(color="Black", interactive=True)
 

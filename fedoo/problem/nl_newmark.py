@@ -32,7 +32,7 @@ class _NonLinearNewmarkBase:
         super().__init__(StiffnessAssembly, name)
         self.nlgeom = nlgeom
 
-        # if DampingAssembly is 0:
+        # if np.isscalar(DampingAssembly) and DampingAssembly == 0:
         #     A = StiffnessAssembly.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembly.get_global_matrix() #tangent matrix
         # else:
         #     A = StiffnessAssembly.get_global_matrix() + 1/(Beta*(TimeStep**2))*MassAssembly.get_global_matrix() + Gamma/(Beta*TimeStep)*DampingAssembly.get_global_matrix()
@@ -54,7 +54,7 @@ class _NonLinearNewmarkBase:
 
     def updateA(self):  # internal function to be used when modifying M, K or C
         dt = self.dtime
-        if self.__DampingAssembly is 0:
+        if np.isscalar(self.__DampingAssembly) and self.__DampingAssembly == 0:
             self.set_A(
                 self.__StiffnessAssembly.get_global_matrix()
                 + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
@@ -81,7 +81,9 @@ class _NonLinearNewmarkBase:
         dt = self.dtime
         if start:
             DeltaDisp = 0  # DeltaDisp = Disp-DispStart = 0 for the 1st increment
-            if self.__Velocity is 0 and self.__Acceleration is 0:
+            if (np.isscalar(self.__Velocity) and self.__Velocity == 0) and (
+                np.isscalar(self.__Acceleration) and self.__Acceleration == 0
+            ):
                 self.set_D(0)
                 return
         else:

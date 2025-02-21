@@ -227,7 +227,7 @@ class ElastoPlasticity(Mechanical3D):
     def update(self, assembly, pb, time):
         displacement = pb.get_dof_solution()
 
-        if displacement is 0:
+        if np.isscalar(displacement) and displacement == 0:
             self.__currentGradDisp = 0
             self.__currentSigma = 0
         else:

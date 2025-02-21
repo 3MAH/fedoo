@@ -42,7 +42,7 @@ class ShellBase(ConstitutiveLaw):
         # disp = pb.get_disp()
         # rot = pb.get_rot()
         U = pb.get_dof_solution()
-        if U is 0:
+        if np.isscalar(U) and U == 0:
             assembly.sv["GeneralizedStrain"] = 0
             assembly.sv["GeneralizedStress"] = 0
         else:

@@ -80,7 +80,7 @@ class FE2(Mechanical3D):
     #     return self.__Wm
 
     # def get_disp_grad(self):
-    #     if self.__currentGradDisp is 0: return 0
+    #     if np.isscalar(self.__currentGradDisp) and self.__currentGradDisp == 0: return 0
     #     else: return self.__currentGradDisp
 
     # def get_tangent_matrix(self):

@@ -75,7 +75,7 @@ class Mechanical3D(ConstitutiveLaw):
             #            theta = np.pi/8
             #            np.array([[np.cos(theta),np.sin(theta),0], [-np.sin(theta),np.cos(theta),0], [0,0,1]])
             if len(self.local_frame.shape) == 2:
-                self.local_frame = self.local_frame.reshape(1,3,3)
+                self.local_frame = self.local_frame.reshape(1, 3, 3)
             R_epsilon = np.empty((len(self.local_frame), 6, 6))
             R_epsilon[:, :3, :3] = self.local_frame**2
             R_epsilon[:, :3, 3:6] = (
@@ -99,7 +99,7 @@ class Mechanical3D(ConstitutiveLaw):
             H_local = np.matmul(R_sigma_inv, np.matmul(H_global, R_epsilon))
             if len(H_local.shape) == 3:
                 if H_local.shape[0] == 1:
-                    return H_local[0,:,:]
+                    return H_local[0, :, :]
                 H_local = np.rollaxis(H_local, 0, 3)
 
             return H_local

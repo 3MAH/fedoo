@@ -86,7 +86,7 @@ class Spring(ConstitutiveLaw):
         displacement = pb.get_dof_solution()
         K = self.get_K()
         assembly.sv["TangentMatrix"] = K
-        if displacement is 0:
+        if np.isscalar(displacement) and displacement == 0:
             assembly.sv["InterfaceStress"] = assembly.sv["RelativeDisp"] = 0
         else:
             op_delta = (
