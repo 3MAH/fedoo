@@ -43,9 +43,7 @@ class _NonLinearBase:
         self.__iter = 0
         self.__compteurOutput = 0
 
-        self.interval_output = (
-            -1
-        )  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
+        self.interval_output = -1  # save results every self.interval_output iter or time step if self.save_at_exact_time = True
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
@@ -64,7 +62,7 @@ class _NonLinearBase:
         -------
         numpy.ndarray
         """
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
@@ -82,19 +80,19 @@ class _NonLinearBase:
         -------
         numpy.ndarray
         """
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
     def get_temp(self):
         """Return the nodal temperature field."""
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, "Temp")
         return self._get_vect_component(self._U + self._dU, "Temp")
 
     # Return all the dof for every variable under a vector form
     def get_dof_solution(self, name="all"):
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
@@ -239,7 +237,7 @@ class _NonLinearBase:
                     np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
                 )  # Displacement criterion
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
-                if self.get_D() is 0:
+                if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
                         np.linalg.norm(self.get_B()[dof_free], norm_type) / self._err0
                     )
@@ -252,7 +250,7 @@ class _NonLinearBase:
                         / self._err0
                     )
             else:  # self.nr_parameters['criterion'] == 'Work': #work criterion
-                if self.get_D() is 0:
+                if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
                         np.linalg.norm(
                             self.get_X()[dof_free] * self.get_B()[dof_free],
@@ -420,9 +418,7 @@ class _NonLinearBase:
         if exec_callback_at_each_iter is not None:
             self.exec_callback_at_each_iter = exec_callback_at_each_iter
         if interval_output is None:
-            interval_output = (
-                self.interval_output
-            )  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
+            interval_output = self.interval_output  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
 
         # if kargs: #not empty
         #    raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
@@ -436,15 +432,13 @@ class _NonLinearBase:
         if self.save_at_exact_time:
             next_time = self.t0 + interval_output
         else:
-            next_time = (
-                self.tmax
-            )  # next_time is the next exact time where the algorithm have to stop for output purpose
+            next_time = self.tmax  # next_time is the next exact time where the algorithm have to stop for output purpose
 
         self.init_bc_start_value()
 
         self.time = self.t0  # time at the begining of the iteration
 
-        if self._U is 0:  # Initialize only if 1st step
+        if np.isscalar(self._U) and self._U == 0:  # Initialize only if 1st step
             self.initialize()
 
         restart = False  # bool to know if the iteration is another attempt
