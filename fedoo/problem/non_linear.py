@@ -498,11 +498,12 @@ class _NonLinearBase:
             else:
                 if update_dt:
                     dt *= 0.25
-                    print(
-                        "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                            normRes, dt
+                    if self.print_info > 0:
+                        print(
+                            "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
+                                normRes, dt
+                            )
                         )
-                    )
 
                     if dt < dt_min:
                         raise NameError(
