@@ -34,7 +34,7 @@ The dimension of the modeling space car be '3D' or '2D' (for planar problem). Th
 
 .. code-block:: python
 
-    fd.ModelingSpace("3D") 
+    fd.ModelingSpace("3D")
 
 
 Create and/or import the geometry (mesh)
@@ -45,7 +45,7 @@ For instance to build the mesh of a box (3d rectangle), we can use:
 
 .. code-block:: python
 
-    fd.mesh.box_mesh(nx=31, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8', name = "Domain") 
+    my_mesh = fd.mesh.box_mesh(nx=31, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8')
 
 You can also import a Mesh by using one of the following Mesh constructor :py:meth:`fedoo.Mesh.read`, :py:meth:`fedoo.Mesh.from_pyvista` or with the function fd.mesh.import_file (see :ref:`importmesh`) that allow to import meshes from the VTK or GMSH format.
 
@@ -60,7 +60,7 @@ In fedoo, the equation is defined by creating a WeakForm object.
 The type of WeakForm may be related to a specific type of elements. 
 
 For instance, a beam weak formulation should be associated to beam elements.
-The module :doc:`weakform <WeakForm>` list the available type of weak formulation. 
+The module :doc:`weakform <WeakForm>` list the available types of weak formulation. 
 Most of weak formulations needs the definition of a material constitutive law.
 The module :doc:`constitutivelaw <ConstitutiveLaw>` list the available ConstitutiveLaw.
 
@@ -68,8 +68,8 @@ For instance a simple weak formulation may be defined by:
 
 .. code-block:: python
     
-    fd.constitutivelaw.ElasticIsotrop(200e3, 0.3, name = 'ElasticLaw')
-    fd.weakform.StressEquilibrium("ElasticLaw", name = "MyWeakForm")
+    material = fd.constitutivelaw.ElasticIsotrop(200e3, 0.3)
+    my_weakform = fd.weakform.StressEquilibrium(material)
 
 
 Create global matrix assemblies
@@ -82,14 +82,14 @@ For instance, a simple assembly for the previously defined weak formulation and 
 
 .. code-block:: python
     
-    fd.Assembly.create("MyWeakForm", 'Domain', name = "MyAssembly") 
+    my_assembly = fd.Assembly.create(my_weakform, my_mesh) 
 
 The Assembly object will automatically compute the assembled stiffness matrix using scipy sparse matrix format.
 To get the global stiffness matrix: 
 
 .. code-block:: python
 
-    fd.Assembly["MyAssembly"].get_matrix()). 
+    my_assembly.get_matrix(). 
 
 
 Set the Problem and the solver

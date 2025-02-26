@@ -918,6 +918,7 @@ class Mesh(MeshBase):
             return pvmesh
         if USE_PYVISTA:
             cell_type, n_elm_nodes = {
+                "node2": (3, 2),
                 "lin2": (3, 2),
                 "tri3": (5, 3),
                 "quad4": (9, 4),

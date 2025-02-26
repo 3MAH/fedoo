@@ -4,7 +4,7 @@ from numpy import linalg
 from fedoo.lib_elements.finite_difference_1d import Node, Parameter
 
 # from fedoo.lib_elements.beam import *
-# from fedoo.lib_elements.cohesive import *
+# from fedoo.lib_elements.cohesive import Cohesive1D
 from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex8r
 from fedoo.lib_elements.line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
 from fedoo.lib_elements.quadrangle import Quad4, Quad8, Quad9
@@ -45,7 +45,7 @@ _dict_default_n_gp = {
     "lin3bubble": 3,
     "lin4": 4,
     "cohesive1d": 1,
-    "cohesive2d": 2,
+    "lin2interface": 2,
     "quad4interface": 4,
     "tri3": 3,
     "tri6": 4,
@@ -281,7 +281,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 ],
             ]
 
-    elif element in ["cohesive1d"]:
+    elif element in ["node2"]:
         # The values are arbitrary, only the size is important
         return np.c_[[0.0, 0.0]]
 

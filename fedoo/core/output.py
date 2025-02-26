@@ -315,6 +315,14 @@ def _get_results(
         elif res in sv:
             data = sv[res]
             data_type = assemb.sv_type.get(res, "GaussPoint")
+            if isinstance(data, list):
+                # try to convert into array
+                try:
+                    data = np.array(data)
+                except ValueError:
+                    import warnings
+                    warnings.warn((f"{res} can't be converted into array "
+                                   "during results extraction."))
 
         if output_type is not None and output_type != data_type:
             data = assemb.convert_data(data, data_type, output_type)
