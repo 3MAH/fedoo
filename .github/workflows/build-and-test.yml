@@ -1,16 +1,11 @@
 name: Build and Test
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - "*"
-
+    branches: [ master ]
   pull_request:
-    branches:
-      - "*"
-
-  schedule:
-    - cron: "0 0 * * *"
+    branches: [ master ]
 
 jobs:
   build-linux:
