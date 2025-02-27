@@ -132,7 +132,6 @@ class Quad4InterfaceJump(ElementQuadrangle):  # à vérifier
         ]
 
 
-
 class Node2Middle(Node2Jump):
     # define the midle between two nodes.
     name = "node2middle"
@@ -231,7 +230,7 @@ class Quad4MeanPlane(ElementQuadrangle):
 Node2 = CombinedElement(
     "spring", Node2Jump, default_n_gp=1, local_csys=True
 )
-# Node2.geometry_elm = Node2Middle
+Node2.geometry_elm = Node2Middle
 
 Quad4Interface = CombinedElement(
     "quad4interface", Quad4InterfaceJump, default_n_gp=4, local_csys=True
