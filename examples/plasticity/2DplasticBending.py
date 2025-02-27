@@ -2,7 +2,7 @@ import fedoo as fd
 import numpy as np
 from time import time
 import os
-import pylab as plt
+# import pylab as plt
 from numpy import linalg
 
 start = time()
@@ -81,7 +81,8 @@ elif mat == 1:
         "Assembling",
         ["Disp", "Stress", "Strain", "Statev", "Wm"],
         output_type="Node",
-        file_format="vtk",
+        file_format="fdz",
+        compressed=True,
     )
     # elm_set = mesh.get_elements_from_nodes(mesh.find_nodes('X<8'))
     # res = pb.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'], element_set = elm_set )
