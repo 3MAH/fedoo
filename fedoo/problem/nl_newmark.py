@@ -16,7 +16,7 @@ class _NonLinearNewmarkBase:
         MassAssembly,
         Beta,
         Gamma,
-        DampingAssembly=0,
+        DampingAssembly=None,
         nlgeom=False,
         name="MainProblem",
     ):
@@ -54,7 +54,7 @@ class _NonLinearNewmarkBase:
 
     def updateA(self):  # internal function to be used when modifying M, K or C
         dt = self.dtime
-        if np.isscalar(self.__DampingAssembly) and self.__DampingAssembly == 0:
+        if self.__DampingAssembly is None:
             self.set_A(
                 self.__StiffnessAssembly.get_global_matrix()
                 + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
@@ -99,7 +99,7 @@ class _NonLinearNewmarkBase:
             )
             + self.__StiffnessAssembly.get_global_vector()
         )
-        if self.__DampingAssembly is not 0:
+        if self.__DampingAssembly is not None:
             if self.__RayleighDamping is not None:
                 # In this case, self.__RayleighDamping = [alpha, beta]
                 DampMatrix = (
@@ -132,7 +132,7 @@ class _NonLinearNewmarkBase:
         """ """
         self.__MassAssembly.initialize(self)
         self.__StiffnessAssembly.initialize(self)
-        if self.__DampingAssembly is not 0 and self.__RayleighDamping is None:
+        if self.__DampingAssembly is not None and self.__RayleighDamping is None:
             self.__DampingAssembly.initialize(self)
 
     def to_start(self):
@@ -142,7 +142,7 @@ class _NonLinearNewmarkBase:
 
         self.__MassAssembly.to_start(self)
         self.__StiffnessAssembly.to_start(self)
-        # if self.__DampingAssembly is not 0:
+        # if self.__DampingAssembly is not None:
         #     self.__DampingAssembly.to_start()
 
     def set_start(self, save_results=False, callback=None):
@@ -164,7 +164,7 @@ class _NonLinearNewmarkBase:
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__MassAssembly.set_start(self)
         self.__StiffnessAssembly.set_start(self)
-        # if self.__DampingAssembly is not 0:
+        # if self.__DampingAssembly is not None:
         #     self.__DampingAssembly.set_start(self,dt)
 
         # Save results
@@ -181,7 +181,7 @@ class _NonLinearNewmarkBase:
     #     ### dt is the time step of the previous increment
     #     self.__MassAssembly.NewTimeIncrement()
     #     self.__StiffnessAssembly.NewTimeIncrement()
-    #     if self.__DampingAssembly is not 0:
+    #     if self.__DampingAssembly is not None:
     #         self.__DampingAssembly.NewTimeIncrement()
 
     #     #update velocity and acceleration
@@ -204,12 +204,12 @@ class _NonLinearNewmarkBase:
         if updateWeakForm == True:
             self.__StiffnessAssembly.update(self, compute)
             # self.__MassAssembly.update(self,dt,compute)
-            # if self.__DampingAssembly is not 0:
+            # if self.__DampingAssembly is not None:
             #     self.__DampingAssembly.update(self,dt,compute)
         else:
             self.__StiffnessAssembly.current.assemble_global_mat(compute)
             # self.__MassAssembly.current.assemble_global_mat(compute)
-            # if self.__DampingAssembly is not 0:
+            # if self.__DampingAssembly is not None:
             #     self.__DampingAssembly.current.assemble_global_mat(compute)
 
         if self.bc._update_during_inc:
@@ -218,7 +218,7 @@ class _NonLinearNewmarkBase:
     def reset(self):
         self.__MassAssembly.reset()
         self.__StiffnessAssembly.reset()
-        if self.__DampingAssembly is not 0:
+        if self.__DampingAssembly is not None:
             self.__DampingAssembly.reset()
         self.set_A(0)  # tangent stiffness
         self.set_D(0)
