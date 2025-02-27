@@ -9,17 +9,46 @@ class SpringEquilibrium(WeakFormBase):
     """
     Weak formulation of the mechanical equilibrium equation for spring models.
 
-    Geometrical are implemented with the updated lagrangian approach.
+    This weak formulation allow to use a simple linear axial spring element
+    with geometrical non linearities (using the updated lagrangian approach).
+
+    To ensure numerical stability, a small tangential stiffness is
+    automatically added. This rigidity can be controled by setting the
+    Kt_factor attribute. For instance set Kt_factor=0 to remove any tangential
+    stiffness.
+
+    An alternative to the SpringEquilibrium is the InterfaceForce weakform.
+    InterfaceForce weakform allows to use springs with complexe behavior
+    and non axial rigidity, but InterfaceForce is restricted to geometrical
+    linear analyses.
 
     Parameters
     ----------
     K: float, numpy array
-        Spring rigidity
-        If numpy array, len(K) should be the number of elements in the corresponding mesh.
+        Spring axial rigidity
+        If numpy array, len(K) should be the number of elements in the
+        corresponding mesh.
     nlgeom: bool, 'UL', default = False
         if True or 'UL', activate the geometrical non linearities
     name: str
         name of the WeakForm
+
+    Example
+    -------
+    Springs in series submitted to an extension and a 45° rotation.
+
+    >>> import fedoo as fd
+    >>> fd.ModelingSpace("2Dplane")
+    >>> mesh = fd.mesh.line_mesh(n_nodes=11,x_min=0, x_max=10, ndim=2)
+    >>> mesh.elm_type = 'spring'
+    >>> wf = fd.weakform.SpringEquilibrium(1000,nlgeom=False)
+    >>> assemb = fd.Assembly.create(wf, mesh)
+    >>> pb = fd.problem.NonLinear(assemb)
+    >>> pb.bc.add('Dirichlet', [0], 'Disp', 0)
+    >>> pb.bc.add('Neumann', [10], 'Disp', [5,5])
+    >>> pb.nlsolve()
+    >>> res = pb.get_results(assemb, ['Disp', 'Fint'])
+    >>> res.plot('Fint', show_nodes=True)
     """
 
     def __init__(
@@ -43,7 +72,7 @@ class SpringEquilibrium(WeakFormBase):
         self.Kt_factor = None
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
-        """Method used to treat the geometric non linearities. 
+        """Method used to treat the geometric non linearities.
             * Set to False if geometric non linarities are ignored (default). 
             * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
             * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
