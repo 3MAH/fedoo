@@ -81,7 +81,7 @@ class _LinearBase:
         updateWF = kargs.pop("updateWF", True)
         self.init_bc_start_value()
         self.apply_boundary_conditions()
-        if self.get_X() is 0:
+        if np.isscalar(self.get_X()) and self.get_X() == 0:
             Problem.solve(self)
         else:
             # solve increment

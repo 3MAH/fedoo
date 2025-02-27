@@ -52,7 +52,7 @@ class Problem(ProblemBase):
 
         self.__A = A
 
-        if B is 0:
+        if np.isscalar(B) and B == 0:
             self.__B = self._new_vect_dof()
         else:
             self.__B = B
@@ -159,7 +159,7 @@ class Problem(ProblemBase):
         self.__D = D
 
     def solve(self, **kargs):
-        if self.__X is 0:
+        if np.isscalar(self.__X) and self.__X == 0:
             self.__X = np.ndarray(self.n_dof)  # empty array
 
         if len(self.__A.shape) == 2:  # A is a matrix
@@ -167,13 +167,13 @@ class Problem(ProblemBase):
             # self.__X[self._dof_slave] = self._Xbc[self._dof_slave]
 
             # Temp = self.__A[:,self._dof_slave].dot(self.__X[self._dof_slave])
-            # if self.__D is 0:
+            # if np.isscalar(self.__D) and self.__D == 0:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] - Temp[self._dof_free])
             # else:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
 
             if len(self._dof_free) != 0:
-                if self.__D is 0:
+                if np.isscalar(self.__D) and self.__D == 0:
                     self.__X[self._dof_free] = self._solve(
                         self.__MatCB.T @ self.__A @ self.__MatCB,
                         self.__MatCB.T @ (self.__B - self.__A @ self._Xbc),
@@ -319,7 +319,7 @@ class Problem(ProblemBase):
     def init_bc_start_value(self):
         ### is used only for incremental problems
         U = self.get_dof_solution()
-        if U is 0:
+        if np.isscalar(U) and U == 0:
             return
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
@@ -369,7 +369,7 @@ class Problem(ProblemBase):
         heat flux for temperature).
         """
         if self._MFext is 0 or not (include_mpc):
-            if self.get_D() is 0:
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(self.get_A() @ self.get_X(), name)
             else:
                 return self._get_vect_component(
@@ -385,7 +385,7 @@ class Problem(ProblemBase):
             M = M.tocsr().T
             # need to be checked
             # M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
-            if self.get_D() is 0:
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
             else:
                 return self._get_vect_component(

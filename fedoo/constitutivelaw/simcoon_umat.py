@@ -447,7 +447,7 @@ class Simcoon(Mechanical3D):
                         0,
                         assembly.sv["Wm"],
                     )
-            except: #for compatility with previous simcoon versions
+            except:  # for compatility with previous simcoon versions
                 (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
                     self.umat_name,
                     zeros_6,
@@ -470,10 +470,10 @@ class Simcoon(Mechanical3D):
         else:
             de = assembly.sv["Strain"] - assembly.sv_start["Strain"]
 
-        # if 'Stress' not in assembly.sv or assembly.sv['Stress'] is 0:
+        # if 'Stress' not in assembly.sv or (np.isarray(assembly.sv['Stress']) and assembly.sv['Stress'] == 0):
         #     assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 
-        # if assembly.sv_start['Strain'] is 0:
+        # if np.isscalar(assembly.sv_start['Strain']) and assembly.sv_start['Strain'] == 0:
         #     assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 
         if "Temp" in assembly.sv:

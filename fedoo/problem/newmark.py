@@ -28,7 +28,7 @@ class _NewmarkBase:
         if isinstance(DampingAssembling, str):
             DampingAssembling = Assembly.get_all()[DampingAssembling]
 
-        if DampingAssembling is 0:
+        if np.isscalar(DampingAssembling) and DampingAssembling == 0:
             A = (
                 StiffnessAssembling.get_global_matrix()
                 + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
@@ -63,7 +63,7 @@ class _NewmarkBase:
         self.__Xdotdot = self._new_vect_dof()
 
     def __UpdateA(self):  # internal function to be used when modifying M, K or C
-        if self.__DampMatrix is 0:
+        if np.isscalar(self.__DampMatrix) and self.__DampMatrix == 0:
             self.set_A(
                 self.__StiffMatrix
                 + 1 / (self.__Beta * (self.__TimeStep**2)) * self.__MassMatrix

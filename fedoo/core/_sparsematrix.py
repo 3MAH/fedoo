@@ -45,7 +45,7 @@ class _BlocSparse:
     #    def addToBloc(self, Mat, rowBloc, colBloc):
     #        #Mat should be a scipy matrix using the csr format
     #        bloc = self.data[rowBloc][colBloc]
-    #        if bloc is 0:
+    #        if np.isscalar(bloc) and bloc == 0:
     #            self.data[rowBloc][colBloc] = Mat.copy()
     #            self.data_coo[rowBloc][colBloc] = self.data[row][col].tocoo(copy = False)
     #            #row are sorted for data_coo
@@ -89,7 +89,10 @@ class _BlocSparse:
                 )  # at each element we build a nbNode x nbNode matrix
 
             if mat_lumping:
-                if self.data[rowBloc][colBloc] is 0:
+                if (
+                    np.isscalar(self.data[rowBloc][colBloc])
+                    and self.data[rowBloc][colBloc] == 0
+                ):
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
@@ -97,7 +100,10 @@ class _BlocSparse:
                     new_data.sum(axis=2)
                 )
             else:
-                if self.data[rowBloc][colBloc] is 0:
+                if (
+                    np.isscalar(self.data[rowBloc][colBloc])
+                    and self.data[rowBloc][colBloc] == 0
+                ):
                     self.data[rowBloc][colBloc] = new_data
                 else:
                     self.data[rowBloc][colBloc] += new_data
@@ -132,7 +138,10 @@ class _BlocSparse:
                 )  # at each element we build a nbNode x nbNode matrix
 
             if mat_lumping:  # only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
-                if self.data[rowBloc][colBloc] is 0:
+                if (
+                    np.isscalar(self.data[rowBloc][colBloc])
+                    and self.data[rowBloc][colBloc] == 0
+                ):
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
@@ -140,7 +149,10 @@ class _BlocSparse:
                     new_data.sum(axis=2)
                 )  # set value only to diag terms
             else:
-                if self.data[rowBloc][colBloc] is 0:
+                if (
+                    np.isscalar(self.data[rowBloc][colBloc])
+                    and self.data[rowBloc][colBloc] == 0
+                ):
                     self.data[rowBloc][colBloc] = new_data
                 else:
                     self.data[rowBloc][colBloc] += new_data
@@ -386,7 +398,10 @@ class _BlocSparseOld:
         if not (isinstance(coef, Number)):
             coef = coef.reshape(-1, 1, 1)
 
-        if self.data[rowBloc][colBloc] is 0:
+        if (
+            np.isscalar(self.data[rowBloc][colBloc])
+            and self.data[rowBloc][colBloc] == 0
+        ):
             # self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
             temp = A.data.reshape(-1, NnzColPerRowA, 1) @ B.data.reshape(
                 -1, 1, NnzColPerRowB
@@ -424,7 +439,10 @@ class _BlocSparseOld:
         if not (isinstance(coef, Number)):
             coef = coef.reshape(-1, 1, 1)
 
-        if self.data[rowBloc][colBloc] is 0:
+        if (
+            np.isscalar(self.data[rowBloc][colBloc])
+            and self.data[rowBloc][colBloc] == 0
+        ):
             self.data[rowBloc][colBloc] = coef * Arr
         else:
             self.data[rowBloc][colBloc] += coef * Arr

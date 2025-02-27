@@ -126,7 +126,7 @@ class CohesiveLaw_mod(Spring):
         return self.__DamageVariable
 
     def updateIrreversibleDamage(self):
-        if self.__DamageVariable is 0:
+        if np.isscalar(self.__DamageVariable) and self.__DamageVariable == 0:
             self.__DamageVariableIrreversible = 0
         else:
             self.__DamageVariableIrreversible = self.__DamageVariable.copy()
@@ -152,9 +152,12 @@ class CohesiveLaw_mod(Spring):
 
     def __UpdateDamageVariable(self, delta):
         alpha = 2  # for the power low
-        if self.__DamageVariable is 0:
+        if np.isscalar(self.__DamageVariable) and self.__DamageVariable == 0:
             self.__DamageVariable = 0 * delta[0]
-        if self.__DamageVariableOpening is 0:
+        if (
+            np.isscalar(self.__DamageVariableOpening)
+            and self.__DamageVariableOpening == 0
+        ):
             self.__DamageVariableOpening = 0 * delta[0]
 
         # delta_n = delta.pop(self.__parameters['axis'])
@@ -248,7 +251,10 @@ class CohesiveLaw_mod(Spring):
 
         d[test] = (tm[test] / (tm[test] - t0[test])) * (1 - (t0[test] / dta[test]))
 
-        if self.__DamageVariableIrreversible is 0:
+        if (
+            np.isscalar(self.__DamageVariableIrreversible)
+            and self.__DamageVariableIrreversible == 0
+        ):
             self.__DamageVariable = (
                 d  # I don't know why self.__DamageVariable = d end up in bads values
             )
@@ -302,8 +308,8 @@ class CohesiveLaw_mod(Spring):
 
 
 #     alpha = 2 #for the power low
-#     if self.__DamageVariable is 0: self.__DamageVariable = 0*delta[0]
-#     if self.__DamageVariableOpening  is 0: self.__DamageVariableOpening  = 0*delta[0]
+#     if np.isscalar(self.__DamageVariable) and self.__DamageVariable == 0: self.__DamageVariable = 0*delta[0]
+#     if np.isscalar(self.__DamageVariableOpening) and self.__DamageVariableOpening == 0: self.__DamageVariableOpening  = 0*delta[0]
 
 #     # delta_n = delta.pop(self.__parameters['axis'])
 #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)
