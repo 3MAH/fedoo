@@ -35,7 +35,7 @@ def compute_mechanical_fields(
     poisson_ratio: float = 0.3,
 ) -> np.ndarray:
     fd.Assembly.delete_memory()
-    # --------------- Pre-Treatment --------------------------------------------------------
+    # --------------- Pre-Treatment -------------------------------------------
     space = fd.ModelingSpace("2Dstress")
 
     type_el = mesh.elm_type

@@ -8,7 +8,6 @@ from simcoon import simmit as sim
 
 import fedoo as fd
 
-
 def test_2DDynamicPlasticBending():
     start = time()
     # --------------- Pre-Treatment --------------------------------------------------------
@@ -104,7 +103,7 @@ def test_2DDynamicPlasticBending():
     # print(time()-start)
 
     res = pb.get_results("Assembling", ["Strain", "Stress"], "Node")
-    # assert np.abs(res.node_data["Strain"][0][941] + 0.019422241296056023) < 1e-8
-    # assert np.abs(res.node_data["Stress"][3][234] + 67.82318305757613) < 1e-4
+    assert np.abs(res.node_data["Strain"][0][941] + 0.019368298175810157) < 1e-8
+    assert np.abs(res.node_data["Stress"][3][234] + 70.30052080276131) < 1e-4
 
     # REMOVE ASSERT until simcoon bug is resolved

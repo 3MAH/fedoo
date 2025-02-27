@@ -66,19 +66,19 @@ class InterfaceForce(WeakFormBase):
         if self.nlgeom == "UL":
             # if updated lagragian method -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())
-            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+            # if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+            #     del assembly._saved_change_of_basis_mat[assembly.current.mesh]
 
-            assembly.current.compute_elementary_operators()
+            # assembly.current.compute_elementary_operators()
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
-            if assembly.current.mesh in assembly._saved_change_of_basis_mat:
-                del assembly._saved_change_of_basis_mat[assembly.current.mesh]
+            # if assembly.current.mesh in assembly._saved_change_of_basis_mat:
+            #     del assembly._saved_change_of_basis_mat[assembly.current.mesh]
 
-            assembly.current.compute_elementary_operators()
+            # assembly.current.compute_elementary_operators()
 
     # def set_start(self, assembly, pb):
     #         if self.nlgeom:

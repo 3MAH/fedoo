@@ -15,7 +15,8 @@ from .beam import (
     BernoulliBeam_rot,
 )
 from .cohesive import (
-    Cohesive1D,
+    Node2,
+    Node2Jump,
     Lin2Interface,
     Lin2InterfaceJump,
     Lin2MeanPlane,

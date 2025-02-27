@@ -27,6 +27,7 @@ The WeakForm library contains the following classes:
    SteadyHeatEquation
    HeatEquation
    BeamEquilibrium
+   SpringEquilibrium
    PlateEquilibrium
    PlateEquilibriumFI
    PlateEquilibriumSI
@@ -37,6 +38,7 @@ The WeakForm library contains the following classes:
 """
 
 from .beam import BeamEquilibrium
+from .spring import SpringEquilibrium
 from .beam_parametric import ParametricBeam, ParametricBernoulliBeam
 from .heat_equation import HeatEquation, SteadyHeatEquation, TemperatureTimeDerivative
 from .implicit_dynamic import ImplicitDynamic, ImplicitDynamic2
@@ -53,6 +55,7 @@ from .stress_equilibrium import StressEquilibrium
 
 __all__ = [
     "BeamEquilibrium",
+    "SpringEquilibrium",
     "Inertia",
     "InterfaceForce",
     "PlateEquilibrium",
