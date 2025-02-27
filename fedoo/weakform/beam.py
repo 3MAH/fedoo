@@ -310,7 +310,7 @@ class BeamEquilibrium(WeakFormBase):
                 # compute the beam strain at gausspoint
                 assembly.sv["BeamStrain"] = [
                     0
-                    if Ke[i] is 0 or op is 0
+                    if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
                     else assembly.current.get_gp_results(
                         op, dof_local, use_local_dof=True
                     )
@@ -319,7 +319,11 @@ class BeamEquilibrium(WeakFormBase):
 
             else:
                 assembly.sv["BeamStrain"] = [
-                    0 if Ke[i] is 0 or op is 0 else assembly.get_gp_results(op, dof)
+                    (
+                        0
+                        if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
+                        else assembly.get_gp_results(op, dof)
+                    )
                     for i, op in enumerate(op_beam_strain)
                 ]
 
@@ -345,7 +349,7 @@ class BeamEquilibrium(WeakFormBase):
         if self.nlgeom and self.space.ndim == 3:  # only UL for now
             # update rot dof because
             pass
-            # if pb.get_dof_solution() is not 0:
+            # if not(np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
             #     #update rotation vector values
             #     ### WARNING only work if vectors are contigous in the variable order
             #     var = self.space.variable_rank('RotX')
@@ -364,7 +368,7 @@ class BeamEquilibrium(WeakFormBase):
 
         initial_stress = assembly.sv["BeamStress"]
 
-        if initial_stress is not 0:
+        if not(np.isscalar(initial_stress) and initial_stress == 0):
             diff_op = diff_op + sum(
                 [
                     eps[i].virtual * initial_stress[i] if eps[i] != 0 else 0

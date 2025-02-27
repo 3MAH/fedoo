@@ -95,7 +95,7 @@ class SpringEquilibrium(WeakFormBase):
             assembly.set_disp(pb.get_disp())
 
         dof = pb.get_dof_solution()  # displacement and rotation node values
-        if dof is 0:
+        if np.isscalar(dof) and dof == 0:
             assembly.sv["Stretch"] = assembly.sv["Fint"] = 0
         else:
             # evaluate Strain
@@ -169,7 +169,7 @@ class SpringEquilibrium(WeakFormBase):
 
         Fint = assembly.sv["Fint"]
 
-        if Fint is not 0:
+        if not(np.isscalar(Fint) and Fint == 0):
             diff_op = diff_op + op_delta[0].virtual * Fint
 
         return diff_op
