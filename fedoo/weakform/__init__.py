@@ -27,6 +27,7 @@ The WeakForm library contains the following classes:
    SteadyHeatEquation
    HeatEquation
    BeamEquilibrium
+   SpringEquilibrium
    PlateEquilibrium
    PlateEquilibriumFI
    PlateEquilibriumSI
