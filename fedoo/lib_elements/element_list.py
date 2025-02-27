@@ -281,7 +281,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 ],
             ]
 
-    elif element in ["node2"]:
+    elif element in ["spring"]:
         # The values are arbitrary, only the size is important
         return np.c_[[0.0, 0.0]]
 

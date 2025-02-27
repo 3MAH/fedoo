@@ -302,16 +302,6 @@ def _get_results(
             # data = assemb.convert_data(data, None, output_type).T
             data_type = "GaussPoint"
 
-        elif res == "Fint":
-            data = assemb.get_int_forces(pb.get_dof_solution(), "local").T
-            # data = assemb.convert_data(data, None, output_type)
-            data_type = "GaussPoint"  # or 'Element' ?
-
-        elif res == "Fint_global":
-            data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
-            # data = assemb.convert_data(data, None, output_type)
-            data_type = "GaussPoint"  # or 'Element' ?
-
         elif res in sv:
             data = sv[res]
             data_type = assemb.sv_type.get(res, "GaussPoint")
@@ -323,6 +313,16 @@ def _get_results(
                     import warnings
                     warnings.warn((f"{res} can't be converted into array "
                                    "during results extraction."))
+
+        elif res == "Fint":
+            data = assemb.get_int_forces(pb.get_dof_solution(), "local").T
+            # data = assemb.convert_data(data, None, output_type)
+            data_type = "GaussPoint"  # or 'Element' ?
+
+        elif res == "Fint_global":
+            data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
+            # data = assemb.convert_data(data, None, output_type)
+            data_type = "GaussPoint"  # or 'Element' ?
 
         if output_type is not None and output_type != data_type:
             data = assemb.convert_data(data, data_type, output_type)

@@ -229,7 +229,7 @@ class Quad4MeanPlane(ElementQuadrangle):
 
 
 Node2 = CombinedElement(
-    "node2", Node2Jump, default_n_gp=1, local_csys=True
+    "spring", Node2Jump, default_n_gp=1, local_csys=True
 )
 # Node2.geometry_elm = Node2Middle
 
