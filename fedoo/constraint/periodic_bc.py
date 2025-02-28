@@ -154,9 +154,9 @@ class PeriodicBC(BCBase):
                 dim = len(node_cd[0])
 
         else:
-            assert np.isscalar(node_cd[0]), (
-                "Only small strain tensor can be treated with non periodic mesh"
-            )
+            assert np.isscalar(
+                node_cd[0]
+            ), "Only small strain tensor can be treated with non periodic mesh"
 
             self.n_neighbours = 3
             self.pow_inter = 1.0
@@ -189,9 +189,7 @@ class PeriodicBC(BCBase):
         # =========== Non Periodic Mesh using simcoon function =====
         # ==========================================================
         if self.meshperio == False:
-            assert USE_SIMCOON, (
-                "Simcoon needs to be installed before using Periodic BC with non perio mesh."
-            )
+            assert USE_SIMCOON, "Simcoon needs to be installed before using Periodic BC with non perio mesh."
 
             if isinstance(node_cd[0], np.int64):
                 node_cd_int32 = [n.item() for n in node_cd]

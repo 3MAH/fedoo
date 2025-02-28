@@ -183,9 +183,9 @@ class _BlocSparse:
 
         method = 1
         if method == 0:
-            assert not (self.__assume_sym), (
-                "method = 0 for sparse matrix building can't be used with the assume_sym option. Contact developer"
-            )
+            assert not (
+                self.__assume_sym
+            ), "method = 0 for sparse matrix building can't be used with the assume_sym option. Contact developer"
             ResDat = np.array(
                 [
                     self.data[i][j]
@@ -315,9 +315,9 @@ class _BlocSparse:
                 Res = sparse.bmat(blocks, format="csr")
 
             elif method == 2:
-                assert not (self.__assume_sym), (
-                    "method = 2 for sparse matrix building can't be used with the assume_sym option. Contact developer"
-                )
+                assert not (
+                    self.__assume_sym
+                ), "method = 2 for sparse matrix building can't be used with the assume_sym option. Contact developer"
                 data_coo = np.array(
                     [
                         self.data[i][j]

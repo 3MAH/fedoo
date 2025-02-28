@@ -203,9 +203,9 @@ class Assembly(AssemblyBase):
                         continue
 
                     var_vir = wf.op_vir[ii].u
-                    assert wf.op_vir[ii].ordre == 0, (
-                        "This weak form is not compatible with finite difference mesh"
-                    )
+                    assert (
+                        wf.op_vir[ii].ordre == 0
+                    ), "This weak form is not compatible with finite difference mesh"
 
                     if (
                         wf.op[ii] == 1
@@ -1190,9 +1190,9 @@ class Assembly(AssemblyBase):
                 var.extend(associatedVariables[var[0]][0])
                 coef.extend(associatedVariables[var[0]][1])
 
-            assert operator.op_vir[ii] == 1, (
-                "Operator virtual are only required to build FE operators, but not to get element results"
-            )
+            assert (
+                operator.op_vir[ii] == 1
+            ), "Operator virtual are only required to build FE operators, but not to get element results"
 
             if np.isscalar(operator.coef[ii]):
                 coef_PG = operator.coef[ii]
@@ -1232,9 +1232,9 @@ class Assembly(AssemblyBase):
                 var.extend(associatedVariables[var[0]][0])
                 coef.extend(associatedVariables[var[0]][1])
 
-            assert operator.op_vir[ii] == 1, (
-                "Operator virtual are only required to build FE operators, but not to get element results"
-            )
+            assert (
+                operator.op_vir[ii] == 1
+            ), "Operator virtual are only required to build FE operators, but not to get element results"
 
             if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                 M = RowBlocMatrix(

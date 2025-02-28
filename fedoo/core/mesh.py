@@ -298,9 +298,9 @@ class Mesh(MeshBase):
 
         elif len(args) == 2:
             # args = [nodes, nb_nodes]
-            assert len(args[0].shape) == 1 or args[0].shape[1] == 1, (
-                "Only one node coordinates should be specified in nodes if nb_nodes is given."
-            )
+            assert (
+                len(args[0].shape) == 1 or args[0].shape[1] == 1
+            ), "Only one node coordinates should be specified in nodes if nb_nodes is given."
             self.nodes = np.vstack((self.nodes, np.tile(args[0], (args[1], 1))))
 
         return np.arange(n_nodes_old, self.n_nodes)

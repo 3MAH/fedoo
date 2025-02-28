@@ -30,9 +30,9 @@ class ModelingSpace:
         >>> print(fd.ModelingSpace['Main'].ndim)
         """
 
-        assert isinstance(dimension, str), (
-            "The dimension value must be a string: '2D', '3D', '2Dplane' or '2Dstress'."
-        )
+        assert isinstance(
+            dimension, str
+        ), "The dimension value must be a string: '2D', '3D', '2Dplane' or '2Dstress'."
         if dimension == "2D":
             dimension = "2Dplane"
         assert (
@@ -104,9 +104,9 @@ class ModelingSpace:
     @staticmethod
     def get_active():
         """Return the active ModelingSpace."""
-        assert ModelingSpace._active is not None, (
-            "You must define a ModelingSpace for your problem."
-        )
+        assert (
+            ModelingSpace._active is not None
+        ), "You must define a ModelingSpace for your problem."
         return ModelingSpace._active
 
     @staticmethod

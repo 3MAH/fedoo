@@ -464,9 +464,9 @@ class ShellLaminate(ShellBase):
         -------
         layer_id (int) : id of the layer at given position
         """
-        assert position >= -1 and position <= 1, (
-            "position should be a float with value in [-1,1]"
-        )
+        assert (
+            position >= -1 and position <= 1
+        ), "position should be a float with value in [-1,1]"
         if position == -1:
             return 0  # 1st layer = bottom layer
         z = position * self.GetThickness() / 2

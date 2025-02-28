@@ -32,9 +32,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         WeakFormBase.__init__(self, name, space)
 
-        assert self.space.ndim == 3, (
-            "No 2D model for a plate kinematic. Choose '3D' problem dimension."
-        )
+        assert (
+            self.space.ndim == 3
+        ), "No 2D model for a plate kinematic. Choose '3D' problem dimension."
 
         self.space.new_variable("DispX")
         self.space.new_variable("DispY")

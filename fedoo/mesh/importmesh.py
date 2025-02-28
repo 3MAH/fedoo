@@ -204,18 +204,18 @@ def import_msh(
                 NbEntityBlocks = int(l[0])
                 Nb_nodes = int(l[1])
                 numnode0 = int(l[2])
-                assert int(l[3]) == Nb_nodes - numnode0 + 1, (
-                    "Only possible to import msh file with continuous node numbering"
-                )
+                assert (
+                    int(l[3]) == Nb_nodes - numnode0 + 1
+                ), "Only possible to import msh file with continuous node numbering"
                 crd = np.empty((Nb_nodes, 3))
                 for i in range(NbEntityBlocks):
                     l = msh.pop(0).split()
                     # entityDim = l[0]
                     # entityTag = l[1] #id of the entity
 
-                    assert int(l[2]) == 0, (
-                        "Parametric coordinates are not implemented in this msh reader"
-                    )
+                    assert (
+                        int(l[2]) == 0
+                    ), "Parametric coordinates are not implemented in this msh reader"
                     numNodesInBlock = int(l[3])
                     if numNodesInBlock != 0:
                         idnodes = np.array(msh[:numNodesInBlock], dtype=int) - numnode0

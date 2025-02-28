@@ -247,9 +247,9 @@ class WeakFormSum(WeakFormBase):
                     l_wf.append(wf)
             list_weakform = l_wf
 
-        assert len(set([a.space for a in list_weakform])) == 1, (
-            "Sum of assembly are possible only if all assembly are associated to the same modeling space"
-        )
+        assert (
+            len(set([a.space for a in list_weakform])) == 1
+        ), "Sum of assembly are possible only if all assembly are associated to the same modeling space"
         WeakFormBase.__init__(self, name, space=list_weakform[0].space)
 
         if any([wf.assembly_options != {} for wf in list_weakform]):
