@@ -43,7 +43,7 @@ class SteadyHeatEquation(WeakFormBase):
             ]
 
         self.__op_grad_temp_vir = [
-            0 if op is 0 else op.virtual for op in self.__op_grad_temp
+            0 if op == 0 else op.virtual for op in self.__op_grad_temp
         ]
 
         self.constitutivelaw = thermal_constitutivelaw
@@ -54,7 +54,7 @@ class SteadyHeatEquation(WeakFormBase):
         if not (np.isscalar(pb.get_dof_solution())):
             assembly.sv["TempGradient"] = [
                 0
-                if operator is 0
+                if operator == 0
                 else assembly.get_gp_results(operator, pb.get_dof_solution())
                 for operator in self.__op_grad_temp
             ]
@@ -64,7 +64,7 @@ class SteadyHeatEquation(WeakFormBase):
     def update(self, assembly, pb):
         assembly.sv["TempGradient"] = [
             0
-            if operator is 0
+            if operator == 0
             else assembly.get_gp_results(operator, pb.get_dof_solution())
             for operator in self.__op_grad_temp
         ]
@@ -81,12 +81,12 @@ class SteadyHeatEquation(WeakFormBase):
         diff_op = sum(
             [
                 0
-                if self.__op_grad_temp_vir[i] is 0
+                if self.__op_grad_temp_vir[i] == 0
                 else self.__op_grad_temp_vir[i]
                 * sum(
                     [
                         0
-                        if self.__op_grad_temp[j] is 0
+                        if self.__op_grad_temp[j] == 0
                         else self.__op_grad_temp[j] * K[i][j]
                         for j in range(3)
                     ]
@@ -100,14 +100,19 @@ class SteadyHeatEquation(WeakFormBase):
         diff_op += sum(
             [
                 0
-                if self.__op_grad_temp_vir[i] is 0
+                if self.__op_grad_temp_vir[i] == 0
                 else self.__op_grad_temp_vir[i]
                 * sum(
-                    [
-                        temp_grad[j] * K[i][j]
-                        for j in range(3)
-                        if K[i][j] is not 0 and temp_grad[j] is not 0
-                    ]
+                    * sum(
+                        [
+                            temp_grad[j] * K[i][j]
+                            for j in range(3)
+                            if not (np.isscalar(K[i][j]) and K[i][j] == 0)
+                            and not (
+                                np.isscalar(temp_grad[j]) and temp_grad[j] == 0
+                            )
+                        ]
+                    )
                 )
                 for i in range(3)
             ]

@@ -114,7 +114,7 @@ class ParametricBeam(WeakFormBase):
                         mesh.GetListMesh()[id_mesh].nodes[:, col] ** 4 * (np.pi / 4)
                     )
                     E_Izz = E_Iyy
-                    if kG_S is not 0:
+                    if not(isinstance(kG_S,int) and kG_S == 0):
                         kG_S.data[id_mesh][:, 0] = kG_S.data[id_mesh][:, 0] * (
                             mesh.GetListMesh()[id_mesh].nodes[:, col] ** 2 * np.pi
                         )
@@ -125,7 +125,7 @@ class ParametricBeam(WeakFormBase):
                         E_S.data[id_mesh][:, 0]
                         * mesh.GetListMesh()[id_mesh].nodes[:, col]
                     )
-                    if kG_S is not 0:
+                    if not(isinstance(kG_S,int) and kG_S == 0):
                         kG_S.data[id_mesh][:, 0] = (
                             kG_S.data[id_mesh][:, 0]
                             * mesh.GetListMesh()[id_mesh].nodes[:, col]
@@ -144,7 +144,7 @@ class ParametricBeam(WeakFormBase):
                     G_Jx.data[id_mesh][:, 0] = G_Jx.data[id_mesh][:, 0] * (
                         0.5 / (1 + mesh.GetListMesh()[id_mesh].nodes[:, col])
                     )
-                    if kG_S is not 0:
+                    if not(isinstance(kG_S,int) and kG_S == 0):
                         kG_S.data[id_mesh][:, 0] = kG_S.data[id_mesh][:, 0] * (
                             0.5 / (1 + mesh.GetListMesh()[id_mesh].nodes[:, col])
                         )
@@ -162,13 +162,13 @@ class ParametricBeam(WeakFormBase):
             elif self.__parameters[param] is not None:
                 if param in ["E", "S"]:
                     E_S = E_S * self.__parameters[param]
-                    if kG_S is not 0:
+                    if not(isinstance(kG_S,int) and kG_S == 0):
                         kG_S = kG_S * self.__parameters[param]
                 if param in ["E", "Jx"]:
                     G_Jx = G_Jx * self.__parameters[param]
                 if param == "nu":
                     G_Jx = G_Jx * (0.5 / (1 + self.__parameters["nu"]))
-                    if kG_S is not 0:
+                    if not(isinstance(kG_S,int) and kG_S == 0):
                         kG_S = kG_S * (0.5 / (1 + self.__parameters["nu"]))
                 if param in ["E", "Iyy"]:
                     E_Iyy = E_Iyy * self.__parameters[param]
