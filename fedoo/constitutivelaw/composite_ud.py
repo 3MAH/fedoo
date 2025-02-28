@@ -181,8 +181,7 @@ class CompositeUD(ElasticAnisotropic):
         H[4, 4] = H[3, 3] = GLT
 
         if not (
-            np.isscalar(self.__parameters["angle"])
-            and self.__parameters["angle"] == 0
+            np.isscalar(self.__parameters["angle"]) and self.__parameters["angle"] == 0
         ):
             # angle in degree
             angle_pli = self.__parameters["angle"] / 180.0 * np.pi

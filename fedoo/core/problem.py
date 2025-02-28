@@ -198,7 +198,7 @@ class Problem(ProblemBase):
         ):  # A is a diagonal matrix stored as a vector containing diagonal values
             # No need to account for boundary condition here because the matrix is diagonal and the resolution is direct
 
-            assert not(np.isscalar(self.__D)), "internal error, contact developper"
+            assert not (np.isscalar(self.__D)), "internal error, contact developper"
 
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
@@ -327,11 +327,11 @@ class Problem(ProblemBase):
         for e in self.bc.list_all():
             if e.bc_type == "Dirichlet":
                 if e._start_value_default is None:
-                    if not(np.isscalar(U) and U == 0):
+                    if not (np.isscalar(U) and U == 0):
                         e.start_value = U[e.variable * n_nodes + e.node_set]
             if e.bc_type == "Neumann":
                 if e._start_value_default is None:
-                    if not(np.isscalar(F) and F == 0):
+                    if not (np.isscalar(F) and F == 0):
                         e.start_value = F[e.variable * n_nodes + e.node_set]
 
     def get_ext_forces(self, name="all", include_mpc=True):

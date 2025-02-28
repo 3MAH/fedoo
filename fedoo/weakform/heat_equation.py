@@ -106,8 +106,10 @@ class SteadyHeatEquation(WeakFormBase):
                     [
                         temp_grad[j] * K[i][j]
                         for j in range(3)
-                        if (not(np.array_equal(K[i][j], 0))
-                        and not(np.array_equal(temp_grad[j], 0)))
+                        if (
+                            not (np.array_equal(K[i][j], 0))
+                            and not (np.array_equal(temp_grad[j], 0))
+                        )
                     ]
                 )
                 for i in range(3)

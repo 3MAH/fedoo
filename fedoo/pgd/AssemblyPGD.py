@@ -233,7 +233,9 @@ class AssemblyPGD(AssemblyFEM):
 
         if listSubMesh is None:
             if len(listElementType) != len(self.mesh.GetListMesh()):
-                assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
+                assert 0, (
+                    "The lenght of the Element Type List must be equal to the number of submeshes"
+                )
             self.__listElementType = [ElementType for ElementType in listElementType]
             self.__listNumberOfGaussPoints = [
                 get_default_n_gp(
@@ -279,7 +281,9 @@ class AssemblyPGD(AssemblyFEM):
 
         if listSubMesh is None:
             if len(listNumberOfGaussPoints) != len(self.mesh.GetListMesh()):
-                assert 0, "The lenght of the Element Type List must be equal to the number of submeshes"
+                assert 0, (
+                    "The lenght of the Element Type List must be equal to the number of submeshes"
+                )
             self.__listNumberOfGaussPoints = listNumberOfGaussPoints
         else:
             for i, m in enumerate(listSubMesh):
@@ -401,9 +405,9 @@ class AssemblyPGD(AssemblyFEM):
                 #     var.append(mesh._GetSpecificVariableRank (dd, Variable.get_Derivative(operator.op[ii].u)[0]) )
                 #     coef.append(Variable.get_Derivative(operator.op[ii].u)[1])
 
-                assert (
-                    operator.op_vir[ii] == 1
-                ), "Operator virtual are only required to build FE operators, but not to get element results"
+                assert operator.op_vir[ii] == 1, (
+                    "Operator virtual are only required to build FE operators, but not to get element results"
+                )
 
                 if isinstance(coef_PG, list):
                     coef_PG.append(

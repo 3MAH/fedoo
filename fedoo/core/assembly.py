@@ -183,7 +183,7 @@ class Assembly(AssemblyBase):
                 ].T  # should be identity matrix restricted to nodes used in the finite difference mesh
 
                 for ii in range(len(wf.op)):
-                    if (compute == "matrix" and wf.op[ii] == 1):
+                    if compute == "matrix" and wf.op[ii] == 1:
                         continue
                     if compute == "vector" and not (wf.op[ii] == 1):
                         continue
@@ -203,9 +203,9 @@ class Assembly(AssemblyBase):
                         continue
 
                     var_vir = wf.op_vir[ii].u
-                    assert (
-                        wf.op_vir[ii].ordre == 0
-                    ), "This weak form is not compatible with finite difference mesh"
+                    assert wf.op_vir[ii].ordre == 0, (
+                        "This weak form is not compatible with finite difference mesh"
+                    )
 
                     if (
                         wf.op[ii] == 1
@@ -422,24 +422,16 @@ class Assembly(AssemblyBase):
                             listCoef_PG = None
 
             if compute != "vector":
-                if (
-                    np.isscalar(mat_change_of_basis)
-                    and mat_change_of_basis == 1
-                ):
+                if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                     self.global_matrix = MM.tocsr()  # format csr
                 else:
                     self.global_matrix = (
-                        mat_change_of_basis.T
-                        * MM.tocsr()
-                        * mat_change_of_basis
+                        mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
                 if np.isscalar(VV) and VV == 0:
                     self.global_vector = 0
-                elif (
-                    np.isscalar(mat_change_of_basis)
-                    and mat_change_of_basis == 1
-                ):
+                elif np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                     self.global_vector = VV  # numpy array
                 else:
                     self.global_vector = mat_change_of_basis.T * VV
@@ -497,11 +489,7 @@ class Assembly(AssemblyBase):
             sl = [slice(i * nbNodes, (i + 1) * nbNodes) for i in range(nvar)]
 
             for ii in range(len(wf.op)):
-                if (
-                    compute == "matrix"
-                    and np.isscalar(wf.op[ii])
-                    and wf.op[ii] == 1
-                ):
+                if compute == "matrix" and np.isscalar(wf.op[ii]) and wf.op[ii] == 1:
                     continue
                 if compute == "vector" and not wf.op[ii] == 1:
                     continue
@@ -593,24 +581,16 @@ class Assembly(AssemblyBase):
                                     saveOperator["blocShape"] = MM.blocShape
 
             if compute != "vector":
-                if (
-                    np.isscalar(mat_change_of_basis)
-                    and mat_change_of_basis == 1
-                ):
+                if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                     self.global_matrix = MM.toCSR()  # format csr
                 else:
                     self.global_matrix = (
-                        mat_change_of_basis.T
-                        * MM.toCSR()
-                        * mat_change_of_basis
+                        mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis
                     )  # format csr
             if compute != "matrix":
                 if np.isscalar(VV) and VV == 0:
                     self.global_vector = 0
-                elif (
-                    np.isscalar(mat_change_of_basis)
-                    and mat_change_of_basis == 1
-                ):
+                elif np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                     self.global_vector = VV  # numpy array
                 else:
                     self.global_vector = mat_change_of_basis.T * VV
@@ -620,11 +600,7 @@ class Assembly(AssemblyBase):
             VV = 0
 
             for ii in range(len(wf.op)):
-                if (
-                    compute == "matrix"
-                    and np.isscalar(wf.op[ii])
-                    and wf.op[ii] == 1
-                ):
+                if compute == "matrix" and np.isscalar(wf.op[ii]) and wf.op[ii] == 1:
                     continue
                 if compute == "vector" and not wf.op[ii] == 1:
                     continue
@@ -1201,9 +1177,7 @@ class Assembly(AssemblyBase):
 
         if not (use_local_dof):
             mat_change_of_basis = self.get_change_of_basis_mat()
-            if not (
-                np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1
-            ):
+            if not (np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1):
                 U = mat_change_of_basis @ U  # U local
 
         associatedVariables = self._get_associated_variables()
@@ -1216,9 +1190,9 @@ class Assembly(AssemblyBase):
                 var.extend(associatedVariables[var[0]][0])
                 coef.extend(associatedVariables[var[0]][1])
 
-            assert (
-                operator.op_vir[ii] == 1
-            ), "Operator virtual are only required to build FE operators, but not to get element results"
+            assert operator.op_vir[ii] == 1, (
+                "Operator virtual are only required to build FE operators, but not to get element results"
+            )
 
             if np.isscalar(operator.coef[ii]):
                 coef_PG = operator.coef[ii]
@@ -1258,9 +1232,9 @@ class Assembly(AssemblyBase):
                 var.extend(associatedVariables[var[0]][0])
                 coef.extend(associatedVariables[var[0]][1])
 
-            assert (
-                operator.op_vir[ii] == 1
-            ), "Operator virtual are only required to build FE operators, but not to get element results"
+            assert operator.op_vir[ii] == 1, (
+                "Operator virtual are only required to build FE operators, but not to get element results"
+            )
 
             if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                 M = RowBlocMatrix(

@@ -26,9 +26,7 @@ class _ExplicitDynamicBase:
         B = 0
         D = 0
 
-        self.__Xold = self._new_vect_dof(
-            A
-        )  # displacement at the previous time step
+        self.__Xold = self._new_vect_dof(A)  # displacement at the previous time step
         self.__Xdot = self._new_vect_dof(A)
         self.__Xdotdot = self._new_vect_dof(A)
 
@@ -105,9 +103,7 @@ class _ExplicitDynamicBase:
                 + beta * self.__StiffMatrix
             )
         else:
-            self.__DampMatrix = (
-                alpha * self.__MassMatrix + beta * self.__StiffMatrix
-            )
+            self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix
         self.__UpdateA()
 
     def initialize(self):
@@ -124,9 +120,7 @@ class _ExplicitDynamicBase:
         self.set_D(D)
 
     def update(self):
-        self.__Xdot = (
-            Problem.get_dof_solution("all") - self.__Xold
-        ) / self.__TimeStep
+        self.__Xdot = (Problem.get_dof_solution("all") - self.__Xold) / self.__TimeStep
         self.__Xold[:] = Problem.get_dof_solution("all")
         self.initialize()
 

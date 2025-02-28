@@ -318,7 +318,7 @@ class Beam_rotZ(Element1D):  # 2 nodes with derivatative dof
     def ShapeFunction(self, xi):
         # [(tetai,tetaj,vi,vj)]
         L = self.L.reshape(1, -1)
-        if not(np.isscalar(self.phi) and self.phi == 0):
+        if not (np.isscalar(self.phi) and self.phi == 0):
             phi = self.phi.reshape(1, -1)
             C = 1 / (1 + phi)
         else:
@@ -338,7 +338,7 @@ class Beam_rotZ(Element1D):  # 2 nodes with derivatative dof
 
     def ShapeFunctionDerivative(self, xi):
         L = self.L.reshape(1, 1, -1)
-        if not(np.isscalar(self.phi) and self.phi == 0):
+        if not (np.isscalar(self.phi) and self.phi == 0):
             phi = self.phi.reshape(1, 1, -1)
             C = 1 / (1 + phi)
         else:
@@ -386,7 +386,7 @@ class Beam_dispY(Element1D):  # 2 nodes with derivatative dof
         # [(vi,vj,tetai,tetaj)]
         L = self.L.reshape(1, -1)
 
-        if not(np.isscalar(self.phi) and self.phi == 0):
+        if not (np.isscalar(self.phi) and self.phi == 0):
             phi = self.phi.reshape(1, -1)
             C = 1 / (1 + phi)
         else:
@@ -405,7 +405,7 @@ class Beam_dispY(Element1D):  # 2 nodes with derivatative dof
     def ShapeFunctionDerivative(self, xi):
         L = self.L.reshape(1, 1, -1)
 
-        if not(np.isscalar(self.phi) and self.phi == 0):
+        if not (np.isscalar(self.phi) and self.phi == 0):
             phi = self.phi.reshape(1, 1, -1)
             C = 1 / (1 + phi)
         else:

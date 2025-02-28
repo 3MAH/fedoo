@@ -32,12 +32,12 @@ class AssemblySum(AssemblyBase):
             if isinstance(assembly, str):
                 list_assembly[i] = AssemblyBase.get_all()[assembly]
 
-        assert (
-            len(set([a.space for a in list_assembly])) == 1
-        ), "Sum of assembly are possible only if all assembly are associated to the same modeling space"
-        assert (
-            len(set([a.mesh.n_nodes for a in list_assembly])) == 1
-        ), "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+        assert len(set([a.space for a in list_assembly])) == 1, (
+            "Sum of assembly are possible only if all assembly are associated to the same modeling space"
+        )
+        assert len(set([a.mesh.n_nodes for a in list_assembly])) == 1, (
+            "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+        )
 
         self._list_assembly = list_assembly
 

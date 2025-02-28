@@ -217,16 +217,12 @@ class StressEquilibrium(WeakFormBase):
         stiffness matrix).
         """
         if assembly._nlgeom == "TL":
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
-                assembly.sv["F"]
-            )
+            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
             if len(assembly.sv["TangentMatrix"].shape) == 2:
                 if len(assembly.sv["F"].shape) == 3:
-                    assembly.sv["TangentMatrix"] = assembly.sv[
-                        "TangentMatrix"
-                    ].reshape(6, 6, -1) * np.ones(
-                        (1, 1, assembly.sv["F"].shape[2])
-                    )
+                    assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(
+                        6, 6, -1
+                    ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
 
             assembly.sv["TangentMatrix"] = sim.Lt_convert(
                 assembly.sv["TangentMatrix"],
@@ -498,9 +494,7 @@ def _comp_Fbar(assembly, displacement):
     #     np.add(eye_3, grad_values_center).transpose((2,0,1))
     # )
     Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
-    F1 = F1 * (
-        (Jcenter / J.reshape(assembly.n_elm_gp, -1)).reshape(-1) ** (1 / 3)
-    )
+    F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).reshape(-1) ** (1 / 3))
 
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
@@ -512,9 +506,7 @@ def _comp_Fbar(assembly, displacement):
 # funtions to compute strain
 def _comp_linear_strain(wf, assembly, pb):
     # not compatible with PGD assembly.
-    assert not (
-        wf.nlgeom
-    ), "the current strain measure isn't adapted for finite strain"
+    assert not (wf.nlgeom), "the current strain measure isn't adapted for finite strain"
     grad_values = assembly.sv["DispGradient"]
 
     strain = np.empty((6, len(grad_values[0][0])), order="F")

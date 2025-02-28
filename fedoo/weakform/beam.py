@@ -368,7 +368,7 @@ class BeamEquilibrium(WeakFormBase):
 
         initial_stress = assembly.sv["BeamStress"]
 
-        if not(np.isscalar(initial_stress) and initial_stress == 0):
+        if not (np.isscalar(initial_stress) and initial_stress == 0):
             diff_op = diff_op + sum(
                 [
                     eps[i].virtual * initial_stress[i] if eps[i] != 0 else 0

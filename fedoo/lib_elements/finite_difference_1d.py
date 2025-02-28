@@ -10,11 +10,15 @@ class FiniteDifference1D(Element):
         self, n_elm_gp
     ):  # Points de gauss pour les éléments de référence 1D entre 0 et 1
         if n_elm_gp != 0:  # if n_elm_gp == 0, we take the position of the nodes
-            assert 0, "Number of gauss points for Finite Difference elements should be set to 0"
+            assert 0, (
+                "Number of gauss points for Finite Difference elements should be set to 0"
+            )
         self.n_elm_gp = 0
 
     def ShapeFunction(xi_pg):
-        assert 0, "No Shape Function for Finite Difference Method. Use lin2 or lin3 element instead"
+        assert 0, (
+            "No Shape Function for Finite Difference Method. Use lin2 or lin3 element instead"
+        )
 
 
 class Parameter(FiniteDifference1D):

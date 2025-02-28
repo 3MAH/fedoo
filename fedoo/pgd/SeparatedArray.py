@@ -170,9 +170,9 @@ class SeparatedArray:  # Fonction discrete sous forme séparée
         if (
             len(dim) == 0
         ):  # if only one element is modified in the global array. Value must be an int or a float
-            assert isinstance(
-                value, (Number, np.floating)
-            ), "Size of assigning values doesn't match in SeparatedArray.__setitem__"
+            assert isinstance(value, (Number, np.floating)), (
+                "Size of assigning values doesn't match in SeparatedArray.__setitem__"
+            )
             FFadd = SeparatedZeros(self.shape)  # SeparatedArray to add
             old_value = np.sum(
                 np.prod([self.data[dd][key[dd]] for dd in range(self.dim)], 0)

@@ -78,7 +78,7 @@ class ImplicitDynamic(WeakFormBase):
 
     def set_start(self, assembly, pb):  # to update
         dt = pb.dtime  ### dt is the time step of the previous increment
-        if not(np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
+        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
@@ -183,7 +183,7 @@ class ImplicitDynamic(WeakFormBase):
                 [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
             )
 
-            if not(np.isscalar(initial_stress) and initial_stress == 0):
+            if not (np.isscalar(initial_stress) and initial_stress == 0):
                 if self.nlgeom:
                     stiffness_mat_wf = stiffness_wf + sum(
                         [
@@ -335,7 +335,7 @@ class _NewmarkInteria(WeakFormBase):
 
     def set_start(self, assembly, pb):  # to update
         dt = pb.dtime  ### dt is the time step of the previous increment
-        if not(np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
+        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]

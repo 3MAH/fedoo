@@ -31,19 +31,13 @@ class _NewmarkBase:
         if DampingAssembling is None:
             A = (
                 StiffnessAssembling.get_global_matrix()
-                + 1
-                / (Beta * (TimeStep**2))
-                * MassAssembling.get_global_matrix()
+                + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
             )
         else:
             A = (
                 StiffnessAssembling.get_global_matrix()
-                + 1
-                / (Beta * (TimeStep**2))
-                * MassAssembling.get_global_matrix()
-                + Gamma
-                / (Beta * TimeStep)
-                * DampingAssembling.get_global_matrix()
+                + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
+                + Gamma / (Beta * TimeStep) * DampingAssembling.get_global_matrix()
             )
 
         B = 0
@@ -64,9 +58,7 @@ class _NewmarkBase:
             A, B, D, StiffnessAssembling.mesh, name, StiffnessAssembling.space
         )
 
-        self.__Xold = (
-            self._new_vect_dof()
-        )  # displacement at the previous time step
+        self.__Xold = self._new_vect_dof()  # displacement at the previous time step
         self.__Xdot = self._new_vect_dof()
         self.__Xdotdot = self._new_vect_dof()
 
@@ -82,9 +74,7 @@ class _NewmarkBase:
             self.set_A(
                 self.__StiffMatrix
                 + 1 / (self.__Beta * (self.__TimeStep**2)) * self.__MassMatrix
-                + self.__Gamma
-                / (self.__Beta * self.__TimeStep)
-                * self.__DampMatrix
+                + self.__Gamma / (self.__Beta * self.__TimeStep) * self.__DampMatrix
             )
 
     def get_X(self):
@@ -137,9 +127,7 @@ class _NewmarkBase:
         Warning: the damping matrix is not automatically updated when mass and stiffness matrix are modified.
         """
 
-        self.__DampMatrix = (
-            alpha * self.__MassMatrix + beta * self.__StiffMatrix
-        )
+        self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix
         self.__UpdateA()
 
     def initialize(self, t0=0.0):
@@ -159,9 +147,7 @@ class _NewmarkBase:
 
     def update(self):
         NewXdotdot = (1 / self.__Beta / (self.__TimeStep**2)) * (
-            self.get_dof_solution("all")
-            - self.__Xold
-            - self.__TimeStep * self.__Xdot
+            self.get_dof_solution("all") - self.__Xold - self.__TimeStep * self.__Xdot
         ) - 1 / self.__Beta * (0.5 - self.__Beta) * self.__Xdotdot
         self.__Xdot += self.__TimeStep * (
             (1 - self.__Gamma) * self.__Xdotdot + self.__Gamma * NewXdotdot

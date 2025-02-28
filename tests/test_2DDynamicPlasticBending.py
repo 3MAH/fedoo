@@ -8,6 +8,7 @@ from simcoon import simmit as sim
 
 import fedoo as fd
 
+
 def test_2DDynamicPlasticBending():
     start = time()
     # --------------- Pre-Treatment --------------------------------------------------------

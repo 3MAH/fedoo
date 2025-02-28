@@ -229,9 +229,9 @@ def generate_nodes(mesh, N, data, type_gen="straight"):
         c = data[2]
         c = np.array(c)
         R = np.linalg.norm(crd[nd1] - c)
-        assert (
-            np.abs(R - np.linalg.norm(crd[nd2] - c)) < R * 1e-4
-        ), "Final nodes is not on the circle"
+        assert np.abs(R - np.linalg.norm(crd[nd2] - c)) < R * 1e-4, (
+            "Final nodes is not on the circle"
+        )
         # (crd[nd1]-c)
         theta_min = np.arctan2(crd[nd1, 1] - c[1], crd[nd1, 0] - c[0])
         theta_max = np.arctan2(crd[nd2, 1] - c[1], crd[nd2, 0] - c[0])

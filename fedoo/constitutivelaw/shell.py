@@ -175,7 +175,8 @@ class ShellHomogeneous(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hplane[i][j]
                     )
                     for j in range(4)
@@ -188,7 +189,8 @@ class ShellHomogeneous(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hshear[i][j]
                     )
                     for j in [4, 5]
@@ -222,7 +224,8 @@ class ShellHomogeneous(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hplane[i][j]
                     )
                     for j in range(4)
@@ -235,7 +238,8 @@ class ShellHomogeneous(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hshear[i][j]
                     )
                     for j in [4, 5]
@@ -342,7 +346,8 @@ class ShellLaminate(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hplane[i][j]
                     )
                     for j in range(4)
@@ -355,7 +360,8 @@ class ShellLaminate(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * Hshear[i][j]
                     )
                     for j in [4, 5]
@@ -395,8 +401,7 @@ class ShellLaminate(ShellBase):
         Hplane = [
             [
                 [
-                    0 if np.array_equal(Hplane[layer][i][j], 0)
-                    else Hplane[layer][i][j]
+                    0 if np.array_equal(Hplane[layer][i][j], 0) else Hplane[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in range(4)
@@ -406,8 +411,7 @@ class ShellLaminate(ShellBase):
         Hshear = [
             [
                 [
-                    0 if np.array_equal(Hshear[layer][i][j], 0)
-                    else Hshear[layer][i][j]
+                    0 if np.array_equal(Hshear[layer][i][j], 0) else Hshear[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in [4, 5]
@@ -419,7 +423,8 @@ class ShellLaminate(ShellBase):
             sum(
                 [
                     (
-                        0 if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
                         else Strain[j] * np.array(Hplane[i][j])
                     )
                     for j in range(4)
@@ -459,9 +464,9 @@ class ShellLaminate(ShellBase):
         -------
         layer_id (int) : id of the layer at given position
         """
-        assert (
-            position >= -1 and position <= 1
-        ), "position should be a float with value in [-1,1]"
+        assert position >= -1 and position <= 1, (
+            "position should be a float with value in [-1,1]"
+        )
         if position == -1:
             return 0  # 1st layer = bottom layer
         z = position * self.GetThickness() / 2

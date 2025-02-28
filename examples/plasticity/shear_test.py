@@ -131,7 +131,7 @@ print(time() - start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot("Stress", component='XX', show=True)
+results.plot("Stress", component="XX", show=True)
 # results.plot("Stress", component=0, data_type='Node', show=True)
 
 # ------------------------------------

@@ -47,9 +47,9 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
         assert isinstance(idmesh, int), "idmesh must an integer, not a " + str(
             type(idmesh)
         )
-        assert idvar == "default" or isinstance(
-            idvar, int
-        ), 'idvar must an integer or "default"'
+        assert idvar == "default" or isinstance(idvar, int), (
+            'idvar must an integer or "default"'
+        )
         assert isinstance(specific_rank, int), (
             "specific_rank must an integer, not a " + str(type(idmesh))
         )
@@ -63,9 +63,9 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
         assert isinstance(idmesh, int), "idmesh must an integer, not a " + str(
             type(idmesh)
         )
-        assert idvar == "default" or isinstance(
-            idvar, int
-        ), 'idvar must an integer or "default"'
+        assert idvar == "default" or isinstance(idvar, int), (
+            'idvar must an integer or "default"'
+        )
 
         if idmesh in self.__SpecificVariableRank:
             if idvar in self.__SpecificVariableRank[idmesh]:
@@ -115,9 +115,9 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
 
         if listSubMesh is None:
             if len(listNodeIndexes) != len(self.__ListMesh):
-                assert (
-                    0
-                ), "The lenght of the Node Indexes List must be equal to the number of submeshes"
+                assert 0, (
+                    "The lenght of the Node Indexes List must be equal to the number of submeshes"
+                )
             listSubMesh = [
                 i
                 for i in range(len(self.__ListMesh))
@@ -140,7 +140,9 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
                 (
                     self.__ListMesh.index(MeshBase.get_all()[m])
                     if isinstance(m, str)
-                    else m if isinstance(m, int) else self.__ListMesh.index(m)
+                    else m
+                    if isinstance(m, int)
+                    else self.__ListMesh.index(m)
                 )
                 for m in listSubMesh
             ]
@@ -160,7 +162,9 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
 
         if listSubMesh is None:
             if len(listElementIndexes) != len(self.__ListMesh):
-                assert 0, "The lenght of the Node Indexes List must be equal to the number of submeshes"
+                assert 0, (
+                    "The lenght of the Node Indexes List must be equal to the number of submeshes"
+                )
             listSubMesh = [
                 self.__ListMesh[i]
                 for i in range(len(self.__ListMesh))

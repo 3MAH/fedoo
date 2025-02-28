@@ -94,7 +94,7 @@ class SpringEquilibrium(WeakFormBase):
         # (NR loop or time increment)
         # Nlgeom implemented only for updated lagragian formulation
         if self.nlgeom == "UL":
-            # if updated lagragian method 
+            # if updated lagragian method
             # -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())
 
@@ -119,8 +119,7 @@ class SpringEquilibrium(WeakFormBase):
 
                 # coordinates of vector between node 1 and 2 for each element
                 element_vectors = (
-                    mesh.nodes[mesh.elements[:, 1]]
-                    - mesh.nodes[mesh.elements[:, 0]]
+                    mesh.nodes[mesh.elements[:, 1]] - mesh.nodes[mesh.elements[:, 0]]
                 )
 
                 # longitunal displacement in local coordinates
