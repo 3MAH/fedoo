@@ -19,3 +19,4 @@ jobs:
           anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
           conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
           anaconda upload noarch/*.tar.bz2 --force
+          anaconda upload noarch/*.conda --force
