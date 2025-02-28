@@ -90,7 +90,7 @@ class Problem(ProblemBase):
     ):  # Get component of a vector (force vector for instance) being given the name of a component (vector or single component)
         assert isinstance(name, str), "argument error"
 
-        if name.lower() == "all" or vector is 0:
+        if name.lower() == "all" or np.isscalar(vector):
             return vector
 
         n = self.mesh.n_nodes
@@ -198,7 +198,7 @@ class Problem(ProblemBase):
         ):  # A is a diagonal matrix stored as a vector containing diagonal values
             # No need to account for boundary condition here because the matrix is diagonal and the resolution is direct
 
-            assert self.__D is not 0, "internal error, contact developper"
+            assert not (np.isscalar(self.__D)), "internal error, contact developper"
 
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
@@ -293,7 +293,7 @@ class Problem(ProblemBase):
             self._MFext = M
             self._dof_blocked = dof_blocked
         else:
-            self._MFext = 0
+            self._MFext = None
 
         # #adding identity for free nodes
         col = np.hstack(
@@ -327,11 +327,11 @@ class Problem(ProblemBase):
         for e in self.bc.list_all():
             if e.bc_type == "Dirichlet":
                 if e._start_value_default is None:
-                    if U is not 0:
+                    if not (np.isscalar(U) and U == 0):
                         e.start_value = U[e.variable * n_nodes + e.node_set]
             if e.bc_type == "Neumann":
                 if e._start_value_default is None:
-                    if F is not 0:
+                    if not (np.isscalar(F) and F == 0):
                         e.start_value = F[e.variable * n_nodes + e.node_set]
 
     def get_ext_forces(self, name="all", include_mpc=True):
@@ -368,7 +368,7 @@ class Problem(ProblemBase):
         on the problem and the nature of the dof (for instance moment for rotational dof or
         heat flux for temperature).
         """
-        if self._MFext is 0 or not (include_mpc):
+        if self._MFext is None or not (include_mpc):
             if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(self.get_A() @ self.get_X(), name)
             else:

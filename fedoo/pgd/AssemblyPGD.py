@@ -78,9 +78,9 @@ class AssemblyPGD(AssemblyFEM):
         BB = 0
 
         for ii in range(len(wf.op)):
-            if compute == "matrix" and wf.op[ii] is 1:
+            if compute == "matrix" and wf.op[ii] == 1:
                 continue
-            if compute == "vector" and wf.op[ii] is not 1:
+            if compute == "vector" and not wf.op[ii] == 1:
                 continue
 
             if wf.op[ii] == 1:  # only virtual operator -> compute a separated array

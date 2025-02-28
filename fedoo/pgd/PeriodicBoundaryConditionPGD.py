@@ -363,15 +363,14 @@ def DefinePeriodicBoundaryCondition(
         pb = problem  # assume Problemname is a Problem Object
 
     numGeometricMesh = mesh.FindCoordinatename("X")
-    assert (
-        numGeometricMesh == mesh.FindCoordinatename("X"),
-        "Not possible to define periodic condition on the given sepearated mesh",
-    )
+    assert numGeometricMesh == mesh.FindCoordinatename(
+        "X"
+    ), "Not possible to define periodic condition on the given sepearated mesh"
+
     if dim == 3:
-        assert (
-            numGeometricMesh == mesh.FindCoordinatename("Z"),
-            "Not possible to define periodic condition on the given sepearated mesh",
-        )
+        assert numGeometricMesh == mesh.FindCoordinatename(
+            "Z"
+        ), "Not possible to define periodic condition on the given sepearated mesh"
 
     GeometricMesh = mesh.GetListMesh()[numGeometricMesh]
     crd = GeometricMesh.nodes

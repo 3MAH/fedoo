@@ -311,8 +311,13 @@ def _get_results(
                     data = np.array(data)
                 except ValueError:
                     import warnings
-                    warnings.warn((f"{res} can't be converted into array "
-                                   "during results extraction."))
+
+                    warnings.warn(
+                        (
+                            f"{res} can't be converted into array "
+                            "during results extraction."
+                        )
+                    )
 
         elif res == "Fint":
             data = assemb.get_int_forces(pb.get_dof_solution(), "local").T

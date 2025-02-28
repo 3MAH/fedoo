@@ -140,7 +140,7 @@ class Node2Middle(Node2Jump):
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
     def ShapeFunction(self, xi):
-        return 0.5 * np.c_[1 + 0*xi, 1 + 0*xi]
+        return 0.5 * np.c_[1 + 0 * xi, 1 + 0 * xi]
 
 
 class Lin2MeanPlane(Element1D):
@@ -227,9 +227,7 @@ class Quad4MeanPlane(ElementQuadrangle):
         ]
 
 
-Node2 = CombinedElement(
-    "spring", Node2Jump, default_n_gp=1, local_csys=True
-)
+Node2 = CombinedElement("spring", Node2Jump, default_n_gp=1, local_csys=True)
 Node2.geometry_elm = Node2Middle
 
 Quad4Interface = CombinedElement(
@@ -241,5 +239,3 @@ Lin2Interface = CombinedElement(
     "lin2interface", Lin2InterfaceJump, default_n_gp=2, local_csys=True
 )
 Lin2Interface.geometry_elm = Lin2MeanPlane
-
-

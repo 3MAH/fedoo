@@ -116,7 +116,7 @@ class StressEquilibrium(WeakFormBase):
             [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
         )
 
-        if initial_stress is not 0:
+        if not (np.isscalar(initial_stress) and initial_stress == 0):
             # this term doesnt seem to improve convergence !
             # if assembly._nlgeom:
             #     DiffOp = DiffOp + \
@@ -265,9 +265,8 @@ class StressEquilibrium(WeakFormBase):
             # nul sum
 
             # update cauchy stress
-            if (
-                assembly.sv["DispGradient"] is not 0
-            ):  # True when the problem have been updated once
+            if not (np.array_equal(assembly.sv["DispGradient"], 0)):
+                # True when the problem have been updated once
                 stress = assembly.sv["Stress"].asarray()
                 assembly.sv["Stress"] = StressTensorList(
                     sim.rotate_stress_R(stress, assembly.sv["DR"])

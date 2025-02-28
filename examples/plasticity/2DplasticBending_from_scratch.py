@@ -47,8 +47,8 @@ bottom_right = mesh.nearest_node([L, 0])
 if typeBending == "3nodes":
     top_center = mesh.nearest_node([L / 2, h])
 else:
-    nodes_top1 = mesh.find_nodes(f"X=={L/4} and Y=={h}")
-    nodes_top2 = mesh.find_nodes(f"X=={3*L/4} and Y=={h}")
+    nodes_top1 = mesh.find_nodes(f"X=={L / 4} and Y=={h}")
+    nodes_top2 = mesh.find_nodes(f"X=={3 * L / 4} and Y=={h}")
     top_center = np.hstack((nodes_top1, nodes_top2))
 
 fd.Assembly.create(
