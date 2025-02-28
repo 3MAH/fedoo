@@ -183,15 +183,9 @@ class Assembly(AssemblyBase):
                 ].T  # should be identity matrix restricted to nodes used in the finite difference mesh
 
                 for ii in range(len(wf.op)):
-                    if (
-                        compute == "matrix"
-                        and np.isscalar(wf.op[ii])
-                        and wf.op[ii] == 1
-                    ):
+                    if (compute == "matrix" and wf.op[ii] == 1):
                         continue
-                    if compute == "vector" and not (
-                        np.isscalar(wf.op[ii]) and wf.op[ii] == 1
-                    ):
+                    if compute == "vector" and not (wf.op[ii] == 1):
                         continue
 
                     if (
@@ -283,13 +277,11 @@ class Assembly(AssemblyBase):
                         and wf.op[ii] == 1
                     ):
                         continue
-                    if compute == "vector" and not (
-                        np.isscalar(wf.op[ii]) and wf.op[ii] == 1
-                    ):
+                    if compute == "vector" and not wf.op[ii] == 1:
                         continue
 
                     if (
-                        not(np.isscalar(wf.op[ii]) and wf.op[ii] == 1)
+                        not wf.op[ii] == 1
                         and self.assume_sym
                         and wf.op[ii].u < wf.op_vir[ii].u
                     ):
@@ -511,9 +503,7 @@ class Assembly(AssemblyBase):
                     and wf.op[ii] == 1
                 ):
                     continue
-                if compute == "vector" and not (
-                    np.isscalar(wf.op[ii]) and wf.op[ii] == 1
-                ):
+                if compute == "vector" and not wf.op[ii] == 1:
                     continue
 
                 if np.isscalar(wf.coef[ii]) or len(wf.coef[ii]) == 1:
@@ -636,9 +626,7 @@ class Assembly(AssemblyBase):
                     and wf.op[ii] == 1
                 ):
                     continue
-                if compute == "vector" and not (
-                    np.isscalar(wf.op[ii]) and wf.op[ii] == 1
-                ):
+                if compute == "vector" and not wf.op[ii] == 1:
                     continue
 
                 coef_vir = [1]

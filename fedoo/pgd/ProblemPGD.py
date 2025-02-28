@@ -437,7 +437,7 @@ class ProblemPGD(ProblemBase):
 
                     DofB[dd] = np.hstack((DofB[dd], GlobalIndex))
                     if dimBC is None:  # initialization of Xbc
-                        if Value is not 0:  # modification of the second term Xbc
+                        if not np.array_equal(Value, 0):  # modification of the second term Xbc
                             dimBC = dd
                             Xbc = SeparatedArray(
                                 [
@@ -507,7 +507,7 @@ class ProblemPGD(ProblemBase):
                         Value = Value.reshape(-1, 1)
 
                     if dimBC is None:  # initialization of Xbc
-                        if Value is not 0:  # modification of the second term Xbc
+                        if not np.array_equal(Value, 0):  # modification of the second term Xbc
                             dimBC = dd
                             Xbc = SeparatedArray(
                                 [

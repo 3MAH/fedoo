@@ -115,25 +115,33 @@ class MeshPGD(MeshBase):  # class pour définir des maillages sous forme sépar�
 
         if listSubMesh is None:
             if len(listNodeIndexes) != len(self.__ListMesh):
-                assert 0, "The lenght of the Node Indexes List must be equal to the number of submeshes"
+                assert (
+                    0
+                ), "The lenght of the Node Indexes List must be equal to the number of submeshes"
             listSubMesh = [
                 i
                 for i in range(len(self.__ListMesh))
-                if not (listNodeIndexes[i] is "all" or listNodeIndexes[i] is "ALL")
+                if not (
+                    np.array_equal(listNodeIndexes[i], "all")
+                    or np.array_equal(listNodeIndexes[i], "ALL")
+                )
             ]
             listNodeIndexes = [
                 NodeIndexes
                 for NodeIndexes in listNodeIndexes
-                if not (NodeIndexes is "all" or NodeIndexes is "ALL")
+                if not (
+                    np.array_equal(NodeIndexes, "all")
+                    or np.array_equal(NodeIndexes, "ALL")
+                )
             ]
         else:
             # listSubMesh = [self.__ListMesh.index(MeshBase.get_all()[m]) if isinstance(m,str) else self.__ListMesh.index(m) for m in listSubMesh]
             listSubMesh = [
-                self.__ListMesh.index(MeshBase.get_all()[m])
-                if isinstance(m, str)
-                else m
-                if isinstance(m, int)
-                else self.__ListMesh.index(m)
+                (
+                    self.__ListMesh.index(MeshBase.get_all()[m])
+                    if isinstance(m, str)
+                    else m if isinstance(m, int) else self.__ListMesh.index(m)
+                )
                 for m in listSubMesh
             ]
 

@@ -157,13 +157,13 @@ class RigidTie(BCBase):
             - mesh.nodes[list_nodes]
         )
 
-        if problem._dU is not 0:
-            if problem._U is not 0:
+        if not (np.array_equal(problem._dU, 0)):
+            if np.array_equal(problem._U, 0):
+                problem._dU.reshape(3, -1)[:, list_nodes] = new_disp.T
+            else:
                 problem._dU.reshape(3, -1)[:, list_nodes] = (
                     new_disp.T - problem._U.reshape(3, -1)[:, list_nodes]
                 )
-            else:
-                problem._dU.reshape(3, -1)[:, list_nodes] = new_disp.T
 
         # approche incrémentale:
 

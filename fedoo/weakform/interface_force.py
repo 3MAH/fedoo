@@ -1,5 +1,6 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
+import numpy as np
 
 
 class InterfaceForce(WeakFormBase):
@@ -113,10 +114,10 @@ class InterfaceForce(WeakFormBase):
 
         initial_stress = assembly.sv["InterfaceStress"]
 
-        if initial_stress is not 0:
+        if not(np.array_equal(initial_stress, 0)):
             diff_op = diff_op + sum(
                 [
-                    0 if U_vir[i] is 0 else U_vir[i] * initial_stress[i]
+                    0 if U_vir[i] == 0 else U_vir[i] * initial_stress[i]
                     for i in range(dim)
                 ]
             )

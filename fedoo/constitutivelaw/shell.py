@@ -395,7 +395,8 @@ class ShellLaminate(ShellBase):
         Hplane = [
             [
                 [
-                    0 if Hplane[layer][i][j] is 0 else Hplane[layer][i][j]
+                    0 if np.array_equal(Hplane[layer][i][j], 0)
+                    else Hplane[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in range(4)
@@ -405,7 +406,8 @@ class ShellLaminate(ShellBase):
         Hshear = [
             [
                 [
-                    0 if Hshear[layer][i][j] is 0 else Hshear[layer][i][j]
+                    0 if np.array_equal(Hshear[layer][i][j], 0)
+                    else Hshear[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in [4, 5]
