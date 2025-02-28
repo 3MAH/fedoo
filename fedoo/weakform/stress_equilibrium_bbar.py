@@ -91,7 +91,7 @@ class StressEquilibriumBbar(StressEquilibrium):
             [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
         )
 
-        if initial_stress is not 0:
+        if not np.array_equal(initial_stress, 0):
             # this term doesnt seem to improve convergence !
             # if assembly._nlgeom:
             #     DiffOp = DiffOp + \

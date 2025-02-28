@@ -456,7 +456,9 @@ def _solver_petsc(
     pc_factor_mat_solver_type=None,
     **kargs,
 ):
-    A_petsc = PETSc.Mat().createAIJWithArrays(A.shape, (A.indptr, A.indices, A.data))
+    A_petsc = PETSc.Mat().createAIJWithArrays(
+        A.shape, (A.indptr, A.indices, A.data)
+    )
     B_petsc = PETSc.Vec().createWithArray(B)
     ksp = PETSc.KSP()
     ksp.create(comm=A_petsc.getComm())

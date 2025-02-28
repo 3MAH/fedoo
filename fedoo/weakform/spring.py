@@ -71,11 +71,13 @@ class SpringEquilibrium(WeakFormBase):
         self.K = K
         self.Kt_factor = None
 
-        self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
+        self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.
-            * Set to False if geometric non linarities are ignored (default). 
-            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
-            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
+            * Set to False if geometric non linarities are ignored (default).
+            * Set to True or 'UL' to use the updated lagrangian method
+              (update the mesh)
+            * Set to 'TL' to use the total lagrangian method
+              (base on the initial mesh with initial displacement effet)
         """
 
         self.assembly_options["assume_sym"] = False
@@ -88,10 +90,12 @@ class SpringEquilibrium(WeakFormBase):
         assembly.sv["Stretch"] = assembly.sv["Fint"] = 0
 
     def update(self, assembly, pb):
-        # function called when the problem is updated (NR loop or time increment)
+        # function called when the problem is updated
+        # (NR loop or time increment)
         # Nlgeom implemented only for updated lagragian formulation
         if self.nlgeom == "UL":
-            # if updated lagragian method -> update the mesh and recompute elementary op
+            # if updated lagragian method 
+            # -> update the mesh and recompute elementary op
             assembly.set_disp(pb.get_disp())
 
         dof = pb.get_dof_solution()  # displacement and rotation node values
@@ -108,8 +112,8 @@ class SpringEquilibrium(WeakFormBase):
                 else:
                     initial_length = np.linalg.norm(
                         assembly.mesh.nodes[mesh.elements[:, 1]]
-                        - assembly.mesh.nodes[mesh.elements[:, 0]]
-                        , axis=1
+                        - assembly.mesh.nodes[mesh.elements[:, 0]],
+                        axis=1,
                     )
                     assembly.sv["_InitialLength"] = initial_length
 
@@ -120,13 +124,15 @@ class SpringEquilibrium(WeakFormBase):
                 )
 
                 # longitunal displacement in local coordinates
-                spring_stretch = np.linalg.norm(element_vectors, axis=1) - initial_length
+                spring_stretch = (
+                    np.linalg.norm(element_vectors, axis=1) - initial_length
+                )
                 assembly.sv["Stretch"] = spring_stretch
 
             else:
-                op_delta = (
-                    assembly.space.op_disp()[0]
-                )  # relative displacement = disp if used with spring element
+                op_delta = assembly.space.op_disp()[
+                    0
+                ]  # relative displacement = disp if used with spring element
                 delta = assembly.get_gp_results(op_delta, dof)
                 assembly.sv["Stretch"] = delta
 
@@ -135,26 +141,26 @@ class SpringEquilibrium(WeakFormBase):
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
-            # if updated lagragian method -> reset the mesh to the begining of the increment
+            # if updated lagragian method
+            # -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
 
     def get_weak_equation(self, assembly, pb):
         dim = self.space.ndim
-        # add a 10% rigididy in the tangent direction to improve 
+        # add a 10% rigididy in the tangent direction to improve
         # cvg stability
         if self.Kt_factor is None:
             if self.nlgeom:
-                Kt = 0.1*self.K
-            else: 
-                Kt = 0.001*self.K
+                Kt = 0.1 * self.K
+            else:
+                Kt = 0.001 * self.K
         else:
             Kt = self.Kt_factor * self.K
         K = [self.K, Kt, Kt]
 
-        op_delta = self.space.op_disp()  # relative displacement if used with cohesive element
-        op_F = [
-            op_delta[i] * K[i] for i in range(dim)
-        ]  # Interface stress operator
+        op_delta = (
+            self.space.op_disp()
+        )  # relative displacement if used with cohesive element
 
         diff_op = sum(
             [
@@ -169,7 +175,7 @@ class SpringEquilibrium(WeakFormBase):
 
         Fint = assembly.sv["Fint"]
 
-        if not(np.isscalar(Fint) and Fint == 0):
+        if not (np.isscalar(Fint) and Fint == 0):
             diff_op = diff_op + op_delta[0].virtual * Fint
 
         return diff_op
