@@ -103,16 +103,12 @@ class SteadyHeatEquation(WeakFormBase):
                 if self.__op_grad_temp_vir[i] == 0
                 else self.__op_grad_temp_vir[i]
                 * sum(
-                    * sum(
-                        [
-                            temp_grad[j] * K[i][j]
-                            for j in range(3)
-                            if not (np.isscalar(K[i][j]) and K[i][j] == 0)
-                            and not (
-                                np.isscalar(temp_grad[j]) and temp_grad[j] == 0
-                            )
-                        ]
-                    )
+                    [
+                        temp_grad[j] * K[i][j]
+                        for j in range(3)
+                        if (not(np.array_equal(K[i][j], 0))
+                        and not(np.array_equal(temp_grad[j], 0)))
+                    ]
                 )
                 for i in range(3)
             ]
