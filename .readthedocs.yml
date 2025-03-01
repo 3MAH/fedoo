@@ -11,8 +11,7 @@ conda:
 build:
   os: "ubuntu-22.04"
   tools:
-    python: "mambaforge-22.9"
-    # python: "3.11"
+    python: "3.12"
 
   # following to avoid pyvista opengl error
   jobs:
