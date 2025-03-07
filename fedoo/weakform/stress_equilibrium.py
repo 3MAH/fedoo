@@ -216,28 +216,36 @@ class StressEquilibrium(WeakFormBase):
         This method is applyed after the constutive law update (stress and
         stiffness matrix).
         """
-        if assembly._nlgeom == "TL":
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
-            if len(assembly.sv["TangentMatrix"].shape) == 2:
-                if len(assembly.sv["F"].shape) == 3:
-                    assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(
-                        6, 6, -1
-                    ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
+        if assembly._nlgeom:
+            if (
+                len(assembly.sv["TangentMatrix"].shape) == 2
+                and len(assembly.sv["F"].shape) == 3
+            ):
+                assembly.sv["TangentMatrix"] = np.multiply(
+                    assembly.sv["TangentMatrix"].reshape(6, 6, -1),
+                    np.ones((1, 1, assembly.sv["F"].shape[2])),
+                    order="F",
+                )
 
-            assembly.sv["TangentMatrix"] = sim.Lt_convert(
-                assembly.sv["TangentMatrix"],
-                assembly.sv["F"],
-                assembly.sv["Stress"].asarray(),
-                self._convert_Lt_tag,
-            )
+            if assembly._nlgeom == "TL":
+                assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
+                    assembly.sv["F"]
+                )
 
-        if assembly._nlgeom == "UL":
-            assembly.sv["TangentMatrix"] = sim.Lt_convert(
-                assembly.sv["TangentMatrix"],
-                assembly.sv["F"],
-                assembly.sv["Stress"].asarray(),
-                self._convert_Lt_tag,
-            )
+                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                    assembly.sv["TangentMatrix"],
+                    assembly.sv["F"],
+                    assembly.sv["Stress"].asarray(),
+                    self._convert_Lt_tag,
+                )
+
+            elif assembly._nlgeom == "UL":
+                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                    assembly.sv["TangentMatrix"],
+                    assembly.sv["F"],
+                    assembly.sv["Stress"].asarray(),
+                    self._convert_Lt_tag,
+                )
 
     def to_start(self, assembly, pb):
         """Reset the current time increment."""
