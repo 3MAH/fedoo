@@ -221,6 +221,8 @@ class StressEquilibrium(WeakFormBase):
                 len(assembly.sv["TangentMatrix"].shape) == 2
                 and len(assembly.sv["F"].shape) == 3
             ):
+                # assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(6, 6, -1
+                #     ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
                 assembly.sv["TangentMatrix"] = np.multiply(
                     assembly.sv["TangentMatrix"].reshape(6, 6, -1),
                     np.ones((1, 1, assembly.sv["F"].shape[2])),
@@ -239,13 +241,13 @@ class StressEquilibrium(WeakFormBase):
                     self._convert_Lt_tag,
                 )
 
-            elif assembly._nlgeom == "UL":
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
-                    assembly.sv["TangentMatrix"],
-                    assembly.sv["F"],
-                    assembly.sv["Stress"].asarray(),
-                    self._convert_Lt_tag,
-                )
+            # elif assembly._nlgeom == "UL":
+            #     assembly.sv["TangentMatrix"] = sim.Lt_convert(
+            #         assembly.sv["TangentMatrix"],
+            #         assembly.sv["F"],
+            #         assembly.sv["Stress"].asarray(),
+            #         self._convert_Lt_tag,
+            #     )
 
     def to_start(self, assembly, pb):
         """Reset the current time increment."""
