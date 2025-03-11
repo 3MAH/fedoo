@@ -108,7 +108,10 @@ class CohesiveLaw(Spring):
             self.update_irreversible_damage(assembly)
 
     def update_irreversible_damage(self, assembly):
-        if assembly.sv["DamageVariable"] is 0:
+        if (
+            np.isscalar(assembly.sv["DamageVariable"])
+            and assembly.sv["DamageVariable"] == 0
+        ):
             assembly.sv["DamageVariableIrreversible"] = 0
         else:
             assembly.sv["DamageVariableIrreversible"] = assembly.sv[
@@ -134,9 +137,15 @@ class CohesiveLaw(Spring):
 
     def _update_damage(self, assembly, delta):
         alpha = 2  # for the power low
-        if assembly.sv["DamageVariable"] is 0:
+        if (
+            np.isscalar(assembly.sv["DamageVariable"])
+            and assembly.sv["DamageVariable"] == 0
+        ):
             assembly.sv["DamageVariable"] = 0 * delta[0]
-        if assembly.sv["DamageVariableOpening"] is 0:
+        if (
+            np.isscalar(assembly.sv["DamageVariableOpening"])
+            and assembly.sv["DamageVariableOpening"] == 0
+        ):
             assembly.sv["DamageVariableOpening"] = 0 * delta[0]
 
         delta_n = delta[self.parameters["axis"]]
@@ -216,7 +225,10 @@ class CohesiveLaw(Spring):
 
         d[test] = (tm[test] / (tm[test] - t0[test])) * (1 - (t0[test] / dta[test]))
 
-        if assembly.sv["DamageVariableIrreversible"] is 0:
+        if (
+            np.isscalar(assembly.sv["DamageVariableIrreversible"])
+            and assembly.sv["DamageVariableIrreversible"] == 0
+        ):
             assembly.sv["DamageVariable"] = (
                 d  # I don't know why assembly.sv['DamageVariable'] = d end up in bads values
             )
@@ -251,7 +263,7 @@ class CohesiveLaw(Spring):
         displacement = pb.get_dof_solution()
         K = self.get_K()
         assembly.sv["TangentMatrix"] = K
-        if displacement is 0:
+        if np.isscalar(displacement) and displacement == 0:
             assembly.sv["InterfaceStress"] = assembly.sv["RelativeDisp"] = 0
         else:
             op_delta = (
@@ -269,7 +281,7 @@ class CohesiveLaw(Spring):
     def update(self, assembly, pb):
         displacement = pb.get_dof_solution()
 
-        if displacement is 0:
+        if np.isscalar(displacement) and displacement == 0:
             assembly.sv["InterfaceStress"] = assembly.sv["RelativeDisp"] = 0
             K = self.get_K()
         else:
@@ -305,8 +317,8 @@ class CohesiveLaw(Spring):
 
 
 #     alpha = 2 #for the power low
-#     if assembly.sv['DamageVariable'] is 0: assembly.sv['DamageVariable'] = 0*delta[0]
-#     if assembly.sv['DamageVariableOpening']  is 0: assembly.sv['DamageVariableOpening']  = 0*delta[0]
+#     if np.isscalar(assembly.sv['DamageVariable']) and assembly.sv['DamageVariable'] == 0: assembly.sv['DamageVariable'] = 0*delta[0]
+#     if np.isscalar(assembly.sv['DamageVariableOpening']) and assembly.sv['DamageVariableOpening'] == 0: assembly.sv['DamageVariableOpening']  = 0*delta[0]
 
 #     # delta_n = delta.pop(self.parameters['axis'])
 #     # delta_t = np.sqrt(delta[0]**2 + delta[1]**2)

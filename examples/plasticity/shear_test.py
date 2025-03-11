@@ -64,6 +64,7 @@ else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
+wf.fbar = True
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create(
@@ -130,7 +131,8 @@ print(time() - start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot("Stress", component=0, show=True)
+results.plot("Stress", component="XX", show=True)
+# results.plot("Stress", component=0, data_type='Node', show=True)
 
 # ------------------------------------
 # Simple plot with default options and save to png

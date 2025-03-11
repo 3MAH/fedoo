@@ -116,7 +116,7 @@ class StressEquilibrium(WeakFormBase):
             [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
         )
 
-        if initial_stress is not 0:
+        if not (np.isscalar(initial_stress) and initial_stress == 0):
             # this term doesnt seem to improve convergence !
             # if assembly._nlgeom:
             #     DiffOp = DiffOp + \
@@ -143,6 +143,8 @@ class StressEquilibrium(WeakFormBase):
 
         # initialize nlgeom value in assembly._nlgeom
         self._initialize_nlgeom(assembly, pb)
+        self.nlgeom = assembly._nlgeom
+        self.corate = self._corate  # to force the setter function
 
         # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
@@ -214,20 +216,38 @@ class StressEquilibrium(WeakFormBase):
         This method is applyed after the constutive law update (stress and
         stiffness matrix).
         """
-        if assembly._nlgeom == "TL":
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
-            if len(assembly.sv["TangentMatrix"].shape) == 2:
-                if len(assembly.sv["F"].shape) == 3:
-                    assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(
-                        6, 6, -1
-                    ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
+        if assembly._nlgeom:
+            if (
+                len(assembly.sv["TangentMatrix"].shape) == 2
+                and len(assembly.sv["F"].shape) == 3
+            ):
+                # assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(6, 6, -1
+                #     ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
+                assembly.sv["TangentMatrix"] = np.multiply(
+                    assembly.sv["TangentMatrix"].reshape(6, 6, -1),
+                    np.ones((1, 1, assembly.sv["F"].shape[2])),
+                    order="F",
+                )
 
-            assembly.sv["TangentMatrix"] = sim.Lt_convert(
-                assembly.sv["TangentMatrix"],
-                assembly.sv["F"],
-                assembly.sv["Stress"].asarray(),
-                self._convert_Lt_tag,
-            )
+            if assembly._nlgeom == "TL":
+                assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
+                    assembly.sv["F"]
+                )
+
+                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                    assembly.sv["TangentMatrix"],
+                    assembly.sv["F"],
+                    assembly.sv["Stress"].asarray(),
+                    self._convert_Lt_tag,
+                )
+
+            # elif assembly._nlgeom == "UL":
+            #     assembly.sv["TangentMatrix"] = sim.Lt_convert(
+            #         assembly.sv["TangentMatrix"],
+            #         assembly.sv["F"],
+            #         assembly.sv["Stress"].asarray(),
+            #         self._convert_Lt_tag,
+            #     )
 
     def to_start(self, assembly, pb):
         """Reset the current time increment."""
@@ -255,9 +275,8 @@ class StressEquilibrium(WeakFormBase):
             # nul sum
 
             # update cauchy stress
-            if (
-                assembly.sv["DispGradient"] is not 0
-            ):  # True when the problem have been updated once
+            if not (np.array_equal(assembly.sv["DispGradient"], 0)):
+                # True when the problem have been updated once
                 stress = assembly.sv["Stress"].asarray()
                 assembly.sv["Stress"] = StressTensorList(
                     sim.rotate_stress_R(stress, assembly.sv["DR"])
@@ -351,31 +370,58 @@ class StressEquilibrium(WeakFormBase):
 
     @corate.setter
     def corate(self, value):
-        value = value.lower()
-        if value == "log":
-            self._corate_func = _comp_log_strain
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "log_inc":
-            self._corate_func = _comp_log_strain_inc
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value in ["gn", "green_naghdi"]:
-            self._corate_func = _comp_gn_strain
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "jaumann":
-            self._corate_func = _comp_jaumann_strain
-            self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
-        elif value == "log_r":
-            self._corate_func = _comp_log_strain_R
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        elif value == "log_r_inc":
-            self._corate_func = _comp_log_strain_R_inc
-            self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-        else:
-            raise ValueError(
-                'corate value not understood. Choose between "log", "log_R", \
-                "green_naghdi" or "jaumann"'
-            )
         self._corate = value
+        if self.nlgeom == "UL":
+            value = value.lower()
+            if value == "log":
+                self._corate_func = _comp_log_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value == "log_inc":
+                self._corate_func = _comp_log_strain_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value in ["gn", "green_naghdi"]:
+                self._corate_func = _comp_gn_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_GreenNaghdiDD"
+            elif value == "jaumann":
+                self._corate_func = _comp_jaumann_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_JaumannDD"
+            elif value == "log_r":
+                self._corate_func = _comp_log_strain_R
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            elif value == "log_r_inc":
+                self._corate_func = _comp_log_strain_R_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+            else:
+                raise ValueError(
+                    'corate value not understood. Choose between "log", "log_R", \
+                    "green_naghdi" or "jaumann"'
+                )
+
+        if self.nlgeom == "TL":
+            value = value.lower()
+            if value == "log":
+                self._corate_func = _comp_log_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_inc":
+                self._corate_func = _comp_log_strain_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value in ["gn", "green_naghdi"]:
+                self._corate_func = _comp_gn_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "jaumann":
+                self._corate_func = _comp_jaumann_strain
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_r":
+                self._corate_func = _comp_log_strain_R
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            elif value == "log_r_inc":
+                self._corate_func = _comp_log_strain_R_inc
+                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+            else:
+                raise ValueError(
+                    'corate value not understood. Choose between "log", "log_R", \
+                    "green_naghdi" or "jaumann"'
+                )
 
 
 # function to compute the displacement gradient

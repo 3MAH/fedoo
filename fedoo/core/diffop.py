@@ -119,6 +119,12 @@ class DiffOp:
         else:
             raise NameError("Argument error")
 
+    def __eq__(self, other):
+        if np.isscalar(other):
+            return False
+        else:
+            return self is other
+
     def __add__(self, A):
         if isinstance(A, DiffOp):
             return DiffOp(self.op + A.op, self.op_vir + A.op_vir, self.coef + A.coef)

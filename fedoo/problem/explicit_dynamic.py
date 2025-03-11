@@ -10,7 +10,7 @@ class _ExplicitDynamicBase:
         StiffnessAssembly,
         MassAssembly,
         TimeStep,
-        DampingAssembly,
+        DampingAssembly=None,
         name="MainProblem",
     ):
         if isinstance(StiffnessAssembly, str):
@@ -35,8 +35,8 @@ class _ExplicitDynamicBase:
 
         self.__MassMatrix = MassAssembly.get_global_matrix()
         self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
-        if DampingAssembly == 0:
-            self.__DampMatrix = 0
+        if DampingAssembly is None:
+            self.__DampMatrix = None
         else:
             self.__DampMatrix = DampingAssembly.get_global_matrix()
 
@@ -114,7 +114,7 @@ class _ExplicitDynamicBase:
             * (self.__Xold + self.__TimeStep * self.__Xdot)
             - self.__StiffMatrix * self.__Xold
         )
-        if self.__DampMatrix is not 0:
+        if self.__DampMatrix is not None:
             D -= self.__DampMatrix * self.__Xdot
 
         self.set_D(D)

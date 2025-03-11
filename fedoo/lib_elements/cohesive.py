@@ -5,8 +5,8 @@ from fedoo.lib_elements.quadrangle import ElementQuadrangle
 from fedoo.lib_elements.element_list import CombinedElement
 
 
-class Cohesive1D(Element):
-    name = "cohesive1d"
+class Node2Jump(Element1DGeom2):
+    name = "node_jump"
     default_n_gp = 1
     n_nodes = 2
 
@@ -17,8 +17,10 @@ class Cohesive1D(Element):
             [0.0, 0.0]
         ]  # The values are arbitrary, only the size is important
         self.w_pg = np.array([1.0])
+        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
 
-    def ComputeJacobianMatrix(self, vec_x, vec_xi):
+    def ComputeJacobianMatrix(self, vec_x, vec_xi, local_frame=None):
+        ### local_frame not used here ###
         self.detJ = [1.0 for xi in vec_xi]
 
     # In the following functions, xi shall always be a column matrix
@@ -130,6 +132,17 @@ class Quad4InterfaceJump(ElementQuadrangle):  # à vérifier
         ]
 
 
+class Node2Middle(Node2Jump):
+    # define the midle between two nodes.
+    name = "node2middle"
+    default_n_gp = 1
+    n_nodes = 2
+
+    # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
+    def ShapeFunction(self, xi):
+        return 0.5 * np.c_[1 + 0 * xi, 1 + 0 * xi]
+
+
 class Lin2MeanPlane(Element1D):
     # define the mean plane between two lin2 elements defining an interface (used for cohesive elements).
     name = "lin2meanplane"
@@ -214,12 +227,15 @@ class Quad4MeanPlane(ElementQuadrangle):
         ]
 
 
+Node2 = CombinedElement("spring", Node2Jump, default_n_gp=1, local_csys=True)
+Node2.geometry_elm = Node2Middle
+
 Quad4Interface = CombinedElement(
     "quad4interface", Quad4InterfaceJump, default_n_gp=4, local_csys=True
 )
 Quad4Interface.geometry_elm = Quad4MeanPlane
 
 Lin2Interface = CombinedElement(
-    "lin2interface", Lin2InterfaceJump, default_n_gp=4, local_csys=True
+    "lin2interface", Lin2InterfaceJump, default_n_gp=2, local_csys=True
 )
 Lin2Interface.geometry_elm = Lin2MeanPlane

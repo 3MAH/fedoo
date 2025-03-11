@@ -16,7 +16,7 @@ class _NewmarkBase:
         Beta,
         Gamma,
         TimeStep,
-        DampingAssembling=0,
+        DampingAssembling=None,
         name="MainProblem",
     ):
         if isinstance(StiffnessAssembling, str):
@@ -28,7 +28,7 @@ class _NewmarkBase:
         if isinstance(DampingAssembling, str):
             DampingAssembling = Assembly.get_all()[DampingAssembling]
 
-        if DampingAssembling is 0:
+        if DampingAssembling is None:
             A = (
                 StiffnessAssembling.get_global_matrix()
                 + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
@@ -49,8 +49,8 @@ class _NewmarkBase:
 
         self.__MassMatrix = MassAssembling.get_global_matrix()
         self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
-        if DampingAssembling == 0:
-            self.__DampMatrix = 0
+        if DampingAssembling is None:
+            self.__DampMatrix = None
         else:
             self.__DampMatrix = DampingAssembling.get_global_matrix()
 
@@ -62,8 +62,10 @@ class _NewmarkBase:
         self.__Xdot = self._new_vect_dof()
         self.__Xdotdot = self._new_vect_dof()
 
-    def __UpdateA(self):  # internal function to be used when modifying M, K or C
-        if self.__DampMatrix is 0:
+    def __UpdateA(
+        self,
+    ):  # internal function to be used when modifying M, K or C
+        if self.__DampMatrix is None:
             self.set_A(
                 self.__StiffMatrix
                 + 1 / (self.__Beta * (self.__TimeStep**2)) * self.__MassMatrix
@@ -134,7 +136,7 @@ class _NewmarkBase:
             + (1 / (self.__Beta * self.__TimeStep)) * self.__Xdot
             + (0.5 / self.__Beta - 1) * self.__Xdotdot
         )
-        if self.__DampMatrix is not 0:
+        if self.__DampMatrix is not None:
             D += self.__DampMatrix * (
                 (self.__Gamma / (self.__Beta * self.__TimeStep)) * self.__Xold
                 + (self.__Gamma / self.__Beta - 1) * self.__Xdot

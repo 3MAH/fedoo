@@ -36,10 +36,14 @@ class ElasticIsotrop(ElasticAnisotropic):
         if dimension is None:
             dimension = assembly.space.get_dimension()
 
-        # the returned stiffness matrix is 6x6 even in 2D
-        H = np.zeros((6, 6), dtype="object")
         E = self.E
         nu = self.nu
+
+        # the returned stiffness matrix is 6x6 even in 2D
+        if np.isscalar(E) and np.isscalar(nu):
+            H = np.zeros((6, 6), dtype=float)
+        else:
+            H = np.zeros((6, 6), dtype="object")
 
         if dimension == "2Dstress":
             # for 2D plane stress problems

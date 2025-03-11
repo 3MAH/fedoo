@@ -13,7 +13,7 @@ class _BlocSparse:
         assume_sym=False,
     ):
         # savedBlocStructure are data from similar structured blocsparse that avoid time consuming operations
-        self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
+        self.data = [[None for i in range(nbBlocCol)] for j in range(nbBlocRow)]
         self.isempty = True
         if savedBlocStructure is None:
             # array for bloc coo structure
@@ -45,7 +45,7 @@ class _BlocSparse:
     #    def addToBloc(self, Mat, rowBloc, colBloc):
     #        #Mat should be a scipy matrix using the csr format
     #        bloc = self.data[rowBloc][colBloc]
-    #        if bloc is 0:
+    #        if np.isscalar(bloc) and bloc == 0:
     #            self.data[rowBloc][colBloc] = Mat.copy()
     #            self.data_coo[rowBloc][colBloc] = self.data[row][col].tocoo(copy = False)
     #            #row are sorted for data_coo
@@ -89,7 +89,7 @@ class _BlocSparse:
                 )  # at each element we build a nbNode x nbNode matrix
 
             if mat_lumping:
-                if self.data[rowBloc][colBloc] is 0:
+                if self.data[rowBloc][colBloc] is None:
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
@@ -97,7 +97,7 @@ class _BlocSparse:
                     new_data.sum(axis=2)
                 )
             else:
-                if self.data[rowBloc][colBloc] is 0:
+                if self.data[rowBloc][colBloc] is None:
                     self.data[rowBloc][colBloc] = new_data
                 else:
                     self.data[rowBloc][colBloc] += new_data
@@ -132,7 +132,7 @@ class _BlocSparse:
                 )  # at each element we build a nbNode x nbNode matrix
 
             if mat_lumping:  # only the diag terms are non zero, with the sum of row values. Non diag terms are set to zeros but not removed to allow fast addition with non lumped matrix)
-                if self.data[rowBloc][colBloc] is 0:
+                if self.data[rowBloc][colBloc] is None:
                     self.data[rowBloc][colBloc] = np.zeros_like(new_data)
 
                 list_ind_row = np.arange(new_data.shape[1])
@@ -140,7 +140,7 @@ class _BlocSparse:
                     new_data.sum(axis=2)
                 )  # set value only to diag terms
             else:
-                if self.data[rowBloc][colBloc] is 0:
+                if self.data[rowBloc][colBloc] is None:
                     self.data[rowBloc][colBloc] = new_data
                 else:
                     self.data[rowBloc][colBloc] += new_data
@@ -191,7 +191,7 @@ class _BlocSparse:
                     self.data[i][j]
                     for i in range(self.nbBlocRow)
                     for j in range(self.nbBlocCol)
-                    if self.data[i][j] is not 0
+                    if self.data[i][j] is not None
                 ]
             ).ravel()
             ResRow = np.array(
@@ -199,7 +199,7 @@ class _BlocSparse:
                     self.row + i * self.blocShape[0]
                     for i in range(self.nbBlocRow)
                     for j in range(self.nbBlocCol)
-                    if self.data[i][j] is not 0
+                    if self.data[i][j] is not None
                 ],
                 np.int32,
             ).ravel()
@@ -208,7 +208,7 @@ class _BlocSparse:
                     self.col + j * self.blocShape[1]
                     for i in range(self.nbBlocRow)
                     for j in range(self.nbBlocCol)
-                    if self.data[i][j] is not 0
+                    if self.data[i][j] is not None
                 ],
                 np.int32,
             ).ravel()
@@ -235,7 +235,7 @@ class _BlocSparse:
                             self.row + i * self.blocShape[0]
                             for i in range(self.nbBlocRow)
                             for j in range(self.nbBlocCol)
-                            if self.data[i][j] is not 0
+                            if self.data[i][j] is not None
                         ],
                         np.int32,
                     ).ravel()
@@ -244,7 +244,7 @@ class _BlocSparse:
                             self.col + j * self.blocShape[1]
                             for i in range(self.nbBlocRow)
                             for j in range(self.nbBlocCol)
-                            if self.data[i][j] is not 0
+                            if self.data[i][j] is not None
                         ],
                         np.int32,
                     ).ravel()
@@ -306,7 +306,7 @@ class _BlocSparse:
                             shape=(self.blocShape[0], self.blocShape[1]),
                             copy=False,
                         )
-                        if self.data[i][j] is not 0
+                        if self.data[i][j] is not None
                         else sparse.csr_matrix((self.blocShape[0], self.blocShape[1]))
                         for j in range(self.nbBlocCol)
                     ]
@@ -323,7 +323,7 @@ class _BlocSparse:
                         self.data[i][j]
                         for i in range(self.nbBlocRow)
                         for j in range(self.nbBlocCol)
-                        if self.data[i][j] is not 0
+                        if self.data[i][j] is not None
                     ]
                 ).ravel()
                 Res = sparse.csr_matrix(
@@ -353,9 +353,9 @@ class _BlocSparse:
             "indptr_csr": self.indptr_csr,
         }
 
-        # ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0]).ravel()
-        # ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
-        # ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not 0], np.int32).ravel()
+        # ResDat = np.array([self.data[i][j] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not None]).ravel()
+        # ResRow = np.array([self.row+i*self.blocShape[0] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not None], np.int32).ravel()
+        # ResCol = np.array([self.col+j*self.blocShape[1] for i in range(self.nbBlocRow) for j in range(self.nbBlocCol) if self.data[i][j] is not None], np.int32).ravel()
         # Res = sparse.coo_matrix((ResDat, (ResRow,ResCol)), shape=(self.blocShape[0]*self.nbBlocRow, self.blocShape[1]*self.nbBlocCol), copy = False).tocsr()
         # # Res.data.round(10, Res.data)
         # Res.eliminate_zeros()
@@ -364,7 +364,7 @@ class _BlocSparse:
 
 class _BlocSparseOld:
     def __init__(self, nbBlocRow, nbBlocCol):
-        self.data = [[0 for i in range(nbBlocCol)] for j in range(nbBlocRow)]
+        self.data = [[None for i in range(nbBlocCol)] for j in range(nbBlocRow)]
         self.col = None
         self.row = None
         self.blocShape = None
@@ -386,7 +386,7 @@ class _BlocSparseOld:
         if not (isinstance(coef, Number)):
             coef = coef.reshape(-1, 1, 1)
 
-        if self.data[rowBloc][colBloc] is 0:
+        if self.data[rowBloc][colBloc] is None:
             # self.data[rowBloc][colBloc] = (coef * A.data.reshape(-1,NnzColPerRowA,1)).reshape(n_elm_gp,-1,NnzColPerRowA).transpose((1,2,0)) @ B.data.reshape(n_elm_gp,-1,NnzColPerRowB).transpose(1,0,2) #at each element we build a nbNode x nbNode matrix
             temp = A.data.reshape(-1, NnzColPerRowA, 1) @ B.data.reshape(
                 -1, 1, NnzColPerRowB
@@ -424,7 +424,7 @@ class _BlocSparseOld:
         if not (isinstance(coef, Number)):
             coef = coef.reshape(-1, 1, 1)
 
-        if self.data[rowBloc][colBloc] is 0:
+        if self.data[rowBloc][colBloc] is None:
             self.data[rowBloc][colBloc] = coef * Arr
         else:
             self.data[rowBloc][colBloc] += coef * Arr
@@ -435,7 +435,7 @@ class _BlocSparseOld:
                 self.data[i][j]
                 for i in range(self.nbBlocRow)
                 for j in range(self.nbBlocCol)
-                if self.data[i][j] is not 0
+                if self.data[i][j] is not None
             ]
         ).ravel()
         ResRow = np.array(
@@ -443,7 +443,7 @@ class _BlocSparseOld:
                 self.row + i * self.blocShape[0]
                 for i in range(self.nbBlocRow)
                 for j in range(self.nbBlocCol)
-                if self.data[i][j] is not 0
+                if self.data[i][j] is not None
             ],
             np.int32,
         ).ravel()
@@ -452,7 +452,7 @@ class _BlocSparseOld:
                 self.col + j * self.blocShape[1]
                 for i in range(self.nbBlocRow)
                 for j in range(self.nbBlocCol)
-                if self.data[i][j] is not 0
+                if self.data[i][j] is not None
             ],
             np.int32,
         ).ravel()

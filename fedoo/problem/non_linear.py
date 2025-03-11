@@ -62,7 +62,7 @@ class _NonLinearBase:
         -------
         numpy.ndarray
         """
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
@@ -80,19 +80,19 @@ class _NonLinearBase:
         -------
         numpy.ndarray
         """
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
     def get_temp(self):
         """Return the nodal temperature field."""
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, "Temp")
         return self._get_vect_component(self._U + self._dU, "Temp")
 
     # Return all the dof for every variable under a vector form
     def get_dof_solution(self, name="all"):
-        if self._dU is 0:
+        if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
@@ -129,7 +129,7 @@ class _NonLinearBase:
 
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
-        if self._dU is not 0:
+        if not (np.isscalar(self._dU) and self._dU == 0):
             self._U += self._dU
             self._dU = 0
             self._err0 = self.nr_parameters[
@@ -237,7 +237,7 @@ class _NonLinearBase:
                     np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
                 )  # Displacement criterion
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
-                if self.get_D() is 0:
+                if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
                         np.linalg.norm(self.get_B()[dof_free], norm_type) / self._err0
                     )
@@ -250,7 +250,7 @@ class _NonLinearBase:
                         / self._err0
                     )
             else:  # self.nr_parameters['criterion'] == 'Work': #work criterion
-                if self.get_D() is 0:
+                if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
                         np.linalg.norm(
                             self.get_X()[dof_free] * self.get_B()[dof_free],
@@ -438,7 +438,7 @@ class _NonLinearBase:
 
         self.time = self.t0  # time at the begining of the iteration
 
-        if self._U is 0:  # Initialize only if 1st step
+        if np.isscalar(self._U) and self._U == 0:  # Initialize only if 1st step
             self.initialize()
 
         restart = False  # bool to know if the iteration is another attempt
@@ -498,11 +498,12 @@ class _NonLinearBase:
             else:
                 if update_dt:
                     dt *= 0.25
-                    print(
-                        "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                            normRes, dt
+                    if self.print_info > 0:
+                        print(
+                            "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
+                                normRes, dt
+                            )
                         )
-                    )
 
                     if dt < dt_min:
                         raise NameError(

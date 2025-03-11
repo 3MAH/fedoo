@@ -126,7 +126,7 @@ class RigidTie(BCBase):
 
         # dof_ref  = [problem._Xbc[dof] if dof in problem.dof_blocked else problem._X[dof] for dof in dof_cd]
         # dof_ref  = [problem.get_dof_solution()[dof] + problem._Xbc[dof] if dof in problem.dof_blocked else problem.get_dof_solution()[dof] for dof in dof_cd]
-        if problem.get_dof_solution() is 0:
+        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
@@ -157,13 +157,13 @@ class RigidTie(BCBase):
             - mesh.nodes[list_nodes]
         )
 
-        if problem._dU is not 0:
-            if problem._U is not 0:
+        if not (np.array_equal(problem._dU, 0)):
+            if np.array_equal(problem._U, 0):
+                problem._dU.reshape(3, -1)[:, list_nodes] = new_disp.T
+            else:
                 problem._dU.reshape(3, -1)[:, list_nodes] = (
                     new_disp.T - problem._U.reshape(3, -1)[:, list_nodes]
                 )
-            else:
-                problem._dU.reshape(3, -1)[:, list_nodes] = new_disp.T
 
         # approche incrémentale:
 
@@ -342,7 +342,7 @@ class RigidTie2D(BCBase):
             for i in range(len(var_cd))
         ]
 
-        if problem.get_dof_solution() is 0:
+        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(

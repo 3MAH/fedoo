@@ -287,7 +287,9 @@ class ModelingSpace:
     def op_strain(self, InitialGradDisp=None):
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 
-        if (InitialGradDisp is None) or (InitialGradDisp is 0):
+        if (InitialGradDisp is None) or (
+            isinstance(InitialGradDisp, (float, int)) and InitialGradDisp == 0
+        ):
             du_dx = self.derivative("DispX", "X")
             dv_dy = self.derivative("DispY", "Y")
             du_dy = self.derivative("DispX", "Y")

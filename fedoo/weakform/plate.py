@@ -77,7 +77,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         GeneralizedStress = [
             sum(
                 [
-                    0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j] * H[i][j]
+                    0 if GeneralizedStrain[j] == 0 else GeneralizedStrain[j] * H[i][j]
                     for j in range(8)
                 ]
             )
@@ -87,7 +87,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         diffop = sum(
             [
                 0
-                if GeneralizedStrain[i] is 0
+                if GeneralizedStrain[i] == 0
                 else GeneralizedStrain[i].virtual * GeneralizedStress[i]
                 for i in range(8)
             ]
@@ -119,7 +119,7 @@ class PlateShearEquilibrium(
         GeneralizedStress = [
             sum(
                 [
-                    0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j] * H[i][j]
+                    0 if GeneralizedStrain[j] == 0 else GeneralizedStrain[j] * H[i][j]
                     for j in range(2)
                 ]
             )
@@ -129,7 +129,7 @@ class PlateShearEquilibrium(
         return sum(
             [
                 0
-                if GeneralizedStrain[i] is 0
+                if GeneralizedStrain[i] == 0
                 else GeneralizedStrain[i].virtual * GeneralizedStress[i]
                 for i in range(2)
             ]
@@ -145,7 +145,7 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):  # plate without shear 
         GeneralizedStress = [
             sum(
                 [
-                    0 if GeneralizedStrain[j] is 0 else GeneralizedStrain[j] * H[i][j]
+                    0 if GeneralizedStrain[j] == 0 else GeneralizedStrain[j] * H[i][j]
                     for j in range(6)
                 ]
             )

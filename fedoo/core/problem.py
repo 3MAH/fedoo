@@ -52,7 +52,7 @@ class Problem(ProblemBase):
 
         self.__A = A
 
-        if B is 0:
+        if np.isscalar(B) and B == 0:
             self.__B = self._new_vect_dof()
         else:
             self.__B = B
@@ -90,7 +90,7 @@ class Problem(ProblemBase):
     ):  # Get component of a vector (force vector for instance) being given the name of a component (vector or single component)
         assert isinstance(name, str), "argument error"
 
-        if name.lower() == "all" or vector is 0:
+        if name.lower() == "all" or np.isscalar(vector):
             return vector
 
         n = self.mesh.n_nodes
@@ -159,7 +159,7 @@ class Problem(ProblemBase):
         self.__D = D
 
     def solve(self, **kargs):
-        if self.__X is 0:
+        if np.isscalar(self.__X) and self.__X == 0:
             self.__X = np.ndarray(self.n_dof)  # empty array
 
         if len(self.__A.shape) == 2:  # A is a matrix
@@ -167,13 +167,13 @@ class Problem(ProblemBase):
             # self.__X[self._dof_slave] = self._Xbc[self._dof_slave]
 
             # Temp = self.__A[:,self._dof_slave].dot(self.__X[self._dof_slave])
-            # if self.__D is 0:
+            # if np.isscalar(self.__D) and self.__D == 0:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] - Temp[self._dof_free])
             # else:
             #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
 
             if len(self._dof_free) != 0:
-                if self.__D is 0:
+                if np.isscalar(self.__D) and self.__D == 0:
                     self.__X[self._dof_free] = self._solve(
                         self.__MatCB.T @ self.__A @ self.__MatCB,
                         self.__MatCB.T @ (self.__B - self.__A @ self._Xbc),
@@ -198,7 +198,7 @@ class Problem(ProblemBase):
         ):  # A is a diagonal matrix stored as a vector containing diagonal values
             # No need to account for boundary condition here because the matrix is diagonal and the resolution is direct
 
-            assert self.__D is not 0, "internal error, contact developper"
+            assert not (np.isscalar(self.__D)), "internal error, contact developper"
 
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
@@ -293,7 +293,7 @@ class Problem(ProblemBase):
             self._MFext = M
             self._dof_blocked = dof_blocked
         else:
-            self._MFext = 0
+            self._MFext = None
 
         # #adding identity for free nodes
         col = np.hstack(
@@ -319,7 +319,7 @@ class Problem(ProblemBase):
     def init_bc_start_value(self):
         ### is used only for incremental problems
         U = self.get_dof_solution()
-        if U is 0:
+        if np.isscalar(U) and U == 0:
             return
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
@@ -327,11 +327,11 @@ class Problem(ProblemBase):
         for e in self.bc.list_all():
             if e.bc_type == "Dirichlet":
                 if e._start_value_default is None:
-                    if U is not 0:
+                    if not (np.isscalar(U) and U == 0):
                         e.start_value = U[e.variable * n_nodes + e.node_set]
             if e.bc_type == "Neumann":
                 if e._start_value_default is None:
-                    if F is not 0:
+                    if not (np.isscalar(F) and F == 0):
                         e.start_value = F[e.variable * n_nodes + e.node_set]
 
     def get_ext_forces(self, name="all", include_mpc=True):
@@ -368,8 +368,8 @@ class Problem(ProblemBase):
         on the problem and the nature of the dof (for instance moment for rotational dof or
         heat flux for temperature).
         """
-        if self._MFext is 0 or not (include_mpc):
-            if self.get_D() is 0:
+        if self._MFext is None or not (include_mpc):
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(self.get_A() @ self.get_X(), name)
             else:
                 return self._get_vect_component(
@@ -385,7 +385,7 @@ class Problem(ProblemBase):
             M = M.tocsr().T
             # need to be checked
             # M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
-            if self.get_D() is 0:
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
             else:
                 return self._get_vect_component(

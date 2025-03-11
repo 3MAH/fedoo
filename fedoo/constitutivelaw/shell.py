@@ -42,13 +42,13 @@ class ShellBase(ConstitutiveLaw):
         # disp = pb.get_disp()
         # rot = pb.get_rot()
         U = pb.get_dof_solution()
-        if U is 0:
+        if np.isscalar(U) and U == 0:
             assembly.sv["GeneralizedStrain"] = 0
             assembly.sv["GeneralizedStress"] = 0
         else:
             GeneralizedStrainOp = assembly.weakform.GetGeneralizedStrainOperator()
             GeneralizedStrain = [
-                0 if op is 0 else assembly.get_gp_results(op, U)
+                op if np.isscalar(op) else assembly.get_gp_results(op, U)
                 for op in GeneralizedStrainOp
             ]
 
@@ -172,12 +172,30 @@ class ShellHomogeneous(ShellBase):
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hplane[i][j] for j in range(4)])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hplane[i][j]
+                    )
+                    for j in range(4)
+                ]
+            )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.get_elastic_matrix()
         Stress += [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hshear[i][j] for j in [4, 5]])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hshear[i][j]
+                    )
+                    for j in [4, 5]
+                ]
+            )
             for i in [4, 5]
         ]  # SXX, SYY, SXY (SZZ should be = 0)
 
@@ -203,12 +221,30 @@ class ShellHomogeneous(ShellBase):
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hplane[i][j] for j in range(4)])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hplane[i][j]
+                    )
+                    for j in range(4)
+                ]
+            )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__material.get_elastic_matrix()
         Stress += [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hshear[i][j] for j in [4, 5]])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hshear[i][j]
+                    )
+                    for j in [4, 5]
+                ]
+            )
             for i in [4, 5]
         ]  # SXX, SYY, SXY (SZZ should be = 0)
 
@@ -307,12 +343,30 @@ class ShellLaminate(ShellBase):
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hplane[i][j] for j in range(4)])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hplane[i][j]
+                    )
+                    for j in range(4)
+                ]
+            )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
         Hshear = self.__listMat[layer].get_elastic_matrix()
         Stress += [
-            sum([0 if Strain[j] is 0 else Strain[j] * Hshear[i][j] for j in [4, 5]])
+            sum(
+                [
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * Hshear[i][j]
+                    )
+                    for j in [4, 5]
+                ]
+            )
             for i in [4, 5]
         ]  # SXX, SYY, SXY (SZZ should be = 0)
 
@@ -347,7 +401,7 @@ class ShellLaminate(ShellBase):
         Hplane = [
             [
                 [
-                    0 if Hplane[layer][i][j] is 0 else Hplane[layer][i][j]
+                    0 if np.array_equal(Hplane[layer][i][j], 0) else Hplane[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in range(4)
@@ -357,7 +411,7 @@ class ShellLaminate(ShellBase):
         Hshear = [
             [
                 [
-                    0 if Hshear[layer][i][j] is 0 else Hshear[layer][i][j]
+                    0 if np.array_equal(Hshear[layer][i][j], 0) else Hshear[layer][i][j]
                     for layer in layer_z
                 ]
                 for j in [4, 5]
@@ -368,7 +422,11 @@ class ShellLaminate(ShellBase):
         Stress = [
             sum(
                 [
-                    0 if Strain[j] is 0 else Strain[j] * np.array(Hplane[i][j])
+                    (
+                        0
+                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
+                        else Strain[j] * np.array(Hplane[i][j])
+                    )
                     for j in range(4)
                 ]
             )
@@ -377,7 +435,11 @@ class ShellLaminate(ShellBase):
         Stress += [
             sum(
                 [
-                    0 if Strain[4 + j] is 0 else Strain[4 + j] * np.array(Hshear[i][j])
+                    (
+                        0
+                        if (np.isscalar(Strain[4 + j]) and Strain[4 + j] == 0)
+                        else Strain[4 + j] * np.array(Hshear[i][j])
+                    )
                     for j in range(2)
                 ]
             )

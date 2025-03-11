@@ -61,13 +61,13 @@ class ImplicitDynamic(WeakFormBase):
         )
 
         # self.inertia_weakform.update(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator is 0 else
+        # assembly.sv['TempGradient'] = [0 if operator == 0 else
         #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
 
     def update_2(self, assembly, pb):
         self.stiffness_weakform.update_2(assembly, pb)
         # self.inertia_weakform.update_2(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator is 0 else
+        # assembly.sv['TempGradient'] = [0 if operator == 0 else
         #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
 
     # def reset(self): #to update
@@ -78,7 +78,7 @@ class ImplicitDynamic(WeakFormBase):
 
     def set_start(self, assembly, pb):  # to update
         dt = pb.dtime  ### dt is the time step of the previous increment
-        if pb.get_disp() is not 0:
+        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
@@ -108,7 +108,7 @@ class ImplicitDynamic(WeakFormBase):
         dt = pb.dtime
 
         if self.rayleigh_damping is None:
-            if pb._dU is 0:  # start of iteration
+            if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
                 delta_disp = np.zeros((self.space.ndim, 1))
             else:
                 delta_disp = assembly.sv["_DeltaDisp_GP"]
@@ -145,7 +145,7 @@ class ImplicitDynamic(WeakFormBase):
             )
         else:
             # need nodes values in this case
-            if pb._dU is 0:  # start of iteration
+            if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
                 delta_disp = np.zeros((self.space.ndim, 1))
             else:
                 delta_disp = assembly.sv["_DeltaDisp"]
@@ -175,20 +175,20 @@ class ImplicitDynamic(WeakFormBase):
             H = assembly.sv["TangentMatrix"]
 
             sigma = [
-                sum([0 if eps[j] is 0 else eps[j] * H[i][j] for j in range(6)])
+                sum([0 if eps[j] == 0 else eps[j] * H[i][j] for j in range(6)])
                 for i in range(6)
             ]
 
             stiffness_wf = sum(
-                [0 if eps[i] is 0 else eps[i].virtual * sigma[i] for i in range(6)]
+                [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
             )
 
-            if initial_stress is not 0:
+            if not (np.isscalar(initial_stress) and initial_stress == 0):
                 if self.nlgeom:
                     stiffness_mat_wf = stiffness_wf + sum(
                         [
                             0
-                            if self.stiffness_weakform._nl_strain_op_vir[i] is 0
+                            if self.stiffness_weakform._nl_strain_op_vir[i] == 0
                             else self.stiffness_weakform._nl_strain_op_vir[i]
                             * initial_stress[i]
                             for i in range(6)
@@ -197,7 +197,7 @@ class ImplicitDynamic(WeakFormBase):
 
                 initial_stress_wf = sum(
                     [
-                        0 if eps[i] is 0 else eps[i].virtual * initial_stress[i]
+                        0 if eps[i] == 0 else eps[i].virtual * initial_stress[i]
                         for i in range(6)
                     ]
                 )
@@ -248,13 +248,13 @@ class ImplicitDynamic(WeakFormBase):
             if new_velocity.shape[1] == 1:
                 new_velocity = new_velocity * np.ones(assembly.mesh.n_nodes)
             op_sigma = [
-                sum([0 if eps[j] is 0 else eps[j] * H[i][j] for j in range(6)])
+                sum([0 if eps[j] == 0 else eps[j] * H[i][j] for j in range(6)])
                 for i in range(6)
             ]
             diff_op += sum(
                 [
                     0
-                    if (eps[i] is 0) or (op_sigma[i] is 0)
+                    if (eps[i] == 0) or (op_sigma[i] == 0)
                     else eps[i].virtual
                     * (
                         self.rayleigh_damping[0]
@@ -264,8 +264,8 @@ class ImplicitDynamic(WeakFormBase):
                 ]
             )
 
-            # mat_sigma_velocity = [0 if op_sigma[i] is 0 else assembly.get_gp_results(op_sigma[i], new_velocity.ravel()) for i in range(6)]
-            # diff_op += sum([0 if eps[i] is 0 else \
+            # mat_sigma_velocity = [0 if op_sigma[i] == 0 else assembly.get_gp_results(op_sigma[i], new_velocity.ravel()) for i in range(6)]
+            # diff_op += sum([0 if eps[i] == 0 else \
             #                 eps[i].virtual * mat_sigma_velocity[i] for i in range(6)])
 
         return diff_op
@@ -318,13 +318,13 @@ class _NewmarkInteria(WeakFormBase):
         )
 
         # self.inertia_weakform.update(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator is 0 else
+        # assembly.sv['TempGradient'] = [0 if operator == 0 else
         #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
 
     def update_2(self, assembly, pb):
         pass
         # self.inertia_weakform.update_2(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator is 0 else
+        # assembly.sv['TempGradient'] = [0 if operator == 0 else
         #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
 
     # def reset(self): #to update
@@ -335,7 +335,7 @@ class _NewmarkInteria(WeakFormBase):
 
     def set_start(self, assembly, pb):  # to update
         dt = pb.dtime  ### dt is the time step of the previous increment
-        if pb.get_disp() is not 0:
+        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
@@ -362,7 +362,7 @@ class _NewmarkInteria(WeakFormBase):
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
         dt = pb.dtime
 
-        if pb._dU is 0:  # start of iteration
+        if np.isscalar(pb._dU) and pb._dU == 0:  # start of iteration
             delta_disp = [0, 0, 0]
         else:
             delta_disp = assembly.sv["_DeltaDisp_GP"]

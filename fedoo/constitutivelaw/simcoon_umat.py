@@ -104,7 +104,7 @@ class Simcoon(Mechanical3D):
                 "nu": 1,
                 "alpha": 2,
                 "sigmaY": 3,
-                "k": 4,
+                "K": 4,
                 "m": 5,
                 "h": 6,
             }  # powerlaw sigma_e = sigmaY + k * eps_p^m - #h=linear kinematical hardening
@@ -115,7 +115,7 @@ class Simcoon(Mechanical3D):
                 "X": slice(8, 14),
             }  # X=backstress
         elif umat_name == "EPCHA":
-            self.n_statev = 32
+            self.n_statev = 33
             self.props_label = {
                 "E": 0,
                 "nu": 1,
@@ -136,7 +136,132 @@ class Simcoon(Mechanical3D):
                 "a2": slice(14, 20),
                 "X1": slice(20, 26),
                 "X2": slice(26, 32),
+                "Hp": 33,
             }
+        elif umat_name == "EPHIL":
+            self.n_statev = 8
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "alpha": 2,
+                "sigmaY": 3,
+                "K": 4,
+                "m": 5,
+                "F_hill": 6,
+                "G_hill": 7,
+                "H_hill": 8,
+                "L_hill": 9,
+                "M_hill": 10,
+                "N_hill": 11,
+            }
+            self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8)}
+        elif umat_name == "EPHAC":
+            self.n_statev = 33
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "G": 2,
+                "alpha": 3,
+                "sigmaY": 4,
+                "Q": 5,
+                "b": 6,
+                "C_1": 7,
+                "D_1": 8,
+                "C_2": 9,
+                "D_2": 10,
+                "F_hill": 11,
+                "G_hill": 12,
+                "H_hill": 13,
+                "L_hill": 14,
+                "M_hill": 15,
+                "N_hill": 16,
+            }
+            self.statev_label = {
+                "T": 0,
+                "P": 1,
+                "EP": slice(2, 8),
+                "a1": slice(8, 14),
+                "a2": slice(14, 20),
+                "X1": slice(20, 26),
+                "X2": slice(26, 32),
+                "Hp": 33,
+            }
+        elif umat_name == "EPANI":
+            self.n_statev = 33
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "G": 2,
+                "alpha": 3,
+                "sigmaY": 4,
+                "Q": 5,
+                "b": 6,
+                "C_1": 7,
+                "D_1": 8,
+                "C_2": 9,
+                "D_2": 10,
+                "P11": 11,
+                "P22": 12,
+                "P33": 13,
+                "P12": 14,
+                "P13": 15,
+                "P23": 16,
+                "P44": 17,
+                "P55": 18,
+                "P66": 19,
+            }
+            self.statev_label = {
+                "T": 0,
+                "P": 1,
+                "EP": slice(2, 8),
+                "a1": slice(8, 14),
+                "a2": slice(14, 20),
+                "X1": slice(20, 26),
+                "X2": slice(26, 32),
+                "Hp": 33,
+            }
+        elif umat_name == "EPDFA":
+            self.n_statev = 33
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "G": 2,
+                "alpha": 3,
+                "sigmaY": 4,
+                "Q": 5,
+                "b": 6,
+                "F_dfa": 11,
+                "G_dfa": 12,
+                "H_dfa": 13,
+                "L_dfa": 14,
+                "M_dfa": 15,
+                "N_dfa": 16,
+                "K_dfa": 17,
+            }
+            self.statev_label = {
+                "T": 0,
+                "P": 1,
+                "EP": slice(2, 8),
+                "a1": slice(8, 14),
+                "a2": slice(14, 20),
+                "X1": slice(20, 26),
+                "X2": slice(26, 32),
+                "Hp": 33,
+            }
+        elif umat_name == "EPHIN":
+            n_plas = self.props[
+                0, 3
+            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            self.n_statev = 7 + n_plas * 7
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "alpha": 2,
+            }  # several plastic laws i "sigmaY":4+i*9, "k":4+i*9+1, "m":4+i*9+2, "F_hill":4+i*9+3, "G_hill":4+i*9+4, "H_hill":4+i*9+5, "L_hill":4+i*9+6, "M_hill":4+i*9+7, "N_hill":4+i*9+8
+            self.statev_label = {
+                "T": 0,
+                "EP": slice(1, 7),
+            }  # Pi:i*7+7, EPi:slice(i*7+8,i*7+14)
         elif umat_name == "SMAUT":
             self.n_statev = 16
             self.props_label = {}
@@ -200,37 +325,6 @@ class Simcoon(Mechanical3D):
                 "T": 0,
                 "EV_tilde": slice(1, 7),
             }  # vi: i*7+7, EVi: slice(i*7+8,i*7+14)
-        elif umat_name == "EPHIC":
-            self.n_statev = 8
-            self.props_label = {
-                "E": 0,
-                "nu": 1,
-                "alpha": 2,
-                "sigmaY": 3,
-                "k": 4,
-                "m": 5,
-                "F_hill": 6,
-                "G_hill": 7,
-                "H_hill": 8,
-                "L_hill": 9,
-                "M_hill": 10,
-                "N_hill": 11,
-            }
-            self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8)}
-        elif umat_name == "EPHIN":
-            n_plas = self.props[
-                0, 3
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
-            self.n_statev = 7 + n_plas * 7
-            self.props_label = {
-                "E": 0,
-                "nu": 1,
-                "alpha": 2,
-            }  # several plastic laws i "sigmaY":4+i*9, "k":4+i*9+1, "m":4+i*9+2, "F_hill":4+i*9+3, "G_hill":4+i*9+4, "H_hill":4+i*9+5, "L_hill":4+i*9+6, "M_hill":4+i*9+7, "N_hill":4+i*9+8
-            self.statev_label = {
-                "T": 0,
-                "EP": slice(1, 7),
-            }  # Pi:i*7+7, EPi:slice(i*7+8,i*7+14)
         elif umat_name == "SMAMO":
             nvariants = self.props[
                 0, 7
@@ -245,6 +339,58 @@ class Simcoon(Mechanical3D):
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
+        elif umat_name == "NEOHC":
+            self.n_statev = 1
+            self.props_label = {
+                "mu": 0,
+                "kappa": 1,
+            }
+            self.statev_label = {"T": 0}
+        elif umat_name == "MOORI":
+            self.n_statev = 1
+            self.props_label = {
+                "C_10": 0,
+                "C_01": 1,
+                "kappa": 2,
+            }
+            self.statev_label = {"T": 0}
+        elif umat_name == "YEOHH":
+            self.n_statev = 1
+            self.props_label = {
+                "C_10": 0,
+                "C_20": 1,
+                "C_30": 2,
+                "kappa": 3,
+            }
+            self.statev_label = {"T": 0}
+        elif umat_name == "ISHAH":
+            self.n_statev = 1
+            self.props_label = {
+                "C_10": 0,
+                "C_20": 1,
+                "C_01": 2,
+                "kappa": 3,
+            }
+            self.statev_label = {"T": 0}
+        elif umat_name == "GETHH":
+            self.n_statev = 1
+            self.props_label = {
+                "C_1": 0,
+                "C_2": 1,
+                "kappa": 2,
+            }
+            self.statev_label = {"T": 0}
+        elif umat_name == "SWANH":
+            self.n_statev = 1
+            self.props_label = {
+                "N_Swanson": 0,
+                "kappa": 1,
+                # Nb of Swanson parameters : 2+i*4, i being the number of Swanson modes
+                # (A, B, alpha, beta) are vectors of size N_Swanson
+            }
+            self.statev_label = {"T": 0}
+        else:
+            raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
     def initialize(self, assembly, pb):
         if "Statev" not in assembly.sv:
@@ -258,28 +404,50 @@ class Simcoon(Mechanical3D):
             DR[...] = np.eye(3).reshape(3, 3, 1)
             assembly.sv["DR"] = DR
 
+            if assembly._nlgeom:
+                F = np.empty((3, 3, assembly.n_gauss_points), order="F")
+                F[...] = np.eye(3).reshape(3, 3, 1)
+                assembly.sv["F"] = F
+
             assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
             # )
 
             # Launch the UMAT to compute the elastic matrix in "TangentMatrix"
-            if self.props.shape[1] == 1:
-                zeros_6 = np.zeros(6)
-                (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                    self.umat_name,
-                    zeros_6,
-                    zeros_6,
-                    zeros_6,
-                    np.eye(3, order="F"),
-                    self.props[:, 0],
-                    np.zeros(self.n_statev),
-                    0,
-                    0,
-                    np.zeros(4),
-                )
-            else:
-                zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
+            zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
+            try:
+                if assembly._nlgeom:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        F,
+                        F,
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+                else:
+                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                        self.umat_name,
+                        zeros_6,
+                        zeros_6,
+                        np.array([]),
+                        np.array([]),
+                        zeros_6,
+                        DR,
+                        self.props,
+                        assembly.sv["Statev"],
+                        0,
+                        0,
+                        assembly.sv["Wm"],
+                    )
+            except:  # for compatility with previous simcoon versions
                 (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
                     self.umat_name,
                     zeros_6,
@@ -302,10 +470,10 @@ class Simcoon(Mechanical3D):
         else:
             de = assembly.sv["Strain"] - assembly.sv_start["Strain"]
 
-        # if 'Stress' not in assembly.sv or assembly.sv['Stress'] is 0:
+        # if 'Stress' not in assembly.sv or (np.isarray(assembly.sv['Stress']) and assembly.sv['Stress'] == 0):
         #     assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 
-        # if assembly.sv_start['Strain'] is 0:
+        # if np.isscalar(assembly.sv_start['Strain']) and assembly.sv_start['Strain'] == 0:
         #     assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
 
         if "Temp" in assembly.sv:
@@ -314,6 +482,49 @@ class Simcoon(Mechanical3D):
             temp = None
 
         try:
+            if assembly._nlgeom:
+                (
+                    stress,
+                    assembly.sv["Statev"],
+                    assembly.sv["Wm"],
+                    assembly.sv["TangentMatrix"],
+                ) = sim.umat(
+                    self.umat_name,
+                    assembly.sv_start["Strain"].array,
+                    de.array,
+                    assembly.sv_start["F"],
+                    assembly.sv["F"],
+                    assembly.sv_start["Stress"].array,
+                    assembly.sv["DR"],
+                    self.props,
+                    assembly.sv_start["Statev"],
+                    pb.time,
+                    pb.dtime,
+                    assembly.sv_start["Wm"],
+                    temp,
+                )
+            else:
+                (
+                    stress,
+                    assembly.sv["Statev"],
+                    assembly.sv["Wm"],
+                    assembly.sv["TangentMatrix"],
+                ) = sim.umat(
+                    self.umat_name,
+                    assembly.sv_start["Strain"].array,
+                    de.array,
+                    np.array([]),
+                    np.array([]),
+                    assembly.sv_start["Stress"].array,
+                    assembly.sv["DR"],
+                    self.props,
+                    assembly.sv_start["Statev"],
+                    pb.time,
+                    pb.dtime,
+                    assembly.sv_start["Wm"],
+                    temp,
+                )
+        except:  # for compatibility with previous simcoon versions
             (
                 stress,
                 assembly.sv["Statev"],
@@ -331,24 +542,6 @@ class Simcoon(Mechanical3D):
                 pb.dtime,
                 assembly.sv_start["Wm"],
                 temp,
-            )
-        except:  # for compatibility with old version of simcoon
-            (
-                stress,
-                assembly.sv["Statev"],
-                assembly.sv["Wm"],
-                assembly.sv["TangentMatrix"],
-            ) = sim.umat(
-                self.umat_name,
-                assembly.sv_start["Strain"].array,
-                de.array,
-                assembly.sv_start["Stress"].array,
-                assembly.sv["DR"],
-                self.props,
-                assembly.sv_start["Statev"],
-                pb.time,
-                pb.dtime,
-                assembly.sv_start["Wm"],
             )
 
         # work only in global local frame

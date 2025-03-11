@@ -36,7 +36,7 @@ class ProblemPGD(ProblemBase):
         self.__A = A
         # if self.__A != 0: self.__A.tocsr() #just in case A is in another format as csr
 
-        if B is 0:
+        if np.isscalar(B) and B == 0:
             self.__B = self._new_vect_dof()
         else:
             self.__B = B
@@ -403,7 +403,7 @@ class ProblemPGD(ProblemBase):
                         else:
                             assert 0, "Dimension doesn't match"
 
-                if F is 0:
+                if np.isscalar(F) and F == 0:
                     if isinstance(Value, (float, int, np.floating)):
                         Fadd = SeparatedZeros(shapeX)
                         # for d in range(meshPGD.get_dimension()): Fadd.data[d][item[d]] = Value
@@ -437,7 +437,9 @@ class ProblemPGD(ProblemBase):
 
                     DofB[dd] = np.hstack((DofB[dd], GlobalIndex))
                     if dimBC is None:  # initialization of Xbc
-                        if Value is not 0:  # modification of the second term Xbc
+                        if not np.array_equal(
+                            Value, 0
+                        ):  # modification of the second term Xbc
                             dimBC = dd
                             Xbc = SeparatedArray(
                                 [
@@ -507,7 +509,9 @@ class ProblemPGD(ProblemBase):
                         Value = Value.reshape(-1, 1)
 
                     if dimBC is None:  # initialization of Xbc
-                        if Value is not 0:  # modification of the second term Xbc
+                        if not np.array_equal(
+                            Value, 0
+                        ):  # modification of the second term Xbc
                             dimBC = dd
                             Xbc = SeparatedArray(
                                 [

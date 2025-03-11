@@ -2,7 +2,8 @@ import fedoo as fd
 import numpy as np
 from time import time
 import os
-import pylab as plt
+
+# import pylab as plt
 from numpy import linalg
 
 start = time()
@@ -48,8 +49,8 @@ bottom_right = mesh.nearest_node([L, 0])
 if typeBending == "3nodes":
     top_center = mesh.nearest_node([L / 2, h])
 else:
-    nodes_top1 = mesh.find_nodes(f"X=={L/4} and Y=={h}")
-    nodes_top2 = mesh.find_nodes(f"X=={3*L/4} and Y=={h}")
+    nodes_top1 = mesh.find_nodes(f"X=={L / 4} and Y=={h}")
+    nodes_top2 = mesh.find_nodes(f"X=={3 * L / 4} and Y=={h}")
     top_center = np.hstack((nodes_top1, nodes_top2))
 
 fd.Assembly.create(
@@ -81,7 +82,8 @@ elif mat == 1:
         "Assembling",
         ["Disp", "Stress", "Strain", "Statev", "Wm"],
         output_type="Node",
-        file_format="vtk",
+        file_format="fdz",
+        compressed=True,
     )
     # elm_set = mesh.get_elements_from_nodes(mesh.find_nodes('X<8'))
     # res = pb.add_output('results/bendingPlastic', 'Assembling', ['Disp', 'Stress', 'Strain', 'Statev', 'Wm'], element_set = elm_set )
