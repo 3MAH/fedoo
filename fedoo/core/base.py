@@ -14,7 +14,7 @@ try:
 
     USE_PYPARDISO = True
     USE_UMFPACK = False
-    USE_PETSC = False # only for the direct mumps solver
+    USE_PETSC = False  # only for the direct mumps solver
 except ModuleNotFoundError:
     USE_PYPARDISO = False
 
@@ -22,6 +22,7 @@ if not USE_PYPARDISO:
     try:
         import petsc4py
         import sys
+
         petsc4py.init(sys.argv)
         from petsc4py import PETSc
 
@@ -332,10 +333,10 @@ class ProblemBase:
             Type of solver.
             The possible choice are :
             * 'direct': direct solver. If pypardiso is installed, the
-              pypardiso solver is used. Else, if petsc is installed, the mumps 
-              solver is used. If not, the function scipy.sparse.linalg.spsolve 
-              is used. If sckikit-umfpack is installed, scipy will use the 
-              umfpack solver which is significantly more efficient than the 
+              pypardiso solver is used. Else, if petsc is installed, the mumps
+              solver is used. If not, the function scipy.sparse.linalg.spsolve
+              is used. If sckikit-umfpack is installed, scipy will use the
+              umfpack solver which is significantly more efficient than the
               base scipy solver.
             * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk'
               using the corresponding iterative method from
@@ -410,9 +411,9 @@ class ProblemBase:
                 elif USE_PETSC:
                     global PETSc
                     solver_func = _solver_petsc
-                    kargs['solver_type']='preonly'
-                    kargs['pc_type']='lu'
-                    kargs['pc_factor_mat_solver_type']='mumps'
+                    kargs["solver_type"] = "preonly"
+                    kargs["pc_type"] = "lu"
+                    kargs["pc_factor_mat_solver_type"] = "mumps"
                     print(
                         f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
                     )
@@ -436,7 +437,7 @@ class ProblemBase:
             elif solver == "petsc":
                 global PETSc
 
-                if 'PETSc' not in dir():
+                if "PETSc" not in dir():
                     try:
                         import sys
 

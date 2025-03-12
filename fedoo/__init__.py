@@ -90,7 +90,7 @@ class get_config:
             core.base.USE_UMFPACK = value
             if value:
                 core.base.USE_PYPARDISO = False
-                core.base.USE_PETSC = False                
+                core.base.USE_PETSC = False
                 core.base._reload_external_solvers(get_config())
         elif item == "USE_PYVISTA":
             core.mesh.USE_PYVISTA = value
