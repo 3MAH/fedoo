@@ -23,8 +23,9 @@ class get_config:
         * 'fedoo version': The current version of fedoo (non modifiable)
         * 'USE_SIMCOON': bool that define if the simcoon librairie may be used
         * 'USE_PYPARDISO': bool that define if the pardiso direct solver may be used
+        * 'USE_PETSC': bool that define if the mumps direct solver should be used.
         * 'USE_UMFPACK': bool that define if the scikit-umfpack solver may be used
-          Only one between pardiso and umfpack direct solver may be used.
+          Only one between pardiso, petsc and umfpack direct solver may be used.
         * 'USE_PYVISTA': bool that define if the pyvista library may be used
         * 'USE_MPL': bool that define if the matplotlib library may be used
         * 'USE_PYVISTA_QT': bool that define if the pyvista_qt library
