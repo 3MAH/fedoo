@@ -405,23 +405,23 @@ class ProblemBase:
             if solver == "direct":
                 if USE_PYPARDISO:
                     solver_func = spsolve
-                    print(
-                        f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
-                    )
+                    # print(
+                    #     f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
+                    # )
                 elif USE_PETSC:
                     global PETSc
                     solver_func = _solver_petsc
                     kargs["solver_type"] = "preonly"
                     kargs["pc_type"] = "lu"
                     kargs["pc_factor_mat_solver_type"] = "mumps"
-                    print(
-                        f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
-                    )
+                    # print(
+                    #     f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
+                    # )
                 else:
                     solver_func = sparse.linalg.spsolve
-                    print(
-                        f"Problem {self.name} : direct solver : Scipy direct solver has been utilized : if SCIPY-UMFPACK is installed, it will be used"
-                    )
+                    # print(
+                    #     f"Problem {self.name} : direct solver : Scipy direct solver has been utilized : if SCIPY-UMFPACK is installed, it will be used"
+                    # )
             elif solver in [
                 "cg",
                 "bicg",
