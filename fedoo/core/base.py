@@ -8,18 +8,21 @@ from fedoo.core.modelingspace import ModelingSpace
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 
+# try to find the best available direct solver
 try:
     from pypardiso import spsolve
 
     USE_PYPARDISO = True
     USE_UMFPACK = False
-    USE_PETSC = False
+    USE_PETSC = False # only for the direct mumps solver
 except ModuleNotFoundError:
     USE_PYPARDISO = False
 
 if not USE_PYPARDISO:
     try:
         import petsc4py
+        import sys
+        petsc4py.init(sys.argv)
         from petsc4py import PETSc
 
         USE_PYPARDISO = False
@@ -51,6 +54,8 @@ def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
         from pypardiso import spsolve
     if config_dict["USE_PETSC"]:
+        global PETSc
+
         import petsc4py
         import sys
 
@@ -327,11 +332,11 @@ class ProblemBase:
             Type of solver.
             The possible choice are :
             * 'direct': direct solver. If pypardiso is installed, the
-              pypardiso solver is used. If not, the function
-              scipy.sparse.linalg.spsolve is used instead.
-              If sckikit-umfpack is installed, scipy will use the umfpack
-              solver which is significantly more efficient than the base
-              scipy solver.
+              pypardiso solver is used. Else, if petsc is installed, the mumps 
+              solver is used. If not, the function scipy.sparse.linalg.spsolve 
+              is used. If sckikit-umfpack is installed, scipy will use the 
+              umfpack solver which is significantly more efficient than the 
+              base scipy solver.
             * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk'
               using the corresponding iterative method from
               scipy.sparse.linalg. For instance, 'cg' is the conjugate
@@ -405,8 +410,11 @@ class ProblemBase:
                 elif USE_PETSC:
                     global PETSc
                     solver_func = _solver_petsc
+                    kargs['solver_type']='preonly'
+                    kargs['pc_type']='lu'
+                    kargs['pc_factor_mat_solver_type']='mumps'
                     print(
-                        f"Problem {self.name} : direct solver : PETSC solver has been utilized with standard options : petsc_solver = 'bcgs', pc_type='eisenstat' "
+                        f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
                     )
                 else:
                     solver_func = sparse.linalg.spsolve
@@ -428,17 +436,18 @@ class ProblemBase:
             elif solver == "petsc":
                 global PETSc
 
-                if USE_PETSC:
-                    import sys
+                if 'PETSc' not in dir():
+                    try:
+                        import sys
 
-                    import petsc4py
-                    from petsc4py import PETSc
+                        import petsc4py
+                        from petsc4py import PETSc
 
-                    petsc4py.init(sys.argv)
-                else:
-                    raise NameError(
-                        'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
-                    )
+                        petsc4py.init(sys.argv)
+                    except ImportError:
+                        raise ImportError(
+                            'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
+                        )
 
                 solver_func = _solver_petsc
             elif solver == "pardiso":
@@ -494,6 +503,8 @@ def _solver_petsc(
     pc_factor_mat_solver_type=None,
     **kargs,
 ):
+    global PETSc
+
     A_petsc = PETSc.Mat().createAIJWithArrays(A.shape, (A.indptr, A.indices, A.data))
     B_petsc = PETSc.Vec().createWithArray(B)
     ksp = PETSc.KSP()
