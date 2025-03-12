@@ -797,10 +797,10 @@ class Assembly(AssemblyBase):
         Parameters:
             - pb: the problem associated to the assembly
         """
+        self.weakform.initialize(self, pb)
+
         if self.weakform.constitutivelaw is not None:
             self.weakform.constitutivelaw.initialize(self, pb)
-
-        self.weakform.initialize(self, pb)
 
         self._pb = pb  # set the associated problem
         self.sv_start = dict(

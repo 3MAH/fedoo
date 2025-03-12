@@ -34,7 +34,7 @@ class ElasticAnisotropic(Mechanical3D):
 
     def update(self, assembly, pb):
         # linear problem = no need to recompute tangent matrix if it has already been computed
-        if "TangentMatrix" in assembly.sv:
+        if not(assembly._nlgeom) and "TangentMatrix" in assembly.sv:
             H = assembly.sv["TangentMatrix"]
         else:
             H = self.get_tangent_matrix(assembly)
