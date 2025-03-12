@@ -47,6 +47,7 @@ class get_config:
             "fedoo version": __version__,
             "USE_SIMCOON": constitutivelaw.simcoon_umat.USE_SIMCOON,
             "USE_PYPARDISO": core.base.USE_PYPARDISO,
+            "USE_PETSC": core.base.USE_PETSC,
             "USE_UMFPACK": core.base.USE_UMFPACK,
             "USE_PYVISTA": core.mesh.USE_PYVISTA,
             "USE_MPL": core.dataset.USE_MPL,
@@ -76,12 +77,20 @@ class get_config:
             core.base.USE_PYPARDISO = value
             if value:
                 core.base.USE_UMFPACK = False
-                core.base._reload_external_solvers(self)
+                core.base.USE_PETSC = False
+                core.base._reload_external_solvers(get_config())
+        elif item == "USE_PETSC":
+            core.base.USE_PETSC = value
+            if value:
+                core.base.USE_PYPARDISO = False
+                core.base.USE_UMFPACK = False
+                core.base._reload_external_solvers(get_config())
         elif item == "USE_UMFPACK":
             core.base.USE_UMFPACK = value
             if value:
                 core.base.USE_PYPARDISO = False
-                core.base._reload_external_solvers(self)
+                core.base.USE_PETSC = False                
+                core.base._reload_external_solvers(get_config())
         elif item == "USE_PYVISTA":
             core.mesh.USE_PYVISTA = value
             core.dataset.USE_PYVISTA = value
