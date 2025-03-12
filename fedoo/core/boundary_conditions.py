@@ -554,7 +554,7 @@ class MPC(BCBase):
         To create a MPC of the equation
         4*Ux_12 - 2*Uz_15 = 7 (Ux_12 is the displacement along x of the 12th node)
         use the following MPC:
-        
+
           >>> MPC([12,15], ['Disp_X', 'Disp_Z'], [4, -2], 7)
 
         Parameters
