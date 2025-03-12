@@ -8,31 +8,59 @@ from fedoo.core.modelingspace import ModelingSpace
 import scipy.sparse.linalg
 import scipy.sparse as sparse
 
-USE_PETSC = None
+# try to find the best available direct solver
 try:
     from pypardiso import spsolve
 
     USE_PYPARDISO = True
     USE_UMFPACK = False
+    USE_PETSC = False # only for the direct mumps solver
 except ModuleNotFoundError:
     USE_PYPARDISO = False
+
+if not USE_PYPARDISO:
+    try:
+        import petsc4py
+        import sys
+        petsc4py.init(sys.argv)
+        from petsc4py import PETSc
+
+        USE_PYPARDISO = False
+        USE_UMFPACK = False
+        USE_PETSC = True
+    except ModuleNotFoundError:
+        USE_PETSC = False
+
+if not USE_PYPARDISO and not USE_PETSC:
     try:
         from scikits.umfpack import spsolve
 
         scipy.sparse.linalg.use_solver(assumeSortedIndicesbool=True)
+        USE_PYPARDISO = False
         USE_UMFPACK = True
-    except ImportError:
-        print(
-            "WARNING: no fast direct sparse solver has been found. \
-             Consider installing pypardiso or scikit-umfpack to improve \
-             computation performance"
-        )
+        USE_PETSC = False
+    except ModuleNotFoundError:
         USE_UMFPACK = False
+
+if not USE_PYPARDISO and not USE_PETSC and not USE_UMFPACK:
+    raise ImportError(
+        "WARNING: no fast direct sparse solver has been found. "
+        "Consider installing pypardiso, petsc, or scikit-umfpack to improve "
+        "computation performance"
+    )
 
 
 def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
         from pypardiso import spsolve
+    if config_dict["USE_PETSC"]:
+        global PETSc
+
+        import petsc4py
+        import sys
+
+        petsc4py.init(sys.argv)
+        from petsc4py import PETSc
     if config_dict["USE_UMFPACK"]:
         from scikits.umfpack import spsolve
 
@@ -45,7 +73,7 @@ def _reload_external_solvers(config_dict):
 class MeshBase:
     """Base class for Mesh object."""
 
-    __dic = {}
+    __dic: dict[str, "MeshBase"] = {}
 
     def __init__(self, name=""):
         assert isinstance(name, str), "name must be a string"
@@ -75,7 +103,7 @@ class MeshBase:
 class AssemblyBase:
     """Base class for Assembly object."""
 
-    __dic = {}
+    __dic: dict[str, "AssemblyBase"] = {}
 
     def __init__(self, name="", space=None):
         assert isinstance(name, str), "An name must be a string"
@@ -172,7 +200,7 @@ class AssemblyBase:
 class ConstitutiveLaw:
     """Base class for constitutive laws (cf constitutive law lib)."""
 
-    __dic = {}
+    __dic: dict[str, "ConstitutiveLaw"] = {}
 
     def __init__(self, name=""):
         assert isinstance(name, str), "An name must be a string"
@@ -304,11 +332,11 @@ class ProblemBase:
             Type of solver.
             The possible choice are :
             * 'direct': direct solver. If pypardiso is installed, the
-              pypardiso solver is used. If not, the function
-              scipy.sparse.linalg.spsolve is used instead.
-              If sckikit-umfpack is installed, scipy will use the umfpack
-              solver which is significantly more efficient than the base
-              scipy solver.
+              pypardiso solver is used. Else, if petsc is installed, the mumps 
+              solver is used. If not, the function scipy.sparse.linalg.spsolve 
+              is used. If sckikit-umfpack is installed, scipy will use the 
+              umfpack solver which is significantly more efficient than the 
+              base scipy solver.
             * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk'
               using the corresponding iterative method from
               scipy.sparse.linalg. For instance, 'cg' is the conjugate
@@ -376,8 +404,23 @@ class ProblemBase:
             if solver == "direct":
                 if USE_PYPARDISO:
                     solver_func = spsolve
+                    print(
+                        f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
+                    )
+                elif USE_PETSC:
+                    global PETSc
+                    solver_func = _solver_petsc
+                    kargs['solver_type']='preonly'
+                    kargs['pc_type']='lu'
+                    kargs['pc_factor_mat_solver_type']='mumps'
+                    print(
+                        f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
+                    )
                 else:
                     solver_func = sparse.linalg.spsolve
+                    print(
+                        f"Problem {self.name} : direct solver : Scipy direct solver has been utilized : if SCIPY-UMFPACK is installed, it will be used"
+                    )
             elif solver in [
                 "cg",
                 "bicg",
@@ -391,17 +434,21 @@ class ProblemBase:
                 return_info = True
                 precond = kargs.pop("precond", True)
             elif solver == "petsc":
-                global USE_PETSC, PETSc
-                if USE_PETSC is None:
-                    try:
-                        import petsc4py
-                    except ModuleNotFoundError:
-                        raise ModuleNotFoundError("PETSc is not installed.")
-                    import sys
+                global PETSc
 
-                    petsc4py.init(sys.argv)
-                    from petsc4py import PETSc
-                USE_PETSC = True
+                if 'PETSc' not in dir():
+                    try:
+                        import sys
+
+                        import petsc4py
+                        from petsc4py import PETSc
+
+                        petsc4py.init(sys.argv)
+                    except ImportError:
+                        raise ImportError(
+                            'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
+                        )
+
                 solver_func = _solver_petsc
             elif solver == "pardiso":
                 if USE_PYPARDISO:
@@ -456,6 +503,8 @@ def _solver_petsc(
     pc_factor_mat_solver_type=None,
     **kargs,
 ):
+    global PETSc
+
     A_petsc = PETSc.Mat().createAIJWithArrays(A.shape, (A.indptr, A.indices, A.data))
     B_petsc = PETSc.Vec().createWithArray(B)
     ksp = PETSc.KSP()

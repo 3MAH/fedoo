@@ -23,8 +23,9 @@ class get_config:
         * 'fedoo version': The current version of fedoo (non modifiable)
         * 'USE_SIMCOON': bool that define if the simcoon librairie may be used
         * 'USE_PYPARDISO': bool that define if the pardiso direct solver may be used
+        * 'USE_PETSC': bool that define if the mumps direct solver should be used.
         * 'USE_UMFPACK': bool that define if the scikit-umfpack solver may be used
-          Only one between pardiso and umfpack direct solver may be used.
+          Only one between pardiso, petsc and umfpack direct solver may be used.
         * 'USE_PYVISTA': bool that define if the pyvista library may be used
         * 'USE_MPL': bool that define if the matplotlib library may be used
         * 'USE_PYVISTA_QT': bool that define if the pyvista_qt library
@@ -47,6 +48,7 @@ class get_config:
             "fedoo version": __version__,
             "USE_SIMCOON": constitutivelaw.simcoon_umat.USE_SIMCOON,
             "USE_PYPARDISO": core.base.USE_PYPARDISO,
+            "USE_PETSC": core.base.USE_PETSC,
             "USE_UMFPACK": core.base.USE_UMFPACK,
             "USE_PYVISTA": core.mesh.USE_PYVISTA,
             "USE_MPL": core.dataset.USE_MPL,
@@ -76,12 +78,20 @@ class get_config:
             core.base.USE_PYPARDISO = value
             if value:
                 core.base.USE_UMFPACK = False
-                core.base._reload_external_solvers(self)
+                core.base.USE_PETSC = False
+                core.base._reload_external_solvers(get_config())
+        elif item == "USE_PETSC":
+            core.base.USE_PETSC = value
+            if value:
+                core.base.USE_PYPARDISO = False
+                core.base.USE_UMFPACK = False
+                core.base._reload_external_solvers(get_config())
         elif item == "USE_UMFPACK":
             core.base.USE_UMFPACK = value
             if value:
                 core.base.USE_PYPARDISO = False
-                core.base._reload_external_solvers(self)
+                core.base.USE_PETSC = False                
+                core.base._reload_external_solvers(get_config())
         elif item == "USE_PYVISTA":
             core.mesh.USE_PYVISTA = value
             core.dataset.USE_PYVISTA = value

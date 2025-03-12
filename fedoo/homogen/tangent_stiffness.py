@@ -57,6 +57,8 @@ def get_homogenized_stiffness(assemb, meshperio=True, **kargs):
 def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     #################### PERTURBATION METHODE #############################
     solver = kargs.get("solver", "direct")
+    solver_type = kargs.get("solver_type", None)
+    pc_type = kargs.get("pc_type", None)
 
     if pb is None:
         pb = ProblemBase.get_active()
@@ -113,7 +115,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     if "_perturbation" not in pb.get_all():
         # initialize perturbation problem
         pb_post_tt = Problem(0, 0, 0, mesh, name="_perturbation")
-        pb_post_tt.set_solver(solver)
+        pb_post_tt.set_solver(solver, solver_type=solver_type, pc_type=pc_type)
 
         pb.make_active()
 
