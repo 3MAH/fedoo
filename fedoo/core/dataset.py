@@ -138,71 +138,109 @@ class DataSet:
         Parameters
         ----------
         field : str (optional)
-            The name of the field to plot. If no name is given, plot only the mesh.
-        component : int | str (default = 0)
+            The name of the field to plot. If no name is given, plot only the
+            mesh.
+
+        component : int | str, default = 0
             The data component to plot in case of vector data.
-            component = 'vm' to plot the von-mises stress from a stress field.
-            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
-            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5
-            for tensor components using the voigt notations.
+            The available str components are:
+
+            * 'X', 'Y' and 'Z'; respectively equivalent to 0, 1 and 2
+              for vector components.
+            * 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively
+              equivalent to 0, 1, 2, 3, 4 and 5 for tensor using
+              the voigt notations.
+            * 'vm' to plot the von-mises stress from a stress field.
+            * 'pressure' to extract the hydrostatic pressure of a stress field.
+            * 'norm' to compute the vector euclidean norm.
+
         data_type : str in {'Node', 'Element', 'GaussPoint'} - Optional
-            The type of data to plot (defined at nodes, elements au gauss integration points).
-            If the existing data doesn't match to the specified one, the data are converted before
-            plotted.
-            For instance data_type = 'Node' make en average of data from adjacent
-            elements at nodes. This allow a more smooth plot.
-            It the type is not specified, look for any type of data and, if the data
-            is found, draw the field without conversion.
+            The type of data to plot (defined at nodes, elements au gauss
+            integration points). If the existing data doesn't match to the
+            specified one, the data are converted before plotted.
+            For instance data_type = 'Node' make en average of data from
+            adjacent elements at nodes. This allow a more smooth plot.
+            It the type is not specified, look for any type of data and, if the
+            data is found, draw the field without conversion.
+
         scale : float (default = 1)
-            The scale factor used for the nodes displacement, using the 'Disp' vector field
+            The scale factor used for the nodes displacement, using the 'Disp'
+            vector field.
             If scale = 0, the field is plotted on the underformed shape.
+
         show : bool (default = True)
-            If show = True, the plot is rendered in a new window.
-            If show = False, the current pyvista plotter is returned without rendering.
-            show = False allow to customize the plot with pyvista before rendering it.
+
+            * If show = True, the plot is rendered in a new window.
+            * If show = False, the current pyvista plotter is returned without
+              rendering.
+            * show = False allow to customize the plot with pyvista before
+              rendering it.
+
         show_edges : bool (default = True)
             if True, the mesh edges are shown
+
         clim : sequence[float], optional
-            Sequence of two float to define data boundaries for color bar. Defaults to minimum and maximum of data.
+            Sequence of two float to define data boundaries for color bar.
+            Defaults to minimum and maximum of data.
+
         node_labels : bool | list (default = False)
             If True, show node labels (node indexe)
-            If a list is given, print the label given in node_labels[i] for each node i.
+            If a list is given, print the label given in node_labels[i] for
+            each node i.
+
         element_labels : bool | list (default = False)
             If True, show element labels (element indexe)
-            If a list is given, print the label given in element_labels[i] for each element i.
+            If a list is given, print the label given in element_labels[i] for
+            each element i.
+
         show_nodes : bool|float (default = False)
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
+
         show_normals : bool|float (default = False)
             Plot the face normals. If True,
             the vectors are shown with a default magnitude.
             If float, show_normals is the required magnitude.
             Only available for 1D or 2D mesh.
+
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
-            If pyvista.Plotter object, plot the mesh in the given plotter
-            If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
-            If 'pv': use the standard pyvista plotter
-            If None: use the background plotter if available, or pyvista plotter if not.
+
+            * If pyvista.Plotter object, plot the mesh in the given plotter
+            * If 'qt': use the background plotter of pyvistaqt (need the lib
+              pyvistaqt)
+            * If 'pv': use the standard pyvista plotter
+            * If None: use the background plotter if available, or pyvista
+              plotter if not.
+
         screenshot: str, optional
             If defined, indicated a filename to save the plot.
+
         azimuth: float, default = 30.
-            Azimuth angle of the camera around the scene (not used for 2D scene)
+            Azimuth angle of the camera around the scene
+            (not used for 2D scene)
+
         elevation: float, default = 15.
-            Elevaltion angle of the camera around the scene (not used for 2D scene).
+            Elevaltion angle of the camera around the scene
+            (not used for 2D scene).
+
         roll: float, default = 0
-            Roll angle of the camera. The default state (roll angle = 0.) is set
-            with the y direction on the up.
+            Roll angle of the camera. The default state (roll angle = 0.) is
+            set with the y direction on the up.
+
         title: str | None
             Title of the plot. By default the title is field name
             and the component is printed.
+
         title_size: float
             Size of the title
+
         window_size: tuple
             Window size in pixels. Defaults to [1024, 768]
 
 
         **kwargs: dict, default = 15.
-            See pyvista.Plotter.add_mesh() in the document of pyvista for additional usefull options.
+            See pyvista.Plotter.add_mesh() in the document of pyvista for 
+            additional usefull options.
         """
 
         if not (USE_PYVISTA):
@@ -494,6 +532,9 @@ class DataSet:
             elif component == "vm":
                 # Try to compute the von mises stress
                 data = StressTensorList(data).von_mises()
+            elif component == "pressure":
+                # Try to compute the pressure stress
+                data = StressTensorList(data).pressure()
             else:
                 if isinstance(component, str):
                     component = {
@@ -1005,66 +1046,101 @@ class MultiFrameDataSet(DataSet):
         Parameters
         ----------
         field : str (optional)
-            The name of the field to plot. If no name is given, plot only the mesh.
-        component : int | str (default = 0)
+            The name of the field to plot. If no name is given, plot only the
+            mesh.
+
+        component : int | str, default = 0
             The data component to plot in case of vector data.
-            component = 'vm' to plot the von-mises stress from a stress field.
-            compoment = 'X', 'Y' and 'Z' are respectively equivalent to 0, 1 and 2 for vector component.
-            compoment = 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively equivalent to 0, 1, 2, 3, 4 and 5
-            for tensor components using the voigt notations.
+            The available str components are:
+
+            * 'X', 'Y' and 'Z'; respectively equivalent to 0, 1 and 2
+              for vector components.
+            * 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively
+              equivalent to 0, 1, 2, 3, 4 and 5 for tensor using
+              the voigt notations.
+            * 'vm' to plot the von-mises stress from a stress field.
+            * 'pressure' to extract the hydrostatic pressure of a stress field.
+            * 'norm' to compute the vector euclidean norm.
+
         data_type : str in {'Node', 'Element', 'GaussPoint'} - Optional
-            The type of data to plot (defined at nodes, elements au gauss integration points).
-            If the existing data doesn't match to the specified one, the data are converted before
-            plotted.
-            For instance data_type = 'Node' make en average of data from adjacent
-            elements at nodes. This allow a more smooth plot.
-            It the type is not specified, look for any type of data and, if the data
-            is found, draw the field without conversion.
+            The type of data to plot (defined at nodes, elements au gauss
+            integration points). If the existing data doesn't match to the
+            specified one, the data are converted before plotted.
+            For instance data_type = 'Node' make en average of data from
+            adjacent elements at nodes. This allow a more smooth plot.
+            It the type is not specified, look for any type of data and,
+            if the data is found, draw the field without conversion.
+
         scale : float (default = 1)
-            The scale factor used for the nodes displacement, using the 'Disp' vector field
+            The scale factor used for the nodes displacement, using the 'Disp'
+            vector field.
             If scale = 0, the field is plotted on the underformed shape.
+
         show : bool (default = True)
-            If show = True, the plot is rendered in a new window.
-            If show = False, the current pyvista plotter is returned without rendering.
-            show = False allow to customize the plot with pyvista before rendering it.
+
+            * If show = True, the plot is rendered in a new window.
+            * If show = False, the current pyvista plotter is returned
+              without rendering.
+            * show = False allow to customize the plot with pyvista before
+              rendering it.
+
         show_edges : bool (default = True)
             if True, the mesh edges are shown
+
         clim: sequence[float], optional
-            Sequence of two float to define data boundaries for color bar. Defaults to minimum and maximum of data.
+            Sequence of two float to define data boundaries for color bar.
+            Defaults to minimum and maximum of data.
+
         node_labels : bool | list (default = False)
             If True, show node labels (node indexe)
-            If a list is given, print the label given in node_labels[i] for each node i.
+            If a list is given, print the label given in node_labels[i] for
+            each node i.
+
         element_labels : bool | list (default = False)
             If True, show element labels (element indexe)
-            If a list is given, print the label given in element_labels[i] for each element i.
+            If a list is given, print the label given in element_labels[i] for
+            each element i.
+
         show_nodes : bool|float (default = False)
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
+
         show_normals : bool|float (default = False)
             Plot the face normals. If True,
             the vectors are shown with a default magnitude.
             If float, show_normals is the required magnitude.
             Only available for 1D or 2D mesh.
+
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
-            If pyvista.Plotter object, plot the mesh in the given plotter
-            If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
-            If 'pv': use the standard pyvista plotter
-            If None: use the background plotter if available, or pyvista plotter if not.
+
+            * If pyvista.Plotter object, plot the mesh in the given plotter
+            * If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
+            * If 'pv': use the standard pyvista plotter
+            * If None: use the background plotter if available, or pyvista plotter if not.
+
         screenshot: str, optional
             If defined, indicated a filename to save the plot.
+
         azimuth: float, default = 30.
-            Azimuth angle of the camera around the scene (not used for 2D scene)
+            Azimuth angle of the camera around the scene
+            (not used for 2D scene)
+
         elevation: float, default = 15.
-            Elevaltion angle of the camera around the scene (not used for 2D scene).
+            Elevaltion angle of the camera around the scene
+            (not used for 2D scene).
+
         roll: float, default = 0
-            Roll angle of the camera. The default state (roll angle = 0.) is set
-            with the y direction on the up.
+            Roll angle of the camera. The default state (roll angle = 0.)
+            is set with the y direction on the up.
+
         iteration : int (Optional)
-            num of the iteration to plot. If None, the current iteration is plotted.
-            If no current iteration is defined, the last iteration is loaded and plotted.
+            num of the iteration to plot. If None, the current iteration is
+            plotted. If no current iteration is defined, the last iteration
+            is loaded and plotted.
 
         **kwargs: dict, optional
-            See pyvista.Plotter.add_mesh() in the document of pyvista for additional usefull options.
+            See pyvista.Plotter.add_mesh() in the document of pyvista for
+            additional usefull options.
         """
         if iteration is None:
             if self.loaded_iter is None:

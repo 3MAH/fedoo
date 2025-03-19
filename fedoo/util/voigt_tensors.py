@@ -132,13 +132,13 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         )
 
     def trace(self):
-        return (1 / 3) * (self[0] + self[1] + self[2])
+        return (self[0] + self[1] + self[2])
 
     def hydrostatic(self):
         """
         Return the hydrostatic part of the Tensor using void form
         """
-        trace = self.trace()
+        trace = (1 / 3) * self.trace()
         return self.__class__([trace, trace, trace, 0, 0, 0])
 
     def diagonalize(self):
@@ -222,6 +222,7 @@ class StressTensorList(_SymetricTensorList):
         """
         Return the vonMises stress
         """
+        # sim.Mises_stress(self.asarray()) # not vectorized for now
         return np.sqrt(
             0.5
             * (
@@ -231,6 +232,9 @@ class StressTensorList(_SymetricTensorList):
                 + 6 * (self[3] ** 2 + self[4] ** 2 + self[5] ** 2)
             )
         )
+
+    def pressure(self):
+        return (1 / 3) * self.trace()
 
     def to_strain(self):
         return StrainTensorList(self[:3] + [self[i] * 2 for i in [3, 4, 5]])
