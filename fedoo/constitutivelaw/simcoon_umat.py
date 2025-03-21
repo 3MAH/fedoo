@@ -3,11 +3,17 @@
 
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
+import warnings
 
 try:
     from simcoon import simmit as sim
+    try:
+        from simcoon import __version__
+        USE_SIMCOON = True
+    except ImportError:
+        warnings.warn('Simcoon version is to old. Simcoon ignored.')
+        USE_SIMCOON = False
 
-    USE_SIMCOON = True
 except ImportError:
     USE_SIMCOON = False
 
@@ -15,24 +21,26 @@ import numpy as np
 
 
 class Simcoon(Mechanical3D):
-    # """
-    # Linear full Anistropic constitutive law defined from the rigidity matrix H.
+    """Constitutive laws from the simcoon library.
 
-    # The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    The constitutive Law should be associated with 
+    :mod:`fedoo.weakform.StressEquilibrium`
 
-    # Parameters
-    # ----------
-    # H : list of list or an array (shape=(6,6)) of scalars or arrays of gauss point values.
-    #     The rigidity matrix.
-    #     If H is a list of gauss point values, the shape shoud be H.shape = (6,6,NumberOfGaussPoints)
-    # name : str, optional
-    #     The name of the constitutive law
-    # """
+    Parameters
+    ----------
+    umat_name: str
+        Name of the constitutive law.
+    props: numpy.array
+        The constitive laws properties
+    name : str
+        The name of the constitutive law
+    """
 
     def __init__(self, umat_name, props, name=""):
         if not (USE_SIMCOON):
             raise NameError(
-                "Simcoon library need to be installed for using the constitutive laws"
+                "Simcoon library need to be installed for using the "
+                "constitutive laws"
             )
 
         # props is a nparray containing all the material variables
@@ -50,8 +58,13 @@ class Simcoon(Mechanical3D):
         )  # if props is 1d -> take it as column.
         # ensure a fortran order for compatibility with armadillo
 
-        self.use_elastic_lt = True  # option to use the elastic tangeant matrix (in principle = initial tangent matrix) at the begining of each time step
+        self.use_elastic_lt = True
+        # option to use the elastic tangeant matrix
+        # (in principle = initial tangent matrix)
+        # at the begining of each time step
 
+        # _Lt_from_F attribute is set to True if the tangent matrix is related
+        # to F instead of log epsilon, ie for hyper elastic materials
         if umat_name == "ELISO":
             self.n_statev = 1
             self.props_label = {"E": 0, "nu": 1, "alpha": 2}
@@ -107,7 +120,9 @@ class Simcoon(Mechanical3D):
                 "K": 4,
                 "m": 5,
                 "h": 6,
-            }  # powerlaw sigma_e = sigmaY + k * eps_p^m - #h=linear kinematical hardening
+            }
+            # powerlaw sigma_e = sigmaY + k * eps_p^m -
+            # h=linear kinematical hardening
             self.statev_label = {
                 "T": 0,
                 "P": 1,
@@ -251,13 +266,18 @@ class Simcoon(Mechanical3D):
         elif umat_name == "EPHIN":
             n_plas = self.props[
                 0, 3
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            ]
+            # should be the same for all gauss_points. If not, needs several
+            # assemblies
             self.n_statev = 7 + n_plas * 7
             self.props_label = {
                 "E": 0,
                 "nu": 1,
                 "alpha": 2,
-            }  # several plastic laws i "sigmaY":4+i*9, "k":4+i*9+1, "m":4+i*9+2, "F_hill":4+i*9+3, "G_hill":4+i*9+4, "H_hill":4+i*9+5, "L_hill":4+i*9+6, "M_hill":4+i*9+7, "N_hill":4+i*9+8
+            }
+            # several plastic laws i "sigmaY":4+i*9, "k":4+i*9+1, "m":4+i*9+2,
+            # "F_hill":4+i*9+3, "G_hill":4+i*9+4, "H_hill":4+i*9+5,
+            # "L_hill":4+i*9+6, "M_hill":4+i*9+7, "N_hill":4+i*9+8
             self.statev_label = {
                 "T": 0,
                 "EP": slice(1, 7),
@@ -300,7 +320,9 @@ class Simcoon(Mechanical3D):
         elif umat_name == "ZENNK":
             n_kelvin = self.props[
                 0, 3
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            ]
+            # should be the same for all gauss_points. If not, needs several
+            # assemblies
             self.n_statev = 7 + 7 * n_kelvin
             self.props_label = {
                 "E0": 0,
@@ -314,7 +336,9 @@ class Simcoon(Mechanical3D):
         elif umat_name == "PRONK":
             n_prony = self.props[
                 0, 3
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            ]
+            # should be the same for all gauss_points. If not, needs several
+            # assemblies
             self.n_statev = 7 + 7 * n_prony
             self.props_label = {
                 "E0": 0,
@@ -328,14 +352,18 @@ class Simcoon(Mechanical3D):
         elif umat_name == "SMAMO":
             nvariants = self.props[
                 0, 7
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            ]
+            # should be the same for all gauss_points. If not, needs several
+            # assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
         elif umat_name == "SMAMC":
             nvariants = self.props[
                 0, 8
-            ]  # should be the same for all gauss_points. If not, needs several assemblies
+            ]
+            # should be the same for all gauss_points. If not, needs several
+            # assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
@@ -346,6 +374,7 @@ class Simcoon(Mechanical3D):
                 "kappa": 1,
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         elif umat_name == "MOORI":
             self.n_statev = 1
             self.props_label = {
@@ -354,6 +383,7 @@ class Simcoon(Mechanical3D):
                 "kappa": 2,
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         elif umat_name == "YEOHH":
             self.n_statev = 1
             self.props_label = {
@@ -363,6 +393,7 @@ class Simcoon(Mechanical3D):
                 "kappa": 3,
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         elif umat_name == "ISHAH":
             self.n_statev = 1
             self.props_label = {
@@ -372,6 +403,7 @@ class Simcoon(Mechanical3D):
                 "kappa": 3,
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         elif umat_name == "GETHH":
             self.n_statev = 1
             self.props_label = {
@@ -380,17 +412,22 @@ class Simcoon(Mechanical3D):
                 "kappa": 2,
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         elif umat_name == "SWANH":
             self.n_statev = 1
             self.props_label = {
                 "N_Swanson": 0,
                 "kappa": 1,
-                # Nb of Swanson parameters : 2+i*4, i being the number of Swanson modes
+                # Nb of Swanson parameters : 2+i*4, i being the number of
+                # Swanson modes
                 # (A, B, alpha, beta) are vectors of size N_Swanson
             }
             self.statev_label = {"T": 0}
+            self._Lt_from_F = True
         else:
-            raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
+            raise ValueError(
+                "Invalid umat_name: Expected a valid 5 char string."
+            )
 
     def initialize(self, assembly, pb):
         if "Statev" not in assembly.sv:
@@ -408,58 +445,45 @@ class Simcoon(Mechanical3D):
                 F = np.empty((3, 3, assembly.n_gauss_points), order="F")
                 F[...] = np.eye(3).reshape(3, 3, 1)
                 assembly.sv["F"] = F
+            else:
+                F = np.array([])
 
-            assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
+            assembly.sv["Wm"] = np.zeros(
+                (4, assembly.n_gauss_points), order="F"
+            )
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
             # )
 
             # Launch the UMAT to compute the elastic matrix in "TangentMatrix"
             zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
-            try:
-                if assembly._nlgeom:
-                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                        self.umat_name,
-                        zeros_6,
-                        zeros_6,
-                        F,
-                        F,
-                        zeros_6,
-                        DR,
-                        self.props,
-                        assembly.sv["Statev"],
-                        0,
-                        0,
-                        assembly.sv["Wm"],
+
+            if assembly.space.get_dimension() == "2Dstress":
+                ndi = 2
+            else:
+                ndi = 3
+
+            (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
+                self.umat_name,
+                zeros_6,
+                zeros_6,
+                F,
+                F,
+                zeros_6,
+                DR,
+                self.props,
+                assembly.sv["Statev"],
+                0,
+                0,
+                assembly.sv["Wm"],
+                ndi=ndi
+            )
+
+            if ndi == 2:  # plane stress assumption
+                if assembly.space.get_dimension() == "2Dstress":
+                    assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
+                        assembly, "2Dstress"
                     )
-                else:
-                    (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                        self.umat_name,
-                        zeros_6,
-                        zeros_6,
-                        np.array([]),
-                        np.array([]),
-                        zeros_6,
-                        DR,
-                        self.props,
-                        assembly.sv["Statev"],
-                        0,
-                        0,
-                        assembly.sv["Wm"],
-                    )
-            except:  # for compatility with previous simcoon versions
-                (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                    self.umat_name,
-                    zeros_6,
-                    zeros_6,
-                    zeros_6,
-                    DR,
-                    self.props,
-                    assembly.sv["Statev"],
-                    0,
-                    0,
-                    assembly.sv["Wm"],
-                )
 
             if self.use_elastic_lt:
                 assembly.sv["ElasticMatrix"] = assembly.sv["TangentMatrix"]
@@ -470,95 +494,57 @@ class Simcoon(Mechanical3D):
         else:
             de = assembly.sv["Strain"] - assembly.sv_start["Strain"]
 
-        # if 'Stress' not in assembly.sv or (np.isarray(assembly.sv['Stress']) and assembly.sv['Stress'] == 0):
-        #     assembly.sv['Stress'] = StressTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
-
-        # if np.isscalar(assembly.sv_start['Strain']) and assembly.sv_start['Strain'] == 0:
-        #     assembly.sv_start['Strain'] = StrainTensorList(np.zeros((6, assembly.n_gauss_points), order='F'))
-
         if "Temp" in assembly.sv:
             temp = assembly.sv["Temp"]
         else:
             temp = None
 
-        try:
-            if assembly._nlgeom:
-                (
-                    stress,
-                    assembly.sv["Statev"],
-                    assembly.sv["Wm"],
-                    assembly.sv["TangentMatrix"],
-                ) = sim.umat(
-                    self.umat_name,
-                    assembly.sv_start["Strain"].array,
-                    de.array,
-                    assembly.sv_start["F"],
-                    assembly.sv["F"],
-                    assembly.sv_start["Stress"].array,
-                    assembly.sv["DR"],
-                    self.props,
-                    assembly.sv_start["Statev"],
-                    pb.time,
-                    pb.dtime,
-                    assembly.sv_start["Wm"],
-                    temp,
-                )
-            else:
-                (
-                    stress,
-                    assembly.sv["Statev"],
-                    assembly.sv["Wm"],
-                    assembly.sv["TangentMatrix"],
-                ) = sim.umat(
-                    self.umat_name,
-                    assembly.sv_start["Strain"].array,
-                    de.array,
-                    np.array([]),
-                    np.array([]),
-                    assembly.sv_start["Stress"].array,
-                    assembly.sv["DR"],
-                    self.props,
-                    assembly.sv_start["Statev"],
-                    pb.time,
-                    pb.dtime,
-                    assembly.sv_start["Wm"],
-                    temp,
-                )
-        except:  # for compatibility with previous simcoon versions
-            (
-                stress,
-                assembly.sv["Statev"],
-                assembly.sv["Wm"],
-                assembly.sv["TangentMatrix"],
-            ) = sim.umat(
-                self.umat_name,
-                assembly.sv_start["Strain"].array,
-                de.array,
-                assembly.sv_start["Stress"].array,
-                assembly.sv["DR"],
-                self.props,
-                assembly.sv_start["Statev"],
-                pb.time,
-                pb.dtime,
-                assembly.sv_start["Wm"],
-                temp,
+        if assembly._nlgeom:
+            F0 = assembly.sv_start["F"]
+            F1 = assembly.sv["F"]
+        else:
+            F0 = F1 = np.array([])
+
+        if assembly.space.get_dimension() == "2Dstress":
+            ndi = 2
+        else:
+            ndi = 3
+
+        (
+            stress,
+            assembly.sv["Statev"],
+            assembly.sv["Wm"],
+            assembly.sv["TangentMatrix"],
+        ) = sim.umat(
+            self.umat_name,
+            assembly.sv_start["Strain"].array,
+            de.array,
+            F0,
+            F1,
+            assembly.sv_start["Stress"].array,
+            assembly.sv["DR"],
+            self.props,
+            assembly.sv_start["Statev"],
+            pb.time,
+            pb.dtime,
+            assembly.sv_start["Wm"],
+            temp,
+            ndi=ndi
+        )
+
+        if ndi == 2:  # plane stress assumption
+            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
+                assembly, "2Dstress"
             )
-
-        # work only in global local frame
-
-        #### TEST ######
-        # assembly.sv['TangentMatrix'][:,:3] = assembly.sv['TangentMatrix'][:,:3] + stress.reshape(6,1,-1)
-        # F = np.transpose(assembly.sv['F'], (2,0,1))
-        # J = np.linalg.det(F)
-        # print(J.min())
-        # assembly.sv['TangentMatrix'] = (1/J)*assembly.sv['TangentMatrix']
-        # stress /= J
-        # assembly.sv['TangentMatrix'] = 5*assembly.sv['TangentMatrix']
-        #### END TEST #####
 
         assembly.sv["Stress"] = StressTensorList(stress)
         # to check the symetriy of the tangentmatrix :
-        # print(np.abs(assembly.sv['TangentMatrix'] - assembly.sv['TangentMatrix'].transpose((1,0,2))).max())
+        # print(
+        #     np.abs(
+        #         assembly.sv["TangentMatrix"]
+        #         - assembly.sv["TangentMatrix"].transpose((1, 0, 2))
+        #     ).max()
+        # )
 
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:

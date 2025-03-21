@@ -7,6 +7,7 @@ from fedoo.core.modelingspace import ModelingSpace
 
 import scipy.sparse.linalg
 import scipy.sparse as sparse
+import warnings
 
 # try to find the best available direct solver
 try:
@@ -44,7 +45,7 @@ if not USE_PYPARDISO and not USE_PETSC:
         USE_UMFPACK = False
 
 if not USE_PYPARDISO and not USE_PETSC and not USE_UMFPACK:
-    raise ImportError(
+    warnings.warn(
         "WARNING: no fast direct sparse solver has been found. "
         "Consider installing pypardiso, petsc, or scikit-umfpack to improve "
         "computation performance"

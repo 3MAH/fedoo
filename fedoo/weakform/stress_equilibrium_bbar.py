@@ -128,3 +128,36 @@ class StressEquilibriumBbar(StressEquilibrium):
                 self.space.new_vector("_Disp", ("_DispX", "_DispY", "_DispZ"))
             else:
                 self.space.new_vector("_Disp", ("_DispX", "_DispY"))
+
+
+
+
+#
+# Fbar additional term fro
+#
+    # if self.fbar:
+    #     # ref: DESIGN OF SIMPLE LOW ORDER FINITE ELEMENTS FOR LARGE STRAIN
+    #     # ANALYSIS OF NEARLY INCOMPRESSIBLE SOLIDS, Neto et al,
+    #     # International Journal of Solids and Structures
+
+    #     q = [(1/3.)*(H[i][0]+H[i][1]+H[i][2]) - (2/3.)*initial_stress[i] for i in range(6)]
+    #     # q = np.column_stack([q, q, q, 0, 0, 0])
+    #     eps0 = [0,0,0] -> eps operator at the element centroid
+
+    #     DiffOp = DiffOp + sum(
+    #         [
+    #             (
+    #                 0
+    #                 if eps[i] == 0
+    #                 else eps[i].virtual
+    #                 * q[i]
+    #                 * (
+    #                     eps0[0] - eps[0]
+    #                     + eps0[1] - eps[1]
+    #                     + eps0[2] - eps[2]
+    #                 )
+    #             )
+    #             for i in range(6)
+    #         ]
+    #     )
+        

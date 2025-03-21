@@ -12,8 +12,9 @@ class Mechanical3D(ConstitutiveLaw):
 
     def __init__(self, name=""):
         ConstitutiveLaw.__init__(self, name)
-        # self._stress = 0 #current stress (pk2 if nlgeom) at integration points
-        # self._grad_disp = 0 #current grad_disp at integration points
+        self._Lt_from_F = False
+        # _Lt_from_F attribute is True if the tangent matrix is related
+        # to F instead of log epsilonn, ie for hyper elastic materials
 
     def initialize(self, assembly, pb):
         pass
