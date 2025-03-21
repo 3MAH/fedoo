@@ -18,7 +18,7 @@ requirements:
     - numpy>=1.26
     - scipy
     - pyvista>=0.39
-    - simcoon
+    - simcoon>=1.9.6
     - pypardiso # [x86]
 
 test:
