@@ -459,6 +459,10 @@ class Simcoon(Mechanical3D):
             zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
 
             if assembly.space.get_dimension() == "2Dstress":
+                if self._Lt_from_F:
+                    raise NotImplementedError(
+                        'Simcoon hyperelastic law are not compatible with '
+                        '2D plane stress assumption')
                 ndi = 2
             else:
                 ndi = 3
@@ -480,10 +484,9 @@ class Simcoon(Mechanical3D):
             )
 
             if ndi == 2:  # plane stress assumption
-                if assembly.space.get_dimension() == "2Dstress":
-                    assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
-                        assembly, "2Dstress"
-                    )
+                assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
+                    assembly, "2Dstress"
+                )
 
             if self.use_elastic_lt:
                 assembly.sv["ElasticMatrix"] = assembly.sv["TangentMatrix"]
