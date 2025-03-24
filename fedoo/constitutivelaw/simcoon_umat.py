@@ -7,11 +7,13 @@ import warnings
 
 try:
     from simcoon import simmit as sim
+
     try:
         from simcoon import __version__
+
         USE_SIMCOON = True
     except ImportError:
-        warnings.warn('Simcoon version is to old. Simcoon ignored.')
+        warnings.warn("Simcoon version is to old. Simcoon ignored.")
         USE_SIMCOON = False
 
 except ImportError:
@@ -23,7 +25,7 @@ import numpy as np
 class Simcoon(Mechanical3D):
     """Constitutive laws from the simcoon library.
 
-    The constitutive Law should be associated with 
+    The constitutive Law should be associated with
     :mod:`fedoo.weakform.StressEquilibrium`
 
     Parameters
@@ -264,9 +266,7 @@ class Simcoon(Mechanical3D):
                 "Hp": 33,
             }
         elif umat_name == "EPHIN":
-            n_plas = self.props[
-                0, 3
-            ]
+            n_plas = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = 7 + n_plas * 7
@@ -318,9 +318,7 @@ class Simcoon(Mechanical3D):
             }
             self.statev_label = {"T": 0, "v": 1, "EV": slice(2, 8)}
         elif umat_name == "ZENNK":
-            n_kelvin = self.props[
-                0, 3
-            ]
+            n_kelvin = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = 7 + 7 * n_kelvin
@@ -334,9 +332,7 @@ class Simcoon(Mechanical3D):
                 "EV": slice(1, 7),
             }  # vi: i*7+7, EVi: slice(i*7+8,i*7+14)
         elif umat_name == "PRONK":
-            n_prony = self.props[
-                0, 3
-            ]
+            n_prony = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = 7 + 7 * n_prony
@@ -350,18 +346,14 @@ class Simcoon(Mechanical3D):
                 "EV_tilde": slice(1, 7),
             }  # vi: i*7+7, EVi: slice(i*7+8,i*7+14)
         elif umat_name == "SMAMO":
-            nvariants = self.props[
-                0, 7
-            ]
+            nvariants = self.props[0, 7]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
         elif umat_name == "SMAMC":
-            nvariants = self.props[
-                0, 8
-            ]
+            nvariants = self.props[0, 8]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = nvariants + 8
@@ -425,9 +417,7 @@ class Simcoon(Mechanical3D):
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
         else:
-            raise ValueError(
-                "Invalid umat_name: Expected a valid 5 char string."
-            )
+            raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
     def initialize(self, assembly, pb):
         if "Statev" not in assembly.sv:
@@ -448,9 +438,7 @@ class Simcoon(Mechanical3D):
             else:
                 F = np.array([])
 
-            assembly.sv["Wm"] = np.zeros(
-                (4, assembly.n_gauss_points), order="F"
-            )
+            assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
             # )
@@ -461,8 +449,9 @@ class Simcoon(Mechanical3D):
             if assembly.space.get_dimension() == "2Dstress":
                 if self._Lt_from_F:
                     raise NotImplementedError(
-                        'Simcoon hyperelastic law are not compatible with '
-                        '2D plane stress assumption')
+                        "Simcoon hyperelastic law are not compatible with "
+                        "2D plane stress assumption"
+                    )
                 ndi = 2
             else:
                 ndi = 3
@@ -480,7 +469,7 @@ class Simcoon(Mechanical3D):
                 0,
                 0,
                 assembly.sv["Wm"],
-                ndi=ndi
+                ndi=ndi,
             )
 
             if ndi == 2:  # plane stress assumption
@@ -532,13 +521,11 @@ class Simcoon(Mechanical3D):
             pb.dtime,
             assembly.sv_start["Wm"],
             temp,
-            ndi=ndi
+            ndi=ndi,
         )
 
         if ndi == 2:  # plane stress assumption
-            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
-                assembly, "2Dstress"
-            )
+            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
 
         assembly.sv["Stress"] = StressTensorList(stress)
         # to check the symetriy of the tangentmatrix :

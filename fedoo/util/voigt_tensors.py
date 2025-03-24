@@ -132,7 +132,7 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         )
 
     def trace(self):
-        return (self[0] + self[1] + self[2])
+        return self[0] + self[1] + self[2]
 
     def hydrostatic(self):
         """

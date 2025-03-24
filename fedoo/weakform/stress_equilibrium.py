@@ -219,13 +219,15 @@ class StressEquilibrium(WeakFormBase):
         if assembly._nlgeom == "TL" or (
             assembly._nlgeom == "UL" and self.constitutivelaw._Lt_from_F
         ):
-
             # check if TangentMatrix has the consistent array shape
             if not isinstance(assembly.sv["TangentMatrix"], np.ndarray):
-                Lt = np.empty((6, 6, assembly.n_gauss_points),  order="F",)
+                Lt = np.empty(
+                    (6, 6, assembly.n_gauss_points),
+                    order="F",
+                )
                 for i in range(6):
                     for j in range(6):
-                        Lt[i,j,:] = assembly.sv["TangentMatrix"][i][j]
+                        Lt[i, j, :] = assembly.sv["TangentMatrix"][i][j]
                 assembly.sv["TangentMatrix"] = Lt
 
             elif (
