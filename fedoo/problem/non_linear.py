@@ -48,6 +48,11 @@ class _NonLinearBase:
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
 
+    @property
+    def n_iter(self):
+        """Return the number of iterations made to solve the problem."""
+        return self.__iter
+
     def get_disp(self, name="Disp"):
         """Return the displacement components.
 
@@ -101,7 +106,7 @@ class _NonLinearBase:
         self.set_A(self.__assembly.current.get_global_matrix())
 
     def updateD(self, start=False):
-        # not used for static problem
+        # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
     def initialize(self):

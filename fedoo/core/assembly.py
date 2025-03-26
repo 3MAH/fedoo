@@ -1313,11 +1313,13 @@ class Assembly(AssemblyBase):
                 # initialize a new assembly
                 new_mesh = copy(self.mesh)
                 new_mesh.nodes = new_crd
+                new_mesh._saved_gaussian_quadrature_mat = {}
                 new_assembly = copy(self)
                 new_assembly.mesh = new_mesh
                 self.current = new_assembly
             else:
                 self.current.mesh.nodes = new_crd
+                self.current.mesh._saved_gaussian_quadrature_mat = {}
 
                 if self.current.mesh in self._saved_change_of_basis_mat:
                     del self._saved_change_of_basis_mat[self.current.mesh]
