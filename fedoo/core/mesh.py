@@ -816,7 +816,7 @@ class Mesh(MeshBase):
                 if any([n in node_set for n in element])
             ]
 
-    def is_periodic(self, tol: float = 1e-8, dim: int = 3) -> bool:
+    def is_periodic(self, tol: float = 1e-8, dim: int | None = None) -> bool:
         """
         Test if the mesh is periodic (have nodes at the same positions on adjacent faces)
 
@@ -833,6 +833,8 @@ class Mesh(MeshBase):
         -------
         True if the mesh is periodic else return False.
         """
+        if dim is None:
+            dim = self.ndim
         return is_periodic(self.nodes, tol, dim)
 
     def deepcopy(self, name: str = "") -> "Mesh":

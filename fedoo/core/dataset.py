@@ -239,7 +239,7 @@ class DataSet:
 
 
         **kwargs: dict, default = 15.
-            See pyvista.Plotter.add_mesh() in the document of pyvista for 
+            See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
         """
 

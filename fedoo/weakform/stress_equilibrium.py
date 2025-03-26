@@ -216,13 +216,27 @@ class StressEquilibrium(WeakFormBase):
         This method is applyed after the constutive law update (stress and
         stiffness matrix).
         """
-        if assembly._nlgeom:
-            if (
+        if assembly._nlgeom == "TL" or (
+            assembly._nlgeom == "UL" and self.constitutivelaw._Lt_from_F
+        ):
+            # check if TangentMatrix has the consistent array shape
+            if not isinstance(assembly.sv["TangentMatrix"], np.ndarray):
+                Lt = np.empty(
+                    (6, 6, assembly.n_gauss_points),
+                    order="F",
+                )
+                for i in range(6):
+                    for j in range(6):
+                        Lt[i, j, :] = assembly.sv["TangentMatrix"][i][j]
+                assembly.sv["TangentMatrix"] = Lt
+
+            elif (
                 len(assembly.sv["TangentMatrix"].shape) == 2
                 and len(assembly.sv["F"].shape) == 3
             ):
                 # assembly.sv["TangentMatrix"] = assembly.sv["TangentMatrix"].reshape(6, 6, -1
                 #     ) * np.ones((1, 1, assembly.sv["F"].shape[2]))
+
                 assembly.sv["TangentMatrix"] = np.multiply(
                     assembly.sv["TangentMatrix"].reshape(6, 6, -1),
                     np.ones((1, 1, assembly.sv["F"].shape[2])),
@@ -241,13 +255,15 @@ class StressEquilibrium(WeakFormBase):
                     self._convert_Lt_tag,
                 )
 
-            # elif assembly._nlgeom == "UL":
-            #     assembly.sv["TangentMatrix"] = sim.Lt_convert(
-            #         assembly.sv["TangentMatrix"],
-            #         assembly.sv["F"],
-            #         assembly.sv["Stress"].asarray(),
-            #         self._convert_Lt_tag,
-            #     )
+            else:  # _Lt_from_F = True and assembly._nlgeom == "UL"
+                # need to convert Lt if Lt is defined related to F instead
+                # of log strain
+                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                    assembly.sv["TangentMatrix"],
+                    assembly.sv["F"],
+                    assembly.sv["Stress"].asarray(),
+                    self._convert_Lt_tag,
+                )
 
     def to_start(self, assembly, pb):
         """Reset the current time increment."""

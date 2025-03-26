@@ -1,6 +1,6 @@
 package:
   name: fedoo
-  version: "0.3.1"
+  version: "0.4.0"
 
 source:
   git_url: https://github.com/3MAH/fedoo.git
@@ -18,7 +18,7 @@ requirements:
     - numpy>=1.26
     - scipy
     - pyvista>=0.39
-    - simcoon
+    - simcoon>=1.9.6
     - pypardiso # [x86]
 
 test:
