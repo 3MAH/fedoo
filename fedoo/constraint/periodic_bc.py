@@ -2070,9 +2070,7 @@ class PeriodicBC(BCBase):
                     )
                 )
 
-    def initialize(
-        self, problem, dic_closest_points_on_boundaries=None
-    ):
+    def initialize(self, problem, dic_closest_points_on_boundaries=None):
         mesh = problem.mesh
         res = None
 
