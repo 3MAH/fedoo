@@ -2071,10 +2071,12 @@ class PeriodicBC(BCBase):
                 )
 
     def initialize(
-        self, problem, periodicity=True, dic_closest_points_on_boundaries=None
+        self, problem, dic_closest_points_on_boundaries=None
     ):
         mesh = problem.mesh
         res = None
+
+        periodicity = self.meshperio
 
         if periodicity == True:
             self._prepare_periodic_lists(mesh, self.tol)
