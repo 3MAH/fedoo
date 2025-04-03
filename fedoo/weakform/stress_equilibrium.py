@@ -28,6 +28,9 @@ class StressEquilibrium(WeakFormBase):
         corotational formulation may be used by setting the corate attribute.
       * For nearly incompressible material, the F-bar method should be used
         by setting the fbar attribute to True.
+      * For problems involving geometrical instabilities, the geometrical
+        stiffness should be used by setting the geometric_stiffness attribute
+        to True.
 
     Parameters
     ----------
@@ -79,6 +82,7 @@ class StressEquilibrium(WeakFormBase):
         # or 'green_naghdi', 'gn', 'log_inc'...
 
         self.fbar = False  # by default, the fbar stabilization is not used
+        self.geometric_stiffness = False
 
         self.assembly_options["assume_sym"] = True
         # internalForce weak form should be symmetric
@@ -117,12 +121,16 @@ class StressEquilibrium(WeakFormBase):
         )
 
         if not (np.isscalar(initial_stress) and initial_stress == 0):
-            # this term doesnt seem to improve convergence !
-            # if assembly._nlgeom:
-            #     DiffOp = DiffOp + \
-            #         sum([0 if self._nl_strain_op_vir[i] == 0 else
-            #              self._nl_strain_op_vir[i] * initial_stress[i]
-            #              for i in range(6)])
+            # this term doesnt seem to improve convergence in general !
+            if self.geometric_stiffness:
+                DiffOp = DiffOp + sum(
+                    [
+                        0
+                        if self._nl_strain_op_vir[i] == 0
+                        else self._nl_strain_op_vir[i] * initial_stress[i]
+                        for i in range(6)
+                    ]
+                )
 
             DiffOp = DiffOp + sum(
                 [
@@ -179,11 +187,6 @@ class StressEquilibrium(WeakFormBase):
                          total lagrangian formulation. Use update \
                          lagrangian instead."
                     )
-
-            # initialize non linear operator for strain
-            # don't improve the convergence, but kept in case it may be usefull
-            # later.
-            # self._init_nl_strain_op_vir()
 
     def update(self, assembly, pb):
         """Update the weakform to the current state.
@@ -302,51 +305,65 @@ class StressEquilibrium(WeakFormBase):
                         assembly.sv["F"]
                     )
 
-    # def _init_nl_strain_op_vir(self):
-    #     # initialize non linear operator for strain
-    #     # don't improve the convergence, but kept in case it may be usefull
-    #     # later.
+    def _init_nl_strain_op_vir(self):
+        # initialize non linear operator for strain
+        # don't improve the convergence, but kept in case it may be usefull
+        # later.
 
-    #     op_grad_du = self.space.op_grad_u()
-    #     # grad of displacement increment in incremental problems
+        op_grad_du = self.space.op_grad_u()
+        # grad of displacement increment in incremental problems
 
-    #     if self.space.ndim == "3D":
-    #         # using voigt notation and with a 2 factor on non diagonal terms:
-    #         # nl_strain_op_vir =
-    #         #      0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj))
-    #         nl_strain_op_vir = [
-    #             sum([op_grad_du[k][i].virtual * op_grad_du[k][i]
-    #                  for k in range(3)])
-    #             for i in range(3)
-    #         ]
-    #         nl_strain_op_vir += [
-    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][1]
-    #                  + op_grad_du[k][1].virtual * op_grad_du[k][0]
-    #                  for k in range(3)])
-    #         ]
-    #         nl_strain_op_vir += [
-    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][2]
-    #                  + op_grad_du[k][2].virtual * op_grad_du[k][0]
-    #                  for k in range(3)])
-    #         ]
-    #         nl_strain_op_vir += [
-    #             sum([op_grad_du[k][1].virtual * op_grad_du[k][2]
-    #                  + op_grad_du[k][2].virtual * op_grad_du[k][1]
-    #                  for k in range(3)])
-    #         ]
-    #     else:
-    #         nl_strain_op_vir = [
-    #             sum([op_grad_du[k][i].virtual * op_grad_du[k][i]
-    #                  for k in range(2)])
-    #             for i in range(2)
-    #         ] + [0]
-    #         nl_strain_op_vir += [
-    #             sum([op_grad_du[k][0].virtual * op_grad_du[k][1]
-    #                  + op_grad_du[k][1].virtual * op_grad_du[k][0]
-    #                  for k in range(2)])
-    #         ] + [0, 0]
+        if self.space.ndim == "3D":
+            # using voigt notation and with a 2 factor on non diagonal terms:
+            # nl_strain_op_vir =
+            #      0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj))
+            nl_strain_op_vir = [
+                sum([op_grad_du[k][i].virtual * op_grad_du[k][i] for k in range(3)])
+                for i in range(3)
+            ]
+            nl_strain_op_vir += [
+                sum(
+                    [
+                        op_grad_du[k][0].virtual * op_grad_du[k][1]
+                        + op_grad_du[k][1].virtual * op_grad_du[k][0]
+                        for k in range(3)
+                    ]
+                )
+            ]
+            nl_strain_op_vir += [
+                sum(
+                    [
+                        op_grad_du[k][0].virtual * op_grad_du[k][2]
+                        + op_grad_du[k][2].virtual * op_grad_du[k][0]
+                        for k in range(3)
+                    ]
+                )
+            ]
+            nl_strain_op_vir += [
+                sum(
+                    [
+                        op_grad_du[k][1].virtual * op_grad_du[k][2]
+                        + op_grad_du[k][2].virtual * op_grad_du[k][1]
+                        for k in range(3)
+                    ]
+                )
+            ]
+        else:
+            nl_strain_op_vir = [
+                sum([op_grad_du[k][i].virtual * op_grad_du[k][i] for k in range(2)])
+                for i in range(2)
+            ] + [0]
+            nl_strain_op_vir += [
+                sum(
+                    [
+                        op_grad_du[k][0].virtual * op_grad_du[k][1]
+                        + op_grad_du[k][1].virtual * op_grad_du[k][0]
+                        for k in range(2)
+                    ]
+                )
+            ] + [0, 0]
 
-    #     self._nl_strain_op_vir = nl_strain_op_vir
+        self._nl_strain_op_vir = nl_strain_op_vir
 
     @property
     def fbar(self):
@@ -366,6 +383,27 @@ class StressEquilibrium(WeakFormBase):
             self._comp_F = _comp_Fbar
         else:
             self._comp_F = _comp_F
+
+    @property
+    def geometric_stiffness(self):
+        """Set to True to add the geometric effects to the stiffness matrix.
+
+        The use of a geometric stiffness matrix usually don't improve the
+        convergence and may even require smaller time step.
+        However, geometric_stiffness should be included to reach convergence
+        when the problem involve geometrical instabilities like buckling or
+        when using very large strain (with hyperelastic materials for
+        instance).
+        """
+        return self._geometric_stiffness
+
+    @geometric_stiffness.setter
+    def geometric_stiffness(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("bool expeted for geometric_stiffness")
+        self._geometric_stiffness = value
+        if value:
+            self._init_nl_strain_op_vir()
 
     @property
     def corate(self):

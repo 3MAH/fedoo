@@ -167,6 +167,28 @@ class Quad4(ElementQuadrangle):
         ]
 
 
+class Quad4r(Quad4):
+    name = "quad4r"
+    default_n_gp = 1
+    n_nodes = 4
+
+    def ShapeFunction(self, vec_xi):
+        # return center value every where (as if n_pg = 1)
+        return 0.25 * np.ones((len(vec_xi), 4))
+
+    def ShapeFunctionDerivative(self, vec_xi):
+        # return center value every where (as if n_pg = 1)
+        return [
+            np.array(
+                [
+                    [-0.25, 0.25, 0.25, -0.25],
+                    [-0.25, -0.25, 0.25, 0.25],
+                ]
+            )
+            for xi in vec_xi
+        ]
+
+
 class Quad8(ElementQuadrangle):
     name = "quad8"
     default_n_gp = 9

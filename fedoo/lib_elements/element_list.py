@@ -7,7 +7,7 @@ from fedoo.lib_elements.finite_difference_1d import Node, Parameter
 # from fedoo.lib_elements.cohesive import Cohesive1D
 from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex8r
 from fedoo.lib_elements.line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
-from fedoo.lib_elements.quadrangle import Quad4, Quad8, Quad9
+from fedoo.lib_elements.quadrangle import Quad4, Quad8, Quad9, Quad4r
 
 # from fedoo.lib_elements.plate import *
 from fedoo.lib_elements.tetrahedron import Tet4, Tet10
@@ -24,6 +24,7 @@ _dict_elements = {
     "tri6": Tri6,
     "tri3bubble": Tri3Bubble,
     "quad4": Quad4,
+    "quad4r": Quad4r,
     "quad8": Quad8,
     "quad9": Quad9,
     "tet4": Tet4,

@@ -258,7 +258,7 @@ class Hex8r(Hex8):
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
     def ShapeFunction(self, vec_xi):
-        # return mean value for all gp
+        # return center value for all gp
         return 0.125 * np.ones((len(vec_xi), 8))
 
     def ShapeFunctionDerivative(self, vec_xi):

@@ -54,8 +54,9 @@ _available_output = [
     "Wm",
     "Fint",
     "Fint_global",
-    "beamstrain",
-    "beamstress",
+    "BeamStrain",
+    "BeamStress",
+    "DispGradient",
 ]
 
 _available_format = [
@@ -115,6 +116,7 @@ _label_dict = {
     "fint_global": "Fint_global",
     "beamstrain": "BeamStrain",
     "beamstress": "BeamStress",
+    "dispgradient": "DispGradient",
 }
 
 
