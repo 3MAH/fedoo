@@ -19,7 +19,7 @@ requirements:
     - scipy
     - pyvista>=0.39
     - simcoon>=1.9.6
-    - pypardiso # [x86]
+    - {{ solver_backend }}
 
 test:
   imports:
