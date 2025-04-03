@@ -1,3 +1,3 @@
 solver_backend:
-  - petsc4py #[x86]
-  - pypardiso #[not x86]
+   - pypardiso #[x86]
+   - petsc4py #[not x86]
