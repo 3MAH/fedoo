@@ -39,15 +39,16 @@ Here are the main features:
 
 Documentation
 --------------
-The [documentation](https://fedoo.readthedocs.io/en/latest/?badge=latest) is provided by readthedocs at
+The [documentation](https://fedoo.readthedocs.io/en/latest/?badge=latest) is
+provided by readthedocs at
 [https://fedoo.readthedocs.io](https://fedoo.readthedocs.io).
 
 
 Installation
 --------------
-Installation with pip including recommanded dependencies excepted simcoon:
+Installation with conda with recommanded dependencices (including simcoon): 
 ```
-pip install fedoo[all]
+conda install -c conda-forge -c set3mah fedoo
 ```
 
 Minimal installation with pip:
@@ -55,28 +56,35 @@ Minimal installation with pip:
 pip install fedoo
 ```
 
-Installation with conda with recommanded dependencices (including simcoon): 
+Installation with pip including recommanded dependencies excepted simcoon:
 ```
-conda install -c conda-forge -c set3mah fedoo
+pip install fedoo[all]
 ```
-In mac OS make sure to use scikit-umfpack, the best way to take the most of MacOs accelerate framework is to install numpy from sources first:
+
+In mac OS make sure to use petsc4py (included in the conda package) or
+scikit-umfpack, the best way to take the most of MacOs accelerate framework
+is to install numpy from sources first:
 ```
 pip install cython pybind11
 pip install --no-binary :all: numpy
 ```
-The conda package is restricted to version 0.33, which is not compatible with the latest versions of numpy
+The conda package is restricted to version 0.33, which is not compatible with
+the latest versions of numpy
 ```
 pip install scikit-umpack>=0.41 
 ```
 
-For performance considerations, it is in general strongly recommended to make sure that numpy is correctly using a fast implementation of BLAS : ou can do
+For performance considerations, it is in general strongly recommended to make
+sure that numpy is correctly using a fast implementation of BLAS : ou can do
 ```
 import numpy
 numpy.show_config()
 ```
 to check this, and use either *MKL* or *Accelerate* implementation of BLAS
 
-Also, make sure that the default number of threads is not leading to performance degradations: using explicit number of threads might help, see below for extensive control of threads number
+Also, make sure that the default number of threads is not leading to
+performance degradations: using explicit number of threads might help,
+see below for extensive control of threads number.
 ```
 #Set the number of threads
 import os
