@@ -234,7 +234,7 @@ class StressTensorList(_SymetricTensorList):
         )
 
     def pressure(self):
-        return (1 / 3) * self.trace()
+        return (-1 / 3) * self.trace()
 
     def to_strain(self):
         return StrainTensorList(self[:3] + [self[i] * 2 for i in [3, 4, 5]])

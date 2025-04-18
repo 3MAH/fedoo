@@ -210,7 +210,10 @@ class StressEquilibrium(WeakFormBase):
                 self._comp_F(assembly, displacement)
                 self._corate_func(self, assembly, pb)
             else:
-                _comp_grad_disp(assembly, displacement)
+                if self.fbar:
+                    _comp_grad_disp_fbar(assembly, displacement)
+                else:
+                    _comp_grad_disp(assembly, displacement)
                 _comp_linear_strain(self, assembly, pb)
 
     def update_2(self, assembly, pb):
@@ -521,6 +524,21 @@ def _comp_grad_disp(assembly, displacement):
     return grad_values
 
 
+def _comp_grad_disp_fbar(assembly, displacement):
+    # #small strain fbar. Only valid in small strain
+    grad_values = np.array(_comp_grad_disp(assembly, displacement))
+    # return grad_values
+    dvol = np.trace(grad_values)
+
+    dvol_center = np.mean(dvol.reshape(assembly.n_elm_gp, -1), axis=0)
+    # grad_values = grad_values - (dvol.reshape(assembly.n_elm_gp,-1) - dvol_center).ravel()
+    grad_values[[0, 1, 2], [0, 1, 2]] -= (
+        1 / 3 * (dvol.reshape(assembly.n_elm_gp, -1) - dvol_center).ravel()
+    )
+    assembly.sv["DispGradient"] = grad_values
+    return grad_values
+
+
 # function to compute F tensor (required nl corate function used with simcoon)
 def _comp_F(assembly, displacement):
     grad_values = _comp_grad_disp(assembly, displacement)
@@ -558,7 +576,7 @@ def _comp_Fbar(assembly, displacement):
     #     np.add(eye_3, grad_values_center).transpose((2,0,1))
     # )
     Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
-    F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).reshape(-1) ** (1 / 3))
+    F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3))
 
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:

@@ -50,7 +50,7 @@ class StressEquilibriumBbar(StressEquilibrium):
             initial_stress = assembly.sv["PK2"]
         else:
             eps = self.space.op_strain()
-            if assembly.elm_type in ["hex8sri"]:
+            if assembly.elm_type in ["hex8sri", "quad4sri"]:
                 eps[0] = (
                     eps[0]
                     - self.space.derivative("DispX", "X")
@@ -61,11 +61,12 @@ class StressEquilibriumBbar(StressEquilibrium):
                     - self.space.derivative("DispY", "Y")
                     + self.space.derivative("_DispY", "Y")
                 )
-                eps[2] = (
-                    eps[2]
-                    - self.space.derivative("DispZ", "Z")
-                    + self.space.derivative("_DispZ", "Z")
-                )
+                if assembly.space.ndim == 3:
+                    eps[2] = (
+                        eps[2]
+                        - self.space.derivative("DispZ", "Z")
+                        + self.space.derivative("_DispZ", "Z")
+                    )
 
             initial_stress = assembly.sv[
                 "Stress"
@@ -114,7 +115,7 @@ class StressEquilibriumBbar(StressEquilibrium):
     def initialize(self, assembly, pb):
         """Initialize the weakform at the begining of a problem."""
         super().initialize(assembly, pb)
-        if assembly.elm_type in ["hex8sri"]:
+        if assembly.elm_type in ["hex8sri", "quad4sri"]:
             if assembly._nlgeom == "TL":
                 raise NotImplementedError(
                     f"{assembly.elm_type} not \
@@ -200,16 +201,16 @@ class StressEquilibriumFbar(StressEquilibrium):
         )
 
         if not (np.isscalar(initial_stress) and initial_stress == 0):
-            # this term doesnt seem to improve convergence !
-            # if assembly._nlgeom:
-            #     DiffOp = DiffOp + sum(
-            #         [
-            #             0
-            #             if self._nl_strain_op_vir[i] == 0
-            #             else self._nl_strain_op_vir[i] * initial_stress[i]
-            #             for i in range(6)
-            #         ]
-            #     )
+            # this term doesnt seem to improve convergence in general !
+            if self.geometric_stiffness:
+                DiffOp = DiffOp + sum(
+                    [
+                        0
+                        if self._nl_strain_op_vir[i] == 0
+                        else self._nl_strain_op_vir[i] * initial_stress[i]
+                        for i in range(6)
+                    ]
+                )
 
             DiffOp = DiffOp + sum(
                 [

@@ -23,16 +23,23 @@ class _NonLinearBase:
 
         self.nr_parameters = {
             "err0": None,  # default error for NR error estimation
-            "criterion": "Displacement",  #
-            "tol": 5e-3,
+            "criterion": "Displacement",
+            "tol": 1e-3,
             "max_subiter": 5,
+            "norm_type": 2,
         }
         """
         Parameters to set the newton raphson algorithm:
-            * 'err0': The reference error. Default is None (automatically computed)
-            * 'criterion': Type of convergence test in ['Displacement', 'Force', 'Work']. Default is 'Displacement'.
-            * 'tol': Error tolerance for convergence. Default is 5e-3.
-            * 'max_subiter': Number of nr iteration before returning a convergence error. Default is 5. 
+            * 'err0': The reference error.
+              Default is None (automatically computed)
+            * 'criterion': Type of convergence test in
+              ['Displacement', 'Force', 'Work'].
+              Default is 'Displacement'.
+            * 'tol': Error tolerance for convergence. Default is 1e-3.
+            * 'max_subiter': Number of nr iteration before returning a
+              convergence error. Default is 5.
+            * 'norm_type': define the norm used to test the criterion
+              Use numpy.inf for the max value. Default is 2.
         """
 
         self.__assembly = assembly
@@ -218,19 +225,28 @@ class _NonLinearBase:
         For Force and Work error criterion, the problem must be updated
         (Update method).
         """
-        norm_type = np.inf
+        norm_type = self.nr_parameters["norm_type"]
         dof_free = self._dof_free
         if len(dof_free) == 0:
             return 0
         if self._err0 is None:  # if self._err0 is None -> initialize the value of err0
+            # if self.nr_parameters["criterion"] == "Displacement":
+            #     self._err0 = np.linalg.norm(
+            #         (self._U + self._dU)[dof_free], norm_type
+            #     )  # Displacement criterion
+            #     if self._err0 == 0:
+            #         self._err0 = 1
+            #         return 1
+            #     return np.max(np.abs(self.get_X()[dof_free])) / self._err0
+            # else:
+            #     self._err0 = 1
+            #     self._err0 = self.NewtonRaphsonError()
+            #     return 1
             if self.nr_parameters["criterion"] == "Displacement":
-                self._err0 = np.linalg.norm(
-                    (self._U + self._dU)[dof_free], norm_type
-                )  # Displacement criterion
-                if self._err0 == 0:
-                    self._err0 = 1
-                    return 1
-                return np.max(np.abs(self.get_X()[dof_free])) / self._err0
+                err0 = np.linalg.norm((self._U + self._dU), norm_type)
+                if err0 == 0:
+                    err0 = 1
+                return np.max(np.abs(self.get_X()[dof_free])) / err0
             else:
                 self._err0 = 1
                 self._err0 = self.NewtonRaphsonError()
@@ -280,12 +296,20 @@ class _NonLinearBase:
         pb.nr_parameters dict.
 
         Parameter:
-            * criterion: Type of convergence test. Str in ['Displacement', 'Force', 'Work'] (default = "Displacement").
+            * criterion: str in ['Displacement', 'Force', 'Work'],
+              default = "Displacement".
+              Type of convergence test.
 
         Optional parameters that can be set as kargs:
-            * err0: The reference error. Float or None. (if None, err0 is automatically computed)
-            * tol: Error tolerance for convergence. Float.
-            * max_subiter: Number of nr iteration before returning a convergence error. Int.
+            * 'err0': float or None, default = None.
+              The reference error.
+              If None (default), err0 is automatically computed.
+            * 'tol': float, default is 1e-3.
+              Error tolerance for convergence.
+            * 'max_subiter': int, default = 5.
+              Number of nr iteration before returning a convergence error.
+            * 'norm_type': int or numpy.inf, default = 2.
+              Define the norm used to test the criterion
         """
         if criterion not in ["Displacement", "Force", "Work"]:
             raise NameError(
@@ -294,9 +318,10 @@ class _NonLinearBase:
         self.nr_parameters["criterion"] = criterion
 
         for key in kargs:
-            if key not in ["err0", "tol", "max_subiter"]:
+            if key not in ["err0", "tol", "max_subiter", "norm_type"]:
                 raise NameError(
-                    "Newton Raphson parameters should be in ['err0', 'tol', 'max_subiter']"
+                    "Newton Raphson parameters should be in "
+                    "['err0', 'tol', 'max_subiter', 'norm_type']"
                 )
 
             self.nr_parameters[key] = kargs[key]
@@ -325,7 +350,6 @@ class _NonLinearBase:
 
             if normRes < tol_nr:  # convergence of the NR algorithm
                 # Initialize the next increment
-                # self.NewTimeIncrement()
                 return 1, subiter, normRes
 
             # --------------- Solve --------------------------------------------------------
