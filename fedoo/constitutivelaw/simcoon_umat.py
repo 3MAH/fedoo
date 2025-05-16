@@ -41,8 +41,7 @@ class Simcoon(Mechanical3D):
     def __init__(self, umat_name, props, name=""):
         if not (USE_SIMCOON):
             raise NameError(
-                "Simcoon library need to be installed for using the "
-                "constitutive laws"
+                "Simcoon library need to be installed for using the constitutive laws"
             )
 
         # props is a nparray containing all the material variables
@@ -283,8 +282,37 @@ class Simcoon(Mechanical3D):
                 "EP": slice(1, 7),
             }  # Pi:i*7+7, EPi:slice(i*7+8,i*7+14)
         elif umat_name == "SMAUT":
-            self.n_statev = 16
-            self.props_label = {}
+            self.n_statev = 17
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "alphaA": 5,
+                "alphaM": 6,
+                "Hmin": 7,
+                "Hmax": 8,
+                "k1": 9,
+                "sigmacrit": 10,
+                "C_A": 11,
+                "C_M": 12,
+                "Ms0": 13,
+                "Mf0": 14,
+                "As0": 15,
+                "Af0": 16,
+                "n1": 17,
+                "n2": 18,
+                "n3": 19,
+                "n4": 20,
+                "sigmacaliber": 21,
+                "b_prager": 22,
+                "n_prager": 23,
+                "c_lambda": 24,
+                "p0_lambda": 25,
+                "n_lambda": 26,
+                "alpha_lambda": 27,
+            }
             self.statev_label = {}
         elif umat_name == "LLDM0":
             self.n_statev = 10
@@ -438,6 +466,11 @@ class Simcoon(Mechanical3D):
             else:
                 F = np.array([])
 
+            if "Temp" in assembly.sv:
+                temp = assembly.sv["Temp"]
+            else:
+                temp = None
+
             assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
             #     np.zeros((6, assembly.n_gauss_points), order="F")
@@ -469,6 +502,7 @@ class Simcoon(Mechanical3D):
                 0,
                 0,
                 assembly.sv["Wm"],
+                temp,
                 ndi=ndi,
             )
 
