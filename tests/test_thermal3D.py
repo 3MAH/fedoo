@@ -40,7 +40,7 @@ def test_thermal3D():
     right = mesh.find_nodes("X", Xmax[2])
 
     pb = fd.problem.NonLinear("Assembling")
-
+    pb.set_nr_criterion(norm_type=np.inf, tol=5e-3)
     # Problem.set_solver('cg', precond = True)
 
     pb.set_nr_criterion("Displacement", tol=5e-2, max_subiter=5, err0=100)

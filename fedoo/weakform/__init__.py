@@ -56,7 +56,11 @@ from .plate import (
     PlateShearEquilibrium,
 )
 from .stress_equilibrium import StressEquilibrium
-from .stress_equilibrium_bbar import StressEquilibriumFbar
+from .stress_equilibrium_bbar import (
+    StressEquilibriumFbar,
+    StressEquilibriumRI,
+    HourglassStiffness,
+)
 
 __all__ = [
     "BeamEquilibrium",

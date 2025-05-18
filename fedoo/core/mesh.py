@@ -1256,9 +1256,36 @@ class Mesh(MeshBase):
             @ self.data_to_gausspoint(field, n_elm_gp).T
         )
 
-    def get_volume(self):
-        """Compute the total volume of the mesh (or surface for 2D meshes)."""
+    def get_volume(self, n_elm_gp: int | None = None):
+        """Compute the total volume of the mesh (or surface for 2D meshes).
+
+        Parameters
+        ----------
+        n_elm_gp: int or None, default = None
+            Number of gauss points used on each element to compute the volume.
+            If None, a default value is used depending on the element type.
+        """
         return sum(self._get_gaussian_quadrature_mat().data)
+
+    def get_element_volumes(self, n_elm_gp: int | None = None):
+        """Compute the volume of each element (or surface for 2D meshes).
+
+        Parameters
+        ----------
+        n_elm_gp: int or None, default = None
+            Number of gauss points used to compute the volumes
+            If None, a default value is used depending on the element type.
+        """
+        if n_elm_gp == 1:
+            return self._get_gaussian_quadrature_mat(1).data
+
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(self.elm_type)
+
+        return np.sum(
+            self._get_gaussian_quadrature_mat().data.reshape(n_elm_gp, -1),
+            axis=0,
+        )
 
     def reset_interpolation(self) -> None:
         """Remove all the saved data related to field interpolation.

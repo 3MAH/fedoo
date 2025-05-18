@@ -59,7 +59,6 @@ class _LinearBase:
         self.set_A(self.__assembly.get_global_matrix())  # tangent stiffness
         self.set_D(self.__assembly.get_global_vector())
         B = 0
-        self.apply_boundary_conditions()
 
     def update(self, dtime=1, compute="all"):
         """
