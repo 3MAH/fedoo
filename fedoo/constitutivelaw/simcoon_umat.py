@@ -313,7 +313,20 @@ class Simcoon(Mechanical3D):
                 "n_lambda": 26,
                 "alpha_lambda": 27,
             }
-            self.statev_label = {}
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+            }
         elif umat_name == "LLDM0":
             self.n_statev = 10
             self.props_label = {
