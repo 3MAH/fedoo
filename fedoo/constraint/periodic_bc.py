@@ -431,7 +431,6 @@ class PeriodicBC(BCBase):
             )
         )
 
-        
         res.append(
             MPC(
                 [
@@ -442,9 +441,7 @@ class PeriodicBC(BCBase):
                     node_cd_load[0][1],
                     node_cd_load[0][2],
                     node_cd_load[1][2],
-
                 ],
-
                 [
                     var_cd[1][1],
                     var_cd_load[0][0],
@@ -454,7 +451,6 @@ class PeriodicBC(BCBase):
                     var_cd_load[0][2],
                     var_cd_load[1][2],
                 ],
-
                 [
                     1.0,
                     -(off_axis_rot_matrix[1, 0] ** 2),
@@ -463,14 +459,12 @@ class PeriodicBC(BCBase):
                     -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 1]),
                     -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 2]),
                     -(off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[1, 2]),
-                ]
-
+                ],
             )
         )
 
         res.append(
             MPC(
-
                 [
                     node_cd[2][2],
                     node_cd_load[0][0],
@@ -479,9 +473,7 @@ class PeriodicBC(BCBase):
                     node_cd_load[0][1],
                     node_cd_load[0][2],
                     node_cd_load[1][2],
-
                 ],
-
                 [
                     var_cd[2][2],
                     var_cd_load[0][0],
@@ -491,7 +483,6 @@ class PeriodicBC(BCBase):
                     var_cd_load[0][2],
                     var_cd_load[1][2],
                 ],
-
                 [
                     1.0,
                     -(off_axis_rot_matrix[2, 0] ** 2),
@@ -500,14 +491,12 @@ class PeriodicBC(BCBase):
                     -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 1]),
                     -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 2]),
                     -(off_axis_rot_matrix[2, 1] * off_axis_rot_matrix[2, 2]),
-                ]
-
+                ],
             )
         )
 
         res.append(
             MPC(
-
                 [
                     node_cd[0][1],
                     node_cd_load[0][0],
@@ -516,9 +505,7 @@ class PeriodicBC(BCBase):
                     node_cd_load[0][1],
                     node_cd_load[0][2],
                     node_cd_load[1][2],
-
                 ],
-
                 [
                     var_cd[0][1],
                     var_cd_load[0][0],
@@ -528,17 +515,24 @@ class PeriodicBC(BCBase):
                     var_cd_load[0][2],
                     var_cd_load[1][2],
                 ],
-
                 [
                     1.0,
-                    -2*(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 0]),
-                    -2*(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 1]),
-                    -2*(off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 2]),
-                    -((off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 1])),
-                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 2])),
-                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 1]) + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 2])),
-                ]
-
+                    -2 * (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 0]),
+                    -2 * (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 1]),
+                    -2 * (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 2]),
+                    -(
+                        (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 0])
+                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 1])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 0])
+                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 2])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 1])
+                        + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 2])
+                    ),
+                ],
             )
         )
 
@@ -552,9 +546,7 @@ class PeriodicBC(BCBase):
                     node_cd_load[0][1],
                     node_cd_load[0][2],
                     node_cd_load[1][2],
-
                 ],
-
                 [
                     var_cd[0][2],
                     var_cd_load[0][0],
@@ -564,19 +556,24 @@ class PeriodicBC(BCBase):
                     var_cd_load[0][2],
                     var_cd_load[1][2],
                 ],
-
                 [
                     1.0,
-                    -2*(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 0]),
-                    -2*(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 1]),
-                    -2*(off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 2]),
-                    -((off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 1])),
-                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 2])),
-                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 1]) + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 2])),
-                ]
-
-
-
+                    -2 * (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 0]),
+                    -2 * (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 1]),
+                    -2 * (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 2]),
+                    -(
+                        (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 0])
+                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 1])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 0])
+                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 2])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 1])
+                        + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 2])
+                    ),
+                ],
             )
         )
 
@@ -590,9 +587,7 @@ class PeriodicBC(BCBase):
                     node_cd_load[0][1],
                     node_cd_load[0][2],
                     node_cd_load[1][2],
-
                 ],
-
                 [
                     var_cd[1][2],
                     var_cd_load[0][0],
@@ -602,20 +597,25 @@ class PeriodicBC(BCBase):
                     var_cd_load[0][2],
                     var_cd_load[1][2],
                 ],
-
                 [
                     1.0,
-                    -2*(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 0]),
-                    -2*(off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 1]),
-                    -2*(off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 2]),
-                    -((off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 1])),
-                    -((off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 2])),
-                    -((off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 1]) + (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 2])),
-                ]
-
-
+                    -2 * (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 0]),
+                    -2 * (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 1]),
+                    -2 * (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 2]),
+                    -(
+                        (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 0])
+                        + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 1])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 0])
+                        + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 2])
+                    ),
+                    -(
+                        (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 1])
+                        + (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 2])
+                    ),
+                ],
             )
-
         )
         return res
 
