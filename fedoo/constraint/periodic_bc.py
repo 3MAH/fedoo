@@ -1,5 +1,6 @@
 # from fedoo.core.base   import ProblemBase
 import numpy as np
+from scipy.spatial.transform import Rotation
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 from fedoo.core.base import ProblemBase
 from fedoo.core.mesh import MeshBase
@@ -9,7 +10,14 @@ class PeriodicBC(BCBase):
     """Class defining periodic boundary conditions"""
 
     def __init__(
-        self, node_cd, var_cd, dim=None, tol=1e-8, meshperio=True, name="Periodicity"
+        self,
+        node_cd,
+        var_cd,
+        off_axis_rotation=None,
+        dim=None,
+        tol=1e-8,
+        meshperio=True,
+        name="Periodicity",
     ):
         """
         Create a perdiodic boundary condition object using several multi-points constraints.
@@ -80,39 +88,74 @@ class PeriodicBC(BCBase):
 
         """
 
-        # The shear coefficient is 0.5 if small strain approximation is utilized, 1. otherwise
-        self.shear_coef = 1
-        if np.isscalar(node_cd[0]):
+        if isinstance(off_axis_rotation, Rotation):
+            self.off_axis_rot_matrix = off_axis_rotation.as_matrix()
             self.shear_coef = 0.5
-            if len(node_cd) == 1:
-                if dim is None:
-                    dim = 1
-                var_cd = [var_cd]
-                node_cd = [node_cd]
-            elif len(node_cd) == 3:
-                if dim is None:
-                    dim = 2
-                node_cd = [[node_cd[0], node_cd[2]], [node_cd[2], node_cd[1]]]
-                var_cd = [[var_cd[0], var_cd[2]], [var_cd[2], var_cd[1]]]
 
-            elif len(node_cd) == 6:
-                if dim is None:
-                    dim = 3
-                node_cd = [
-                    [node_cd[0], node_cd[3], node_cd[4]],
-                    [node_cd[3], node_cd[1], node_cd[5]],
-                    [node_cd[4], node_cd[5], node_cd[2]],
-                ]
-                var_cd = [
-                    [var_cd[0], var_cd[3], var_cd[4]],
-                    [var_cd[3], var_cd[1], var_cd[5]],
-                    [var_cd[4], var_cd[5], var_cd[2]],
-                ]
+            if np.isscalar(node_cd[0]):
+                if len(node_cd) == 6:
+                    if dim is None:
+                        dim = 3
+                    node_cd_load = [
+                        [node_cd[0], node_cd[3], node_cd[4]],
+                        [node_cd[3], node_cd[1], node_cd[5]],
+                        [node_cd[4], node_cd[5], node_cd[2]],
+                    ]
+                    var_cd_load = [
+                        [var_cd[0], var_cd[3], var_cd[4]],
+                        [var_cd[3], var_cd[1], var_cd[5]],
+                        [var_cd[4], var_cd[5], var_cd[2]],
+                    ]
+                else:
+                    raise NameError(
+                        "Length of node_cd and var_cd should be 6 considering off_axis rotation"
+                    )
+
+                self.node_cd_load = node_cd_load
+                self.var_cd_load = var_cd_load
+
+                node_cd = np.zeros((3, 3)).tolist()
+                var_cd = np.zeros((3, 3)).tolist()
+
             else:
-                raise NameError("Length of node_cd and var_cd should be 1,3 or 6")
+                raise ValueError("off_axis_rotation is valid in small strain only")
+        elif off_axis_rotation is None:
+            # The shear coefficient is 0.5 if small strain approximation is utilized, 1. otherwise
+            self.shear_coef = 1
+            if np.isscalar(node_cd[0]):
+                self.shear_coef = 0.5
+                if len(node_cd) == 1:
+                    if dim is None:
+                        dim = 1
+                    var_cd = [var_cd]
+                    node_cd = [node_cd]
+                elif len(node_cd) == 3:
+                    if dim is None:
+                        dim = 2
+                    node_cd = [[node_cd[0], node_cd[2]], [node_cd[2], node_cd[1]]]
+                    var_cd = [[var_cd[0], var_cd[2]], [var_cd[2], var_cd[1]]]
 
-        elif dim is None:
-            dim = len(node_cd[0])
+                elif len(node_cd) == 6:
+                    if dim is None:
+                        dim = 3
+                    node_cd = [
+                        [node_cd[0], node_cd[3], node_cd[4]],
+                        [node_cd[3], node_cd[1], node_cd[5]],
+                        [node_cd[4], node_cd[5], node_cd[2]],
+                    ]
+                    var_cd = [
+                        [var_cd[0], var_cd[3], var_cd[4]],
+                        [var_cd[3], var_cd[1], var_cd[5]],
+                        [var_cd[4], var_cd[5], var_cd[2]],
+                    ]
+                else:
+                    raise NameError("Length of node_cd and var_cd should be 1,3 or 6")
+
+            elif dim is None:
+                dim = len(node_cd[0])
+
+        elif off_axis_rotation is not None:
+            raise ValueError("off_axis_rotation should be a scipy Rotation object")
 
         self.node_cd = node_cd
         self.var_cd = var_cd
@@ -336,6 +379,246 @@ class PeriodicBC(BCBase):
 
         self.d_rve = d_rve
 
+    def _list_MPC_rotation(self):
+        """
+        This function defines the list of MPC constraints for periodic homogenization,
+        assuming a periodic mesh
+
+        :param: self : the PeriodicBC object
+        :param off_axis_rot_mat: Rotation object from scipy.transform
+            Rotation matrix that defines the off_axis loading
+
+        :return: A dictionnary containing the MPC constraints that links constrain drivers of the off_axis to the reference frame.
+        """
+
+        node_cd = self.node_cd
+        var_cd = self.var_cd
+
+        node_cd_load = self.node_cd_load
+        var_cd_load = self.var_cd_load
+        off_axis_rot_matrix = self.off_axis_rot_matrix
+
+        res = ListBC()
+        res.append(
+            MPC(
+                [
+                    node_cd[0][0],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+                ],
+                [
+                    var_cd[0][0],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+                [
+                    1.0,
+                    -(off_axis_rot_matrix[0, 0] ** 2),
+                    -(off_axis_rot_matrix[0, 1] ** 2),
+                    -(off_axis_rot_matrix[0, 2] ** 2),
+                    -(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[0, 1]),
+                    -(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[0, 2]),
+                    -(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[0, 2]),
+                ],
+            )
+        )
+
+        
+        res.append(
+            MPC(
+                [
+                    node_cd[1][1],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+
+                ],
+
+                [
+                    var_cd[1][1],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+
+                [
+                    1.0,
+                    -(off_axis_rot_matrix[1, 0] ** 2),
+                    -(off_axis_rot_matrix[1, 1] ** 2),
+                    -(off_axis_rot_matrix[1, 2] ** 2),
+                    -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 1]),
+                    -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 2]),
+                    -(off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[1, 2]),
+                ]
+
+            )
+        )
+
+        res.append(
+            MPC(
+
+                [
+                    node_cd[2][2],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+
+                ],
+
+                [
+                    var_cd[2][2],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+
+                [
+                    1.0,
+                    -(off_axis_rot_matrix[2, 0] ** 2),
+                    -(off_axis_rot_matrix[2, 1] ** 2),
+                    -(off_axis_rot_matrix[2, 2] ** 2),
+                    -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 1]),
+                    -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 2]),
+                    -(off_axis_rot_matrix[2, 1] * off_axis_rot_matrix[2, 2]),
+                ]
+
+            )
+        )
+
+        res.append(
+            MPC(
+
+                [
+                    node_cd[0][1],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+
+                ],
+
+                [
+                    var_cd[0][1],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+
+                [
+                    1.0,
+                    -2*(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 0]),
+                    -2*(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 1]),
+                    -2*(off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 2]),
+                    -((off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 1])),
+                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 2])),
+                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 1]) + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 2])),
+                ]
+
+            )
+        )
+
+        res.append(
+            MPC(
+                [
+                    node_cd[0][2],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+
+                ],
+
+                [
+                    var_cd[0][2],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+
+                [
+                    1.0,
+                    -2*(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 0]),
+                    -2*(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 1]),
+                    -2*(off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 2]),
+                    -((off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 1])),
+                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 2])),
+                    -((off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 1]) + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 2])),
+                ]
+
+
+
+            )
+        )
+
+        res.append(
+            MPC(
+                [
+                    node_cd[1][2],
+                    node_cd_load[0][0],
+                    node_cd_load[1][1],
+                    node_cd_load[2][2],
+                    node_cd_load[0][1],
+                    node_cd_load[0][2],
+                    node_cd_load[1][2],
+
+                ],
+
+                [
+                    var_cd[1][2],
+                    var_cd_load[0][0],
+                    var_cd_load[1][1],
+                    var_cd_load[2][2],
+                    var_cd_load[0][1],
+                    var_cd_load[0][2],
+                    var_cd_load[1][2],
+                ],
+
+                [
+                    1.0,
+                    -2*(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 0]),
+                    -2*(off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 1]),
+                    -2*(off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 2]),
+                    -((off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 1])),
+                    -((off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 0]) + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 2])),
+                    -((off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 1]) + (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 2])),
+                ]
+
+
+            )
+
+        )
+        return res
+
     def _list_MPC_periodic(self):
         """
         This function defines the list of MPC constraints for periodic homogenization,
@@ -346,7 +629,7 @@ class PeriodicBC(BCBase):
         :warning: TO possibly modifiy, the (xmin, xmax, ymin, ymax, zmin, zmax) values are computed from the crd here
                   It might be better to add a parameter that computes it from a BoxMesh object
 
-        :return: A dictionnary containing all the mesh listes (faces, edges, corners)
+        :return: A dictionnary containing all the mesh liste (faces, edges, corners)
         """
 
         node_cd = self.node_cd
@@ -2079,6 +2362,9 @@ class PeriodicBC(BCBase):
         if periodicity == True:
             self._prepare_periodic_lists(mesh, self.tol)
             res = self._list_MPC_periodic()
+            if self.off_axis_rot_matrix is not None:
+                res_rot = self._list_MPC_rotation()
+                res = res + res_rot
         else:
             if dic_closest_points_on_boundaries is None:
                 raise
