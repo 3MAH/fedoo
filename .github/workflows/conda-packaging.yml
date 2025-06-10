@@ -13,9 +13,9 @@ jobs:
         with:
           miniconda-version: "latest"
       - name: Conda build
-        shell: pwsh
+        shell: bash -el {0}
         run: |
           conda install conda-build anaconda-client
-          anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
+          yes | anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
           conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
           anaconda upload noarch/*.conda --force
