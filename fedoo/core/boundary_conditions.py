@@ -141,12 +141,8 @@ class ListBC(BCBase):
             else:
                 del self.data_end[bc - len(self.data)]
         elif isinstance(bc, str):
-            for count, item in enumerate(self.data):
-                if item.name == bc:
-                    del self.data[count]
-            for count, item in enumerate(self.data_end):
-                if item.name == bc:
-                    del self.data_end[count]
+            self.data = [item for item in self.data if item.name != bc]
+            self.data_end = [item for item in self.data_end if item.name != bc]
         else:
             try:
                 self.data.remove(bc)
