@@ -356,8 +356,7 @@ class RigidTie2D(BCBase):
         cos = np.cos(angles)
 
         # Correct displacement of slave nodes to be consistent with the master nodes
-        R = np.array([[cos, -sin],
-                      [sin,  cos]])
+        R = np.array([[cos, -sin], [sin, cos]])
 
         new_disp = (
             (mesh.nodes[list_nodes] - mesh.nodes[node_cd[0]]) @ R.T
@@ -367,12 +366,12 @@ class RigidTie2D(BCBase):
         )
 
         if not (np.array_equal(problem._dU, 0)):
-                    if np.array_equal(problem._U, 0):
-                        problem._dU.reshape(2, -1)[:, list_nodes] = new_disp.T
-                    else:
-                        problem._dU.reshape(2, -1)[:, list_nodes] = (
-                            new_disp.T - problem._U.reshape(2, -1)[:, list_nodes]
-                        )
+            if np.array_equal(problem._U, 0):
+                problem._dU.reshape(2, -1)[:, list_nodes] = new_disp.T
+            else:
+                problem._dU.reshape(2, -1)[:, list_nodes] = (
+                    new_disp.T - problem._U.reshape(2, -1)[:, list_nodes]
+                )
 
         # approche incrémentale:
 

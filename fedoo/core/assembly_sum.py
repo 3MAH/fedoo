@@ -65,7 +65,7 @@ class AssemblySum(AssemblyBase):
 
     def __getitem__(self, item):
         return self._list_assembly[item]
-    
+
     def __repr__(self):
         return f"fedoo.AssemblySum({self._list_assembly})"
 

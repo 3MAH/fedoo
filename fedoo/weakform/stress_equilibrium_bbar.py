@@ -309,6 +309,7 @@ class StressEquilibriumFbar(StressEquilibrium):
             else:
                 self.space.new_vector("_Disp", ("_DispX", "_DispY"))
 
+
 class HourglassStiffness(WeakFormBase):
     """Hourglass stiffness weak formulation for reduced integration elements.
 
@@ -357,7 +358,7 @@ class HourglassStiffness(WeakFormBase):
       >>> wf = wf + fd.HourglassStiffness()
     """
 
-    def __init__(self, stiffness_coef = 0.01, name="", nlgeom=False, space=None):
+    def __init__(self, stiffness_coef=0.01, name="", nlgeom=False, space=None):
         WeakFormBase.__init__(self, name, space)
         self.assembly_options["n_elm_gp"] = 1
         self.assembly_options["elm_type", "quad4"] = "quad4hourglass"
@@ -388,54 +389,68 @@ class HourglassStiffness(WeakFormBase):
         # if assembly.elm_type == 'quad4hourglass':
         op_dq = [assembly.space.op_disp()]
         ndim = len(op_dq[0])
-        if assembly.elm_type == 'hex8hourglass':
+        if assembly.elm_type == "hex8hourglass":
             n_hourglass_mode = 4
             for i in range(1, n_hourglass_mode):
                 op_dq.append(assembly.space.op_disp())
                 for j in range(ndim):
                     op_dq[i][j].op[0].x = i
-        elif assembly.elm_type == 'quad4hourglass':
+        elif assembly.elm_type == "quad4hourglass":
             n_hourglass_mode = 1
         else:
-            raise ValueError('elm_type should be "quad4hourglass" or '
-                             '"hex8hourglass" for HourlgassStiffness weakform')
+            raise ValueError(
+                'elm_type should be "quad4hourglass" or '
+                '"hex8hourglass" for HourlgassStiffness weakform'
+            )
 
         if np.array_equal(pb.get_dof_solution(), 0):
-            q0 = [[0,0,0] for dq in op_dq]
+            q0 = [[0, 0, 0] for dq in op_dq]
         else:
-            q0 = [[assembly.get_gp_results(dq[i], pb.get_dof_solution()) for i in range(ndim)]
-                  for dq in op_dq]
+            q0 = [
+                [
+                    assembly.get_gp_results(dq[i], pb.get_dof_solution())
+                    for i in range(ndim)
+                ]
+                for dq in op_dq
+            ]
 
-        if self.compute_stiffness_only_once and hasattr(assembly, '_hourglass_stiffness'):
+        if self.compute_stiffness_only_once and hasattr(
+            assembly, "_hourglass_stiffness"
+        ):
             hourglass_stiffness = assembly._hourglass_stiffness
         else:
             try:
-                b = assembly._b_matrix.transpose(0,2,1)
+                b = assembly._b_matrix.transpose(0, 2, 1)
             except AttributeError:
                 assembly.compute_elementary_operators()
-                b = assembly._b_matrix.transpose(0,2,1)
+                b = assembly._b_matrix.transpose(0, 2, 1)
             # A = assembly.mesh.get_element_volumes()
             # coef = A * sum([(b[i] ** 2).sum(axis = 1) for i in range(ndim)])
             # coef = (1/A) * sum([(b[i] ** 2).sum(axis = 1) for i in range(ndim)])
-            coef = sum([(b[i] ** 2).sum(axis = 1) for i in range(ndim)])
+            coef = sum([(b[i] ** 2).sum(axis=1) for i in range(ndim)])
 
             if isinstance(assembly.stress_equilibrium_assembly, AssemblyBase):
-                pwave_modulus = self.get_p_wave_modulus(assembly.stress_equilibrium_assembly)
+                pwave_modulus = self.get_p_wave_modulus(
+                    assembly.stress_equilibrium_assembly
+                )
             else:
-                raise(TypeError)
+                raise (TypeError)
                 # pwave_modulus = 1
 
-            hourglass_stiffness = (1/ndim * self.stiffness_coef * pwave_modulus * coef)
+            hourglass_stiffness = 1 / ndim * self.stiffness_coef * pwave_modulus * coef
             # Formulation from Flanagan, D.P. and Belytschko, T. (1981)
 
             if self.compute_stiffness_only_once:
                 assembly._hourglass_stiffness = hourglass_stiffness
 
-
         DiffOp = 0
         for hg_mode in range(n_hourglass_mode):
-            DiffOp += sum([op_dq[hg_mode][i].virtual * (op_dq[hg_mode][i]+q0[hg_mode][i]) for i in range(ndim)])
-
+            DiffOp += sum(
+                [
+                    op_dq[hg_mode][i].virtual * (op_dq[hg_mode][i] + q0[hg_mode][i])
+                    for i in range(ndim)
+                ]
+            )
 
         DiffOp = DiffOp * hourglass_stiffness
 
@@ -455,13 +470,18 @@ class HourglassStiffness(WeakFormBase):
             else:
                 self.compute_stiffness_only_once = True
 
-        assembly.stress_equilibrium_assembly = self.stress_equilibrium_assembly # pas propre, on devrait définir un autre dictionnaire dans assembly
+        assembly.stress_equilibrium_assembly = (
+            self.stress_equilibrium_assembly
+        )  # pas propre, on devrait définir un autre dictionnaire dans assembly
         if self.stress_equilibrium_assembly is None:
             # extract the assembly associated to StressEquilibrium.
             # required to compute the tangent bulk modulus
             list_assembly = assembly.associated_assembly_sum.list_assembly
             for a in list_assembly:
-                if isinstance(a.weakform, StressEquilibrium) and a.elm_type in ['quad4', 'hex8']:
+                if isinstance(a.weakform, StressEquilibrium) and a.elm_type in [
+                    "quad4",
+                    "hex8",
+                ]:
                     assembly.stress_equilibrium_assembly = a
                     break
 
@@ -477,13 +497,15 @@ class HourglassStiffness(WeakFormBase):
             assembly.set_disp(pb.get_disp())
 
     def get_p_wave_modulus(self, assembly):
-        # M = E*(1-nu)/((1+nu)*(1-2*nu)) = K+4/3 * mu 
+        # M = E*(1-nu)/((1+nu)*(1-2*nu)) = K+4/3 * mu
         #   = lambda + 2 * mu = p wave modulus
-        Lt = assembly.sv['TangentMatrix']
-        bulk_modulus = (1/9)*sum([Lt[i,j] for i in range(3) for j in range(3)])
+        Lt = assembly.sv["TangentMatrix"]
+        bulk_modulus = (1 / 9) * sum([Lt[i, j] for i in range(3) for j in range(3)])
         # bulk_modulus = E/(3*(1-2*nu)) for elastic isotropic law
-        shear_modulus = (1/3)*sum([Lt[i,j] for i in range(3,6) for j in range(3,6)])
-        return bulk_modulus + 4/3 * shear_modulus
+        shear_modulus = (1 / 3) * sum(
+            [Lt[i, j] for i in range(3, 6) for j in range(3, 6)]
+        )
+        return bulk_modulus + 4 / 3 * shear_modulus
 
 
 def StressEquilibriumRI(
@@ -560,5 +582,5 @@ def StressEquilibriumRI(
     def corate_setter(self, value):
         self.list_weakform[0].corate = value
 
-    setattr(wf.__class__, 'corate', property(corate_getter, corate_setter))
+    setattr(wf.__class__, "corate", property(corate_getter, corate_setter))
     return wf

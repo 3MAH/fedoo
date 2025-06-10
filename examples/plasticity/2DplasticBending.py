@@ -60,7 +60,9 @@ else:
     top_center = np.hstack((nodes_top1, nodes_top2))
 
 assemb = fd.Assembly.create(
-    wf, "Domain", name="Assembling",
+    wf,
+    "Domain",
+    name="Assembling",
 )
 
 pb = fd.problem.NonLinear("Assembling")

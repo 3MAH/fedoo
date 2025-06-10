@@ -103,7 +103,7 @@ class Mesh(MeshBase):
             #     local_frame_temp[:,2,2]   = 1
             #     self.local_frame = local_frame_temp
         elif ndim < self.nodes.shape[1]:
-            self.nodes = self.nodes[:,:ndim]
+            self.nodes = self.nodes[:, :ndim]
 
         self.crd_name: tuple[str, ...]
         if ndim == 1:
@@ -125,13 +125,13 @@ class Mesh(MeshBase):
 
     def __repr__(self):
         return (
-                 f"{object.__repr__(self)}\n\n"
-                 f"elm_type: {self.elm_type}\n"
-                 f"n_nodes: {self.n_nodes}\n"
-                 f"n_elements: {self.n_elements}\n"
-                 f"n node_sets: {len(self.node_sets)}\n"
-                 f"n element_sets: {len(self.element_sets)}"
-               )
+            f"{object.__repr__(self)}\n\n"
+            f"elm_type: {self.elm_type}\n"
+            f"n_nodes: {self.n_nodes}\n"
+            f"n_elements: {self.n_elements}\n"
+            f"n node_sets: {len(self.node_sets)}\n"
+            f"n element_sets: {len(self.element_sets)}"
+        )
 
     @staticmethod
     def from_pyvista(
@@ -194,19 +194,23 @@ class Mesh(MeshBase):
             else:
                 ndim = None
 
-            if len(elements_dict)==1:
-                return Mesh(pvmesh.points,
-                            elements_dict[elm_type],
-                            elm_type, ndim=ndim,
-                            name=name)
-            elif len(elements_dict)==0:
+            if len(elements_dict) == 1:
+                return Mesh(
+                    pvmesh.points,
+                    elements_dict[elm_type],
+                    elm_type,
+                    ndim=ndim,
+                    name=name,
+                )
+            elif len(elements_dict) == 0:
                 raise NotImplementedError("This mesh contains no compatible element.")
             else:
-                return MultiMesh(pvmesh.points,
-                        elements_dict,
-                        ndim,
-                        name,
-                    )
+                return MultiMesh(
+                    pvmesh.points,
+                    elements_dict,
+                    ndim,
+                    name,
+                )
 
             # elm = list(pvmesh.cells_dict.values())[0]
             #     return Mesh(
@@ -1237,7 +1241,7 @@ class Mesh(MeshBase):
             return data
 
         if n_elm_gp is None:
-            if convert_from == 'GaussPoint':
+            if convert_from == "GaussPoint":
                 n_elm_gp = data.shape[-1] // self.n_elements
             else:
                 n_elm_gp = get_default_n_gp(self.elm_type)
@@ -1505,7 +1509,7 @@ class MultiMesh(Mesh):
             dim_add = ndim - self.nodes.shape[1]
             self.nodes = np.c_[self.nodes, np.zeros((self.n_nodes, dim_add))]
         elif ndim < self.nodes.shape[1]:
-            self.nodes = self.nodes[:,:ndim]
+            self.nodes = self.nodes[:, :ndim]
 
         if ndim == 1:
             self.crd_name = "X"
@@ -1533,11 +1537,11 @@ class MultiMesh(Mesh):
 
     def __repr__(self):
         return (
-                 f"{object.__repr__(self)}\n\n"
-                 f"elm_types: {tuple(self.mesh_dict.keys())}\n"
-                 f"n_nodes: {self.n_nodes}\n"
-                 f"n node_sets: {len(self.node_sets)}"
-               )
+            f"{object.__repr__(self)}\n\n"
+            f"elm_types: {tuple(self.mesh_dict.keys())}\n"
+            f"n_nodes: {self.n_nodes}\n"
+            f"n node_sets: {len(self.node_sets)}"
+        )
 
     @staticmethod
     def from_mesh_list(mesh_list: list[Mesh], name: str = "") -> "MultiMesh":

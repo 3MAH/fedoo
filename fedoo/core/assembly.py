@@ -72,11 +72,12 @@ class Assembly(AssemblyBase):
         if isinstance(mesh, str):
             mesh = Mesh.get_all()[mesh]
         if not type(mesh) == Mesh:
-            if hasattr(mesh, 'mesh_dict'):
+            if hasattr(mesh, "mesh_dict"):
                 raise TypeError(
-                      "Can't create an assembly based on a MultiMesh object. "
-                      "For that purpose, create separated assemblies for each "
-                      "element type and sum them together.")
+                    "Can't create an assembly based on a MultiMesh object. "
+                    "For that purpose, create separated assemblies for each "
+                    "element type and sum them together."
+                )
             else:
                 raise TypeError("mesh should refers to a fedoo.Mesh object")
 
@@ -933,7 +934,7 @@ class Assembly(AssemblyBase):
             elmRef = get_element(elm_type)(n_elm_gp)
             OP = elmRef.computeOperator(nodes, elements)
             mesh._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.identity(
-                OP[0,0][0].shape[0], "d", format="csr"
+                OP[0, 0][0].shape[0], "d", format="csr"
             )  # No gaussian quadrature in this case : nodal identity matrix
             mesh._saved_gausspoint2node_mat[n_elm_gp] = (
                 1  # no need to translate between pg and nodes because no pg
@@ -994,7 +995,6 @@ class Assembly(AssemblyBase):
 
             n_interpol_nodes = elmRef.n_nodes  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
 
-
             # special treatment so that elements can have several different
             # shape functions for a same node (different kind of interpolation)
             # that may be used with different x values (op_deriv.x)
@@ -1009,14 +1009,15 @@ class Assembly(AssemblyBase):
                 NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
             # end special treatment
 
-
             nb_dir_deriv = 0
             if hasattr(elmRef, "ShapeFunctionDerivativePG"):
                 derivativePG = (
                     elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
                 )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2]
-            nop = nb_dir_deriv + n_diff_interpolations  # nombre d'opérateur à discrétiser
+            nop = (
+                nb_dir_deriv + n_diff_interpolations
+            )  # nombre d'opérateur à discrétiser
 
             data = [
                 [
@@ -1034,7 +1035,9 @@ class Assembly(AssemblyBase):
                         (-1, n_elm_gp, n_interpol_nodes)
                     )  # same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv + n_diff_interpolations][j][:, :, :n_interpol_nodes] = derivativePG[
+                    data[dir_deriv + n_diff_interpolations][j][
+                        :, :, :n_interpol_nodes
+                    ] = derivativePG[
                         ...,
                         dir_deriv,
                         j * n_interpol_nodes : (j + 1) * n_interpol_nodes,
@@ -1093,11 +1096,9 @@ class Assembly(AssemblyBase):
                 xx = ListMeshCoordinatenameRank.index(deriv.x)
             else:
                 # for PGD only (will be probably deprecated):
-                # if the coordinate doesnt exist, return operator without 
+                # if the coordinate doesnt exist, return operator without
                 # derivation ()
-                return data[
-                    0, 0
-                ]
+                return data[0, 0]
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else:
@@ -1699,11 +1700,12 @@ class Assembly(AssemblyBase):
         if isinstance(mesh, str):
             mesh = Mesh[mesh]
         if not type(mesh) == Mesh:
-            if hasattr(mesh, 'mesh_dict'):
+            if hasattr(mesh, "mesh_dict"):
                 raise TypeError(
-                      "Can't create an assembly based on a MultiMesh object. "
-                      "For that purpose, create separated assemblies for each "
-                      "element type and sum them together.")
+                    "Can't create an assembly based on a MultiMesh object. "
+                    "For that purpose, create separated assemblies for each "
+                    "element type and sum them together."
+                )
             else:
                 raise TypeError("mesh should refers to a fedoo.Mesh object")
 
@@ -1714,22 +1716,20 @@ class Assembly(AssemblyBase):
 
             # get lists of some non compatible assembly_options items for each weakform in list_weakform
             list_elm_type = [
-                elm_type if elm_type != ""
-                else
-                wf.assembly_options.get(
-                    "elm_type", mesh.elm_type, mesh.elm_type
-                )
+                elm_type
+                if elm_type != ""
+                else wf.assembly_options.get("elm_type", mesh.elm_type, mesh.elm_type)
                 for wf in list_weakform
             ]
             list_n_elm_gp = [
                 wf.assembly_options.get(
                     "n_elm_gp", list_elm_type[i], get_default_n_gp(elm_type, mesh)
                 )
-                for i,wf in enumerate(list_weakform)
+                for i, wf in enumerate(list_weakform)
             ]
             list_assume_sym = [
                 wf.assembly_options.get("assume_sym", list_elm_type[i], False)
-                for i,wf in enumerate(list_weakform)
+                for i, wf in enumerate(list_weakform)
             ]
             list_prop = list(zip(list_n_elm_gp, list_assume_sym, list_elm_type))
             list_diff_prop = list(
