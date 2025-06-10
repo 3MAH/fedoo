@@ -15,10 +15,7 @@ h = 20
 thickness = 1
 F = -100
 
-geom_elm_type = "quad4"  # choose among 'tri3', 'tri6', 'quad4', 'quad9'
-plate_elm_type = (
-    "p" + geom_elm_type
-)  # plate interpolation. Same as geom interpolation in local element coordinate (change of basis)
+geom_elm_type = "quad4"  # choose among 'tri3', 'tri6', 'quad4', 'quad8', 'quad9'
 reduced_integration = "auto"  # choose among True, False and 'auto'. if True, use reduce integration for shear. if 'auto', depend on the order of the element
 save_results = True
 
@@ -49,7 +46,7 @@ else:
     # full integration
     fd.weakform.PlateEquilibriumFI("PlateSection", name="WFplate")
 
-fd.Assembly.create("WFplate", "plate", plate_elm_type, name="plate")
+fd.Assembly.create("WFplate", "plate", name="plate")
 
 pb = fd.problem.Linear("plate")
 

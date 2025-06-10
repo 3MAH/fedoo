@@ -265,6 +265,12 @@ class WeakFormSum(WeakFormBase):
         )
         self._list_weakform = list_weakform
 
+    def __getitem__(self, item):
+        return self._list_weakform[item]
+
+    def __repr__(self):
+        return f"fedoo.WeakFormSum({self._list_weakform})"
+
     def get_weak_equation(self, assembly, pb):
         Diff = 0
         self._list_mat_lumping = []

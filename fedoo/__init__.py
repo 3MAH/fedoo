@@ -3,6 +3,7 @@ from ._version import __version__
 from .core import (
     MPC,
     Assembly,
+    AssemblySum,
     ConstitutiveLaw,
     DataSet,
     ListBC,
@@ -11,6 +12,7 @@ from .core import (
     MultiFrameDataSet,
     Problem,
     WeakForm,
+    WeakFormSum,
     read_data,
 )
 

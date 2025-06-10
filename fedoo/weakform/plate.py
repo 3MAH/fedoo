@@ -47,6 +47,14 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         self.constitutivelaw = PlateConstitutiveLaw
 
+        # automatically set the right assembly element formulation
+        # for each geometric interpolation
+        self.assembly_options["elm_type", "tri3"] = "ptri3"
+        self.assembly_options["elm_type", "quad4"] = "pquad4"
+        self.assembly_options["elm_type", "tri6"] = "ptri6"
+        self.assembly_options["elm_type", "quad8"] = "pquad8"
+        self.assembly_options["elm_type", "quad9"] = "pquad9"
+
     def GetGeneralizedStrainOperator(self):
         # membrane strain
         EpsX = self.space.derivative("DispX", "X")
