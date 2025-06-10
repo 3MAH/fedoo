@@ -6,16 +6,29 @@ on:
 jobs:
   conda-packaging:
     name: Conda packaging
-    runs-on: "windows-latest"
+    runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: conda-incubator/setup-miniconda@v2
         with:
           miniconda-version: "latest"
-      - name: Conda build
-        shell: pwsh
+          auto-update-conda: true
+
+      - name: Install Dependencies
+        shell: bash -el {0}
         run: |
           conda install conda-build anaconda-client
-          anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
+          conda config --set anaconda_upload no
+
+      - name: Conda build
+        shell: bash -el {0}
+        run: |
           conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
+
+      - name: Upload to Anaconda
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
           anaconda upload noarch/*.conda --force
+          
