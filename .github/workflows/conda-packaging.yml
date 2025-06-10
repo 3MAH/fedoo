@@ -6,15 +6,16 @@ on:
 jobs:
   conda-packaging:
     name: Conda packaging
-    runs-on: "windows-latest"
+    runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
       - name: Conda build
-        shell: pwsh
+        shell: bash -l {0}
         run: |
+          conda update --all
           conda install conda-build anaconda-client
           anaconda login --username ${{ secrets.ANACONDA_USERNAME }} --password ${{ secrets.ANACONDA_PASSWORD }}
           conda-build conda.recipe -c conda-forge -c set3mah --output-folder  .
