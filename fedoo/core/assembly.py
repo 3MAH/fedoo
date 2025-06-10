@@ -11,7 +11,7 @@ from fedoo.core._sparsematrix import (
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
 from fedoo.core.mesh import Mesh
-from fedoo.core.weakform import WeakFormBase, _AssemblyOptions
+from fedoo.core.weakform import WeakFormBase, _AssemblyOptions, WeakFormSum
 from fedoo.lib_elements.element_list import (
     get_default_n_gp,
     get_element,
@@ -71,6 +71,14 @@ class Assembly(AssemblyBase):
 
         if isinstance(mesh, str):
             mesh = Mesh.get_all()[mesh]
+        if not type(mesh) == Mesh:
+            if hasattr(mesh, 'mesh_dict'):
+                raise TypeError(
+                      "Can't create an assembly based on a MultiMesh object. "
+                      "For that purpose, create separated assemblies for each "
+                      "element type and sum them together.")
+            else:
+                raise TypeError("mesh should refers to a fedoo.Mesh object")
 
         if isinstance(weakform, WeakFormBase):
             self.weakform = weakform
@@ -85,14 +93,16 @@ class Assembly(AssemblyBase):
         # attributes to set assembly related to current (deformed) configuration
         # used for update lagrangian method.
         self.current = self
+        self.associated_assembly_sum = None
+        """AssemblySum object that contains the assembly."""
 
         self.meshChange = kargs.pop("MeshChange", False)
         self.mesh = mesh
         if elm_type == "":
-            elm_type = mesh.elm_type
+            elm_type = weakform.assembly_options.get(
+                "elm_type", mesh.elm_type, mesh.elm_type
+            )  # change elm_type if it was specified in assembly_options
         self.elm_type = elm_type.lower()
-        self._use_local_csys = self._test_if_local_csys()
-        self._element_local_frame = None
 
         self.n_elm_gp = kargs.pop("n_elm_gp", None)
         if self.n_elm_gp is None:
@@ -102,6 +112,9 @@ class Assembly(AssemblyBase):
 
         self.assume_sym = weakform.assembly_options.get("assume_sym", elm_type, False)
         self.mat_lumping = weakform.assembly_options.get("mat_lumping", elm_type, False)
+
+        self._use_local_csys = self._test_if_local_csys()
+        self._element_local_frame = None
 
         self._saved_bloc_structure = None  # use to save data about the sparse structure and avoid time consuming recomputation
         self._assembly_method = (
@@ -458,7 +471,7 @@ class Assembly(AssemblyBase):
 
             # list_elm_type contains the id of the element associated with every variable
             # list_elm_type could be stored to avoid reevaluation
-            if hasattr(get_element(elm_type), "get_elm_type"):
+            if hasattr(get_element(self.elm_type), "get_elm_type"):
                 element = get_element(self.elm_type)
                 list_elm_type = [
                     element.get_elm_type(self.space.variable_name(i))
@@ -920,7 +933,7 @@ class Assembly(AssemblyBase):
             elmRef = get_element(elm_type)(n_elm_gp)
             OP = elmRef.computeOperator(nodes, elements)
             mesh._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.identity(
-                OP[0][0].shape[0], "d", format="csr"
+                OP[0,0][0].shape[0], "d", format="csr"
             )  # No gaussian quadrature in this case : nodal identity matrix
             mesh._saved_gausspoint2node_mat[n_elm_gp] = (
                 1  # no need to translate between pg and nodes because no pg
@@ -981,15 +994,29 @@ class Assembly(AssemblyBase):
 
             n_interpol_nodes = elmRef.n_nodes  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
 
+
+            # special treatment so that elements can have several different
+            # shape functions for a same node (different kind of interpolation)
+            # that may be used with different x values (op_deriv.x)
+            # required for 3D hourglass
+            n_diff_interpolations = 1
+            if isinstance(elmRef.ShapeFunctionPG, list):
+                n_diff_interpolations = len(elmRef.ShapeFunctionPG)
+                shape_functions = elmRef.ShapeFunctionPG
+                NbDoFperNode = elmRef.ShapeFunctionPG[0].shape[-1] // n_interpol_nodes
+            else:
+                shape_functions = [elmRef.ShapeFunctionPG]
+                NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
+            # end special treatment
+
+
             nb_dir_deriv = 0
             if hasattr(elmRef, "ShapeFunctionDerivativePG"):
                 derivativePG = (
                     elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
                 )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2]
-            nop = nb_dir_deriv + 1  # nombre d'opérateur à discrétiser
-
-            NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
+            nop = nb_dir_deriv + n_diff_interpolations  # nombre d'opérateur à discrétiser
 
             data = [
                 [
@@ -1000,13 +1027,14 @@ class Assembly(AssemblyBase):
             ]
 
             for j in range(0, NbDoFperNode):
-                data[0][j][:, :, :n_interpol_nodes] = elmRef.ShapeFunctionPG[
-                    ..., j * n_interpol_nodes : (j + 1) * n_interpol_nodes
-                ].reshape(
-                    (-1, n_elm_gp, n_interpol_nodes)
-                )  # same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
+                for i in range(n_diff_interpolations):  # i should be mainly 0
+                    data[i][j][:, :, :n_interpol_nodes] = shape_functions[i][
+                        ..., j * n_interpol_nodes : (j + 1) * n_interpol_nodes
+                    ].reshape(
+                        (-1, n_elm_gp, n_interpol_nodes)
+                    )  # same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv + 1][j][:, :, :n_interpol_nodes] = derivativePG[
+                    data[dir_deriv + n_diff_interpolations][j][:, :, :n_interpol_nodes] = derivativePG[
                         ...,
                         dir_deriv,
                         j * n_interpol_nodes : (j + 1) * n_interpol_nodes,
@@ -1023,10 +1051,10 @@ class Assembly(AssemblyBase):
                 for i in range(nop)
             ]
 
-            data = {0: op_dd[0]}  # data is a dictionnary
+            data = {(0, i): op_dd[i] for i in range(n_diff_interpolations)}
             for i in range(nb_dir_deriv):
                 data[1, i] = op_dd[
-                    i + 1
+                    i + n_diff_interpolations
                 ]  # as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
             Assembly._saved_elementary_operators[(mesh, elm_type.name, n_elm_gp)] = data
@@ -1049,25 +1077,31 @@ class Assembly(AssemblyBase):
 
         data = Assembly._saved_elementary_operators[(mesh, elm_type, n_elm_gp)]
 
-        if deriv.ordre == 0 and 0 in data:
-            return data[0]
-
-        # extract the mesh coordinate that corespond to coordinate rank given in deriv.x
-        ListMeshCoordinatenameRank = [
-            self.space.coordinate_rank(crdname)
-            for crdname in mesh.crd_name
-            if crdname in self.space.list_coordinates()
-        ]
-        if deriv.x in ListMeshCoordinatenameRank:
-            xx = ListMeshCoordinatenameRank.index(deriv.x)
+        if deriv.ordre == 0:
+            # in this case deriv.x should be 0 execpt if several interpolations
+            # are used. In this case, deriv.x is and arbitrary id not related
+            # to any coordinate
+            xx = deriv.x
         else:
-            return data[
-                0
-            ]  # if the coordinate doesnt exist, return operator without derivation (for PGD)
-
+            # extract the mesh coordinate that corespond to coordinate rank given in deriv.x
+            ListMeshCoordinatenameRank = [
+                self.space.coordinate_rank(crdname)
+                for crdname in mesh.crd_name
+                if crdname in self.space.list_coordinates()
+            ]
+            if deriv.x in ListMeshCoordinatenameRank:
+                xx = ListMeshCoordinatenameRank.index(deriv.x)
+            else:
+                # for PGD only (will be probably deprecated):
+                # if the coordinate doesnt exist, return operator without 
+                # derivation ()
+                return data[
+                    0, 0
+                ]
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else:
+            pass
             assert 0, "Operator unavailable"
 
     def _get_gaussian_quadrature_mat(
@@ -1664,9 +1698,14 @@ class Assembly(AssemblyBase):
 
         if isinstance(mesh, str):
             mesh = Mesh[mesh]
-        if elm_type == "":
-            elm_type = mesh.elm_type
-        elm_type = elm_type.lower()
+        if not type(mesh) == Mesh:
+            if hasattr(mesh, 'mesh_dict'):
+                raise TypeError(
+                      "Can't create an assembly based on a MultiMesh object. "
+                      "For that purpose, create separated assemblies for each "
+                      "element type and sum them together.")
+            else:
+                raise TypeError("mesh should refers to a fedoo.Mesh object")
 
         if (
             hasattr(weakform, "list_weakform") and weakform.assembly_options is None
@@ -1674,17 +1713,25 @@ class Assembly(AssemblyBase):
             list_weakform = weakform.list_weakform
 
             # get lists of some non compatible assembly_options items for each weakform in list_weakform
-            list_n_elm_gp = [
+            list_elm_type = [
+                elm_type if elm_type != ""
+                else
                 wf.assembly_options.get(
-                    "n_elm_gp", elm_type, get_default_n_gp(elm_type, mesh)
+                    "elm_type", mesh.elm_type, mesh.elm_type
                 )
                 for wf in list_weakform
             ]
-            list_assume_sym = [
-                wf.assembly_options.get("assume_sym", elm_type, False)
-                for wf in list_weakform
+            list_n_elm_gp = [
+                wf.assembly_options.get(
+                    "n_elm_gp", list_elm_type[i], get_default_n_gp(elm_type, mesh)
+                )
+                for i,wf in enumerate(list_weakform)
             ]
-            list_prop = list(zip(list_n_elm_gp, list_assume_sym))
+            list_assume_sym = [
+                wf.assembly_options.get("assume_sym", list_elm_type[i], False)
+                for i,wf in enumerate(list_weakform)
+            ]
+            list_prop = list(zip(list_n_elm_gp, list_assume_sym, list_elm_type))
             list_diff_prop = list(
                 set(list_prop)
             )  # list of different non compatible properties that required separated assembly
@@ -1692,6 +1739,7 @@ class Assembly(AssemblyBase):
             if len(list_diff_prop) == 1:  # only 1 assembly is required
                 # update assembly_options
                 prop = list_diff_prop[0]
+                elm_type = prop[2]
                 weakform.assembly_options = _AssemblyOptions()
                 weakform.assembly_options["n_elm_gp", elm_type] = prop[0]
                 weakform.assembly_options["assume_sym", elm_type] = prop[1]
@@ -1707,11 +1755,12 @@ class Assembly(AssemblyBase):
                     l_wf = [
                         list_weakform[i] for i, p in enumerate(list_prop) if p == prop
                     ]  # list_weakform with compatible properties
+                    elm_type = prop[2]
                     if len(l_wf) == 1:
                         wf = l_wf[0]  # standard weakform. No WeakFormSum required
                     else:
                         # create a new WeakFormSum object
-                        wf = WeakFormSum(l_wf)  # to modify : add automatic name
+                        wf = WeakFormSum(l_wf)
                         # define the assembly_options of the new weakform
                         wf.assembly_options = _AssemblyOptions()
                         wf.assembly_options["n_elm_gp", elm_type] = prop[0]
@@ -1725,13 +1774,14 @@ class Assembly(AssemblyBase):
                     if list_weakform[0] in l_wf:
                         assembly_output = list_assembly[
                             -1
-                        ]  # by default, the assembly used for output is the one assocaited to the 1st weakform
+                        ]  # by default, the assembly used for output is the one associated to the 1st weakform
 
             # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
             kargs["assembly_output"] = kargs.get("assembly_output", assembly_output)
             return AssemblySum(list_assembly, name, **kargs)
 
-        return Assembly(weakform, mesh, elm_type, name, **kargs)
+        else:
+            return Assembly(weakform, mesh, elm_type, name, **kargs)
 
 
 def delete_memory():

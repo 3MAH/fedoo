@@ -7,6 +7,7 @@ from fedoo.core.base import MeshBase
 from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from fedoo.util.test_periodicity import is_periodic
 from scipy import sparse
+import warnings
 
 from os.path import splitext
 
@@ -101,6 +102,8 @@ class Mesh(MeshBase):
             #     local_frame_temp[:,:2,:2] = self.local_frame
             #     local_frame_temp[:,2,2]   = 1
             #     self.local_frame = local_frame_temp
+        elif ndim < self.nodes.shape[1]:
+            self.nodes = self.nodes[:,:ndim]
 
         self.crd_name: tuple[str, ...]
         if ndim == 1:
@@ -120,9 +123,20 @@ class Mesh(MeshBase):
     def __add__(self, another_mesh):
         return Mesh.stack(self, another_mesh)
 
+    def __repr__(self):
+        return (
+                 f"{object.__repr__(self)}\n\n"
+                 f"elm_type: {self.elm_type}\n"
+                 f"n_nodes: {self.n_nodes}\n"
+                 f"n_elements: {self.n_elements}\n"
+                 f"n node_sets: {len(self.node_sets)}\n"
+                 f"n element_sets: {len(self.element_sets)}"
+               )
+
     @staticmethod
     def from_pyvista(
-        pvmesh: pv.PolyData | pv.UnstructuredGrid, name: str = ""
+        pvmesh: pv.PolyData | pv.UnstructuredGrid,
+        name: str = "",
     ) -> "Mesh":
         """Build a Mesh from a pyvista UnstructuredGrid or PolyData mesh.
 
@@ -137,52 +151,71 @@ class Mesh(MeshBase):
 
         Notes
         -----
-        For now, only mesh with single element type may be imported.
+        If the pyvista mesh with single element type may be imported.
         Multi-element meshes will be integrated later."""
         if USE_PYVISTA:
             if isinstance(pvmesh, pv.PolyData):
                 pvmesh = pvmesh.cast_to_unstructured_grid()
 
-            if len(pvmesh.cells_dict) != 1:
-                raise NotImplementedError
+            # if len(pvmesh.cells_dict) != 1:
+            #     raise NotImplementedError
+            elements_dict = {}
+            for celltype in pvmesh.cells_dict:
+                elm_type = {
+                    3: "lin2",  # pv._vtk.VTK_LINE
+                    5: "tri3",  # pv._vtk.VTK_TRIANGLE
+                    9: "quad4",  # pv._vtk.VTK_QUAD
+                    10: "tet4",  # pv._vtk.VTK_TETRA
+                    12: "hex8",  # pv._vtk.VTK_HEXAHEDRON
+                    13: "wed6",  # pv._vtk.VTK_WEDGE
+                    14: "pyr5",  # NOT IMPLEMENTED in fedoo # pv._vtk.VTK_PYRAMID
+                    21: "lin3",  # pv._vtk.VTK_QUADRATIC_EDGE
+                    22: "tri6",  # pv._vtk.VTK_QUADRATIC_TRIANGLE
+                    23: "quad8",  # pv._vtk.VTK_QUADRATIC_QUAD
+                    24: "tet10",  # pv._vtk.VTK_QUADRATIC_TETRA
+                    25: "hex20",  # pv._vtk.VTK_QUADRATIC_HEXAHEDRON
+                    26: "wed15",  # pv._vtk.VTK_QUADRATIC_WEDGE
+                    27: "pyr13",  # NOT IMPLEMENTED in fedoo #pv._vtk.VTK_QUADRATIC_PYRAMID
+                    28: "quad9",  # pv._vtk.VTK_BIQUADRATIC_QUAD
+                    29: "hex27",  # NOT IMPLEMENTED in fedoo #pv._vtk.VTK_TRIQUADRATIC_HEXAHEDRON
+                    32: "wed18",  # pv._vtk.VTK_BIQUADRATIC_QUADRATIC_WEDGE
+                }.get(celltype, None)
+                if elm_type is None:
+                    warnings.warn(
+                        "Element Type " + str(elm_type) + " not available in pyvista"
+                    )
+                else:
+                    elements_dict[elm_type] = pvmesh.cells_dict[celltype]
 
-            elm_type = {
-                3: "lin2",  # pv._vtk.VTK_LINE
-                5: "tri3",  # pv._vtk.VTK_TRIANGLE
-                9: "quad4",  # pv._vtk.VTK_QUAD
-                10: "tet4",  # pv._vtk.VTK_TETRA
-                12: "hex8",  # pv._vtk.VTK_HEXAHEDRON
-                13: "wed6",  # pv._vtk.VTK_WEDGE
-                14: "pyr5",  # NOT IMPLEMENTED in fedoo # pv._vtk.VTK_PYRAMID
-                21: "lin3",  # pv._vtk.VTK_QUADRATIC_EDGE
-                22: "tri6",  # pv._vtk.VTK_QUADRATIC_TRIANGLE
-                23: "quad8",  # pv._vtk.VTK_QUADRATIC_QUAD
-                24: "tet10",  # pv._vtk.VTK_QUADRATIC_TETRA
-                25: "hex20",  # pv._vtk.VTK_QUADRATIC_HEXAHEDRON
-                26: "wed15",  # pv._vtk.VTK_QUADRATIC_WEDGE
-                27: "pyr13",  # NOT IMPLEMENTED in fedoo #pv._vtk.VTK_QUADRATIC_PYRAMID
-                28: "quad9",  # pv._vtk.VTK_BIQUADRATIC_QUAD
-                29: "hex27",  # NOT IMPLEMENTED in fedoo #pv._vtk.VTK_TRIQUADRATIC_HEXAHEDRON
-                32: "wed18",  # pv._vtk.VTK_BIQUADRATIC_QUADRATIC_WEDGE
-            }.get(pvmesh.celltypes[0], None)
+            if "ndim" in pvmesh.field_data:
+                # vtk mesh are always 3d.
+                # the ndim field is used to specify 2D or 1D meshes
+                ndim = int(pvmesh.field_data["ndim"][0])
+            else:
+                ndim = None
 
-            if elm_type is None:
-                raise NameError(
-                    "Element Type " + str(elm_type) + " not available in pyvista"
-                )
+            if len(elements_dict)==1:
+                return Mesh(pvmesh.points,
+                            elements_dict[elm_type],
+                            elm_type, ndim=ndim,
+                            name=name)
+            elif len(elements_dict)==0:
+                raise NotImplementedError("This mesh contains no compatible element.")
+            else:
+                return MultiMesh(pvmesh.points,
+                        elements_dict,
+                        ndim,
+                        name,
+                    )
 
-            elm = list(pvmesh.cells_dict.values())[0]
-            # elm = pvmesh.cells.reshape(-1,pvmesh.cells[0]+1)[1:]
+            # elm = list(pvmesh.cells_dict.values())[0]
+            #     return Mesh(
+            #         pvmesh.points[:, : int(pvmesh.field_data["ndim"][0])],
+            #         elm,
+            #         elm_type,
+            #         name=name,
+            #     )
 
-            if "ndim" in pvmesh.field_data:  # vtk mesh are always 3d. the ndim
-                return Mesh(
-                    pvmesh.points[:, : int(pvmesh.field_data["ndim"][0])],
-                    elm,
-                    elm_type,
-                    name=name,
-                )
-
-            return Mesh(pvmesh.points, elm, elm_type, name=name)
         else:
             raise NameError("Pyvista not installed.")
 
@@ -1204,7 +1237,10 @@ class Mesh(MeshBase):
             return data
 
         if n_elm_gp is None:
-            n_elm_gp = get_default_n_gp(self.elm_type)
+            if convert_from == 'GaussPoint':
+                n_elm_gp = data.shape[-1] // self.n_elements
+            else:
+                n_elm_gp = get_default_n_gp(self.elm_type)
 
         if convert_from is None:
             convert_from = self.determine_data_type(data, n_elm_gp)
@@ -1256,9 +1292,36 @@ class Mesh(MeshBase):
             @ self.data_to_gausspoint(field, n_elm_gp).T
         )
 
-    def get_volume(self):
-        """Compute the total volume of the mesh (or surface for 2D meshes)."""
+    def get_volume(self, n_elm_gp: int | None = None):
+        """Compute the total volume of the mesh (or surface for 2D meshes).
+
+        Parameters
+        ----------
+        n_elm_gp: int or None, default = None
+            Number of gauss points used on each element to compute the volume.
+            If None, a default value is used depending on the element type.
+        """
         return sum(self._get_gaussian_quadrature_mat().data)
+
+    def get_element_volumes(self, n_elm_gp: int | None = None):
+        """Compute the volume of each element (or surface for 2D meshes).
+
+        Parameters
+        ----------
+        n_elm_gp: int or None, default = None
+            Number of gauss points used to compute the volumes
+            If None, a default value is used depending on the element type.
+        """
+        if n_elm_gp == 1:
+            return self._get_gaussian_quadrature_mat(1).data
+
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(self.elm_type)
+
+        return np.sum(
+            self._get_gaussian_quadrature_mat().data.reshape(n_elm_gp, -1),
+            axis=0,
+        )
 
     def reset_interpolation(self) -> None:
         """Remove all the saved data related to field interpolation.
@@ -1441,6 +1504,8 @@ class MultiMesh(Mesh):
         elif ndim > self.nodes.shape[1]:
             dim_add = ndim - self.nodes.shape[1]
             self.nodes = np.c_[self.nodes, np.zeros((self.n_nodes, dim_add))]
+        elif ndim < self.nodes.shape[1]:
+            self.nodes = self.nodes[:,:ndim]
 
         if ndim == 1:
             self.crd_name = "X"
@@ -1451,8 +1516,10 @@ class MultiMesh(Mesh):
 
         self.mesh_dict = {}
         if elements_dict is not None:
-            for elm_type, elements in enumerate(elements_dict):
-                self.mesh_dict[elm_type] = Mesh(self.nodes, elements, elm_type, ndim)
+            for elm_type, elements in elements_dict.items():
+                self.mesh_dict[elm_type] = Mesh(
+                    self.nodes, elements, elm_type, ndim=ndim
+                )
 
         self.node_sets = {}
         """Dict containing node sets associated to the mesh"""
@@ -1464,9 +1531,17 @@ class MultiMesh(Mesh):
     def __getitem__(self, item: str) -> Mesh:
         return self.mesh_dict[item]
 
+    def __repr__(self):
+        return (
+                 f"{object.__repr__(self)}\n\n"
+                 f"elm_types: {tuple(self.mesh_dict.keys())}\n"
+                 f"n_nodes: {self.n_nodes}\n"
+                 f"n node_sets: {len(self.node_sets)}"
+               )
+
     @staticmethod
     def from_mesh_list(mesh_list: list[Mesh], name: str = "") -> "MultiMesh":
-        multi_mesh = MultiMesh(mesh_list[0].nodes, name)
+        multi_mesh = MultiMesh(mesh_list[0].nodes, name=name)
         multi_mesh._n_physical_nodes = mesh_list[0]._n_physical_nodes
         for mesh in mesh_list:
             multi_mesh.mesh_dict[mesh.elm_type] = mesh

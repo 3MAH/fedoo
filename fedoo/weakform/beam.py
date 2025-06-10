@@ -279,7 +279,7 @@ class BeamEquilibrium(WeakFormBase):
 
                     # update rot values and dirichlet boundary conditions
 
-                    rot_var = self.space.get_vector("Rot")
+                    rot_var = self.space.get_rank_vector("Rot")
                     ### WARNING only work if vectors are contigous in the variable order
                     if np.isscalar(pb._U) and pb._U == 0:
                         pb._dU[
@@ -303,7 +303,7 @@ class BeamEquilibrium(WeakFormBase):
                                 # if bc._dof_index[0] == 605:
                                 #     print(bc.get_true_value(pb._t_fact))
                                 pb._Xbc[bc._dof_index] = (
-                                    bc.get_true_value(pb._t_fact)
+                                    bc.get_true_value(pb.t_fact)
                                     - pb.get_dof_solution()[bc._dof_index]
                                 )
 

@@ -1,8 +1,9 @@
 from .modelingspace import ModelingSpace
 from .base import ConstitutiveLaw
 from .mesh import Mesh
-from .weakform import WeakForm
+from .weakform import WeakForm, WeakFormSum
 from .assembly import Assembly
+from .assembly_sum import AssemblySum
 from .dataset import (
     DataSet,
     MultiFrameDataSet,
@@ -15,8 +16,10 @@ from .problem import Problem
 __all__ = [
     "Mesh",
     "Assembly",
+    "AssemblySum",
     "ConstitutiveLaw",
     "WeakForm",
+    "WeakFormSum",
     "ModelingSpace",
     "DataSet",
     "MultiFrameDataSet",

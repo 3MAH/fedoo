@@ -310,3 +310,51 @@ class Quad9(ElementQuadrangle):
             )
             for xi in vec_xi
         ]
+
+#### Hourglass control shape function ####
+
+class Quad4Hourglass(Quad4):
+    name = "quad4hourglass"
+    default_n_gp = 1
+    n_nodes = 4
+
+    def __init__(
+        self, n_elm_gp=1, **kargs
+    ):
+        assembly = kargs.get("assembly", None)
+        if assembly is not None:
+            self.x_nd = assembly.mesh.nodes[assembly.mesh.elements]
+            self.mesh = assembly.mesh
+        else:
+            assert 0, 'Internal error, contact developper'
+        if n_elm_gp != 1:
+            raise ValueError('Hourglass stiffness only applicable with '
+                             '1 integration point')
+        self._b_matrix = self._get_b_matrix()
+        assembly._b_matrix = self._b_matrix  # for use in weakform
+        super().__init__(n_elm_gp, **kargs)
+
+
+    def ShapeFunction(self, vec_xi):
+        h = 0.5 * np.array([[1, -1, 1, -1]])
+        b = self._b_matrix
+
+        return (
+            h
+            - (self.x_nd[:, :, 0] @ h.T) * b[0].T
+            - (self.x_nd[:, :, 1] @ h.T) * b[1].T
+        )[:,np.newaxis,:]
+        # shape = (Nel, Nb_pg=1, Nddl=4)
+
+    def _get_b_matrix(self):
+        A = self.mesh.get_element_volumes(1)
+        x = self.x_nd[:, :, 0].T
+        y = self.x_nd[:, :, 1].T
+        return (
+            1 / (2 * A) * np.array(
+                [
+                    [y[1] - y[3], y[2] - y[0], y[3] - y[1], y[0] - y[2]],
+                    [x[3] - x[1], x[0] - x[2], x[1] - x[3], x[2] - x[0]],
+                ]
+            )
+        )

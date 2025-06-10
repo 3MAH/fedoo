@@ -13,9 +13,11 @@ class _AssemblyOptions:
 
     def __setitem__(self, item, value):
         # possible options :
-        # * 'assume_sym' - self.assembly_options['assume_sym'] = True  to accelerate assembly if the weak form may be considered as symmetric
+        # * 'assume_sym' - self.assembly_options['assume_sym'] = True
+        #    to accelerate assembly if the weak form may be considered as symmetric
         # * 'n_elm_gp' - set the default n_elm_gp
         # * 'mat_lumping' - matrix lumping if set to True
+        # * 'elm_type' - set the default elm_type
 
         if isinstance(item, tuple):
             assert len(item) == 2, "item not understoond"
@@ -262,6 +264,12 @@ class WeakFormSum(WeakFormBase):
             [a.constitutivelaw for a in list_weakform if a.constitutivelaw is not None]
         )
         self._list_weakform = list_weakform
+
+    def __getitem__(self, item):
+        return self._list_weakform[item]
+
+    def __repr__(self):
+        return f"fedoo.WeakFormSum({self._list_weakform})"
 
     def get_weak_equation(self, assembly, pb):
         Diff = 0
