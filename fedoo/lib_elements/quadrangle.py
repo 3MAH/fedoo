@@ -336,7 +336,7 @@ class Quad4Hourglass(Quad4):
 
 
     def ShapeFunction(self, vec_xi):
-        h = 0.25 * np.array([[1, -1, 1, -1]])
+        h = 0.5 * np.array([[1, -1, 1, -1]])
         b = self._b_matrix
 
         return (

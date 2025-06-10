@@ -71,6 +71,14 @@ class Assembly(AssemblyBase):
 
         if isinstance(mesh, str):
             mesh = Mesh.get_all()[mesh]
+        if not type(mesh) == Mesh:
+            if hasattr(mesh, 'mesh_dict'):
+                raise TypeError(
+                      "Can't create an assembly based on a MultiMesh object. "
+                      "For that purpose, create separated assemblies for each "
+                      "element type and sum them together.")
+            else:
+                raise TypeError("mesh should refers to a fedoo.Mesh object")
 
         if isinstance(weakform, WeakFormBase):
             self.weakform = weakform
@@ -85,6 +93,8 @@ class Assembly(AssemblyBase):
         # attributes to set assembly related to current (deformed) configuration
         # used for update lagrangian method.
         self.current = self
+        self.associated_assembly_sum = None
+        """AssemblySum object that contains the assembly."""
 
         self.meshChange = kargs.pop("MeshChange", False)
         self.mesh = mesh
@@ -989,12 +999,14 @@ class Assembly(AssemblyBase):
             # shape functions for a same node (different kind of interpolation)
             # that may be used with different x values (op_deriv.x)
             # required for 3D hourglass
-            nb_diff_interpolations = 1
+            n_diff_interpolations = 1
             if isinstance(elmRef.ShapeFunctionPG, list):
                 n_diff_interpolations = len(elmRef.ShapeFunctionPG)
                 shape_functions = elmRef.ShapeFunctionPG
+                NbDoFperNode = elmRef.ShapeFunctionPG[0].shape[-1] // n_interpol_nodes
             else:
                 shape_functions = [elmRef.ShapeFunctionPG]
+                NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
             # end special treatment
 
 
@@ -1004,9 +1016,7 @@ class Assembly(AssemblyBase):
                     elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
                 )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2]
-            nop = nb_dir_deriv + nb_diff_interpolations  # nombre d'opérateur à discrétiser
-
-            NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
+            nop = nb_dir_deriv + n_diff_interpolations  # nombre d'opérateur à discrétiser
 
             data = [
                 [
@@ -1017,14 +1027,14 @@ class Assembly(AssemblyBase):
             ]
 
             for j in range(0, NbDoFperNode):
-                for i in range(nb_diff_interpolations):  # i should be mainly 0
+                for i in range(n_diff_interpolations):  # i should be mainly 0
                     data[i][j][:, :, :n_interpol_nodes] = shape_functions[i][
                         ..., j * n_interpol_nodes : (j + 1) * n_interpol_nodes
                     ].reshape(
                         (-1, n_elm_gp, n_interpol_nodes)
                     )  # same as dataNodeToPG matrix if geometrical shape function are the same as interpolation functions
                 for dir_deriv in range(nb_dir_deriv):
-                    data[dir_deriv + nb_diff_interpolations][j][:, :, :n_interpol_nodes] = derivativePG[
+                    data[dir_deriv + n_diff_interpolations][j][:, :, :n_interpol_nodes] = derivativePG[
                         ...,
                         dir_deriv,
                         j * n_interpol_nodes : (j + 1) * n_interpol_nodes,
@@ -1041,10 +1051,10 @@ class Assembly(AssemblyBase):
                 for i in range(nop)
             ]
 
-            data = {(0, i): op_dd[i] for i in range(nb_diff_interpolations)}
+            data = {(0, i): op_dd[i] for i in range(n_diff_interpolations)}
             for i in range(nb_dir_deriv):
                 data[1, i] = op_dd[
-                    i + nb_diff_interpolations
+                    i + n_diff_interpolations
                 ]  # as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
             Assembly._saved_elementary_operators[(mesh, elm_type.name, n_elm_gp)] = data
@@ -1091,6 +1101,7 @@ class Assembly(AssemblyBase):
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else:
+            pass
             assert 0, "Operator unavailable"
 
     def _get_gaussian_quadrature_mat(
@@ -1687,6 +1698,14 @@ class Assembly(AssemblyBase):
 
         if isinstance(mesh, str):
             mesh = Mesh[mesh]
+        if not type(mesh) == Mesh:
+            if hasattr(mesh, 'mesh_dict'):
+                raise TypeError(
+                      "Can't create an assembly based on a MultiMesh object. "
+                      "For that purpose, create separated assemblies for each "
+                      "element type and sum them together.")
+            else:
+                raise TypeError("mesh should refers to a fedoo.Mesh object")
 
         if (
             hasattr(weakform, "list_weakform") and weakform.assembly_options is None

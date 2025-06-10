@@ -517,8 +517,9 @@ class Hex8Hourglass(Hex8):
                   np.array([[1, -1, 1, -1, 1, -1, 1, -1]]),  # 3rd mode
                   np.array([[-1, 1, -1, 1, 1, -1, 1, -1]])]  # mode 4
         b = self._b_matrix
+
         return [
-            (
+            (1/np.sqrt(8))*(
                 h
                 - (self.x_nd[:, :, 0] @ h.T) * b[0].T
                 - (self.x_nd[:, :, 1] @ h.T) * b[1].T
@@ -526,10 +527,12 @@ class Hex8Hourglass(Hex8):
             )[:, np.newaxis, :]
             for h in list_h
         ]
-        # list (len = nb hourglass mode) 
+        # list (len = nb hourglass mode)
         # of array of shape = (Nel, Nb_pg=1, Nddl=4)
-
-    def _get_b_matrix(self):        
-        self.ComputeJacobianMatrix(self.x_nd,np.array([[0, 0]]))
+    def _get_b_matrix(self):
+        xi_center = self.get_gp_elm_coordinates(1)
+        self.ComputeJacobianMatrix(self.x_nd, xi_center)
         # should try to avoid computing multiple time J
-        return (self.inverseJacobian @ self.ShapeFunctionDerivative(np.array([[0,0]]))[0])[:,0]
+        return (
+            self.inverseJacobian @ self.ShapeFunctionDerivative(xi_center)[0]
+        )[:, 0].transpose(1,2,0)
