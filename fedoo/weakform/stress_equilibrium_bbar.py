@@ -357,7 +357,7 @@ class HourglassStiffness(WeakFormBase):
       >>> wf = wf + fd.HourglassStiffness()
     """
 
-    def __init__(self, stiffness_coef = 0.125, name="", nlgeom=False, space=None):
+    def __init__(self, stiffness_coef = 0.01, name="", nlgeom=False, space=None):
         WeakFormBase.__init__(self, name, space)
         self.assembly_options["n_elm_gp"] = 1
         self.assembly_options["elm_type", "quad4"] = "quad4hourglass"
@@ -425,8 +425,8 @@ class HourglassStiffness(WeakFormBase):
                 raise(TypeError)
                 # pwave_modulus = 1
 
-            hourglass_stiffness = (0.5 * self.stiffness_coef * pwave_modulus * coef)
-            # Formulation from Flanagan, D.P. and Belytschko, T. (1981) 
+            hourglass_stiffness = (1/ndim * self.stiffness_coef * pwave_modulus * coef)
+            # Formulation from Flanagan, D.P. and Belytschko, T. (1981)
 
             if self.compute_stiffness_only_once:
                 assembly._hourglass_stiffness = hourglass_stiffness

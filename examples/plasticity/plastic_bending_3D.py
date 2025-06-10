@@ -69,6 +69,9 @@ wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom=NLGEOM)
 wf.corate = "green_naghdi"
 wf.fbar = True
 
+# or alternatively with reduced integration + hourglass stiffness :
+# wf = fd.weakform.StressEquilibriumRI("constitutivelaw", nlgeom = True)
+
 # note set for boundary conditions
 nodes_bottomLeft = mesh.find_nodes("XY", (0, 0))
 nodes_bottomRight = mesh.find_nodes("XY", (L, 0))
@@ -83,7 +86,7 @@ else:
 
 # Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 # assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create(wf, meshname, "hex8", name="Assembling")
+assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 
 
 pb = fd.problem.NonLinear("Assembling")
@@ -138,7 +141,7 @@ print(time() - start)
 # from pyvistaqt import BackgroundPlotter
 # plotter = BackgroundPlotter()
 
-res.plot("Stress", component="XY", data_type="GaussPoint")
+res.plot("Stress", component="XY", data_type="Node")
 
 # res.plot('Statev', 'Node', component = 1)
 # res.write_movie('test', 'Stress', component=0)
