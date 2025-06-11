@@ -329,11 +329,10 @@ class HourglassStiffness(WeakFormBase):
 
     Parameters
     ----------
-    stiffness_coef: float, default=0.01
+    stiffness_coef: float, default: 0.01
         Coefficient to control the hourglass stiffness. This coefficient is a
         compromise between a sufficient stiffness to suppress hourglass modes
         and a not too high stiffness to avoid additionnal flexural stiffness.
-        Values are generaly chosen between 0.1 and 0.3.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
@@ -529,11 +528,10 @@ def StressEquilibriumRI(
 
     Parameters
     ----------
-    hourglass_stiffness: float, default=0.01
+    hourglass_stiffness: float, default: 0.01
         Coefficient to control the hourglass stiffness. This coefficient is a
         compromise between a sufficient stiffness to suppress hourglass modes
         and a not too high stiffness to avoid non physical flexural stiffness.
-        Values are generaly chosen between 0.1 and 0.3.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional

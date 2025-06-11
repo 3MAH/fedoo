@@ -14,21 +14,25 @@ class BeamEquilibrium(WeakFormBase):
     Parameters
     ----------
     material: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Material Constitutive Law used to get the young modulus and poisson ratio
-        The ConstitutiveLaw object should have a GetYoungModulus and GetPoissonRatio methods
-        (as :mod:`fedoo.constitutivelaw.ElasticIsotrop`)
-    A: scalar or arrays of gauss point values
-        Beam section area
-    Jx: scalar or arrays of gauss point values
-        Torsion constant
-    Iyy: scalar or arrays of gauss point values
-        Second moment of area with respect to y (beam local coordinate system)
-    Izz:
-        Second moment of area with respect to z (beam local coordinate system)
-    k=0: scalar or arrays of gauss point values
-        Shear coefficient. If k=0 (*default*) the beam use the bernoulli hypothesis
+        material can be either a beam constitutive law
+        (:ref:`beam_constitutive_laws`) or a material constitutive law with
+        attributes E and G for elastic and shear modulus
+        (for instance :mod:`fedoo.constitutivelaw.ElasticIsotrop`). If material
+        is a beam constitutive law, the following parameters A, Jx, Iyy, Izz
+        and k are ignored.
+    A: scalar or arrays of gauss point values, optional
+        Beam section area.
+    Jx: scalar or arrays of gauss point values, optional
+        Torsion constant.
+    Iyy: scalar or arrays of gauss point values, optional
+        Second moment of area with respect to y (beam local coordinate system).
+    Izz: scalar or arrays of gauss point values, optional
+        Second moment of area with respect to z (beam local coordinate system).
+    k: scalar or arrays of gauss point values, optional
+        Shear coefficient. If k=0 (*default*) the beam use the bernoulli
+        hypothesis.
     name: str
-        name of the WeakForm
+        name of the WeakForm.
     """
 
     def __init__(
@@ -72,10 +76,12 @@ class BeamEquilibrium(WeakFormBase):
             )
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
-        """Method used to treat the geometric non linearities. 
-            * Set to False if geometric non linarities are ignored (default). 
-            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
-            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
+        """Method used to treat the geometric non linearities.
+            * Set to False if geometric non linarities are ignored (default).
+            * Set to True or 'UL' to use the updated lagrangian method
+              (update the mesh)
+            * Set to 'TL' to use the total lagrangian method (base on the
+              initial mesh with initial displacement effet)
         """
 
     def initialize(self, assembly, pb):
