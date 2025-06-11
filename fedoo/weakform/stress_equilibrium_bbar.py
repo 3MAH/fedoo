@@ -535,11 +535,15 @@ def StressEquilibriumRI(
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
-        If nlgeom is False, the stiffness is considered as linear based on the
-        initial configuration. If not, the geometry and material properties
-        are udpated at each iteration. The use of nlgeom = False, generally
-        produces accurate results, even for finite strain problems.
-    nlgeom_hourglass: bool, 'UL' or 'TL', optional
+        If True, the geometrical non linearities are activate based on the
+        updated lagrangian method. This parameters is used only in the
+        context of NonLinearProblems such as
+        :mod:`fedoo.problem.NonLinearStatic` or
+        :mod:`fedoo.problem.NonLinearNewmark`.
+        If nlgeom == 'UL' the updated lagrangian method is used (same as True).
+        If nlgeom == 'TL' the total lagrangian method is used.
+        If not defined, the problem.nlgeom parameter is used instead.
+    nlgeom_hourglass: bool, 'UL' or 'TL', default: False
         nlgeom for the hourglass stiffness term. The use of
         nlgeom_hourglass = False seems to produced accurate
         results in most cases, even for finite strain problems

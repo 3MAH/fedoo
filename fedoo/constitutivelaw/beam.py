@@ -1,17 +1,13 @@
-# #derive de ConstitutiveLaw
-# #compatible with the simcoon strain and stress notation
+"""Beam constitutive laws."""
 
 from fedoo.core.base import ConstitutiveLaw
-# from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-
 import numpy as np
 
 
 class BeamProperties(ConstitutiveLaw):
     def __init__(self, material, A, Jx, Iyy, Izz, k=0, name=""):
-        """
-        Beam properties constitutive law.
-        
+        """Beam properties constitutive law.
+
         This constitutive law should be associated with the weakform
         :mod:`fedoo.weakform.BeamEquilibrium`
 
@@ -83,8 +79,7 @@ class BeamProperties(ConstitutiveLaw):
 
 class BeamCircular(BeamProperties):
     def __init__(self, material, r, k=0.9, name=""):
-        """
-        Properties for a beam with circular cross section.
+        """Properties for a beam with circular cross section.
 
         Parameters
         ----------
@@ -111,8 +106,7 @@ class BeamCircular(BeamProperties):
 
 class BeamPipe(BeamProperties):
     def __init__(self, material, r_int, r_ext, k=0.5, name=""):
-        """
-        Properties for a beam with pipe cross section.
+        """Properties for a beam with pipe cross section.
 
         Parameters
         ----------
@@ -145,8 +139,7 @@ class BeamPipe(BeamProperties):
 
 class BeamRectangular(BeamProperties):
     def __init__(self, material, a, b=None, k=5 / 6, name=""):
-        """
-        Properties for a beam with rectangular cross section.
+        """Properties for a beam with rectangular cross section.
 
         Parameters
         ----------

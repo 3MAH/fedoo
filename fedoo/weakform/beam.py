@@ -14,9 +14,8 @@ class BeamEquilibrium(WeakFormBase):
     Parameters
     ----------
     material: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        material can be either a beam constitutive law
-        (:ref:`beam_constitutive_laws`) or a material constitutive law with
-        attributes E and G for elastic and shear modulus
+        material can be either a :ref:`beam_constitutive_laws` or a material
+        constitutive law with attributes E and G for elastic and shear modulus
         (for instance :mod:`fedoo.constitutivelaw.ElasticIsotrop`). If material
         is a beam constitutive law, the following parameters A, Jx, Iyy, Izz
         and k are ignored.
