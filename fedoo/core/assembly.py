@@ -94,8 +94,6 @@ class Assembly(AssemblyBase):
         # attributes to set assembly related to current (deformed) configuration
         # used for update lagrangian method.
         self.current = self
-        self.associated_assembly_sum = None
-        """AssemblySum object that contains the assembly."""
 
         self.meshChange = kargs.pop("MeshChange", False)
         self.mesh = mesh
