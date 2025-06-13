@@ -68,7 +68,7 @@ else:
 
 wf = fd.weakform.StressEquilibriumFbar("ConstitutiveLaw", nlgeom=NLGEOM)
 wf.fbar = True
-wf.corate = "jaumann"
+wf.corate = "log"
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create(
@@ -77,7 +77,7 @@ fd.Assembly.create(
 
 pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0=None, tol=5e-4, max_subiter=20)
+pb.set_nr_criterion("Displacement", err0=None, tol=5e-4, max_subiter=5)
 
 # Problem.set_nr_criterion("Displacement")
 # Problem.set_nr_criterion("Work")

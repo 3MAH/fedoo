@@ -15,7 +15,7 @@ Welcome to FEDOO's documentation!
    Assembly   
    Problem
    boundary_conditions
-   post-treatment
+   post_processing
    examples/index
    heterogeneous
    .. simple_examples -> a effacer

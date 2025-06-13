@@ -1227,7 +1227,8 @@ class MultiFrameDataSet(DataSet):
         directly related to pyvista options (for instance in the pyvista.plotter.add_mesh method).
         Please, refer to the documentation of pyvista for more details.
 
-        Available keyword arguments are :
+        Available keyword arguments are:
+
         * framerate : int (default = 24)
             Number of frames per second
         * quality : int between 1 and 10 (default = 5)
