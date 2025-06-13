@@ -271,7 +271,7 @@ we can plot the stress results after the example
 """
 
 
-from .data_treatment import (
+from .axi_to_3d import (
     axi_to_3d,
     axi_to_3d_multi,
 )
