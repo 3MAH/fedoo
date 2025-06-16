@@ -1,6 +1,6 @@
 """
 =================================
-Post-Treatment
+Post-Processing
 =================================
 
 .. currentmodule:: fedoo
@@ -86,7 +86,7 @@ Read data from disk
 To read data saved on disk, use the function :py:func:`read_data`.
 
 
-.. _very_simple_problem
+.. _very_simple_problem:
 
 Example
 -------
@@ -143,9 +143,9 @@ time interval (here the results are saved on a file).
     pb_nl.nlsolve(dt = 0.1, tmax = 1, interval_output = 0.2)
 
     # plot the sigma_xx averaged at nodes at the last increment
-    results_nl.plot("Stress", "Node", component='XX') 
+    results_nl.plot("Stress", "Node", component='XX')
 
-.. image:: ./_static/examples/example_plot_dataset_nl.png    
+.. image:: ./_static/examples/example_plot_dataset_nl.png
 
 Basic operations
 ================
@@ -208,9 +208,9 @@ fully control the movie rendering. This is easy to do by manualy writing the
 movie using the pyvista library.
 
 Here is an exemple to animate the linear results obtained in the
-:ref:`very_simple_problem` defined above. The idea is to use a scale_factor
-applied to the displacement (using the *scale* argument) and to the stress
-field (modifiying the results data).
+:ref:`problem <very_simple_problem>` defined above. The idea is to use a
+scale_factor applied to the displacement (using the *scale* argument) and to
+the stress field (modifiying the results data).
 
 .. code-block:: python
 
