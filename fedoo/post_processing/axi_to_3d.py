@@ -1,6 +1,6 @@
 import numpy as np
-from fedoo.mesh import extrude
-from fedoo import DataSet, MultiFrameDataSet
+from fedoo.mesh.functions import extrude
+from fedoo.core.dataset import DataSet, MultiFrameDataSet
 
 def axi_to_3d(axi_data, n_theta):
     mesh = axi_data.mesh
