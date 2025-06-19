@@ -270,7 +270,6 @@ we can plot the stress results after the example
 .. image:: ./_static/examples/multiplot.png
 """
 
-
 from .axi_to_3d import (
     axi_to_3d,
     axi_to_3d_multi,

@@ -65,6 +65,7 @@ from .stress_equilibrium_bbar import (
     StressEquilibriumRI,
     HourglassStiffness,
 )
+from .distributed_load import ExternalPressure, DistributedLoad
 
 __all__ = [
     "BeamEquilibrium",
@@ -87,4 +88,6 @@ __all__ = [
     "ImplicitDynamic2",
     "ParametricBeam",
     "ParametricBernoulliBeam",
+    "DistributedLoad",
+    "ExternalPressure",
 ]
