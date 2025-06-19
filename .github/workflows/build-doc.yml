@@ -36,7 +36,7 @@ jobs:
           conda remove --force vtk
           pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
 
-      - name: Output conda info:
+      - name: Conda info
         run: |
           conda info
           conda list
