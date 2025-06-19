@@ -13,6 +13,10 @@ env:
 jobs:
   build-doc:
     runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -el {0}
+    
     steps:
       - uses: actions/checkout@v4
 
@@ -20,10 +24,22 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
+          activate-environment: fedoo-doc
           auto-update-conda: true
 
       - name: Update environment
-        run: conda env update -f environment_doc.yml
+        run: |
+          conda env update -n fedoo-doc -f environment_doc.yml
+          # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
+          # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
+          # - pip uninstall -y vtk
+          conda remove --force vtk
+          pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
+
+      - name: Output conda info:
+        run: |
+          conda info
+          conda list
 
       - name: Cache Sphinx-Gallery Examples
         uses: actions/cache@v4
