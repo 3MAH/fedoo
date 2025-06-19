@@ -14,5 +14,6 @@ dependencies:
   - pyvista>=0.39
   - simcoon>=1.9.6
   - pytest
+  - sphinx
   - sphinx_rtd_theme
   - sphinx-gallery
