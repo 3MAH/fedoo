@@ -20,6 +20,8 @@ jobs:
           miniconda-version: "latest"
           activate-environment: fedoo-doc
           auto-update-conda: true
+
+      - name: Update environment
         run: conda env update -n fedoo-doc -f environment.yml
 
       - name: Cache Sphinx-Gallery Examples
