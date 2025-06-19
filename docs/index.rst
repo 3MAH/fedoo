@@ -1,3 +1,7 @@
+Documentation not updated anymore (version 0.5.1).  
+The new documentation is `here <https://3mah.github.io/fedoo-docs/>`_.
+
+
 Welcome to FEDOO's documentation!
 =================================
 
