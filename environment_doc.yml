@@ -1,4 +1,4 @@
-name: fedoo-doc
+name: fedoo
 
 channels:
   - conda-forge

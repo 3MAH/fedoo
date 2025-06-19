@@ -20,11 +20,10 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
-          activate-environment: fedoo-doc
           auto-update-conda: true
 
       - name: Update environment
-        run: conda env update -n fedoo-doc -f environment_doc.yml
+        run: conda env update -f environment_doc.yml
 
       - name: Cache Sphinx-Gallery Examples
         uses: actions/cache@v4
