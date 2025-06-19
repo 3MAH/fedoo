@@ -59,14 +59,14 @@ jobs:
         uses: actions/cache@v4
         if: env.USE_CACHE == 'true'
         with:
-          path: /examples/
+          path: examples/
           key: doc-examples-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Cache Sphinx build directory
         uses: actions/cache@v4
         if: env.USE_CACHE == 'true'
         with:
-          path: docs/_build/
+          path: docs/build/
           key: doc-examples-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Build Documentation
@@ -78,4 +78,15 @@ jobs:
         with:
           name: docs-build
           path:
-            docs/_build/html/
+            docs/build/html/
+                    
+      - name: Upload HTML documentation
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          # deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
+          external_repository: 3MAH/fedoo-docs
+          publish_branch: master
+          publish_dir: ./docs/build/html
+          # cname: 3mah.fedoo.github.io
