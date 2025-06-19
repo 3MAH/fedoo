@@ -24,7 +24,7 @@ jobs:
           auto-update-conda: true
 
       - name: Update environment
-        run: conda env update -n fedoo-doc -f environment.yml
+        run: conda env update -n fedoo-doc -f environment_doc.yml
 
       - name: Cache Sphinx-Gallery Examples
         uses: actions/cache@v4
