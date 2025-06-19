@@ -79,7 +79,7 @@ jobs:
           name: docs-build
           path:
             docs/build/html/
-                    
+
       - name: Upload HTML documentation
         if: always()
         uses: peaceiris/actions-gh-pages@v4
@@ -87,6 +87,6 @@ jobs:
           # deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
           external_repository: 3MAH/fedoo-docs
-          publish_branch: master
+          publish_branch: main
           publish_dir: ./docs/build/html
           # cname: 3mah.fedoo.github.io
