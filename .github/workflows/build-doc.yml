@@ -25,7 +25,20 @@ jobs:
         with:
           miniconda-version: "latest"
           activate-environment: fedoo-doc
-          auto-update-conda: true
+
+      - name: Get Date
+        id: get-date
+        run: echo "::set-output name=today::$(/bin/date -u '+%Y%m%d')"
+
+      - name: Cache Conda env
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CONDA }}/envs
+          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+        env:
+          # Increase this value to reset cache if environment.yml has not changed
+          CACHE_NUMBER: 0
+        id: cache
 
       - name: Update environment
         run: |
@@ -35,6 +48,7 @@ jobs:
           # - pip uninstall -y vtk
           conda remove --force vtk
           pip install --extra-index-url https://wheels.vtk.org trame vtk-osmesa
+        if: steps.cache.outputs.cache-hit != 'true'
 
       - name: Conda info
         run: |
@@ -52,7 +66,7 @@ jobs:
         uses: actions/cache@v4
         if: env.USE_CACHE == 'true'
         with:
-          path: doc/_build/
+          path: docs/_build/
           key: doc-examples-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Build Documentation
