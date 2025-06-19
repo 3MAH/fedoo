@@ -1,4 +1,13 @@
-from . import constitutivelaw, constraint, core, homogen, mesh, problem, weakform, post_processing
+from . import (
+    constitutivelaw,
+    constraint,
+    core,
+    homogen,
+    mesh,
+    problem,
+    weakform,
+    post_processing,
+)
 from ._version import __version__
 from .core import (
     MPC,
