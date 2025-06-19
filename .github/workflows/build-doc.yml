@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CONDA }}/envs
-          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment_doc.yml') }}-${{ env.CACHE_NUMBER }}
         env:
           # Increase this value to reset cache if environment.yml has not changed
           CACHE_NUMBER: 0
