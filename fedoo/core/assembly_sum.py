@@ -26,8 +26,6 @@ class AssemblySum(AssemblyBase):
     """
 
     def __init__(self, list_assembly, name="", **kargs):
-        AssemblyBase.__init__(self, name)
-
         for i, assembly in enumerate(list_assembly):
             if isinstance(assembly, str):
                 list_assembly[i] = AssemblyBase.get_all()[assembly]
@@ -40,6 +38,8 @@ class AssemblySum(AssemblyBase):
         assert (
             len(set([a.mesh.n_nodes for a in list_assembly])) == 1
         ), "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+
+        AssemblyBase.__init__(self, name, list_assembly[0].space)
 
         self._list_assembly = list_assembly
 

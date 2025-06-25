@@ -247,7 +247,7 @@ class DataSet:
             subplot.
 
 
-        **kwargs: dict, default = 15.
+        **kwargs: dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
         """

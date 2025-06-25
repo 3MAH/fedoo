@@ -29,7 +29,7 @@ class Element:
         else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
             if np.shape(self.JacobianMatrix)[-2] == 1:
                 self.detJ = linalg.norm(self.JacobianMatrix, axis=3)
-            else:  # On doit avoir np.shape(JacobianMatrix)[-2]=2 (l'elm de ref est défini en 2D) et np.shape(JacobianMatrix)[-1]=3  (l'espace réel est 3D)
+            else:  # On doit avoir JacobianMatrix.shape[-2]=2 (l'elm de ref est défini en 2D) et JacobianMatrix.shape[-1]=3  (l'espace réel est 3D)
                 J = self.JacobianMatrix
                 self.detJ = np.sqrt(
                     abs(J[..., 0, 1] * J[..., 1, 2] - J[..., 0, 2] * J[..., 1, 1]) ** 2
@@ -344,7 +344,7 @@ class Element2D(Element):
         self.ComputeDetJacobian(vec_x, vec_xi)
 
         if self.JacobianMatrix.shape[-2] == self.JacobianMatrix.shape[-1]:
-            if rep_loc != None:
+            if rep_loc is not None:
                 rep_pg = self.interpolateLocalFrame(
                     rep_loc, vec_xi
                 )  # interpolation du repère local aux points de gauss  -> shape = (len(vec_x),len(vec_xi),dim,dim)
@@ -353,19 +353,29 @@ class Element2D(Element):
                 )  # to verify - np.swapaxes(rep_pg,2,3) is equivalent to a transpose over the axis 2 and 3
         #                rep_pg = self.interpolateLocalFrame(rep_loc, vec_xi) #interpolation du repère local aux points de gauss
         #                for k,J in enumerate(self.JacobianMatrix): self.JacobianMatrix[k] = np.dot(J, rep_pg[k].T)
-        else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
-            if rep_loc is None:
-                J = self.JacobianMatrix
-                JT = np.swapaxes(self.JacobianMatrix, 2, 3)
-                self.inverseJacobian = np.matmul(
-                    JT, linalg.inv(np.matmul(J, JT))
-                )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
-                #                self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]   #this line may have a high computational cost
-                return
-            else:
-                rep_pg = self.repLocFromJac(rep_loc, vec_xi)[:, 0:2, :]
-                for k, J in enumerate(self.JacobianMatrix):
-                    self.JacobianMatrix[k] = np.dot(J, rep_pg[k].T)
+        else:
+            # Dimension of True space (=3) > dimension of ref element (=2)
+            # This case is for shell like models. The derivative are computed
+            # in local frame. The out of plane direction  (last dimention)
+            # is removed from local because no derivative is expected outside
+            # the plane
+            rep_pg = self.repLocFromJac(rep_loc, vec_xi)[..., :2, :]
+
+            self.JacobianMatrix = self.JacobianMatrix @ rep_pg.swapaxes(
+                2, 3
+            )  # Jacobian matrix change of basis
+
+            ### alternatively, it is possible to keep global derivative:
+            ### is there any interest?
+            # if rep_loc is None:
+            #     J = self.JacobianMatrix
+            #     JT = np.swapaxes(self.JacobianMatrix, 2, 3)
+            #     self.inverseJacobian = np.matmul(
+            #         JT, linalg.inv(np.matmul(J, JT))
+            #     )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
+            #     #                self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]   #this line may have a high computational cost
+            #     return
+
         self.inverseJacobian = linalg.inv(self.JacobianMatrix)
 
     def repLocFromJac(self, rep_loc=None, vec_xi=None):

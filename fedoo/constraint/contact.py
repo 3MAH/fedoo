@@ -284,7 +284,7 @@ class Contact(AssemblyBase):
                                 * tangents[possible_elements]
                             ),
                             axis=2,
-                        ),
+                        )[..., np.newaxis],
                     )
 
                 # contact points in global coordinates
