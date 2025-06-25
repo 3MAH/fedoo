@@ -16,7 +16,7 @@ E = 2e3  # MPa
 nu = 0.37
 radius = 20  # mm
 thickness = 0.45  # mm
-pressure = 10 # MPa
+pressure = 10  # MPa
 
 ###############################################################################
 # Create a simple sphere mesh using pyvista.
@@ -44,7 +44,7 @@ solid_assembly = fd.Assembly.create(wf, mesh)
 # minimal or maximal z value (sphere extremity along the z axis.
 
 boundaries = mesh.find_elements(
-    f'Z>{mesh.bounding_box.zmax-3} or Z<{mesh.bounding_box.zmin+3}'
+    f"Z>{mesh.bounding_box.zmax-3} or Z<{mesh.bounding_box.zmin+3}"
 )
 
 ###############################################################################
@@ -77,9 +77,7 @@ pb.solve()
 # defined in the element local coordinate system
 # (mesh.get_element_local_frame()).
 
-res = pb.get_results(
-    solid_assembly, ["Disp", "Rot", "Stress", "Strain"], position=1
-)
+res = pb.get_results(solid_assembly, ["Disp", "Rot", "Stress", "Strain"], position=1)
 pl = pv.Plotter()
 res.plot("Stress", component="XX", data_type="Node", plotter=pl)
 pl.view_isometric()
