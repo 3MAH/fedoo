@@ -61,7 +61,7 @@ assembly = solid_assembly + pressure_assembly
 ###############################################################################
 # Define a linear analysis and solve the problem.
 #
-# ..notes::
+# .. notes::
 #   Here we don't need to add other boundary conditions. The rigid body
 #   displacements and rotations of the sphere aren't constrained but the solver
 #   find a solution that is unique in terms of strain and stress (but not
