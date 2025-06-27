@@ -15,7 +15,7 @@ internal_pressure = 2
 radius = 200
 thickness = 20
 
-fd.ModelingSpace('2D')  # plane strain assumption
+fd.ModelingSpace("2D")  # plane strain assumption
 mesh = fd.mesh.hollow_disk_mesh(radius, thickness, nr=5, nt=41)
 
 material = fd.constitutivelaw.ElasticIsotrop(200e3, 0.3)
@@ -40,7 +40,7 @@ int_nodes = mesh.find_nodes("Distance", ([0, 0], radius - thickness))
 # :py:meth:`fedoo.contraint.Pressure.from_elements` constructor from a set of
 # element to extract the external surface.
 #
-# ..warnings::
+# ..warning::
 #   The from_nodes and from_elements constructor can't be used to apply a
 #   pressure over a shell structure because, as the shell mesh is a surface
 #   mesh, these constructors will extract linear mesh of the boundaries.
@@ -50,12 +50,8 @@ int_nodes = mesh.find_nodes("Distance", ([0, 0], radius - thickness))
 #   :ref:`sphx_glr_examples_01_simple_spherical_shell_compression.py`
 
 
-ext_pressure = fd.constraint.Pressure.from_nodes(
-    mesh, ext_nodes, external_pressure
-)
-int_pressure = fd.constraint.Pressure.from_nodes(
-    mesh, int_nodes, internal_pressure
-)
+ext_pressure = fd.constraint.Pressure.from_nodes(mesh, ext_nodes, external_pressure)
+int_pressure = fd.constraint.Pressure.from_nodes(mesh, int_nodes, internal_pressure)
 
 ###############################################################################
 # Define a problem from the solid and pressure assemblies

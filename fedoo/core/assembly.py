@@ -128,6 +128,11 @@ class Assembly(AssemblyBase):
         self.sv_start = {}
         self.sv_type = {}  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
+        self.sv_component = {}
+        # allow to define output accessible with problem.get_results.
+        # for instance: sv_component[component_name] = (sv_name, indice)
+        # indice may be an int or a slice
+
         self._nlgeom = None
 
         self._pb = None

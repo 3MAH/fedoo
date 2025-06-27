@@ -467,6 +467,10 @@ class Simcoon(Mechanical3D):
                 (self.n_statev, assembly.n_gauss_points), order="F"
             )  # initialize all statev to 0
 
+            # Define sv_component
+            for label in self.statev_label:
+                assembly.sv_component[label] = ("Statev", self.statev_label[label])
+
             # initialize all DR to np.eye(3)
             DR = np.empty((3, 3, assembly.n_gauss_points), order="F")
             DR[...] = np.eye(3).reshape(3, 3, 1)
