@@ -18,3 +18,4 @@ dependencies:
   - sphinx_rtd_theme
   - sphinx-gallery
   - imageio
+  - imageio-ffmpeg
