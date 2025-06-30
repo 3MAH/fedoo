@@ -36,7 +36,9 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
     "sphinx_gallery.gen_gallery",
+    "pyvista.ext.plot_directive",
     "pyvista.ext.viewer_directive",
+    "sphinx_design",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

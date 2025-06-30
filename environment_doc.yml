@@ -16,6 +16,7 @@ dependencies:
   - pytest
   - sphinx
   - sphinx_rtd_theme
+  - sphinx-design
   - sphinx-gallery
   - imageio
   - imageio-ffmpeg

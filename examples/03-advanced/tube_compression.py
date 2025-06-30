@@ -126,11 +126,13 @@ pl.close()
 #   renderic availbale through pyvista. This example generate a mp4 movie
 #   and will not been rendered with sphinx-gallery.
 
-pl = pv.Plotter(window_size=[600, 800], off_screen=True)
+pl = pv.Plotter(window_size=[608, 800], off_screen=True)
 cubemap = pv.examples.download_sky_box_cube_map()
 pl.add_actor(cubemap.to_skybox())
 pl.set_environment_texture(cubemap)
 pl.open_movie("tube_compression.mp4", quality=6)
+pl.show(auto_close=False)  # only necessary for an off-screen movie
+
 for i in range(res.n_iter):
     res.load(i)
     fd.post_processing.axi_to_3d(res, 41).plot(
@@ -142,7 +144,7 @@ for i in range(res.n_iter):
         elevation=-70,
         diffuse=0.8,
         color="orange",
-        clim=clim,
+        # clim=clim,
         show_scalar_bar=False,
         plotter=pl,
         name="mymesh",
