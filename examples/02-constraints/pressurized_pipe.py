@@ -40,7 +40,7 @@ int_nodes = mesh.find_nodes("Distance", ([0, 0], radius - thickness))
 # :py:meth:`fedoo.contraint.Pressure.from_elements` constructor from a set of
 # element to extract the external surface.
 #
-# ..warning::
+# .. note::
 #   The from_nodes and from_elements constructor can't be used to apply a
 #   pressure over a shell structure because, as the shell mesh is a surface
 #   mesh, these constructors will extract linear mesh of the boundaries.

@@ -86,15 +86,25 @@ pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0)
 
 
 ###############################################################################
-# Plot with pyvista:
-# - The 2D plot of :math:`\sigma_{zz}`
+# Plot with pyvista
+# ~~~~~~~~~~~~~~~~~
+# A simple 3D plot of the :math:`\sigma_{zz}` field which coorespond to the
+# :math:`\sigma_{\theta \theta}` component since the axisymmetric model work in
+# cylindrical coordinates.
 
-
-res.plot("Stress", component="ZZ", data_type="Node")
+res.plot("Stress", component="YY", data_type="Node")
 
 ###############################################################################
-# - An animated gif of the equivalent plasticity :math:`p`, with 3D
-#   reconstruction using the :func:`fedoo.post_processing.axi_to_3d` function.
+# Write an animated gif of the equivalent plasticity :math:`p`, with full 3D
+# reconstruction using :func:`fedoo.post_processing.axi_to_3d`.
+#
+# .. note::
+#   The 3D reconstruction convert all fields to node_data. The fields are kept
+#   in the axisymmetric cylindrical coordinate system except for the 'Disp'
+#   field (displacement) that is converted to the 3D global coordinate system.
+#   For instance, the 'XX' component of 'Stress' is the radial stress whereas
+#   the 'X' component of displacement is the true 3d displacement along x.
+
 clim = res.get_all_frame_lim("P")[2]
 pl = pv.Plotter(window_size=[400, 600], off_screen=True)
 pl.open_gif("tube_compression.gif", fps=20)
@@ -119,39 +129,60 @@ pl.close()
 
 # We can also write a mp4 movie with:
 # data_3d = fd.post_processing.axi_to_3d_multi('full_3d_data', res)
-# data_3d.write_movie('tube_compression', 'Statev', 1)
+# data_3d.write_movie('tube_compression', 'P')
 
 ###############################################################################
-# - An example of how to do a realistic plot using the vtk physical based
-#   renderic availbale through pyvista. This example generate a mp4 movie
-#   and will not been rendered with sphinx-gallery.
+# An example of how to do a realistic plot using the vtk physical based
+# renderic availbale through pyvista.
 
-pl = pv.Plotter(window_size=[608, 800], off_screen=True)
-cubemap = pv.examples.download_sky_box_cube_map()
-pl.add_actor(cubemap.to_skybox())
-pl.set_environment_texture(cubemap)
-pl.open_movie("tube_compression.mp4", quality=6)
-pl.show(auto_close=False)  # only necessary for an off-screen movie
+pl = pv.Plotter(window_size=[608, 800])
+res.load(62)
+fd.post_processing.axi_to_3d(res, 41).plot(
+    'Disp',
+    'Z',
+    show_edges=False,
+    pbr=True,
+    metallic=1,
+    roughness=0.5,
+    diffuse=1.,
+    azimuth=0,
+    elevation=-70,
+    show_scalar_bar=False,
+    plotter=pl,
+)
+pl.show()
 
-for i in range(res.n_iter):
-    res.load(i)
-    fd.post_processing.axi_to_3d(res, 41).plot(
-        show_edges=False,
-        metallic=0.9,
-        pbr=True,
-        roughness=0.4,
-        azimuth=0,
-        elevation=-70,
-        diffuse=0.8,
-        color="orange",
-        # clim=clim,
-        show_scalar_bar=False,
-        plotter=pl,
-        name="mymesh",
-    )
+###############################################################################
+# This example generate a relastic mp4 movie of the 3d deformation of the
+# cylinder. It is commented because it is not possible to render the mp4 movie
+# with sphinx-gallery.
 
-    pl.hide_axes()
-    pl.write_frame()
-    pl.remove_actor("mymesh")
+# pl = pv.Plotter(window_size=[608, 800], off_screen=True)
 
-pl.close()
+# cubemap = pv.examples.download_sky_box_cube_map()
+# pl.add_actor(cubemap.to_skybox())
+# pl.set_environment_texture(cubemap)
+# pl.open_movie("tube_compression.mp4", quality=6)
+
+# for i in range(res.n_iter):
+#     res.load(i)
+#     fd.post_processing.axi_to_3d(res, 41).plot(
+#         show_edges=False,
+#         pbr=True,
+#         metallic=0.9,
+#         roughness=0.4,
+#         diffuse=0.8,
+#         azimuth=0,
+#         elevation=-70,
+#         color="orange",
+#         # clim=clim,
+#         show_scalar_bar=False,
+#         plotter=pl,
+#         name="mymesh",
+#     )
+
+#     pl.hide_axes()
+#     pl.write_frame()
+#     pl.remove_actor("mymesh")
+
+# pl.close()
