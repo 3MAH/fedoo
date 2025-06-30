@@ -7,6 +7,7 @@ assumption in a 2D axisymetric modeling space.
 The full 3D result is ploted during the post processing phase.
 """
 
+# sphinx_gallery_thumbnail_number = 3
 import fedoo as fd
 import numpy as np
 import pyvista as pv
@@ -138,13 +139,13 @@ pl.close()
 pl = pv.Plotter(window_size=[608, 800])
 res.load(62)
 fd.post_processing.axi_to_3d(res, 41).plot(
-    'Disp',
-    'Z',
+    "Disp",
+    "Z",
     show_edges=False,
     pbr=True,
     metallic=1,
     roughness=0.5,
-    diffuse=1.,
+    diffuse=1.0,
     azimuth=0,
     elevation=-70,
     show_scalar_bar=False,

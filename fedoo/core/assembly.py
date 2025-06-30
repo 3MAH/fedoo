@@ -900,8 +900,7 @@ class Assembly(AssemblyBase):
         but it is not done by default. In this case, deleting the memory should
         resolve the problem.
 
-        -----------
-        Remark : it the MeshChange argument is set to True when creating the Assembly object, the
+        Note: it the MeshChange argument is set to True when creating the Assembly object, the
         memory will be recomputed by default, which may cause a decrease in assembling performances
         """
         Assembly._saved_elementary_operators = {}

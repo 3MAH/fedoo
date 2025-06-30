@@ -11,6 +11,7 @@ dependencies:
   - pypardiso # [x86 or x86_64]
   # - scikit-umfpack # [(not x86) and (not x86_64)]
   - vtk>=9.2
+  - pypandoc
   - pyvista>=0.39
   - simcoon>=1.9.6
   - pytest
