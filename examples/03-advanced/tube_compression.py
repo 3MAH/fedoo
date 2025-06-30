@@ -97,8 +97,8 @@ res.plot("Stress", component="ZZ", data_type="Node")
 #   reconstruction using the :func:`fedoo.post_processing.axi_to_3d` function.
 
 clim = res.get_all_frame_lim("P")[2]
-pl = pv.Plotter(window_size=[600, 800])
-pl.open_gif("tube_compression.gif", fps=20, off_screen=True)
+pl = pv.Plotter(window_size=[600, 800], off_screen=True)
+pl.open_gif("tube_compression.gif", fps=20)
 for i in range(res.n_iter):
     res.load(i)
     pl.clear_actors()
@@ -127,30 +127,30 @@ pl.close()
 #   renderic availbale through pyvista. This example generate a mp4 movie
 #   and will not been rendered with sphinx-gallery.
 
-pl = pv.Plotter(window_size=[600, 800])
-cubemap = pv.examples.download_sky_box_cube_map()
-pl.add_actor(cubemap.to_skybox())
-pl.set_environment_texture(cubemap)
-pl.open_movie("tube_compression.mp4", quality=6)
-for i in range(res.n_iter):
-    res.load(i)
-    fd.post_processing.axi_to_3d(res, 41).plot(
-        show_edges=False,
-        metallic=0.9,
-        pbr=True,
-        roughness=0.4,
-        azimuth=0,
-        elevation=-70,
-        diffuse=0.8,
-        color="orange",
-        clim=clim,
-        show_scalar_bar=False,
-        plotter=pl,
-        name="mymesh",
-    )
+# pl = pv.Plotter(window_size=[600, 800])
+# cubemap = pv.examples.download_sky_box_cube_map()
+# pl.add_actor(cubemap.to_skybox())
+# pl.set_environment_texture(cubemap)
+# pl.open_movie("tube_compression.mp4", quality=6)
+# for i in range(res.n_iter):
+#     res.load(i)
+#     fd.post_processing.axi_to_3d(res, 41).plot(
+#         show_edges=False,
+#         metallic=0.9,
+#         pbr=True,
+#         roughness=0.4,
+#         azimuth=0,
+#         elevation=-70,
+#         diffuse=0.8,
+#         color="orange",
+#         clim=clim,
+#         show_scalar_bar=False,
+#         plotter=pl,
+#         name="mymesh",
+#     )
 
-    pl.hide_axes()
-    pl.write_frame()
-    pl.remove_actor("mymesh")
+#     pl.hide_axes()
+#     pl.write_frame()
+#     pl.remove_actor("mymesh")
 
-pl.close()
+# pl.close()
