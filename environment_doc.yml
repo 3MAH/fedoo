@@ -19,3 +19,4 @@ dependencies:
   - sphinx-gallery
   - imageio
   - imageio-ffmpeg
+  - trame-vtk

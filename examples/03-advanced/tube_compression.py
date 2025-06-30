@@ -95,7 +95,6 @@ res.plot("Stress", component="ZZ", data_type="Node")
 ###############################################################################
 # - An animated gif of the equivalent plasticity :math:`p`, with 3D
 #   reconstruction using the :func:`fedoo.post_processing.axi_to_3d` function.
-#   *Use off_screen=True for the sphinx-gallery rendering.*
 
 clim = res.get_all_frame_lim("P")[2]
 pl = pv.Plotter(window_size=[600, 800])
