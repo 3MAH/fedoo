@@ -22,3 +22,6 @@ dependencies:
   - imageio
   - imageio-ffmpeg
   - trame-vtk
+  - trame-vuetify
+  - trame
+  - ipywidget
