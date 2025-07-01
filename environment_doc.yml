@@ -24,4 +24,4 @@ dependencies:
   - trame-vtk
   - trame-vuetify
   - trame
-  - ipywidget
+  - ipywidgets
