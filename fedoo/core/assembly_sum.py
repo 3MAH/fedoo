@@ -26,11 +26,11 @@ class AssemblySum(AssemblyBase):
     """
 
     def __init__(self, list_assembly, name="", **kargs):
-        AssemblyBase.__init__(self, name)
-
         for i, assembly in enumerate(list_assembly):
             if isinstance(assembly, str):
                 list_assembly[i] = AssemblyBase.get_all()[assembly]
+            if list_assembly[i].associated_assembly_sum is None:
+                list_assembly[i].associated_assembly_sum = self
 
         assert (
             len(set([a.space for a in list_assembly])) == 1
@@ -38,6 +38,8 @@ class AssemblySum(AssemblyBase):
         assert (
             len(set([a.mesh.n_nodes for a in list_assembly])) == 1
         ), "Sum of assembly are possible only if the two meshes have the same number of Nodes"
+
+        AssemblyBase.__init__(self, name, list_assembly[0].space)
 
         self._list_assembly = list_assembly
 
@@ -60,6 +62,12 @@ class AssemblySum(AssemblyBase):
             return AssemblySum(self.list_assembly + another_assembly.list_assembly)
         else:
             return AssemblySum(self.list_assembly + [another_assembly])
+
+    def __getitem__(self, item):
+        return self._list_assembly[item]
+
+    def __repr__(self):
+        return f"fedoo.AssemblySum({self._list_assembly})"
 
     def assemble_global_mat(self, compute="all"):
         if self._reload == "all":

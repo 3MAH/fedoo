@@ -1,15 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jan 23 15:27:43 2020
-
-@author: Etienne
-"""
-
-# from fedoo.core.base   import ProblemBase
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
-from fedoo.core.base import ProblemBase
-from fedoo.core.mesh import MeshBase
 
 
 from scipy.spatial.transform import Rotation
@@ -19,17 +9,20 @@ class RigidTie(BCBase):
     """
     Boundary conditions class that eliminate dof assuming a rigid body tie between nodes
 
-    Create an object that defines a rigid tie coupling between some nodes using several multi-points constraints.
-    Some constraint drivers (cd) dof  are used to define rigid body displacement and rotation.
-    The center of rotation is assumed to be at the position of the first node given in the constraint driver nodes (node_cd[0])
-    The dof associated to a contraint driver is difined by the node indice (defined in node_cd)
-    and the associated variable (defined in var_vd) with the following order:
+    Create an object that defines a rigid tie coupling between some nodes using
+    several multi-points constraints. Some constraint drivers (cd) dof  are
+    used to define rigid body displacement and rotation. The center of rotation
+    is assumed to be at the position of the first node given in the constraint
+    driver nodes (node_cd[0]). The dof associated to a contraint driver is
+    difined by the node indice (defined in node_cd) and the associated variable
+    (defined in var_vd) with the following order:
     [DispX, DispY, DispZ, RotX, RotY, RotZ] where:
 
     * DispX, DispY and DispZ are the displacement of the reference node of the
       rigid group (reference node = node_cd[0])
-    * RotX, RotY and RotZ are the rigid rotation around the 3 axes with the reference node
-      being the center of rotation. The rotation axis are attached to the solid.
+    * RotX, RotY and RotZ are the rigid rotation around the 3 axes with the
+      reference node being the center of rotation. The rotation axis are
+      attached to the solid.
 
 
     Parameters
@@ -37,9 +30,10 @@ class RigidTie(BCBase):
     list_nodes : list (int) or 1d np.array
         list of nodes that will be eliminated considering a rigid body tie.
     node_cd : list of int
-        Nodes used as constraint drivers for each rigid displacement and rotation.
-        The associated dof used as contraint drivers are defined in var_cd.
-        len(node_cd) should be 6 because 6 constraint driver dof are required.
+        Nodes used as constraint drivers for each rigid displacement and
+        rotation. The associated dof used as contraint drivers are defined in
+        var_cd. len(node_cd) should be 6 because 6 constraint driver dof are
+        required.
     var_cd : list of str.
         Variables used as constraint drivers.
         The len of the list should be the same as node_cd (ie 6).
@@ -48,28 +42,31 @@ class RigidTie(BCBase):
 
 
     Definition of rotations
-    ----------------------------
+    -----------------------
     A convention needs to be defined the orders of rotations.
     The convention used in this class is: First rotation around X, then
     rotation around Y' (Y' being the new Y afte r rotation around X)
-    and finaly the rotation arould Z" (Z" beging the new Z after the 2 first rotations).
+    and finaly the rotation arould Z" (Z" beging the new Z after the 2 first
+    rotations).
 
-    We can note that this convention can also be interpreted using global axis not attached to the solid
-    by applying first the rotation around Z, then the rotation around Y and finally, the rotation around X.
+    We can note that this convention can also be interpreted using global axis
+    not attached to the solid by applying first the rotation around Z, then the
+    rotation around Y and finally, the rotation around X.
 
 
     Notes
-    ---------------
+    -----
 
     * The node given in list_nodes are eliminated from the system (slave nodes)
       and can't be used in another mpc.
-    * The rigid coupling is highly non-linear and the multi-point constraints are
-      modified at each iteration.
-    * Once created the RigidTie object needs to be associated to the problem using the Problem.add method.
+    * The rigid coupling is highly non-linear and the multi-point constraints
+      are modified at each iteration.
+    * Once created the RigidTie object needs to be associated to the problem
+      using the Problem.add method.
 
 
     Example
-    ---------
+    -------
 
     .. code-block:: python
 
@@ -355,26 +352,25 @@ class RigidTie2D(BCBase):
         sin = np.sin(angles)
         cos = np.cos(angles)
 
-        # warning add correction with the rotation matrix
-        # R = ???
-        # # Correct displacement of slave nodes to be consistent with the master nodes
-        # new_disp = (mesh.nodes[list_nodes] - mesh.nodes[node_cd[0]]) @ R.T + mesh.nodes[node_cd[0]] + disp_ref - mesh.nodes[list_nodes]
+        # Correct displacement of slave nodes to be consistent with the master nodes
+        R = np.array([[cos, -sin], [sin, cos]])
 
-        # if problem._dU is not 0:
-        #     if problem._U is not 0:
-        #         problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T - problem._U.reshape(3,-1)[:,list_nodes]
-        #     else:
-        #         problem._dU.reshape(3,-1)[:,list_nodes] = new_disp.T
+        new_disp = (
+            (mesh.nodes[list_nodes] - mesh.nodes[node_cd[0]]) @ R.T
+            + mesh.nodes[node_cd[0]]
+            + disp_ref
+            - mesh.nodes[list_nodes]
+        )
+
+        if not (np.array_equal(problem._dU, 0)):
+            if np.array_equal(problem._U, 0):
+                problem._dU.reshape(2, -1)[:, list_nodes] = new_disp.T
+            else:
+                problem._dU.reshape(2, -1)[:, list_nodes] = (
+                    new_disp.T - problem._U.reshape(2, -1)[:, list_nodes]
+                )
 
         # approche incrémentale:
-
-        # dR_drx = np.array([[0, 0, 0],
-        #           [-sin[0]*sin[2] + cos[2]*cos[0]*sin[1], -sin[0]*cos[2]-cos[0]*sin[1]*sin[2], -cos[1]*cos[0]],
-        #           [cos[0]*sin[2] + sin[0]*cos[2]*sin[1], cos[2]*cos[0]-sin[0]*sin[1]*sin[2], -sin[0]*cos[1]]] )
-
-        # dR_dry = np.array([[-sin[1]*cos[2], +sin[1]*sin[2], cos[1]],
-        #           [cos[2]*sin[0]*cos[1], -sin[0]*cos[1]*sin[2], sin[1]*sin[0]],
-        #           [-cos[0]*cos[2]*cos[1], cos[0]*cos[1]*sin[2], -cos[0]*sin[1]]] )
 
         dR_drz = np.array([[-sin, -cos], [cos, -sin]])
 

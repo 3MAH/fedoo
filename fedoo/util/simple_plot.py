@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu May  7 15:22:31 2020
-
-@author: Etienne
-"""
-
 try:
     import matplotlib.pyplot as plt
     import matplotlib.tri as mtri

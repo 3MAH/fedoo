@@ -60,11 +60,15 @@ elif mat == 1 or mat == 2:
             E, nu, Re, name="ConstitutiveLaw"
         )
         material.SetHardeningFunction("power", H=k, beta=m)
+elif mat == 3:
+    props = np.array([3.0, 0.5e2])
+    material = fd.constitutivelaw.Simcoon("NEOHC", props, name="ConstitutiveLaw")
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
+wf = fd.weakform.StressEquilibriumFbar("ConstitutiveLaw", nlgeom=NLGEOM)
 wf.fbar = True
+wf.corate = "log"
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
 fd.Assembly.create(
@@ -73,7 +77,7 @@ fd.Assembly.create(
 
 pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0=1, tol=1e-3, max_subiter=20)
+pb.set_nr_criterion("Displacement", err0=None, tol=5e-4, max_subiter=5)
 
 # Problem.set_nr_criterion("Displacement")
 # Problem.set_nr_criterion("Work")
@@ -105,13 +109,13 @@ pb.bc.add("Dirichlet", nodes_top, ["DispY", "DispZ"], 0)
 pb.bc.add("Dirichlet", nodes_top, "DispX", uimp)
 
 
-pb.nlsolve(dt=0.05, tmax=1, update_dt=False, print_info=1, interval_output=0.05)
+pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=1, interval_output=0.05)
 
-E = np.array(
-    fd.Assembly.get_all()["Assembling"].get_strain(
-        pb.get_dof_solution(), "GaussPoint", False
-    )
-).T
+# E = np.array(
+#     fd.Assembly.get_all()["Assembling"].get_strain(
+#         pb.get_dof_solution(), "GaussPoint", False
+#     )
+# ).T
 
 # ################### step 2 ################################
 # bc.Remove()
@@ -131,7 +135,7 @@ print(time() - start)
 # ------------------------------------
 # Simple plot with default options
 # ------------------------------------
-results.plot("Stress", component="XX", show=True)
+results.plot("Stress", component="vm", show=True, data_type="Node")
 # results.plot("Stress", component=0, data_type='Node', show=True)
 
 # ------------------------------------

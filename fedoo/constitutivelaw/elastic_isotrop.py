@@ -15,11 +15,11 @@ class ElasticIsotrop(ElasticAnisotropic):
 
     Parameters
     ----------
-    E : scalars or arrays of gauss point values.
+    E: scalars or arrays of gauss point values.
         The Young Modulus of the elastic isotropic material
-    nu : scalars or arrays of gauss point values.
+    nu: scalars or arrays of gauss point values.
         The Poisson Ratio of the elastic isotropic material
-    name : str, optional
+    name: str, optional
         The name of the constitutive law
     """
 

@@ -486,3 +486,57 @@ class Hex20(ElementHexahedron):
             )
             for xi in vec_xi
         ]
+
+
+#### Hourglass control shape function ####
+
+
+class Hex8Hourglass(Hex8):
+    name = "hex8hourglass"
+    default_n_gp = 1
+    n_nodes = 8
+
+    def __init__(self, n_elm_gp=1, **kargs):
+        assembly = kargs.get("assembly", None)
+        if assembly is not None:
+            self.x_nd = assembly.mesh.nodes[assembly.mesh.elements]
+            self.mesh = assembly.mesh
+        else:
+            assert 0, "Internal error, contact developper"
+        if n_elm_gp != 1:
+            raise ValueError(
+                "Hourglass stiffness only applicable with " "1 integration point"
+            )
+        self._b_matrix = self._get_b_matrix()
+        assembly._b_matrix = self._b_matrix  # for use in weakform
+        super().__init__(n_elm_gp, **kargs)
+
+    def ShapeFunction(self, vec_xi):
+        list_h = [
+            np.array([[1, 1, -1, -1, -1, -1, 1, 1]]),  # 1st mode
+            np.array([[1, -1, -1, 1, -1, 1, 1, -1]]),  # 2nd mode
+            np.array([[1, -1, 1, -1, 1, -1, 1, -1]]),  # 3rd mode
+            np.array([[-1, 1, -1, 1, 1, -1, 1, -1]]),
+        ]  # mode 4
+        b = self._b_matrix
+
+        return [
+            (1 / np.sqrt(8))
+            * (
+                h
+                - (self.x_nd[:, :, 0] @ h.T) * b[0].T
+                - (self.x_nd[:, :, 1] @ h.T) * b[1].T
+                - (self.x_nd[:, :, 2] @ h.T) * b[2].T
+            )[:, np.newaxis, :]
+            for h in list_h
+        ]
+        # list (len = nb hourglass mode)
+        # of array of shape = (Nel, Nb_pg=1, Nddl=4)
+
+    def _get_b_matrix(self):
+        xi_center = self.get_gp_elm_coordinates(1)
+        self.ComputeJacobianMatrix(self.x_nd, xi_center)
+        # should try to avoid computing multiple time J
+        return (self.inverseJacobian @ self.ShapeFunctionDerivative(xi_center)[0])[
+            :, 0
+        ].transpose(1, 2, 0)

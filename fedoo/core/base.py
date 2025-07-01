@@ -118,6 +118,13 @@ class AssemblyBase:
             self.mesh = None
 
         self.current = self
+        """Assembly associated to the mesh of the deformed geometry.
+
+        Used only for problem that required to modify the geometry (Updated
+        Lagrangian formalism)
+        """
+        self.associated_assembly_sum = None
+        """AssemblySum object that contains the assembly."""
 
         if name != "":
             AssemblyBase.__dic[self.__name] = self

@@ -47,6 +47,7 @@ class _NonLinearBase:
         self.nlgeom = nlgeom
         self.t0 = 0
         self.tmax = 1
+        self.time = 0
         self.__iter = 0
         self.__compteurOutput = 0
 
@@ -206,7 +207,6 @@ class _NonLinearBase:
         self.t0 = 0
         self.tmax = 1
         self.__iter = 0
-        self.apply_boundary_conditions()  # perhaps not usefull here as the BC will be applied in the NewTimeIncrement method ?
 
     def change_assembly(self, assembling, update=True):
         """
@@ -491,11 +491,6 @@ class _NonLinearBase:
             else:
                 self.dtime = dt
 
-            # adimensional time for boundary conditions
-            time_end = self.time + self.dtime
-            self.t_fact = (time_end - self.t0) / (self.tmax - self.t0)
-            self.t_fact_old = (self.time - self.t0) / (self.tmax - self.t0)
-
             if restart:
                 # reset internal variables, update Stress, initial displacement and assemble global matrix at previous time
                 self.to_start()
@@ -571,6 +566,16 @@ class _NonLinearBase:
     @property
     def assembly(self):
         return self.__assembly
+
+    @property
+    def t_fact(self):
+        """Adimensional time used for boundary conditions."""
+        return (self.time + self.dtime - self.t0) / (self.tmax - self.t0)
+
+    @property
+    def t_fact_old(self):
+        """Previous adimensional time for boundary conditions."""
+        return (self.time - self.t0) / (self.tmax - self.t0)
 
 
 class NonLinear(_NonLinearBase, Problem):

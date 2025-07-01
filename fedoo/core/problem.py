@@ -311,10 +311,10 @@ class Problem(ProblemBase):
         self.__B = F
         self._dof_slave = dof_slave
         self._dof_free = dof_free
-        self._t_fact = t_fact
 
     def update_boundary_conditions(self):
-        self.apply_boundary_conditions(self._t_fact, self._t_fact)
+        t_fact = self.t_fact
+        self.apply_boundary_conditions(t_fact, t_fact)
 
     def init_bc_start_value(self):
         ### is used only for incremental problems

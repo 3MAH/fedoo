@@ -40,6 +40,22 @@ These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium
    CohesiveLaw
    Spring
 
+.. _beam_constitutive_laws:
+
+Beam constitutive laws
+======================================
+
+These laws should be associated with :py:class:`fedoo.weakform.InterfaceForce`
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   BeamProperties
+   BeamCircular
+   BeamPipe
+   BeamRectangular
+
 Shell constitutive laws
 ======================================
 

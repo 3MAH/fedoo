@@ -151,9 +151,10 @@ def _get_results(
         # output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
         if (
             res not in _available_output
-            and res not in pb.space.list_variables()
-            and res not in pb.space.list_vectors()
+            and res not in assemb.space.list_variables()
+            and res not in assemb.space.list_vectors()
             and res not in assemb.sv
+            and res not in assemb.sv_component
         ):
             print("List of available output: ", _available_output)
             raise NameError(res, "' doens't match to any available output")
@@ -184,7 +185,6 @@ def _get_results(
             data_type = "Node"
 
         elif res == "Fext":
-            # data = assemb.get_ext_forces(pb.get_dof_solution())
             data = pb.get_ext_forces().reshape(pb.space.nvar, -1)
             data_type = "Node"
 
@@ -292,18 +292,6 @@ def _get_results(
 
             data_type = "GaussPoint"
 
-        elif res == "Statev":
-            data = sv["Statev"]
-            # data = material.get_statev()
-            # data = assemb.convert_data(data, None, output_type).T
-            data_type = "GaussPoint"
-
-        elif res in ["Wm"]:
-            data = sv["Wm"]
-            # data = material.get_wm()
-            # data = assemb.convert_data(data, None, output_type).T
-            data_type = "GaussPoint"
-
         elif res in sv:
             data = sv[res]
             data_type = assemb.sv_type.get(res, "GaussPoint")
@@ -321,14 +309,17 @@ def _get_results(
                         )
                     )
 
+        elif res in assemb.sv_component:
+            (sv_name, indices) = assemb.sv_component[res]
+            data = assemb.sv[sv_name][indices]
+            data_type = assemb.sv_type.get(sv_name, "GaussPoint")
+
         elif res == "Fint":
             data = assemb.get_int_forces(pb.get_dof_solution(), "local").T
-            # data = assemb.convert_data(data, None, output_type)
             data_type = "GaussPoint"  # or 'Element' ?
 
         elif res == "Fint_global":
             data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
-            # data = assemb.convert_data(data, None, output_type)
             data_type = "GaussPoint"  # or 'Element' ?
 
         if output_type is not None and output_type != data_type:
@@ -413,17 +404,18 @@ class _ProblemOutput:
             )
 
         for i, res in enumerate(output_list):
-            output_list[i] = _label_dict[
-                res.lower()
-            ]  # to allow full lower case str as output
-            if res not in _available_output:
-                print(
-                    "WARNING: '",
-                    res,
-                    "' doens't match to any available output",
-                )
-                print("Specified output ignored")
-                print("List of available output: ", _available_output)
+            # output_list[i] = _label_dict[
+            #     res.lower()
+            # ]  # to allow full lower case str as output
+            output_list[i] = res
+            # if res not in _available_output:
+            #     print(
+            #         "WARNING: '",
+            #         res,
+            #         "' doens't match to any available output",
+            #     )
+            #     print("Specified output ignored")
+            #     print("List of available output: ", _available_output)
 
         if isinstance(assemb, str):
             assemb = AssemblyBase.get_all()[assemb]

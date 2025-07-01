@@ -12,6 +12,9 @@
 #
 import os
 import sys
+import pyvista
+from pyvista.plotting.utilities.sphinx_gallery import DynamicScraper
+from sphinx_gallery.sorting import FileNameSortKey
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -33,6 +36,9 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
     "sphinx_gallery.gen_gallery",
+    "pyvista.ext.plot_directive",
+    "pyvista.ext.viewer_directive",
+    "sphinx_design",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -82,18 +88,13 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
-# -- Options for sphinx gallery for examples automatic generation -------------------------------------------------
-
-import pyvista
-
+# -- Options for sphinx gallery for examples automatic generation ----------------------
 pyvista.OFF_SCREEN = True
 # necessary when building the sphinx gallery
 pyvista.BUILDING_GALLERY = True
 # pyvista.set_jupyter_backend(None)
 
 # -- Sphinx Gallery Options
-from sphinx_gallery.sorting import FileNameSortKey
-
 sphinx_gallery_conf = {
     # convert rst to md for ipynb
     "pypandoc": True,
@@ -105,5 +106,5 @@ sphinx_gallery_conf = {
     "filename_pattern": r"\.py",
     # Sort gallery example by file name instead of number of lines (default)
     "within_subsection_order": FileNameSortKey,
-    "image_scrapers": ("pyvista", "matplotlib"),
+    "image_scrapers": (DynamicScraper(), "matplotlib"),
 }

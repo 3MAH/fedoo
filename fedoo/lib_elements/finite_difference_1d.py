@@ -10,11 +10,17 @@ class FiniteDifference1D(Element):
         self, n_elm_gp
     ):  # Points de gauss pour les éléments de référence 1D entre 0 et 1
         if n_elm_gp != 0:  # if n_elm_gp == 0, we take the position of the nodes
-            assert 0, "Number of gauss points for Finite Difference elements should be set to 0"
+            assert 0, (
+                "Number of gauss points for Finite Difference elements should "
+                "be set to 0"
+            )
         self.n_elm_gp = 0
 
     def ShapeFunction(xi_pg):
-        assert 0, "No Shape Function for Finite Difference Method. Use lin2 or lin3 element instead"
+        assert 0, (
+            "No Shape Function for Finite Difference Method. Use lin2 or lin3 element "
+            "instead"
+        )
 
 
 class Parameter(FiniteDifference1D):
@@ -24,7 +30,7 @@ class Parameter(FiniteDifference1D):
 
     def computeOperator(self, crd, elm):
         Nnd = np.shape(crd)[0]
-        return {0: [sparse.identity(Nnd, "d", "csr")]}  # dictionnary
+        return {(0, 0): [sparse.identity(Nnd, "d", "csr")]}  # dictionnary
 
 
 class Node(FiniteDifference1D):
@@ -41,7 +47,7 @@ class Node(FiniteDifference1D):
         col = elm[:, 0]
         data = np.ones(Nel)
         return {
-            0: [sparse.coo_matrix((data, (row, col)), shape=(Nel, Nnd)).tocsr()]
+            (0, 0): [sparse.coo_matrix((data, (row, col)), shape=(Nel, Nnd)).tocsr()]
         }  # dictionnary
 
 
@@ -59,7 +65,7 @@ class ForwardFiniteDifference(FiniteDifference1D):
 
     def computeOperator(self, crd, elm):
         Nnd = np.shape(crd)[0]
-        data = {0: [sparse.identity(Nnd, "d", "csr")]}
+        data = {(0, 0): [sparse.identity(Nnd, "d", "csr")]}
         invLenght = 1 / (crd[elm[:, 1], 0] - crd[elm[:, 0], 0])  # 1/(element lenght)
         data[1, 0] = [sparse.spdiags([-invLenght, invLenght], [0, 1], Nnd, Nnd, "csr")]
         return data  # dictionnary
@@ -72,7 +78,7 @@ class ForwardFiniteDifferenceOrder2(FiniteDifference1D):
 
     def computeOperator(self, crd, elm):
         Nnd = np.shape(crd)[0]
-        data = {0: [sparse.identity(Nnd, "d", "csr")]}
+        data = {(0, 0): [sparse.identity(Nnd, "d", "csr")]}
         invLenght = 1 / (crd[elm[:, 1], 0] - crd[elm[:, 0], 0])  # 1/(element lenght)
         data[1, 0] = [sparse.spdiags([-invLenght, invLenght], [0, 1], Nnd, Nnd, "csr")]
         invLenghtSquare = invLenght**2
@@ -96,7 +102,7 @@ class BackwardFiniteDifference(FiniteDifference1D):
 
     def computeOperator(self, crd, elm):
         Nnd = np.shape(crd)[0]
-        data = {0: [sparse.identity(Nnd, "d", "csr")]}
+        data = {(0, 0): [sparse.identity(Nnd, "d", "csr")]}
         invLenght = 1 / (crd[elm[:, 1], 0] - crd[elm[:, 0], 0])  # 1/(element lenght)
         data[1, 0] = [sparse.spdiags([-invLenght, invLenght], [-1, 0], Nnd, Nnd, "csr")]
         return data  # dictionnary
@@ -110,7 +116,7 @@ class BackwardFiniteDifferenceOrder2(FiniteDifference1D):
 
     def computeOperator(self, crd, elm):
         Nnd = np.shape(crd)[0]
-        data = {0: [sparse.identity(Nnd, "d", "csr")]}
+        data = {(0, 0): [sparse.identity(Nnd, "d", "csr")]}
         invLenght = 1 / (crd[elm[:, 1], 0] - crd[elm[:, 0], 0])  # 1/(element lenght)
         data[1, 0] = [sparse.spdiags([-invLenght, invLenght], [-1, 0], Nnd, Nnd, "csr")]
         invLenghtSquare = invLenght**2

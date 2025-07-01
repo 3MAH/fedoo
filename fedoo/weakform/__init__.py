@@ -24,6 +24,8 @@ The WeakForm library contains the following classes:
    :template: custom-class-template.rst
 
    StressEquilibrium
+   ImplicitDynamic
+   StressEquilibriumRI
    SteadyHeatEquation
    HeatEquation
    BeamEquilibrium
@@ -35,6 +37,8 @@ The WeakForm library contains the following classes:
    InterfaceForce
    DistributedLoad
    ExternalPressure
+   HourglassStiffness
+   StressEquilibriumFbar
 """
 
 from .beam import BeamEquilibrium
@@ -56,7 +60,12 @@ from .plate import (
     PlateShearEquilibrium,
 )
 from .stress_equilibrium import StressEquilibrium
-from .stress_equilibrium_bbar import StressEquilibriumFbar
+from .stress_equilibrium_bbar import (
+    StressEquilibriumFbar,
+    StressEquilibriumRI,
+    HourglassStiffness,
+)
+from .distributed_load import ExternalPressure, DistributedLoad
 
 __all__ = [
     "BeamEquilibrium",
@@ -70,6 +79,8 @@ __all__ = [
     "PlateShearEquilibrium",
     "StressEquilibrium",
     "StressEquilibriumFbar",
+    "StressEquilibriumRI",
+    "HourglassStiffness",
     "HeatEquation",
     "SteadyHeatEquation",
     "TemperatureTimeDerivative",
@@ -77,4 +88,6 @@ __all__ = [
     "ImplicitDynamic2",
     "ParametricBeam",
     "ParametricBernoulliBeam",
+    "DistributedLoad",
+    "ExternalPressure",
 ]

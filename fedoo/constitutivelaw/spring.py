@@ -10,7 +10,8 @@ class Spring(ConstitutiveLaw):
     """
     Simple directional spring connector between nodes or surfaces
 
-    This constitutive Law should be associated with :mod:`fedoo.weakform.InterfaceForce`
+    This constitutive Law should be associated with
+    :mod:`fedoo.weakform.InterfaceForce`
 
     Parameters
     ----------

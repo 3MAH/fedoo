@@ -6,7 +6,7 @@ About
 -----
 
 Fedoo is an open source Finite Element library developed in Python.
-It is mainly dedicated for mechanical problems but is easily developpable for other kind of problems (thermal laws already includes).
+It is mainly dedicated for mechanical problems but is easily developpable for other kind of problems (thermal laws already included).
 One of the main application of fedoo is to simulate the mechanical response of heterogeneous materials. 
 For that purpose, fedoo is part of the 3mah set that also include microgen for the CAD and meshing of heterogeneous materials 
 and simcoon for the non linear material constitutive models in finite strain. 
@@ -32,7 +32,7 @@ Here are the main features:
 |---------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | PyPI package  | [![PyPI version](https://badge.fury.io/py/fedoo.svg)](https://badge.fury.io/py/fedoo)                                                  |
 | Conda package | [![Conda](https://anaconda.org/set3mah/fedoo/badges/version.svg)](https://anaconda.org/set3mah/fedoo)                                  |
-| Documentation | [![Documentation](https://readthedocs.org/projects/fedoo/badge/?version=latest)](https://fedoo.readthedocs.io/en/latest/?badge=latest) |
+| Documentation | [![Documentation](https://github.com/3MAH/fedoo/actions/workflows/build-doc.yml/badge.svg)](https://3mah.github.io/fedoo-docs/)    |
 | License       | [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)                                |
 | Website       | [![Website](https://img.shields.io/badge/website-3MAH-blue)](https://3mah.github.io/)                                                  |
 
@@ -62,25 +62,22 @@ pip install fedoo[all]
 ```
 
 In mac OS make sure to use petsc4py (included in the conda package) or
-scikit-umfpack, the best way to take the most of MacOs accelerate framework
-is to install numpy from sources first:
-```
-pip install cython pybind11
-pip install --no-binary :all: numpy
-```
-The conda package is restricted to version 0.33, which is not compatible with
-the latest versions of numpy
+scikit-umfpack. To install scikit-umfpack, it is recommanded to use pip
+(the conda package is outdated):
 ```
 pip install scikit-umpack>=0.41 
 ```
 
 For performance considerations, it is in general strongly recommended to make
-sure that numpy is correctly using a fast implementation of BLAS : ou can do
+sure that numpy is correctly installed using a fast implementation of BLAS
+(*MKL* for windows or linux or *Accelerate* for mac OS).
+
+In mac OS, the best way to take the most of MacOs accelerate framework
+is to install numpy from sources first:
 ```
-import numpy
-numpy.show_config()
+pip install cython pybind11
+pip install --no-binary :all: numpy
 ```
-to check this, and use either *MKL* or *Accelerate* implementation of BLAS
 
 Also, make sure that the default number of threads is not leading to
 performance degradations: using explicit number of threads might help,

@@ -131,6 +131,7 @@ class DataSet:
         title: str | None = None,
         title_size: float = 18.0,
         window_size: list = None,
+        multiplot: bool | None = None,
         **kargs,
     ) -> None:
         """Plot a field on the surface of the associated mesh.
@@ -163,12 +164,12 @@ class DataSet:
             It the type is not specified, look for any type of data and, if the
             data is found, draw the field without conversion.
 
-        scale : float (default = 1)
+        scale : float, default = 1
             The scale factor used for the nodes displacement, using the 'Disp'
             vector field.
             If scale = 0, the field is plotted on the underformed shape.
 
-        show : bool (default = True)
+        show : bool, default = True
 
             * If show = True, the plot is rendered in a new window.
             * If show = False, the current pyvista plotter is returned without
@@ -176,28 +177,28 @@ class DataSet:
             * show = False allow to customize the plot with pyvista before
               rendering it.
 
-        show_edges : bool (default = True)
+        show_edges : bool, default = True
             if True, the mesh edges are shown
 
         clim : sequence[float], optional
             Sequence of two float to define data boundaries for color bar.
             Defaults to minimum and maximum of data.
 
-        node_labels : bool | list (default = False)
+        node_labels : bool | list, default = False
             If True, show node labels (node indexe)
             If a list is given, print the label given in node_labels[i] for
             each node i.
 
-        element_labels : bool | list (default = False)
+        element_labels : bool | list, default = False
             If True, show element labels (element indexe)
             If a list is given, print the label given in element_labels[i] for
             each element i.
 
-        show_nodes : bool|float (default = False)
+        show_nodes : bool|float, default = False
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
 
-        show_normals : bool|float (default = False)
+        show_normals : bool|float, default = False
             Plot the face normals. If True,
             the vectors are shown with a default magnitude.
             If float, show_normals is the required magnitude.
@@ -227,18 +228,26 @@ class DataSet:
             Roll angle of the camera. The default state (roll angle = 0.) is
             set with the y direction on the up.
 
-        title: str | None
+        title: str | None, default = None
             Title of the plot. By default the title is field name
             and the component is printed.
 
-        title_size: float
+        title_size: float, default = 18
             Size of the title
 
-        window_size: tuple
-            Window size in pixels. Defaults to [1024, 768]
+        window_size: tuple, default = (1024, 768)
+            Window size in pixels.
+
+        multiplot: bool | None, default = None
+            If True, the pyvista mesh is copied to force a separated scalar
+            bar. This is usefull when ploting several figures at the same time.
+            If multiplot si False, the same scalarbar will be applied to
+            all the plots.
+            If None, uses separated scalarbars only if the pyvista plotter uses
+            subplot.
 
 
-        **kwargs: dict, default = 15.
+        **kwargs: dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
         """
@@ -344,10 +353,11 @@ class DataSet:
             # dont show
             pl = plotter
 
-        if pl.renderers.shape == (1, 1):
-            multiplot = False
-        else:
-            multiplot = True
+        if multiplot is None:
+            if pl.renderers.shape == (1, 1):
+                multiplot = False
+            else:
+                multiplot = True
 
         pl.set_background("White")
         # camera position
@@ -1217,7 +1227,8 @@ class MultiFrameDataSet(DataSet):
         directly related to pyvista options (for instance in the pyvista.plotter.add_mesh method).
         Please, refer to the documentation of pyvista for more details.
 
-        Available keyword arguments are :
+        Available keyword arguments are:
+
         * framerate : int (default = 24)
             Number of frames per second
         * quality : int between 1 and 10 (default = 5)

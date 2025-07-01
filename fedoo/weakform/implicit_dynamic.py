@@ -8,7 +8,7 @@ import numpy as np
 
 class ImplicitDynamic(WeakFormBase):
     """
-    Weak formulation of the steady heat equation (without time evolution).
+    Weak formulation.
 
     Parameters
     ----------
@@ -275,7 +275,7 @@ class ImplicitDynamic(WeakFormBase):
         return self.__nlgeom
 
 
-class _NewmarkInteria(WeakFormBase):
+class _NewmarkInertia(WeakFormBase):
     """
     Weak formulation of the steady heat equation (without time evolution).
 
@@ -394,6 +394,6 @@ def ImplicitDynamic2(
     constitutivelaw, density, beta, gamma, name="", nlgeom=False, space=None
 ):
     stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
-    time_integration = _NewmarkInteria(density, beta, gamma, "", nlgeom, space)
+    time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
     time_integration.assembly_options["assume_sym"] = True
     return WeakFormSum([stiffness_weakform, time_integration], name)
