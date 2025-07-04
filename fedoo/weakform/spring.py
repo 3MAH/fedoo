@@ -71,6 +71,8 @@ class SpringEquilibrium(WeakFormBase):
         self.K = K
         self.Kt_factor = None
 
+        self.assembly_options.set("elm_type", "spring", elm_type="lin2")
+
         self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.
             * Set to False if geometric non linarities are ignored (default).
@@ -99,7 +101,7 @@ class SpringEquilibrium(WeakFormBase):
             assembly.set_disp(pb.get_disp())
 
         dof = pb.get_dof_solution()  # displacement and rotation node values
-        if np.isscalar(dof) and dof == 0:
+        if np.array_equal(dof, 0):
             assembly.sv["Stretch"] = assembly.sv["Fint"] = 0
         else:
             # evaluate Strain

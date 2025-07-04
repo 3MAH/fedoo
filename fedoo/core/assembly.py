@@ -184,8 +184,13 @@ class Assembly(AssemblyBase):
                 n_bloc_cols = self.mesh.n_nodes
             else:
                 n_bloc_cols = self.mesh.n_elements * self.mesh.n_elm_nodes
-                # or: mat_change_of_basis.shape[0]//nvar
             sl = [slice(i * n_bloc_cols, (i + 1) * n_bloc_cols) for i in range(nvar)]
+
+            # total number of dof for the operator (with pb virtual dof)
+            if self._pb is None:
+                n_dof = n_bloc_cols * nvar  # if assembly has not been initialized
+            else:
+                n_dof = n_bloc_cols * nvar + self._pb.n_virtual_dof
 
             if n_elm_gp == 0:  # if finite difference elements, don't use BlocSparse
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
@@ -227,8 +232,8 @@ class Assembly(AssemblyBase):
                     if (
                         wf.op[ii] == 1
                     ):  # only virtual operator -> compute a vector which is the nodal values
-                        if np.isscalar(VV) and VV == 0:
-                            VV = np.zeros((n_bloc_cols * nvar))
+                        if np.array_equal(VV, 0):
+                            VV = np.zeros(n_dof)
                         VV[sl[var_vir[ii]]] = VV[sl[var_vir[ii]]] - (coef_PG)
 
                     else:  # virtual and real operators -> compute a matrix
@@ -264,6 +269,8 @@ class Assembly(AssemblyBase):
                     for blocks_row in blocks
                 ]
                 MM = sparse.bmat(blocks, format="csr")
+                if self._pb is not None and self._pb.n_virtual_dof > 0:
+                    MM.resize((n_dof, n_dof))
 
             else:
                 MM = BlocSparse(
@@ -386,8 +393,8 @@ class Assembly(AssemblyBase):
                         coef_vir.extend(associatedVariables[var_vir[0]][1])
 
                     if wf.op[ii] == 1:  # only virtual operator -> compute a vector
-                        if np.isscalar(VV) and VV == 0:
-                            VV = np.zeros((n_bloc_cols * nvar))
+                        if np.array_equal(VV, 0):
+                            VV = np.zeros(n_dof)
                         for i in range(len(Matvir)):
                             try:
                                 VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[
