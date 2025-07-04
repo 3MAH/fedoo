@@ -44,7 +44,7 @@ class Problem(ProblemBase):
         name of the problem.
     """
 
-    def __init__(self, A, B, D, mesh, name="MainProblem", space=None):
+    def __init__(self, A=None, B=0, D=0, mesh=None, name="MainProblem", space=None):
         # the problem is AX = B + D
 
         ProblemBase.__init__(self, name, space)
