@@ -73,6 +73,7 @@ class BeamEquilibrium(WeakFormBase):
             self.properties = BeamProperties(
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
+        self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
         """Method used to treat the geometric non linearities.

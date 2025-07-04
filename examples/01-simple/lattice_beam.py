@@ -26,11 +26,11 @@ wf = fd.weakform.BeamEquilibrium(beam_props)
 # assembly = fd.Assembly.create(wf, mesh, "bernoullibeam")
 assembly = fd.Assembly.create(wf, mesh)
 
-pb = fd.problem.NonLinear(assembly)
+pb = fd.problem.NonLinear(assembly, nlgeom=True)
 results = pb.add_output("test", assembly, ["Disp", "Rot", "BeamStress"])
 
 pb.bc.add("Dirichlet", nodes_left, ["Disp", "Rot"], 0)
-pb.bc.add("Dirichlet", nodes_right, "DispY", -2)
+pb.bc.add("Dirichlet", nodes_right, ["DispY", "DispX"], [-2,0])
 
 pb.nlsolve(dt=0.02)
 
