@@ -16,6 +16,7 @@ def extract_surface(
     reduce_order: bool = False,
     quad2tri: bool | None = None,
     check_normals: bool = True,
+    only_external_faces = True,
     node_set: str | np.typing.ArrayLike | None = None,
     element_set: str | np.typing.ArrayLike | None = None,
 ):
@@ -143,7 +144,8 @@ def extract_surface(
     dump, list_faces_index, counts = np.unique(
         test, axis=0, return_index=True, return_counts=True
     )
-    list_faces_index = list_faces_index[counts == 1]
+    if only_external_faces:
+        list_faces_index = list_faces_index[counts == 1]
     surf_elements = list_faces[list_faces_index]
     ind_element = list_faces_index // n_faces_in_elm
 
@@ -165,7 +167,7 @@ def extract_surface(
     # Check if normal are well defined (outside the volume)
     # idea: compute the distance of a point that belong the elm but
     #       is not the face itself
-    if check_normals:
+    if check_normals and only_external_faces:
         nodes_inside = [
             np.setdiff1d(mesh.elements[ind_element[i]], face)[0]
             for i, face in enumerate(surf_elements)
@@ -514,3 +516,100 @@ def change_elm_type(mesh, elm_type, name=""):
     # new_mesh = new_mesh.to_pyvista().clean(tol=1e-6, remove_unused_points=False)
     # new_mesh = new_mesh.from_pyvista()
     return new_mesh
+
+def extract_edges(
+    mesh: Mesh,
+    reduce_order: bool = False,
+    node_set: str | np.typing.ArrayLike | None = None,
+    element_set: str | np.typing.ArrayLike | None = None,
+):
+    """Extract a mesh with edges from a given 2D or 3D mesh.
+
+    Parameters
+    ----------
+    mesh : fd.Mesh
+        Mesh from which we want to extract the surface
+    reduce_order: bool, default = False
+        If True, only 2-nodes edges will be extracted in any cases
+    node_set: str | array_like, optional
+        if node_set is defined (array of node indices or node_set name),
+        the surface mesh will include only face whose corner nodes are all
+        in the given node_set.
+    element_set: str | array_like, optional
+        if element_set is defined (array of node indices or node_set name),
+        the surface mesh will include only
+        face that belong to elements in the given element_set.
+
+    Returns
+    -------
+    Mesh
+        Edge Mesh with 'lin2' or 'lin3' elm_type.
+    """
+    if mesh.elm_type in ["quad4", "quad8", "quad9", "tri3", "tri6"]:
+        return extract_surface(
+            mesh,
+            reduce_order,
+            check_normals=False,
+            only_external_faces=False,
+            node_set=node_set,
+            element_set=element_set,
+        )
+
+    elif mesh.elm_type == "tet4" or (reduce_order and mesh.elm_type == "tet10"):
+        edges_in_elm = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
+        n_edge_nodes = n_edge_nodes_for_sort = 2
+        edge_elm_type = "lin2"
+    elif mesh.elm_type == "tet10":
+        edges_in_elm = [[0, 1, 4], [0, 2, 6], [0, 3, 7], [1, 2, 5], [1, 3, 8], [2, 3, 9]]
+        n_edge_nodes = 3
+        n_edge_nodes_for_sort = 2
+        edge_elm_type = "lin3"
+    elif mesh.elm_type == "hex8" or (reduce_order and mesh.elm_type == "hex20"):
+        edges_in_elm = [
+            [0, 1], [1, 2], [2, 3], [0, 3],
+            [4, 5], [4, 7], [6, 7], [5, 6],
+            [0, 4], [1, 5], [2, 6], [3, 7],
+        ]
+        n_edge_nodes = n_edge_nodes_for_sort = 2
+        edge_elm_type = "lin2"
+
+    elif mesh.elm_type == "hex20":
+        edges_in_elm = [
+            [0, 1, 8], [1, 2, 9], [2, 3, 10], [0, 3, 11],
+            [4, 5, 12], [4, 7, 15], [6, 7, 14], [5, 6, 13],
+            [0, 4, 16], [1, 5, 17], [2, 6, 18], [3, 7, 19],
+        ]
+        n_edge_nodes = 3
+        n_edge_nodes_for_sort = 2
+        edge_elm_type = "lin3"
+    else:
+        raise NotImplementedError()
+
+    n_edges_in_elm = len(edges_in_elm)
+    list_edges = mesh.elements[:, edges_in_elm].reshape(
+        -1, n_edge_nodes
+    )  # shape = (n_elements, n_elm_faces, n_node_per_faces) before reshape
+
+    test = np.sort(list_edges[:, :n_edge_nodes_for_sort], axis=1)
+
+    dump, list_edges_index = np.unique(test, axis=0, return_index=True)
+
+    edge_elements = list_edges[list_edges_index]
+    ind_element = list_edges_index // n_edges_in_elm
+
+    if node_set is not None:
+        if isinstance(node_set, str):
+            node_set = mesh.node_sets[node_set]
+        mask = np.isin(edge_elements[:, :n_edge_nodes_for_sort], node_set).all(axis=1)
+        edge_elements = edge_elements[mask]
+        ind_element = ind_element[mask]
+
+    if element_set is not None:
+        if isinstance(element_set, str):
+            element_set = mesh.element_sets[element_set]
+
+        mask = np.isin(ind_element, element_set)
+        edge_elements = edge_elements[mask]
+        ind_element = ind_element[mask]
+
+    return Mesh(mesh.nodes, edge_elements, edge_elm_type)
