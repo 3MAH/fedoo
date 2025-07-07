@@ -88,7 +88,7 @@ class Problem(ProblemBase):
     def _get_vect_component(
         self, vector, name
     ):  # Get component of a vector (force vector for instance) being given the name of a component (vector or single component)
-        assert isinstance(name, str), "argument error"
+        assert isinstance(name, str), "name should be a str"
 
         if name.lower() == "all" or np.isscalar(vector):
             return vector
@@ -99,8 +99,8 @@ class Problem(ProblemBase):
             vec = self.space.get_rank_vector(name)
             i = vec[0]  # rank of the 1rst variable of the vector
             dim = len(vec)
-            return vector.reshape(-1, n)[i : i + dim]
-            # return vector[i*n : (i+dim)*n].reshape(-1,n)
+            # return vector.reshape(-1, n)[i : i + dim]
+            return vector[i * n : (i + dim) * n].reshape(-1, n)
         else:
             # vector component are assumed defined as an increment sequence (i, i+1, i+2)
             i = self.space.variable_rank(name)
@@ -195,7 +195,7 @@ class Problem(ProblemBase):
 
             assert not (np.isscalar(self.__D)), "internal error, contact developper"
 
-            if self.__A.shape[0] != n_dof:
+            if self.__A.shape[0] != n_dof:  # probably not required
                 self.__A.resize((n_dof))
 
             self.__X[self._dof_free] = (

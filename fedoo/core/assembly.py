@@ -182,15 +182,19 @@ class Assembly(AssemblyBase):
             # number of col for each bloc
             if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
                 n_bloc_cols = self.mesh.n_nodes
+                use_change_of_basis = False
             else:
                 n_bloc_cols = self.mesh.n_elements * self.mesh.n_elm_nodes
+                use_change_of_basis = True
             sl = [slice(i * n_bloc_cols, (i + 1) * n_bloc_cols) for i in range(nvar)]
 
             # total number of dof for the operator (with pb virtual dof)
-            if self._pb is None:
-                n_dof = n_bloc_cols * nvar  # if assembly has not been initialized
+            if use_change_of_basis or self._pb is None or self._pb._n_virtual_dof == 0:
+                n_dof = n_bloc_cols * nvar
+                global_mat_resize = False
             else:
                 n_dof = n_bloc_cols * nvar + self._pb.n_virtual_dof
+                global_mat_resize = True  # resize to account for virtual dof
 
             if n_elm_gp == 0:  # if finite difference elements, don't use BlocSparse
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
@@ -269,8 +273,6 @@ class Assembly(AssemblyBase):
                     for blocks_row in blocks
                 ]
                 MM = sparse.bmat(blocks, format="csr")
-                if self._pb is not None and self._pb.n_virtual_dof > 0:
-                    MM.resize((n_dof, n_dof))
 
             else:
                 MM = BlocSparse(
@@ -343,7 +345,6 @@ class Assembly(AssemblyBase):
                     coef_PG = (
                         coef_PG_sum * mat_gaussian_quadrature.data
                     )  # mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
-                    #                Matvir = (RowBlocMatrix(self._get_elementary_operator(wf.op_vir[ii]), nvar, var_vir, coef_vir) * mat_change_of_basis).T
                     # check how it appens with change of variable and rotation dof
 
                     Matvir = self._get_elementary_operator(wf.op_vir[ii])
@@ -412,7 +413,6 @@ class Assembly(AssemblyBase):
                             var.extend(associatedVariables[var[0]][0])
                             coef.extend(associatedVariables[var[0]][1])
 
-                        #                    Mat    =  RowBlocMatrix(self._get_elementary_operator(wf.op[ii]), nvar, var, coef)         * mat_change_of_basis
                         Mat = self._get_elementary_operator(wf.op[ii])
 
                         # Possibility to increase performance for multivariable case
@@ -446,180 +446,27 @@ class Assembly(AssemblyBase):
                             listCoef_PG = None
 
             if compute != "vector":
-                if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
-                    self.global_matrix = MM.tocsr()  # format csr
-                else:
+                if use_change_of_basis:
                     self.global_matrix = (
                         mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
                     )  # format csr
-            if compute != "matrix":
-                if np.isscalar(VV) and VV == 0:
-                    self.global_vector = 0
-                elif np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
-                    self.global_vector = VV  # numpy array
                 else:
+                    self.global_matrix = MM.tocsr()  # format csr
+                    if global_mat_resize:
+                        self.global_matrix.resize(n_dof, n_dof)
+            if compute != "matrix":
+                if np.array_equal(VV, 0):
+                    self.global_vector = 0
+                elif use_change_of_basis:
                     self.global_vector = mat_change_of_basis.T * VV
+                else:
+                    self.global_vector = VV  # numpy array
 
             if self._saved_bloc_structure is None:
                 self._saved_bloc_structure = MM.get_BlocStructure()
 
-        elif _assembly_method == "old":
-            # keep a lot in memory, not very efficient in a memory point of view. May be slightly more rapid in some cases
-            # Don't work with alias variables
-            intRef = wf.sort()  # intRef = list of integer for compareason (same int = same operator with different coef)
-
-            if (
-                self.mesh,
-                self.elm_type,
-                n_elm_gp,
-            ) not in Assembly._saved_elementary_operators:
-                Assembly._saved_elementary_operators[
-                    (self.mesh, self.elm_type, n_elm_gp)
-                ] = {}
-            saveOperator = Assembly._saved_elementary_operators[
-                (self.mesh, self.elm_type, n_elm_gp)
-            ]
-
-            # list_elm_type contains the id of the element associated with every variable
-            # list_elm_type could be stored to avoid reevaluation
-            if hasattr(get_element(self.elm_type), "get_elm_type"):
-                element = get_element(self.elm_type)
-                list_elm_type = [
-                    element.get_elm_type(self.space.variable_name(i))
-                    for i in range(nvar)
-                ]  # will not work for alias variable...
-            else:
-                list_elm_type = [self.elm_type for i in range(nvar)]
-
-            if "blocShape" not in saveOperator:
-                saveOperator["blocShape"] = saveOperator[
-                    "colBlocSparse"
-                ] = saveOperator["rowBlocSparse"] = None
-
-            # MM not used if only compute vector
-            MM = BlocSparseOld(nvar, nvar)
-            MM.col = saveOperator[
-                "colBlocSparse"
-            ]  # col indices for bloc to build coo matrix with BlocSparse
-            MM.row = saveOperator[
-                "rowBlocSparse"
-            ]  # row indices for bloc to build coo matrix with BlocSparse
-            MM.blocShape = saveOperator["blocShape"]  # shape of one bloc in BlocSparse
-
-            # sl contains list of slice object that contains the dimension for each variable
-            # size of VV and sl must be redefined for case with change of basis
-            VV = 0
-            nbNodes = self.mesh.n_nodes
-            sl = [slice(i * nbNodes, (i + 1) * nbNodes) for i in range(nvar)]
-
-            for ii in range(len(wf.op)):
-                if compute == "matrix" and np.isscalar(wf.op[ii]) and wf.op[ii] == 1:
-                    continue
-                if compute == "vector" and not wf.op[ii] == 1:
-                    continue
-
-                if np.isscalar(wf.coef[ii]) or len(wf.coef[ii]) == 1:
-                    coef_PG = wf.coef[
-                        ii
-                    ]  # mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
-                else:
-                    coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
-
-                if (
-                    ii > 0 and intRef[ii] == intRef[ii - 1]
-                ):  # if same operator as previous with different coef, add the two coef
-                    coef_PG_sum += coef_PG
-                else:
-                    coef_PG_sum = coef_PG
-
-                if (
-                    ii < len(wf.op) - 1 and intRef[ii] == intRef[ii + 1]
-                ):  # if operator similar to the next, continue
-                    continue
-
-                coef_PG = coef_PG_sum * mat_gaussian_quadrature.data
-
-                coef_vir = [1]
-                var_vir = [wf.op_vir[ii].u]  # list in case there is an angular variable
-
-                if var_vir[0] in associatedVariables:
-                    var_vir.extend(associatedVariables[var_vir[0]][0])
-                    coef_vir.extend(associatedVariables[var_vir[0]][1])
-
-                if wf.op[ii] == 1:  # only virtual operator -> compute a vector
-                    Matvir = self._get_elementary_operator(wf.op_vir[ii])
-                    if np.isscalar(VV) and VV == 0:
-                        VV = np.zeros((self.mesh.n_nodes * nvar))
-                    for i in range(len(Matvir)):
-                        VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[i] * Matvir[
-                            i
-                        ].T * (coef_PG)  # this line may be optimized
-
-                else:  # virtual and real operators -> compute a matrix
-                    coef = [1]
-                    var = [wf.op[ii].u]  # list in case there is an angular variable
-                    if var[0] in associatedVariables:
-                        var.extend(associatedVariables[var[0]][0])
-                        coef.extend(associatedVariables[var[0]][1])
-
-                    tuplename = (
-                        list_elm_type[wf.op_vir[ii].u],
-                        wf.op_vir[ii].x,
-                        wf.op_vir[ii].ordre,
-                        list_elm_type[wf.op[ii].u],
-                        wf.op[ii].x,
-                        wf.op[ii].ordre,
-                    )  # tuple to identify operator
-                    if tuplename in saveOperator:
-                        MatvirT_Mat = saveOperator[
-                            tuplename
-                        ]  # MatvirT_Mat is an array that contains usefull data to build the matrix MatvirT*Matcoef*Mat where Matcoef is a diag coefficient matrix. MatvirT_Mat is build with BlocSparse class
-                    else:
-                        MatvirT_Mat = None
-                        saveOperator[tuplename] = [
-                            [None for i in range(len(var))] for j in range(len(var_vir))
-                        ]
-                        Matvir = self._get_elementary_operator(wf.op_vir[ii])
-                        Mat = self._get_elementary_operator(wf.op[ii])
-
-                    for i in range(len(var)):
-                        for j in range(len(var_vir)):
-                            if MatvirT_Mat is not None:
-                                MM.addToBloc(
-                                    MatvirT_Mat[j][i],
-                                    (coef[i] * coef_vir[j]) * coef_PG,
-                                    var_vir[j],
-                                    var[i],
-                                )
-                            else:
-                                saveOperator[tuplename][j][i] = MM.addToBlocATB(
-                                    Matvir[j],
-                                    Mat[i],
-                                    (coef[i] * coef_vir[j]) * coef_PG,
-                                    var_vir[j],
-                                    var[i],
-                                )
-                                if saveOperator["colBlocSparse"] is None:
-                                    saveOperator["colBlocSparse"] = MM.col
-                                    saveOperator["rowBlocSparse"] = MM.row
-                                    saveOperator["blocShape"] = MM.blocShape
-
-            if compute != "vector":
-                if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
-                    self.global_matrix = MM.toCSR()  # format csr
-                else:
-                    self.global_matrix = (
-                        mat_change_of_basis.T * MM.toCSR() * mat_change_of_basis
-                    )  # format csr
-            if compute != "matrix":
-                if np.isscalar(VV) and VV == 0:
-                    self.global_vector = 0
-                elif np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
-                    self.global_vector = VV  # numpy array
-                else:
-                    self.global_vector = mat_change_of_basis.T * VV
-
         elif _assembly_method == "very_old":
+            # Only for debug purpose. No optim. Dont work with virtual dof. Not tested
             MM = 0
             VV = 0
 
@@ -754,6 +601,11 @@ class Assembly(AssemblyBase):
                 else:
                     local_frame_el = self._element_local_frame
 
+                if self._pb is not None:
+                    n_virtual_dof = self._pb.n_virtual_dof
+                else:
+                    n_virtual_dof = 0
+
                 rowMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
                 colMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
                 dataMCB = np.empty(
@@ -797,7 +649,7 @@ class Assembly(AssemblyBase):
 
                     mat_change_of_basis = sparse.coo_matrix(
                         (dataMCB, (rowMCB, colMCB)),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar),
+                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_virtual_dof),
                     )
                 else:
                     mat_change_of_basis = sparse.coo_matrix(
@@ -805,7 +657,7 @@ class Assembly(AssemblyBase):
                             dataMCB.reshape(-1),
                             (rowMCB.reshape(-1), colMCB.reshape(-1)),
                         ),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar),
+                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_virtual_dof),
                     )
 
                 mat_change_of_basis = mat_change_of_basis.tocsr()
