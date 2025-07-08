@@ -43,7 +43,7 @@ class BeamEquilibrium(WeakFormBase):
         Izz=None,
         k=0,
         name="",
-        nlgeom=False,
+        nlgeom=None,
         space=None,
     ):
         # k: shear shape factor
@@ -88,17 +88,8 @@ class BeamEquilibrium(WeakFormBase):
         assembly.sv["BeamStrain"] = 0
         assembly.sv["BeamStress"] = 0
 
-        if self.nlgeom:
-            if self.nlgeom is True:
-                self.nlgeom = "UL"
-            elif isinstance(self.nlgeom, str):
-                self.nlgeom = self.nlgeom.upper()
-                if self.nlgeom != "UL":
-                    raise NotImplementedError(
-                        f"{self.nlgeom} nlgeom not implemented for Interface force."
-                    )
-            else:
-                raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
+        self._initialize_nlgeom(assembly, pb)
+        self.nlgeom = assembly._nlgeom
 
     def update(self, assembly, pb):
         # function called when the problem is updated (NR loop or time increment)
@@ -186,22 +177,30 @@ class BeamEquilibrium(WeakFormBase):
 
                 else:  # ndim === 3
                     # values from initial and last iterations
-                    if "_ElementVectors" in assembly.sv:
-                        element_vectors_old = assembly.sv["_ElementVectors"]
+                    if "_InitialElementVectors" in assembly.sv:
                         initial_element_vectors = assembly.sv["_InitialElementVectors"]
+                        initial_element_rotmat = assembly.sv["_InitialRigidRotationMat"]
                     else:
+                        # vector along the element axis (local X direction)
                         initial_element_vectors = (
                             assembly.mesh.nodes[mesh.elements[:, 1]]
                             - assembly.mesh.nodes[mesh.elements[:, 0]]
                         )
-                        element_vectors_old = initial_element_vectors
+                        assembly.sv["_InitialElementVectors"] = initial_element_vectors
+
+                        # element rigid rotation mat to get the local frame from global
                         assembly.sv["RigidRotationMat"] = (
                             assembly.mesh.get_element_local_frame()
                         )
+                        # initial rotation mat to get the initial element local frame
+                        initial_element_rotmat = assembly.sv[
+                            "_InitialRigidRotationMat"
+                        ] = assembly.sv["RigidRotationMat"]
+
+                        # dof rotation matrix at node (without elm initial rotation)
                         assembly.sv["_NodesRotationMatrix"] = np.tile(
                             np.eye(3), (assembly.mesh.n_nodes, 1, 1)
                         )
-                        assembly.sv["_InitialElementVectors"] = initial_element_vectors
 
                     # coordinates of vector between node 1 and 2 for each element
                     element_vectors = (
@@ -217,10 +216,9 @@ class BeamEquilibrium(WeakFormBase):
 
                     # update rigid rotation local_frame (rotmatrix from global frame)
                     rigid_rotmat_trial = (
+                        assembly.sv["RigidRotationMat"] @
                         Rotation.from_rotvec(delta_rotvec)
                         .as_matrix()
-                        .transpose(0, 2, 1)
-                        @ assembly.sv["RigidRotationMat"]
                     )
 
                     # get rigid rotation by projection (X axis is the poutre normal)
@@ -247,10 +245,10 @@ class BeamEquilibrium(WeakFormBase):
                     )
 
                     rot1 = Rotation.from_matrix(
-                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 0]]
+                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 0]] @ initial_element_rotmat.transpose(0,2,1)
                     ).as_rotvec()
                     rot2 = Rotation.from_matrix(
-                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 1]]
+                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 1]] @ initial_element_rotmat.transpose(0,2,1)
                     ).as_rotvec()
 
                     # longitunal displacement in local coordinates (u2y=0)
@@ -276,7 +274,7 @@ class BeamEquilibrium(WeakFormBase):
                     ] = u2x
 
                     # update saved values for next iteration
-                    assembly.sv["_ElementVectors"] = element_vectors
+                    # assembly.sv["_ElementVectors"] = element_vectors
                     assembly.sv["RigidRotationMat"] = rigid_rotmat
                     assembly.sv["_NodesRotationMatrix"] = nodes_rotmat
                     assembly.current._element_local_frame = rigid_rotmat.reshape(
@@ -293,15 +291,27 @@ class BeamEquilibrium(WeakFormBase):
                             * assembly.mesh.n_nodes
                         ] = (Rotation.from_matrix(nodes_rotmat).as_rotvec().T).ravel()
                     else:
+                        nodes_rotmat_from_U = Rotation.from_rotvec(pb._U[
+                            rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                            * assembly.mesh.n_nodes
+                        ].reshape(3,-1).T).as_matrix()
+
+                        # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
                         pb._dU[
                             rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             * assembly.mesh.n_nodes
-                        ] = (
-                            Rotation.from_matrix(nodes_rotmat).as_rotvec().T
-                        ).ravel() - pb._U[
-                            rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            * assembly.mesh.n_nodes
-                        ]
+                        ] = Rotation.from_matrix(nodes_rotmat @ nodes_rotmat_from_U.transpose(0,2,1)).as_rotvec().T.ravel()
+
+                        # Or equivalent bug sigularité if angle > pi
+                        # pb._dU[
+                        #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                        #     * assembly.mesh.n_nodes
+                        # ] = (
+                        #     Rotation.from_matrix(nodes_rotmat).as_rotvec().T
+                        # ).ravel() - pb._U[
+                        #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                        #     * assembly.mesh.n_nodes
+                        # ]
 
                     for bc in pb.bc.list_all():
                         if bc.bc_type == "Dirichlet":

@@ -55,7 +55,7 @@ class SpringEquilibrium(WeakFormBase):
         self,
         K,
         name="",
-        nlgeom=False,
+        nlgeom=None,
         space=None,
     ):
         WeakFormBase.__init__(self, name)
