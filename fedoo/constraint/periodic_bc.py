@@ -14,6 +14,7 @@ class PeriodicBC(BCBase):
         periodicity_type: str = "small_strain",
         off_axis_rotation: Rotation = None,
         dim: int = None,
+        meshperio: bool = True,
         tol: float = 1e-8,
         name: str = "Periodicity",
     ):
@@ -59,19 +60,7 @@ class PeriodicBC(BCBase):
             #add nodes not associated to any element for constraint driver
             node_cd = fd.Mesh["Domain2"].add_nodes(crd_center, 3)
 
-            list_strain_nodes = [StrainNodes[0], StrainNodes[0], StrainNodes[0],
-                                    StrainNodes[1], StrainNodes[1], StrainNodes[1]]
-            list_strain_var = ['DispX', 'DispY', 'DispZ','DispX', 'DispY', 'DispZ']
-
-            # or using the displacement gradient formulation (in this case the shear strain are true strain component):
-            # list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
-            #                      [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
-            #                      [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
-            # list_strain_var = [['DispX', 'DispX', 'DispY'],
-            #                    ['DispX', 'DispY', 'DispZ'],
-            #                    ['DispY', 'DispZ', 'DispZ']]
-
-            bc_periodic = fd.homogen.PeriodicBC(list_strain_nodes, list_strain_var)
+            bc_periodic = fd.constraint.PeriodicBC(periodicity_type = 'small_strain')
 
         """
 
@@ -89,9 +78,9 @@ class PeriodicBC(BCBase):
         if dim is None:
             dim = 3
 
-        if isinstance(off_axis_rotation, Rotation):
-            self.off_axis_rotation = off_axis_rotation
+        self.off_axis_rotation = off_axis_rotation
         self.dim = dim  # dimension of periodicity (1, 2 or 3)
+        self.meshperio = meshperio  # if True, the mesh is periodic
         self.tol = tol
         self.bc_type = "PeriodicBC"
         BCBase.__init__(self, name)
