@@ -11,36 +11,24 @@ class PeriodicBC(BCBase):
 
     def __init__(
         self,
-        node_cd,
-        var_cd,
-        off_axis_rotation=None,
-        dim=None,
-        tol=1e-8,
-        meshperio=True,
-        name="Periodicity",
+        periodicity_type: str = "small_strain",
+        off_axis_rotation: Rotation = None,
+        dim: int = None,
+        tol: float = 1e-8,
+        name: str = "Periodicity",
     ):
         """
         Create a perdiodic boundary condition object using several multi-points constraints.
-        Some constraint driver (cd) dof  are used to define mean strain or mean displacement gradient.
-        The dof associated to a contraint driver is difined by the node indice (defined in node_cd)
-        and the associated variable (defined in var_vd).
-
-        The constraint drivers can be defined in several way
-            * [Eps_XX] or [[Eps_XX]] -> strain dof for 1D periodicity
-            * [Eps_XX, Eps_YY, 2*Eps_XY] -> strain dof for 2D periodicity using Voigt notation for shear components
-            * [Eps_XX, Eps_YY, Eps_ZZ, 2*Eps_XY, 2*Eps_XZ, 2*Eps_YZ] -> strain dof for 3D periodicity using Voigt notation for shear components
-            * [[DU_XX, DU_XY], [DU_YX, DU_YY]] -> gradient of displacement for 2D periodicity
-            * [[DU_XX, DU_XY, DU_XZ], [DU_YX, DU_YY, DU_YZ], [DU_ZX, DU_ZY, DU_ZZ]]
-            -> gradient of displacement for 3D periodicity
+        Some virtual dof are used to define mean strain or mean displacement gradient.
+        those multi point constraint equations are defined using virtual degrees of freedom
 
         Parameters
         ----------
-        crd : The list of nodes in terms of coordinates of the mesh
-        node_cd : list of nodes (small strain), or list of list of nodes (finite strain).
-            Nodes used as constraint drivers for each strain component. The dof used as contraint drivers are defined in var_cd.
-        var_cd : list of str (small strain), or list of list of str (finite strain).
-            Variables used as constraint drivers. The len of lists should be the same as node_cd.
-        dim : int in [1,2,3] (default = assess from the constraint drivers dimension)
+        periodicity_type : The type of periodicity : 'small_strain' or 'finite_strain'. If small_strain is selected, the constrain driver is directly expressed in terms of strain components.
+            If 'finite_strain' is selected, the constrain driver is expressed in terms of displacement gradient.
+        off_axis_rotation : A scipy.spatial.transform object Rotation that contain the rotation between the reference frame where boundary conditions are applied and the off-axis loading frame.
+
+        dim : int in [1,2,3] (default = 3)
             Number of dimensions with periodic condition.
             If dim = 1: the periodicity is assumed along the x coordinate
             If dim = 2: the periodicity is assumed along x and y coordinates
@@ -49,7 +37,6 @@ class PeriodicBC(BCBase):
             Tolerance for the periodic nodes detection. The default is 1e-8.
         name : str, optional
             Name of the created boundary condition. The default is "Periodicity".
-
 
         Remarks
         ---------------
@@ -88,83 +75,27 @@ class PeriodicBC(BCBase):
 
         """
 
-        if isinstance(off_axis_rotation, Rotation):
-            self.off_axis_rot_matrix = off_axis_rotation.as_matrix()
+        if not isinstance(periodicity_type, str):
+            raise TypeError("periodicity_type should be a string")
+        if periodicity_type == "small_strain":
             self.shear_coef = 0.5
+        elif periodicity_type == "finite_strain":
+            self.shear_coef = 1.0
+        else:
+            raise ValueError(
+                "periodicity_type should be either 'small_strain' or 'finite_strain'"
+            )
 
-            if np.isscalar(node_cd[0]):
-                if len(node_cd) == 6:
-                    if dim is None:
-                        dim = 3
-                    node_cd_load = [
-                        [node_cd[0], node_cd[3], node_cd[4]],
-                        [node_cd[3], node_cd[1], node_cd[5]],
-                        [node_cd[4], node_cd[5], node_cd[2]],
-                    ]
-                    var_cd_load = [
-                        [var_cd[0], var_cd[3], var_cd[4]],
-                        [var_cd[3], var_cd[1], var_cd[5]],
-                        [var_cd[4], var_cd[5], var_cd[2]],
-                    ]
-                else:
-                    raise NameError(
-                        "Length of node_cd and var_cd should be 6 considering off_axis rotation"
-                    )
+        if dim is None:
+            dim = 3
 
-                self.node_cd_load = node_cd_load
-                self.var_cd_load = var_cd_load
-
-                node_cd = np.zeros((3, 3)).tolist()
-                var_cd = np.zeros((3, 3)).tolist()
-
-            else:
-                raise ValueError("off_axis_rotation is valid in small strain only")
-        elif off_axis_rotation is None:
-            # The shear coefficient is 0.5 if small strain approximation is utilized, 1. otherwise
-            self.shear_coef = 1
-            if np.isscalar(node_cd[0]):
-                self.shear_coef = 0.5
-                if len(node_cd) == 1:
-                    if dim is None:
-                        dim = 1
-                    var_cd = [var_cd]
-                    node_cd = [node_cd]
-                elif len(node_cd) == 3:
-                    if dim is None:
-                        dim = 2
-                    node_cd = [[node_cd[0], node_cd[2]], [node_cd[2], node_cd[1]]]
-                    var_cd = [[var_cd[0], var_cd[2]], [var_cd[2], var_cd[1]]]
-
-                elif len(node_cd) == 6:
-                    if dim is None:
-                        dim = 3
-                    node_cd = [
-                        [node_cd[0], node_cd[3], node_cd[4]],
-                        [node_cd[3], node_cd[1], node_cd[5]],
-                        [node_cd[4], node_cd[5], node_cd[2]],
-                    ]
-                    var_cd = [
-                        [var_cd[0], var_cd[3], var_cd[4]],
-                        [var_cd[3], var_cd[1], var_cd[5]],
-                        [var_cd[4], var_cd[5], var_cd[2]],
-                    ]
-                else:
-                    raise NameError("Length of node_cd and var_cd should be 1,3 or 6")
-
-            elif dim is None:
-                dim = len(node_cd[0])
-
-        elif off_axis_rotation is not None:
-            raise ValueError("off_axis_rotation should be a scipy Rotation object")
-
-        self.node_cd = node_cd
-        self.var_cd = var_cd
+        if isinstance(off_axis_rotation, Rotation):
+            self.off_axis_rotation = off_axis_rotation
         self.dim = dim  # dimension of periodicity (1, 2 or 3)
         self.tol = tol
         self.bc_type = "PeriodicBC"
         BCBase.__init__(self, name)
-
-        self.meshperio = meshperio
+        self.periodicity_type = periodicity_type
 
     def __repr__(self):
         list_str = ["{}D Periodic Boundary Condition:".format(self.dim)]
@@ -392,232 +323,430 @@ class PeriodicBC(BCBase):
         """
 
         node_cd = self.node_cd
-        var_cd = self.var_cd
-
         node_cd_load = self.node_cd_load
-        var_cd_load = self.var_cd_load
         off_axis_rot_matrix = self.off_axis_rot_matrix
 
+        a, b, c, d, e, f, g, h, i = off_axis_rot_matrix.flatten()
+
         res = ListBC()
-        res.append(
-            MPC(
-                [
-                    node_cd[0][0],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[0][0],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -(off_axis_rot_matrix[0, 0] ** 2),
-                    -(off_axis_rot_matrix[0, 1] ** 2),
-                    -(off_axis_rot_matrix[0, 2] ** 2),
-                    -(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[0, 1]),
-                    -(off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[0, 2]),
-                    -(off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[0, 2]),
-                ],
-            )
-        )
 
-        res.append(
-            MPC(
-                [
-                    node_cd[1][1],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[1][1],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -(off_axis_rot_matrix[1, 0] ** 2),
-                    -(off_axis_rot_matrix[1, 1] ** 2),
-                    -(off_axis_rot_matrix[1, 2] ** 2),
-                    -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 1]),
-                    -(off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[1, 2]),
-                    -(off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[1, 2]),
-                ],
+        if self.periodicity_type == "small_strain":
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][0],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -(a**2),
+                        -(b**2),
+                        -(c**2),
+                        -(a * b),
+                        -(a * c),
+                        -(b * c),
+                    ],
+                )
             )
-        )
 
-        res.append(
-            MPC(
-                [
-                    node_cd[2][2],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[2][2],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -(off_axis_rot_matrix[2, 0] ** 2),
-                    -(off_axis_rot_matrix[2, 1] ** 2),
-                    -(off_axis_rot_matrix[2, 2] ** 2),
-                    -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 1]),
-                    -(off_axis_rot_matrix[2, 0] * off_axis_rot_matrix[2, 2]),
-                    -(off_axis_rot_matrix[2, 1] * off_axis_rot_matrix[2, 2]),
-                ],
+            res.append(
+                MPC(
+                    [
+                        node_cd[1][1],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -(d**2),
+                        -(e**2),
+                        -(f**2),
+                        -(d * e),
+                        -(d * f),
+                        -(e * f),
+                    ],
+                )
             )
-        )
 
-        res.append(
-            MPC(
-                [
-                    node_cd[0][1],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[0][1],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -2 * (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 0]),
-                    -2 * (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 1]),
-                    -2 * (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 2]),
-                    -(
-                        (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 0])
-                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 1])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 0])
-                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[1, 2])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[1, 1])
-                        + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[1, 2])
-                    ),
-                ],
+            res.append(
+                MPC(
+                    [
+                        node_cd[2][2],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -(g**2),
+                        -(h**2),
+                        -(i**2),
+                        -(g * h),
+                        -(g * i),
+                        -(h * i),
+                    ],
+                )
             )
-        )
 
-        res.append(
-            MPC(
-                [
-                    node_cd[0][2],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[0][2],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -2 * (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 0]),
-                    -2 * (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 1]),
-                    -2 * (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 2]),
-                    -(
-                        (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 0])
-                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 1])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 0])
-                        + (off_axis_rot_matrix[0, 0] * off_axis_rot_matrix[2, 2])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[0, 2] * off_axis_rot_matrix[2, 1])
-                        + (off_axis_rot_matrix[0, 1] * off_axis_rot_matrix[2, 2])
-                    ),
-                ],
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][1],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -2.0 * (a * d),
+                        -2.0 * (b * e),
+                        -2.0 * (c * f),
+                        -(b * d + a * e),
+                        -(c * d + a * f),
+                        -(c * e + b * f),
+                    ],
+                )
             )
-        )
 
-        res.append(
-            MPC(
-                [
-                    node_cd[1][2],
-                    node_cd_load[0][0],
-                    node_cd_load[1][1],
-                    node_cd_load[2][2],
-                    node_cd_load[0][1],
-                    node_cd_load[0][2],
-                    node_cd_load[1][2],
-                ],
-                [
-                    var_cd[1][2],
-                    var_cd_load[0][0],
-                    var_cd_load[1][1],
-                    var_cd_load[2][2],
-                    var_cd_load[0][1],
-                    var_cd_load[0][2],
-                    var_cd_load[1][2],
-                ],
-                [
-                    1.0,
-                    -2 * (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 0]),
-                    -2 * (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 1]),
-                    -2 * (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 2]),
-                    -(
-                        (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 0])
-                        + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 1])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 0])
-                        + (off_axis_rot_matrix[1, 0] * off_axis_rot_matrix[2, 2])
-                    ),
-                    -(
-                        (off_axis_rot_matrix[1, 2] * off_axis_rot_matrix[2, 1])
-                        + (off_axis_rot_matrix[1, 1] * off_axis_rot_matrix[2, 2])
-                    ),
-                ],
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][2],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -2.0 * (a * g),
+                        -2.0 * (b * h),
+                        -2.0 * (c * i),
+                        -(b * g + a * h),
+                        -(c * g + a * i),
+                        -(c * h + b * i),
+                    ],
+                )
             )
-        )
-        return res
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[1][2],
+                        node_cd_load[0][0],
+                        node_cd_load[1][1],
+                        node_cd_load[2][2],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][2],
+                    ],
+                    ["Virtual"] * 6,
+                    [
+                        1.0,
+                        -2.0 * (d * g),
+                        -2.0 * (e * h),
+                        -2.0 * (f * i),
+                        -(e * g + d * h),
+                        -(f * g + d * i),
+                        -(f * h + e * i),
+                    ],
+                )
+            )
+            return res
+
+        if self.periodicity_type == "finite_strain":
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][0],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -(a**2),
+                        -a * b,
+                        -a * c,
+                        -b * a,
+                        -(b**2),
+                        -b * c,
+                        -c * a,
+                        -c * b,
+                        -(c**2),
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][1],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -a * d,
+                        -a * e,
+                        -a * f,
+                        -b * d,
+                        -b * e,
+                        -b * f,
+                        -c * d,
+                        -c * e,
+                        -c * f,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[0][2],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -a * g,
+                        -a * h,
+                        -a * i,
+                        -b * g,
+                        -b * h,
+                        -b * i,
+                        -c * g,
+                        -c * h,
+                        -c * i,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[1][0],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -d * a,
+                        -d * b,
+                        -d * c,
+                        -e * a,
+                        -e * b,
+                        -e * c,
+                        -f * a,
+                        -f * b,
+                        -f * c,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[1][1],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -(d**2),
+                        -d * e,
+                        -d * f,
+                        -e * d,
+                        -(e**2),
+                        -e * f,
+                        -f * d,
+                        -f * e,
+                        -(f**2),
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[1][2],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -d * g,
+                        -d * h,
+                        -d * i,
+                        -e * g,
+                        -e * h,
+                        -e * i,
+                        -f * g,
+                        -f * h,
+                        -f * i,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[2][0],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -g * a,
+                        -g * b,
+                        -g * c,
+                        -h * a,
+                        -h * b,
+                        -h * c,
+                        -i * a,
+                        -i * b,
+                        -i * c,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[2][1],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -g * d,
+                        -g * e,
+                        -g * f,
+                        -h * d,
+                        -h * e,
+                        -h * f,
+                        -i * d,
+                        -i * e,
+                        -i * f,
+                    ],
+                )
+            )
+
+            res.append(
+                MPC(
+                    [
+                        node_cd[2][2],
+                        node_cd_load[0][0],
+                        node_cd_load[0][1],
+                        node_cd_load[0][2],
+                        node_cd_load[1][0],
+                        node_cd_load[1][1],
+                        node_cd_load[1][2],
+                        node_cd_load[2][0],
+                        node_cd_load[2][1],
+                        node_cd_load[2][2],
+                    ],
+                    ["Virtual"] * 9,
+                    [
+                        1.0,
+                        -(g**2),
+                        -g * h,
+                        -g * i,
+                        -h * g,
+                        -(h**2),
+                        -h * i,
+                        -i * g,
+                        -i * h,
+                        -(i**2),
+                    ],
+                )
+            )
+            return res
 
     def _list_MPC_periodic(self):
         """
@@ -1553,6 +1682,8 @@ class PeriodicBC(BCBase):
         dy = self.d_rve[1]
         dz = self.d_rve[2]
 
+        sc = self.shear_coef
+
         face_Xm = self.face_Xm
         face_Ym = self.face_Ym
         face_Zm = self.face_Zm
@@ -1579,18 +1710,6 @@ class PeriodicBC(BCBase):
         corner_XpYmZp = self.corner_XpYmZp
         corner_XpYpZm = self.corner_XpYpZm
         corner_XpYpZp = self.corner_XpYpZp
-
-        node_cd = [
-            [node_cd[0], node_cd[3], node_cd[4]],
-            [node_cd[3], node_cd[1], node_cd[5]],
-            [node_cd[4], node_cd[5], node_cd[2]],
-        ]
-
-        var_cd = [
-            [var_cd[0], var_cd[3], var_cd[4]],
-            [var_cd[3], var_cd[1], var_cd[5]],
-            [var_cd[4], var_cd[5], var_cd[2]],
-        ]
 
         D_xyz = [
             [-dx, -sc * dx, -sc * dx],
@@ -2354,17 +2473,206 @@ class PeriodicBC(BCBase):
                 )
 
     def initialize(self, problem, dic_closest_points_on_boundaries=None):
+        """
+        Initialize a periodic boundary condition object using several multi-point constraints. The constraint drivers are constructed as follows, depending on `periodicity_type` and `dim`:
+        - For `periodicity_type="small_strain"`:
+            - dim=1:
+                - `virtual_dof` is created for ['E_xx'] (1 DOF).
+                - `node_cd = [problem.virtual_dof['E_xx']]`
+                - `var_cd = ['Virtual']`
+            - dim=2:
+                - `virtual_dof` is created for ['E_xx', 'E_yy', 'E_xy'] (3 DOF).
+                - `node_cd = [[problem.virtual_dof['E_xx'], problem.virtual_dof['E_xy']], [problem.virtual_dof['E_xy'], problem.virtual_dof['E_yy']]]`
+                - `var_cd = [['Virtual', 'Virtual'], ['Virtual', 'Virtual']]`
+            - dim=3:
+                - `virtual_dof` is created for ['E_xx', 'E_yy', 'E_zz', 'E_xy', 'E_xz', 'E_yz'] (6 DOF).
+                - `node_cd = [[problem.virtual_dof['E_xx'], problem.virtual_dof['E_xy'], problem.virtual_dof['E_xz']], [problem.virtual_dof['E_xy'], problem.virtual_dof['E_yy'], problem.virtual_dof['E_yz']], [problem.virtual_dof['E_xz'], problem.virtual_dof['E_yz'], problem.virtual_dof['E_zz']]]`
+                - `var_cd = [['Virtual', 'Virtual', 'Virtual'], ['Virtual', 'Virtual', 'Virtual'], ['Virtual', 'Virtual', 'Virtual']]`
+        - For `periodicity_type="finite_strain"`:
+            - dim=1:
+                - `virtual_dof` is created for ['DU_xx'] (1 DOF).
+                - `node_cd = [problem.virtual_dof['DU_xx']]`
+                - `var_cd = ['Virtual']`
+            - dim=2:
+                - `virtual_dof` is created for ['DU_xx', 'DU_xy', 'DU_yx', 'DU_yy'] (4 DOF).
+                - `node_cd = [[problem.virtual_dof['DU_xx'], problem.virtual_dof['DU_xy']], [problem.virtual_dof['DU_yx'], problem.virtual_dof['DU_yy']]]`
+                - `var_cd = [['Virtual', 'Virtual'], ['Virtual', 'Virtual']]`
+            - dim=3:
+                - `virtual_dof` is created for ['DU_xx', 'DU_xy', 'DU_xz', 'DU_yx', 'DU_yy', 'DU_yz', 'DU_zx', 'DU_zy', 'DU_zz'] (9 DOF).
+                - `node_cd = [[problem.virtual_dof['DU_xx'], problem.virtual_dof['DU_xy'], problem.virtual_dof['DU_xz']], [problem.virtual_dof['DU_yx'], problem.virtual_dof['DU_yy'], problem.virtual_dof['DU_yz']], [problem.virtual_dof['DU_zx'], problem.virtual_dof['DU_zy'], problem.virtual_dof['DU_zz']]]`
+                - `var_cd = [['Virtual', 'Virtual', 'Virtual'], ['Virtual', 'Virtual', 'Virtual'], ['Virtual', 'Virtual', 'Virtual']]`
+        The `node_cd` and `var_cd` structures define the virtual DOFs and their associated variables for the constraint drivers, depending on the periodicity type and dimension.
+
+        """
         mesh = problem.mesh
         res = None
 
+        if self.periodicity_type == "small_strain":
+            if self.dim == 1:
+                virtual_dof = problem.add_virtual_dof(1, "small_strain", ["E_xx"])
+                node_cd = [problem.virtual_dof["E_xx"]]
+                var_cd = ["Virtual"]
+            elif self.dim == 2:
+                virtual_dof = problem.add_virtual_dof(
+                    3, "small_strain", ["E_xx", "E_yy", "E_xy"]
+                )
+                node_cd = [
+                    [problem.virtual_dof["E_xx"], problem.virtual_dof["E_xy"]],
+                    [problem.virtual_dof["E_xy"], problem.virtual_dof["E_yy"]],
+                ]
+                var_cd = [["Virtual"] * 2 for _ in range(2)]
+            elif self.dim == 3:
+                virtual_dof = problem.add_virtual_dof(
+                    6, "small_strain", ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"]
+                )
+                node_cd = [
+                    [
+                        problem.virtual_dof["E_xx"],
+                        problem.virtual_dof["E_xy"],
+                        problem.virtual_dof["E_xz"],
+                    ],
+                    [
+                        problem.virtual_dof["E_xy"],
+                        problem.virtual_dof["E_yy"],
+                        problem.virtual_dof["E_yz"],
+                    ],
+                    [
+                        problem.virtual_dof["E_xz"],
+                        problem.virtual_dof["E_yz"],
+                        problem.virtual_dof["E_zz"],
+                    ],
+                ]
+                var_cd = [["Virtual"] * 3 for _ in range(3)]
+
+        if self.periodicity_type == "finite_strain":
+            if self.dim == 1:
+                virtual_dof = problem.add_virtual_dof(1, "finite_strain", ["DU_xx"])
+                node_cd = [problem.virtual_dof["DU_xx"]]
+                var_cd = ["Virtual"]
+            elif self.dim == 2:
+                virtual_dof = problem.add_virtual_dof(
+                    4, "finite_strain", ["DU_xx", "DU_xy", "DU_yx", "DU_yy"]
+                )
+                node_cd = [
+                    [problem.virtual_dof["DU_xx"], problem.virtual_dof["DU_xy"]],
+                    [problem.virtual_dof["DU_yx"], problem.virtual_dof["DU_yy"]],
+                ]
+                var_cd = [["Virtual"] * 2 for _ in range(2)]
+            elif self.dim == 3:
+                virtual_dof = problem.add_virtual_dof(
+                    9,
+                    "finite_strain",
+                    [
+                        "DU_xx",
+                        "DU_xy",
+                        "DU_xz",
+                        "DU_yx",
+                        "DU_yy",
+                        "DU_yz",
+                        "DU_zx",
+                        "DU_zy",
+                        "DU_zz",
+                    ],
+                )
+                node_cd = [
+                    [
+                        problem.virtual_dof["DU_xx"],
+                        problem.virtual_dof["DU_xy"],
+                        problem.virtual_dof["DU_xz"],
+                    ],
+                    [
+                        problem.virtual_dof["DU_yx"],
+                        problem.virtual_dof["DU_yy"],
+                        problem.virtual_dof["DU_yz"],
+                    ],
+                    [
+                        problem.virtual_dof["DU_zx"],
+                        problem.virtual_dof["DU_zy"],
+                        problem.virtual_dof["DU_zz"],
+                    ],
+                ]
+                var_cd = [["Virtual"] * 3 for _ in range(3)]
+
+        self.virtual_dof = virtual_dof
+        self.node_cd = node_cd
+        self.var_cd = var_cd
+
+        if self.off_axis_rotation is not None:
+            if self.dim == 3:
+                self.off_axis_rot_matrix = self.off_axis_rotation.as_matrix()
+            else:
+                raise ValueError("off_axis_rotation is valid in 3D only")
+
+            if self.periodicity_type == "small_strain":
+                virtual_dof_loading = problem.add_virtual_dof(
+                    6, "loading", ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"]
+                )
+                node_cd_loading = [
+                    [
+                        virtual_dof["E_xx"].node_cd,
+                        virtual_dof["E_xy"].node_cd,
+                        virtual_dof["E_xz"].node_cd,
+                    ],
+                    [
+                        virtual_dof["E_xy"].node_cd,
+                        virtual_dof["E_yy"].node_cd,
+                        virtual_dof["E_yz"].node_cd,
+                    ],
+                    [
+                        virtual_dof["E_xz"].node_cd,
+                        virtual_dof["E_yz"].node_cd,
+                        virtual_dof["E_zz"].node_cd,
+                    ],
+                ]
+                var_cd_loading = [["Virtual"] * 3 for _ in range(3)]
+
+            if self.periodicity_type == "fintie_strain":
+                virtual_dof_loading = problem.add_virtual_dof(
+                    9,
+                    "loading",
+                    [
+                        "DU_xx",
+                        "DU_xy",
+                        "DU_xz",
+                        "DU_yx",
+                        "DU_yy",
+                        "DU_yz",
+                        "DU_zx",
+                        "DU_zy",
+                        "DU_zz",
+                    ],
+                )
+                node_cd_loading = [
+                    [
+                        problem.virtual_dof["DU_xx"],
+                        problem.virtual_dof["DU_xy"],
+                        problem.virtual_dof["DU_xz"],
+                    ],
+                    [
+                        problem.virtual_dof["DU_yx"],
+                        problem.virtual_dof["DU_yy"],
+                        problem.virtual_dof["DU_yz"],
+                    ],
+                    [
+                        problem.virtual_dof["DU_zx"],
+                        problem.virtual_dof["DU_zy"],
+                        problem.virtual_dof["DU_zz"],
+                    ],
+                ]
+                var_cd_loading = [["Virtual"] * 3 for _ in range(3)]
+
+            self.virtual_dof_loading = virtual_dof_loading
+            self.node_cd_loading = node_cd_loading
+            self.var_cd_loading = var_cd_loading
+
         periodicity = self.meshperio
 
-        if periodicity == True:
+        if periodicity:
             self._prepare_periodic_lists(mesh, self.tol)
-            res = self._list_MPC_periodic()
-            if self.off_axis_rot_matrix is not None:
-                res_rot = self._list_MPC_rotation()
-                res = res + res_rot
+            if self.off_axis_rotation is None:
+                res = self._list_MPC_periodic()
+            if self.off_axis_rotation is not None:
+                res = ListBC([self._list_MPC_rotation(), self._list_MPC_periodic()])
         else:
             if dic_closest_points_on_boundaries is None:
                 raise
