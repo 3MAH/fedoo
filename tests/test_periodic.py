@@ -199,3 +199,6 @@ def test_given_periodic_box_must_return_periodic_MPC(
     pb.bc.add(bc_periodic)
 
     # return is_periodic
+
+if __name__ == '__main__':
+    pytest.main([__file__])
