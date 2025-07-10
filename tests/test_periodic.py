@@ -195,19 +195,7 @@ def test_given_periodic_box_must_return_periodic_MPC(
     crd_center = bounds.center
     # Nearest node to the center of the bounding box for boundary conditions
 
-    # Add 2 virtual nodes for macro strain
-    StrainNodes = fd_mesh.add_virtual_nodes(crd_center, 2)
-
-    list_strain_nodes = [
-        StrainNodes[0],
-        StrainNodes[0],
-        StrainNodes[0],
-        StrainNodes[1],
-        StrainNodes[1],
-        StrainNodes[1],
-    ]
-    list_strain_var = ["DispX", "DispY", "DispZ", "DispX", "DispY", "DispZ"]
-
-    bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3)
+    bc_periodic = fd.constraint.PeriodicBC(periodicity_type="small_strain")
+    pb.bc.add(bc_periodic)
 
     # return is_periodic
