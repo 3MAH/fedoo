@@ -219,9 +219,9 @@ def _get_results(
                 else:
                     data_type = "GaussPoint"
 
-            try:
+            if hasattr(data, 'asarray'):
                 data = data.asarray()
-            except:
+            else:
                 data = np.array(data)
 
         elif res in ["PK2_vm", "Kirchhoff_vm", "Stress_vm"]:
@@ -298,7 +298,10 @@ def _get_results(
             if isinstance(data, list):
                 # try to convert into array
                 try:
-                    data = np.array(data)
+                    if hasattr(data, 'asarray'):
+                        data = data.asarray()
+                    else:
+                        data = np.array(data)
                 except ValueError:
                     import warnings
 

@@ -174,6 +174,8 @@ class BeamEquilibrium(WeakFormBase):
                     # update saved values for next iteration
                     assembly.sv["_ElementVectors"] = element_vectors
                     assembly.sv["RigidRotation"] = rigid_rot
+                    # print(pb.get_rot()[[1,7]])
+                    # pass
 
                 else:  # ndim === 3
                     # values from initial and last iterations
@@ -245,10 +247,14 @@ class BeamEquilibrium(WeakFormBase):
                     )
 
                     rot1 = Rotation.from_matrix(
-                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 0]] @ initial_element_rotmat.transpose(0,2,1)
+                        rigid_rotmat
+                        @ nodes_rotmat[mesh.elements[:, 0]]
+                        @ initial_element_rotmat.transpose(0, 2, 1)
                     ).as_rotvec()
                     rot2 = Rotation.from_matrix(
-                        rigid_rotmat @ nodes_rotmat[mesh.elements[:, 1]] @ initial_element_rotmat.transpose(0,2,1)
+                        rigid_rotmat
+                        @ nodes_rotmat[mesh.elements[:, 1]]
+                        @ initial_element_rotmat.transpose(0, 2, 1)
                     ).as_rotvec()
 
                     # longitunal displacement in local coordinates (u2y=0)
@@ -324,14 +330,14 @@ class BeamEquilibrium(WeakFormBase):
                                 )
 
                 # compute the beam strain at gausspoint
-                assembly.sv["BeamStrain"] = [
+                assembly.sv["BeamStrain"] = _BeamComponentList([
                     0
                     if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
                     else assembly.current.get_gp_results(
                         op, dof_local, use_local_dof=True
                     )
                     for i, op in enumerate(op_beam_strain)
-                ]
+                ])
 
             else:
                 assembly.sv["BeamStrain"] = [
@@ -343,9 +349,9 @@ class BeamEquilibrium(WeakFormBase):
                     for i, op in enumerate(op_beam_strain)
                 ]
 
-            assembly.sv["BeamStress"] = [
+            assembly.sv["BeamStress"] = _BeamComponentList([
                 Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)
-            ]
+            ])
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
@@ -384,13 +390,25 @@ class BeamEquilibrium(WeakFormBase):
 
         initial_stress = assembly.sv["BeamStress"]
 
-        if not (np.isscalar(initial_stress) and initial_stress == 0):
+        if not (np.array_equal(initial_stress, 0)):
             diff_op = diff_op + sum(
                 [
                     eps[i].virtual * initial_stress[i] if eps[i] != 0 else 0
                     for i in range(6)
                 ]
             )
+
+            # Geometrical stiffness (or initial stress stiffness)
+            if assembly._nlgeom:
+                N = initial_stress[0]  # normal force
+                dv_dx = self.space.derivative("DispY", "X")
+                diff_op = diff_op + dv_dx.virtual * dv_dx * N
+                if self.space.ndim == 3:
+                    dw_dx = self.space.derivative("DispZ", "X") #self.space.derivative("DispY", "Y")
+                    diff_op = diff_op + dw_dx.virtual * dw_dx * N
+                # axial geometrical generally not significant
+                # uncomment the following line to activate
+                # diff_op = diff_op + eps[0].virtual * eps[0] * N
 
         return diff_op
 
@@ -399,3 +417,18 @@ class BeamEquilibrium(WeakFormBase):
         eps = self.space.op_beam_strain()
         Ke = self.properties.get_beam_rigidity()
         return [eps[i] * Ke[i] for i in range(6)]
+
+class _BeamComponentList(list):
+    def asarray(self):
+        try:
+            return np.array(self)
+        except ValueError:  # fill zeros first
+            for i in range(6):
+                if not (np.isscalar(self[i])):
+                    N = len(self[i])  # number of stress values
+                    break
+
+            res = np.empty((6, N))
+            for i in range(6):
+                res[i] = self[i]
+            return res
