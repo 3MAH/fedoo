@@ -286,6 +286,10 @@ class ProblemBase:
 
         self.bc._problem = self
 
+        self._virtual_dof_names = dict()
+        self._virtual_dof = _VirtualDof(self._virtual_dof_names)  # for user interface
+        self._n_virtual_dof = 0
+
         if name != "":
             ProblemBase.__dic[self.__name] = self
 
@@ -329,6 +333,75 @@ class ProblemBase:
     def get_active():
         """Return the active Problem."""
         return ProblemBase.active
+
+    def add_virtual_dof(
+        self,
+        nb_new_dof: int = 1,
+        name: str | None = None,
+        component_names: list[str] | None = None,
+    ):
+        """Add virtual degrees of freedom to the problem.
+
+        The virtual dof are virtual in the sense that they are not associated
+        to a node of a mesh as usual finite element dof. They are usefull to
+        define some constraints, like periodic boundary conditions.
+
+        Parameters
+        ----------
+        nb_new_dof: int, default=1
+            Number of new virutal dof
+        name: str, optional
+            If a name is given, add a label to the new set of dof. Name is
+            required to catch the results using the get_results of
+            get_ext_forces method.
+        components_name: list of str, optional
+            If several dof are added at one time, a name
+            can be attributed to each individual dof whereas the argument
+            'name' define a label for the whole set.
+
+        Return
+        ------
+        List of the indices of the added virtual dof.
+        """
+        if nb_new_dof == 1:
+            new_lm_indices = self._n_virtual_dof
+        else:
+            new_lm_indices = slice(
+                self._n_virtual_dof,
+                self._n_virtual_dof + nb_new_dof,
+            )
+        if name is not None:
+            self._virtual_dof_names[name] = new_lm_indices
+        if component_names is not None:
+            if len(component_names) != nb_new_dof:
+                raise ValueError(
+                    "The number of components name should match"
+                    "the number of new virtual dof."
+                )
+            self._virtual_dof_names.update(
+                zip(
+                    component_names,
+                    range(
+                        self._n_virtual_dof,
+                        self._n_virtual_dof + nb_new_dof,
+                    ),
+                )
+            )
+
+        self._n_virtual_dof += nb_new_dof
+        if nb_new_dof == 1:
+            return [new_lm_indices]
+        else:
+            return new_lm_indices  # slice
+            # return list(range(0,self._n_virtual_dof)[new_lm_indices])
+
+    @property
+    def virtual_dof(self):
+        return self._virtual_dof
+
+    @property
+    def n_virtual_dof(self):
+        return self._n_virtual_dof
 
     def set_solver(
         self, solver: str = "direct", **kargs
@@ -502,6 +575,14 @@ class ProblemBase:
     def solver(self):
         """Return the current solver used for the problem."""
         return self.__solver[1]
+
+
+class _VirtualDof():
+    def __init__(self, virtual_dof_name):
+        self._virtual_dof_name = virtual_dof_name
+
+    def __getitem__(self, item):
+        return self._virtual_dof_name[item]
 
 
 def _solver_petsc(

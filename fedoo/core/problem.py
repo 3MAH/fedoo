@@ -44,7 +44,7 @@ class Problem(ProblemBase):
         name of the problem.
     """
 
-    def __init__(self, A, B, D, mesh, name="MainProblem", space=None):
+    def __init__(self, A=None, B=0, D=0, mesh=None, name="MainProblem", space=None):
         # the problem is AX = B + D
 
         ProblemBase.__init__(self, name, space)
@@ -88,7 +88,7 @@ class Problem(ProblemBase):
     def _get_vect_component(
         self, vector, name
     ):  # Get component of a vector (force vector for instance) being given the name of a component (vector or single component)
-        assert isinstance(name, str), "argument error"
+        assert isinstance(name, str), "name should be a str"
 
         if name.lower() == "all" or np.isscalar(vector):
             return vector
@@ -99,8 +99,8 @@ class Problem(ProblemBase):
             vec = self.space.get_rank_vector(name)
             i = vec[0]  # rank of the 1rst variable of the vector
             dim = len(vec)
-            return vector.reshape(-1, n)[i : i + dim]
-            # return vector[i*n : (i+dim)*n].reshape(-1,n)
+            # return vector.reshape(-1, n)[i : i + dim]
+            return vector[i * n : (i + dim) * n].reshape(-1, n)
         else:
             # vector component are assumed defined as an increment sequence (i, i+1, i+2)
             i = self.space.variable_rank(name)
@@ -159,18 +159,13 @@ class Problem(ProblemBase):
         self.__D = D
 
     def solve(self, **kargs):
+        n_dof = self.n_dof
         if np.isscalar(self.__X) and self.__X == 0:
             self.__X = np.ndarray(self.n_dof)  # empty array
 
         if len(self.__A.shape) == 2:  # A is a matrix
-            # to delete after a careful validation of the other case
-            # self.__X[self._dof_slave] = self._Xbc[self._dof_slave]
-
-            # Temp = self.__A[:,self._dof_slave].dot(self.__X[self._dof_slave])
-            # if np.isscalar(self.__D) and self.__D == 0:
-            #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] - Temp[self._dof_free])
-            # else:
-            #     self.__X[self._dof_free]  = self._solve(self.__A[self._dof_free,:][:,self._dof_free],self.__B[self._dof_free] + self.__D[self._dof_free] - Temp[self._dof_free])
+            if self.__A.shape[0] != n_dof:
+                self.__A.resize(n_dof, n_dof)
 
             if len(self._dof_free) != 0:
                 if np.isscalar(self.__D) and self.__D == 0:
@@ -200,6 +195,9 @@ class Problem(ProblemBase):
 
             assert not (np.isscalar(self.__D)), "internal error, contact developper"
 
+            if self.__A.shape[0] != n_dof:  # probably not required
+                self.__A.resize((n_dof))
+
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
             ) / self.__A[self._dof_free]
@@ -218,8 +216,9 @@ class Problem(ProblemBase):
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
         n = self.mesh.n_nodes
         nvar = self.space.nvar
-        self._Xbc = np.zeros(nvar * n)
-        F = np.zeros(nvar * n)
+        n_dof = self.n_dof
+        self._Xbc = np.zeros(n_dof)
+        F = np.zeros(n_dof)
 
         build_mpc = False
         dof_blocked = set()  # only dirichlet bc
@@ -265,7 +264,7 @@ class Problem(ProblemBase):
             # M is a matrix such as Xblocked = M@X + Xbc
             M = sparse.coo_matrix(
                 (np.hstack(data), (np.hstack(row), np.hstack(col))),
-                shape=(nvar * n, nvar * n),
+                shape=(n_dof, n_dof),
             )
 
             # update Xbc with the eliminated dof that may be used as slave dof in mpc
@@ -305,7 +304,7 @@ class Problem(ProblemBase):
         )  # data.append(np.ones(len(dof_free)))
 
         self.__MatCB = sparse.coo_matrix(
-            (data, (row, col)), shape=(nvar * n, len(dof_free))
+            (data, (row, col)), shape=(n_dof, len(dof_free))
         ).tocsc()  # so that self.__MatCB.T is csr
 
         self.__B = F
@@ -398,4 +397,4 @@ class Problem(ProblemBase):
 
     @property
     def n_dof(self):
-        return self.mesh.n_nodes * self.space.nvar
+        return self.mesh.n_nodes * self.space.nvar + self.n_virtual_dof

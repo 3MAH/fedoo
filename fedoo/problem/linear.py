@@ -8,18 +8,16 @@ class _LinearBase:
         if isinstance(assembly, str):
             assembly = Assembly.get_all()[assembly]
 
+        super().__init__(mesh=assembly.mesh, name=name)
+
         self.nlgeom = False
         assembly.initialize(self)
-        A = assembly.get_global_matrix()
-        B = 0
-        D = assembly.get_global_vector()
+        self.set_A(assembly.get_global_matrix())
+        self.set_D(assembly.get_global_vector())
         self.__assembly = assembly
-
-        super().__init__(A, B, D, assembly.mesh, name)
 
     def get_disp(self, name="all"):
         """Return the displacement components.
-
 
         Parameters
         ----------
@@ -37,7 +35,6 @@ class _LinearBase:
 
     def get_rot(self, name="all"):
         """Return the rotation components.
-
 
         Parameters
         ----------
