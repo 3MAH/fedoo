@@ -12,8 +12,8 @@ class _LinearBase:
 
         self.nlgeom = False
         assembly.initialize(self)
-        self.set_A(assembly.get_global_matrix())
-        self.set_D(assembly.get_global_vector())
+        # self.set_A(assembly.get_global_matrix())
+        # self.set_D(assembly.get_global_vector())
         self.__assembly = assembly
 
     def get_disp(self, name="all"):
@@ -75,6 +75,8 @@ class _LinearBase:
         # Solve and update weakform (compute stress for instance) without updating global matrix
         # to avoid update weakform, use updateWF = True
         updateWF = kargs.pop("updateWF", True)
+        self.set_A(self.__assembly.get_global_matrix())
+        self.set_D(self.__assembly.get_global_vector())
         self.init_bc_start_value()
         self.apply_boundary_conditions()
         if np.isscalar(self.get_X()) and self.get_X() == 0:

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
-from numbers import Number
 from itertools import chain
+from numbers import Number
 
 # from fedoo.core.base import BCBase
 # from fedoo.pgd.SeparatedArray import *
@@ -348,16 +348,15 @@ class BoundaryCondition(BCBase):
         If only one variable is specified, return a BoundaryCondition object,
         if several variables are specified, return a ListBC object.
         """
-        if space is not None:
-            if isinstance(variable, str) and variable not in space.list_variables():
-                # we assume that Var is a Vector
-                try:
-                    variable = [
-                        space.variable_name(var_rank)
-                        for var_rank in space.get_rank_vector(variable)
-                    ]
-                except:
-                    raise NameError("Unknown variable name")
+        if (
+            space is not None
+            and isinstance(variable, str)
+            and variable in space.list_vectors()
+        ):
+            variable = [
+                space.variable_name(var_rank)
+                for var_rank in space.get_rank_vector(variable)
+            ]
 
         if isinstance(variable, list):
             if np.isscalar(value):
@@ -426,8 +425,15 @@ class BoundaryCondition(BCBase):
         self.variable = problem.space.variable_rank(self.variable_name)
 
         if isinstance(self.node_set_name, str):
-            # must be a string defining a set of nodes
-            self.node_set = problem.mesh.node_sets[self.node_set_name]
+            if self.node_set_name in problem.virtual_dof:
+                self.node_set = problem.virtual_dof[self.node_set_name]
+                if np.isscalar(self.node_set):
+                    self.node_set = [self.node_set]
+                elif isinstance(self.node_set, slice):
+                    self.node_set = range(0, self.node_set.stop)[self.node_set]
+            else:
+                # must be a string defining a set of nodes
+                self.node_set = problem.mesh.node_sets[self.node_set_name]
 
         if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
             self.pgd = True

@@ -75,9 +75,6 @@ class PeriodicBC(BCBase):
                 "periodicity_type should be either 'small_strain' or 'finite_strain'"
             )
 
-        if dim is None:
-            dim = 3
-
         self.off_axis_rotation = off_axis_rotation
         self.dim = dim  # dimension of periodicity (1, 2 or 3)
         self.meshperio = meshperio  # if True, the mesh is periodic
@@ -2494,6 +2491,9 @@ class PeriodicBC(BCBase):
 
         """
         mesh = problem.mesh
+        if self.dim is None:
+            self.dim = problem.space.ndim
+
         res = None
 
         if self.periodicity_type == "small_strain":

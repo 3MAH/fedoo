@@ -26,7 +26,7 @@ mesh = fd.mesh.hole_plate_mesh(name="Domain")
 ###############################################################################
 # Adding virtual nodes related the macroscopic strain
 # ------------------------------------------------------------------------------
-strain_nodes = mesh.add_virtual_nodes(2)
+# strain_nodes = mesh.add_virtual_nodes(2)
 # The position of the virtual node has no importance.
 # For a problem in 2D with a 2D periodicity, we need 3 independant strain component
 # 2 nodes (with 2 dof per node in 2D) are required
@@ -62,10 +62,13 @@ pb = fd.problem.Linear("Assembly")
 #  - the dof 'DispY' of the node strain_nodes[1] will be arbitrary associated to the EYY strain component
 #  - the dof 'DispY' of the node strain_nodes[0] will be arbitrary associated to the EXY strain component
 #  - the dof 'DispX' of the node strain_nodes[1] is not used and will be blocked to avoid singularity
+# pb.bc.add(
+#     fd.constraint.PeriodicBC(
+#         [strain_nodes[0], strain_nodes[1], strain_nodes[0]], ["DispX", "DispY", "DispY"]
+#     )
+# )
 pb.bc.add(
-    fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]], ["DispX", "DispY", "DispY"]
-    )
+    fd.constraint.PeriodicBC(periodicity_type="small_strain")
 )
 
 ###############################################################################
@@ -78,13 +81,9 @@ Eyy = 0
 Exy = 0.1
 
 # Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
-pb.bc.add("Dirichlet", [strain_nodes[0]], "DispX", Exx)  # EpsXX
-pb.bc.add("Dirichlet", [strain_nodes[0]], "DispY", Exy)  # EpsXY
-
-pb.bc.add(
-    "Dirichlet", [strain_nodes[1]], "DispX", 0
-)  # nothing (blocked to avoir singularity)
-pb.bc.add("Dirichlet", [strain_nodes[1]], "DispY", Eyy)  # EpsYY
+pb.bc.add("Dirichlet", "E_xx", "Virtual", Exx)  # EpsXX
+pb.bc.add("Dirichlet", "E_xy", "Virtual", Exy)  # EpsXY
+pb.bc.add("Dirichlet", "E_yy", "Virtual", Eyy)  # EpsYY
 
 # Block one node to avoid singularity
 center = mesh.nearest_node(mesh.bounding_box.center)

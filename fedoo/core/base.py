@@ -581,8 +581,14 @@ class _VirtualDof():
     def __init__(self, virtual_dof_name):
         self._virtual_dof_name = virtual_dof_name
 
+    def __repr__(self):
+        return f"List of virtual dof labels:\n{list(self._virtual_dof_name)}"
+
     def __getitem__(self, item):
         return self._virtual_dof_name[item]
+
+    def __contains__(self, key):
+        return key in self._virtual_dof_name
 
 
 def _solver_petsc(

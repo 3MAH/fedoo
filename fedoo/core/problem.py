@@ -277,7 +277,7 @@ class Problem(ProblemBase):
 
             # modification col numbering from dof_free to np.arange(len(dof_free))
             changeInd = np.full(
-                nvar * n, np.nan
+                n_dof, np.nan
             )  # mettre des nan plutôt que des zeros pour générer une erreur si pb
             changeInd[dof_free] = np.arange(len(dof_free))
             col = changeInd[np.hstack(col)]

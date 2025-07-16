@@ -470,20 +470,22 @@ class _BlocSparseOld:
         return Res
 
 
-def bloc_matrix(M, nb_bloc, position):
+def bloc_matrix(M, nb_bloc, position, shape = None):
     var = position[1]
     var_vir = position[0]
     M = M.tocsr()
+    if shape is None:
+        shape = (M.shape[0] * nb_bloc[0], M.shape[1] * nb_bloc[1])
 
-    indptr = np.zeros(np.shape(M)[0] * nb_bloc[0] + 1, dtype=int)
-    indptr[var_vir * np.shape(M)[0] : (var_vir + 1) * np.shape(M)[0] + 1] = M.indptr
-    indptr[(var_vir + 1) * np.shape(M)[0] + 1 :] = indptr[
-        (var_vir + 1) * np.shape(M)[0]
+    indptr = np.zeros(shape[0] + 1, dtype=int)
+    indptr[var_vir * M.shape[0] : (var_vir + 1) * M.shape[0] + 1] = M.indptr
+    indptr[(var_vir + 1) * M.shape[0] + 1 :] = indptr[
+        (var_vir + 1) * M.shape[0]
     ]
 
     MatBloc = sparse.csr_matrix(
         (M.data, M.indices + var * np.shape(M)[1], indptr),
-        shape=(np.shape(M)[0] * nb_bloc[0], np.shape(M)[1] * nb_bloc[1]),
+        shape=shape,
     )
 
     return MatBloc
@@ -515,10 +517,20 @@ def ColumnBlocMatrix(listBloc, nb_bloc, position):
     )
 
 
-def RowBlocMatrix(listBloc, nb_bloc, position, coef):
+def RowBlocMatrix(listBloc, nb_bloc, position, coef, n_cols=None):
+    if n_cols is None:
+        shape = None
+    else:
+        shape = (listBloc[0].shape[0], n_cols)
+
     return sum(
         [
-            bloc_matrix(coef[ii] * listBloc[ii], (1, nb_bloc), (0, position[ii]))
+            bloc_matrix(
+                coef[ii] * listBloc[ii],
+                (1, nb_bloc),
+                (0, position[ii]),
+                shape = shape,
+            )
             for ii in range(len(listBloc))
         ]
     )
