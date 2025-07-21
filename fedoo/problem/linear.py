@@ -12,6 +12,7 @@ class _LinearBase:
 
         self.nlgeom = False
         assembly.initialize(self)
+        self.time = self.dtime = 0
         # self.set_A(assembly.get_global_matrix())
         # self.set_D(assembly.get_global_vector())
         self.__assembly = assembly

@@ -185,7 +185,8 @@ def _get_results(
             data_type = "Node"
 
         elif res == "Fext":
-            data = pb.get_ext_forces().reshape(pb.space.nvar, -1)
+            # Only node dof
+            data = pb.get_ext_forces()[:pb.n_node_dof].reshape(pb.space.nvar, -1)
             data_type = "Node"
 
         elif res in ["PK2", "Kirchhoff", "Strain", "Stress"]:

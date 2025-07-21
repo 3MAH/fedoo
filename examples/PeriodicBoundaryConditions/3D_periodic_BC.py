@@ -1,5 +1,6 @@
 import fedoo as fd
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 # --------------- Pre-Treatment --------------------------------------------------------
 
@@ -18,8 +19,6 @@ zmax = np.max(crd[:, 2])
 zmin = np.min(crd[:, 2])
 center = [np.linalg.norm(crd, axis=1).argmin()]
 
-StrainNodes = mesh.add_virtual_nodes(2)  # add virtual nodes for macro strain
-
 # Material definition
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
 wf = fd.weakform.StressEquilibrium(material)
@@ -33,40 +32,15 @@ pb = fd.problem.Linear(assembly)
 
 # Boundary conditions
 E = [0, 0, 0, 0, 0, 1]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
-# StrainNode[0] - 'DispX' is a virtual dof for EXX
-# StrainNode[0] - 'DispY' is a virtual dof for EYY
-# StrainNode[0] - 'DispZ' is a virtual dof for EZZ
-# StrainNode[1] - 'DispX' is a virtual dof for EXY
-# StrainNode[1] - 'DispY' is a virtual dof for EXZ
-# StrainNode[1] - 'DispZ' is a virtual dof for EYZ
 
-# define periodic boundary condition
-list_strain_nodes = [
-    StrainNodes[0],
-    StrainNodes[0],
-    StrainNodes[0],
-    StrainNodes[1],
-    StrainNodes[1],
-    StrainNodes[1],
-]
-list_strain_var = ["DispX", "DispY", "DispZ", "DispX", "DispY", "DispZ"]
-
-bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var)
+bc_periodic = fd.constraint.PeriodicBC("small_strain")
 pb.bc.add(bc_periodic)
 
 # boundary conditions
-pb.bc.add("Dirichlet", center, "DispX", 0)
-pb.bc.add("Dirichlet", center, "DispY", 0)
-pb.bc.add("Dirichlet", center, "DispZ", 0)
+pb.bc.add("Dirichlet", center, "Disp", 0)
+pb.bc.add("Dirichlet", "MeanStrain", E)
 
-pb.bc.add("Dirichlet", [StrainNodes[0]], "DispX", E[0])  # EpsXX
-pb.bc.add("Dirichlet", [StrainNodes[0]], "DispY", E[1])  # EpsYY
-pb.bc.add("Dirichlet", [StrainNodes[0]], "DispZ", E[2])  # EpsZZ
-pb.bc.add("Dirichlet", [StrainNodes[1]], "DispX", E[3])  # EpsXY
-pb.bc.add("Dirichlet", [StrainNodes[1]], "DispY", E[4])  # EpsXZ
-pb.bc.add("Dirichlet", [StrainNodes[1]], "DispZ", E[5])  # EpsYZ
-
-# lv--------------- Soe --------------------------------------------------------
+# --------------- Solve --------------------------------------------------------
 pb.solve()
 
 tensor_strain = assembly.sv["Strain"]
@@ -74,14 +48,8 @@ tensor_stress = assembly.sv["Stress"]
 
 ###############################################################################
 # print the macroscopic strain tensor and stress tensor
-mean_strain = [
-    pb.get_disp("DispX")[-2],
-    pb.get_disp("DispY")[-2],
-    pb.get_disp("DispZ")[-2],
-    pb.get_disp("DispX")[-1],
-    pb.get_disp("DispY")[-1],
-    pb.get_disp("DispZ")[-1],
-]
+mean_strain = pb.get_dof_solution("MeanStrain")
+
 print(
     "Strain tensor: ",
     np.array(

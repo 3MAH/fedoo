@@ -19,28 +19,48 @@ class PeriodicBC(BCBase):
         name: str = "Periodicity",
     ):
         """
-        Create a perdiodic boundary condition object using several multi-points constraints.
-        Some virtual dof are used to define mean strain or mean displacement gradient.
-        those multi point constraint equations are defined using virtual degrees of freedom
+        Create a perdiodic boundary condition object using several multi-points
+        constraints.
+        Some global dofs are added to define mean strain or mean displacement gradient.
+        These dof are defined.
+        The added global dof are:
+
+        * For "small_strain" the linearized strain tensor components are introduced. The
+          following global variables are therefore accessible:
+          'E_xx', 'E_yy', 'E_zz', 'E_xy', 'E_xz', 'E_yz' in 3d (only the in-plane
+          component in 2d)
+          The whole component can also be extracted using the vector name 'MeanStrain.'
+        * For "finite_strain", the displacement gradient is utilized:
+          'DU_xx', 'DU_xy', 'DU_xz', 'DU_yx', 'DU_yy', 'DU_yz', 'DU_zx', 'DU_zy', 'DU_zz'
+          ie 9 components in 3D and only 4 in-plane component in 2D.
+          The whole component can also be extracted using the vector name 'MeanGradDisp'.
+        * If off_axis_rotation is used, the local dof are also added for small and
+          finite strain respectiveley:
+          'E_ij' or 'DU_ij' with i and j taking values in {1,2,3} and the vectors
+          'LocalMeanStrain' or 'LocalMeanGradDisp'.
 
         Parameters
         ----------
-        periodicity_type : The type of periodicity : 'small_strain' or 'finite_strain'. If small_strain is selected, the constrain driver is directly expressed in terms of strain components.
-            If 'finite_strain' is selected, the constrain driver is expressed in terms of displacement gradient.
-        off_axis_rotation : A scipy.spatial.transform object Rotation that contain the rotation between the reference frame where boundary conditions are applied and the off-axis loading frame.
-
+        periodicity_type : 'small_strain' or 'finite_strain'.
+            The type of periodicity :
+            * If small_strain is selected, the constraint is directly expressed in terms
+              of linearized strain components.
+            * If 'finite_strain' is selected, the constraint is expressed in terms of
+              displacement gradient.
+        off_axis_rotation : scipy.spatial.transform object Rotation
+            Rotation between the reference frame and the off-axis loading frame
+            where boundary conditions are applied.
         dim : int in [1,2,3] (default = 3)
             Number of dimensions with periodic condition.
             If dim = 1: the periodicity is assumed along the x coordinate
             If dim = 2: the periodicity is assumed along x and y coordinates
-
         tol : float, optional
             Tolerance for the periodic nodes detection. The default is 1e-8.
         name : str, optional
             Name of the created boundary condition. The default is "Periodicity".
 
         Remarks
-        ---------------
+        -------
 
         * The boundary condition object needs to be used with a problem associated to
         either a a periodic mesh, either
@@ -56,10 +76,6 @@ class PeriodicBC(BCBase):
             import fedoo as fd
 
             mesh = fd.mesh.box_mesh()
-
-            #add nodes not associated to any element for constraint driver
-            node_cd = fd.Mesh["Domain2"].add_nodes(crd_center, 3)
-
             bc_periodic = fd.constraint.PeriodicBC(periodicity_type = 'small_strain')
 
         """
@@ -309,7 +325,9 @@ class PeriodicBC(BCBase):
         """
 
         node_cd = self.node_cd
-        node_cd_load = self.node_cd_load
+        var_cd = self.var_cd
+        node_cd_load = self.node_cd_loading
+        var_cd_load = self.var_cd_loading
         off_axis_rot_matrix = self.off_axis_rot_matrix
 
         a, b, c, d, e, f, g, h, i = off_axis_rot_matrix.flatten()
@@ -328,7 +346,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
+                    [
+                        var_cd[0][0],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],
                     [
                         1.0,
                         -(a**2),
@@ -352,8 +378,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
                     [
+                        var_cd[1][1],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],                    [
                         1.0,
                         -(d**2),
                         -(e**2),
@@ -376,7 +409,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
+                    [
+                        var_cd[2][2],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],
                     [
                         1.0,
                         -(g**2),
@@ -400,7 +441,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
+                    [
+                        var_cd[0][1],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],
                     [
                         1.0,
                         -2.0 * (a * d),
@@ -424,7 +473,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
+                    [
+                        var_cd[0][2],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],                    
                     [
                         1.0,
                         -2.0 * (a * g),
@@ -448,7 +505,15 @@ class PeriodicBC(BCBase):
                         node_cd_load[0][2],
                         node_cd_load[1][2],
                     ],
-                    ["Virtual"] * 6,
+                    [
+                        var_cd[1][2],
+                        var_cd_load[0][0],
+                        var_cd_load[1][1],
+                        var_cd_load[2][2],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][2],
+                    ],
                     [
                         1.0,
                         -2.0 * (d * g),
@@ -477,7 +542,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[0][0],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -(a**2),
@@ -507,7 +583,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[0][1],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -a * d,
@@ -537,7 +624,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[0][2],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -a * g,
@@ -567,7 +665,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[1][0],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -d * a,
@@ -597,7 +706,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[1][1],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -(d**2),
@@ -627,7 +747,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[1][2],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -d * g,
@@ -657,7 +788,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[2][0],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -g * a,
@@ -687,7 +829,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[2][1],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -g * d,
@@ -717,7 +870,18 @@ class PeriodicBC(BCBase):
                         node_cd_load[2][1],
                         node_cd_load[2][2],
                     ],
-                    ["Virtual"] * 9,
+                    [
+                        var_cd[2][2],
+                        var_cd_load[0][0],
+                        var_cd_load[0][1],
+                        var_cd_load[0][2],
+                        var_cd_load[1][0],
+                        var_cd_load[1][1],
+                        var_cd_load[1][2],
+                        var_cd_load[2][0],
+                        var_cd_load[2][1],
+                        var_cd_load[2][2],
+                    ],
                     [
                         1.0,
                         -(g**2),
@@ -2463,9 +2627,9 @@ class PeriodicBC(BCBase):
         Initialize a periodic boundary condition object using several multi-point constraints. The constraint drivers are constructed as follows, depending on `periodicity_type` and `dim`:
         - For `periodicity_type="small_strain"`:
             - dim=1:
-                - `virtual_dof` is created for ['E_xx'] (1 DOF).
+                - `global_dof` is created for ['E_xx'] (1 DOF).
                 - `node_cd = [problem.virtual_dof['E_xx']]`
-                - `var_cd = ['Virtual']`
+                - `var_cd = ['E_xx']`
             - dim=2:
                 - `virtual_dof` is created for ['E_xx', 'E_yy', 'E_xy'] (3 DOF).
                 - `node_cd = [[problem.virtual_dof['E_xx'], problem.virtual_dof['E_xy']], [problem.virtual_dof['E_xy'], problem.virtual_dof['E_yy']]]`
@@ -2498,91 +2662,62 @@ class PeriodicBC(BCBase):
 
         if self.periodicity_type == "small_strain":
             if self.dim == 1:
-                virtual_dof = problem.add_virtual_dof(1, "small_strain", ["E_xx"])
-                node_cd = [problem.virtual_dof["E_xx"]]
-                var_cd = ["Virtual"]
+                dof_indice = problem.add_global_dof(
+                    ["E_xx"], 1, vector_name="MeanStrain"
+                )
+                var_cd = ["E_xx"]
+                node_cd = [dof_indice]
             elif self.dim == 2:
-                virtual_dof = problem.add_virtual_dof(
-                    3, "small_strain", ["E_xx", "E_yy", "E_xy"]
+                dof_indice = problem.add_global_dof(
+                    ["E_xx", "E_yy", "E_xy"], 1, vector_name="MeanStrain"
                 )
-                node_cd = [
-                    [problem.virtual_dof["E_xx"], problem.virtual_dof["E_xy"]],
-                    [problem.virtual_dof["E_xy"], problem.virtual_dof["E_yy"]],
+                var_cd = [
+                    ["E_xx", "E_xy"],
+                    ["E_xy", "E_yy"],
                 ]
-                var_cd = [["Virtual"] * 2 for _ in range(2)]
+                node_cd = np.full((2, 2), dof_indice)
             elif self.dim == 3:
-                virtual_dof = problem.add_virtual_dof(
-                    6, "small_strain", ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"]
+                dof_indice = problem.add_global_dof(
+                    ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"], 1, "MeanStrain",
                 )
-                node_cd = [
-                    [
-                        problem.virtual_dof["E_xx"],
-                        problem.virtual_dof["E_xy"],
-                        problem.virtual_dof["E_xz"],
-                    ],
-                    [
-                        problem.virtual_dof["E_xy"],
-                        problem.virtual_dof["E_yy"],
-                        problem.virtual_dof["E_yz"],
-                    ],
-                    [
-                        problem.virtual_dof["E_xz"],
-                        problem.virtual_dof["E_yz"],
-                        problem.virtual_dof["E_zz"],
-                    ],
+                var_cd = [
+                    ["E_xx", "E_xy", "E_xz"],
+                    ["E_xy", "E_yy", "E_yz"],
+                    ["E_xz", "E_yz", "E_zz"],
                 ]
-                var_cd = [["Virtual"] * 3 for _ in range(3)]
+                node_cd = np.full((3, 3), dof_indice)
 
         if self.periodicity_type == "finite_strain":
             if self.dim == 1:
-                virtual_dof = problem.add_virtual_dof(1, "finite_strain", ["DU_xx"])
-                node_cd = [problem.virtual_dof["DU_xx"]]
-                var_cd = ["Virtual"]
+                dof_indice = problem.add_global_dof(["DU_xx"], 1, "MeanGradDisp")
+                var_cd = ["DU_xx"]
+                node_cd = [dof_indice]
             elif self.dim == 2:
-                virtual_dof = problem.add_virtual_dof(
-                    4, "finite_strain", ["DU_xx", "DU_xy", "DU_yx", "DU_yy"]
+                dof_indice = problem.add_global_dof(
+                    ["DU_xx", "DU_xy", "DU_yx", "DU_yy"], 1, "MeanGradDisp"
                 )
-                node_cd = [
-                    [problem.virtual_dof["DU_xx"], problem.virtual_dof["DU_xy"]],
-                    [problem.virtual_dof["DU_yx"], problem.virtual_dof["DU_yy"]],
+                var_cd = [
+                    ["DU_xx", "DU_xy"],
+                    ["DU_yx", "DU_yy"],
                 ]
-                var_cd = [["Virtual"] * 2 for _ in range(2)]
+                node_cd = np.full((2, 2), dof_indice)
             elif self.dim == 3:
-                virtual_dof = problem.add_virtual_dof(
-                    9,
-                    "finite_strain",
+                dof_indice = problem.add_global_dof(
                     [
-                        "DU_xx",
-                        "DU_xy",
-                        "DU_xz",
-                        "DU_yx",
-                        "DU_yy",
-                        "DU_yz",
-                        "DU_zx",
-                        "DU_zy",
-                        "DU_zz",
+                        "DU_xx", "DU_xy", "DU_xz",
+                        "DU_yx", "DU_yy", "DU_yz",
+                        "DU_zx", "DU_zy", "DU_zz",
                     ],
+                    1,
+                    "MeanGradDisp",
                 )
-                node_cd = [
-                    [
-                        problem.virtual_dof["DU_xx"],
-                        problem.virtual_dof["DU_xy"],
-                        problem.virtual_dof["DU_xz"],
-                    ],
-                    [
-                        problem.virtual_dof["DU_yx"],
-                        problem.virtual_dof["DU_yy"],
-                        problem.virtual_dof["DU_yz"],
-                    ],
-                    [
-                        problem.virtual_dof["DU_zx"],
-                        problem.virtual_dof["DU_zy"],
-                        problem.virtual_dof["DU_zz"],
-                    ],
+                var_cd = [
+                    ["DU_xx", "DU_xy", "DU_xz"],
+                    ["DU_yx", "DU_yy", "DU_yz"],
+                    ["DU_zx", "DU_zy", "DU_zz"],
                 ]
-                var_cd = [["Virtual"] * 3 for _ in range(3)]
+                node_cd = np.full((3, 3), dof_indice)
 
-        self.virtual_dof = virtual_dof
         self.node_cd = node_cd
         self.var_cd = var_cd
 
@@ -2593,64 +2728,33 @@ class PeriodicBC(BCBase):
                 raise ValueError("off_axis_rotation is valid in 3D only")
 
             if self.periodicity_type == "small_strain":
-                virtual_dof_loading = problem.add_virtual_dof(
-                    6, "loading", ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"]
+                dof_indice = virtual_dof_loading = problem.add_global_dof(
+                    ["E_11", "E_22", "E_33", "E_12", "E_13", "E_23"], 1, "LocalMeanStrain"
                 )
-                node_cd_loading = [
-                    [
-                        virtual_dof["E_xx"].node_cd,
-                        virtual_dof["E_xy"].node_cd,
-                        virtual_dof["E_xz"].node_cd,
-                    ],
-                    [
-                        virtual_dof["E_xy"].node_cd,
-                        virtual_dof["E_yy"].node_cd,
-                        virtual_dof["E_yz"].node_cd,
-                    ],
-                    [
-                        virtual_dof["E_xz"].node_cd,
-                        virtual_dof["E_yz"].node_cd,
-                        virtual_dof["E_zz"].node_cd,
-                    ],
+                var_cd_loading = [
+                    ["E_11", "E_12", "E_13"],
+                    ["E_12", "E_22", "E_23"],
+                    ["E_13", "E_23", "E_33"],
                 ]
-                var_cd_loading = [["Virtual"] * 3 for _ in range(3)]
+                node_cd_loading = np.full((3, 3), dof_indice)
 
             if self.periodicity_type == "fintie_strain":
-                virtual_dof_loading = problem.add_virtual_dof(
-                    9,
-                    "loading",
+                dof_indice = problem.add_global_dof(
                     [
-                        "DU_xx",
-                        "DU_xy",
-                        "DU_xz",
-                        "DU_yx",
-                        "DU_yy",
-                        "DU_yz",
-                        "DU_zx",
-                        "DU_zy",
-                        "DU_zz",
+                        "DU_11", "DU_12", "DU_13",
+                        "DU_21", "DU_22", "DU_23",
+                        "DU_31", "DU_32", "DU_33",
                     ],
+                    1,
+                    "LocalMeanGradDisp",
                 )
-                node_cd_loading = [
-                    [
-                        problem.virtual_dof["DU_xx"],
-                        problem.virtual_dof["DU_xy"],
-                        problem.virtual_dof["DU_xz"],
-                    ],
-                    [
-                        problem.virtual_dof["DU_yx"],
-                        problem.virtual_dof["DU_yy"],
-                        problem.virtual_dof["DU_yz"],
-                    ],
-                    [
-                        problem.virtual_dof["DU_zx"],
-                        problem.virtual_dof["DU_zy"],
-                        problem.virtual_dof["DU_zz"],
-                    ],
+                var_cd_loading = [
+                    ["DU_11", "DU_12", "DU_13"],
+                    ["DU_21", "DU_22", "DU_23"],
+                    ["DU_31", "DU_32", "DU_33"],
                 ]
-                var_cd_loading = [["Virtual"] * 3 for _ in range(3)]
+                node_cd_loading = np.full((3, 3), dof_indice)
 
-            self.virtual_dof_loading = virtual_dof_loading
             self.node_cd_loading = node_cd_loading
             self.var_cd_loading = var_cd_loading
 

@@ -97,14 +97,32 @@ class Problem(ProblemBase):
 
         if name in self.space.list_vectors():
             vec = self.space.get_rank_vector(name)
+            # vector component are assumed defined as an increment sequence (i, i+1, i+2)
             i = vec[0]  # rank of the 1rst variable of the vector
             dim = len(vec)
             # return vector.reshape(-1, n)[i : i + dim]
             return vector[i * n : (i + dim) * n].reshape(-1, n)
-        else:
-            # vector component are assumed defined as an increment sequence (i, i+1, i+2)
+        elif name in self.space.list_variables():
             i = self.space.variable_rank(name)
             return vector[i * n : (i + 1) * n]
+        elif name in self._global_dof:
+            global_var_rank = self._global_dof._variable[name]
+            start, stop = (
+                self.n_node_dof
+                + self._global_dof._indptr[[global_var_rank, global_var_rank + 1]]
+            )
+            return vector[start: stop]
+        elif name in self._global_dof._vector:
+            global_vector_list = self._global_dof._vector[name]
+            n_comp = len(global_vector_list)
+            global_var_rank = self._global_dof._variable[global_vector_list[0]]
+            start, stop = (
+                self.n_node_dof
+                + self._global_dof._indptr[[global_var_rank, global_var_rank + n_comp]]
+            )
+            return vector[start: stop].reshape(n_comp, -1)
+        else:
+            raise ValueError(f"Variable '{name}' doesn't exist.")
 
     def add_output(
         self,
@@ -205,6 +223,9 @@ class Problem(ProblemBase):
     def get_X(self):  # solution of the linear system
         return self.__X
 
+    def set_X(self, value):  # solution of the linear system
+        self.__X = value
+
     def get_dof_solution(
         self, name="all"
     ):  # solution of the problem (same as get_X for linear problems if name=='all')
@@ -256,7 +277,7 @@ class Problem(ProblemBase):
         dof_slave.update(dof_blocked)
         dof_slave = np.fromiter(dof_slave, int, len(dof_slave))
         # dof_slave= np.unique(np.hstack(dof_slave)).astype(int)
-        dof_free = np.setdiff1d(range(nvar * n), dof_slave).astype(int)
+        dof_free = np.setdiff1d(range(n_dof), dof_slave).astype(int)
 
         # build matrix MPC
         if build_mpc:
@@ -348,7 +369,7 @@ class Problem(ProblemBase):
             the name of a vector or 'all'.
         include_mpc: bool (default = True)
             if True, the multi_point_constraint (mpc) are included in the returned ext forces. This make the external force
-            accessible on mpc virtual dof (dof only used in mpc and not linked to a mesh). A direct consequence
+            accessible on mpc global dof (dof only used in mpc and not linked to a mesh). A direct consequence
             is that the external force can't be accessed on the mpc slave dof.
 
         Returns
@@ -397,4 +418,8 @@ class Problem(ProblemBase):
 
     @property
     def n_dof(self):
-        return self.mesh.n_nodes * self.space.nvar + self.n_virtual_dof
+        return self.mesh.n_nodes * self.space.nvar + self.n_global_dof
+
+    @property
+    def n_node_dof(self):
+        return self.mesh.n_nodes * self.space.nvar

@@ -179,8 +179,8 @@ class ModelingSpace:
         """
         Return the rank (int) of a variable associated to a given name (str)
         """
-        if name == "Virtual":  # to get virtual dof
-            return self._nvar
+        # if name == "Global":  # to get virtual dof
+        #     return self._nvar
         if name not in self._variable.keys():
             assert 0, "the variable " + str(name) + " does not exist"
         return self._variable[name]

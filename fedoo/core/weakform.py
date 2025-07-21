@@ -309,10 +309,10 @@ class WeakFormSum(WeakFormBase):
         for wf in self._list_weakform:
             wf.update_2(assembly, pb)
 
-    def to_start(self):
+    def to_start(self, assembly, pb):
         # function called if the time step is reinitialized. Used to reset variables to the begining of the step
         for wf in self._list_weakform:
-            wf.to_start()
+            wf.to_start(assembly, pb)
 
     def reset(self):
         # function called if all the problem history is reseted.

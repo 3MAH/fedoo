@@ -312,7 +312,8 @@ class _NewmarkInertia(WeakFormBase):
         assembly.sv["_DeltaDisp"] = 0
 
     def update(self, assembly, pb):
-        assembly.sv["_DeltaDisp"] = pb._dU.reshape(-1, pb.mesh.n_nodes)
+        # assembly.sv["_DeltaDisp"] = pb._dU.reshape(-1, pb.mesh.n_nodes)
+        assembly.sv["_DeltaDisp"] = pb._get_vect_component(pb._dU, "Disp")
         assembly.sv["_DeltaDisp_GP"] = assembly.convert_data(
             assembly.sv["_DeltaDisp"], convert_from="Node", convert_to="GaussPoint"
         )

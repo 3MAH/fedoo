@@ -574,7 +574,6 @@ class Simcoon(Mechanical3D):
             temp,
             ndi=ndi,
         )
-
         if ndi == 2:  # plane stress assumption
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
 
@@ -586,6 +585,8 @@ class Simcoon(Mechanical3D):
         #         - assembly.sv["TangentMatrix"].transpose((1, 0, 2))
         #     ).max()
         # )
+        # check if all eigvalues are positive
+        # print((np.linalg.eig(assembly.sv['TangentMatrix'].transpose(2,0,1))[0]<0).any())
 
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:

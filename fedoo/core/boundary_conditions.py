@@ -174,13 +174,38 @@ class ListBC(BCBase):
           the BoundaryCondition.create staticmethod, and add it at the end of the list.
 
           Same agruments as the :py:meth:`fedoo.BoundaryCondition.create` static method.
+
+        * ListBC.add(bc_type, variable, value, time_func=None, start_value=None, name=""):
+
+          If a variable contains only one dof, the node_set parameter can be skiped.
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
             self.append(args[0])
             return args[0]
         else:  # define a boundary condition
-            kargs["space"] = self._problem.space
-            bc = BoundaryCondition.create(*args, **kargs)
+            type_bc = args[0]
+            if len(args) == 3 and (
+                    args[1] in self._problem._global_dof._variable
+                    or args[1] in self._problem._global_dof._vector
+            ):
+                node_set = [0]
+                variable = args[1]
+                value = args[2]
+            else:
+                node_set = args[1]
+                variable = args[2]
+                value = args[3]
+
+            # test if variable is a vector
+            if isinstance(variable, str):
+                if variable in self._problem.space.list_vectors():
+                    variable = [
+                        self._problem.space.variable_name(var_rank)
+                        for var_rank in self._problem.space.get_rank_vector(variable)
+                    ]
+                elif variable in self._problem._global_dof._vector:
+                    variable = self._problem._global_dof._vector[variable]
+            bc = BoundaryCondition.create(type_bc, node_set, variable, value, **kargs)
             self.append(bc)
             return bc
 
@@ -256,10 +281,10 @@ class BoundaryCondition(BCBase):
             Variable name (str) over which the bc is applied.
         value : scalar or scalar array
             Final value of the variable (Dirichlet) or the adjoint variable (Neumann).
-            e.g. the adjoint variable associated to displacement is the force.
-        node_set : list of int or str
+            e.g. the adjoint variable associated to displac bdsement is the force.
+        node_set : int, list of int or str
             list of node index (list of int) or name of a node_set
-            associated to the reference mesh (str)
+            associated to the reference mesh (str) or dof indice (for global variables)
         time_func : function
             Function that gives the temporal evolution of the BC value
             (applyed as a factor to the specified BC).
@@ -311,7 +336,6 @@ class BoundaryCondition(BCBase):
         time_func=None,
         start_value=None,
         name="",
-        space=None,
     ):
         """
         Create one or several standard boundary conditions (Dirichlet or Neumann BC)
@@ -329,7 +353,7 @@ class BoundaryCondition(BCBase):
             e.g. the adjoint variable associated to displacement is the force.
         node_set : list of int or str
             list of node index (list of int) or name of a node_set
-            associated to the reference mesh (str).
+            associated to the reference mesh (str) or dof_indice (for global variables)
         time_func : function
             Function that gives the temporal evolution of the BC value
             (applyed as a factor to the specified BC).
@@ -348,16 +372,6 @@ class BoundaryCondition(BCBase):
         If only one variable is specified, return a BoundaryCondition object,
         if several variables are specified, return a ListBC object.
         """
-        if (
-            space is not None
-            and isinstance(variable, str)
-            and variable in space.list_vectors()
-        ):
-            variable = [
-                space.variable_name(var_rank)
-                for var_rank in space.get_rank_vector(variable)
-            ]
-
         if isinstance(variable, list):
             if np.isscalar(value):
                 value = [value for var in variable]
@@ -369,10 +383,9 @@ class BoundaryCondition(BCBase):
                         node_set,
                         var,
                         value[i],
-                        time_func,
-                        start_value,
-                        name,
-                        space,
+                        time_func=time_func,
+                        start_value=start_value,
+                        name=name,
                     )
                     for i, var in enumerate(variable)
                 ]
@@ -422,18 +435,18 @@ class BoundaryCondition(BCBase):
         return "\n".join(res)
 
     def initialize(self, problem):
-        self.variable = problem.space.variable_rank(self.variable_name)
+        if self.variable_name in problem.global_dof:
+            self.variable = problem.space.nvar
+            self.node_set = (
+                np.array(self.node_set)
+                + problem.global_dof.indice_start(self.variable_name)
+            )
+        else:
+            self.variable = problem.space.variable_rank(self.variable_name)
 
         if isinstance(self.node_set_name, str):
-            if self.node_set_name in problem.virtual_dof:
-                self.node_set = problem.virtual_dof[self.node_set_name]
-                if np.isscalar(self.node_set):
-                    self.node_set = [self.node_set]
-                elif isinstance(self.node_set, slice):
-                    self.node_set = range(0, self.node_set.stop)[self.node_set]
-            else:
-                # must be a string defining a set of nodes
-                self.node_set = problem.mesh.node_sets[self.node_set_name]
+            # must be a string defining a set of nodes
+            self.node_set = problem.mesh.node_sets[self.node_set_name]
 
         if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
             self.pgd = True
@@ -620,14 +633,16 @@ class MPC(BCBase):
 
     def initialize(self, problem):
         # list_variables should be a list or a numpy array
-        if isinstance(self.list_variables[0], str):
-            self.list_variables = [
-                problem.space.variable_rank(v) for v in self.list_variables
-            ]
-        if isinstance(self.list_node_sets[0], str):
-            self.list_node_sets = [
-                problem.mesh.node_sets[n_set] for n_set in self.list_node_sets
-            ]
+        for i, var in enumerate(self.list_variables):
+            if isinstance(self.list_node_sets[i], str):
+                # in principle not admited for global variable
+                self.list_node_sets[i] = problem.mesh.node_sets[self.list_node_sets[i]]
+            if isinstance(var, str):
+                if var in problem.space.list_variables():
+                    self.list_variables[i] = problem.space.variable_rank(var)
+                elif var in problem.global_dof._variable:
+                    self.list_node_sets[i] += problem.global_dof.indice_start(var)
+                    self.list_variables[i] = problem.space.nvar
 
         if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
             self.pgd = True

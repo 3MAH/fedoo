@@ -24,14 +24,6 @@ mesh = fd.mesh.hole_plate_mesh(name="Domain")
 # Mesh.rectangle_mesh(Nx=51, Ny=51, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = 'quad4', name ="Domain")
 
 ###############################################################################
-# Adding virtual nodes related the macroscopic strain
-# ------------------------------------------------------------------------------
-# strain_nodes = mesh.add_virtual_nodes(2)
-# The position of the virtual node has no importance.
-# For a problem in 2D with a 2D periodicity, we need 3 independant strain component
-# 2 nodes (with 2 dof per node in 2D) are required
-
-###############################################################################
 # Now define the problem to solve
 
 # ------------------------------------------------------------------------------
@@ -81,9 +73,9 @@ Eyy = 0
 Exy = 0.1
 
 # Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
-pb.bc.add("Dirichlet", "E_xx", "Virtual", Exx)  # EpsXX
-pb.bc.add("Dirichlet", "E_xy", "Virtual", Exy)  # EpsXY
-pb.bc.add("Dirichlet", "E_yy", "Virtual", Eyy)  # EpsYY
+pb.bc.add("Dirichlet", "E_xx", Exx)  # EpsXX
+pb.bc.add("Dirichlet", "E_xy", Exy)  # EpsXY
+pb.bc.add("Dirichlet", "E_yy", Eyy)  # EpsYY
 
 # Block one node to avoid singularity
 center = mesh.nearest_node(mesh.bounding_box.center)

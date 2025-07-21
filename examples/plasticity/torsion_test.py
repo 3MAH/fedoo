@@ -19,9 +19,9 @@ uimp = 1
 filename = "torsion_test"
 res_dir = "results/"
 
-# mesh = fd.mesh.box_mesh(nx=21, ny=21, nz=21, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
+mesh = fd.mesh.box_mesh(nx=11, ny=11, nz=11, x_min=0, x_max=L, y_min=0, y_max=h, z_min = 0, z_max = w, elm_type = 'hex8', name = 'Domain')
 # mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
-mesh = fd.mesh.import_file("../../util/meshes/octet_truss_2.msh", name="Domain")["tet4"]
+# mesh = fd.mesh.import_file("../../util/meshes/octet_truss_2.msh", name="Domain")["tet4"]
 
 crd = mesh.nodes
 
@@ -55,13 +55,6 @@ assemb = fd.Assembly.create(
 left = mesh.find_nodes("X", 0)
 right = mesh.find_nodes("X", 1)
 
-# add CD nodes
-# ref_node = mesh.add_nodes(2) #reference node for rigid body motion
-ref_node = mesh.add_virtual_nodes(2)  # reference node for rigid body motion
-node_cd = [ref_node[0] for i in range(3)] + [ref_node[1] for i in range(3)]
-var_cd = ["DispX", "DispY", "DispZ", "DispX", "DispY", "DispZ"]
-
-
 pb = fd.problem.NonLinear("Assembling")
 # Problem.set_solver('cg', precond = True)
 pb.set_nr_criterion("Displacement", err0=1, tol=1e-3, max_subiter=5)
@@ -86,7 +79,7 @@ results = pb.add_output(
 # Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
 
 
-pb.bc.add(fd.constraint.RigidTie(right, node_cd, var_cd))
+pb.bc.add(fd.constraint.RigidTie(right))
 
 # pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
 # pb.bc.add('Dirichlet','DispY', 0,nodes_top)
@@ -97,7 +90,7 @@ pb.bc.add("Dirichlet", left, "Disp", 0)
 # pb.bc.add('Dirichlet',ref_node[0], 'Disp', 0) #Displacement of the right end
 # pb.bc.add('Dirichlet',ref_node[1], ['DispX','DispY','DispZ'], [np.pi,0,0.]) #Rigid rotation of the right end
 pb.bc.add(
-    "Dirichlet", ref_node[1], "DispX", 2 * np.pi / 2
+    "Dirichlet", "RigidRotX", 2 * np.pi / 2
 )  # Rigid rotation of the right end
 
 # pb.bc.add('Dirichlet',ref_node[0], 'DispX', 0.5) #Rigid displacement of the right end

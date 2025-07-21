@@ -13,7 +13,7 @@ import os
 # --------------- Pre-Treatment --------------------------------------------------------
 dim = 3
 meshperio = True
-method = 2
+method = 1
 dir_meshes = "../../util/meshes/"
 
 if dim == 2:
@@ -51,28 +51,13 @@ if method == 0:
     wf = fd.weakform.StressEquilibrium(material, name="WeakForm", nlgeom=False)
 
     # Assembly
-    assemb = fd.Assembly.create("WeakForm", mesh, mesh.elm_type, name="Assembly")
+    assemb = fd.Assembly.create("WeakForm", mesh, name="Assembly")
 
     # if '_perturbation' in fd.Problem.get_all():
     #     del fd.Problem.get_all()['_perturbation']
     L_eff = fd.homogen.get_homogenized_stiffness(assemb, meshperio)
 else:
-    type_el = mesh.elm_type
-    # type_el = 'hex20'
-    xmax = np.max(crd[:, 0])
-    xmin = np.min(crd[:, 0])
-    ymax = np.max(crd[:, 1])
-    ymin = np.min(crd[:, 1])
-    if dim == 3:
-        zmax = np.max(crd[:, 2])
-        zmin = np.min(crd[:, 2])
-        crd_center = (np.array([xmin, ymin, zmin]) + np.array([xmax, ymax, zmax])) / 2
-    else:
-        crd_center = (np.array([xmin, ymin]) + np.array([xmax, ymax])) / 2
-
-    center = [np.linalg.norm(crd - crd_center, axis=1).argmin()]
-
-    StrainNodes = mesh.add_nodes(crd_center, 2)  # add virtual nodes for macro strain
+    center = mesh.nearest_node(bounds.center)
 
     BC_perturb = np.eye(6)
     # BC_perturb[3:6,3:6] *= 2 #2xEXY
@@ -84,22 +69,14 @@ else:
 
     # Assembly
     wf = fd.weakform.StressEquilibrium("ElasticLaw")
-    assemb = fd.Assembly.create(wf, mesh, type_el, name="Assembling")
+    assemb = fd.Assembly.create(wf, mesh, name="Assembling")
 
     # Type of problem
     pb = fd.problem.Linear("Assembling")
 
     # Shall add other conditions later on
     bc_periodic = fd.constraint.PeriodicBC(
-        [
-            StrainNodes[0],
-            StrainNodes[0],
-            StrainNodes[0],
-            StrainNodes[1],
-            StrainNodes[1],
-            StrainNodes[1],
-        ],
-        ["DispX", "DispY", "DispZ", "DispX", "DispY", "DispZ"],
+        "small_strain",
         dim=dim,
         meshperio=meshperio,
     )
@@ -134,115 +111,82 @@ else:
     # typeBC = 'Dirichlet'
     typeBC = "Neumann"
     for i in range(6):
+        # assemb.sv['Stress'] = 0
+        pb.set_X(0)  # remove previous result
         pb.bc.remove("_Strain")
         pb.bc.add(
             typeBC,
-            [StrainNodes[0]],
-            "DispX",
+            "E_xx",
             BC_perturb[i][0],
-            start_value=0,
+            # start_value=0,
             name="_Strain",
-        )  # EpsXX
+        )
         pb.bc.add(
             typeBC,
-            [StrainNodes[0]],
-            "DispY",
+            "E_yy",
             BC_perturb[i][1],
-            start_value=0,
             name="_Strain",
-        )  # EpsYY
+        )
         pb.bc.add(
             typeBC,
-            [StrainNodes[1]],
-            "DispX",
+            "E_xy",
             BC_perturb[i][3],
-            start_value=0,
             name="_Strain",
-        )  # EpsXY
-
+        )
         if dim == 3:
             pb.bc.add(
                 typeBC,
-                [StrainNodes[0]],
-                "DispZ",
+                "E_zz",
                 BC_perturb[i][2],
-                start_value=0,
                 name="_Strain",
-            )  # EpsZZ
+            )
             pb.bc.add(
                 typeBC,
-                [StrainNodes[1]],
-                "DispY",
+                "E_xz",
                 BC_perturb[i][4],
-                start_value=0,
                 name="_Strain",
-            )  # EpsXZ
+            )
             pb.bc.add(
                 typeBC,
-                [StrainNodes[1]],
-                "DispZ",
+                "E_yz",
                 BC_perturb[i][5],
-                start_value=0,
                 name="_Strain",
-            )  # EpsYZ
-        else:
-            pb.bc.add("Dirichlet", StrainNodes[1], "DispY", 0, name="_Strain")
-
-        pb.apply_boundary_conditions()
+            )
 
         pb.solve()
         pb.save_results(i)
 
         X = pb.get_X()
-        if dim == 3:
-            DStrain.append(
-                np.array(
-                    [
-                        pb._get_vect_component(X, "DispX")[StrainNodes[0]],
-                        pb._get_vect_component(X, "DispY")[StrainNodes[0]],
-                        pb._get_vect_component(X, "DispZ")[StrainNodes[0]],
-                        pb._get_vect_component(X, "DispX")[StrainNodes[1]],
-                        pb._get_vect_component(X, "DispY")[StrainNodes[1]],
-                        pb._get_vect_component(X, "DispZ")[StrainNodes[1]],
-                    ]
+        Fext = pb.get_ext_forces()
+        dstrain_dstress = [DStrain, DStress]
+        disp_force = [X, Fext]
+        for i in range(2):
+            if dim == 3:
+                dstrain_dstress[i].append(
+                    np.array(
+                        [
+                            pb._get_vect_component(disp_force[i], "E_xx")[0],
+                            pb._get_vect_component(disp_force[i], "E_yy")[0],
+                            pb._get_vect_component(disp_force[i], "E_zz")[0],
+                            pb._get_vect_component(disp_force[i], "E_xy")[0],
+                            pb._get_vect_component(disp_force[i], "E_xz")[0],
+                            pb._get_vect_component(disp_force[i], "E_yz")[0],
+                        ]
+                    )
                 )
-            )
-
-            Fext = pb.get_ext_forces()
-            Fext = Fext.reshape(3, -1)
-            stress = [
-                Fext[0, -2],
-                Fext[1, -2],
-                Fext[2, -2],
-                Fext[0, -1],
-                Fext[1, -1],
-                Fext[2, -1],
-            ]
-
-            DStress.append(stress)
-
-            Fext2 = pb.get_ext_forces(include_mpc=False)
-            Fext2 = Fext2.reshape(3, -1)
-
-        elif dim == 2:
-            DStrain.append(
-                np.array(
-                    [
-                        pb._get_vect_component(X, "DispX")[StrainNodes[0]],
-                        pb._get_vect_component(X, "DispY")[StrainNodes[0]],
-                        0,
-                        pb._get_vect_component(X, "DispX")[StrainNodes[1]],
-                        0,
-                        0,
-                    ]
+            else:  # ndim == 2
+                dstrain_dstress[i].append(
+                    np.array(
+                        [
+                            pb._get_vect_component(disp_force[i], "E_xx")[0],
+                            pb._get_vect_component(disp_force[i], "E_yy")[0],
+                            0,
+                            pb._get_vect_component(disp_force[i], "E_xy")[0],
+                            0,
+                            0,
+                        ]
+                    )
                 )
-            )
-
-            Fext = pb.get_ext_forces()
-            Fext = Fext.reshape(2, -1)
-            stress = [Fext[0, -2], Fext[1, -2], 0, Fext[0, -1], 0, 0]
-
-            DStress.append(stress)
 
     if typeBC == "Neumann":
         L_eff = np.linalg.inv(np.array(DStrain).T)

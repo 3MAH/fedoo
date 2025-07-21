@@ -188,13 +188,13 @@ class Assembly(AssemblyBase):
                 use_change_of_basis = True
             sl = [slice(i * n_bloc_cols, (i + 1) * n_bloc_cols) for i in range(nvar)]
 
-            # total number of dof for the operator (with pb virtual dof)
-            if use_change_of_basis or self._pb is None or self._pb._n_virtual_dof == 0:
+            # total number of dof for the operator (with pb global dof)
+            if use_change_of_basis or self._pb is None or self._pb.n_global_dof == 0:
                 n_dof = n_bloc_cols * nvar
                 global_mat_resize = False
             else:
-                n_dof = n_bloc_cols * nvar + self._pb.n_virtual_dof
-                global_mat_resize = True  # resize to account for virtual dof
+                n_dof = n_bloc_cols * nvar + self._pb.n_global_dof
+                global_mat_resize = True  # resize to account for global dof
 
             if n_elm_gp == 0:  # if finite difference elements, don't use BlocSparse
                 blocks = [[None for i in range(nvar)] for j in range(nvar)]
@@ -466,7 +466,7 @@ class Assembly(AssemblyBase):
                 self._saved_bloc_structure = MM.get_BlocStructure()
 
         elif _assembly_method == "very_old":
-            # Only for debug purpose. No optim. Dont work with virtual dof. Not tested
+            # Only for debug purpose. No optim. Dont work with global dof. Not tested
             MM = 0
             VV = 0
 
@@ -602,9 +602,9 @@ class Assembly(AssemblyBase):
                     local_frame_el = self._element_local_frame
 
                 if self._pb is not None:
-                    n_virtual_dof = self._pb.n_virtual_dof
+                    n_global_dof = self._pb.n_global_dof
                 else:
-                    n_virtual_dof = 0
+                    n_global_dof = 0
 
                 rowMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
                 colMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
@@ -649,7 +649,7 @@ class Assembly(AssemblyBase):
 
                     mat_change_of_basis = sparse.coo_matrix(
                         (dataMCB, (rowMCB, colMCB)),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_virtual_dof),
+                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_global_dof),
                     )
                 else:
                     mat_change_of_basis = sparse.coo_matrix(
@@ -657,7 +657,7 @@ class Assembly(AssemblyBase):
                             dataMCB.reshape(-1),
                             (rowMCB.reshape(-1), colMCB.reshape(-1)),
                         ),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_virtual_dof),
+                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_global_dof),
                     )
 
                 mat_change_of_basis = mat_change_of_basis.tocsr()
