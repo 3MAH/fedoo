@@ -5,6 +5,7 @@
 import numpy as np
 
 import fedoo as fd
+import pytest
 
 
 def test_beam_element():
@@ -105,3 +106,6 @@ def test_beam_element():
         assert np.abs(sol - U[-1][1]) < 1e-10  # deflection vs analytical expression
         # print('Analytical deflection: ', sol)
         # print(U[-1][1])
+
+if __name__ == '__main__':
+    pytest.main([__file__])

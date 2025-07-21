@@ -198,16 +198,29 @@ class ListBC(BCBase):
 
             # test if variable is a vector
             if isinstance(variable, str):
-                if variable in self._problem.space.list_vectors():
-                    variable = [
-                        self._problem.space.variable_name(var_rank)
-                        for var_rank in self._problem.space.get_rank_vector(variable)
-                    ]
-                elif variable in self._problem._global_dof._vector:
-                    variable = self._problem._global_dof._vector[variable]
+                variable = self._extract_vartiables_from_vector(variable)
+                if len(variable) == 1: variable = variable[0]
+            elif isinstance(variable, list):
+                for i, var in enumerate(variable):
+                    variable[i] = self._extract_vartiables_from_vector(var)
+                variable = sum(variable, [])
+                if len(variable) == 1: variable = variable[0]
+
             bc = BoundaryCondition.create(type_bc, node_set, variable, value, **kargs)
             self.append(bc)
             return bc
+
+    def _extract_vartiables_from_vector(self, variable):
+        # return a list in any cases
+        if variable in self._problem.space.list_vectors():
+            return [
+                self._problem.space.variable_name(var_rank)
+                for var_rank in self._problem.space.get_rank_vector(variable)
+            ]
+        elif variable in self._problem._global_dof._vector:
+            return  self._problem._global_dof._vector[variable]
+        else:
+            return [variable]
 
     def mpc(self, *args, **kargs):
         """
