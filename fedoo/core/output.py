@@ -155,6 +155,8 @@ def _get_results(
             and res not in assemb.space.list_vectors()
             and res not in assemb.sv
             and res not in assemb.sv_component
+            and res not in pb._global_dof._variable
+            and res not in pb._global_dof._vector
         ):
             print("List of available output: ", _available_output)
             raise NameError(res, "' doens't match to any available output")
@@ -183,6 +185,10 @@ def _get_results(
         if res in pb.space.list_variables() or res in pb.space.list_vectors():
             data = pb.get_dof_solution(res)
             data_type = "Node"
+
+        elif res in pb._global_dof._variable or res in pb._global_dof._vector:
+            data = pb.get_dof_solution(res)
+            data_type = "Scalar"
 
         elif res == "Fext":
             # Only node dof
@@ -326,7 +332,7 @@ def _get_results(
             data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
             data_type = "GaussPoint"  # or 'Element' ?
 
-        if output_type is not None and output_type != data_type:
+        if (output_type is not None) and (output_type != "Scalar") and (output_type != data_type):
             data = assemb.convert_data(data, data_type, output_type)
             data_type = output_type
 
@@ -349,6 +355,8 @@ def _get_results(
                     result.gausspoint_data[res] = data[:, :, element_set].reshape(
                         data.shape[0], -1
                     )
+        elif data_type == "Scalar":
+            result.scalar_data[res] = data
 
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time

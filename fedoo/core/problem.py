@@ -68,6 +68,9 @@ class Problem(ProblemBase):
         # prepering output demand to export results
         self._problem_output = _ProblemOutput()
 
+        # Option to allow mpc of dof involved in other mpc. False by default
+        self.enable_mpc_coupling = False
+
     def _new_vect_dof(
         self,
     ):  # initialize a vector (force vector for instance) whose size is n_dof
@@ -281,16 +284,18 @@ class Problem(ProblemBase):
 
         # build matrix MPC
         if build_mpc:
-            # Treating the case where MPC includes some blocked nodes as master nodes
             # M is a matrix such as Xblocked = M@X + Xbc
             M = sparse.coo_matrix(
                 (np.hstack(data), (np.hstack(row), np.hstack(col))),
                 shape=(n_dof, n_dof),
             )
 
+            # Treating the case where MPC includes some blocked nodes as master nodes
+            # Compute M + M@M - require if slave dof in one mpc is master in another
+            if self.enable_mpc_coupling:
+                M = (M+M@M).tocoo()
             # update Xbc with the eliminated dof that may be used as slave dof in mpc
             self._Xbc = self._Xbc + M @ self._Xbc
-            # M = (M+M@M).tocoo() #Compute M + M@M - not sure it is required
 
             data = M.data
             row = M.row

@@ -386,7 +386,8 @@ class PeriodicBC(BCBase):
                         var_cd_load[0][1],
                         var_cd_load[0][2],
                         var_cd_load[1][2],
-                    ],                    [
+                    ],                    
+                    [
                         1.0,
                         -(d**2),
                         -(e**2),
@@ -2722,6 +2723,7 @@ class PeriodicBC(BCBase):
         self.var_cd = var_cd
 
         if self.off_axis_rotation is not None:
+            problem.enable_mpc_coupling = True
             if self.dim == 3:
                 self.off_axis_rot_matrix = self.off_axis_rotation.as_matrix()
             else:
