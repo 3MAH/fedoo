@@ -654,7 +654,9 @@ class MPC(BCBase):
                 if var in problem.space.list_variables():
                     self.list_variables[i] = problem.space.variable_rank(var)
                 elif var in problem.global_dof._variable:
-                    self.list_node_sets[i] += problem.global_dof.indice_start(var)
+                    self.list_node_sets[i] = self.list_node_sets[
+                        i
+                    ] + problem.global_dof.indice_start(var)
                     self.list_variables[i] = problem.space.nvar
 
         if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
@@ -662,6 +664,7 @@ class MPC(BCBase):
         else:
             self.pgd = False
             self.list_node_sets = np.asarray(self.list_node_sets, dtype=int)
+            self.list_variables = np.asarray(self.list_variables, dtype=int)
 
     def generate(self, problem, t_fact, t_fact_old=None):
         # # Node index for master DOF (not eliminated DOF in MPC)

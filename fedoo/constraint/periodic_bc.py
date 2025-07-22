@@ -481,7 +481,7 @@ class PeriodicBC(BCBase):
                         var_cd_load[0][1],
                         var_cd_load[0][2],
                         var_cd_load[1][2],
-                    ],                    
+                    ],
                     [
                         1.0,
                         -2.0 * (a * g),
@@ -2675,7 +2675,7 @@ class PeriodicBC(BCBase):
                     ["E_xx", "E_xy"],
                     ["E_xy", "E_yy"],
                 ]
-                node_cd = np.full((2, 2), dof_indice)
+                node_cd = np.full((2, 2, 1), dof_indice)
             elif self.dim == 3:
                 dof_indice = problem.add_global_dof(
                     ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"], 1, "MeanStrain",
@@ -2685,7 +2685,7 @@ class PeriodicBC(BCBase):
                     ["E_xy", "E_yy", "E_yz"],
                     ["E_xz", "E_yz", "E_zz"],
                 ]
-                node_cd = np.full((3, 3), dof_indice)
+                node_cd = np.full((3, 3, 1), dof_indice)
 
         if self.periodicity_type == "finite_strain":
             if self.dim == 1:
@@ -2700,7 +2700,7 @@ class PeriodicBC(BCBase):
                     ["DU_xx", "DU_xy"],
                     ["DU_yx", "DU_yy"],
                 ]
-                node_cd = np.full((2, 2), dof_indice)
+                node_cd = np.full((2, 2, 1), dof_indice)
             elif self.dim == 3:
                 dof_indice = problem.add_global_dof(
                     [
@@ -2716,7 +2716,7 @@ class PeriodicBC(BCBase):
                     ["DU_yx", "DU_yy", "DU_yz"],
                     ["DU_zx", "DU_zy", "DU_zz"],
                 ]
-                node_cd = np.full((3, 3), dof_indice)
+                node_cd = np.full((3, 3, 1), dof_indice)
 
         self.node_cd = node_cd
         self.var_cd = var_cd
@@ -2736,7 +2736,7 @@ class PeriodicBC(BCBase):
                     ["E_12", "E_22", "E_23"],
                     ["E_13", "E_23", "E_33"],
                 ]
-                node_cd_loading = np.full((3, 3), dof_indice)
+                node_cd_loading = np.full((3, 3, 1), dof_indice)
 
             if self.periodicity_type == "fintie_strain":
                 dof_indice = problem.add_global_dof(
@@ -2753,7 +2753,7 @@ class PeriodicBC(BCBase):
                     ["DU_21", "DU_22", "DU_23"],
                     ["DU_31", "DU_32", "DU_33"],
                 ]
-                node_cd_loading = np.full((3, 3), dof_indice)
+                node_cd_loading = np.full((3, 3, 1), dof_indice)
 
             self.node_cd_loading = node_cd_loading
             self.var_cd_loading = var_cd_loading
@@ -2766,6 +2766,7 @@ class PeriodicBC(BCBase):
                 res = self._list_MPC_periodic()
             if self.off_axis_rotation is not None:
                 res = ListBC([self._list_MPC_rotation(), self._list_MPC_periodic()])
+                # res = ListBC([self._list_MPC_periodic(), self._list_MPC_rotation()])
         else:
             if dic_closest_points_on_boundaries is None:
                 raise
