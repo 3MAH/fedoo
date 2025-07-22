@@ -166,7 +166,6 @@ class SpringEquilibrium(WeakFormBase):
         # Linear tangeant stiffness
         diff_op = op_delta[0].virtual * op_delta[0] * self.K
 
-
         # Add small tangential rigidity to avoid instability
         # Important even with nlgeom for low values of Fint
         if self.Kt_factor is None:
@@ -183,12 +182,9 @@ class SpringEquilibrium(WeakFormBase):
             L0 = assembly.sv["_InitialLength"]
             Kt += Fint / L0
 
-        if not(np.array_equal(Kt, 0)):
+        if not (np.array_equal(Kt, 0)):
             diff_op = diff_op + sum(
-                [
-                    op_delta[i].virtual * op_delta[i] * Kt
-                    for i in range(1, dim)
-                ]
+                [op_delta[i].virtual * op_delta[i] * Kt for i in range(1, dim)]
             )
         # Initial stress vector
         diff_op = diff_op + op_delta[0].virtual * Fint

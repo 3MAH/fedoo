@@ -80,5 +80,6 @@ def test_octet():
     assert np.abs(TensorStress[4][222] - 72.3765265291865) < 1e-3
     assert np.abs(TensorStrain[2][876] - 0.03046909551762696) < 1e-6
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     pytest.main([__file__])

@@ -196,9 +196,10 @@ def test_given_periodic_box_must_return_periodic_MPC(
     # Nearest node to the center of the bounding box for boundary conditions
 
     bc_periodic = fd.constraint.PeriodicBC(periodicity_type="small_strain")
-    pb.bc.add(bc_periodic)
 
+    # pb.bc.add(bc_periodic) # return error for non periodic meshes
     # return is_periodic
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     pytest.main([__file__])

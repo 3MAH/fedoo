@@ -82,7 +82,7 @@ class RigidTie(BCBase):
         rigid_tie = fd.constraint.RigidTie(right_face, node_cd, var_cd)
     """
 
-    def __init__(self, list_nodes, center = None, name="Rigid Tie"):
+    def __init__(self, list_nodes, center=None, name="Rigid Tie"):
         self.list_nodes = list_nodes
         self.center = center
         self.bc_type = "RigidTie"
@@ -102,7 +102,7 @@ class RigidTie(BCBase):
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box
             nodes_crd = problem.mesh.nodes[self.list_nodes]
-            self.center = 0.5*(nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
+            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
         elif np.isscalar(self.center):
             # initialize the center at a position of a node
             self.center = problem.mesh.nodes[self.center]
@@ -121,8 +121,12 @@ class RigidTie(BCBase):
             "RigidRotZ",
         ]
         self.node_cd = [
-            dof_indice_disp, dof_indice_disp, dof_indice_disp,
-            dof_indice_rot, dof_indice_rot, dof_indice_rot,
+            dof_indice_disp,
+            dof_indice_disp,
+            dof_indice_disp,
+            dof_indice_rot,
+            dof_indice_rot,
+            dof_indice_rot,
         ]
 
         # extract indices array that gives the disp from the full dof solution
@@ -130,7 +134,8 @@ class RigidTie(BCBase):
         rank = problem.space.variable_rank("DispX")
         # rank = rank of variable "DispX". rank of "DispY" and "DispZ" should follow
         self._disp_indices = (
-            np.c_[rank * n_nodes, (rank + 1) * n_nodes, (rank + 2) * n_nodes] + self.list_nodes[:, None]
+            np.c_[rank * n_nodes, (rank + 1) * n_nodes, (rank + 2) * n_nodes]
+            + self.list_nodes[:, None]
         )
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
@@ -168,7 +173,8 @@ class RigidTie(BCBase):
         # Correct displacement of slave nodes to be consistent with the master nodes
         new_disp = (
             (mesh.nodes[list_nodes] - self.center) @ R.T
-            + self.center + disp_ref
+            + self.center
+            + disp_ref
             - mesh.nodes[list_nodes]
         )
 
@@ -335,16 +341,14 @@ class RigidTie2D(BCBase):
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box
             nodes_crd = problem.mesh.nodes[self.list_nodes]
-            self.center = 0.5*(nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
+            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
         elif np.isscalar(self.center):
             # initialize the center at a position of a node
             self.center = problem.mesh.nodes[self.center]
         dof_indice_disp = problem.add_global_dof(
             ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
         )
-        dof_indice_rot = problem.add_global_dof(
-            ["RigidRotZ"], 1, "RidigRot"
-        )
+        dof_indice_rot = problem.add_global_dof(["RigidRotZ"], 1, "RidigRot")
         self.var_cd = [
             "RigidDispX",
             "RigidDispY",
@@ -391,7 +395,8 @@ class RigidTie2D(BCBase):
 
         new_disp = (
             (mesh.nodes[list_nodes] - self.center) @ R.T
-            + self.center + disp_ref
+            + self.center
+            + disp_ref
             - mesh.nodes[list_nodes]
         )
 

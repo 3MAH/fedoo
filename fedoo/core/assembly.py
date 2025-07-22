@@ -1101,7 +1101,7 @@ class Assembly(AssemblyBase):
                     nvar,
                     var,
                     coef,
-                    n_cols = len(U)
+                    n_cols=len(U),
                 )
                 @ U
             )

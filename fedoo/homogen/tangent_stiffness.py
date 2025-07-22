@@ -155,7 +155,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
             X = pb_post_tt.get_X()  # alias
             list_res = DStrain
         else:
-            X = pb_post_tt.get_ext_forces() # F
+            X = pb_post_tt.get_ext_forces()  # F
             list_res = DStress
 
         if ndim == 3:

@@ -59,9 +59,7 @@ pb = fd.problem.Linear("Assembly")
 #         [strain_nodes[0], strain_nodes[1], strain_nodes[0]], ["DispX", "DispY", "DispY"]
 #     )
 # )
-pb.bc.add(
-    fd.constraint.PeriodicBC(periodicity_type="small_strain")
-)
+pb.bc.add(fd.constraint.PeriodicBC(periodicity_type="small_strain"))
 
 ###############################################################################
 # Add standard boundary conditions

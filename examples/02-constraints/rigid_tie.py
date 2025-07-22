@@ -36,9 +36,7 @@ results = pb.add_output(
 pb.bc.add(fd.constraint.RigidTie2D(top))
 
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
-pb.bc.add(
-    "Dirichlet", "RigidRotZ", -np.pi / 4
-)  # Rigid rotation of the top
+pb.bc.add("Dirichlet", "RigidRotZ", -np.pi / 4)  # Rigid rotation of the top
 
 pb.nlsolve(dt=0.2, tmax=1, update_dt=True, print_info=1, interval_output=0.2)
 

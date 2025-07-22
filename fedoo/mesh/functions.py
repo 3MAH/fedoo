@@ -16,7 +16,7 @@ def extract_surface(
     reduce_order: bool = False,
     quad2tri: bool | None = None,
     check_normals: bool = True,
-    only_external_faces = True,
+    only_external_faces=True,
     node_set: str | np.typing.ArrayLike | None = None,
     element_set: str | np.typing.ArrayLike | None = None,
 ):
@@ -517,6 +517,7 @@ def change_elm_type(mesh, elm_type, name=""):
     # new_mesh = new_mesh.from_pyvista()
     return new_mesh
 
+
 def extract_edges(
     mesh: Mesh,
     reduce_order: bool = False,
@@ -560,24 +561,49 @@ def extract_edges(
         n_edge_nodes = n_edge_nodes_for_sort = 2
         edge_elm_type = "lin2"
     elif mesh.elm_type == "tet10":
-        edges_in_elm = [[0, 1, 4], [0, 2, 6], [0, 3, 7], [1, 2, 5], [1, 3, 8], [2, 3, 9]]
+        edges_in_elm = [
+            [0, 1, 4],
+            [0, 2, 6],
+            [0, 3, 7],
+            [1, 2, 5],
+            [1, 3, 8],
+            [2, 3, 9],
+        ]
         n_edge_nodes = 3
         n_edge_nodes_for_sort = 2
         edge_elm_type = "lin3"
     elif mesh.elm_type == "hex8" or (reduce_order and mesh.elm_type == "hex20"):
         edges_in_elm = [
-            [0, 1], [1, 2], [2, 3], [0, 3],
-            [4, 5], [4, 7], [6, 7], [5, 6],
-            [0, 4], [1, 5], [2, 6], [3, 7],
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [0, 3],
+            [4, 5],
+            [4, 7],
+            [6, 7],
+            [5, 6],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
         ]
         n_edge_nodes = n_edge_nodes_for_sort = 2
         edge_elm_type = "lin2"
 
     elif mesh.elm_type == "hex20":
         edges_in_elm = [
-            [0, 1, 8], [1, 2, 9], [2, 3, 10], [0, 3, 11],
-            [4, 5, 12], [4, 7, 15], [6, 7, 14], [5, 6, 13],
-            [0, 4, 16], [1, 5, 17], [2, 6, 18], [3, 7, 19],
+            [0, 1, 8],
+            [1, 2, 9],
+            [2, 3, 10],
+            [0, 3, 11],
+            [4, 5, 12],
+            [4, 7, 15],
+            [6, 7, 14],
+            [5, 6, 13],
+            [0, 4, 16],
+            [1, 5, 17],
+            [2, 6, 18],
+            [3, 7, 19],
         ]
         n_edge_nodes = 3
         n_edge_nodes_for_sort = 2

@@ -185,8 +185,8 @@ class ListBC(BCBase):
         else:  # define a boundary condition
             type_bc = args[0]
             if len(args) == 3 and (
-                    args[1] in self._problem._global_dof._variable
-                    or args[1] in self._problem._global_dof._vector
+                args[1] in self._problem._global_dof._variable
+                or args[1] in self._problem._global_dof._vector
             ):
                 node_set = [0]
                 variable = args[1]
@@ -199,12 +199,14 @@ class ListBC(BCBase):
             # test if variable is a vector
             if isinstance(variable, str):
                 variable = self._extract_vartiables_from_vector(variable)
-                if len(variable) == 1: variable = variable[0]
+                if len(variable) == 1:
+                    variable = variable[0]
             elif isinstance(variable, list):
                 for i, var in enumerate(variable):
                     variable[i] = self._extract_vartiables_from_vector(var)
                 variable = sum(variable, [])
-                if len(variable) == 1: variable = variable[0]
+                if len(variable) == 1:
+                    variable = variable[0]
 
             bc = BoundaryCondition.create(type_bc, node_set, variable, value, **kargs)
             self.append(bc)
@@ -218,7 +220,7 @@ class ListBC(BCBase):
                 for var_rank in self._problem.space.get_rank_vector(variable)
             ]
         elif variable in self._problem._global_dof._vector:
-            return  self._problem._global_dof._vector[variable]
+            return self._problem._global_dof._vector[variable]
         else:
             return [variable]
 
@@ -450,9 +452,8 @@ class BoundaryCondition(BCBase):
     def initialize(self, problem):
         if self.variable_name in problem.global_dof:
             self.variable = problem.space.nvar
-            self.node_set = (
-                np.array(self.node_set)
-                + problem.global_dof.indice_start(self.variable_name)
+            self.node_set = np.array(self.node_set) + problem.global_dof.indice_start(
+                self.variable_name
             )
         else:
             self.variable = problem.space.variable_rank(self.variable_name)

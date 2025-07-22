@@ -548,10 +548,10 @@ class ProblemBase:
 
 
 # Class to define global dof that are not associated with a mesh
-class _GlobalDof():
+class _GlobalDof:
     def __init__(self):
         self._variable = {}  # dict containing global variable ranks
-        self._nvar = 0 # number of global variables
+        self._nvar = 0  # number of global variables
         self._vector = {}  # dic of vectors containing the variable names
         self._rank_vector = {}  # dict of vectors containing the var ranks
         self._indptr = np.array([0])
@@ -580,17 +580,17 @@ class _GlobalDof():
                 self._indptr[rank], self._indptr[rank + n_var_in_vec]
             ).reshape(n_var_in_vec, -1)
         else:
-            raise ValueError('Global variable or vector unknown.')
+            raise ValueError("Global variable or vector unknown.")
 
     def __contains__(self, key):
         return key in self._variable
 
     def add(
-          self,
-          variable_names: str | list[str],
-          nb_new_dof: int = 1,
-          vector_name: str | None = None,
-      ):
+        self,
+        variable_names: str | list[str],
+        nb_new_dof: int = 1,
+        vector_name: str | None = None,
+    ):
         """Add global degrees of freedom to the problem.
 
         The global dof are global in the sense that they are not associated
@@ -629,17 +629,14 @@ class _GlobalDof():
             )
             # dof_indice = indice of the first new dof in each variable
             for r in variable_ranks:
-                self._indptr[r+1:] += nb_new_dof
+                self._indptr[r + 1 :] += nb_new_dof
         else:
             # add new variable
             for i, var_name in enumerate(variable_names):
                 self._variable[var_name] = self._nvar + i
             indptr = list(self._indptr)
             indptr.extend(
-                [
-                    self.n_dof + i * nb_new_dof
-                    for i in range(1, n_new_variables + 1)
-                ]
+                [self.n_dof + i * nb_new_dof for i in range(1, n_new_variables + 1)]
             )
             self._indptr = np.array(indptr)
 

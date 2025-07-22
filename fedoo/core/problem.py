@@ -114,7 +114,7 @@ class Problem(ProblemBase):
                 self.n_node_dof
                 + self._global_dof._indptr[[global_var_rank, global_var_rank + 1]]
             )
-            return vector[start: stop]
+            return vector[start:stop]
         elif name in self._global_dof._vector:
             global_vector_list = self._global_dof._vector[name]
             n_comp = len(global_vector_list)
@@ -123,7 +123,7 @@ class Problem(ProblemBase):
                 self.n_node_dof
                 + self._global_dof._indptr[[global_var_rank, global_var_rank + n_comp]]
             )
-            return vector[start: stop].reshape(n_comp, -1)
+            return vector[start:stop].reshape(n_comp, -1)
         else:
             raise ValueError(f"Variable '{name}' doesn't exist.")
 
@@ -293,7 +293,7 @@ class Problem(ProblemBase):
             # Treating the case where MPC includes some blocked nodes as master nodes
             # Compute M + M@M - require if slave dof in one mpc is master in another
             if self.enable_mpc_coupling:
-                M = (M+M@M).tocoo()
+                M = (M + M @ M).tocoo()
             # update Xbc with the eliminated dof that may be used as slave dof in mpc
             self._Xbc = self._Xbc + M @ self._Xbc
 

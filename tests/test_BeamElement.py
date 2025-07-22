@@ -107,5 +107,6 @@ def test_beam_element():
         # print('Analytical deflection: ', sol)
         # print(U[-1][1])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     pytest.main([__file__])

@@ -192,7 +192,7 @@ def _get_results(
 
         elif res == "Fext":
             # Only node dof
-            data = pb.get_ext_forces()[:pb.n_node_dof].reshape(pb.space.nvar, -1)
+            data = pb.get_ext_forces()[: pb.n_node_dof].reshape(pb.space.nvar, -1)
             data_type = "Node"
 
         elif res in ["PK2", "Kirchhoff", "Strain", "Stress"]:
@@ -226,7 +226,7 @@ def _get_results(
                 else:
                     data_type = "GaussPoint"
 
-            if hasattr(data, 'asarray'):
+            if hasattr(data, "asarray"):
                 data = data.asarray()
             else:
                 data = np.array(data)
@@ -305,7 +305,7 @@ def _get_results(
             if isinstance(data, list):
                 # try to convert into array
                 try:
-                    if hasattr(data, 'asarray'):
+                    if hasattr(data, "asarray"):
                         data = data.asarray()
                     else:
                         data = np.array(data)
@@ -332,7 +332,11 @@ def _get_results(
             data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
             data_type = "GaussPoint"  # or 'Element' ?
 
-        if (output_type is not None) and (output_type != "Scalar") and (output_type != data_type):
+        if (
+            (output_type is not None)
+            and (output_type != "Scalar")
+            and (output_type != data_type)
+        ):
             data = assemb.convert_data(data, data_type, output_type)
             data_type = output_type
 

@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation
 fd.ModelingSpace("3D")
 mesh = fd.Mesh.read("../../util/meshes/gyroid_per.vtk")
 # mesh = fd.mesh.box_mesh(2,2,2)
-assert (mesh.is_periodic(tol=1e-3))
+assert mesh.is_periodic(tol=1e-3)
 
 # Material definition
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
@@ -56,12 +56,12 @@ pb.solve()
 ###############################################################################
 # print the macroscopic strain tensor and stress tensor
 
-res = pb.get_results(assembly, ['LocalMeanStrain', 'MeanStrain', 'Stress', 'Disp'])
-res.plot('Stress', 'XX')
+res = pb.get_results(assembly, ["LocalMeanStrain", "MeanStrain", "Stress", "Disp"])
+res.plot("Stress", "XX")
 
 np.set_printoptions(3)
 
-mean_strain = res['LocalMeanStrain'].ravel()
+mean_strain = res["LocalMeanStrain"].ravel()
 # or pb.get_dof_solution("LocalMeanStrain")
 print(
     "Strain tensor in local frame:\n",
@@ -75,7 +75,7 @@ print(
     " \n\n",
 )
 
-mean_strain = res['MeanStrain'].ravel()
+mean_strain = res["MeanStrain"].ravel()
 # or pb.get_dof_solution("MeanStrain")
 print(
     "Strain tensor in global frame:\n",
@@ -118,7 +118,7 @@ print(
 
 # Compute the mean stress tensor by integration over the domain
 # The difference with the previous method is due to numerical errors
-mean_stress = [1 / volume * mesh.integrate_field(res['Stress'][i]) for i in range(6)]
+mean_stress = [1 / volume * mesh.integrate_field(res["Stress"][i]) for i in range(6)]
 print(
     "Stress tensor using integration:\n",
     np.array(

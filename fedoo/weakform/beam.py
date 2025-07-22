@@ -218,9 +218,8 @@ class BeamEquilibrium(WeakFormBase):
 
                     # update rigid rotation local_frame (rotmatrix from global frame)
                     rigid_rotmat_trial = (
-                        assembly.sv["RigidRotationMat"] @
-                        Rotation.from_rotvec(delta_rotvec)
-                        .as_matrix()
+                        assembly.sv["RigidRotationMat"]
+                        @ Rotation.from_rotvec(delta_rotvec).as_matrix()
                     )
 
                     # get rigid rotation by projection (X axis is the poutre normal)
@@ -297,16 +296,26 @@ class BeamEquilibrium(WeakFormBase):
                             * assembly.mesh.n_nodes
                         ] = (Rotation.from_matrix(nodes_rotmat).as_rotvec().T).ravel()
                     else:
-                        nodes_rotmat_from_U = Rotation.from_rotvec(pb._U[
-                            rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            * assembly.mesh.n_nodes
-                        ].reshape(3,-1).T).as_matrix()
+                        nodes_rotmat_from_U = Rotation.from_rotvec(
+                            pb._U[
+                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                                * assembly.mesh.n_nodes
+                            ]
+                            .reshape(3, -1)
+                            .T
+                        ).as_matrix()
 
                         # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
                         pb._dU[
                             rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             * assembly.mesh.n_nodes
-                        ] = Rotation.from_matrix(nodes_rotmat @ nodes_rotmat_from_U.transpose(0,2,1)).as_rotvec().T.ravel()
+                        ] = (
+                            Rotation.from_matrix(
+                                nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
+                            )
+                            .as_rotvec()
+                            .T.ravel()
+                        )
 
                         # Or equivalent bug sigularité if angle > pi
                         # pb._dU[
@@ -330,14 +339,16 @@ class BeamEquilibrium(WeakFormBase):
                                 )
 
                 # compute the beam strain at gausspoint
-                assembly.sv["BeamStrain"] = _BeamComponentList([
-                    0
-                    if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
-                    else assembly.current.get_gp_results(
-                        op, dof_local, use_local_dof=True
-                    )
-                    for i, op in enumerate(op_beam_strain)
-                ])
+                assembly.sv["BeamStrain"] = _BeamComponentList(
+                    [
+                        0
+                        if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
+                        else assembly.current.get_gp_results(
+                            op, dof_local, use_local_dof=True
+                        )
+                        for i, op in enumerate(op_beam_strain)
+                    ]
+                )
 
             else:
                 assembly.sv["BeamStrain"] = [
@@ -349,9 +360,9 @@ class BeamEquilibrium(WeakFormBase):
                     for i, op in enumerate(op_beam_strain)
                 ]
 
-            assembly.sv["BeamStress"] = _BeamComponentList([
-                Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)
-            ])
+            assembly.sv["BeamStress"] = _BeamComponentList(
+                [Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)]
+            )
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
@@ -404,7 +415,9 @@ class BeamEquilibrium(WeakFormBase):
                 dv_dx = self.space.derivative("DispY", "X")
                 diff_op = diff_op + dv_dx.virtual * dv_dx * N
                 if self.space.ndim == 3:
-                    dw_dx = self.space.derivative("DispZ", "X") #self.space.derivative("DispY", "Y")
+                    dw_dx = self.space.derivative(
+                        "DispZ", "X"
+                    )  # self.space.derivative("DispY", "Y")
                     diff_op = diff_op + dw_dx.virtual * dw_dx * N
                 # axial geometrical generally not significant
                 # uncomment the following line to activate
@@ -417,6 +430,7 @@ class BeamEquilibrium(WeakFormBase):
         eps = self.space.op_beam_strain()
         Ke = self.properties.get_beam_rigidity()
         return [eps[i] * Ke[i] for i in range(6)]
+
 
 class _BeamComponentList(list):
     def asarray(self):

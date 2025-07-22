@@ -386,7 +386,7 @@ class PeriodicBC(BCBase):
                         var_cd_load[0][1],
                         var_cd_load[0][2],
                         var_cd_load[1][2],
-                    ],                    
+                    ],
                     [
                         1.0,
                         -(d**2),
@@ -2679,7 +2679,9 @@ class PeriodicBC(BCBase):
                 node_cd = np.full((2, 2, 1), dof_indice)
             elif self.dim == 3:
                 dof_indice = problem.add_global_dof(
-                    ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"], 1, "MeanStrain",
+                    ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"],
+                    1,
+                    "MeanStrain",
                 )
                 var_cd = [
                     ["E_xx", "E_xy", "E_xz"],
@@ -2705,9 +2707,15 @@ class PeriodicBC(BCBase):
             elif self.dim == 3:
                 dof_indice = problem.add_global_dof(
                     [
-                        "DU_xx", "DU_xy", "DU_xz",
-                        "DU_yx", "DU_yy", "DU_yz",
-                        "DU_zx", "DU_zy", "DU_zz",
+                        "DU_xx",
+                        "DU_xy",
+                        "DU_xz",
+                        "DU_yx",
+                        "DU_yy",
+                        "DU_yz",
+                        "DU_zx",
+                        "DU_zy",
+                        "DU_zz",
                     ],
                     1,
                     "MeanGradDisp",
@@ -2731,7 +2739,9 @@ class PeriodicBC(BCBase):
 
             if self.periodicity_type == "small_strain":
                 dof_indice = virtual_dof_loading = problem.add_global_dof(
-                    ["E_11", "E_22", "E_33", "E_12", "E_13", "E_23"], 1, "LocalMeanStrain"
+                    ["E_11", "E_22", "E_33", "E_12", "E_13", "E_23"],
+                    1,
+                    "LocalMeanStrain",
                 )
                 var_cd_loading = [
                     ["E_11", "E_12", "E_13"],
@@ -2743,9 +2753,15 @@ class PeriodicBC(BCBase):
             if self.periodicity_type == "fintie_strain":
                 dof_indice = problem.add_global_dof(
                     [
-                        "DU_11", "DU_12", "DU_13",
-                        "DU_21", "DU_22", "DU_23",
-                        "DU_31", "DU_32", "DU_33",
+                        "DU_11",
+                        "DU_12",
+                        "DU_13",
+                        "DU_21",
+                        "DU_22",
+                        "DU_23",
+                        "DU_31",
+                        "DU_32",
+                        "DU_33",
                     ],
                     1,
                     "LocalMeanGradDisp",
