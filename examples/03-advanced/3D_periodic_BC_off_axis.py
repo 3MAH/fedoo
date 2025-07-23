@@ -56,7 +56,17 @@ pb.solve()
 ###############################################################################
 # print the macroscopic strain tensor and stress tensor
 
-res = pb.get_results(assembly, ["LocalMeanStrain", "MeanStrain", "Stress", "Disp"])
+res = pb.get_results(
+    assembly,
+    [
+        "LocalMeanStrain",
+        "MeanStrain",
+        "Stress",
+        "Disp",
+        "Fext(MeanStrain)",  # dual variable associated to strain is: stress * volume
+        "Fext(LocalMeanStrain)",
+    ],
+)
 res.plot("Stress", "XX")
 
 np.set_printoptions(3)
@@ -90,7 +100,8 @@ print(
 )
 
 volume = mesh.bounding_box.volume  # total surface of the domain = volume in 2d
-mean_stress = pb.get_ext_forces("LocalMeanStrain").ravel() / volume
+mean_stress = res["Fext(LocalMeanStrain)"].ravel() / volume
+# or mean_stress = pb.get_ext_forces("LocalMeanStrain").ravel() / volume
 print(
     "Stress tensor in local frame:\n",
     np.array(
@@ -103,7 +114,8 @@ print(
     " \n\n",
 )
 
-mean_stress = pb.get_ext_forces("MeanStrain").ravel() / volume
+mean_stress = res["Fext(MeanStrain)"].ravel() / volume
+# or mean_stress = pb.get_ext_forces("MeanStrain").ravel() / volume
 print(
     "Stress tensor in global frame:\n",
     np.array(

@@ -69,7 +69,9 @@ class Problem(ProblemBase):
         self._problem_output = _ProblemOutput()
 
         # Option to allow mpc of dof involved in other mpc. False by default
-        self.enable_mpc_coupling = False
+        # Set it to True may avoid unusefull computation time. Keep it to True
+        # by default for safety.
+        self.enable_mpc_coupling = True
 
     def _new_vect_dof(
         self,

@@ -68,57 +68,6 @@ _available_format = [
     "xlsx",
 ]
 
-_label_dict = {
-    "pkii": "PK2",
-    "pk2": "PK2",
-    "kirchoff": "Kirchhoff",
-    "kirchhoff": "Kirchhoff",
-    "cauchy": "Stress",
-    "pkii_vm": "PK2_vm",
-    "pk2_vm": "PK2_vm",
-    "kirchoff_vm": "Kirchhoff_vm",
-    "kirchhoff_vm": "Kirchhoff_vm",
-    "cauchy_vm": "Stress_vm",
-    "pkii_pc": "PK2_pc",
-    "pk2_pc": "PK2_pc",
-    "kirchoff_pc": "Kirchhoff_pc",
-    "kirchhoff_pc": "Kirchhoff_pc",
-    "cauchy_pc": "Stress_pc",
-    "stress_pc": "Stress_pc",
-    "pkii_pdir1": "PK2_pdir1",
-    "pk2_pdir1": "PK2_pdir1",
-    "kirchoff_pdir1": "Kirchhoff_pdir1",
-    "kirchhoff_pdir1": "Kirchhoff_pdir1",
-    "cauchy_pdir1": "Sress_pdir1",
-    "stress_pdir1": "Stress_pdir1",
-    "pkii_pdir2": "PK2_pdir2",
-    "pk2_pdir2": "PK2_pdir2",
-    "kirchoff_pdir2": "Kirchhoff_pdir2",
-    "kirchhoff_pdir2": "Kirchhoff_pdir2",
-    "cauchy_pdir2": "Stress_pdir2",
-    "stress_pdir2": "Stress_pdir2",
-    "pkii_pdir3": "PK2_pdir3",
-    "pk2_pdir3": "PK2_pdir3",
-    "kirchoff_pdir3": "Kirchhoff_pdir3",
-    "kirchhoff_pdir3": "Kirchhoff_pdir3",
-    "cauchy_pdir3": "Stress_pdir1",
-    "stress_pdir3": "Stress_pdir3",
-    "disp": "Disp",
-    "rot": "Rot",
-    "temp": "Temp",
-    "strain": "Strain",
-    "statev": "Statev",
-    "stress": "Stress",
-    "stress_vm": "Stress_vm",
-    "fext": "Fext",
-    "wm": "Wm",
-    "fint": "Fint",
-    "fint_global": "Fint_global",
-    "beamstrain": "BeamStrain",
-    "beamstress": "BeamStress",
-    "dispgradient": "DispGradient",
-}
-
 
 def _get_results(
     pb,
@@ -147,19 +96,18 @@ def _get_results(
     if isinstance(assemb, str):
         assemb = AssemblyBase.get_all()[assemb]
 
-    for i, res in enumerate(output_list):
-        # output_list[i] = _label_dict[res.lower()] #to allow full lower case str as output
-        if (
-            res not in _available_output
-            and res not in assemb.space.list_variables()
-            and res not in assemb.space.list_vectors()
-            and res not in assemb.sv
-            and res not in assemb.sv_component
-            and res not in pb._global_dof._variable
-            and res not in pb._global_dof._vector
-        ):
-            print("List of available output: ", _available_output)
-            raise NameError(res, "' doens't match to any available output")
+    # for i, res in enumerate(output_list):
+        # if (
+        #     res not in _available_output
+        #     and res not in assemb.space.list_variables()
+        #     and res not in assemb.space.list_vectors()
+        #     and res not in assemb.sv
+        #     and res not in assemb.sv_component
+        #     and res not in pb._global_dof._variable
+        #     and res not in pb._global_dof._vector
+        # ):
+        #     print("List of available output: ", _available_output)
+        #     raise NameError(res, "' doens't match to any available output")
 
     data_sav = {}  # dict to keep data in memory that may be used more that one time
 
@@ -194,6 +142,14 @@ def _get_results(
             # Only node dof
             data = pb.get_ext_forces()[: pb.n_node_dof].reshape(pb.space.nvar, -1)
             data_type = "Node"
+
+        elif res[:5] == "Fext(" and res[-1] == ")":
+            var = res[5:-1]
+            data = pb.get_ext_forces(var)
+            if data.shape[-1] == assemb.mesh.n_nodes:
+                data_type = "Node"  # if var is a node field variable (or vector)
+            else:
+                data_type = "Scalar"  # if var is global_dof variable
 
         elif res in ["PK2", "Kirchhoff", "Strain", "Stress"]:
             if res in data_sav:
@@ -332,6 +288,9 @@ def _get_results(
             data = assemb.get_int_forces(pb.get_dof_solution(), "global").T
             data_type = "GaussPoint"  # or 'Element' ?
 
+        else:
+            raise NameError(res, "' doens't match to any available output")
+
         if (
             (output_type is not None)
             and (output_type != "Scalar")
@@ -420,18 +379,7 @@ class _ProblemOutput:
             )
 
         for i, res in enumerate(output_list):
-            # output_list[i] = _label_dict[
-            #     res.lower()
-            # ]  # to allow full lower case str as output
             output_list[i] = res
-            # if res not in _available_output:
-            #     print(
-            #         "WARNING: '",
-            #         res,
-            #         "' doens't match to any available output",
-            #     )
-            #     print("Specified output ignored")
-            #     print("List of available output: ", _available_output)
 
         if isinstance(assemb, str):
             assemb = AssemblyBase.get_all()[assemb]

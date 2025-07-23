@@ -9,33 +9,33 @@ class RigidTie(BCBase):
     """Constraint that eliminate dof assuming a rigid body tie between nodes.
 
     Create an object that defines a rigid tie coupling between some nodes using
-    several multi-points constraints. Some constraint drivers (cd) dof  are
-    used to define rigid body displacement and rotation. The center of rotation
-    is assumed to be at the position of the first node given in the constraint
-    driver nodes (node_cd[0]). The dof associated to a contraint driver is
-    difined by the node indice (defined in node_cd) and the associated variable
-    (defined in var_vd) with the following order:
-    [DispX, DispY, DispZ, RotX, RotY, RotZ] where:
+    several multi-points constraints. Some constraint drivers (cd) dof are
+    used to define rigid body displacement and rotation. By default, the center of
+    rotation is located at the center of the bounding box defined by all nodes
+    tied together. The rotation center move with the rigid displacement.
+    RigidTie constraint add 6 global_dof to the problem:
+    "RigidDispX", "RigidDispY", "RigidDispZ", "RigidRotX", "RigidRotY", "RigidRotZ"
+    and two global_dot vectors:
 
-    * DispX, DispY and DispZ are the displacement of the reference node of the
-      rigid group (reference node = node_cd[0])
-    * RotX, RotY and RotZ are the rigid rotation around the 3 axes with the
-      reference node being the center of rotation. The rotation axis are
-      attached to the solid.
+    * "RigidDisp" = ["RigidDispX", "RigidDispY", "RigidDispZ"] for rigid displacement
+    * "RigidRot" = ["RigidRotX", "RigidRotY", "RigidRotZ"] for rigid rotation
+
+    If several RigidTime constraints are used with the same problem, all the previous
+    variables will contains several dof, the indice of the dof being associated to
+    order in which the constraint has been added.
+    For instance, pb.global_dof['RigidDispX'][0] will be associated to the first
+    added RigidTie and dof['RigidDispX'][1] to the second one.
 
 
     Parameters
     ----------
-    list_nodes : list (int) or 1d np.array
-        list of nodes that will be eliminated considering a rigid body tie.
-    node_cd : list of int
-        Nodes used as constraint drivers for each rigid displacement and
-        rotation. The associated dof used as contraint drivers are defined in
-        var_cd. len(node_cd) should be 6 because 6 constraint driver dof are
-        required.
-    var_cd : list of str.
-        Variables used as constraint drivers.
-        The len of the list should be the same as node_cd (ie 6).
+    list_nodes: list (int) or 1d np.array
+        List of nodes that will be eliminated considering a rigid body tie.
+    center: int of np.array[float] with shape = (3), optional
+        If center is an int, the rotation center will be initialized at the coordinates
+        of the corresponding node in the mesh. If center is an array (or list, ...)
+        it contains the initial coordinates of the rotation center. By default, the
+        center is set at the midle of the rigid sets.
     name : str, optional
         Name of the created boundary condition. The default is "Rigid Tie".
 
@@ -56,7 +56,8 @@ class RigidTie(BCBase):
     Notes
     -----
     * The node given in list_nodes are eliminated from the system (slave nodes)
-      and can't be used in another mpc.
+      and can't be used in other boundary conditions. The boundary conditions should
+      be enforce using the added global dof.
     * The rigid coupling is highly non-linear and the multi-point constraints
       are modified at each iteration.
     * Once created the RigidTie object needs to be associated to the problem
@@ -72,14 +73,10 @@ class RigidTie(BCBase):
 
         mesh = fd.mesh.box_mesh()
 
-        #add nodes not associated to any element for constraint driver
-        node_cd = mesh.add_virtual_nodes(2)
-        var_cd = ['DispX', 'DispY', 'DispZ', 'DispX', 'DispY', 'DispZ']
-
         left_face = mesh.find_nodes('X', mesh.bounding_box.xmin)
         right_face = mesh.find_nodes('X', mesh.bounding_box.xmax)
 
-        rigid_tie = fd.constraint.RigidTie(right_face, node_cd, var_cd)
+        rigid_tie = fd.constraint.RigidTie(right_face)
     """
 
     def __init__(self, list_nodes, center=None, name="Rigid Tie"):
@@ -106,6 +103,9 @@ class RigidTie(BCBase):
         elif np.isscalar(self.center):
             # initialize the center at a position of a node
             self.center = problem.mesh.nodes[self.center]
+        else:
+            self.center = np.asarray(self.center)
+
         dof_indice_disp = problem.add_global_dof(
             ["RigidDispX", "RigidDispY", "RigidDispZ"], 1, "RidigDisp"
         )
