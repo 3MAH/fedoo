@@ -97,17 +97,17 @@ def _get_results(
         assemb = AssemblyBase.get_all()[assemb]
 
     # for i, res in enumerate(output_list):
-        # if (
-        #     res not in _available_output
-        #     and res not in assemb.space.list_variables()
-        #     and res not in assemb.space.list_vectors()
-        #     and res not in assemb.sv
-        #     and res not in assemb.sv_component
-        #     and res not in pb._global_dof._variable
-        #     and res not in pb._global_dof._vector
-        # ):
-        #     print("List of available output: ", _available_output)
-        #     raise NameError(res, "' doens't match to any available output")
+    # if (
+    #     res not in _available_output
+    #     and res not in assemb.space.list_variables()
+    #     and res not in assemb.space.list_vectors()
+    #     and res not in assemb.sv
+    #     and res not in assemb.sv_component
+    #     and res not in pb._global_dof._variable
+    #     and res not in pb._global_dof._vector
+    # ):
+    #     print("List of available output: ", _available_output)
+    #     raise NameError(res, "' doens't match to any available output")
 
     data_sav = {}  # dict to keep data in memory that may be used more that one time
 
