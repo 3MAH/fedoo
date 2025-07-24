@@ -185,7 +185,7 @@ class Problem(ProblemBase):
         save_mesh : bool, default = True
             If True the mesh is saved.
         """
-        if output_list is None and hasattr(self, 'assembly'):
+        if output_list is None and hasattr(self, "assembly"):
             output_list = assembly
             assembly = self.assembly
 
@@ -205,8 +205,9 @@ class Problem(ProblemBase):
         self._problem_output.save_results(self, iterOutput)
 
     def get_results(
-        self, *args, **kargs
-
+        self,
+        *args,
+        **kargs,
         # self, assemb, output_list, output_type=None, position=1, element_set=None
     ):
         """Extract some results from the current problem.
@@ -238,21 +239,20 @@ class Problem(ProblemBase):
             If specified, only the results restriced to the set of elements
             are extracted.
         """
-        if len(args)>0 and (isinstance(args[0], AssemblyBase) or (
-            isinstance(args[0], str) and args[0] in AssemblyBase.get_all())
+        if len(args) > 0 and (
+            isinstance(args[0], AssemblyBase)
+            or (isinstance(args[0], str) and args[0] in AssemblyBase.get_all())
         ):
             assemb = args[0]
-            args =  args[1:]
-        elif 'assemb' in kargs:
-            assemb = kargs.pop('assemb')
-        elif hasattr(self, 'assembly'):
+            args = args[1:]
+        elif "assemb" in kargs:
+            assemb = kargs.pop("assemb")
+        elif hasattr(self, "assembly"):
             assemb = self.assembly
         else:
-            raise TypeError('Wrong argument type.')
+            raise TypeError("Wrong argument type.")
 
-        return _get_results(
-            self, assemb, *args, **kargs
-        )
+        return _get_results(self, assemb, *args, **kargs)
 
     def set_A(self, A):
         self.__A = A

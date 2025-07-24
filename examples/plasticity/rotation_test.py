@@ -69,9 +69,7 @@ nodes_top = mesh.find_nodes("Y", 1)
 
 node_center = mesh.nearest_node([0.5, 0.5, 0.5])
 
-assemb = fd.Assembly.create(
-    wf, meshname, "hex8", name="Assembling", n_elm_gp=8
-)
+assemb = fd.Assembly.create(wf, meshname, "hex8", name="Assembling", n_elm_gp=8)
 
 pb = fd.problem.NonLinear("Assembling")
 
@@ -79,9 +77,7 @@ pb = fd.problem.NonLinear("Assembling")
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
-res = pb.add_output(
-    "results/rot_test", ["Disp", "Stress", "Strain", "Statev", "Wm"]
-)
+res = pb.add_output("results/rot_test", ["Disp", "Stress", "Strain", "Statev", "Wm"])
 
 # Add periodic BC
 bc_periodic = fd.constraint.PeriodicBC("finite_strain", dim=3)
@@ -129,12 +125,14 @@ pb.nlsolve(dt=0.05, tmax=1, update_dt=False, print_info=1, interval_output=0.05)
 
 ### Show results with slider
 pl = pv.Plotter()
+
+
 def change_iter(value):
     res.load(int(value))
     pl.clear_actors()
     res.plot(
         "Stress",
-        'XX',
+        "XX",
         plotter=pl,
         title="",
         # title_size=10,
@@ -146,15 +144,10 @@ def change_iter(value):
     pl.hide_axes()
     pl.write_frame()
 
+
 slider = pl.add_text_slider_widget(
-
     change_iter,
-
     [str(i) for i in range(20)],
-
-    style = 'modern',
-
+    style="modern",
 )
 pl.show()
-
-

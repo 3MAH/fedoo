@@ -379,7 +379,7 @@ class Mesh(MeshBase):
     # warning , this method must be static
     @staticmethod
     def stack(mesh1: "Mesh", mesh2: "Mesh", name: str = "") -> "Mesh":
-        """Add two mesh together to make a new mesh. 
+        """Add two mesh together to make a new mesh.
 
         *Static method* - Make the spatial stack of two mesh objects which have the
         same element shape. This function doesn't merge coindicent Nodes.
