@@ -4,7 +4,7 @@ import scipy.sparse as sparse
 import scipy.sparse.linalg
 
 from fedoo.core.assembly import Assembly
-from fedoo.core.base import ProblemBase
+from fedoo.core.base import ProblemBase, AssemblyBase
 from fedoo.core.boundary_conditions import BoundaryCondition, MPC
 from fedoo.core.output import _ProblemOutput, _get_results
 from fedoo.core.dataset import DataSet
@@ -132,8 +132,8 @@ class Problem(ProblemBase):
     def add_output(
         self,
         filename,
-        assemblyname,
-        output_list,
+        assembly,
+        output_list=None,
         output_type=None,
         file_format="fdz",
         compressed=False,
@@ -141,9 +141,57 @@ class Problem(ProblemBase):
         element_set=None,
         save_mesh=True,
     ):
+        """Add output requirement for automatic saving during nlsolve.
+
+        optionnaly, the add_output can be used without specifying the assembly with the
+        arguments:
+
+        >>> problem.add_output(filename, output_list, **kargs)
+
+        In this case, the Assembly defined in problem.assembly will be used.
+
+        Parameters
+        ----------
+        filename: str
+            name of the file used to save data to disk.
+
+        assembly : Assembly, optional
+            Assembly object used to extract the results.
+
+        output_list : list[str]
+            list of result labels.
+
+        output_type : 'Node', 'Element' or 'GaussPoint', optional
+            Type of results. If None, the type of output is not converted.
+            Scalar results are not concerned by this parameter.
+
+        file_format : "fdz", "vtk", "msh", "npz", "csv", "xlsx"
+            file format used to save the results. The default file format
+            and recommanding one is "fdz".
+
+        compressed : bool, default = False
+            if True, the fdz data are compressed.
+
+        position : float in [-1, 1], optional
+            Normalized position in the section for shell output.
+            For instance, 1 is top face define by the local z direction,
+            -1 is the bottom face and 0 is the midplane
+
+        element_set : str or list[int], optional
+            set of element indices or name of an element set associated to the mesh.
+            If specified, only the results restriced to the set of elements
+            are extracted.
+
+        save_mesh : bool, default = True
+            If True the mesh is saved.
+        """
+        if output_list is None and hasattr(self, 'assembly'):
+            output_list = assembly
+            assembly = self.assembly
+
         return self._problem_output.add_output(
             filename,
-            assemblyname,
+            assembly,
             output_list,
             output_type,
             file_format,
@@ -157,10 +205,53 @@ class Problem(ProblemBase):
         self._problem_output.save_results(self, iterOutput)
 
     def get_results(
-        self, assemb, output_list, output_type=None, position=1, element_set=None
+        self, *args, **kargs
+
+        # self, assemb, output_list, output_type=None, position=1, element_set=None
     ):
+        """Extract some results from the current problem.
+
+        Two list of arguments are possible:
+
+        * get_results(assemb, output_list, output_type, position, element_set)
+        * get_results(output_list, output_type, position, element_set)
+
+        Parameters
+        ----------
+        assemb : Assembly, optional
+            Assembly object used to extract the results.
+
+        output_list : list[str]
+            list of result labels.
+
+        output_type : 'Node', 'Element' or 'GaussPoint', optional
+            Type of results. If None, the type of output is not converted.
+            Scalar results are not concerned by this parameter.
+
+        position : float in [-1, 1], optional
+            Normalized position in the section for shell output.
+            For instance, 1 is top face define by the local z direction,
+            -1 is the bottom face and 0 is the midplane
+
+        element_set : str or list[int], optional
+            set of element indices or name of an element set associated to the mesh.
+            If specified, only the results restriced to the set of elements
+            are extracted.
+        """
+        if len(args)>0 and (isinstance(args[0], AssemblyBase) or (
+            isinstance(args[0], str) and args[0] in AssemblyBase.get_all())
+        ):
+            assemb = args[0]
+            args =  args[1:]
+        elif 'assemb' in kargs:
+            assemb = kargs.pop('assemb')
+        elif hasattr(self, 'assembly'):
+            assemb = self.assembly
+        else:
+            raise TypeError('Wrong argument type.')
+
         return _get_results(
-            self, assemb, output_list, output_type, position, element_set
+            self, assemb, *args, **kargs
         )
 
     def set_A(self, A):

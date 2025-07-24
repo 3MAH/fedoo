@@ -213,32 +213,32 @@ class DataSet:
             * If None: use the background plotter if available, or pyvista
               plotter if not.
 
-        screenshot: str, optional
+        screenshot : str, optional
             If defined, indicated a filename to save the plot.
 
-        azimuth: float, default = 30.
+        azimuth : float, default = 30.
             Azimuth angle of the camera around the scene
             (not used for 2D scene)
 
-        elevation: float, default = 15.
+        elevation : float, default = 15.
             Elevaltion angle of the camera around the scene
             (not used for 2D scene).
 
-        roll: float, default = 0
+        roll : float, default = 0
             Roll angle of the camera. The default state (roll angle = 0.) is
             set with the y direction on the up.
 
-        title: str | None, default = None
+        title : str | None, default = None
             Title of the plot. By default the title is field name
             and the component is printed.
 
-        title_size: float, default = 18
+        title_size : float, default = 18
             Size of the title
 
-        window_size: tuple, default = (1024, 768)
+        window_size : tuple, default = (1024, 768)
             Window size in pixels.
 
-        multiplot: bool | None, default = None
+        multiplot : bool | None, default = None
             If True, the pyvista mesh is copied to force a separated scalar
             bar. This is usefull when ploting several figures at the same time.
             If multiplot si False, the same scalarbar will be applied to
@@ -247,7 +247,7 @@ class DataSet:
             subplot.
 
 
-        **kwargs: dict
+        **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
         """
@@ -598,7 +598,7 @@ class DataSet:
         save_mesh : bool, default = False
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
             For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
-        compressed: bool, default = False
+        compressed : bool, default = False
             If True, the file is compressed if available (only for npz and fdz files)
         """
         ext = os.path.splitext(filename)[1]

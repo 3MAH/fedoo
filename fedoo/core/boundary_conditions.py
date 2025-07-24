@@ -162,7 +162,7 @@ class ListBC(BCBase):
         Add a boundary condition to the ListBC object, and then to the associated problem
         if there is one.
 
-        Two possible use:
+        Three possible uses:
 
         * ListBC.add(bc), where bc is any BC object.
 
