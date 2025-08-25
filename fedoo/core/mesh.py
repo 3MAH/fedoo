@@ -40,9 +40,11 @@ class Mesh(MeshBase):
     elements: numpy array of int
         Elements table. elements[i] define the nodes associated to the ith element.
     elm_type: str
-        Type of the element. The type of the element should be coherent with the shape of elements.
+        Type of the element. The type of the element should be coherent with the shape
+        of elements.
     ndim: int, optional:
-        Dimension of the mesh. By default, ndim is deduced from the nodes coordinates using ndim = nodes.shape[1]
+        Dimension of the mesh. By default, ndim is deduced from the nodes coordinates
+        using ndim = nodes.shape[1]
     name: str, optional
         The name of the mesh
 
@@ -73,7 +75,9 @@ class Mesh(MeshBase):
         self.elements = elements  # element table
         """List of elements: elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
-        """Type of the element (str). The type of the element should be coherent with the shape of elements."""
+        """Type of the element (str).
+
+        The type of the element should be coherent with the shape elements."""
 
         if node_sets is None:
             node_sets = {}
@@ -146,7 +150,8 @@ class Mesh(MeshBase):
         ----------
         pvmesh: pyvista mesh
         name : str
-            name of the new created Mesh. If specitified, this Mesh will be added in the dict containing all the loaded Mesh (Mesh.get_all()).
+            name of the new created Mesh. If specitified, this Mesh will be added in
+            the dict containing all the loaded Mesh (Mesh.get_all()).
             By default, the  Mesh is not added to the list.
 
         Notes
@@ -307,14 +312,12 @@ class Mesh(MeshBase):
             If the nodes coorinates ("nodes") is not specified, new nodes are created at
             the center of the bounding box.
         nodes: np.ndarray
-            The coordinates of the new nodes. If nb_nodes is not specified, the number of nodes is deduced from
+            The coordinates of the new nodes. If nb_nodes is not specified, the number
+            of nodes is deduced from
             the number of line.
-            If only one node position is given (ie len(nodes) == ndim) and nb_nodes is given,
-            several nodes are created at the same position.
+            If only one node position is given (ie len(nodes) == ndim) and nb_nodes is
+            given, several nodes are created at the same position.
         """
-        # if self._n_physical_nodes is not None:
-        #     print('WARNING: the new nodes will be considered are virtual nodes. To avoid this behavior, consider adding virtual nodes at the end.')
-
         n_nodes_old = self.n_nodes
 
         if len(args) == 0:
@@ -376,9 +379,10 @@ class Mesh(MeshBase):
     # warning , this method must be static
     @staticmethod
     def stack(mesh1: "Mesh", mesh2: "Mesh", name: str = "") -> "Mesh":
-        """
-        *Static method* - Make the spatial stack of two mesh objects which have the same element shape.
-        This function doesn't merge coindicent Nodes.
+        """Add two mesh together to make a new mesh.
+
+        *Static method* - Make the spatial stack of two mesh objects which have the
+        same element shape. This function doesn't merge coindicent Nodes.
         For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
         on the resulting Mesh.
 

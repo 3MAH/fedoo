@@ -8,18 +8,17 @@ class _LinearBase:
         if isinstance(assembly, str):
             assembly = Assembly.get_all()[assembly]
 
+        super().__init__(mesh=assembly.mesh, name=name)
+
         self.nlgeom = False
         assembly.initialize(self)
-        A = assembly.get_global_matrix()
-        B = 0
-        D = assembly.get_global_vector()
+        self.time = self.dtime = 0
+        # self.set_A(assembly.get_global_matrix())
+        # self.set_D(assembly.get_global_vector())
         self.__assembly = assembly
-
-        super().__init__(A, B, D, assembly.mesh, name)
 
     def get_disp(self, name="all"):
         """Return the displacement components.
-
 
         Parameters
         ----------
@@ -37,7 +36,6 @@ class _LinearBase:
 
     def get_rot(self, name="all"):
         """Return the rotation components.
-
 
         Parameters
         ----------
@@ -78,6 +76,8 @@ class _LinearBase:
         # Solve and update weakform (compute stress for instance) without updating global matrix
         # to avoid update weakform, use updateWF = True
         updateWF = kargs.pop("updateWF", True)
+        self.set_A(self.__assembly.get_global_matrix())
+        self.set_D(self.__assembly.get_global_vector())
         self.init_bc_start_value()
         self.apply_boundary_conditions()
         if np.isscalar(self.get_X()) and self.get_X() == 0:

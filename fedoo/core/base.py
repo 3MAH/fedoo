@@ -7,6 +7,7 @@ from fedoo.core.modelingspace import ModelingSpace
 
 import scipy.sparse.linalg
 import scipy.sparse as sparse
+import numpy as np
 import warnings
 
 # try to find the best available direct solver
@@ -293,6 +294,8 @@ class ProblemBase:
             space = ModelingSpace.get_active()
         self.__space = space
 
+        self._global_dof = _GlobalDof()
+
         self.set_solver()  # initialize solver properties
 
         self.make_active()
@@ -329,6 +332,46 @@ class ProblemBase:
     def get_active():
         """Return the active Problem."""
         return ProblemBase.active
+
+    def add_global_dof(
+        self,
+        variable_names: str | list[str],
+        nb_new_dof: int = 1,
+        vector_name: str | None = None,
+    ):
+        """Add global degrees of freedom to the problem.
+
+        The global dof are global in the sense that they are not associated
+        to a node of a mesh as usual finite element dof. They are usefull to
+        define some constraints, like periodic boundary conditions.
+
+        Parameters
+        ----------
+        variable_names: str, list[str]
+            Name of the global variable (ie not associated to nodes).
+            Name is required to catch the results using the get_results or
+            get_ext_forces method.
+        nb_new_dof: int, default=1
+            Number of new global dof for each new variable
+        vector_name: str, optional
+            If a vector name is given, add a vector that allow to catch
+            all the associated variables at the same time.
+
+        Note
+        -----
+        If the variables already exists, some dof are added to the variables
+        In this case, the vector_name argument is ignored. A vector should be defined
+        when adding new variables only.
+        """
+        return self._global_dof.add(variable_names, nb_new_dof, vector_name)
+
+    @property
+    def global_dof(self):
+        return self._global_dof
+
+    @property
+    def n_global_dof(self):
+        return self._global_dof.n_dof
 
     def set_solver(
         self, solver: str = "direct", **kargs
@@ -502,6 +545,121 @@ class ProblemBase:
     def solver(self):
         """Return the current solver used for the problem."""
         return self.__solver[1]
+
+
+# Class to define global dof that are not associated with a mesh
+class _GlobalDof:
+    def __init__(self):
+        self._variable = {}  # dict containing global variable ranks
+        self._nvar = 0  # number of global variables
+        self._vector = {}  # dic of vectors containing the variable names
+        self._rank_vector = {}  # dict of vectors containing the var ranks
+        self._indptr = np.array([0])
+        # pointer to the indices in the global dof array for each variables
+        # ie the indices for the variable rank "var" are:
+        # global_dof[self._indptr[var]: self._indptr[var+1]]
+
+        self.n_dof = 0
+        """Number of non-local DoF."""
+
+    def __repr__(self):
+        return (
+            f"Global dof labels:\n{list(self._variable)}\n\n"
+            "Global vectors:\n"
+            f"{self._vector}"
+        )
+
+    def __getitem__(self, item: str):
+        # only for user interface
+        # return an array of indices for the variable or vector named "item"
+        # item should be a str
+        if item in self._variable:
+            rank = self._variable[item]
+            return np.arange(self._indptr[rank], self._indptr[rank + 1])
+        elif item in self._vector:
+            # asume variables inside the vector are contigus
+            rank = self._rank_vector[item][0]
+            n_var_in_vec = len(self._rank_vector[item])
+            return np.arange(
+                self._indptr[rank], self._indptr[rank + n_var_in_vec]
+            ).reshape(n_var_in_vec, -1)
+        else:
+            raise ValueError("Global variable or vector unknown.")
+
+    def __contains__(self, key):
+        return key in self._variable
+
+    def add(
+        self,
+        variable_names: str | list[str],
+        nb_new_dof: int = 1,
+        vector_name: str | None = None,
+    ):
+        """Add global degrees of freedom to the problem.
+
+        The global dof are global in the sense that they are not associated
+        to a node of a mesh as usual finite element dof. They are usefull to
+        define some constraints, like periodic boundary conditions.
+
+        Parameters
+        ----------
+        variable_names: str, list[str]
+            Name of the global variable. Name is
+            required to catch the results using the get_results or
+            get_ext_forces method.
+        nb_new_dof: int, default=1
+            Number of new dof for each new global variable
+        vector_name: str, optional
+            If a vector name is given, add vector that allow to catch
+            all the associated variables at the same time.
+
+        Note
+        -----
+        If the variables already exists, some dof are added to the variables
+        In this case, the vector_name argument is ignored. A vector should be defined
+        when adding new variables only.
+        """
+        if not isinstance(variable_names, list):
+            variable_names = [variable_names]
+
+        n_new_variables = len(variable_names)
+        if variable_names[0] in self._variable:
+            # assume all the variable in variable_names should already exist
+            # in this case, only add some dof to each variables
+            variable_ranks = [self._variable[var_name] for var_name in variable_names]
+            variable_ranks.sort()  # should aleady be the case but kept for safety
+            dof_indice = (
+                self._indptr[variable_ranks[0] + 1] - self._indptr[variable_ranks[0]]
+            )
+            # dof_indice = indice of the first new dof in each variable
+            for r in variable_ranks:
+                self._indptr[r + 1 :] += nb_new_dof
+        else:
+            # add new variable
+            for i, var_name in enumerate(variable_names):
+                self._variable[var_name] = self._nvar + i
+            indptr = list(self._indptr)
+            indptr.extend(
+                [self.n_dof + i * nb_new_dof for i in range(1, n_new_variables + 1)]
+            )
+            self._indptr = np.array(indptr)
+
+            if vector_name is not None:
+                self._vector[vector_name] = variable_names
+                self._rank_vector[vector_name] = [
+                    self._nvar + i for i in range(n_new_variables)
+                ]
+
+            self._nvar += n_new_variables
+            dof_indice = 0
+
+        self.n_dof = self._indptr[-1]
+
+        return dof_indice
+
+    def indice_start(self, variable_name):
+        """Return the first indice of the given variable name in the global dofs."""
+        return self._indptr[self._variable[variable_name]]
 
 
 def _solver_petsc(

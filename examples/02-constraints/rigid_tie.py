@@ -26,11 +26,6 @@ assembly = fd.Assembly.create("wf", mesh)
 bottom = mesh.find_nodes("Y", mesh.bounding_box.ymin)
 top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
 
-# add CD nodes
-ref_node = mesh.add_virtual_nodes(2)  # reference node for rigid body motion
-node_cd = [ref_node[0], ref_node[0], ref_node[1]]
-var_cd = ["DispX", "DispY", "DispX"]
-
 pb = fd.problem.NonLinear(assembly)
 pb.set_nr_criterion("Displacement", err0=1, tol=1e-2, max_subiter=5)
 
@@ -38,13 +33,10 @@ results = pb.add_output(
     "rigid_tie_example", assembly, ["Disp", "Stress", "Strain", "Fext"]
 )
 
-pb.bc.add(fd.constraint.RigidTie2D(top, node_cd, var_cd))
+pb.bc.add(fd.constraint.RigidTie2D(top))
 
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
-pb.bc.add("Dirichlet", ref_node[1], "DispY", 0)  # to block the non used virtual dof
-pb.bc.add(
-    "Dirichlet", ref_node[1], "DispX", -np.pi / 4
-)  # Rigid rotation of the right end
+pb.bc.add("Dirichlet", "RigidRotZ", -np.pi / 4)  # Rigid rotation of the top
 
 pb.nlsolve(dt=0.2, tmax=1, update_dt=True, print_info=1, interval_output=0.2)
 

@@ -55,7 +55,7 @@ class SpringEquilibrium(WeakFormBase):
         self,
         K,
         name="",
-        nlgeom=False,
+        nlgeom=None,
         space=None,
     ):
         WeakFormBase.__init__(self, name)
@@ -70,6 +70,8 @@ class SpringEquilibrium(WeakFormBase):
 
         self.K = K
         self.Kt_factor = None
+
+        self.assembly_options.set("elm_type", "spring", elm_type="lin2")
 
         self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.
@@ -89,6 +91,13 @@ class SpringEquilibrium(WeakFormBase):
 
         assembly.sv["Stretch"] = assembly.sv["Fint"] = 0
 
+        initial_length = np.linalg.norm(
+            assembly.mesh.nodes[assembly.mesh.elements[:, 1]]
+            - assembly.mesh.nodes[assembly.mesh.elements[:, 0]],
+            axis=1,
+        )
+        assembly.sv["_InitialLength"] = initial_length
+
     def update(self, assembly, pb):
         # function called when the problem is updated
         # (NR loop or time increment)
@@ -99,7 +108,7 @@ class SpringEquilibrium(WeakFormBase):
             assembly.set_disp(pb.get_disp())
 
         dof = pb.get_dof_solution()  # displacement and rotation node values
-        if np.isscalar(dof) and dof == 0:
+        if np.array_equal(dof, 0):
             assembly.sv["Stretch"] = assembly.sv["Fint"] = 0
         else:
             # evaluate Strain
@@ -110,6 +119,8 @@ class SpringEquilibrium(WeakFormBase):
                 if "_InitialLength" in assembly.sv:
                     initial_length = assembly.sv["_InitialLength"]
                 else:
+                    # should ne need to recompute initial_length as it is done in
+                    # initialize
                     initial_length = np.linalg.norm(
                         assembly.mesh.nodes[mesh.elements[:, 1]]
                         - assembly.mesh.nodes[mesh.elements[:, 0]],
@@ -146,35 +157,35 @@ class SpringEquilibrium(WeakFormBase):
 
     def get_weak_equation(self, assembly, pb):
         dim = self.space.ndim
-        # add a 10% rigididy in the tangent direction to improve
-        # cvg stability
-        if self.Kt_factor is None:
-            if self.nlgeom:
-                Kt = 0.1 * self.K
-            else:
-                Kt = 0.001 * self.K
-        else:
-            Kt = self.Kt_factor * self.K
-        K = [self.K, Kt, Kt]
+        # K = [self.K, Kt, Kt]
 
         op_delta = (
             self.space.op_disp()
-        )  # relative displacement if used with cohesive element
+        )  # relative displacement when used with spring element
 
-        diff_op = sum(
-            [
-                (
-                    0
-                    if np.isscalar(K[i]) and K[i] == 0
-                    else op_delta[i].virtual * op_delta[i] * K[i]
-                )
-                for i in range(dim)
-            ]
-        )
+        # Linear tangeant stiffness
+        diff_op = op_delta[0].virtual * op_delta[0] * self.K
+
+        # Add small tangential rigidity to avoid instability
+        # Important even with nlgeom for low values of Fint
+        if self.Kt_factor is None:
+            Kt = 0.0001 * self.K
+        elif self.Kt_factor == 0:
+            Kt = 0
+        else:
+            Kt = self.Kt_factor * self.K
 
         Fint = assembly.sv["Fint"]
+        if assembly._nlgeom:
+            # Geometrical stiffness (or stress stiffness)
+            # L0 = assembly.sv["_InitialLength"] + assembly.sv["Stretch"]
+            L0 = assembly.sv["_InitialLength"]
+            Kt += Fint / L0
 
-        if not (np.isscalar(Fint) and Fint == 0):
-            diff_op = diff_op + op_delta[0].virtual * Fint
-
+        if not (np.array_equal(Kt, 0)):
+            diff_op = diff_op + sum(
+                [op_delta[i].virtual * op_delta[i] * Kt for i in range(1, dim)]
+            )
+        # Initial stress vector
+        diff_op = diff_op + op_delta[0].virtual * Fint
         return diff_op

@@ -25,6 +25,7 @@ Mesh manipulation functions
    stack
    extrude
    extract_surface
+   extract_edges
    change_elm_type
    quad2tri
 
@@ -82,7 +83,13 @@ from .simple import (
 
 from .importmesh import import_file, import_vtk, import_msh
 
-from .functions import extrude, extract_surface, change_elm_type, quad2tri
+from .functions import (
+    extrude,
+    extract_surface,
+    extract_edges,
+    change_elm_type,
+    quad2tri,
+)
 
 from .structured_mesh import (
     structured_mesh_2D,

@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import numpy as np
-
 import fedoo as fd
+import pytest
 
 
 def test_octet():
@@ -25,9 +25,6 @@ def test_octet():
     crd_center = bounds.center
     # Nearest node to the center of the bounding box for boundary conditions
     center = mesh.nearest_node(crd_center)
-
-    # Add 2 virtual nodes for macro strain
-    StrainNodes = fd.Mesh["Domain2"].add_virtual_nodes(crd_center, 2)
 
     # Material definition and simcoon elasto-plastic constitutive law
     Re = 300
@@ -59,24 +56,7 @@ def test_octet():
     # Boundary conditions for the linearized strain tensor
     E = [0, 0, 0, 0.1, 0, 0]  # [EXX, EYY, EZZ, EXY, EXZ, EYZ]
 
-    list_strain_nodes = [
-        StrainNodes[0],
-        StrainNodes[0],
-        StrainNodes[0],
-        StrainNodes[1],
-        StrainNodes[1],
-        StrainNodes[1],
-    ]
-    list_strain_var = ["DispX", "DispY", "DispZ", "DispX", "DispY", "DispZ"]
-    # or equivalent:
-    # list_strain_nodes = [[StrainNodes[0], StrainNodes[1], StrainNodes[1]],
-    #                      [StrainNodes[1], StrainNodes[0], StrainNodes[1]],
-    #                      [StrainNodes[1], StrainNodes[1], StrainNodes[0]]]
-    # list_strain_var = [['DispX', 'DispX', 'DispY'],
-    #                    ['DispX', 'DispY', 'DispZ'],
-    #                    ['DispY', 'DispZ', 'DispZ']]
-
-    bc_periodic = fd.constraint.PeriodicBC(list_strain_nodes, list_strain_var, dim=3)
+    bc_periodic = fd.constraint.PeriodicBC("small_strain", dim=3)
     pb.bc.add(bc_periodic)
 
     # fixed point on the center to avoid rigid body motion
@@ -84,11 +64,8 @@ def test_octet():
 
     # Enforced mean strain
     pb.bc.add(
-        "Dirichlet", [StrainNodes[0]], "Disp", [E[0], E[1], E[2]]
-    )  # EpsXX, EpsYY, EpsZZ
-    pb.bc.add(
-        "Dirichlet", [StrainNodes[1]], "Disp", [E[3], E[4], E[5]]
-    )  # EpsXY, EpsXZ, EpsYZ
+        "Dirichlet", 0, "MeanStrain", E
+    )  # EpsXX, EpsYY, EpsZZ, EpsXY, EpsXZ, EpsYZ
 
     # ---------------  Non linear solver---------------------------------------
     # pb.set_solver('CG') #conjugate gradient solver
@@ -102,3 +79,7 @@ def test_octet():
 
     assert np.abs(TensorStress[4][222] - 72.3765265291865) < 1e-3
     assert np.abs(TensorStrain[2][876] - 0.03046909551762696) < 1e-6
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

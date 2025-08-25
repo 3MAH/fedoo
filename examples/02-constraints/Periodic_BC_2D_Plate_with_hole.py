@@ -18,21 +18,14 @@ fd.ModelingSpace("2Dstress")
 ###############################################################################
 # Definition of the Geometry
 # ------------------------------------------------------------------------------
-mesh = fd.mesh.hole_plate_mesh(name="Domain")
+mesh = fd.mesh.hole_plate_mesh()
 
 # alternative mesh below (uncomment the line)
-# Mesh.rectangle_mesh(Nx=51, Ny=51, x_min=-50, x_max=50, y_min=-50, y_max=50, ElementShape = 'quad4', name ="Domain")
-
-###############################################################################
-# Adding virtual nodes related the macroscopic strain
-# ------------------------------------------------------------------------------
-strain_nodes = mesh.add_virtual_nodes(2)
-# The position of the virtual node has no importance.
-# For a problem in 2D with a 2D periodicity, we need 3 independant strain component
-# 2 nodes (with 2 dof per node in 2D) are required
+# mesh = fd.mesh.rectangle_mesh(nx=51, ny=51)
 
 ###############################################################################
 # Now define the problem to solve
+# ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
 # Material definition
@@ -56,20 +49,16 @@ pb = fd.problem.Linear("Assembly")
 
 ###############################################################################
 # Add periodic constraint
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Add a periodic conditions (ie a multipoint constraint) linked to the strain dof based on virtual nodes:
-#  - the dof 'DispX' of the node strain_nodes[0] will be arbitrary associated to the EXX strain component
-#  - the dof 'DispY' of the node strain_nodes[1] will be arbitrary associated to the EYY strain component
-#  - the dof 'DispY' of the node strain_nodes[0] will be arbitrary associated to the EXY strain component
-#  - the dof 'DispX' of the node strain_nodes[1] is not used and will be blocked to avoid singularity
-pb.bc.add(
-    fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]], ["DispX", "DispY", "DispY"]
-    )
-)
+# ------------------------------------------------------------------------------
+# Add a periodic conditions (ie a multipoint constraint)
+# Some global dof are automatically added to the problem:
+#  - 'E_xx', 'E_yy', 'E_xy' that refere to the mean strain components
+#  - The global vector 'MeanStrain' is also added
+pb.bc.add(fd.constraint.PeriodicBC(periodicity_type="small_strain"))
 
 ###############################################################################
 # Add standard boundary conditions
+# ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
 # Macroscopic strain components to enforce
@@ -78,13 +67,9 @@ Eyy = 0
 Exy = 0.1
 
 # Mean strain: Dirichlet (strain) or Neumann (associated mean stress) can be enforced
-pb.bc.add("Dirichlet", [strain_nodes[0]], "DispX", Exx)  # EpsXX
-pb.bc.add("Dirichlet", [strain_nodes[0]], "DispY", Exy)  # EpsXY
-
-pb.bc.add(
-    "Dirichlet", [strain_nodes[1]], "DispX", 0
-)  # nothing (blocked to avoir singularity)
-pb.bc.add("Dirichlet", [strain_nodes[1]], "DispY", Eyy)  # EpsYY
+pb.bc.add("Dirichlet", "E_xx", Exx)  # EpsXX
+pb.bc.add("Dirichlet", "E_xy", Exy)  # EpsXY
+pb.bc.add("Dirichlet", "E_yy", Eyy)  # EpsYY
 
 # Block one node to avoid singularity
 center = mesh.nearest_node(mesh.bounding_box.center)
@@ -97,18 +82,16 @@ pb.solve()
 # ------------------------------------------------------------------------------
 # Post-treatment
 # ------------------------------------------------------------------------------
-res = pb.get_results("Assembly", ["Disp", "Stress"])
+res = pb.get_results("Assembly", ["Disp", "Stress", "MeanStrain"])
 
 # plot the deformed mesh with the shear stress (component=3).
 res.plot("Stress", "XY", "Node")
-# simple matplotlib alternative if pyvista is not installed:
-# fd.util.field_plot_2d("Assembly", disp = pb.get_dof_solution(), dataname = 'Stress', component=3, scale_factor = 1, plot_edge = True, nb_level = 6, type_plot = "smooth")
 
 ###############################################################################
 # print the macroscopic strain tensor and stress tensor
 print(
     "Strain tensor ([Exx, Eyy, Exy]): ",
-    [pb.get_disp("DispX")[-2], pb.get_disp("DispY")[-1], pb.get_disp("DispY")[-2]],
+    [pb.get_dof_solution(component)[0] for component in ["E_xx", "E_yy", "E_xy"]],
 )
 
 # Compute the mean stress tensor

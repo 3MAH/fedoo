@@ -54,7 +54,7 @@ pb.set_solver("CG")
 pb.solve()
 
 # extract the results from the Assembly object
-results = pb.get_results("Assembly", ["Stress", "Disp", "Strain"])
+results = pb.get_results(assemb="Assembly", output_list=["Stress", "Disp", "Strain"])
 
 ###############################################################################
 # Plot results:
