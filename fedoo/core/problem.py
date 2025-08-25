@@ -221,6 +221,8 @@ class Problem(ProblemBase):
         ----------
         assemb : Assembly, optional
             Assembly object used to extract the results.
+            If assemb is not specified, the assembly associated to the problem,
+            (given by the assembly property) is used.
 
         output_list : list[str]
             list of result labels.

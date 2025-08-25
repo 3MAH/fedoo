@@ -1,3 +1,5 @@
+"""Rigid Tie constraint."""
+
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 

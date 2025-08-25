@@ -1,13 +1,73 @@
-# from fedoo.core.base   import ProblemBase
+"""Periodic boundary condition constraint."""
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
-from fedoo.core.base import ProblemBase
-from fedoo.core.mesh import MeshBase
 
 
 class PeriodicBC(BCBase):
-    """Class defining periodic boundary conditions"""
+    """Periodic boundary conditions constraint.
+
+    Perdiodic boundary condition object using several multi-points
+    constraints.
+    Some global dofs are added to define mean strain or mean displacement gradient.
+    These dof are defined.
+    The added global dof are:
+
+    * For "small_strain" the linearized strain tensor components are introduced. The
+      following global variables are therefore accessible:
+      'E_xx', 'E_yy', 'E_zz', 'E_xy', 'E_xz', 'E_yz' in 3d (only the in-plane
+      component in 2d)
+      The whole component can also be extracted using the vector name 'MeanStrain.'
+    * For "finite_strain", the displacement gradient is utilized:
+      'DU_xx', 'DU_xy', 'DU_xz', 'DU_yx', 'DU_yy', 'DU_yz', 'DU_zx', 'DU_zy', 'DU_zz'
+      ie 9 components in 3D and only 4 in-plane component in 2D.
+      The whole component can also be extracted using the vector name 'MeanGradDisp'.
+    * If off_axis_rotation is used, the local dof are also added for small and
+      finite strain respectiveley:
+      'E_ij' or 'DU_ij' with i and j taking values in {1,2,3} and the vectors
+      'LocalMeanStrain' or 'LocalMeanGradDisp'.
+
+    Parameters
+    ----------
+    periodicity_type : 'small_strain' or 'finite_strain'.
+        The type of periodicity :
+        * If small_strain is selected, the constraint is directly expressed in terms
+          of linearized strain components.
+        * If 'finite_strain' is selected, the constraint is expressed in terms of
+          displacement gradient.
+    off_axis_rotation : scipy.spatial.transform object Rotation
+        Rotation between the reference frame and the off-axis loading frame
+        where boundary conditions are applied.
+    dim : int in [1,2,3] (default = 3)
+        Number of dimensions with periodic condition.
+        If dim = 1: the periodicity is assumed along the x coordinate
+        If dim = 2: the periodicity is assumed along x and y coordinates
+    tol : float, optional
+        Tolerance for the periodic nodes detection. The default is 1e-8.
+    name : str, optional
+        Name of the created boundary condition. The default is "Periodicity".
+
+
+    Notes
+    -----
+    * The boundary condition object needs to be used with a problem associated to
+      either a a periodic mesh, either
+    * The periodic nodes are automatically detected using the given tolerance (tol).
+    * The nodes of the Xp (x=xmax), Yp (y=ymax) and Zp (z=zmax) faces are
+      eliminated from the system (slave nodes) and can't be used in another mpc.
+
+
+    Example
+    ---------
+
+    .. code-block:: python
+
+        import fedoo as fd
+
+        mesh = fd.mesh.box_mesh()
+        bc_periodic = fd.constraint.PeriodicBC(periodicity_type = 'small_strain')
+    """
 
     def __init__(
         self,
@@ -18,68 +78,6 @@ class PeriodicBC(BCBase):
         tol: float = 1e-8,
         name: str = "Periodicity",
     ):
-        """
-        Create a perdiodic boundary condition object using several multi-points
-        constraints.
-        Some global dofs are added to define mean strain or mean displacement gradient.
-        These dof are defined.
-        The added global dof are:
-
-        * For "small_strain" the linearized strain tensor components are introduced. The
-          following global variables are therefore accessible:
-          'E_xx', 'E_yy', 'E_zz', 'E_xy', 'E_xz', 'E_yz' in 3d (only the in-plane
-          component in 2d)
-          The whole component can also be extracted using the vector name 'MeanStrain.'
-        * For "finite_strain", the displacement gradient is utilized:
-          'DU_xx', 'DU_xy', 'DU_xz', 'DU_yx', 'DU_yy', 'DU_yz', 'DU_zx', 'DU_zy', 'DU_zz'
-          ie 9 components in 3D and only 4 in-plane component in 2D.
-          The whole component can also be extracted using the vector name 'MeanGradDisp'.
-        * If off_axis_rotation is used, the local dof are also added for small and
-          finite strain respectiveley:
-          'E_ij' or 'DU_ij' with i and j taking values in {1,2,3} and the vectors
-          'LocalMeanStrain' or 'LocalMeanGradDisp'.
-
-        Parameters
-        ----------
-        periodicity_type : 'small_strain' or 'finite_strain'.
-            The type of periodicity :
-            * If small_strain is selected, the constraint is directly expressed in terms
-              of linearized strain components.
-            * If 'finite_strain' is selected, the constraint is expressed in terms of
-              displacement gradient.
-        off_axis_rotation : scipy.spatial.transform object Rotation
-            Rotation between the reference frame and the off-axis loading frame
-            where boundary conditions are applied.
-        dim : int in [1,2,3] (default = 3)
-            Number of dimensions with periodic condition.
-            If dim = 1: the periodicity is assumed along the x coordinate
-            If dim = 2: the periodicity is assumed along x and y coordinates
-        tol : float, optional
-            Tolerance for the periodic nodes detection. The default is 1e-8.
-        name : str, optional
-            Name of the created boundary condition. The default is "Periodicity".
-
-        Remarks
-        -------
-
-        * The boundary condition object needs to be used with a problem associated to
-        either a a periodic mesh, either
-        * The periodic nodes are automatically detected using the given tolerance (tol).
-        * The nodes of the Xp (x=xmax), Yp (y=ymax) and Zp (z=zmax) faces are
-        eliminated from the system (slave nodes) and can't be used in another mpc.
-
-        Example
-        ---------
-
-        .. code-block:: python
-
-            import fedoo as fd
-
-            mesh = fd.mesh.box_mesh()
-            bc_periodic = fd.constraint.PeriodicBC(periodicity_type = 'small_strain')
-
-        """
-
         if not isinstance(periodicity_type, str):
             raise TypeError("periodicity_type should be a string")
         if periodicity_type == "small_strain":

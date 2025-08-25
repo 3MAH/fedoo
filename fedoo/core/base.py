@@ -563,7 +563,11 @@ class _GlobalDof:
         """Number of non-local DoF."""
 
     def __repr__(self):
-        return f"List of global dof labels:\n{list(self._variable)}"
+        return (
+            f"Global dof labels:\n{list(self._variable)}\n\n"
+            "Global vectors:\n"
+            f"{self._vector}"
+        )
 
     def __getitem__(self, item: str):
         # only for user interface
