@@ -261,7 +261,6 @@ class DataSet:
             )
 
         ndim = self.mesh.ndim
-        n_physical_nodes = self.mesh.n_physical_nodes
 
         field = kargs.pop(
             "scalars", field
@@ -305,8 +304,8 @@ class DataSet:
                     # compute center (dont use meshplot to compute center because
                     # isolated nodes are removed -> may be annoying with show_nodes)
                     crd = (
-                        self.mesh.physical_nodes
-                        + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                        self.mesh.nodes
+                        + scale * self.node_data["Disp"].T
                     )
                     center = 0.5 * (crd.min(axis=0) + crd.max(axis=0))
                     if len(center) < 3:
@@ -326,14 +325,11 @@ class DataSet:
 
             if "Disp" in self.node_data and scale != 0:
                 meshplot.points = as_3d_coordinates(
-                    self.mesh.physical_nodes
-                    + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                    self.mesh.nodes
+                    + scale * self.node_data["Disp"].T
                 )
             else:
-                meshplot.points = as_3d_coordinates(self.mesh.physical_nodes)
-
-            if data_type == "Node":
-                data = data[:n_physical_nodes]
+                meshplot.points = as_3d_coordinates(self.mesh.nodes)
 
             center = 0.5 * (meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
 
@@ -441,18 +437,18 @@ class DataSet:
             if data_type == "GaussPoint":
                 if "Disp" in self.node_data:
                     crd_labels = as_3d_coordinates(
-                        self.mesh.physical_nodes
-                        + self.node_data["Disp"].T[:n_physical_nodes]
+                        self.mesh.nodes
+                        + self.node_data["Disp"].T
                     )
                 else:
-                    crd_labels = as_3d_coordinates(self.mesh.physical_nodes)
+                    crd_labels = as_3d_coordinates(self.mesh.nodes)
             else:
                 crd_labels = meshplot.points
 
         if node_labels:
             if node_labels == True:
-                node_labels = list(range(n_physical_nodes))
-            pl.add_point_labels(crd_labels, node_labels[:n_physical_nodes])
+                node_labels = list(range(self.mesh.n_nodes))
+            pl.add_point_labels(crd_labels, node_labels)
 
         if element_labels:
             if element_labels == True:
@@ -1256,7 +1252,6 @@ class MultiFrameDataSet(DataSet):
             )
 
         ndim = self.mesh.ndim
-        n_physical_nodes = self.mesh.n_physical_nodes
 
         field = kargs.pop("scalars", field)
 
@@ -1306,7 +1301,7 @@ class MultiFrameDataSet(DataSet):
                 meshplot = self.meshplot = self.mesh.to_pyvista()
             else:
                 meshplot = self.meshplot
-            crd = self.mesh.physical_nodes
+            crd = self.mesh.nodes
         else:
             return NotImplemented
 
@@ -1364,18 +1359,15 @@ class MultiFrameDataSet(DataSet):
                 if show_nodes:
                     if "Disp" in self.node_data:
                         crd_points = as_3d_coordinates(
-                            self.mesh.physical_nodes
-                            + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                            self.mesh.nodes
+                            + scale * self.node_data["Disp"].T
                         )
             else:
                 if "Disp" in self.node_data:
                     meshplot.points = as_3d_coordinates(
-                        crd + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                        crd + scale * self.node_data["Disp"].T
                     )
                     crd_points = meshplot.points  # alias
-
-                if data_type == "Node":
-                    data = data[:n_physical_nodes]
 
             if i == 0:
                 pl.add_mesh(
@@ -1455,19 +1447,18 @@ class MultiFrameDataSet(DataSet):
     def get_all_frame_lim(self, field, component=0, data_type=None, scale=1):
         ndim = self.mesh.ndim
         clim = [np.inf, -np.inf]
-        crd = self.mesh.physical_nodes
-        n_physical_nodes = self.mesh.n_physical_nodes
+        crd = self.mesh.nodes
 
         for i in range(0, self.n_iter):
             self.load(i)
-            data = self.get_data(field, component, data_type)[:n_physical_nodes]
+            data = self.get_data(field, component, data_type)
             clim = [
                 np.min([data.min(), clim[0]]),
                 np.max([data.max(), clim[1]]),
             ]
 
             if "Disp" in self.node_data:
-                new_crd = crd + scale * self.node_data["Disp"].T[:n_physical_nodes]
+                new_crd = crd + scale * self.node_data["Disp"].T
 
                 new_Xmin = new_crd.min(axis=0)
                 new_Xmax = new_crd.max(axis=0)

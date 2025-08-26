@@ -73,7 +73,7 @@ class Mesh(MeshBase):
         self.nodes = nodes  # node coordinates
         """List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
         self.elements = elements  # element table
-        """List of elements: elements[i] gives the nodes associated to the ith element."""
+        """List of elements. elements[i] gives the nodes associated to the ith element."""
         self.elm_type = elm_type
         """Type of the element (str).
 
@@ -91,9 +91,6 @@ class Mesh(MeshBase):
 
         self.local_frame: np.ndarray | None = (
             None  # contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
-        )
-        self._n_physical_nodes: int | None = (
-            None  # if None, the number of physical_nodes is the same as n_nodes
         )
 
         if ndim is None:
@@ -345,20 +342,6 @@ class Mesh(MeshBase):
 
         return np.arange(n_nodes_old, self.n_nodes)
 
-    def add_virtual_nodes(
-        self, *args
-    ) -> np.ndarray[int]:  # coordinates = None, nb_added = None):
-        """
-        Add some nodes to the node list.
-
-        This method is exactly the same as add_nodes, excepted that the
-        new nodes are considered as virtural, ie are not intended to be
-        associated to any element, nor visualised.
-        """
-        if self._n_physical_nodes is None:
-            self._n_physical_nodes = self.n_nodes
-        return self.add_nodes(*args)
-
     def add_internal_nodes(self, nb_added: int) -> np.ndarray[int]:
         """
         Add some nodes to the node list.
@@ -367,10 +350,7 @@ class Mesh(MeshBase):
         of added elements is then: nb_added*n_elements
 
         The added nodes are internal nodes required for specific element interpolations.
-        The new nodes are considered as virtual nodes (ie will not be displayed).
         """
-        if self._n_physical_nodes is None:
-            self._n_physical_nodes = self.n_nodes
         new_nodes = self.add_nodes(self.n_elements * nb_added)
         self.elements = np.c_[self.elements, new_nodes]
         self.reset_interpolation()
@@ -612,7 +592,7 @@ class Mesh(MeshBase):
         -------
         The index of the nearest node to X
         """
-        return np.linalg.norm(self.physical_nodes - X, axis=1).argmin()
+        return np.linalg.norm(self.nodes - X, axis=1).argmin()
 
     def find_nodes(
         self, selection_criterion: str, value: float = 0, tol: float = 1e-6
@@ -673,7 +653,7 @@ class Mesh(MeshBase):
           >>> mesh.find_nodes("(X>0.2 and X<0.5) or Y>0.4")
         """
         assert np.isscalar(tol), "tol should be a scalar"
-        nodes = self.physical_nodes
+        nodes = self.nodes
         if selection_criterion in ["X", "Y", "Z"]:
             assert np.isscalar(value), (
                 "value should be a scalar for selection_criterion = "
@@ -801,7 +781,7 @@ class Mesh(MeshBase):
                     value = float(expr[i:i_end])
 
                 crd_indices = {"X": 0, "Y": 1, "Z": 2}[expr[i_start]]
-                new_res = test_op(self.physical_nodes[:, crd_indices], value)
+                new_res = test_op(self.nodes[:, crd_indices], value)
             else:
                 raise NameError("Invalid expression")
 
@@ -1421,72 +1401,31 @@ class Mesh(MeshBase):
                 )
 
     @property
-    def physical_nodes(self) -> np.ndarray[float]:
-        """Get the node coordinates of the physical_nodes.
-
-        If no virtual nodes has been added using the add_virtual_nodes method
-        physical_nodes return the entire node list (ie the nodes attribute).
-
-        This property is equivalent to:
-
-          >>> mesh.nodes[:n_physical_nodes]
-        """
-        if self._n_physical_nodes is None:
-            return self.nodes
-        else:
-            return self.nodes[: self._n_physical_nodes]
-
-    @property
     def n_nodes(self) -> int:
-        """
-        Total number of nodes in the Mesh
-        """
+        """Total number of nodes in the Mesh."""
         return len(self.nodes)
 
     @property
-    def n_physical_nodes(self) -> int:
-        """
-        Number of physical nodes in the mesh.
-
-        If no virtual nodes has been added using the add_virtual_nodes method
-        The property n_physical_nodes has the same value than n_nodes.
-
-        The virtual nodes should be inserted at the end of the node list.
-        The coordinates of physical nodes can be extracted by:
-
-          >>> mesh.nodes[:n_physical_nodes]
-        """
-        if self._n_physical_nodes is None:
-            return self.n_nodes
-        else:
-            return self._n_physical_nodes
-
-    @property
     def n_elements(self) -> int:
-        """
-        Total number of elements in the Mesh
-        """
+        """Total number of elements in the Mesh."""
         return len(self.elements)
 
     @property
     def n_elm_nodes(self) -> int:
-        """
-        Number of nodes associated to each element
-        """
+        """Number of nodes associated to each element."""
         return self.elements.shape[1]
 
     @property
     def ndim(self) -> int:
-        """
-        Dimension of the mesh
-        """
+        """Dimension of the mesh."""
         return self.nodes.shape[1]
 
     @property
     def element_centers(self) -> np.ndarray:
-        """
-        Coordinates of the element centers.
-        element_center[i] gives the coordinates of the ith element center.
+        """Coordinates of the element centers.
+
+        element_center[i] gives the coordinates of the ith element
+        center.
         """
         return self.gausspoint_coordinates(1)
 
@@ -1532,10 +1471,6 @@ class MultiMesh(Mesh):
         self.node_sets = {}
         """Dict containing node sets associated to the mesh"""
 
-        self._n_physical_nodes = (
-            None  # if None, the number of physical_nodes is the same as n_nodes
-        )
-
     def __getitem__(self, item: str) -> Mesh:
         return self.mesh_dict[item]
 
@@ -1550,7 +1485,6 @@ class MultiMesh(Mesh):
     @staticmethod
     def from_mesh_list(mesh_list: list[Mesh], name: str = "") -> "MultiMesh":
         multi_mesh = MultiMesh(mesh_list[0].nodes, name=name)
-        multi_mesh._n_physical_nodes = mesh_list[0]._n_physical_nodes
         for mesh in mesh_list:
             multi_mesh.mesh_dict[mesh.elm_type] = mesh
 
@@ -1560,8 +1494,7 @@ class MultiMesh(Mesh):
 class BoundingBox(list):
     def __init__(self, m: Mesh | list[np.ndarray[float], np.ndarray[float]]):
         if isinstance(m, Mesh):
-            nodes = m.physical_nodes
-            m = [nodes.min(axis=0), nodes.max(axis=0)]
+            m = [m.nodes.min(axis=0), m.nodes.max(axis=0)]
         elif isinstance(m, list):
             if len(m) != 2:
                 raise NameError("list lenght for BoundingBox object must be 2")
@@ -1574,121 +1507,65 @@ class BoundingBox(list):
 
     @property
     def xmin(self) -> float:
-        """
-        return xmin
-        """
+        """Return xmin."""
         return self[0][0]
 
     @property
     def xmax(self) -> float:
-        """
-        return xmax
-        """
+        """Return xmax."""
         return self[1][0]
 
     @property
     def ymin(self) -> float:
-        """
-        return ymin
-        """
+        """Return ymin."""
         return self[0][1]
 
     @property
     def ymax(self) -> float:
-        """
-        return ymax
-        """
+        """Return ymax."""
         return self[1][1]
 
     @property
     def zmin(self) -> float:
-        """
-        return zmin
-        """
+        """Return zmin."""
         return self[0][2]
 
     @property
     def zmax(self) -> float:
-        """
-        return zmax
-        """
+        """Return zmax."""
         return self[1][2]
 
     @property
     def center(self) -> np.ndarray[float]:
-        """
-        return the center of the bounding box
-        """
+        """Return the center of the bounding box."""
         return (self[0] + self[1]) / 2
 
     @property
     def volume(self) -> float:
-        """
-        return the volume of the bounding box
-        """
+        """Return the volume of the bounding box."""
         return (self[1] - self[0]).prod()
 
     @property
     def size(self) -> np.ndarray[float]:
-        """
-        return the sizes of the bounding box
-        """
+        """Return the sizes of the bounding box."""
         return self[1] - self[0]
 
     @property
     def size_x(self) -> float:
-        """
-        return the size of the bounding box in the x direction
-        """
+        """Return the size of the bounding box in the x direction."""
         return self[1][0] - self[0][0]
 
     @property
     def size_y(self) -> float:
-        """
-        return the size of the bounding box in the y direction
-        """
+        """Return the size of the bounding box in the y direction."""
         return self[1][1] - self[0][1]
 
     @property
     def size_z(self) -> float:
-        """
-        return the size of the bounding box in the z direction
-        """
+        """Return the size of the bounding box in the z direction."""
         return self[1][2] - self[0][2]
 
 
 if __name__ == "__main__":
     a = Mesh(np.array([[0, 0, 0], [1, 0, 0]]), np.array([[0, 1]]), "lin2")
     print(a.nodes)
-
-
-#
-# May be integrated later ?
-#
-# def InititalizeLocalFrame(self):
-#     """
-#     Following the mesh geometry and the element shape, a local frame is initialized on each nodes
-#     """
-#        elmRef = self.elm_type(1)
-#        rep_loc = np.zeros((self.__n_nodes,np.shape(self.nodes)[1],np.shape(self.nodes)[1]))
-#        for e in self.elements:
-#            if self.__localBasis == None: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd)
-#            else: rep_loc[e] += elmRef.getRepLoc(self.nodes[e], elmRef.xi_nd, self.__rep_loc[e])
-#
-#        rep_loc = np.array([rep_loc[nd]/len(np.where(self.elements==nd)[0]) for nd in range(self.__n_nodes)])
-#        rep_loc = np.array([ [r/linalg.norm(r) for r in rep] for rep in rep_loc])
-#        self__.localBasis = rep_loc
-
-
-#
-# development
-#
-#     def GetElementLocalFrame(self): #Précalcul des opérateurs dérivés suivant toutes les directions (optimise les calculs en minimisant le nombre de boucle)
-#         #initialisation
-#         elmRef = eval(self.elm_type)(1) #only 1 gauss point for returning one local Frame per element
-
-#         elm = self.elements
-#         crd = self.nodes
-
-# #        elmGeom.ComputeJacobianMatrix(crd[elm_geom], vec_xi, localFrame) #elmRef.JacobianMatrix, elmRef.detJ, elmRef.inverseJacobian
-#         return elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, self.local_frame) #array of shape (n_elements, n_elm_gp, nb of vectors in basis = dim, dim)
