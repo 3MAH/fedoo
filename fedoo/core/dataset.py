@@ -303,10 +303,7 @@ class DataSet:
                 if show_nodes:
                     # compute center (dont use meshplot to compute center because
                     # isolated nodes are removed -> may be annoying with show_nodes)
-                    crd = (
-                        self.mesh.nodes
-                        + scale * self.node_data["Disp"].T
-                    )
+                    crd = self.mesh.nodes + scale * self.node_data["Disp"].T
                     center = 0.5 * (crd.min(axis=0) + crd.max(axis=0))
                     if len(center) < 3:
                         center = np.hstack((center, np.zeros(3 - len(center))))
@@ -325,8 +322,7 @@ class DataSet:
 
             if "Disp" in self.node_data and scale != 0:
                 meshplot.points = as_3d_coordinates(
-                    self.mesh.nodes
-                    + scale * self.node_data["Disp"].T
+                    self.mesh.nodes + scale * self.node_data["Disp"].T
                 )
             else:
                 meshplot.points = as_3d_coordinates(self.mesh.nodes)
@@ -437,8 +433,7 @@ class DataSet:
             if data_type == "GaussPoint":
                 if "Disp" in self.node_data:
                     crd_labels = as_3d_coordinates(
-                        self.mesh.nodes
-                        + self.node_data["Disp"].T
+                        self.mesh.nodes + self.node_data["Disp"].T
                     )
                 else:
                     crd_labels = as_3d_coordinates(self.mesh.nodes)
@@ -1359,8 +1354,7 @@ class MultiFrameDataSet(DataSet):
                 if show_nodes:
                     if "Disp" in self.node_data:
                         crd_points = as_3d_coordinates(
-                            self.mesh.nodes
-                            + scale * self.node_data["Disp"].T
+                            self.mesh.nodes + scale * self.node_data["Disp"].T
                         )
             else:
                 if "Disp" in self.node_data:
