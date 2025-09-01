@@ -275,6 +275,20 @@ class PeriodicBC(BCBase):
                     np.lexsort((crd[face_Zp, 0], crd[face_Zp, 1].round(decimal_round)))
                 ]
 
+        # save the computated set of nodes as class attributes
+        self.face_Xm = face_Xm
+        self.face_Xp = face_Xp
+
+        if self.dim > 1:
+            self.face_Ym = face_Ym
+            self.face_Yp = face_Yp
+
+            self.edge_XmYm = edge_XmYm
+            self.edge_XpYm = edge_XpYm
+            self.edge_XpYp = edge_XpYp
+            self.edge_XmYp = edge_XmYp
+
+        if self.dim > 2:
             self.face_Zm = face_Zm
             self.face_Zp = face_Zp
 
@@ -297,16 +311,6 @@ class PeriodicBC(BCBase):
             self.corner_XpYmZp = corner_XpYmZp
             self.corner_XpYpZm = corner_XpYpZm
             self.corner_XpYpZp = corner_XpYpZp
-
-        self.face_Xm = face_Xm
-        self.face_Ym = face_Ym
-        self.face_Xp = face_Xp
-        self.face_Yp = face_Yp
-
-        self.edge_XmYm = edge_XmYm
-        self.edge_XpYm = edge_XpYm
-        self.edge_XpYp = edge_XpYp
-        self.edge_XmYp = edge_XmYp
 
         self.d_rve = d_rve
 

@@ -48,7 +48,7 @@ tensor_stress = assembly.sv["Stress"]
 
 ###############################################################################
 # print the macroscopic strain tensor and stress tensor
-mean_strain = pb.get_dof_solution("MeanStrain")
+mean_strain = pb.get_dof_solution("MeanStrain")[:, 0]
 
 print(
     "Strain tensor: ",

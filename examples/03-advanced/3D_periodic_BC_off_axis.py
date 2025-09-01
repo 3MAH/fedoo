@@ -1,19 +1,19 @@
 """
-Tensile test on a Gyroid unit cell with periodic boundary condition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Off-axis tensile test on a Gyroid unit cell with periodic boundary condition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The periodic mesh of the Gyriod has been generated with microgen.
 This example show how to define periodic boundary conditions and
 to load the structure with prescribed strain in local coordinate system.
-After that, the mean stress and mean strain results are extracted in local and global
-coordinate system.
+After that, the mean stress and mean strain results are extracted in local and
+global coordinate system.
 """
 
 import fedoo as fd
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-# --------------- Pre-Treatment --------------------------------------------------------
+# --------------- Pre-Treatment -----------------------------------------------
 
 fd.ModelingSpace("3D")
 mesh = fd.Mesh.read("../../util/meshes/gyroid_per.vtk")
@@ -46,8 +46,9 @@ pb.bc.add("Dirichlet", mesh.nearest_node(mesh.bounding_box.center), "Disp", 0)
 # off axis traction along the local x axis = '1'
 pb.bc.add("Dirichlet", "E_11", 1)
 
-# Warning: the global strain are eliminated from the problem and are no more applicable
-# for BC. For instance: pb.bc.add("Dirichlet", "E_xx", 1) will have no effect.
+# Warning: the global strain are eliminated from the problem and are no more
+# applicable for BC. For instance: pb.bc.add("Dirichlet", "E_xx", 1) will have
+# no effect.
 
 
 # --------------- Solve -----------------------------------------------------
