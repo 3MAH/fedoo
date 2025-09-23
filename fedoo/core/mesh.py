@@ -967,7 +967,7 @@ class Mesh(MeshBase):
         if extension == "":
             filename = filename + ".vtk"
 
-        self.to_pyvista().save(filename, binary = binary)
+        self.to_pyvista().save(filename, binary=binary)
 
     def plot(self, show_edges: bool = True, **kargs) -> None:
         """Simple plot function using pyvista.

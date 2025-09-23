@@ -815,7 +815,7 @@ class DataSet:
             ext = os.path.splitext(filename)[1]
             if ext == "":
                 filename = filename + ".vtk"
-            self.to_pyvista(gp_data_to_node).save(filename, binary = binary)
+            self.to_pyvista(gp_data_to_node).save(filename, binary=binary)
         else:
             from fedoo.util.mesh_writer import write_vtk
 
