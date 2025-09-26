@@ -41,7 +41,38 @@ class DataSet:
     Object to store, save, load and plot data associated to a mesh.
 
     DataSet have a multiframe version :py:class:`fedoo.MultiFrameDataSet` that
-    is a class that encapsulate several DataSet mainly usefull for time dependent data.
+    is a class that encapsulate several DataSet mainly usefull for time
+    dependent data.
+
+    Attributes
+    ----------
+    mesh : fd.Mesh
+        Mesh object associated to the data
+    node_data : dict
+        Dictionnary of data fields defined at mesh nodes.
+    element_data : dict
+        Dictionnary of data fields defined at mesh elements.
+    gausspoint_data : dict
+        Dictionnary of data fields defined at gauss points.
+    res.scalar_data : dict
+        Dictionnary of scalar data.
+
+    Notes
+    -----
+    Data in the node_data, element_data or gauspoint_data dictionarries
+    should be provided as 1D or 2D NumPy arrays, where the last
+    dimension matches the number of nodes, elements or integration
+    points in the associated mesh, respectively.
+
+    For gausspoint_data, the number of Gauss points per element is assumed
+    to be constant and is inferred from the array's shape.
+
+    If 2D NumPy arrays are provided, or 1D for scalar data,
+    the first dimension corresponds to the data components.
+
+    To access data, it is recommended to use the
+    :py:meth:`fedoo.DataSet.get_data` method as it supports automatic
+    conversion between different data types.
 
     Parameters
     ----------
@@ -502,6 +533,44 @@ class DataSet:
         return pl
 
     def get_data(self, field, component=None, data_type=None, return_data_type=False):
+        """
+        Retrieve data from the DataSet for a given field.
+
+        This method is equivalent to the `DataSet.__getitem__` magic method.
+        One may prefer to use the shorthand syntax:
+        `dataset[field, component, data_type]`.
+
+        Parameters
+        ----------
+        field : str
+            Name of the data field to retrieve.
+        component : int, str or None, optional
+            Index or label of the component to extract if the data is
+            multi-dimensional.
+            If None, all components are returned.
+        data_type : str or None, optional
+            Desired data type to convert to. Can be one of 'Node', 'Element',
+            or 'GaussPoint'.
+            If None, the original data type is preserved.
+        return_data_type : bool, optional
+            If True, the method returns a tuple `(data, data_type)`
+            where `data_type` is the type of the returned data. If False, only
+            the data is returned.
+
+        Returns
+        -------
+        data : np.ndarray
+            The requested data, possibly converted to the specified type.
+        data_type : str, optional
+            Returned only if `return_data_type` is True.
+            Indicates the type of the returned data.
+
+        Notes
+        -----
+        This method supports automatic conversion between node, element,
+        and Gauss point data types when applicable.
+        """
+
         if data_type is None:  # search if field exist somewhere
             if field in self.node_data:
                 data_type = "Node"
