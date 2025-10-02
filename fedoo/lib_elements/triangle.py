@@ -11,8 +11,8 @@ class ElementTriangle(Element2D):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
+        self.ShapeFunctionDerivativePG = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -107,10 +107,10 @@ class Tri3(ElementTriangle):
     # xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[(1 - xi[:, 0] - xi[:, 1]), xi[:, 0], xi[:, 1]]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [np.array([[-1.0, 1.0, 0.0], [-1.0, 0.0, 1.0]]) for x in xi]
 
 
@@ -118,7 +118,7 @@ class Tri3Bubble(Tri3):
     name = "tri3bubble"
     n_nodes = 4
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[
             1 - xi[:, 0] - xi[:, 1],
             xi[:, 0],
@@ -126,7 +126,7 @@ class Tri3Bubble(Tri3):
             (1 - xi[:, 0] - xi[:, 1]) * xi[:, 0] * xi[:, 1],
         ]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [
             np.array(
                 [
@@ -153,7 +153,7 @@ class Tri6(ElementTriangle):
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     # xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[
             (1 - xi[:, 0] - xi[:, 1]) * (1 - 2 * xi[:, 0] - 2 * xi[:, 1]),
             xi[:, 0] * (2 * xi[:, 0] - 1),
@@ -163,7 +163,7 @@ class Tri6(ElementTriangle):
             4 * xi[:, 1] * (1 - xi[:, 0] - xi[:, 1]),
         ]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [
             np.array(
                 [

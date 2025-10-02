@@ -12,8 +12,8 @@ class ElementWedge(Element):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
+        self.ShapeFunctionDerivativePG = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -196,7 +196,7 @@ class Wed6(ElementWedge):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -209,7 +209,7 @@ class Wed6(ElementWedge):
             0.5 * (1 + xi) * (1 - eta - zeta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -277,7 +277,7 @@ class Wed15(ElementWedge):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -299,7 +299,7 @@ class Wed15(ElementWedge):
             (1 - xi**2) * (1 - eta - zeta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -439,7 +439,7 @@ class Wed18(ElementWedge):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -464,7 +464,7 @@ class Wed18(ElementWedge):
             4 * eta * (xi**2 - 1) * (eta + zeta - 1),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]

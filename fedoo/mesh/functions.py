@@ -240,7 +240,7 @@ def extract_surface(
             )
 
         # for all elements
-        shape_func_val = element_face.ShapeFunction(vec_xi)
+        shape_func_val = element_face.shape_function(vec_xi)
         contact_points = (shape_func_val[:, np.newaxis, :] @ elm_nodes_crd).squeeze()
         # or equivalent :
         # contact_points = np.sum(shape_func_val[..., np.newaxis] * surf.nodes[surf.elements], axis = 1)
@@ -506,7 +506,7 @@ def change_elm_type(mesh, elm_type, name=""):
         )
 
     xi_nd = xi_nd[elm_ref.n_nodes :]
-    shape_func_val = elm_ref.ShapeFunction(xi_nd)
+    shape_func_val = elm_ref.shape_function(xi_nd)
 
     new_nodes_crd = shape_func_val @ mesh.nodes[mesh.elements]
     new_nodes = np.vstack((mesh.nodes, new_nodes_crd.reshape(-1, mesh.ndim)))

@@ -16,7 +16,7 @@ class FiniteDifference1D(Element):
             )
         self.n_elm_gp = 0
 
-    def ShapeFunction(xi_pg):
+    def shape_function(xi_pg):
         assert 0, (
             "No Shape Function for Finite Difference Method. Use lin2 or lin3 element "
             "instead"

@@ -12,8 +12,8 @@ class ElementQuadrangle(Element2D):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
+        self.ShapeFunctionDerivativePG = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp=None):
         if n_elm_gp is None:
@@ -135,7 +135,7 @@ class Quad4(ElementQuadrangle):
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         return np.c_[
@@ -145,7 +145,7 @@ class Quad4(ElementQuadrangle):
             0.25 * (1 - xi) * (1 + eta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -172,11 +172,11 @@ class Quad4r(Quad4):
     default_n_gp = 1
     n_nodes = 4
 
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         # return center value every where (as if n_pg = 1)
         return 0.25 * np.ones((len(vec_xi), 4))
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         # return center value every where (as if n_pg = 1)
         return [
             np.array(
@@ -205,7 +205,7 @@ class Quad8(ElementQuadrangle):
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     # xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         return np.c_[
@@ -219,7 +219,7 @@ class Quad8(ElementQuadrangle):
             0.5 * (1 - xi) * (1 - eta**2),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -265,7 +265,7 @@ class Quad9(ElementQuadrangle):
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     # xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         return np.c_[
@@ -280,7 +280,7 @@ class Quad9(ElementQuadrangle):
             (1 - xi**2) * (1 - eta**2),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -335,7 +335,7 @@ class Quad4Hourglass(Quad4):
         assembly._b_matrix = self._b_matrix  # for use in weakform
         super().__init__(n_elm_gp, **kargs)
 
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         h = 0.5 * np.array([[1, -1, 1, -1]])
         b = self._b_matrix
 

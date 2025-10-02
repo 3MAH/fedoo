@@ -14,10 +14,10 @@ class Lin2(Element1DGeom2, Element1D):
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[(1 - xi), xi]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [np.array([[-1.0, 1.0]]) for x in xi]
 
 
@@ -25,10 +25,10 @@ class Lin2Bubble(Lin2):
     name = "lin2bubble"
     n_nodes = 3
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[(1 - xi), xi, xi * (1 - xi)]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [np.array([[-1.0, 1.0, 1.0 - 2 * x]]) for x in xi[:, 0]]
 
 
@@ -42,15 +42,15 @@ class Lin3(Element1D):
         self.n_elm_gp = n_elm_gp
         Element1D.__init__(self, n_elm_gp)
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[2 * xi**2 - 3 * xi + 1, xi * (2 * xi - 1), 4 * xi * (1 - xi)]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [np.array([[4 * x - 3, 4 * x - 1, 4 - 8 * x]]) for x in xi[:, 0]]
 
 
 class Lin3Bubble(Lin3):
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[
             2 * xi**2 - 3 * xi + 1,
             xi * (2 * xi - 1),
@@ -58,7 +58,7 @@ class Lin3Bubble(Lin3):
             64.0 / 3 * xi**3 - 32 * xi**2 + 32.0 / 3 * xi,
         ]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [
             np.array([[4 * x - 3, 4 * x - 1, 4 - 8 * x, 64 * x**2 - 64 * x + 32.0 / 3]])
             for x in xi[:, 0]

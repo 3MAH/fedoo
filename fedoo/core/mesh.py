@@ -1163,9 +1163,9 @@ class Mesh(MeshBase):
         vec_xi = (
             elm_interpol.xi_pg
         )  # coordinate of points of gauss in element coordinate (xi)
-        elm_interpol.ComputeJacobianMatrix(
+        elm_interpol.compute_jacobian_with_inverse(
             self.nodes[self._elements_geom], vec_xi, self.local_frame
-        )  # compute elm_interpol.JacobianMatrix, elm_interpol.detJ and elm_interpol.inverseJacobian
+        )  # compute elm_interpol.jacobian_matrix, elm_interpol.detJ and elm_interpol.inv_jacobian_matrix
 
         # -------------------------------------------------------------------
         # Compute the diag matrix used for the gaussian quadrature

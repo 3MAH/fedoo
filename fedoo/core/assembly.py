@@ -57,7 +57,9 @@ class Assembly(AssemblyBase):
     _saved_change_of_basis_mat = {}
     # _saved_node2gausspoint_mat = {}
     # _saved_gausspoint2node_mat = {}
-    _saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+    _saved_associated_variables = (
+        {}
+    )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def __init__(self, weakform, mesh="", elm_type="", name="", **kargs):
         if isinstance(weakform, str):
@@ -126,7 +128,9 @@ class Assembly(AssemblyBase):
         self.sv = {}
         """ Dictionary of state variables associated to the current problem."""
         self.sv_start = {}
-        self.sv_type = {}  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
+        self.sv_type = (
+            {}
+        )  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
         self.sv_component = {}
         # allow to define output accessible with problem.get_results.
@@ -202,9 +206,7 @@ class Assembly(AssemblyBase):
                     0  # don't save block structure for finite difference mesh
                 )
 
-                Matvir = self._get_elementary_operator(
-                    wf.op_vir[0], n_elm_gp=0
-                )[
+                Matvir = self._get_elementary_operator(wf.op_vir[0], n_elm_gp=0)[
                     0
                 ].T  # should be identity matrix restricted to nodes used in the finite difference mesh
 
@@ -265,9 +267,13 @@ class Assembly(AssemblyBase):
 
                 blocks = [
                     [
-                        b
-                        if b is not None
-                        else sparse.csr_matrix((self.mesh.n_nodes, self.mesh.n_nodes))
+                        (
+                            b
+                            if b is not None
+                            else sparse.csr_matrix(
+                                (self.mesh.n_nodes, self.mesh.n_nodes)
+                            )
+                        )
                         for b in blocks_row
                     ]
                     for blocks_row in blocks
@@ -325,7 +331,9 @@ class Assembly(AssemblyBase):
                         coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
-                    if sum_coef:  # if same operator as previous with different coef, add the two coef
+                    if (
+                        sum_coef
+                    ):  # if same operator as previous with different coef, add the two coef
                         coef_PG_sum += coef_PG
                         sum_coef = False
                     else:
@@ -767,7 +775,9 @@ class Assembly(AssemblyBase):
         # Assembly._saved_gaussian_quadrature_mat = {}
         # Assembly._saved_node2gausspoint_mat = {}
         # Assembly._saved_gausspoint2node_mat = {}
-        Assembly._saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+        Assembly._saved_associated_variables = (
+            {}
+        )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def compute_elementary_operators(
         self, n_elm_gp=None
@@ -854,7 +864,9 @@ class Assembly(AssemblyBase):
         for elm_type in list_elm_type:
             elmRef = elm_type(n_elm_gp, elmGeom=elmRefGeom, assembly=self)
 
-            n_interpol_nodes = elmRef.n_nodes  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
+            n_interpol_nodes = (
+                elmRef.n_nodes
+            )  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
 
             # special treatment so that elements can have several different
             # shape functions for a same node (different kind of interpolation)
@@ -873,8 +885,8 @@ class Assembly(AssemblyBase):
             nb_dir_deriv = 0
             if hasattr(elmRef, "ShapeFunctionDerivativePG"):
                 derivativePG = (
-                    elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
-                )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
+                    elmRefGeom.inv_jacobian_matrix @ elmRef.ShapeFunctionDerivativePG
+                )  # derivativePG = np.matmul(elmRefGeom.inv_jacobian_matrix , elmRef.ShapeFunctionDerivativePG)
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = (
                 nb_dir_deriv + n_diff_interpolations
@@ -963,7 +975,6 @@ class Assembly(AssemblyBase):
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else:
-            pass
             assert 0, "Operator unavailable"
 
     def _get_gaussian_quadrature_mat(
@@ -1294,9 +1305,11 @@ class Assembly(AssemblyBase):
         if Type == "Node":
             return [
                 [
-                    self.get_node_results(op, U)
-                    if op != 0
-                    else np.zeros(self.mesh.n_nodes)
+                    (
+                        self.get_node_results(op, U)
+                        if op != 0
+                        else np.zeros(self.mesh.n_nodes)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1305,9 +1318,11 @@ class Assembly(AssemblyBase):
         elif Type == "Element":
             return [
                 [
-                    self.get_element_results(op, U)
-                    if op != 0
-                    else np.zeros(self.mesh.n_elements)
+                    (
+                        self.get_element_results(op, U)
+                        if op != 0
+                        else np.zeros(self.mesh.n_elements)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1316,9 +1331,11 @@ class Assembly(AssemblyBase):
         elif Type == "GaussPoint":
             return [
                 [
-                    self.get_gp_results(op, U)
-                    if op != 0
-                    else np.zeros(self.n_gauss_points)
+                    (
+                        self.get_gp_results(op, U)
+                        if op != 0
+                        else np.zeros(self.n_gauss_points)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1578,9 +1595,13 @@ class Assembly(AssemblyBase):
 
             # get lists of some non compatible assembly_options items for each weakform in list_weakform
             list_elm_type = [
-                elm_type
-                if elm_type != ""
-                else wf.assembly_options.get("elm_type", mesh.elm_type, mesh.elm_type)
+                (
+                    elm_type
+                    if elm_type != ""
+                    else wf.assembly_options.get(
+                        "elm_type", mesh.elm_type, mesh.elm_type
+                    )
+                )
                 for wf in list_weakform
             ]
             list_n_elm_gp = [

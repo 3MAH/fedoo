@@ -29,7 +29,7 @@ class BernoulliBeam_disp(Element1D):  # 2 nodes with derivatative dof
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(vi,vj,tetai,tetaj)]
         if np.isscalar(self.L) and self.L == 1:  # only for debug purpose
             return np.c_[
@@ -72,7 +72,7 @@ class BernoulliBeam_rot(Element1D):  # 2 nodes with derivatative dof
         self.n_elm_gp = n_elm_gp
         Element1D.__init__(self, n_elm_gp)
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(tetai,tetaj,vi,vj)]
         if np.isscalar(self.L) and self.L == 1:  # only for debug purpose
             return [
@@ -100,7 +100,7 @@ class BernoulliBeam_rot(Element1D):  # 2 nodes with derivatative dof
                 (2, 1, 0),
             )  # shape = (Nel, Nb_pg, Nddl=4)
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         # [(tetai,tetaj,vi,vj)]
         if np.isscalar(self.L) and self.L == 1:  # only for debug purpose
             return [
@@ -151,10 +151,10 @@ class BeamFCQ_lin2(Element1DGeom2, Element1D):
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[(1 - xi), xi, 0 * xi]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [np.array([[-1.0, 1.0, 0]]) for x in xi]
 
 
@@ -180,7 +180,7 @@ class BeamFCQ_rot(Element1D):  # 2 nodes with derivatative dof
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(tetai,tetaj,tetak)] #tetak -> internal dof without true physical sense
 
         # see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
@@ -189,7 +189,7 @@ class BeamFCQ_rot(Element1D):  # 2 nodes with derivatative dof
             [(1 - xi) * (1 - 3 * xi), -xi * (2 - 3 * xi), 1 - (1 - 2 * xi) ** 2]
         ).T  # shape = (Nb_pg, Nddl=3)
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return np.transpose(
             [6 * xi - 4, 6 * xi - 2, -8 * xi + 4], (1, 2, 0)
         )  # shape = (Nb_pg, Nd_deriv=1, Nddl=3)
@@ -217,7 +217,7 @@ class BeamFCQ_disp(Element1D):  # 2 nodes with derivatative dof
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(vi,vj,vk, 0, 0, vl)] #vk and vl are internal dof without physical sense. vl is taken in a non used internal dof related to another variable (dispx or rotx)
 
         # see "Ibrahim  Bitar,  St ́ephane  Grange,  Panagiotis  Kotronis,  Nathan  Benkemoun.   Diff ́erentes  for-mulations  ́el ́ements  finis  poutres  multifibres  pour  la  mod ́elisation  des  structures  sous  sollici-tations  statiques  et  sismiques.   9`eme  Colloque  National  de  l’Association  Fran ̧caise  du  G ́enieParasismique (AFPS), Nov 2015,  Marne-la-Vall ́ee,  France.  2015,  9`eme Colloque National del’Association Fran ̧caise du G ́enie Parasismique (AFPS).<hal-01300418 "
@@ -234,7 +234,7 @@ class BeamFCQ_disp(Element1D):  # 2 nodes with derivatative dof
             ]
         ).T  # shape = (Nb_pg, Nddl=6)
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return np.transpose(
             [
                 6 * xi**2 - 6 * xi,
@@ -315,7 +315,7 @@ class Beam_rotZ(Element1D):  # 2 nodes with derivatative dof
         return 0  # no shear effect
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(tetai,tetaj,vi,vj)]
         L = self.L.reshape(1, -1)
         if not (np.isscalar(self.phi) and self.phi == 0):
@@ -336,7 +336,7 @@ class Beam_rotZ(Element1D):  # 2 nodes with derivatative dof
             (2, 1, 0),
         )  # shape = (Nel, Nb_pg, Nddl=4)
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         L = self.L.reshape(1, 1, -1)
         if not (np.isscalar(self.phi) and self.phi == 0):
             phi = self.phi.reshape(1, 1, -1)
@@ -382,7 +382,7 @@ class Beam_dispY(Element1D):  # 2 nodes with derivatative dof
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         # [(vi,vj,tetai,tetaj)]
         L = self.L.reshape(1, -1)
 
@@ -402,7 +402,7 @@ class Beam_dispY(Element1D):  # 2 nodes with derivatative dof
             [Nv1, Nv2, Nth1, Nth2], (2, 1, 0)
         )  # shape = (Nel, Nb_pg, Nddl=4)
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         L = self.L.reshape(1, 1, -1)
 
         if not (np.isscalar(self.phi) and self.phi == 0):

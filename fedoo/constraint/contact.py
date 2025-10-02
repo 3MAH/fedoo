@@ -232,7 +232,7 @@ class Contact(AssemblyBase):
             #     vec_xi = self.contact_list_xi[slave_node]
 
             #     #contact points in global coordinates
-            #     shape_func_val = elm_ref.ShapeFunction(vec_xi)[0]
+            #     shape_func_val = elm_ref.shape_function(vec_xi)[0]
             #     contact_point = (shape_func_val @ elm_nodes_crd[el])
 
             #     #algebric distance from the possible elements
@@ -293,7 +293,7 @@ class Contact(AssemblyBase):
                     )
 
                 # contact points in global coordinates
-                shape_func_val = elm_ref.ShapeFunction(vec_xi)
+                shape_func_val = elm_ref.shape_function(vec_xi)
                 contact_points = (
                     shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[possible_elements]
                 ).squeeze()
@@ -393,7 +393,7 @@ class Contact(AssemblyBase):
                     ).reshape(1, -1)
 
                 # contact points in global coordinates
-                shape_func_val = elm_ref.ShapeFunction(vec_xi)[0]
+                shape_func_val = elm_ref.shape_function(vec_xi)[0]
                 contact_point = shape_func_val @ elm_nodes_crd[el]
 
                 # algebric distance from the possible elements
@@ -460,7 +460,7 @@ class Contact(AssemblyBase):
                     )
                 )
             else:
-                shape_func_deriv_val = elm_ref.ShapeFunctionDerivative(
+                shape_func_deriv_val = elm_ref.shape_function_derivative(
                     [vec_xi]
                 )[
                     0
