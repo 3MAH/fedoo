@@ -269,7 +269,14 @@ def extract_surface(
     return Mesh(mesh.nodes, surf_elements, face_elm_type)
 
 
-def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
+def extrude(
+    mesh,
+    extrude_path,
+    n_nodes=11,
+    use_local_frame=False,
+    ndim=None,
+    name="",
+):
     """
     Build a volume or surface mesh from the extrusion of a surface or wire mesh.
 
@@ -324,6 +331,9 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
         else:
             raise NameError("extrude_path argument not understood. ")
 
+    if ndim is None:
+        ndim = min(3, mesh.ndim + mesh1.ndim)  # dim of the extruded mesh
+
     n_el1 = mesh1.n_elements
     n_el = n_el1 * mesh.n_elements
     n_elm_nd0 = mesh.n_elm_nodes
@@ -334,7 +344,6 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
         dim_mesh = 1
         if mesh1.elm_type == "lin2":
             type_elm = "quad4"
-            dim_mesh1 = 1
             for i in range(mesh.n_elements):
                 elm[i * n_el1 : (i + 1) * n_el1, [0, 1]] = (
                     mesh1.elements + mesh.elements[i, 0] * mesh1.n_nodes
@@ -343,7 +352,6 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
                     mesh1.elements + mesh.elements[i, 1] * mesh1.n_nodes
                 )
         elif mesh1.elm_type == "quad4":
-            dim_mesh1 = 2
             type_elm = "hex8"
             for i in range(mesh.n_elements):
                 elm[i * n_el1 : (i + 1) * n_el1, 0:n_elm_nd1] = (
@@ -360,7 +368,6 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
     ):  # need verification because the node numerotation for lin2 has changed
         dim_mesh = 1
         if mesh1.elm_type == "lin3":  # mesh1 and mesh are lin3 elements
-            dim_mesh1 = 1
             type_elm = "quad9"
             for i in range(
                 mesh.n_elements
@@ -380,7 +387,6 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
     elif mesh.elm_type == "quad4":
         dim_mesh = 2
         if mesh1.elm_type == "lin2":
-            dim_mesh1 = 1
             type_elm = "hex8"
             for i in range(n_el1):
                 elm[i::n_el1, 0:n_elm_nd0] = (
@@ -395,7 +401,6 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
     elif mesh.elm_type == "tri3":
         dim_mesh = 2
         if mesh1.elm_type == "lin2":
-            dim_mesh1 = 1
             type_elm = "wed6"
             for i in range(n_el1):
                 elm[i::n_el1, 0:n_elm_nd0] = (
@@ -407,29 +412,36 @@ def extrude(mesh, extrude_path, n_nodes=11, use_local_frame=False, name=""):
     else:
         raise NameError("Element not implemented")
 
+    n_nodes_extruded = mesh1.n_nodes * mesh.n_nodes
     if not use_local_frame:
-        Ncrd = mesh1.n_nodes * mesh.n_nodes
-        #                crd = np.c_[np.tile(mesh1.nodes[:,:dim_mesh1],(mesh.n_nodes,1)), \
-        #                            np.reshape([np.ones((mesh1.n_nodes,1))*mesh.nodes[i,:dim_mesh] for i in range(mesh.n_nodes)] ,(Ncrd,-1)) ]
-        crd = np.c_[
-            np.reshape(
-                [
-                    np.ones((mesh1.n_nodes, 1)) * mesh.nodes[i, :dim_mesh]
-                    for i in range(mesh.n_nodes)
-                ],
-                (Ncrd, -1),
-            ),
-            np.tile(mesh1.nodes[:, :dim_mesh1], (mesh.n_nodes, 1)),
-        ]
-    elif dim_mesh == 1:  # dim_mesh is the thickness
-        crd = np.zeros((mesh1.n_nodes * mesh.n_nodes, np.shape(mesh1.nodes)[1]))
-        for i in range(mesh.n_nodes):
-            crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
-                mesh1.nodes + mesh1.local_frame[:, -1, :] * mesh.nodes[i][0]
-            )
-    else:
-        return NotImplemented
+        if mesh1.ndim + mesh.ndim <= ndim:
+            crd = np.c_[
+                np.repeat(mesh.nodes, mesh1.n_nodes, axis=0),
+                np.tile(mesh1.nodes, (mesh.n_nodes, 1)),
+            ]
+        else:
+            crd = np.repeat(mesh.as_ndim(ndim).nodes, mesh1.n_nodes, axis=0)
+            crd[:, : mesh1.ndim] += np.tile(mesh1.nodes, (mesh.n_nodes, 1))
 
+    else:  # dim_mesh is the thickness
+        if dim_mesh == 1:
+            crd = np.zeros((n_nodes_extruded, np.shape(mesh1.nodes)[1]))
+            for i in range(mesh.n_nodes):
+                crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
+                    mesh1.nodes + mesh1.local_frame[:, -1, :] * mesh.nodes[i][0]
+                )
+        elif dim_mesh == 2:
+            crd = np.zeros((n_nodes_extruded, np.shape(mesh1.nodes)[1]))
+            for i in range(mesh.n_nodes):
+                crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
+                    mesh1.nodes
+                    + mesh1.local_frame[:, 1, :] * mesh.nodes[i][0]
+                    + mesh1.local_frame[:, 2, :] * mesh.nodes[i][1]
+                )
+        else:
+            return NotImplemented
+
+    ### CHECK ndim add add 0 if required ####
     return Mesh(crd, elm, type_elm, name=name)
 
 

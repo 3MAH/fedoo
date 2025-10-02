@@ -110,6 +110,7 @@ class get_config:
             core.dataset.USE_MPL = value
         elif item == "USE_PYVISTA_QT":
             core.dataset.USE_PYVISTA_QT = value
+            core.mesh.USE_PYVISTA_QT = value
         elif item == "USE_PANDAS":
             core.dataset.USE_PANDAS = value
         else:

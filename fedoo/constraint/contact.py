@@ -95,7 +95,12 @@ class Contact(AssemblyBase):
                     ]
                 )
             else:
-                return NotImplemented
+                raise NotImplementedError(
+                    f"'{self.mesh.elm_type}' elements are not "
+                    "supported in contact. Use either 'tri3' "
+                    "or 'lin2' elements."
+                )
+
             self.bucket_size = np.sqrt(2) * max_edge_size
             # self.bucket_size = self.mesh.bounding_box.size.max()/10 #bucket size #bounding box includes all nodes
         elif search_algorithm.lower() != "search_nearest":

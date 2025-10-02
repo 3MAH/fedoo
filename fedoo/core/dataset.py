@@ -281,6 +281,13 @@ class DataSet:
         **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
+
+        Notes
+        -----
+        If the package pyvistaqt is installed, the BackgroundPlotter is used
+        by default. To desactivate pyvistaqt, set the fedoo config:
+
+            >>> fedoo.get_config()['USE_PYVISTA_QT'] = False
         """
 
         if not (USE_PYVISTA):

@@ -18,6 +18,13 @@ try:
 except ImportError:
     USE_PYVISTA = False
 
+try:
+    import pyvistaqt as pvqt
+
+    USE_PYVISTA_QT = True
+except ImportError:
+    USE_PYVISTA_QT = False
+
 
 class Mesh(MeshBase):
     """Fedoo Mesh object.
@@ -82,16 +89,15 @@ class Mesh(MeshBase):
         if node_sets is None:
             node_sets = {}
         self.node_sets = node_sets
-        """Dict containing node sets associated to the mesh"""
+        """Dict containing node sets associated to the mesh."""
 
         if element_sets is None:
             element_sets = {}
         self.element_sets = element_sets
-        """Dict containing element sets associated to the mesh"""
+        """Dict containing element sets associated to the mesh."""
 
-        self.local_frame: np.ndarray | None = (
-            None  # contient le repere locale (3 vecteurs unitaires) en chaque noeud. Vaut 0 si pas de rep locaux definis
-        )
+        self.local_frame: np.ndarray | None = None
+        """Optional nodal local Frame."""
 
         if ndim is None:
             ndim = self.nodes.shape[1]
@@ -427,7 +433,9 @@ class Mesh(MeshBase):
 
         ind_coincident = np.where(
             np.linalg.norm(crd[ind_sorted[:-1]] - crd[ind_sorted[1:]], axis=1) == 0
-        )[0]  # indices of the first coincident nodes
+        )[
+            0
+        ]  # indices of the first coincident nodes
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident + 1]]).T
 
     def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
@@ -447,9 +455,7 @@ class Mesh(MeshBase):
         for nd in range(n_nodes):
             if j < len(nds_del) and nd == nds_del[ordre[j]]:
                 # test if some nodes are equal to deleted node among the kept nodes. If required update the kept nodes values
-                deleted_nodes = np.where(
-                    nds_kept == nds_del[ordre[j]]
-                )[
+                deleted_nodes = np.where(nds_kept == nds_del[ordre[j]])[
                     0
                 ]  # index of nodes to kept that are deleted and need to be updated to their new values
                 nds_kept[deleted_nodes] = nds_kept[ordre[j]]
@@ -544,7 +550,7 @@ class Mesh(MeshBase):
             element set that exist in the dict: mesh.node_sets with the given key.
             If a list (or similar object) is given, it should contains
             the indices of the nodes.
-        name : str, default: ""
+        name : str, default=""
             The name of the new Mesh
 
         Returns
@@ -972,10 +978,11 @@ class Mesh(MeshBase):
     def plot(self, show_edges: bool = True, **kargs) -> None:
         """Simple plot function using pyvista.
 
-        This function is proposed for quick visulation of Mesh. For advanced visualization,
-        it is recommanded to build a DataSet object of the mesh before plotting
-        (for instance fedoo.DataSet(mesh).plot()) or to convert the mesh to pyvista
-        with the to_pyvista() method and directly use the pyvista plot funcitonnalities.
+        This function is proposed for quick visulation of Mesh. For advanced
+        visualization, it is recommanded to build a DataSet object of the mesh before
+        plotting (for instance fedoo.DataSet(mesh).plot()) or to convert the mesh to
+        pyvista with the to_pyvista() method and directly use the pyvista plot
+        funcitonnalities.
 
         Parameters
         ----------
@@ -983,16 +990,24 @@ class Mesh(MeshBase):
             If False, the edges are not plotted (default = True)
         kargs: arguments directly passed to the pyvista
             plot method. See the documentation of pyvista for available options.
+
+        Notes
+        -----
+        If the package pyvistaqt is installed, the BackgroundPlotter is used
+        by default. To desactivate pyvistaqt, set the fedoo config:
+
+            >>> fedoo.get_config()['USE_PYVISTA_QT'] = False
         """
-        if USE_PYVISTA:
+        if USE_PYVISTA_QT:
+            pl = pvqt.BackgroundPlotter()
+            pl.add_mesh(self.to_pyvista(), show_edges=show_edges, **kargs)
+        elif USE_PYVISTA:
             self.to_pyvista().plot(show_edges=show_edges, **kargs)
         else:
             raise NameError("Pyvista not installed.")
 
     def get_element_local_frame(self, n_elm_gp: int = 1) -> np.ndarray:
-        elm_ref = get_element(
-            self.elm_type
-        )(
+        elm_ref = get_element(self.elm_type)(
             n_elm_gp
         )  # 1 gauss point by default to compute the local frame at the center of the element
         elm_nodes_crd = self.nodes[self.elements]
@@ -1012,42 +1027,52 @@ class Mesh(MeshBase):
     def plot_normals(self, mag: float = 1.0, show_mesh: bool = True, **kargs) -> None:
         """Simple functions to plot the normals of a surface Mesh.
 
-        This function is proposed for quick visual verification of normals
+        This function is proposed for visual verification of normals
         orientations. The normals are plotted at the center of the elements.
 
         Parameters
         ----------
-        mag : float
-            Size of the arrows (default = 1).
-        show_mesh : bool
-            If False, the mesh is not rendered (default = True)
+        mag : float, default=1
+            Size of the arrows.
+        show_mesh : bool, default=True
+            If False, the mesh is not rendered.
         kargs: arguments directly passed to the pyvista
             add_mesh method. See the documentation of pyvista for available options.
+
+        Notes
+        -----
+        If the package pyvistaqt is installed, the BackgroundPlotter is used
+        by default. To desactivate pyvistaqt, set the fedoo config:
+
+            >>> fedoo.get_config()['USE_PYVISTA_QT'] = False
         """
-        if USE_PYVISTA:
+        if USE_PYVISTA_QT:
+            pl = pvqt.BackgroundPlotter()
+        elif USE_PYVISTA:
             pl = pv.Plotter()
-
-            if show_mesh:
-                pl.add_mesh(self.to_pyvista(), **kargs)
-
-            centers = self.element_centers
-            normals = self.get_element_local_frame()[:, -1]
-
-            if self.ndim < 3:
-                normals = np.column_stack(
-                    (normals, np.zeros((self.n_elements, 3 - self.ndim)))
-                )
-                centers = np.column_stack(
-                    (
-                        self.element_centers,
-                        np.zeros((self.n_elements, 3 - self.ndim)),
-                    )
-                )
-
-            pl.add_arrows(centers, normals, mag=mag, show_scalar_bar=False)
-            pl.show()
         else:
             raise NameError("Pyvista not installed.")
+
+        if show_mesh:
+            pl.add_mesh(self.to_pyvista(), **kargs)
+
+        centers = self.element_centers
+        normals = self.get_element_local_frame()[:, -1]
+
+        if self.ndim < 3:
+            normals = np.column_stack(
+                (normals, np.zeros((self.n_elements, 3 - self.ndim)))
+            )
+            centers = np.column_stack(
+                (
+                    self.element_centers,
+                    np.zeros((self.n_elements, 3 - self.ndim)),
+                )
+            )
+
+        pl.add_arrows(centers, normals, mag=mag, show_scalar_bar=False)
+        if not (USE_PYVISTA_QT):
+            pl.show()
 
     def init_interpolation(self, n_elm_gp: int | None = None) -> None:
         # in principle, no need to recompute if the structure is changed.
@@ -1069,7 +1094,9 @@ class Mesh(MeshBase):
 
         elm_interpol = elm_interpol(n_elm_gp)  # initialise element interpolation
 
-        n_interpol_nodes = elm_interpol.n_nodes  # len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_interpol_nodes = n_elm_nd
+        n_interpol_nodes = (
+            elm_interpol.n_nodes
+        )  # len(elm_interpol.xi_nd) #number of dof used in the geometrical interpolation for each element - for isoparametric elements n_interpol_nodes = n_elm_nd
 
         elm_geom = self.elements[
             :, :n_interpol_nodes
@@ -1343,51 +1370,36 @@ class Mesh(MeshBase):
         """
         return self._get_node2gausspoint_mat(n_elm_gp) @ self.nodes
 
-    def as_2d(self, inplace: bool = False) -> "Mesh":
-        """Return a view of the current mesh in 2D.
+    def as_ndim(self, ndim, inplace: bool = False) -> "Mesh":
+        """Change the number of dimensions of the mesh.
 
-        If inplace is True (default=False), the current mesh is modified.
+        This method modifies only the `nodes` attribute. All other attributes
+        remain unchanged.
 
-        Warning: this method don't check if the element type is compatible
-        with a 2d mesh. It only truncate or add zeros to the nodes list to force
-        a 2d mesh. The returned mesh may not be valid.
+        Parameters
+        ----------
+        ndim : int
+            Number of dimensions for the returned mesh.
+        inplace : bool, default=False
+            If True, modifies the current mesh in place.
+            If False, returns a new mesh that shares memory with the original one
+            for most attributes.
+
+        Warnings
+        --------
+        This method does not check whether the element type is compatible
+        with the new dimensionality. It simply truncates or pads the node coordinates
+        with zeros. As a result, the returned mesh may be invalid.
         """
-
-        if self.ndim == 2:
+        if self.ndim == ndim:
             return self
         else:
-            if self.ndim == 1:
-                nodes = np.column_stack((self.nodes, np.zeros(self.n_nodes)))
-            else:
-                nodes = self.nodes[:, :2]
-            if inplace:
-                self.nodes = nodes
-                return self
-            return Mesh(
-                nodes,
-                self.elements,
-                self.elm_type,
-                self.node_sets,
-                self.element_sets,
-            )
-
-    def as_3d(self, inplace: bool = False) -> "Mesh":
-        """Return a view of the current mesh in 3D.
-
-        If inplace is True (default=False), the current mesh is modified.
-
-        This method truncate or add zeros to the nodes list to force
-        a 3d mesh."""
-
-        if self.ndim == 3:
-            return self
-        else:
-            if self.ndim < 3:
+            if self.ndim < ndim:
                 nodes = np.column_stack(
-                    (self.nodes, np.zeros((self.n_nodes, 3 - self.ndim)))
+                    (self.nodes, np.zeros((self.n_nodes, ndim - self.ndim)))
                 )
             else:
-                nodes = self.nodes[:, :3]
+                nodes = self.nodes[:, :ndim]
             if inplace:
                 self.nodes = nodes
                 return self
@@ -1399,6 +1411,28 @@ class Mesh(MeshBase):
                     self.node_sets,
                     self.element_sets,
                 )
+
+    def as_2d(self, inplace: bool = False) -> "Mesh":
+        """Return a view of the current mesh in 2D.
+
+        This method truncate or add zeros to the nodes list to force
+        a 2d mesh.
+        It is equivalent to: mesh.as_ndim(2).
+
+        If inplace is True (default=False), the current mesh is modified.
+        """
+        return self.as_ndim(2, inplace)
+
+    def as_3d(self, inplace: bool = False) -> "Mesh":
+        """Return a view of the current mesh in 3D.
+
+        This method truncate or add zeros to the nodes list to force
+        a 3d mesh.
+        It is equivalent to: mesh.as_ndim(3).
+
+        If inplace is True (default=False), the current mesh is modified.
+        """
+        return self.as_ndim(3, inplace)
 
     @property
     def n_nodes(self) -> int:

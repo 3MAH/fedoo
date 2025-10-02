@@ -180,7 +180,7 @@ def grid_mesh_cylindric(
     theta_min=0,
     theta_max=1,
     elm_type="quad4",
-    init_rep_loc=0,
+    init_local_frame=0,
     ndim=None,
     name="",
 ):
@@ -199,8 +199,8 @@ def grid_mesh_cylindric(
         * 'quad4' -- 4 node quadrangular mesh
         * 'quad8' -- 8 node quadrangular mesh (à tester)
         * 'quad9' -- 9 node quadrangular mesh
-    init_rep_loc : {0, 1}
-        if init_rep_loc is set to 1, the local basis is initialized with the global basis.
+    init_local_frame : {0, 1}
+        if init_local_frame is set to 1, the local basis is initialized with the global basis.
 
     Returns
     -------
@@ -299,7 +299,7 @@ def line_mesh_1D(n_nodes=11, x_min=0, x_max=1, elm_type="lin2", name=""):
     return Mesh(crd, elm, elm_type, node_sets, name=name)
 
 
-def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type="lin2", ndim=None, name=""):
+def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type="lin2", ndim=2, name=""):
     """
     Create the Mesh of a straight line
 
@@ -329,7 +329,7 @@ def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type="lin2", ndim=None, name="")
     """
     if np.isscalar(x_min):
         m = line_mesh_1D(n_nodes, x_min, x_max, elm_type, name)
-        crd = np.c_[m.nodes, np.zeros((n_nodes, ndim - 1))]
+        crd = np.c_[m.nodes, np.zeros((m.n_nodes, ndim - 1))]
         return Mesh(crd, m.elements, elm_type, m.node_sets, name=name)
     else:
         m = line_mesh_1D(n_nodes, 0.0, 1.0, elm_type, name)
@@ -339,13 +339,13 @@ def line_mesh(n_nodes=11, x_min=0, x_max=1, elm_type="lin2", ndim=None, name="")
 
 
 def line_mesh_cylindric(
-    nt=11,
+    nt=12,
     r=1,
     theta_min=0,
     theta_max=3.14,
     elm_type="lin2",
-    init_rep_loc=0,
-    ndim=None,
+    init_local_frame=0,
+    ndim=2,
     name="",
 ):
     """
@@ -362,8 +362,67 @@ def line_mesh_cylindric(
         * 'lin2' -- 2 node line
         * 'lin3' -- 3 node line
         * 'lin4' -- 4 node line
-    init_rep_loc : {0, 1}
-        if init_rep_loc is set to 1, the local frame is initialized with the cylindrical local basis.
+    init_local_frame : bool, default = False
+        if init_local_frame True, the local frame is initialized with the cylindrical
+        local basis.
+
+    Returns
+    -------
+    Mesh
+        The generated geometry in Mesh format. See the Mesh class for more details.
+
+    See Also
+    --------
+    line_mesh : Mesh of a line whith choosen dimension
+    rectangle_mesh : Surface mesh of a rectangle
+    box_mesh : Volume mesh of a box
+    grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate
+    """
+    # init_local_frame = 1 si on veut initialiser le repère local (0 par défaut)
+    m = line_mesh_1D(nt, theta_min, theta_max, elm_type, name)
+    theta = m.nodes[:, 0]
+    elm = m.elements
+
+    crd = np.c_[r * np.cos(theta), r * np.sin(theta)]
+
+    returned_mesh = Mesh(crd, elm, elm_type, m.node_sets, {}, ndim, name)
+
+    if init_local_frame:
+        returned_mesh.local_frame = np.array(
+            [[[np.sin(t), -np.cos(t)], [np.cos(t), np.sin(t)]] for t in theta]
+        )
+
+    return returned_mesh
+
+
+def circle_mesh(
+    n=12,
+    r=1,
+    elm_type="lin2",
+    init_local_frame=0,
+    ndim=2,
+    name="",
+):
+    """
+    Create the mesh of a cicle.
+
+    Parameters
+    ----------
+    n : int, default=12
+        Number of nodes along the angular coordinate.
+    r : float, default=1.
+        Radius of the circle.
+    elm_type : {'lin2', 'lin3', 'lin4'}, default='lin2'
+        Type of line elements used in the mesh:
+        * 'lin2' -- 2-node line
+        * 'lin3' -- 3-node line
+        * 'lin4' -- 4-node line
+    init_local_frame : bool, default=False
+        If True, initializes the local frame using a cylindrical basis
+    ndim : int, default=2
+        Dimension of the mesh.
+    name : str, optional
+        Name of the mesh.
 
     Returns
     -------
@@ -378,21 +437,24 @@ def line_mesh_cylindric(
     grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate
     line_mesh_cylindric : Line mesh in cylindrical coordinate
     """
-    # init_rep_loc = 1 si on veut initialiser le repère local (0 par défaut)
-    m = line_mesh_1D(nt, theta_min, theta_max, elm_type, name)
-    theta = m.nodes[:, 0]
-    elm = m.elements
+    m = line_mesh_cylindric(
+        n + 1,
+        r,
+        0,
+        2 * np.pi,
+        elm_type,
+        init_local_frame,
+        ndim,
+        name,
+    )
 
-    crd = np.c_[r * np.cos(theta), r * np.sin(theta)]
+    m.nodes = m.nodes[:-1]
+    m.elements[-1, -1] = 0
 
-    returned_mesh = Mesh(crd, elm, elm_type, m.node_sets, {}, ndim, name)
+    if init_local_frame:
+        m.local_frame = m.local_frame[:-1]
 
-    if init_rep_loc:
-        local_frame = np.array(
-            [[[np.sin(t), -np.cos(t)], [np.cos(t), np.sin(t)]] for t in theta]
-        )
-
-    return returned_mesh
+    return m
 
 
 def box_mesh(
@@ -753,7 +815,7 @@ def box_mesh(
 if __name__ == "__main__":
     import math
 
-    a = line_mesh_cylindric(11, 1, 0, math.pi, "lin2", init_rep_loc=0)
-    b = line_mesh_cylindric(11, 1, 0, math.pi, "lin4", init_rep_loc=1)
+    a = line_mesh_cylindric(11, 1, 0, math.pi, "lin2", init_local_frame=0)
+    b = line_mesh_cylindric(11, 1, 0, math.pi, "lin4", init_local_frame=1)
 
     print(b.nodes)
