@@ -37,10 +37,11 @@ problem.bc is then a :py:class:`fedoo.ListBC` Object.
 Dirichlet and Neumann Boundary conditions
 ____________________________________________
 
-The usual boundary conditions are associated with the
-:py:class:`fedoo.core.BoundaryCondition` Object. The recommanded way to
-apply some boundary conditions is to use the method :py:meth:`fedoo.ListBC.add`,
-directly from problem attribute :py:attr:`fedoo.Problem.bc`.
+The recommanded way to apply some boundary conditions is to use the method
+:py:meth:`fedoo.ListBC.add`, directly from problem attribute
+:py:attr:`fedoo.Problem.bc`.
+This method build a :py:class:`fedoo.core.BoundaryCondition` object and add it to
+the problem boundary conditions.
 
 .. autosummary::
    :toctree: generated/
