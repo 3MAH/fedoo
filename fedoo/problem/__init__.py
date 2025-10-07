@@ -18,16 +18,17 @@ To create a new Problem, use one of the following function:
    NonLinearNewmark
    ExplicitDynamic
 
-Each of these functions creates an object that is derived from a \
-   base class "ProblemBase".
+Each of these functions creates an object that is derived from the \
+   base classes "ProblemBase" or "Problem".
 
-.. currentmodule:: fedoo.core.base
+.. currentmodule:: fedoo
 
 .. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
-   ProblemBase
+   fedoo.core.base.ProblemBase
+   fedoo.Problem
 """
 
 from .explicit_dynamic import ExplicitDynamic
