@@ -41,8 +41,6 @@ def compute_mechanical_fields(
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
 
-    strain_nodes = mesh.add_virtual_nodes(2)
-
     material = fd.constitutivelaw.ElasticIsotrop(young_modulus, poisson_ratio)
 
     # Assembly
@@ -53,44 +51,16 @@ def compute_mechanical_fields(
     # Type of problem
     pb = fd.problem.Linear(assemb)
 
-    # Shall add other conditions later on
-    bc_periodic = fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]],
-        ["DispX", "DispY", "DispY"],
-        dim=2,
-    )
+    bc_periodic = fd.constraint.PeriodicBC(periodicity_type="small_strain")
+    # bc_periodic.shear_coef = 1
     pb.bc.add(bc_periodic)
 
-    pb.bc.add("Dirichlet", strain_nodes[1], "DispX", 0)
     pb.bc.add("Dirichlet", center, "Disp", 0, name="center")
 
-    pb.apply_boundary_conditions()
-
     pb.bc.remove("_Strain")
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispX",
-        eps_xx,
-        start_value=0,
-        name="_Strain",
-    )  # EpsXX
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispY",
-        eps_yy,
-        start_value=0,
-        name="_Strain",
-    )  # EpsYY
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispY",
-        gamma_xy,
-        start_value=0,
-        name="_Strain",
-    )  # 2EpsXY
+    pb.bc.add("Dirichlet", "E_xx", eps_xx, name="_Strain")
+    pb.bc.add("Dirichlet", "E_yy", eps_yy, name="_Strain")
+    pb.bc.add("Dirichlet", "E_xy", gamma_xy, name="_Strain")  # gamma_xy
 
     pb.apply_boundary_conditions()
 
@@ -132,6 +102,7 @@ def mesh_updater(
     strain_xx: float, strain_yy: float, strain_xy: float, hole_radius: float
 ) -> pv.PolyData:
     mesh = hole_plate_mesh(hole_radius=hole_radius)
+    # mesh = fd.mesh.rectangle_mesh()
     (
         stress_field_per_node,
         displacement,
@@ -154,9 +125,9 @@ class StressRoutine:
         self.output = mesh  # Expected PyVista mesh type
         # default parameters
         self.kwargs = {
-            "strain_xx": 0.025,
-            "strain_yy": 0.025,
-            "strain_xy": 0.025,
+            "strain_xx": 0.0,
+            "strain_yy": 0.0,
+            "strain_xy": 0.0,
             "hole_radius": 20,
         }
 
@@ -178,7 +149,7 @@ class StressRoutine:
         return
 
 
-start_mesh = mesh_updater(0.03, -0.025, 0.025, 20)
+start_mesh = mesh_updater(0.0, -0.0, 0.0, 20)
 engine = StressRoutine(start_mesh)
 
 start_mesh.ComputeBounds()
@@ -200,7 +171,7 @@ pl.add_mesh(
 pl.add_slider_widget(
     callback=lambda value: engine("strain_xx", value),
     rng=STRAIN_RANGES,
-    value=0.025,
+    value=0.0,
     title="Mean Strain X",
     pointa=(0.025, 0.9),
     pointb=(0.14, 0.9),
@@ -212,7 +183,7 @@ pl.add_slider_widget(
 pl.add_slider_widget(
     callback=lambda value: engine("strain_yy", value),
     rng=STRAIN_RANGES,
-    value=0.025,
+    value=0.0,
     title="Mean Strain Y",
     pointa=(0.28, 0.9),
     pointb=(0.42, 0.9),
@@ -223,7 +194,7 @@ pl.add_slider_widget(
 pl.add_slider_widget(
     callback=lambda value: engine("strain_xy", value),
     rng=STRAIN_RANGES,
-    value=0.025,
+    value=0.0,
     title="Mean Strain XY",
     pointa=(0.57, 0.9),
     pointb=(0.71, 0.9),
