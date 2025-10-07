@@ -26,13 +26,27 @@ the problem in the "*bc*" attribute of the problem instance.
 
 problem.bc is then a :py:class:`fedoo.ListBC` Object.
 
-.. autoclass:: fedoo.ListBC
-    :members:
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+   
+   fedoo.ListBC
 
 
 
 Dirichlet and Neumann Boundary conditions
 ____________________________________________
+
+The usual boundary conditions are associated with the
+:py:class:`fedoo.core.BoundaryCondition` Object. The recommanded way to
+apply some boundary conditions is to use the method :py:meth:`fedoo.ListBC.add`,
+directly from problem attribute :py:attr:`fedoo.Problem.bc`.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.core.BoundaryCondition
 
 Here are some examples to add some Dirichlet or Neumann Boundary conditions
 for a given problem  *pb*:
