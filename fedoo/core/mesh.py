@@ -1124,7 +1124,7 @@ class Mesh(MeshBase):
         # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)
         # -------------------------------------------------------------------
         PGtoNode = np.linalg.pinv(
-            elm_interpol.ShapeFunctionPG
+            elm_interpol.shape_function_gp
         )  # pseudo-inverse of NodeToPG
         dataPGtoNode = PGtoNode.T.reshape(
             (1, n_elm_gp, n_interpol_nodes)
@@ -1140,7 +1140,7 @@ class Mesh(MeshBase):
         # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)
         # -------------------------------------------------------------------
         dataNodeToPG = np.empty((n_elements, n_elm_gp, n_interpol_nodes))
-        dataNodeToPG[:] = elm_interpol.ShapeFunctionPG.reshape(
+        dataNodeToPG[:] = elm_interpol.shape_function_gp.reshape(
             (1, n_elm_gp, n_interpol_nodes)
         )
         self._saved_node2gausspoint_mat[n_elm_gp] = sparse.coo_matrix(

@@ -156,10 +156,10 @@ class Element1D(Element):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
 
         if hasattr(self, "shape_function_derivative"):
-            self.ShapeFunctionDerivativePG = self.shape_function_derivative(self.xi_pg)
+            self.shape_function_derivative_gp = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -361,9 +361,9 @@ class Element1DGeom2(
             -1, 1, 1, 1
         )  # dxi/dx -> scalar #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 
-    #        self.derivativePG = self.inv_jacobian_matrix.reshape(-1,1,1,1) * np.array(self.ShapeFunctionDerivativePG).reshape(1,len(vec_xi),1,-1)
+    #        self.derivativePG = self.inv_jacobian_matrix.reshape(-1,1,1,1) * np.array(self.shape_function_derivative_gp).reshape(1,len(vec_xi),1,-1)
     #        self.inv_jacobian_matrix = [np.array([qq]) for xi in vec_xi] #qq est constant sur l'élément
-    #        self.derivativePG = np.array([self.inv_jacobian_matrix[k] * self.ShapeFunctionDerivativePG[k] for k in range(len(vec_xi))])
+    #        self.derivativePG = np.array([self.inv_jacobian_matrix[k] * self.shape_function_derivative_gp[k] for k in range(len(vec_xi))])
 
     def GetLocalFrame(self, vec_x, vec_xi, localFrame=None):  # linear local frame
         # return Element1D.GetLocalFrame(self,vec_x, vec_xi, localFrame)

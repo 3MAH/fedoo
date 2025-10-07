@@ -11,8 +11,8 @@ class ElementTriangle(Element2D):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.shape_function_derivative(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
+        self.shape_function_derivative_gp = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:

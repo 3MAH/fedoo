@@ -17,7 +17,7 @@ class PeriodicBC(BCBase):
     * For "small_strain" the linearized strain tensor components are introduced. The
       following global variables are therefore accessible:
       'E_xx', 'E_yy', 'E_zz', 'E_xy', 'E_xz', 'E_yz' in 3d (only the in-plane
-      component in 2d)
+      component in 2d).
       The whole component can also be extracted using the vector name 'MeanStrain.'
     * For "finite_strain", the displacement gradient is utilized:
       'DU_xx', 'DU_xy', 'DU_xz', 'DU_yx', 'DU_yy', 'DU_yz', 'DU_zx', 'DU_zy', 'DU_zz'
@@ -56,6 +56,10 @@ class PeriodicBC(BCBase):
     * The periodic nodes are automatically detected using the given tolerance (tol).
     * The nodes of the Xp (x=xmax), Yp (y=ymax) and Zp (z=zmax) faces are
       eliminated from the system (slave nodes) and can't be used in another mpc.
+    * For "small_strain" periodicity, the shear strain components are expressed
+      with the Voigt notation which uses shear angles rather than the corresponding
+      strain tensor terms—these differ by a factor of 2. This behavior can be changed
+      by setting the shear_coef attribute to 1 (see example below).
 
 
     Example
@@ -67,6 +71,8 @@ class PeriodicBC(BCBase):
 
         mesh = fd.mesh.box_mesh()
         bc_periodic = fd.constraint.PeriodicBC(periodicity_type = 'small_strain')
+        bc_periodic = fd.constraint.PeriodicBC(periodicity_type="small_strain")
+        bc_periodic.shear_coef = 1  # use strain tensor shear terms instead of angles
     """
 
     def __init__(

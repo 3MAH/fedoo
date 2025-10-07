@@ -873,20 +873,20 @@ class Assembly(AssemblyBase):
             # that may be used with different x values (op_deriv.x)
             # required for 3D hourglass
             n_diff_interpolations = 1
-            if isinstance(elmRef.ShapeFunctionPG, list):
-                n_diff_interpolations = len(elmRef.ShapeFunctionPG)
-                shape_functions = elmRef.ShapeFunctionPG
-                NbDoFperNode = elmRef.ShapeFunctionPG[0].shape[-1] // n_interpol_nodes
+            if isinstance(elmRef.shape_function_gp, list):
+                n_diff_interpolations = len(elmRef.shape_function_gp)
+                shape_functions = elmRef.shape_function_gp
+                NbDoFperNode = elmRef.shape_function_gp[0].shape[-1] // n_interpol_nodes
             else:
-                shape_functions = [elmRef.ShapeFunctionPG]
-                NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
+                shape_functions = [elmRef.shape_function_gp]
+                NbDoFperNode = elmRef.shape_function_gp.shape[-1] // n_interpol_nodes
             # end special treatment
 
             nb_dir_deriv = 0
-            if hasattr(elmRef, "ShapeFunctionDerivativePG"):
+            if hasattr(elmRef, "shape_function_derivative_gp"):
                 derivativePG = (
-                    elmRefGeom.inv_jacobian_matrix @ elmRef.ShapeFunctionDerivativePG
-                )  # derivativePG = np.matmul(elmRefGeom.inv_jacobian_matrix , elmRef.ShapeFunctionDerivativePG)
+                    elmRefGeom.inv_jacobian_matrix @ elmRef.shape_function_derivative_gp
+                )  # derivativePG = np.matmul(elmRefGeom.inv_jacobian_matrix , elmRef.shape_function_derivative_gp)
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = (
                 nb_dir_deriv + n_diff_interpolations

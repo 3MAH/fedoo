@@ -48,8 +48,10 @@ class BCBase:
 
 
 class ListBC(BCBase):
-    """Class that define a list of ordered elementary boundary conditions (the bc are applied in the list order).
-    Derived from the python list object"""
+    """List of boundary conditions.
+
+    Class that define a list of ordered elementary boundary conditions (the bc are applied in the list order).
+    Derived from the python list object."""
 
     def __init__(self, l=None, name=""):
         BCBase.__init__(self, name)
@@ -262,9 +264,7 @@ class ListBC(BCBase):
 
 class BoundaryCondition(BCBase):
     """
-    Classe de condition limite
-
-    Advice: For PGD problems, it is more efficient to define zeros values BC first  (especially for MPC)
+    Basic boundary conditions.
     """
 
     def __init__(

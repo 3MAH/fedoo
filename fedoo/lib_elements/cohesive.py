@@ -17,7 +17,7 @@ class Node2Jump(Element1DGeom2):
             [0.0, 0.0]
         ]  # The values are arbitrary, only the size is important
         self.w_pg = np.array([1.0])
-        self.ShapeFunctionPG = self.shape_function(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
 
     def compute_jacobian_with_inverse(self, vec_x, vec_xi, local_frame=None):
         ### local_frame not used here ###
