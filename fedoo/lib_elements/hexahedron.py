@@ -537,6 +537,6 @@ class Hex8Hourglass(Hex8):
         xi_center = self.get_gp_elm_coordinates(1)
         self.compute_jacobian_with_inverse(self.x_nd, xi_center)
         # should try to avoid computing multiple time J
-        return (self.inv_jacobian_matrix @ self.shape_function_derivative(xi_center)[0])[
-            :, 0
-        ].transpose(1, 2, 0)
+        return (
+            self.inv_jacobian_matrix @ self.shape_function_derivative(xi_center)[0]
+        )[:, 0].transpose(1, 2, 0)

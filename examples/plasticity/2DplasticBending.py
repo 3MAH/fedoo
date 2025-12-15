@@ -44,9 +44,7 @@ elif mat == 1:
     k = 1000
     m = 0.25
     props = np.array([E, nu, alpha, Re, k, m])
-    material = fd.constitutivelaw.Simcoon(
-        "EPICP", props, name="ConstitutiveLaw"
-    )
+    material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
 
 
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)

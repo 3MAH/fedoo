@@ -57,9 +57,7 @@ class Assembly(AssemblyBase):
     _saved_change_of_basis_mat = {}
     # _saved_node2gausspoint_mat = {}
     # _saved_gausspoint2node_mat = {}
-    _saved_associated_variables = (
-        {}
-    )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+    _saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def __init__(self, weakform, mesh="", elm_type="", name="", **kargs):
         if isinstance(weakform, str):
@@ -128,9 +126,7 @@ class Assembly(AssemblyBase):
         self.sv = {}
         """ Dictionary of state variables associated to the current problem."""
         self.sv_start = {}
-        self.sv_type = (
-            {}
-        )  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
+        self.sv_type = {}  # type of values (between 'Node', 'Element' and 'GaussPoint'. default = 'GaussPoint' if field not present in sv_type)
 
         self.sv_component = {}
         # allow to define output accessible with problem.get_results.
@@ -206,7 +202,9 @@ class Assembly(AssemblyBase):
                     0  # don't save block structure for finite difference mesh
                 )
 
-                Matvir = self._get_elementary_operator(wf.op_vir[0], n_elm_gp=0)[
+                Matvir = self._get_elementary_operator(
+                    wf.op_vir[0], n_elm_gp=0
+                )[
                     0
                 ].T  # should be identity matrix restricted to nodes used in the finite difference mesh
 
@@ -331,9 +329,7 @@ class Assembly(AssemblyBase):
                         coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
-                    if (
-                        sum_coef
-                    ):  # if same operator as previous with different coef, add the two coef
+                    if sum_coef:  # if same operator as previous with different coef, add the two coef
                         coef_PG_sum += coef_PG
                         sum_coef = False
                     else:
@@ -775,9 +771,7 @@ class Assembly(AssemblyBase):
         # Assembly._saved_gaussian_quadrature_mat = {}
         # Assembly._saved_node2gausspoint_mat = {}
         # Assembly._saved_gausspoint2node_mat = {}
-        Assembly._saved_associated_variables = (
-            {}
-        )  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+        Assembly._saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
 
     def compute_elementary_operators(
         self, n_elm_gp=None
@@ -864,9 +858,7 @@ class Assembly(AssemblyBase):
         for elm_type in list_elm_type:
             elmRef = elm_type(n_elm_gp, elmGeom=elmRefGeom, assembly=self)
 
-            n_interpol_nodes = (
-                elmRef.n_nodes
-            )  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
+            n_interpol_nodes = elmRef.n_nodes  # number of nodes used in the element interpolation (may be different from mesh.n_elm_nodes)
 
             # special treatment so that elements can have several different
             # shape functions for a same node (different kind of interpolation)

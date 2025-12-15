@@ -69,9 +69,7 @@ class CompositeUD(ElasticAnisotropic):
         Gm = (
             0.5 * self.__parameters["E_m"] / (1 + self.__parameters["nu_m"])
         )  # shear modulus matrix
-        kf = self.__parameters["E_f"] / (
-            3 * (1 - 2 * self.__parameters["nu_f"])
-        )
+        kf = self.__parameters["E_f"] / (3 * (1 - 2 * self.__parameters["nu_f"]))
         km = self.__parameters["E_m"] / (
             3 * (1 - 2 * self.__parameters["nu_m"])
         )  # modules de compressibilité
@@ -83,8 +81,7 @@ class CompositeUD(ElasticAnisotropic):
         )  # loi des mélanges
 
         nuLT = (
-            Vf * self.__parameters["nu_f"]
-            + (1 - Vf) * self.__parameters["nu_m"]
+            Vf * self.__parameters["nu_f"] + (1 - Vf) * self.__parameters["nu_m"]
         )  # loi des mélanges
 
         # GLT =  1./(Vf/Gm + (1-Vf)/Gf) #approche simplifiée
@@ -101,9 +98,7 @@ class CompositeUD(ElasticAnisotropic):
                 + (km + 7.0 * Gm / 3) / (2 * km + 8.0 * Gm / 3) * (1 - Vf)
             )
         )  # approche exacte
-        KL = Km + Vf / (
-            1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm)
-        )
+        KL = Km + Vf / (1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm))
 
         # ET = 1./(Vf/E_f + (1-Vf)/E_m) #simplified approach
         ET = 2.0 / (0.5 / KL + 0.5 / GTT + 2 * nuLT**2 / EL)  # exact approach
@@ -134,9 +129,7 @@ class CompositeUD(ElasticAnisotropic):
         Gm = (
             0.5 * self.__parameters["E_m"] / (1 + self.__parameters["nu_m"])
         )  # shear modulus matrix
-        kf = self.__parameters["E_f"] / (
-            3 * (1 - 2 * self.__parameters["nu_f"])
-        )
+        kf = self.__parameters["E_f"] / (3 * (1 - 2 * self.__parameters["nu_f"]))
         km = self.__parameters["E_m"] / (
             3 * (1 - 2 * self.__parameters["nu_m"])
         )  # modules de compressibilité
@@ -148,8 +141,7 @@ class CompositeUD(ElasticAnisotropic):
         )  # loi des mélanges
 
         nuLT = (
-            Vf * self.__parameters["nu_f"]
-            + (1 - Vf) * self.__parameters["nu_m"]
+            Vf * self.__parameters["nu_f"] + (1 - Vf) * self.__parameters["nu_m"]
         )  # loi des mélanges
 
         # GLT =  1./(Vf/Gm + (1-Vf)/Gf) #approche simplifiée
@@ -166,9 +158,7 @@ class CompositeUD(ElasticAnisotropic):
                 + (km + 7.0 * Gm / 3) / (2 * km + 8.0 * Gm / 3) * (1 - Vf)
             )
         )  # approche exacte
-        KL = Km + Vf / (
-            1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm)
-        )
+        KL = Km + Vf / (1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm))
 
         # ET = 1./(Vf/E_f + (1-Vf)/E_m) #simplified approach
         ET = 2.0 / (0.5 / KL + 0.5 / GTT + 2 * nuLT**2 / EL)  # exact approach
@@ -202,8 +192,7 @@ class CompositeUD(ElasticAnisotropic):
         H[4, 4] = H[3, 3] = GLT
 
         if not (
-            np.isscalar(self.__parameters["angle"])
-            and self.__parameters["angle"] == 0
+            np.isscalar(self.__parameters["angle"]) and self.__parameters["angle"] == 0
         ):
             # angle in degree
             angle_pli = self.__parameters["angle"] / 180.0 * np.pi

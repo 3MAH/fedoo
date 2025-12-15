@@ -159,7 +159,9 @@ class Element1D(Element):
         self.shape_function_gp = self.shape_function(self.xi_pg)
 
         if hasattr(self, "shape_function_derivative"):
-            self.shape_function_derivative_gp = self.shape_function_derivative(self.xi_pg)
+            self.shape_function_derivative_gp = self.shape_function_derivative(
+                self.xi_pg
+            )
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:

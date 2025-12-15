@@ -46,20 +46,18 @@ except ImportError:
 #     self.info = getattr(obj, 'info', None)
 
 
-class _SymetricTensorList(
-    list
-):  # base class for StressTensorList and StrainTensorList
+class _SymetricTensorList(list):  # base class for StressTensorList and StrainTensorList
     def __init__(self, l):
         if len(l) != 6:
             raise NameError(
-                "list lenght for "
-                + str(self.__class__.__name__)
-                + " object must be 6"
+                "list lenght for " + str(self.__class__.__name__) + " object must be 6"
             )
         if isinstance(l, np.ndarray):
             self.array = l
         else:
-            self.array = None  # if object build from an array, keep it in memory to avoid copy
+            self.array = (
+                None  # if object build from an array, keep it in memory to avoid copy
+            )
         list.__init__(self, l)
 
     def __getitem__(self, item):
@@ -110,14 +108,10 @@ class _SymetricTensorList(
         See the utilities.ExportData class for more details
         """
         try:
-            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(
-                float
-            )
+            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
         except:
             self.fill_zeros()
-            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(
-                float
-            )
+            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
 
     def to_tensor(self):
         return np.array(
@@ -227,21 +221,15 @@ class StressTensorList(_SymetricTensorList):
     def cauchy_to_pk2(self, F):
         if USE_SIMCOON:
             return StressTensorList(
-                sim.stress_convert(
-                    self.asarray(), F, "Cauchy2PKII", copy=False
-                )
+                sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy=False)
             )
         else:
-            raise NameError(
-                "Install simcoon to allow conversion from cauchy to pk2"
-            )
+            raise NameError("Install simcoon to allow conversion from cauchy to pk2")
 
     def pk2_to_cauchy(self, F):
         if USE_SIMCOON:
             return StressTensorList(
-                sim.stress_convert(
-                    self.asarray(), F, "PKII2Cauchy", copy=False
-                )
+                sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy=False)
             )
         else:
             pk2 = self.to_tensor().transpose(2, 0, 1)
@@ -269,9 +257,7 @@ class StressTensorList(_SymetricTensorList):
                 sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy=False)
             )
         else:
-            raise NameError(
-                "Install simcoon to allow conversion from cauchy to pk1"
-            )
+            raise NameError("Install simcoon to allow conversion from cauchy to pk1")
 
     def pk1_to_cauchy(self, F):
         if USE_SIMCOON:
@@ -279,9 +265,7 @@ class StressTensorList(_SymetricTensorList):
                 sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
             )
         else:
-            raise NameError(
-                "Install simcoon to allow conversion from pk1 to cauchy"
-            )
+            raise NameError("Install simcoon to allow conversion from pk1 to cauchy")
 
     def von_mises(self):
         """
@@ -316,14 +300,10 @@ class StrainTensorList(_SymetricTensorList):
         """
 
         try:
-            return np.vstack(
-                self[:3] + [self[i] / 2 for i in [3, 5, 4]]
-            ).astype(float)
+            return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
         except:
             self.fill_zeros()
-            return np.vstack(
-                self[:3] + [self[i] / 2 for i in [3, 5, 4]]
-            ).astype(float)
+            return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
 
     def to_tensor(self):
         return np.array(
