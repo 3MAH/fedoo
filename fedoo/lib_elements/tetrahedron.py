@@ -12,8 +12,8 @@ class ElementTetrahedron(Element):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
+        self.shape_function_derivative_gp = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -115,13 +115,13 @@ class Tet4(ElementTetrahedron):
         self.n_elm_gp = n_elm_gp
         ElementTetrahedron.__init__(self, n_elm_gp)
 
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
         return np.c_[eta, zeta, 1 - xi - eta - zeta, xi]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [[0.0, 0.0, -1.0, 1.0], [1.0, 0.0, -1.0, 0.0], [0.0, 1.0, -1.0, 0.0]]
@@ -144,7 +144,7 @@ class Tet10(ElementTetrahedron):
         self.n_elm_gp = n_elm_gp
         ElementTetrahedron.__init__(self, n_elm_gp)
 
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -161,7 +161,7 @@ class Tet10(ElementTetrahedron):
             4 * xi * (1 - xi - eta - zeta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         vec_m = [1 - xi[0] - xi[1] - xi[2] for xi in vec_xi]
         return [
             np.array(

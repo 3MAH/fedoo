@@ -13,8 +13,8 @@ class ElementHexahedron(Element):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
-        self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
+        self.shape_function_derivative_gp = self.shape_function_derivative(self.xi_pg)
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -193,7 +193,7 @@ class Hex8(ElementHexahedron):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -208,7 +208,7 @@ class Hex8(ElementHexahedron):
             0.125 * (1 - xi) * (1 + eta) * (1 + zeta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -257,11 +257,11 @@ class Hex8r(Hex8):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         # return center value for all gp
         return 0.125 * np.ones((len(vec_xi), 8))
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             0.125
             * np.array(
@@ -313,7 +313,7 @@ class Hex20(ElementHexahedron):
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
     # vec_xi[:,2] -> list of values of zeta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         zeta = vec_xi[:, 2]
@@ -340,7 +340,7 @@ class Hex20(ElementHexahedron):
             0.25 * (1 - zeta**2) * (1 - xi) * (1 + eta),
         ]
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             np.array(
                 [
@@ -511,7 +511,7 @@ class Hex8Hourglass(Hex8):
         assembly._b_matrix = self._b_matrix  # for use in weakform
         super().__init__(n_elm_gp, **kargs)
 
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         list_h = [
             np.array([[1, 1, -1, -1, -1, -1, 1, 1]]),  # 1st mode
             np.array([[1, -1, -1, 1, -1, 1, 1, -1]]),  # 2nd mode
@@ -535,8 +535,8 @@ class Hex8Hourglass(Hex8):
 
     def _get_b_matrix(self):
         xi_center = self.get_gp_elm_coordinates(1)
-        self.ComputeJacobianMatrix(self.x_nd, xi_center)
+        self.compute_jacobian_with_inverse(self.x_nd, xi_center)
         # should try to avoid computing multiple time J
-        return (self.inverseJacobian @ self.ShapeFunctionDerivative(xi_center)[0])[
-            :, 0
-        ].transpose(1, 2, 0)
+        return (
+            self.inv_jacobian_matrix @ self.shape_function_derivative(xi_center)[0]
+        )[:, 0].transpose(1, 2, 0)

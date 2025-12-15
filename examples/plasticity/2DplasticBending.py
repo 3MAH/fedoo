@@ -23,7 +23,14 @@ alpha = 1e-5  # ???
 uimp = -5
 
 mesh = fd.mesh.rectangle_mesh(
-    nx=41, ny=21, x_min=0, x_max=L, y_min=0, y_max=h, elm_type="quad4", name="Domain"
+    nx=41,
+    ny=21,
+    x_min=0,
+    x_max=L,
+    y_min=0,
+    y_max=h,
+    elm_type="quad4",
+    name="Domain",
 )
 
 crd = mesh.nodes

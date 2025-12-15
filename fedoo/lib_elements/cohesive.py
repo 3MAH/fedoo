@@ -17,21 +17,21 @@ class Node2Jump(Element1DGeom2):
             [0.0, 0.0]
         ]  # The values are arbitrary, only the size is important
         self.w_pg = np.array([1.0])
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
 
-    def ComputeJacobianMatrix(self, vec_x, vec_xi, local_frame=None):
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi, local_frame=None):
         ### local_frame not used here ###
         self.detJ = [1.0 for xi in vec_xi]
 
     # In the following functions, xi shall always be a column matrix
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.array([[-1.0, 1.0] for x in xi])
 
-    def ShapeFunctionDerivative(self, xi):  # inutile en principe
+    def shape_function_derivative(self, xi):  # inutile en principe
         return [np.array([[0.0, 0.0]]) for x in xi]
 
 
-#    def GeometricalShapeFunction(self,xi):
+#    def geometrical_shape_function(self,xi):
 #        return 0.5*np.array([[1., 1.] for x in xi])
 
 
@@ -52,14 +52,14 @@ class Lin2InterfaceJump(Element1DGeom2, Element1D):
         self.xi_nd = np.c_[[0.0, 1.0]]
         self.n_elm_gp = n_elm_gp
 
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return np.c_[-xi, -1 + xi, xi, 1 - xi]
 
-    def ShapeFunctionDerivative(self, xi):  # is it required for cohesive elements ?
+    def shape_function_derivative(self, xi):  # is it required for cohesive elements ?
         return [np.array([[-1.0, 1.0, 1.0, -1.0]]) for x in xi]
 
 
-#    def GeometricalShapeFunction(self,xi):
+#    def geometrical_shape_function(self,xi):
 #        return 0.5*np.c_[xi, 1-xi, xi, 1-xi]
 
 
@@ -85,7 +85,7 @@ class Quad4InterfaceJump(ElementQuadrangle):  # à vérifier
     # Dans les fonctions suivantes vec_xi contient une liste de points dans le repère de référence (xi, eta)
     # vec_xi[:,0] -> liste des valeurs de xi pour chaque point (points de gauss en général)
     # vec_xi[:,1] -> liste des valeurs de eta pour chaque point (points de gauss en général)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         return np.c_[
@@ -99,7 +99,7 @@ class Quad4InterfaceJump(ElementQuadrangle):  # à vérifier
             0.25 * (1 - xi) * (1 + eta),
         ]
 
-    def ShapeFunctionDerivative(
+    def shape_function_derivative(
         self, vec_xi
     ):  # quad4 shape functions based on the mean values from two adjacent nodes
         return [
@@ -139,7 +139,7 @@ class Node2Middle(Node2Jump):
     n_nodes = 2
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return 0.5 * np.c_[1 + 0 * xi, 1 + 0 * xi]
 
 
@@ -155,10 +155,10 @@ class Lin2MeanPlane(Element1D):
         Element1D.__init__(self, n_elm_gp)
 
     # Dans les fonctions suivantes, xi doit toujours être une matrice colonne
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         return 0.5 * np.c_[(1 - xi), xi, (1 - xi), xi]
 
-    def ShapeFunctionDerivative(self, xi):
+    def shape_function_derivative(self, xi):
         return [0.5 * np.array([[-1.0, 1.0, -1.0, 1.0]]) for x in xi]
 
 
@@ -179,7 +179,7 @@ class Quad4MeanPlane(ElementQuadrangle):
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta)
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)
     # vec_xi[:,1] -> list of values of eta for all points (gauss points in general but may be used with other points)
-    def ShapeFunction(self, vec_xi):
+    def shape_function(self, vec_xi):
         xi = vec_xi[:, 0]
         eta = vec_xi[:, 1]
         return (
@@ -196,7 +196,7 @@ class Quad4MeanPlane(ElementQuadrangle):
             ]
         )
 
-    def ShapeFunctionDerivative(self, vec_xi):
+    def shape_function_derivative(self, vec_xi):
         return [
             0.5
             * np.array(

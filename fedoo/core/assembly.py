@@ -265,9 +265,13 @@ class Assembly(AssemblyBase):
 
                 blocks = [
                     [
-                        b
-                        if b is not None
-                        else sparse.csr_matrix((self.mesh.n_nodes, self.mesh.n_nodes))
+                        (
+                            b
+                            if b is not None
+                            else sparse.csr_matrix(
+                                (self.mesh.n_nodes, self.mesh.n_nodes)
+                            )
+                        )
                         for b in blocks_row
                     ]
                     for blocks_row in blocks
@@ -861,20 +865,20 @@ class Assembly(AssemblyBase):
             # that may be used with different x values (op_deriv.x)
             # required for 3D hourglass
             n_diff_interpolations = 1
-            if isinstance(elmRef.ShapeFunctionPG, list):
-                n_diff_interpolations = len(elmRef.ShapeFunctionPG)
-                shape_functions = elmRef.ShapeFunctionPG
-                NbDoFperNode = elmRef.ShapeFunctionPG[0].shape[-1] // n_interpol_nodes
+            if isinstance(elmRef.shape_function_gp, list):
+                n_diff_interpolations = len(elmRef.shape_function_gp)
+                shape_functions = elmRef.shape_function_gp
+                NbDoFperNode = elmRef.shape_function_gp[0].shape[-1] // n_interpol_nodes
             else:
-                shape_functions = [elmRef.ShapeFunctionPG]
-                NbDoFperNode = elmRef.ShapeFunctionPG.shape[-1] // n_interpol_nodes
+                shape_functions = [elmRef.shape_function_gp]
+                NbDoFperNode = elmRef.shape_function_gp.shape[-1] // n_interpol_nodes
             # end special treatment
 
             nb_dir_deriv = 0
-            if hasattr(elmRef, "ShapeFunctionDerivativePG"):
+            if hasattr(elmRef, "shape_function_derivative_gp"):
                 derivativePG = (
-                    elmRefGeom.inverseJacobian @ elmRef.ShapeFunctionDerivativePG
-                )  # derivativePG = np.matmul(elmRefGeom.inverseJacobian , elmRef.ShapeFunctionDerivativePG)
+                    elmRefGeom.inv_jacobian_matrix @ elmRef.shape_function_derivative_gp
+                )  # derivativePG = np.matmul(elmRefGeom.inv_jacobian_matrix , elmRef.shape_function_derivative_gp)
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = (
                 nb_dir_deriv + n_diff_interpolations
@@ -963,7 +967,6 @@ class Assembly(AssemblyBase):
         if (deriv.ordre, xx) in data:
             return data[deriv.ordre, xx]
         else:
-            pass
             assert 0, "Operator unavailable"
 
     def _get_gaussian_quadrature_mat(
@@ -1294,9 +1297,11 @@ class Assembly(AssemblyBase):
         if Type == "Node":
             return [
                 [
-                    self.get_node_results(op, U)
-                    if op != 0
-                    else np.zeros(self.mesh.n_nodes)
+                    (
+                        self.get_node_results(op, U)
+                        if op != 0
+                        else np.zeros(self.mesh.n_nodes)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1305,9 +1310,11 @@ class Assembly(AssemblyBase):
         elif Type == "Element":
             return [
                 [
-                    self.get_element_results(op, U)
-                    if op != 0
-                    else np.zeros(self.mesh.n_elements)
+                    (
+                        self.get_element_results(op, U)
+                        if op != 0
+                        else np.zeros(self.mesh.n_elements)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1316,9 +1323,11 @@ class Assembly(AssemblyBase):
         elif Type == "GaussPoint":
             return [
                 [
-                    self.get_gp_results(op, U)
-                    if op != 0
-                    else np.zeros(self.n_gauss_points)
+                    (
+                        self.get_gp_results(op, U)
+                        if op != 0
+                        else np.zeros(self.n_gauss_points)
+                    )
                     for op in line_op
                 ]
                 for line_op in grad_operator
@@ -1578,9 +1587,13 @@ class Assembly(AssemblyBase):
 
             # get lists of some non compatible assembly_options items for each weakform in list_weakform
             list_elm_type = [
-                elm_type
-                if elm_type != ""
-                else wf.assembly_options.get("elm_type", mesh.elm_type, mesh.elm_type)
+                (
+                    elm_type
+                    if elm_type != ""
+                    else wf.assembly_options.get(
+                        "elm_type", mesh.elm_type, mesh.elm_type
+                    )
+                )
                 for wf in list_weakform
             ]
             list_n_elm_gp = [

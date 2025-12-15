@@ -6,7 +6,7 @@ import numpy as np
 import os
 from zipfile import ZipFile, Path
 from fedoo.core.mesh import Mesh
-from fedoo.util.voigt_tensors import StressTensorList
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 try:
     from matplotlib import pylab as plt
@@ -163,6 +163,7 @@ class DataSet:
         title_size: float = 18.0,
         window_size: list = None,
         multiplot: bool | None = None,
+        lock_view: bool = False,
         **kargs,
     ) -> None:
         """Plot a field on the surface of the associated mesh.
@@ -277,10 +278,21 @@ class DataSet:
             If None, uses separated scalarbars only if the pyvista plotter uses
             subplot.
 
+        lock_view : bool, default = False
+            If ``True``, the camera position and background color are not
+            modified. In this mode, any view‑modifying arguments such as
+            ``azimuth``, ``elevation``, or ``roll`` are ignored.
 
         **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
+
+        Notes
+        -----
+        If the package pyvistaqt is installed, the BackgroundPlotter is used
+        by default. To desactivate pyvistaqt, set the fedoo config:
+
+            >>> fedoo.get_config()['USE_PYVISTA_QT'] = False
         """
 
         if not (USE_PYVISTA):
@@ -382,20 +394,20 @@ class DataSet:
             else:
                 multiplot = True
 
-        pl.set_background("White")
-        # camera position
-        # meshplot.ComputeBounds()
-        # center = meshplot.center
+        if not lock_view:
+            pl.set_background("White")
+            # camera position
+            # meshplot.ComputeBounds()
+            # center = meshplot.center
+            pl.camera.SetFocalPoint(center)
+            pl.camera.position = tuple(center + np.array([0, 0, 2 * meshplot.length]))
+            pl.camera.up = tuple([0, 1, 0])
+            if roll != 0:
+                pl.camera.Roll(roll)
 
-        pl.camera.SetFocalPoint(center)
-        pl.camera.position = tuple(center + np.array([0, 0, 2 * meshplot.length]))
-        pl.camera.up = tuple([0, 1, 0])
-        if roll != 0:
-            pl.camera.Roll(roll)
-
-        if ndim == 3:
-            pl.camera.Azimuth(azimuth)
-            pl.camera.Elevation(elevation)
+            if ndim == 3:
+                pl.camera.Azimuth(azimuth)
+                pl.camera.Elevation(elevation)
 
         # default sargs values
         if sargs is None and field is not None:  # default value
@@ -457,7 +469,8 @@ class DataSet:
 
             pl.add_text(title, name="name", color="Black", font_size=title_size)
 
-        pl.add_axes(color="Black", interactive=True)
+        if not lock_view:
+            pl.add_axes(color="Black", interactive=True)
 
         # Node and Element Labels and plot points
         if node_labels or show_nodes:  # extract nodes coordinates
@@ -597,33 +610,42 @@ class DataSet:
         if (
             component is not None and not (np.isscalar(data)) and len(data.shape) > 1
         ):  # if data is scalar or 1d array, component ignored
+            if isinstance(component, str):
+                component = {
+                    "X": 0,
+                    "Y": 1,
+                    "Z": 2,
+                    "XX": 0,
+                    "YY": 1,
+                    "ZZ": 2,
+                    "XY": 3,
+                    "XZ": 4,
+                    "YZ": 5,
+                }.get(component, component)
+
             if component == "norm":
                 data = np.linalg.norm(data, axis=0)
-            elif component == "vm":
-                # Try to compute the von mises stress
-                data = StressTensorList(data).von_mises()
-            elif component == "pressure":
-                # Try to compute the pressure stress
-                data = StressTensorList(data).pressure()
             else:
                 if isinstance(component, str):
-                    component = {
-                        "X": 0,
-                        "Y": 1,
-                        "Z": 2,
-                        "XX": 0,
-                        "YY": 1,
-                        "ZZ": 2,
-                        "XY": 3,
-                        "XZ": 4,
-                        "YZ": 5,
-                    }[component]
+                    if field == "Stress":
+                        data = StressTensorList(data)
+                    elif field == "Strain":
+                        data = StrainTensorList(data)
                 data = data[component]
 
         if return_data_type:
             return data, data_type
         else:
             return data
+
+    def field_names(self):
+        return list(
+            set(
+                list(self.gausspoint_data.keys())
+                + list(self.node_data.keys())
+                + list(self.node_data.keys())
+            )
+        )
 
     def save(
         self, filename: str, save_mesh: bool = False, compressed: bool = False

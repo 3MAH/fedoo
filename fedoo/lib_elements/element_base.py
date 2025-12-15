@@ -4,33 +4,55 @@ from numpy import linalg
 
 class Element:
     # Lines of xi should contains the coordinates of each point to consider
-    def ShapeFunction(self, xi):
+    def shape_function(self, xi):
         pass  # à définir dans les classes héritées
 
     # return an array whose lines are the values of the form functions (one line per point defined in xi)
-    # def ShapeFunctionDerivative(self,xi): pass #à définir dans les classes héritées si nécessaire
+    # def shape_function_derivative(self,xi): pass #à définir dans les classes héritées si nécessaire
 
-    def ComputeDetJacobian(self, vec_x, vec_xi):
+    def compute_det_jacobian(self, vec_x, vec_xi):
         """
-        Calcul le Jacobien aux points de gauss dans le cas d'un élément isoparamétrique (c'est à dire que les mêmes fonctions de forme sont utilisées)
-        vec_x est un tabeau de dimension 3 où les lignes de vec_x[el] donnent les coordonnées de chacun des noeuds de l'éléments el
-        vec_xi est un tableau de dimension 2 dont les lignes donnent les coordonnées dans le repère de référence des points où on souhaite avoir le jacobien (en général pg)
-        Calcul le jacobien dans self.JacobianMatrix où self.Jacobien[el,k] est le jacobien de l'élément el au point de gauss k sous la forme [[dx/dxi, dy/dxi, ...], [dx/deta, dy/deta, ...], ...]
-        Calcul également le déterminant du jacobien pour le kième point de gauss de l'élément el dans self.detJ[el,k]
+        Compute the Jacobian matrix and its determinent at Gauss points.
+
+        This method assume an isoparametric element, i.e., the same shape functions are
+        used for both field and geometry interpolation.
+
+        Parameters
+        ----------
+        vec_x : 3D numpy.ndarray
+            3D array where vec_x[el, i] contains the coordinates of the i-th node
+            of the element `el`.
+        vec_xi : 2D numpy.ndarray
+            A 2D array where each row represents the local coordinates of a point
+            (typically Gauss points) in the reference element. These coordinates are
+            generally denoted ξ, η, and ζ.
+
+
+        Notes
+        -----
+        The Jacobian matrix is computed and stored in the `jacobian_matrix` attribute,
+        where `self.jacobian_matrix[el,k]` is the Jacobian of element el at Gauss point
+        k, in the form:
+            [[dx/dξ, dy/dξ, ...],
+             [dx/dη, dy/dη, ...],
+             ...]
+
+        The determinant of the Jacobian matrix for the k-th Gauss point of element el
+        is also computed and stored in self.detJ[el,k].
         """
-        dnn_xi = self.ShapeFunctionDerivative(vec_xi)
-        self.JacobianMatrix = np.moveaxis(
+        dnn_xi = self.shape_function_derivative(vec_xi)
+        self.jacobian_matrix = np.moveaxis(
             [np.dot(dnn, vec_x) for dnn in dnn_xi], 2, 0
         )  # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 
-        if self.JacobianMatrix.shape[-2] == self.JacobianMatrix.shape[-1]:
-            #            self.detJ = [abs(linalg.det(J)) for J in self.JacobianMatrix]
-            self.detJ = abs(linalg.det(self.JacobianMatrix))
+        if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
+            #            self.detJ = [abs(linalg.det(J)) for J in self.jacobian_matrix]
+            self.detJ = abs(linalg.det(self.jacobian_matrix))
         else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
-            if np.shape(self.JacobianMatrix)[-2] == 1:
-                self.detJ = linalg.norm(self.JacobianMatrix, axis=3)
+            if np.shape(self.jacobian_matrix)[-2] == 1:
+                self.detJ = linalg.norm(self.jacobian_matrix, axis=3)
             else:  # On doit avoir JacobianMatrix.shape[-2]=2 (l'elm de ref est défini en 2D) et JacobianMatrix.shape[-1]=3  (l'espace réel est 3D)
-                J = self.JacobianMatrix
+                J = self.jacobian_matrix
                 self.detJ = np.sqrt(
                     abs(J[..., 0, 1] * J[..., 1, 2] - J[..., 0, 2] * J[..., 1, 1]) ** 2
                     + abs(J[..., 0, 2] * J[..., 1, 0] - J[..., 1, 2] * J[..., 0, 0])
@@ -39,39 +61,71 @@ class Element:
                     ** 2
                 )
 
-    def ComputeJacobianMatrix(
-        self, vec_x, vec_xi=None, rep_loc=None
-    ):  # need validation
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
         """
-        Calcul l'inverse du Jacobien aux points de gauss dans le cas d'un élément isoparamétrique (c'est à dire que les mêmes fonctions de forme sont utilisées)
-        vec_xi est un tableau dont les lignes donnent les coordonnées dans le repère de référence où on souhaite avoir le jacobien (en général pg)
+        Compute the Jacobian matrix and its inverse at Gauss points.
+
+        This method assume an isoparametric element, i.e., the same shape functions are
+        used for both field and geometry interpolation.
+        The Jacobian matrix and its inverse may be computed relatively to a local frame.
+
+        Parameters
+        ----------
+        vec_x : 3D numpy.ndarray
+            3D array where vec_x[el, i] contains the coordinates of the i-th node
+            of the element `el`.
+        vec_xi : 2D numpy.ndarray
+            A 2D array where each row represents the local coordinates of a point
+            (typically Gauss points) in the reference element. These coordinates are
+            generally denoted ξ, η, and ζ.
+        rep_loc: numpy.ndarray, optional
+            nodal local frames. If given, the local frames are interpolated at Gauss
+            points and the derivative are computed with respect to the
+            local frame.
+
+        Notes
+        -----
+        The Jacobian matrix and its inverse are computed and stored in the
+        `jacobian_matrix` and `inv_jacobian_matrix` attributes,
+        where `self.jacobian_matrix[el,k]` is the Jacobian of element el at Gauss point
+        k, in the form:
+            [[dx/dξ, dy/dξ, ...],
+             [dx/dη, dy/dη, ...],
+             ...]
+        and `self.inv_jacobian_matrix[el,k]` is the inverse of the Jacobian of element
+        el at Gauss point k, in the form:
+            [[dξ/dx, dη/dx, ...],
+             [dξ/dy, dη/dy, ...],
+             ...]
+        The determinant of the Jacobian matrix for the k-th Gauss point of element el
+        is stored in self.detJ[el,k].
         """
         if vec_xi is None:
             vec_xi = self.xi_pg
-        self.ComputeDetJacobian(vec_x, vec_xi)
+        self.compute_det_jacobian(vec_x, vec_xi)
 
         if rep_loc != None:
-            rep_pg = self.interpolateLocalFrame(
+            rep_pg = self.interpolate_local_frame(
                 rep_loc, vec_xi
             )  # interpolation du repère local aux points de gauss
-            self.JacobianMatrix = np.matmul(
-                self.JacobianMatrix, np.swapaxes(rep_pg, 2, 3)
+            self.jacobian_matrix = np.matmul(
+                self.jacobian_matrix, np.swapaxes(rep_pg, 2, 3)
             )  # to verify - np.swapaxes(rep_pg,2,3) is equivalent to a transpose over the axis 2 and 3
-        #            for k,J in enumerate(self.JacobianMatrix): self.JacobianMatrix[k] = np.dot(J, rep_pg[k].T)
+        #            for k,J in enumerate(self.jacobian_matrix): self.jacobian_matrix[k] = np.dot(J, rep_pg[k].T)
 
-        if self.JacobianMatrix.shape[-2] == self.JacobianMatrix.shape[-1]:
-            self.inverseJacobian = linalg.inv(self.JacobianMatrix)
-        #            self.inverseJacobian = [linalg.inv(J) for J in self.JacobianMatrix]
+        if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
+            self.inv_jacobian_matrix = linalg.inv(self.jacobian_matrix)
+        #            self.inv_jacobian_matrix = [linalg.inv(J) for J in self.jacobian_matrix]
         else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
-            J = self.JacobianMatrix
-            JT = np.swapaxes(self.JacobianMatrix, 2, 3)
-            self.inverseJacobian = np.matmul(
+            J = self.jacobian_matrix
+            JT = np.swapaxes(self.jacobian_matrix, 2, 3)
+            self.inv_jacobian_matrix = np.matmul(
                 JT, linalg.inv(np.matmul(J, JT))
             )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
 
-    #            self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]
+    #            self.inv_jacobian_matrix = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.jacobian_matrix]
 
-    def interpolateLocalFrame(
+    def interpolate_local_frame(
         self, rep_loc, vec_xi=None
     ):  # to do: vectorization #on interpole le repère local aux points de gauss
         # renvoie la moyenne des repères locaux nodaux (mauvais à améliorer)
@@ -88,7 +142,7 @@ class Element:
         return [np.eye(3) for xi in vec_xi]
 
     def GetLocalFrame(self, vec_x, vec_xi, rep_loc=None):
-        self.ComputeDetJacobian(vec_x, vec_xi)
+        self.compute_det_jacobian(vec_x, vec_xi)
         return self.repLocFromJac(rep_loc, vec_xi)
 
 
@@ -102,10 +156,12 @@ class Element1D(Element):
             self.xi_pg = self.get_gp_elm_coordinates(n_elm_gp)  # = np.c_[xi,eta]
             self.w_pg = self.get_gp_weight(n_elm_gp)
 
-        self.ShapeFunctionPG = self.ShapeFunction(self.xi_pg)
+        self.shape_function_gp = self.shape_function(self.xi_pg)
 
-        if hasattr(self, "ShapeFunctionDerivative"):
-            self.ShapeFunctionDerivativePG = self.ShapeFunctionDerivative(self.xi_pg)
+        if hasattr(self, "shape_function_derivative"):
+            self.shape_function_derivative_gp = self.shape_function_derivative(
+                self.xi_pg
+            )
 
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
@@ -145,28 +201,28 @@ class Element1D(Element):
                 + " unavailable for 1D element"
             )
 
-    def ComputeDetJacobian(self, vec_x, vec_xi):
-        dnn_xi = self.ShapeFunctionDerivative(vec_xi)
-        # self.JacobianMatrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
-        self.JacobianMatrix = np.linalg.norm(
+    def compute_det_jacobian(self, vec_x, vec_xi):
+        dnn_xi = self.shape_function_derivative(vec_xi)
+        # self.jacobian_matrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        self.jacobian_matrix = np.linalg.norm(
             np.moveaxis([np.dot(dnn, vec_x) for dnn in dnn_xi], 2, 0), axis=3
         )[..., np.newaxis]
-        #        self.JacobianMatrix = [linalg.norm(np.dot(dnn,vec_x)) for dnn in dnn_xi] #dx_dxi avec x tangeant à l'élément (repère local élémentaire)
-        self.detJ = self.JacobianMatrix.reshape(
+        #        self.jacobian_matrix = [linalg.norm(np.dot(dnn,vec_x)) for dnn in dnn_xi] #dx_dxi avec x tangeant à l'élément (repère local élémentaire)
+        self.detJ = self.jacobian_matrix.reshape(
             len(vec_x), -1
         )  # In 1D, the jacobian matrix is a scalar
 
-    def ComputeJacobianMatrix(self, vec_x, vec_xi=None, localFrame=None):
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, localFrame=None):
         """
         The localFrame isn't used
         The jacobian is computed along the axis of the 1D element
         """
         if vec_xi is None:
             vec_xi = self.xi_pg
-        self.ComputeDetJacobian(vec_x, vec_xi)
-        self.inverseJacobian = 1.0 / self.JacobianMatrix  # dxi_dx
+        self.compute_det_jacobian(vec_x, vec_xi)
+        self.inv_jacobian_matrix = 1.0 / self.jacobian_matrix  # dxi_dx
 
-    #        self.inverseJacobian = [np.array([1./J]) for J in self.JacobianMatrix] #dxi_dx
+    #        self.inv_jacobian_matrix = [np.array([1./J]) for J in self.jacobian_matrix] #dxi_dx
 
     def __GetLocalFrameFromX(self, listX, elementLocalFrame):
         lastAxis = len(listX[0].shape) - 1
@@ -262,7 +318,7 @@ class Element1D(Element):
     def GetLocalFrame(self, vec_x, vec_xi, localFrame=None):  # linear local frame
         if len(vec_x.shape) == 2:
             vec_x = np.array([vec_x])
-        dnn_xi = self.ShapeFunctionDerivative(vec_xi)
+        dnn_xi = self.shape_function_derivative(vec_xi)
         listX = [np.dot(dnn, vec_x)[0] for dnn in dnn_xi]
         if self.n_elm_gp == 2:
             pass
@@ -271,7 +327,7 @@ class Element1D(Element):
         if localFrame is None:
             return np.moveaxis(self.__GetLocalFrameFromX(listX, None), 2, 0)
         else:
-            rep_pg = self.interpolateLocalFrame(
+            rep_pg = self.interpolate_local_frame(
                 localFrame, vec_xi
             )  # interpolation du repère local aux points de gauss
             return np.moveaxis(
@@ -282,7 +338,7 @@ class Element1D(Element):
 class Element1DGeom2(
     Element1D
 ):  # élément 1D à géométrie affine (interpolée par 2 noeuds)
-    def ComputeDetJacobian(self, vec_x, vec_xi):
+    def compute_det_jacobian(self, vec_x, vec_xi):
         """
         Calcul le Jacobien aux points de gauss
         vec_x est un tabeau dont les lignes vec_x[el] donnent les coordonnées de chaqun des noeuds de l'éléments el
@@ -290,26 +346,26 @@ class Element1DGeom2(
         """
         x1 = vec_x[:, 0]
         x2 = vec_x[:, 1]
-        self.JacobianMatrix = linalg.norm(
+        self.jacobian_matrix = linalg.norm(
             x2 - x1, axis=1
         )  # longueur de l'élément réel car la longueur de élément de référence = 1      #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
-        self.detJ = self.JacobianMatrix.reshape(-1, 1) * np.ones(
+        self.detJ = self.jacobian_matrix.reshape(-1, 1) * np.ones(
             len(vec_xi)
         )  # detJ est constant sur l'élément
-        #        self.detJ = self.JacobianMatrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar
+        #        self.detJ = self.jacobian_matrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar
 
-    def ComputeJacobianMatrix(self, vec_x, vec_xi=None, rep_loc=None):
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
         # rep_loc inutile ici : le repère local élémentaire est utilisé (x : tangeante à l'élément)
         if vec_xi is None:
             vec_xi = self.xi_pg
-        self.ComputeDetJacobian(vec_x, vec_xi)
-        self.inverseJacobian = (1.0 / self.JacobianMatrix).reshape(
+        self.compute_det_jacobian(vec_x, vec_xi)
+        self.inv_jacobian_matrix = (1.0 / self.jacobian_matrix).reshape(
             -1, 1, 1, 1
         )  # dxi/dx -> scalar #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 
-    #        self.derivativePG = self.inverseJacobian.reshape(-1,1,1,1) * np.array(self.ShapeFunctionDerivativePG).reshape(1,len(vec_xi),1,-1)
-    #        self.inverseJacobian = [np.array([qq]) for xi in vec_xi] #qq est constant sur l'élément
-    #        self.derivativePG = np.array([self.inverseJacobian[k] * self.ShapeFunctionDerivativePG[k] for k in range(len(vec_xi))])
+    #        self.derivativePG = self.inv_jacobian_matrix.reshape(-1,1,1,1) * np.array(self.shape_function_derivative_gp).reshape(1,len(vec_xi),1,-1)
+    #        self.inv_jacobian_matrix = [np.array([qq]) for xi in vec_xi] #qq est constant sur l'élément
+    #        self.derivativePG = np.array([self.inv_jacobian_matrix[k] * self.shape_function_derivative_gp[k] for k in range(len(vec_xi))])
 
     def GetLocalFrame(self, vec_x, vec_xi, localFrame=None):  # linear local frame
         # return Element1D.GetLocalFrame(self,vec_x, vec_xi, localFrame)
@@ -324,7 +380,7 @@ class Element1DGeom2(
         if localFrame is None:
             return np.moveaxis(self._Element1D__GetLocalFrameFromX(listX, None), 2, 0)
         else:
-            rep_pg = self.interpolateLocalFrame(
+            rep_pg = self.interpolate_local_frame(
                 localFrame, vec_xi
             )  # interpolation du repère local aux points de gauss
             return np.moveaxis(
@@ -338,21 +394,21 @@ class Element1DGeom2(
 
 
 class Element2D(Element):
-    def ComputeJacobianMatrix(self, vec_x, vec_xi=None, rep_loc=None):
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
         if vec_xi is None:
             vec_xi == self.xi_pg
-        self.ComputeDetJacobian(vec_x, vec_xi)
+        self.compute_det_jacobian(vec_x, vec_xi)
 
-        if self.JacobianMatrix.shape[-2] == self.JacobianMatrix.shape[-1]:
+        if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
             if rep_loc is not None:
-                rep_pg = self.interpolateLocalFrame(
+                rep_pg = self.interpolate_local_frame(
                     rep_loc, vec_xi
                 )  # interpolation du repère local aux points de gauss  -> shape = (len(vec_x),len(vec_xi),dim,dim)
-                self.JacobianMatrix = np.matmul(
-                    self.JacobianMatrix, np.swapaxes(rep_pg, 2, 3)
+                self.jacobian_matrix = np.matmul(
+                    self.jacobian_matrix, np.swapaxes(rep_pg, 2, 3)
                 )  # to verify - np.swapaxes(rep_pg,2,3) is equivalent to a transpose over the axis 2 and 3
-        #                rep_pg = self.interpolateLocalFrame(rep_loc, vec_xi) #interpolation du repère local aux points de gauss
-        #                for k,J in enumerate(self.JacobianMatrix): self.JacobianMatrix[k] = np.dot(J, rep_pg[k].T)
+        #                rep_pg = self.interpolate_local_frame(rep_loc, vec_xi) #interpolation du repère local aux points de gauss
+        #                for k,J in enumerate(self.jacobian_matrix): self.jacobian_matrix[k] = np.dot(J, rep_pg[k].T)
         else:
             # Dimension of True space (=3) > dimension of ref element (=2)
             # This case is for shell like models. The derivative are computed
@@ -361,26 +417,26 @@ class Element2D(Element):
             # the plane
             rep_pg = self.repLocFromJac(rep_loc, vec_xi)[..., :2, :]
 
-            self.JacobianMatrix = self.JacobianMatrix @ rep_pg.swapaxes(
+            self.jacobian_matrix = self.jacobian_matrix @ rep_pg.swapaxes(
                 2, 3
             )  # Jacobian matrix change of basis
 
             ### alternatively, it is possible to keep global derivative:
             ### is there any interest?
             # if rep_loc is None:
-            #     J = self.JacobianMatrix
-            #     JT = np.swapaxes(self.JacobianMatrix, 2, 3)
-            #     self.inverseJacobian = np.matmul(
+            #     J = self.jacobian_matrix
+            #     JT = np.swapaxes(self.jacobian_matrix, 2, 3)
+            #     self.inv_jacobian_matrix = np.matmul(
             #         JT, linalg.inv(np.matmul(J, JT))
             #     )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
-            #     #                self.inverseJacobian = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.JacobianMatrix]   #this line may have a high computational cost
+            #     #                self.inv_jacobian_matrix = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.jacobian_matrix]   #this line may have a high computational cost
             #     return
 
-        self.inverseJacobian = linalg.inv(self.JacobianMatrix)
+        self.inv_jacobian_matrix = linalg.inv(self.jacobian_matrix)
 
     def repLocFromJac(self, rep_loc=None, vec_xi=None):
-        # listZ=[[np.cross(J[0],J[1]) for J in Jel] for Jel in self.JacobianMatrix]
-        listZ = np.cross(self.JacobianMatrix[:, :, 0], self.JacobianMatrix[:, :, 1])
+        # listZ=[[np.cross(J[0],J[1]) for J in Jel] for Jel in self.jacobian_matrix]
+        listZ = np.cross(self.jacobian_matrix[:, :, 0], self.jacobian_matrix[:, :, 1])
         listZ = (
             listZ / linalg.norm(listZ, axis=2)[..., np.newaxis]
         )  # direction perpendiculaire au plan tangeant
@@ -391,7 +447,7 @@ class Element2D(Element):
             y = np.array([0, 1, 0])
             listX = x - listZ[..., 0, np.newaxis] * listZ
         else:
-            rep_pg = self.interpolateLocalFrame(
+            rep_pg = self.interpolate_local_frame(
                 rep_loc, vec_xi
             )  # interpolation du repère local aux points de gauss
             x = rep_pg[..., 0]

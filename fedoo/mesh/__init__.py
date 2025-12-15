@@ -59,6 +59,7 @@ Mesh Creation Functions
    line_mesh_1D
    line_mesh
    line_mesh_cylindric
+   circle_mesh
    grid_mesh_cylindric
    structured_mesh_2D
    generate_nodes
@@ -78,6 +79,7 @@ from .simple import (
     line_mesh_1D,
     line_mesh,
     line_mesh_cylindric,
+    circle_mesh,
     box_mesh,
 )
 

@@ -9,9 +9,12 @@ import numpy as np
 
 class CompositeUD(ElasticAnisotropic):
     """
-    Linear Orthotropic constitutive law defined from composites phase parameters, assuming uniform unidirectional fibers.
-    The fiber are assumed in the X direction. Use Change of basis to rotate the material.
-    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    Linear Orthotropic constitutive law defined from composites phase
+    parameters, assuming uniform unidirectional fibers.
+    The fiber are assumed in the X direction. Use a local frame
+    to rotate the material.
+    The constitutive Law should be associated with a
+    :mod:`fedoo.weakform.SressEquilibrium` type of weakform.
 
     Parameters
     ----------
@@ -26,13 +29,21 @@ class CompositeUD(ElasticAnisotropic):
     nu_m: scalar or arrays of gauss point values.
         Matrix Poisson Ratio
     angle: scalar or arrays of gauss point values (*default=0*)
-        The angle of the fibers relative to the X direction normal to the Z direction (if defined, the local material coordinates are used)
+        The angle of the fibers relative to the X direction normal to the
+        Z direction (if defined, the local material coordinates are used).
     name: str, optional
         The name of the constitutive law
     """
 
     def __init__(
-        self, Vf=0.6, E_f=250000, E_m=3500, nu_f=0.33, nu_m=0.3, angle=0, name=""
+        self,
+        Vf=0.6,
+        E_f=250000,
+        E_m=3500,
+        nu_f=0.33,
+        nu_m=0.3,
+        angle=0,
+        name="",
     ):
         Mechanical3D.__init__(self, name)  # heritage
 

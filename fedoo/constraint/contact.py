@@ -95,7 +95,12 @@ class Contact(AssemblyBase):
                     ]
                 )
             else:
-                return NotImplemented
+                raise NotImplementedError(
+                    f"'{self.mesh.elm_type}' elements are not "
+                    "supported in contact. Use either 'tri3' "
+                    "or 'lin2' elements."
+                )
+
             self.bucket_size = np.sqrt(2) * max_edge_size
             # self.bucket_size = self.mesh.bounding_box.size.max()/10 #bucket size #bounding box includes all nodes
         elif search_algorithm.lower() != "search_nearest":
@@ -227,7 +232,7 @@ class Contact(AssemblyBase):
             #     vec_xi = self.contact_list_xi[slave_node]
 
             #     #contact points in global coordinates
-            #     shape_func_val = elm_ref.ShapeFunction(vec_xi)[0]
+            #     shape_func_val = elm_ref.shape_function(vec_xi)[0]
             #     contact_point = (shape_func_val @ elm_nodes_crd[el])
 
             #     #algebric distance from the possible elements
@@ -288,7 +293,7 @@ class Contact(AssemblyBase):
                     )
 
                 # contact points in global coordinates
-                shape_func_val = elm_ref.ShapeFunction(vec_xi)
+                shape_func_val = elm_ref.shape_function(vec_xi)
                 contact_points = (
                     shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[possible_elements]
                 ).squeeze()
@@ -388,7 +393,7 @@ class Contact(AssemblyBase):
                     ).reshape(1, -1)
 
                 # contact points in global coordinates
-                shape_func_val = elm_ref.ShapeFunction(vec_xi)[0]
+                shape_func_val = elm_ref.shape_function(vec_xi)[0]
                 contact_point = shape_func_val @ elm_nodes_crd[el]
 
                 # algebric distance from the possible elements
@@ -455,7 +460,7 @@ class Contact(AssemblyBase):
                     )
                 )
             else:
-                shape_func_deriv_val = elm_ref.ShapeFunctionDerivative(
+                shape_func_deriv_val = elm_ref.shape_function_derivative(
                     [vec_xi]
                 )[
                     0

@@ -120,7 +120,7 @@ Then, we can catch the Stress, Displacement and Strain fields using:
 
     results = pb.get_results(assembly, ["Stress", "Disp", "Strain"])
     # plot the sigma_xx averaged at nodes
-    results.plot("Stress", "Node", component='XX')
+    results.plot("Stress", component='XX', data_type='Node')
 
 
 .. image:: ./_static/examples/example_plot_dataset.png
@@ -143,7 +143,7 @@ time interval (here the results are saved on a file).
     pb_nl.nlsolve(dt = 0.1, tmax = 1, interval_output = 0.2)
 
     # plot the sigma_xx averaged at nodes at the last increment
-    results_nl.plot("Stress", "Node", component='XX')
+    results_nl.plot("Stress", component='XX', data_type='Node')
 
 .. image:: ./_static/examples/example_plot_dataset_nl.png
 
@@ -214,6 +214,8 @@ the stress field (modifiying the results data).
 
 .. code-block:: python
 
+    import pyvista as pv
+
     results = pb.get_results(assembly, ['Stress', 'Disp'], 'Node')
     stress = results.node_data['Stress']
     clim = [stress[3].min(), stress[3].max()]  # 3 -> xy in voigt notation
@@ -254,6 +256,7 @@ we can plot the stress results after the example
 .. code-block:: python
 
     import pyvista as pv
+
     pl = pv.Plotter(shape=(2,2))
     # or using the backgroundplotter:
     # from pyvistaqt import BackgroundPlotter

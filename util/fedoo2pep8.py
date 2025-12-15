@@ -57,6 +57,16 @@ dirs = ["../fedoo"]
 # dirs = ["../tests"]
 rep = {}
 
+rep["ShapeFunctionDerivativePG"] = "shape_function_derivative_gp"
+rep["ShapeFunctionPG"] = "shape_function_gp"
+# rep["ShapeFunction("] = "shape_function("
+# rep["ComputeDetJacobian("] = "compute_det_jacobian("
+# rep["ComputeJacobianMatrix("] = "compute_jacobian_with_inverse("
+# rep["interpolateLocalFrame("] = "interpolate_local_frame("
+# rep[".JacobianMatrix"] = ".jacobian_matrix"
+# rep[".inverseJacobian"] = ".inv_jacobian_matrix"
+# rep["repLocFromJac("] = "local_frame_from"
+
 
 # rep[".GetActive()"] = ".get_active()"
 # rep[".GetDimension()"] = ".get_dimension()"
@@ -191,7 +201,7 @@ rep = {}
 # rep["get_DifferentialOperator"] = "get_weak_equation"
 
 # rep["GetNodePositionInElementCoordinates"] = "get_node_elm_coordinates"
-rep["GetTangentMatrix"] = "get_tangent_matrix"
+# rep["GetTangentMatrix"] = "get_tangent_matrix"
 
 for key in rep:
     findReplace(dirs, key, rep[key], "*.py")
