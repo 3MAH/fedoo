@@ -9,9 +9,12 @@ import numpy as np
 
 class CompositeUD(ElasticAnisotropic):
     """
-    Linear Orthotropic constitutive law defined from composites phase parameters, assuming uniform unidirectional fibers.
-    The fiber are assumed in the X direction. Use Change of basis to rotate the material.
-    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    Linear Orthotropic constitutive law defined from composites phase
+    parameters, assuming uniform unidirectional fibers.
+    The fiber are assumed in the X direction. Use a local frame
+    to rotate the material.
+    The constitutive Law should be associated with a
+    :mod:`fedoo.weakform.SressEquilibrium` type of weakform.
 
     Parameters
     ----------
@@ -26,13 +29,21 @@ class CompositeUD(ElasticAnisotropic):
     nu_m: scalar or arrays of gauss point values.
         Matrix Poisson Ratio
     angle: scalar or arrays of gauss point values (*default=0*)
-        The angle of the fibers relative to the X direction normal to the Z direction (if defined, the local material coordinates are used)
+        The angle of the fibers relative to the X direction normal to the
+        Z direction (if defined, the local material coordinates are used).
     name: str, optional
         The name of the constitutive law
     """
 
     def __init__(
-        self, Vf=0.6, E_f=250000, E_m=3500, nu_f=0.33, nu_m=0.3, angle=0, name=""
+        self,
+        Vf=0.6,
+        E_f=250000,
+        E_m=3500,
+        nu_f=0.33,
+        nu_m=0.3,
+        angle=0,
+        name="",
     ):
         Mechanical3D.__init__(self, name)  # heritage
 
@@ -58,7 +69,9 @@ class CompositeUD(ElasticAnisotropic):
         Gm = (
             0.5 * self.__parameters["E_m"] / (1 + self.__parameters["nu_m"])
         )  # shear modulus matrix
-        kf = self.__parameters["E_f"] / (3 * (1 - 2 * self.__parameters["nu_f"]))
+        kf = self.__parameters["E_f"] / (
+            3 * (1 - 2 * self.__parameters["nu_f"])
+        )
         km = self.__parameters["E_m"] / (
             3 * (1 - 2 * self.__parameters["nu_m"])
         )  # modules de compressibilité
@@ -70,7 +83,8 @@ class CompositeUD(ElasticAnisotropic):
         )  # loi des mélanges
 
         nuLT = (
-            Vf * self.__parameters["nu_f"] + (1 - Vf) * self.__parameters["nu_m"]
+            Vf * self.__parameters["nu_f"]
+            + (1 - Vf) * self.__parameters["nu_m"]
         )  # loi des mélanges
 
         # GLT =  1./(Vf/Gm + (1-Vf)/Gf) #approche simplifiée
@@ -87,7 +101,9 @@ class CompositeUD(ElasticAnisotropic):
                 + (km + 7.0 * Gm / 3) / (2 * km + 8.0 * Gm / 3) * (1 - Vf)
             )
         )  # approche exacte
-        KL = Km + Vf / (1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm))
+        KL = Km + Vf / (
+            1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm)
+        )
 
         # ET = 1./(Vf/E_f + (1-Vf)/E_m) #simplified approach
         ET = 2.0 / (0.5 / KL + 0.5 / GTT + 2 * nuLT**2 / EL)  # exact approach
@@ -118,7 +134,9 @@ class CompositeUD(ElasticAnisotropic):
         Gm = (
             0.5 * self.__parameters["E_m"] / (1 + self.__parameters["nu_m"])
         )  # shear modulus matrix
-        kf = self.__parameters["E_f"] / (3 * (1 - 2 * self.__parameters["nu_f"]))
+        kf = self.__parameters["E_f"] / (
+            3 * (1 - 2 * self.__parameters["nu_f"])
+        )
         km = self.__parameters["E_m"] / (
             3 * (1 - 2 * self.__parameters["nu_m"])
         )  # modules de compressibilité
@@ -130,7 +148,8 @@ class CompositeUD(ElasticAnisotropic):
         )  # loi des mélanges
 
         nuLT = (
-            Vf * self.__parameters["nu_f"] + (1 - Vf) * self.__parameters["nu_m"]
+            Vf * self.__parameters["nu_f"]
+            + (1 - Vf) * self.__parameters["nu_m"]
         )  # loi des mélanges
 
         # GLT =  1./(Vf/Gm + (1-Vf)/Gf) #approche simplifiée
@@ -147,7 +166,9 @@ class CompositeUD(ElasticAnisotropic):
                 + (km + 7.0 * Gm / 3) / (2 * km + 8.0 * Gm / 3) * (1 - Vf)
             )
         )  # approche exacte
-        KL = Km + Vf / (1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm))
+        KL = Km + Vf / (
+            1 / (kf - km + (Gf - Gm) / 3) + (1 - Vf) / (km + 4 / 3.0 * Gm)
+        )
 
         # ET = 1./(Vf/E_f + (1-Vf)/E_m) #simplified approach
         ET = 2.0 / (0.5 / KL + 0.5 / GTT + 2 * nuLT**2 / EL)  # exact approach
@@ -181,7 +202,8 @@ class CompositeUD(ElasticAnisotropic):
         H[4, 4] = H[3, 3] = GLT
 
         if not (
-            np.isscalar(self.__parameters["angle"]) and self.__parameters["angle"] == 0
+            np.isscalar(self.__parameters["angle"])
+            and self.__parameters["angle"] == 0
         ):
             # angle in degree
             angle_pli = self.__parameters["angle"] / 180.0 * np.pi

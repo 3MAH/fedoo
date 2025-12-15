@@ -57,8 +57,8 @@ dirs = ["../fedoo"]
 # dirs = ["../tests"]
 rep = {}
 
-rep["Geometricalshape_function("] = "geometrical_shape_function("
-rep["ShapeFunctionDerivative("] = "shape_function_derivative("
+rep["ShapeFunctionDerivativePG"] = "shape_function_derivative_gp"
+rep["ShapeFunctionPG"] = "shape_function_gp"
 # rep["ShapeFunction("] = "shape_function("
 # rep["ComputeDetJacobian("] = "compute_det_jacobian("
 # rep["ComputeJacobianMatrix("] = "compute_jacobian_with_inverse("

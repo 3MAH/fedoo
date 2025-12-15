@@ -141,13 +141,6 @@ or 'Neumann' (nodal force for mechanical problems).
     
     pb.bc.add('Dirichlet',nodes_right, 'DispY', -10) #displacement along y set to -10 on right
 
-To apply the boundary conditions to the active problem use the command: 
-
-.. code-block:: python
-
-    pb.apply_boundary_conditions()
-
-
 
 Solve the Problem
 __________________________________
@@ -155,6 +148,7 @@ __________________________________
 .. code-block:: python
 
     pb.solve()
+
 
 Analyse and export results
 ________________________________

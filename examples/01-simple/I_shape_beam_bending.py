@@ -59,9 +59,15 @@ pb = fd.problem.Linear(assembly)
 bottom = mesh.find_nodes("Y", mesh.bounding_box.ymin)
 top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
 
-left_bottom = np.intersect1d(mesh.find_nodes("X", mesh.bounding_box.xmin), bottom)
-right_bottom = np.intersect1d(mesh.find_nodes("X", mesh.bounding_box.xmax), bottom)
-center_top = np.intersect1d(mesh.find_nodes("X", mesh.bounding_box.center[0]), top)
+left_bottom = np.intersect1d(
+    mesh.find_nodes("X", mesh.bounding_box.xmin), bottom
+)
+right_bottom = np.intersect1d(
+    mesh.find_nodes("X", mesh.bounding_box.xmax), bottom
+)
+center_top = np.intersect1d(
+    mesh.find_nodes("X", mesh.bounding_box.center[0]), top
+)
 
 pb.bc.add("Dirichlet", left_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", right_bottom, "DispY", 0)

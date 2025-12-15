@@ -190,7 +190,9 @@ class Mesh(MeshBase):
                 }.get(celltype, None)
                 if elm_type is None:
                     warnings.warn(
-                        "Element Type " + str(elm_type) + " not available in pyvista"
+                        "Element Type "
+                        + str(elm_type)
+                        + " not available in pyvista"
                     )
                 else:
                     elements_dict[elm_type] = pvmesh.cells_dict[celltype]
@@ -211,7 +213,9 @@ class Mesh(MeshBase):
                     name=name,
                 )
             elif len(elements_dict) == 0:
-                raise NotImplementedError("This mesh contains no compatible element.")
+                raise NotImplementedError(
+                    "This mesh contains no compatible element."
+                )
             else:
                 return MultiMesh(
                     pvmesh.points,
@@ -344,7 +348,9 @@ class Mesh(MeshBase):
             assert (
                 len(args[0].shape) == 1 or args[0].shape[1] == 1
             ), "Only one node coordinates should be specified in nodes if nb_nodes is given."
-            self.nodes = np.vstack((self.nodes, np.tile(args[0], (args[1], 1))))
+            self.nodes = np.vstack(
+                (self.nodes, np.tile(args[0], (args[1], 1)))
+            )
 
         return np.arange(n_nodes_old, self.n_nodes)
 
@@ -382,7 +388,9 @@ class Mesh(MeshBase):
             mesh2 = Mesh.get_all()[mesh2]
 
         if mesh1.elm_type != mesh2.elm_type:
-            raise NameError("Can only stack meshes with the same element shape")
+            raise NameError(
+                "Can only stack meshes with the same element shape"
+            )
 
         n_nodes = mesh1.n_nodes
         n_elements = mesh1.n_elements
@@ -408,7 +416,9 @@ class Mesh(MeshBase):
                     np.array(mesh2.element_sets[key]) + n_elements,
                 ]
             else:
-                new_elSets[key] = np.array(mesh2.element_sets[key]) + n_elements
+                new_elSets[key] = (
+                    np.array(mesh2.element_sets[key]) + n_elements
+                )
 
         mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, name=name)
         mesh3.node_sets = new_ndSets
@@ -425,18 +435,23 @@ class Mesh(MeshBase):
         where meshObject is the Mesh object containing merged coincidentNodes.
         """
         decimal_round = int(-np.log10(tol) - 1)
-        crd = self.nodes.round(decimal_round)  # round coordinates to match tolerance
+        crd = self.nodes.round(
+            decimal_round
+        )  # round coordinates to match tolerance
         if self.ndim == 3:
             ind_sorted = np.lexsort((crd[:, 2], crd[:, 1], crd[:, 0]))
         elif self.ndim == 2:
             ind_sorted = np.lexsort((crd[:, 1], crd[:, 0]))
 
         ind_coincident = np.where(
-            np.linalg.norm(crd[ind_sorted[:-1]] - crd[ind_sorted[1:]], axis=1) == 0
+            np.linalg.norm(crd[ind_sorted[:-1]] - crd[ind_sorted[1:]], axis=1)
+            == 0
         )[
             0
         ]  # indices of the first coincident nodes
-        return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident + 1]]).T
+        return np.array(
+            [ind_sorted[ind_coincident], ind_sorted[ind_coincident + 1]]
+        ).T
 
     def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
         """
@@ -448,7 +463,9 @@ class Mesh(MeshBase):
         nds_kept = node_couples[:, 0]  # list des noeuds a conserver
 
         unique_nodes, ordre = np.unique(nds_del, return_index=True)
-        assert len(unique_nodes) == len(nds_del), "A node can't be deleted 2 times"
+        assert len(unique_nodes) == len(
+            nds_del
+        ), "A node can't be deleted 2 times"
         # ordre = np.argsort(nds_del)
         j = 0
         new_num = np.zeros(n_nodes, dtype="int")
@@ -470,7 +487,9 @@ class Mesh(MeshBase):
         self.nodes = self.nodes[list_nd_new]
         self.reset_interpolation()
 
-    def remove_nodes(self, index_nodes: list[int] | np.ndarray[int]) -> np.ndarray[int]:
+    def remove_nodes(
+        self, index_nodes: list[int] | np.ndarray[int]
+    ) -> np.ndarray[int]:
         """
         Remove some nodes and associated element.
 
@@ -509,8 +528,8 @@ class Mesh(MeshBase):
         """
         Return the nodes that are not associated with any element.
 
-        Return
-        -------------
+        Returns
+        -------
         1D array containing the indexes of the non used nodes.
         If all elements are used, return an empty array.
         """
@@ -522,7 +541,7 @@ class Mesh(MeshBase):
 
         The total number and the id of nodes are modified
 
-        Return : n_removed_nodes (int)
+        Returns : n_removed_nodes (int)
             the number of removed nodes.
         """
         index_non_used_nodes = np.setdiff1d(
@@ -539,7 +558,9 @@ class Mesh(MeshBase):
         """
         self.nodes = self.nodes + disp.T
 
-    def extract_elements(self, element_set: str | list, name: str = "") -> "Mesh":
+    def extract_elements(
+        self, element_set: str | list, name: str = ""
+    ) -> "Mesh":
         """
         Return a new mesh from the set of elements defined by element_set
 
@@ -672,16 +693,23 @@ class Mesh(MeshBase):
             elif selection_criterion == "Z":
                 return np.where(np.abs(nodes[:, 2] - value) < tol)[0]
         elif selection_criterion == "XY":
-            return np.where(np.linalg.norm(nodes[:, :2] - value, axis=1) < tol)[0]
+            return np.where(
+                np.linalg.norm(nodes[:, :2] - value, axis=1) < tol
+            )[0]
         elif selection_criterion == "XZ":
-            return np.where(np.linalg.norm(nodes[:, ::2] - value, axis=1) < tol)[0]
+            return np.where(
+                np.linalg.norm(nodes[:, ::2] - value, axis=1) < tol
+            )[0]
         elif selection_criterion == "YZ":
-            return np.where(np.linalg.norm(nodes[:, 1:] - value, axis=1) < tol)[0]
+            return np.where(
+                np.linalg.norm(nodes[:, 1:] - value, axis=1) < tol
+            )[0]
         elif selection_criterion.lower() == "point":
             return np.where(np.linalg.norm(nodes - value, axis=1) < tol)[0]
         elif selection_criterion.lower() == "distance":
             return np.where(
-                np.abs(np.linalg.norm(nodes - value[0], axis=1) - value[1]) < tol
+                np.abs(np.linalg.norm(nodes - value[0], axis=1) - value[1])
+                < tol
             )[0]
         elif isinstance(selection_criterion, str):
             # assume arbitrary expression
@@ -741,7 +769,9 @@ class Mesh(MeshBase):
         else:
             raise ValueError("select_by should be in {'centers', 'nodes'}")
 
-    def _eval_expr(self, expr):  # evaluate an expression within the find_nodes method
+    def _eval_expr(
+        self, expr
+    ):  # evaluate an expression within the find_nodes method
         i = i_start = 0
         logical_op = None
         while i < len(expr):
@@ -775,7 +805,9 @@ class Mesh(MeshBase):
                 else:
                     raise NameError("Invalid expression")
 
-                test = np.array([expr.find(crd_name, i) for crd_name in ["&", "|"]])
+                test = np.array(
+                    [expr.find(crd_name, i) for crd_name in ["&", "|"]]
+                )
                 if test.max() == -1:
                     i_end = -1
                     value = float(expr[i:])
@@ -942,11 +974,15 @@ class Mesh(MeshBase):
             }.get(self.elm_type, None)
             if cell_type is None:
                 raise NameError(
-                    "Element Type " + str(self.elm_type) + " not available in pyvista"
+                    "Element Type "
+                    + str(self.elm_type)
+                    + " not available in pyvista"
                 )
 
             # elm = np.empty((self.elements.shape[0], self.elements.shape[1]+1), dtype=int)
-            elm = np.empty((self.elements.shape[0], n_elm_nodes + 1), dtype=int)
+            elm = np.empty(
+                (self.elements.shape[0], n_elm_nodes + 1), dtype=int
+            )
             elm[:, 0] = n_elm_nodes  # self.elements.shape[1]
             elm[:, 1:] = self.elements[:, :n_elm_nodes]
 
@@ -1024,7 +1060,9 @@ class Mesh(MeshBase):
                 (1, 0, 2, 3),
             ).reshape(-1, self.ndim, self.ndim)
 
-    def plot_normals(self, mag: float = 1.0, show_mesh: bool = True, **kargs) -> None:
+    def plot_normals(
+        self, mag: float = 1.0, show_mesh: bool = True, **kargs
+    ) -> None:
         """Simple functions to plot the normals of a surface Mesh.
 
         This function is proposed for visual verification of normals
@@ -1082,7 +1120,9 @@ class Mesh(MeshBase):
 
         n_nodes = self.n_nodes
         n_elements = self.n_elements
-        n_elm_nd = self.n_elm_nodes  # number of nodes associated to each element
+        n_elm_nd = (
+            self.n_elm_nodes
+        )  # number of nodes associated to each element
 
         # -------------------------------------------------------------------
         # Initialise the geometrical interpolation
@@ -1092,7 +1132,9 @@ class Mesh(MeshBase):
         if hasattr(elm_interpol, "geometry_elm"):
             elm_interpol = elm_interpol.geometry_elm
 
-        elm_interpol = elm_interpol(n_elm_gp)  # initialise element interpolation
+        elm_interpol = elm_interpol(
+            n_elm_gp
+        )  # initialise element interpolation
 
         n_interpol_nodes = (
             elm_interpol.n_nodes
@@ -1153,7 +1195,9 @@ class Mesh(MeshBase):
         self._sparse_structure[n_elm_gp] = (row.reshape(-1), col.reshape(-1))
         self._elements_geom = elm_geom  # dont depend on n_elm_gp
 
-    def _compute_gaussian_quadrature_mat(self, n_elm_gp: int | None = None) -> None:
+    def _compute_gaussian_quadrature_mat(
+        self, n_elm_gp: int | None = None
+    ) -> None:
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
         if n_elm_gp not in self._saved_gaussian_quadrature_mat:
@@ -1170,7 +1214,9 @@ class Mesh(MeshBase):
         # -------------------------------------------------------------------
         # Compute the diag matrix used for the gaussian quadrature
         # -------------------------------------------------------------------
-        gaussianQuadrature = (elm_interpol.detJ * elm_interpol.w_pg).T.reshape(-1)
+        gaussianQuadrature = (elm_interpol.detJ * elm_interpol.w_pg).T.reshape(
+            -1
+        )
         self._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.diags(
             gaussianQuadrature, 0, format="csr"
         )  # matrix to get the gaussian quadrature (integration over each element)
@@ -1196,7 +1242,9 @@ class Mesh(MeshBase):
             self._compute_gaussian_quadrature_mat(n_elm_gp)
         return self._saved_gaussian_quadrature_mat[n_elm_gp]
 
-    def determine_data_type(self, data: np.ndarray, n_elm_gp: int | None = None) -> str:
+    def determine_data_type(
+        self, data: np.ndarray, n_elm_gp: int | None = None
+    ) -> str:
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
 
@@ -1216,7 +1264,11 @@ class Mesh(MeshBase):
                              number of elements or number of gauss points."
             )
         if test > 1:
-            ("Warning: kind of data is confusing. " + data_type + " values choosen.")
+            (
+                "Warning: kind of data is confusing. "
+                + data_type
+                + " values choosen."
+            )
         return data_type
 
     def data_to_gausspoint(
@@ -1348,7 +1400,9 @@ class Mesh(MeshBase):
         self._elm_interpolation = {}
         self._sparse_structure = {}
 
-    def gausspoint_coordinates(self, n_elm_gp: int | None = None) -> np.ndarray:
+    def gausspoint_coordinates(
+        self, n_elm_gp: int | None = None
+    ) -> np.ndarray:
         """Return the coordinates of the integration points
 
         Parameters

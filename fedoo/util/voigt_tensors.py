@@ -46,19 +46,47 @@ except ImportError:
 #     self.info = getattr(obj, 'info', None)
 
 
-class _SymetricTensorList(list):  # base class for StressTensorList and StrainTensorList
+class _SymetricTensorList(
+    list
+):  # base class for StressTensorList and StrainTensorList
     def __init__(self, l):
         if len(l) != 6:
             raise NameError(
-                "list lenght for " + str(self.__class__.__name__) + " object must be 6"
+                "list lenght for "
+                + str(self.__class__.__name__)
+                + " object must be 6"
             )
         if isinstance(l, np.ndarray):
             self.array = l
         else:
-            self.array = (
-                None  # if object build from an array, keep it in memory to avoid copy
-            )
+            self.array = None  # if object build from an array, keep it in memory to avoid copy
         list.__init__(self, l)
+
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            if item == "vm":
+                return self.von_mises()
+            elif item == "pressure":
+                return self.pressure()
+            elif item in ["I", "II", "III"]:
+                return self.eigvalues()[{"I": 2, "II": 1, "III": 0}.get(item)]
+            elif item in ["XX", "YY", "ZZ", "XY", "XZ", "YZ"]:
+                return self[
+                    {
+                        "XX": 0,
+                        "YY": 1,
+                        "ZZ": 2,
+                        "XY": 3,
+                        "XZ": 4,
+                        "YZ": 5,
+                    }.get(item)
+                ]
+            elif item == "eigvalues":
+                return self.eigvalues()
+            else:
+                raise TypeError(f"unknown component '{item}'")
+        else:
+            return super().__getitem__(item)
 
     def __add__(self, tensor_list):
         if np.isscalar(tensor_list) and tensor_list == 0:
@@ -82,10 +110,14 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         See the utilities.ExportData class for more details
         """
         try:
-            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
+            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(
+                float
+            )
         except:
             self.fill_zeros()
-            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
+            return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(
+                float
+            )
 
     def to_tensor(self):
         return np.array(
@@ -101,12 +133,7 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             try:
                 return np.array(self)
             except ValueError:  # fill zeros first
-                for i in range(6):
-                    if not (np.isscalar(self[i])):
-                        N = len(self[i])  # number of stress values
-                        break
-
-                res = np.empty((6, N))
+                res = np.empty((6, self.n_points))
                 for i in range(6):
                     res[i] = self[i]
                 return res
@@ -140,44 +167,81 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
 
     def diagonalize(self):
         """
-        Return the principal value and principal directions of the tensor for all given points
-        Return eigenvalues, eigenvectors
-        The line of eigenvalues are the values of the principal stresses for all points.
-        eigenvectors[i] is the principal direction associated to the ith principal value.
-        The line of eigenvectors[i] are component of the vector, for all points.
+        Return the principal values and principal directions of the tensor for
+        all points.
+
+        Returns
+        -------
+
+        A tuple (eigenvalues, eigenvectors):
+
+        eigenvalues : (3, n_points) numpy.ndarray
+            eigenvalues[i] gives ith principal values arranged in ascending
+            order for all points
+        eigenvectors : (3, 3, n_points) numpy.ndarray
+            eigenvectors[i, j] gives the jth component of the principal
+            direction associated to the ith principal value.
         """
         full_tensor = self.to_tensor().transpose(2, 0, 1)
-        eigenvalues, eigenvectors = np.linalg.eig(full_tensor)
-        return eigenvalues, eigenvectors.transpose(2, 0, 1)
+        eigenvalues, eigenvectors = np.linalg.eigh(full_tensor)
+        return eigenvalues.T, eigenvectors.transpose(2, 1, 0)
+
+    def eigvalues(self):
+        """
+        Return the principal values of the tensor for all points.
+
+        Returns
+        -------
+        eigenvalues : (3, n_points) numpy.ndarray
+            eigenvalues[i] gives ith principal values arranged in ascending
+            order for all points
+        """
+        full_tensor = self.to_tensor().transpose(2, 0, 1)
+        return np.linalg.eigvalsh(full_tensor).T
 
     def fill_zeros(self):
-        for i in range(6):
-            if not (np.isscalar(self[i])):
-                N = len(self[i])  # number of stress values
-                break
+        n = self.n_points
         for i in range(6):
             if np.isscalar(self[i]) and self[i] == 0:
-                self[i] = np.zeros(N)
+                self[i] = np.zeros(n)
 
     def convert(self, assemb, convert_from=None, convert_to="GaussPoint"):
         return self.__class__(
             [assemb.convert_data(S, convert_from, convert_to) for S in self]
         )
 
+    @property
+    def n_points(self):
+        """Number of points where stress values are given."""
+        for i in range(6):
+            if not (np.isscalar(self[i])):
+                return len(self[i])  # number of stress values
+        return 1
+
+    @property
+    def shape(self):
+        return (6, self.n_points)
+
 
 class StressTensorList(_SymetricTensorList):
     def cauchy_to_pk2(self, F):
         if USE_SIMCOON:
             return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy=False)
+                sim.stress_convert(
+                    self.asarray(), F, "Cauchy2PKII", copy=False
+                )
             )
         else:
-            raise NameError("Install simcoon to allow conversion from cauchy to pk2")
+            raise NameError(
+                "Install simcoon to allow conversion from cauchy to pk2"
+            )
 
     def pk2_to_cauchy(self, F):
         if USE_SIMCOON:
             return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy=False)
+                sim.stress_convert(
+                    self.asarray(), F, "PKII2Cauchy", copy=False
+                )
             )
         else:
             pk2 = self.to_tensor().transpose(2, 0, 1)
@@ -205,7 +269,9 @@ class StressTensorList(_SymetricTensorList):
                 sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy=False)
             )
         else:
-            raise NameError("Install simcoon to allow conversion from cauchy to pk1")
+            raise NameError(
+                "Install simcoon to allow conversion from cauchy to pk1"
+            )
 
     def pk1_to_cauchy(self, F):
         if USE_SIMCOON:
@@ -213,7 +279,9 @@ class StressTensorList(_SymetricTensorList):
                 sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
             )
         else:
-            raise NameError("Install simcoon to allow conversion from pk1 to cauchy")
+            raise NameError(
+                "Install simcoon to allow conversion from pk1 to cauchy"
+            )
 
     def von_mises(self):
         """
@@ -248,10 +316,14 @@ class StrainTensorList(_SymetricTensorList):
         """
 
         try:
-            return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
+            return np.vstack(
+                self[:3] + [self[i] / 2 for i in [3, 5, 4]]
+            ).astype(float)
         except:
             self.fill_zeros()
-            return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
+            return np.vstack(
+                self[:3] + [self[i] / 2 for i in [3, 5, 4]]
+            ).astype(float)
 
     def to_tensor(self):
         return np.array(
