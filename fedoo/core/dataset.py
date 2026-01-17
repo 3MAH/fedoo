@@ -163,6 +163,7 @@ class DataSet:
         title_size: float = 18.0,
         window_size: list = None,
         multiplot: bool | None = None,
+        clip_args: tuple | None = None,
         lock_view: bool = False,
         **kargs,
     ) -> None:
@@ -278,6 +279,10 @@ class DataSet:
             If None, uses separated scalarbars only if the pyvista plotter uses
             subplot.
 
+        clip_args : dict, optional
+            Dictionary of arguments to pass to the pyvista clip filter in
+            order to clip the current plot.
+
         lock_view : bool, default = False
             If ``True``, the camera position and background color are not
             modified. In this mode, any view‑modifying arguments such as
@@ -318,7 +323,7 @@ class DataSet:
             screenshot = False  # not used if show = False
 
         return_cpos = kargs.pop("return_cpos", False)
-        sargs = kargs.pop("scalar_bar_args", None)
+        cmap = kargs.pop("cmap", "jet")  # if cmap not defined, default to "jet"
 
         if data_type == "GaussPoint":
             if self.meshplot_gp is None:
@@ -410,64 +415,99 @@ class DataSet:
                 pl.camera.Elevation(elevation)
 
         # default sargs values
-        if sargs is None and field is not None:  # default value
-            if multiplot:
-                # scalarbar can't be interactive in multiplot
-                sargs = dict(
-                    label_font_size=int(
-                        pl.window_size[1] / pl.renderers.shape[1] * 0.6 / 22
-                    ),
-                    color="Black",
-                    position_x=0.2,
-                    width=0.6,
-                    # n_colors= 10
-                )
-            else:
-                sargs = dict(
-                    interactive=True,
-                    title_font_size=20,
-                    label_font_size=16,
-                    color="Black",
-                    # n_colors= 10
-                )
+        # if sargs is None and field is not None:  # default value
+        if multiplot:
+            # scalarbar can't be interactive in multiplot
+            sargs = dict(
+                label_font_size=int(
+                    pl.window_size[1] / pl.renderers.shape[1] * 0.6 / 22
+                ),
+                color="Black",
+                position_x=0.2,
+                width=0.6,
+                # n_colors= 10
+            )
+        else:
+            sargs = dict(
+                interactive=True,
+                title_font_size=20,
+                label_font_size=16,
+                color="Black",
+                # n_colors= 10
+            )
+        sargs.update(kargs.pop("scalar_bar_args", {}))
 
         if multiplot and "title" not in sargs:
             # title use as scalar_bar id required to plot several scalar bar
             sargs["title"] = f"{pl.renderers.active_index}"
             sargs["title_font_size"] = 1
 
+        mesh_to_show = meshplot
+        if clip_args is not None:
+            # add data field to mesh object to clip data with the mesh
+            if data_type == "Element":
+                meshplot.cell_data["Data"] = data
+            elif data_type:
+                meshplot.point_data["Data"] = data
+            mesh_to_show = meshplot.clip(**clip_args)
+            if data_type == "Element":
+                data = mesh_to_show.cell_data["Data"]
+                del meshplot.cell_data["Data"]
+            elif data_type:
+                data = mesh_to_show.point_data["Data"]
+                del meshplot.point_data["Data"]
+
+        edges = None
+        if multiplot:
+            copy_mesh = True
+        else:
+            copy_mesh = False
+
+        if show_edges and self.mesh.elm_type in [
+            "tri6",
+            "quad8",
+            "quad9",
+            "hex20",
+            "tet10",
+            "wed15",
+            "wed18",
+        ]:
+            # patch to correct edges visualization in 2nd ordre elements
+            show_edges = False
+            edges = (
+                mesh_to_show.separate_cells()
+                .extract_surface(nonlinear_subdivision=4)
+                .extract_feature_edges()
+            )
+
         if field is None:
             meshplot.active_scalars_name = None
-            if multiplot:
-                pl.add_mesh(meshplot.copy(), show_edges=show_edges, **kargs)
-            else:
-                pl.add_mesh(meshplot, show_edges=show_edges, **kargs)
+            pl.add_mesh(
+                mesh_to_show,
+                show_edges=show_edges,
+                copy_mesh=copy_mesh,
+                **kargs,
+            )
+            if title is None:
+                title = ""
         else:
-            if multiplot:
-                pl.add_mesh(
-                    meshplot.copy(),
-                    scalars=data,
-                    show_edges=show_edges,
-                    scalar_bar_args=sargs,
-                    cmap="jet",
-                    clim=clim,
-                    **kargs,
-                )
-            else:
-                pl.add_mesh(
-                    meshplot,
-                    scalars=data,
-                    show_edges=show_edges,
-                    scalar_bar_args=sargs,
-                    cmap="jet",
-                    clim=clim,
-                    **kargs,
-                )
-
+            pl.add_mesh(
+                mesh_to_show,
+                scalars=data,
+                show_edges=show_edges,
+                scalar_bar_args=sargs,
+                cmap=cmap,
+                clim=clim,
+                copy_mesh=copy_mesh,
+                **kargs,
+            )
             if title is None:
                 title = f"{field}_{component}"
 
-            pl.add_text(title, name="name", color="Black", font_size=title_size)
+        if edges:
+            pl.add_mesh(edges, color="black", line_width=1.5)
+
+        pl.add_text(title, name="name", color="Black", font_size=title_size)
 
         if not lock_view:
             pl.add_axes(color="Black", interactive=True)
@@ -1533,6 +1573,7 @@ class MultiFrameDataSet(DataSet):
         ndim = self.mesh.ndim
         clim = [np.inf, -np.inf]
         crd = self.mesh.nodes
+        current_iter = self.loaded_iter
 
         for i in range(0, self.n_iter):
             self.load(i)
@@ -1554,6 +1595,7 @@ class MultiFrameDataSet(DataSet):
                     Xmin = [np.min([Xmin[i], new_Xmin[i]]) for i in range(ndim)]
                     Xmax = [np.max([Xmax[i], new_Xmax[i]]) for i in range(ndim)]
 
+        self.load(current_iter)
         if "Disp" not in self.node_data:
             Xmin = self.mesh.bounding_box[0]
             Xmax = self.mesh.bounding_box[1]

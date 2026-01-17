@@ -24,6 +24,7 @@ from .core import (
     WeakFormSum,
     read_data,
 )
+from .util.viewer import viewer
 
 
 class get_config:
