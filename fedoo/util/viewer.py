@@ -16,15 +16,22 @@ from qtpy.QtWidgets import (
     QWidget,
     QShortcut,
 )
-from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer
+from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent
 import matplotlib as mpl  # only for colormap
 import pyvista as pv
 from pyvistaqt import QtInteractor
 import os
+import re
 
 
 class PlotDock(QDockWidget):
+    _n_created_dock = 0  # total dock created
+
     def __init__(self, data, title, parent=None, opts=None):
+        PlotDock._n_created_dock += 1
+        self._dock_index = PlotDock._n_created_dock
+        self.title = title
+        title = f"{self._dock_index }: " + str(title)
         super().__init__(title, parent)
         self.data = data
 
@@ -45,7 +52,7 @@ class PlotDock(QDockWidget):
 
         # if hasattr(dock, "plotter") and hasattr(dock.plotter, "interactor"):
         # container.setFocusPolicy(Qt.NoFocus)
-        # self.plotter.interactor.setFocusPolicy(Qt.StrongFocus)
+        self.plotter.interactor.setFocusPolicy(Qt.StrongFocus)
 
         #####################################################################
         # Parameters / Plot options
@@ -88,23 +95,21 @@ class PlotDock(QDockWidget):
             self.current_iter = data.loaded_iter
         else:
             self.current_iter = 0
-        
+
         field_names = data.field_names()
-        if 'Stress' in field_names:
-            self.current_field = 'Stress'
-            self.current_comp = 'vm'
-        elif 'Disp' in field_names:
-            self.current_field = 'disp'
-            self.current_comp = 'X'
+        if "Stress" in field_names:
+            self.current_field = "Stress"
+            self.current_comp = "vm"
+        elif "Disp" in field_names:
+            self.current_field = "disp"
+            self.current_comp = "X"
         else:
             self.current_field = field_names[0]
             self.current_comp = None
-        self.current_data_type = 'Node'
+        self.current_data_type = "Node"
 
+        parent.all_docks.append(self)
         parent._set_active(self)
-
-        # Clip plane parameters
-        # self._plane_widget = None  # save plane widget object
 
     def update_plot(self, val=None, iteration=None, lock_view=True, plotter=None):
         if self.data.mesh is None:
@@ -147,7 +152,7 @@ class PlotDock(QDockWidget):
             metallic=self.opts["metallic"],
             roughness=self.opts["roughness"],
             diffuse=self.opts["diffuse"],
-            clip_args=self.opts['clip_args'],
+            clip_args=self.opts["clip_args"],
             lock_view=lock_view,
             title=self.opts["title_plot"],
             cmap=self.opts["cmap"],
@@ -172,14 +177,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._clip_dialog = None  # clip windows if open
         self._renderer_dialog = None
         self._plot_dialog = None
+        self._window_index = 1
 
         self._plane_widget_enabled = (
             False  # if plane_widget should be shown in the active dock
         )
-        # fullscreen options        
+
+        self.apply_options_to_all = True
+
+        # fullscreen options
         self._is_fullscreen = False
         self._hidden_ui_when_fullscreen = []
-
 
         self.setTabPosition(Qt.AllDockWidgetAreas, QtWidgets.QTabWidget.North)
 
@@ -259,31 +267,31 @@ class MainWindow(QtWidgets.QMainWindow):
         view_top_action = QtWidgets.QAction("Top (Z-)", self)
         view_top_action.setShortcut("Ctrl+1")
         view_top_action.triggered.connect(self.view_top)
-        
+
         view_bottom_action = QtWidgets.QAction("Bottom (Z+)", self)
         view_bottom_action.setShortcut("Ctrl+2")
         view_bottom_action.triggered.connect(self.view_bottom)
-        
+
         view_front_action = QtWidgets.QAction("Front (Y-)", self)
         view_front_action.setShortcut("Ctrl+3")
         view_front_action.triggered.connect(self.view_front)
-        
+
         view_back_action = QtWidgets.QAction("Back (Y+)", self)
         view_back_action.setShortcut("Ctrl+4")
         view_back_action.triggered.connect(self.view_back)
-        
+
         view_left_action = QtWidgets.QAction("Left (X-)", self)
         view_left_action.setShortcut("Ctrl+5")
         view_left_action.triggered.connect(self.view_left)
-        
+
         view_right_action = QtWidgets.QAction("Right (X+)", self)
         view_right_action.setShortcut("Ctrl+6")
         view_right_action.triggered.connect(self.view_right)
-        
+
         view_isometric_action = QtWidgets.QAction("Isometric", self)
         view_isometric_action.setShortcut("Ctrl+0")
         view_isometric_action.triggered.connect(self.view_isometric)
-        
+
         # add view actions to toolbars
         view_toolbar.addAction(view_top_action)
         view_toolbar.addAction(view_bottom_action)
@@ -302,11 +310,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
         window_toolbar.addWidget(QtWidgets.QLabel("Active window: "))
         self.dock_selector_combo = QtWidgets.QComboBox()
+        self.dock_selector_combo.setMinimumWidth(150)
+
+        # Allow user text input
+        self.dock_selector_combo.setEditable(True)
+
+        # Prevent adding arbitrary new items
+        self.dock_selector_combo.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+
         window_toolbar.addWidget(self.dock_selector_combo)
 
         # When user selects a dock from combo
         self.dock_selector_combo.currentIndexChanged.connect(
             lambda idx: self._set_active(self.all_docks[idx])
+        )
+
+        self.dock_selector_combo.lineEdit().editingFinished.connect(
+            self.rename_active_dock_from_combo
         )
 
         # -------------------------
@@ -326,56 +346,67 @@ class MainWindow(QtWidgets.QMainWindow):
         self.anim_timer.timeout.connect(self._on_anim_tick)
         self._on_anim_fps_changed(self.anim_fps_spin.value())
 
-
         #####################################################################
         # Menu bar
         #####################################################################
-        
+
         # --- Main Menu ---
         menubar = self.menuBar()
-        
+
         # --- Menu file ---
         file_menu = menubar.addMenu("File")
-        
+
         # Action "Open"
         open_action = QtWidgets.QAction("Open...", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
-        
+
         # Save Image
         save_image_action = QtWidgets.QAction("Save Image...", self)
         save_image_action.setShortcut("Ctrl+S")
         save_image_action.triggered.connect(self.save_image_dialog)
         file_menu.addAction(save_image_action)
-        
+
         # Save Movie
         save_movie_action = QtWidgets.QAction("Write movie...", self)
         save_movie_action.triggered.connect(self.save_movie_dialog)
         file_menu.addAction(save_movie_action)
-        
+
         # Action "Quit"
         quitAction = QtWidgets.QAction("Quit", self)
         quitAction.setShortcut("Ctrl+Q")
         quitAction.triggered.connect(self.close)
         file_menu.addAction(quitAction)
-        
+
         # --- Menu "Options"---
         options_menu = menubar.addMenu("Options")
         plot_options_action = QtWidgets.QAction("Plot...", self)
         plot_options_action.setShortcut("Ctrl+P")
         plot_options_action.triggered.connect(self.open_plot_dialog)
         options_menu.addAction(plot_options_action)
-        
+
         clim_action = QtWidgets.QAction("Scalar bar…", self)
         clim_action.setShortcut("Ctrl+L")
         clim_action.triggered.connect(self.open_clim_dialog)
         options_menu.addAction(clim_action)
-        
+
         renderer_options_action = QtWidgets.QAction("Renderer…", self)
         renderer_options_action.triggered.connect(self.open_renderer_dialog)
         options_menu.addAction(renderer_options_action)
-        
+
+        apply_opt_to_menu = options_menu.addMenu("Apply options to")
+        group = QtWidgets.QActionGroup(self)
+        group.setExclusive(True)
+        apply_opt_to_active = QtWidgets.QAction("Active window", self, checkable=True)
+        apply_opt_to_all = QtWidgets.QAction("All windows", self, checkable=True)
+        apply_opt_to_all.setChecked(True)
+        group.addAction(apply_opt_to_active)
+        group.addAction(apply_opt_to_all)
+        group.triggered.connect(self._on_apply_options_target_changed)
+
+        apply_opt_to_menu.addActions(group.actions())
+
         # --- Menu View ---
         view_menu = menubar.addMenu("View")
         # add same actions as view toolbar
@@ -383,7 +414,7 @@ class MainWindow(QtWidgets.QMainWindow):
         link_views_action.setCheckable(True)
         link_views_action.triggered.connect(self._toggle_link_views)
         view_menu.addAction(link_views_action)
-        
+
         view_menu.addAction(view_top_action)
         view_menu.addAction(view_bottom_action)
         view_menu.addAction(view_front_action)
@@ -391,10 +422,10 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(view_left_action)
         view_menu.addAction(view_right_action)
         view_menu.addAction(view_isometric_action)
-        
+
         # --- Menu Tools ---
         tools_menu = menubar.addMenu("Tools")
-        
+
         clipAction = QtWidgets.QAction("Clip...", self)
         clipAction.setShortcut("Ctrl+K")
         clipAction.triggered.connect(self.open_clip_dialog)
@@ -409,37 +440,35 @@ class MainWindow(QtWidgets.QMainWindow):
             toolbars_menu.addAction(action)
 
         distribute_menu = windows_menu.addMenu("Arrange Windows")
-        
+
         # Actions
         tabify_action = QtWidgets.QAction("Tabify All", self)
         tabify_action.triggered.connect(self._distribute_tabified)
         distribute_menu.addAction(tabify_action)
-        
+
         vertical_action = QtWidgets.QAction("Split Vertically", self)
         vertical_action.triggered.connect(self._distribute_vertical)
         distribute_menu.addAction(vertical_action)
-        
+
         horizontal_action = QtWidgets.QAction("Split Horizontally", self)
         horizontal_action.triggered.connect(self._distribute_horizontal)
         distribute_menu.addAction(horizontal_action)
-        
+
         auto_action = QtWidgets.QAction("Automatic Layout", self)
         auto_action.triggered.connect(self._distribute_auto)
         distribute_menu.addAction(auto_action)
-        
+
         act_fullscreen = QtWidgets.QAction("Full Screen\tF11", self)
-        # act_fullscreen.setShortcut(QtGui.QKeySequence("F11"))
-        # act_fullscreen.setShortcutContext(Qt.ApplicationShortcut)  # <- key point
         act_fullscreen.triggered.connect(self.toggle_fullscreen)
-        windows_menu.addAction(act_fullscreen)   # or put it in View/Window menu
+        windows_menu.addAction(act_fullscreen)  # or put it in View/Window menu
         self._act_fullscreen = act_fullscreen
-    
+
         copy_action = QtWidgets.QAction("Copy Window", self)
         copy_action.setShortcut("Ctrl+D")  # optional
         copy_action.triggered.connect(self.copy_active_dock)
         windows_menu.addAction(copy_action)
-    
-        #Define escape and F11 shortcuts to exit fullscreen mode        
+
+        # Define escape and F11 shortcuts to exit fullscreen mode
         self.esc_shortcut = QShortcut(QtGui.QKeySequence("Esc"), self)
         self.esc_shortcut.setContext(Qt.ApplicationShortcut)
         self.esc_shortcut.activated.connect(self._exit_fullscreen)
@@ -463,11 +492,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # dock_plotter.setWidget(self.plotter.interactor)
             # dock_plotter.setAllowedAreas(Qt.AllDockWidgetAreas)
             # self.addDockWidget(Qt.RightDockWidgetArea, dock_plotter)
+        else:
+            self.setRange(0, 0)
 
         # Initialisation
         self.setWindowIcon(QtGui.QIcon("fedoo_logo_simple.png"))
         self.setWindowTitle("Fedoo Viewer")
-    
+
     @property
     def opts(self):
         if self.active_dock:
@@ -486,34 +517,32 @@ class MainWindow(QtWidgets.QMainWindow):
     def add_dataset_dock(self, data, title, opts=None):
         dock = PlotDock(data, title, self, opts)
 
-        self.all_docks.append(dock)
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        # dock.visibilityChanged.connect(
-        #     lambda v, d=dock: self._set_active(d) if v else None
-        # )
-        # dock.widget().installEventFilter(self)
+        dock.visibilityChanged.connect(
+            lambda v, d=dock: self._set_active(d) if v else None
+        )
+        dock.widget().installEventFilter(self)
         self._update_dock_selector()
-        self.update_plot(lock_view = False)
+        self.update_plot(lock_view=False)
 
     def copy_active_dock(self):
         dock = self.active_dock
         if dock:
-            self.add_dataset_dock(
-                dock.data,
-                dock.windowTitle()+ " (Copy)",
-                opts = dict(dock.opts)
-                )
+            self.add_dataset_dock(dock.data.copy(), dock.title, opts=dict(dock.opts))
             self.active_dock.plotter.camera_position = dock.plotter.camera_position
 
-    # def eventFilter(self, obj, event):
-    #     et = event.type()
-    #     if et in (QEvent.FocusIn, QEvent.MouseButtonPress):
-    #         dock = self._dock_for_widget(obj)
-    #         if dock:
-    #             self._set_active(dock)
-    #     return super().eventFilter(obj, event)
+    def eventFilter(self, obj, event):
+        et = event.type()
+        if et in (QEvent.FocusIn, QEvent.MouseButtonPress):
+            dock = self._dock_for_widget(obj)
+            if dock:
+                self._set_active(dock)
+        return super().eventFilter(obj, event)
 
-    def _update_dock_selector(self):        
+    def _on_apply_options_target_changed(self, action):
+        self.apply_options_to_all = action.text() == "All windows"
+
+    def _update_dock_selector(self):
         # Block signals while updating the combo
         blocker = QSignalBlocker(self.dock_selector_combo)
 
@@ -529,6 +558,27 @@ class MainWindow(QtWidgets.QMainWindow):
         except:
             self.active_dock = None
 
+    def rename_active_dock_from_combo(self):
+        dock = self.active_dock
+        if not dock:
+            return
+
+        new_name = self.dock_selector_combo.currentText().strip()
+        if not new_name:
+            return
+        # extract window number if any
+        match = re.match(r"^(\d+)\s*:\s*(.*)$", new_name)
+        if match:
+            dock._dock_index = int(match.group(1))
+            if dock._dock_index > PlotDock._n_created_dock:
+                PlotDock._n_created_dock = dock._dock_index
+            dock.title = match.group(2)
+        else:
+            dock.title = new_name
+
+        dock.setWindowTitle(f"{dock._dock_index}: " + dock.title)
+        self._update_dock_selector()
+
     def _dock_for_widget(self, w):
         # Walk up parents until the QDockWidget (or your PlotDock subclass)
         while w:
@@ -540,48 +590,49 @@ class MainWindow(QtWidgets.QMainWindow):
     def _distribute_tabified(self):
         """redistribute docks"""
         # Simple example: tabify all docks together
+        active_dock = self.active_dock
         if len(self.all_docks) > 1:
-            first = self.active_dock
+            # first = self.active_dock
+            first = self.all_docks[0]
             for dock in self.all_docks:
                 if dock is not first:
                     self.tabifyDockWidget(first, dock)
-    
+        self._set_active(active_dock)
+        self.active_dock.raise_()
+
     def _distribute_vertical(self):
         if not self.all_docks:
             return
-    
+
         self.addDockWidget(Qt.RightDockWidgetArea, self.all_docks[0])
-    
+
         for dock in self.all_docks[1:]:
             self.splitDockWidget(self.all_docks[0], dock, Qt.Vertical)
-
 
     def _distribute_horizontal(self):
         if not self.all_docks:
             return
-    
+
         # Add the first dock
         self.addDockWidget(Qt.RightDockWidgetArea, self.all_docks[0])
-    
+
         # Split horizontally for the rest
         for dock in self.all_docks[1:]:
             self.splitDockWidget(self.all_docks[0], dock, Qt.Horizontal)
 
-        
-    
     def _distribute_auto(self):
         n = len(self.all_docks)
         if n == 0:
             return
-    
+
         # Compute grid dimensions
         cols = int(np.ceil(np.sqrt(n)))
         rows = int(np.ceil(n / cols))
-        
+
         # # Start with the first dock
         # main_dock = self.all_docks[0]
         # self.addDockWidget(Qt.RightDockWidgetArea, main_dock)
-    
+
         # Arrange remaining docks
         dock_index = 0
         start_dock = []
@@ -590,12 +641,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 if dock_index >= n:
                     break
                 dock = self.all_docks[dock_index]
-                if r==0:
+                if r == 0:
                     start_dock.append(dock)
-                if c == 0 and r == 0: 
-                        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-                        # current_row_start = dock
-                elif r==0:
+                if c == 0 and r == 0:
+                    self.addDockWidget(Qt.RightDockWidgetArea, dock)
+                    # current_row_start = dock
+                elif r == 0:
                     # First row: split horizontally
                     self.splitDockWidget(start_dock[0], dock, Qt.Horizontal)
                     # current_row_start = dock
@@ -609,17 +660,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 #     self.splitDockWidget(current_row_start, dock, Qt.Horizontal)
                 dock_index += 1
 
-
-
-
     def _toggle_link_views(self, checked):
         if checked:
             # Sync all cameras to the active dock
-            if len(self.all_docks)>1:
+            if len(self.all_docks) > 1:
                 ref = self.active_dock
                 for dock in self.all_docks:
                     if dock is not ref:
-                        ref.plotter.link_views_across_plotters(dock.plotter)                    
+                        ref.plotter.link_views_across_plotters(dock.plotter)
         else:
             # Unlink when disabled
             cam = self.active_dock.plotter.camera_position
@@ -644,10 +692,18 @@ class MainWindow(QtWidgets.QMainWindow):
             QSignalBlocker(self.iter_spin),
             QSignalBlocker(self.field_combo),
             QSignalBlocker(self.avg_combo),
+            QSignalBlocker(self.dock_selector_combo),
         ]
+        if self._plane_widget_enabled and self.active_dock:
+            # remove plane widget from previous active dock
+            try:
+                self.plotter.clear_plane_widgets()
+            except Exception:
+                self.plotter.clear_widgets()
+
         self.active_dock = dock
-        if hasattr(dock.data, 'n_iter'):
-            max_iter = dock.data.n_iter-1
+        if hasattr(dock.data, "n_iter"):
+            max_iter = dock.data.n_iter - 1
         else:
             max_iter = 0
         current_iter = dock.current_iter  # may be modified by setRange
@@ -657,7 +713,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # old_state = self.field_combo.blockSignals(True)
 
-        #update_field_combo
+        # update_field_combo
         self.field_combo.clear()
         if self.data is not None:
             self.field_combo.addItems(self.data.field_names())
@@ -665,15 +721,15 @@ class MainWindow(QtWidgets.QMainWindow):
         if dock.current_field is not None:
             self.field_combo.setCurrentText(dock.current_field)
         else:
-            self.field_combo.setCurrentIndex(0)  
+            self.field_combo.setCurrentIndex(0)
         # self.field_combo.blockSignals(old_state)
-        
-        #update data_type value
+
+        # update data_type value
         # old_state = self.avg_combo.blockSignals(True)
         self.avg_combo.setCurrentText(dock.current_data_type)
 
-        #update component combo
-        self.update_components(dock.current_field)   
+        # update component combo
+        self.update_components(dock.current_field)
 
         # self.avg_combo.blockSignals(old_state)
         if self._plot_dialog:  # if plot dialog exist
@@ -682,6 +738,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._renderer_dialog.update_values()
         if self._clim_dialog:
             self._clim_dialog.update_values()
+        if self._plane_widget_enabled:
+            self.enable_plane_widget()
+        if self._clip_dialog:
+            self._clip_dialog.update_values()
+        if self.active_dock in self.all_docks:
+            self.dock_selector_combo.setCurrentIndex(
+                self.all_docks.index(self.active_dock)
+            )
 
     def _on_anim_tick(self):
         # go to next iteration
@@ -699,7 +763,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_slider_changed(self, val: int):
         # sync iter spin_box without emit signal
         if self.iter_spin.value() != val:
-            old_state = self.iter_spin.blockSignals(True)            
+            old_state = self.iter_spin.blockSignals(True)
             self.iter_spin.setValue(val)
             self.active_dock.current_iter = val
             self.iter_spin.blockSignals(old_state)
@@ -857,16 +921,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def apply_clim_from_dialog(self):
         """Called by the Apply button."""
+        clim_opts = {}
         (
-            self.opts["clim_mode"],
-            self.opts["clim"],
-            self.opts["n_colors"],
-            self.opts["n_labels"],
-            self.opts["cmap_name"],
-            self.opts["cmap"],
+            clim_opts["clim_mode"],
+            clim_opts["clim"],
+            clim_opts["n_colors"],
+            clim_opts["n_labels"],
+            clim_opts["cmap_name"],
+            clim_opts["cmap"],
         ) = self._clim_dialog.get_values()
-
-        self.update_plot(lock_view=True)
+        if self.apply_options_to_all:
+            list_docks = self.all_docks
+        else:
+            list_docks = [self.active_dock]
+        for dock in list_docks:
+            dock.opts.update(clim_opts)
+            dock.update_plot(lock_view=True)
 
     def apply_clim_and_close(self):
         """OK: applique puis ferme."""
@@ -885,33 +955,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self._plot_dialog.activateWindow()
 
     def _apply_plot_options(self):
-        # self.node_labels_cb = QtWidgets.QCheckBox("Show node labels")
-        # self.element_labels_cb = QtWidgets.QCheckBox("Show element labels")
-        if self._plot_dialog.scale_cb.isChecked():
-            self.opts["scale"] = float(self._plot_dialog.scale_spin.value())
+        if self.apply_options_to_all:
+            for dock in self.all_docks:
+                self.apply_plot_options_to_dock(dock)
+                dock.update_plot()
         else:
-            self.opts["scale"] = 0.0
-        # save scale value in case of active dock change
-        self.opts["scale_save"] = float(self._plot_dialog.scale_spin.value())
-        
-        self.opts["show_edges"] = self._plot_dialog.edges_cb.isChecked()
-        self.opts["show_scalar_bar"] = self._plot_dialog.scalarbar_cb.isChecked()
-        if self._plot_dialog.axes_cb.isChecked():
-            self.plotter.show_axes()
-        else:
-            self.plotter.hide_axes()
+            self.apply_plot_options_to_dock(self.active_dock)
+            self.update_plot()
 
-        self.opts["node_labels"] = self._plot_dialog.node_labels_cb.isChecked()
-        self.opts["element_labels"] = self._plot_dialog.element_labels_cb.isChecked()
+    def apply_plot_options_to_dock(self, dock):
+        opts = dock.opts
+        if self._plot_dialog.scale_cb.isChecked():
+            opts["scale"] = float(self._plot_dialog.scale_spin.value())
+        else:
+            opts["scale"] = 0.0
+        # save scale value in case of active dock change
+        opts["scale_save"] = float(self._plot_dialog.scale_spin.value())
+
+        opts["show_edges"] = self._plot_dialog.edges_cb.isChecked()
+        opts["show_scalar_bar"] = self._plot_dialog.scalarbar_cb.isChecked()
+        if self._plot_dialog.axes_cb.isChecked():
+            dock.plotter.show_axes()
+        else:
+            dock.plotter.hide_axes()
+
+        opts["node_labels"] = self._plot_dialog.node_labels_cb.isChecked()
+        opts["element_labels"] = self._plot_dialog.element_labels_cb.isChecked()
 
         if not (self._plot_dialog.show_title_cb.isChecked()):
-            self.opts["title_plot"] = ""
+            opts["title_plot"] = ""
         elif self._plot_dialog.auto_title_rb.isChecked():
-            self.opts["title_plot"] = None
+            opts["title_plot"] = None
         else:
-            self.opts["title_plot"] = self._plot_dialog.title_edit.text()
-
-        self.update_plot()
+            opts["title_plot"] = self._plot_dialog.title_edit.text()
 
     def open_renderer_dialog(self):
         # # Create once and keep a reference so it isn't garbage-collected
@@ -924,13 +1000,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._renderer_dialog.activateWindow()
 
     def _apply_renderer_options(self):
-        self.opts["opacity"] = float(self._renderer_dialog.opacity_spin.value())
-        self.opts["pbr"] = self._renderer_dialog.pbr_cb.isChecked()
-        self.opts["metallic"] = float(self._renderer_dialog.metallic_spin.value())
-        self.opts["roughness"] = float(self._renderer_dialog.roughness_spin.value())
-        self.opts["diffuse"] = float(self._renderer_dialog.diffuse_spin.value())
-
-        self.update_plot()
+        if self.apply_options_to_all:
+            list_docks = self.all_docks
+        else:
+            list_docks = [self.active_dock]
+        for dock in list_docks:
+            dock.opts["opacity"] = float(self._renderer_dialog.opacity_spin.value())
+            dock.opts["pbr"] = self._renderer_dialog.pbr_cb.isChecked()
+            dock.opts["metallic"] = float(self._renderer_dialog.metallic_spin.value())
+            dock.opts["roughness"] = float(self._renderer_dialog.roughness_spin.value())
+            dock.opts["diffuse"] = float(self._renderer_dialog.diffuse_spin.value())
+            dock.update_plot()
 
     def update_plot_with_clim(self, val=None, iteration=None, lock_view=True):
         self.active_dock.current_comp = self.current_component
@@ -1221,13 +1301,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 else (0.0, 0.0, 0.0)
             )
             normal = (1.0, 0.0, 0.0)
-            self.opts['clip_origin'] = origin
-            self.opts['clip_normal'] = normal
+            self.opts["clip_origin"] = origin
+            self.opts["clip_normal"] = normal
             self._clip_dialog = ClipDialog(
                 self,
                 default_origin=origin,
                 default_normal=normal,
-                invert=self.opts['clip_invert'],
+                invert=self.opts["clip_invert"],
             )
             # connection to sync dialog with clip & widget
             self._clip_dialog.clipPlaneChanged.connect(self._on_dialog_clip_changed)
@@ -1249,17 +1329,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_dialog_clip_changed(self, enabled, origin, normal, invert):
         """Dialog → Apply clip and update clip plane widget."""
-        self.opts['clip_invert'] = bool(invert)
-        self.opts['clip_normal'] = normal
-        self.opts['clip_origin'] = origin
+        self.opts["clip_invert"] = bool(invert)
+        self.opts["clip_normal"] = normal
+        self.opts["clip_origin"] = origin
         if enabled:
-            self.opts['clip_args'] = {
+            self.opts["clip_args"] = {
                 "normal": normal,
                 "origin": origin,
-                "invert": self.opts['clip_invert'],
+                "invert": self.opts["clip_invert"],
             }
         else:
-            self.opts['clip_args'] = None
+            self.opts["clip_args"] = None
 
         self.update_plot()
 
@@ -1276,19 +1356,19 @@ class MainWindow(QtWidgets.QMainWindow):
         except AttributeError:
             bounds = tuple(np.array(self.data.mesh.as_3d().bounding_box).T.ravel())
 
-        if self.opts['clip_origin'] is None:
-            self.opts['clip_origin'] = tuple(self.data.mesh.bounding_box.center)
-            self.opts['clip_normal'] = (1.0, 0.0, 0.0)
+        if self.opts["clip_origin"] is None:
+            self.opts["clip_origin"] = tuple(self.data.mesh.bounding_box.center)
+            self.opts["clip_normal"] = (1.0, 0.0, 0.0)
 
-        origin = self.opts['clip_origin']
-        normal = self.opts['clip_normal']
+        origin = self.opts["clip_origin"]
+        normal = self.opts["clip_normal"]
         # bounds = self._bounds
 
         def _cb(normal_cb, origin_cb):
             """Widget → Dialog + Clip (live)."""
             if self._clip_dialog is not None:
                 self._clip_dialog.set_values_from_widget(
-                    origin_cb, normal_cb, invert=self.opts['clip_invert']
+                    origin_cb, normal_cb, invert=self.opts["clip_invert"]
                 )
                 self._clip_dialog._emit_clip_params()  # emit signal
                 self.update_plot()
@@ -1324,7 +1404,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def toggle_fullscreen(self):
         # Hide chrome (optional): menu + toolbars when in fullscreen
-        if not(self.isFullScreen()):
+        if not (self.isFullScreen()):
             # Remember current visible toolbars/menubar to restore later
             self._hidden_ui_when_fullscreen = []
             if self.menuBar().isVisible():
@@ -1341,7 +1421,6 @@ class MainWindow(QtWidgets.QMainWindow):
             for kind, w in self._hidden_ui_when_fullscreen:
                 w.setVisible(True)
             self._hidden_ui_when_fullscreen.clear()
-    
 
     def _exit_fullscreen(self):
         if self.isFullScreen():
@@ -1391,8 +1470,8 @@ class PlotOptionsDialog(QtWidgets.QDialog):
         self.title_edit = QtWidgets.QLineEdit()
         self.title_edit.setPlaceholderText("Enter custom title…")
 
-        self.update_values()        
-        
+        self.update_values()
+
         # === Layouts ===
         main = QtWidgets.QVBoxLayout(self)
 
@@ -1451,7 +1530,7 @@ class PlotOptionsDialog(QtWidgets.QDialog):
             self.scale_spin.setValue(float(opts["scale"]))
             self.scale_cb.setChecked(True)
         self.scale_spin.setEnabled(self.scale_cb.isChecked())
-        
+
         self.scalarbar_cb.setChecked(opts["show_scalar_bar"])
         self.edges_cb.setChecked(opts["show_edges"])
         self.axes_cb.setChecked(self.parent().plotter.renderer.axes_enabled)
@@ -1468,7 +1547,6 @@ class PlotOptionsDialog(QtWidgets.QDialog):
             else:
                 self.custom_title_rb.setChecked(True)
                 self.title_edit.setText(opts["title_plot"])
-
 
     # --- Helpers ---
     def _on_button_clicked(self, button):
@@ -1535,11 +1613,11 @@ class ClimOptionsDialog(QtWidgets.QDialog):
             [c for c in sorted(list(mpl.colormaps)) if not c.endswith("_r")]
         )
         # self._all_cmaps = sorted(list(mpl.colormaps))
-        self.cmap_combo.addItems(self._all_cmaps)        
+        self.cmap_combo.addItems(self._all_cmaps)
         self.cmap_preview = CMapPreview()  # Preview widget
-        
+
         self.update_values()
-        
+
         # connections
         # Activate/Deactivated manual clim values
         def refresh_manual_enabled():
@@ -1815,12 +1893,12 @@ class RedererOptionsDialog(QtWidgets.QDialog):
 
     def update_values(self):
         opts = self.parent().opts
-        self.opacity_spin.setValue(float(opts['opacity']))
-        self.pbr_cb.setChecked(opts['pbr'])
-        self.metallic_spin.setValue(float(opts['metallic']))
-        self.roughness_spin.setValue(float(opts['roughness']))
-        self.diffuse_spin.setValue(float(opts['diffuse']))
-        
+        self.opacity_spin.setValue(float(opts["opacity"]))
+        self.pbr_cb.setChecked(opts["pbr"])
+        self.metallic_spin.setValue(float(opts["metallic"]))
+        self.roughness_spin.setValue(float(opts["roughness"]))
+        self.diffuse_spin.setValue(float(opts["diffuse"]))
+
     def _toggle_pbr_group(self, checked: bool):
         self.pbr_group.setEnabled(checked)
 
@@ -1857,7 +1935,7 @@ class ClipDialog(QtWidgets.QDialog):
 
         # --- Widgets ---------------------------------------------------------
         self.enableClipChk = QtWidgets.QCheckBox("Activate clipping")
-        self.enableClipChk.setChecked(bool(parent.opts['clip_args']))
+        self.enableClipChk.setChecked(bool(parent.opts["clip_args"]))
 
         # Number widgets
         self.originX = QtWidgets.QDoubleSpinBox()
@@ -1925,6 +2003,14 @@ class ClipDialog(QtWidgets.QDialog):
             w.valueChanged.connect(self._emit_clip_params)
         self.invertChk.toggled.connect(self._emit_clip_params)
 
+    def update_values(self):
+        opts = self.parent().opts
+        self.set_values_from_widget(
+            opts["clip_origin"], opts["clip_normal"], opts["clip_invert"]
+        )
+        blockers = QSignalBlocker(self.enableClipChk)
+        self.enableClipChk.setChecked(bool(opts["clip_args"]))
+
     def _normalize_normal(self):
         nn = normalize(
             (self.normalX.value(), self.normalY.value(), self.normalZ.value())
@@ -1948,7 +2034,7 @@ class ClipDialog(QtWidgets.QDialog):
         self.clipPlaneChanged.emit(enabled, origin, normalize(normal), invert)
 
     def set_values_from_widget(self, origin, normal, invert=None):
-        """Uzpdate widget values without emiting signal."""
+        """Update widget values without emiting signal."""
         blockers = [
             QSignalBlocker(self.originX),
             QSignalBlocker(self.originY),

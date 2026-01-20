@@ -1072,6 +1072,47 @@ class DataSet:
             "Scalar": self.scalar_data,
         }
 
+    def copy(self):
+        """Make a copy of the dataset.
+
+        This method make a shallow copy, ie every arrays (node coordinates,
+        element table, data arrays, ...) are alias of the former arrays.
+        To make a copy of all data, use the deepcopy method.
+
+        Returns
+        -------
+        The copied DataSet object.
+        """
+        copy = DataSet()
+        copy.mesh = self.mesh.copy()
+        copy.node_data = dict(self.node_data)
+        copy.element_data = dict(self.element_data)
+        copy.gausspoint_data = dict(self.gausspoint_data)
+        copy.scalar_data = dict(self.scalar_data)
+        return copy
+
+    def deepcopy(self):
+        """Make a deep copy of the dataset.
+
+        Returns
+        -------
+        The copied DataSet object.
+        """
+        copy = DataSet()
+        copy.mesh = self.mesh.deepcopy()
+        copy.node_data = {key: value.copy() for key, value in self.node_data.items()}
+        copy.element_data = {
+            key: value.copy() for key, value in self.element_data.items()
+        }
+        copy.gausspoint_data = {
+            key: value.copy() for key, value in self.gausspoint_data.items()
+        }
+        copy.scalar_data = {
+            key: value if np.isscalar(value) else np.array(value).copy()
+            for key, value in self.scalar_data.items()
+        }
+        return copy
+
 
 class MultiFrameDataSet(DataSet):
     def __init__(self, mesh=None, list_data=None):
@@ -1601,6 +1642,36 @@ class MultiFrameDataSet(DataSet):
             Xmax = self.mesh.bounding_box[1]
 
         return np.array(Xmin), np.array(Xmax), clim
+
+    def copy(self):
+        """Make a copy of the dataset.
+
+        This method make a shallow copy of the mesh.
+        The current iteration data is reloaded.
+
+        Returns
+        -------
+        The copied MultiFrameDataSet object.
+        """
+        copy = MultiFrameDataSet(self.mesh.copy(), list(self.list_data))
+        if self.loaded_iter:
+            copy.load(self.loaded_iter)
+        return copy
+
+    def deepcopy(self):
+        """Make a deep copy of the dataset.
+
+        This method make a deep copy of the mesh.
+        The current iteration data is reloaded.
+
+        Returns
+        -------
+        The copied MultiFrameDataSet object.
+        """
+        copy = MultiFrameDataSet(self.mesh.deepcopy(), list(self.list_data))
+        if self.loaded_iter:
+            copy.load(self.loaded_iter)
+        return copy
 
     @property
     def n_iter(self):
