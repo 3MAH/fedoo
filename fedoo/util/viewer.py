@@ -16,12 +16,112 @@ from qtpy.QtWidgets import (
     QWidget,
     QShortcut,
 )
-from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent
+from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent, QSize
 import matplotlib as mpl  # only for colormap
 import pyvista as pv
 from pyvistaqt import QtInteractor
+
+from matplotlib.figure import Figure
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
+
 import os
 import re
+
+
+class DockTitleBar(QtWidgets.QWidget):
+    clicked = Signal()
+
+    def __init__(self, dock: QtWidgets.QDockWidget, parent=None):
+        super().__init__(parent)
+        self._dock = dock
+        self._active = False
+
+        # --- Left: title label
+        self.label = QtWidgets.QLabel(dock.windowTitle())
+        self.label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.label.setTextInteractionFlags(Qt.NoTextInteraction)
+
+        # --- Right: close button
+        self.btnClose = QtWidgets.QToolButton(self)
+        self.btnClose.setAutoRaise(True)
+        self.btnClose.setIconSize(QSize(10, 10))
+        self.btnClose.setIcon(
+            self.style().standardIcon(QtWidgets.QStyle.SP_TitleBarCloseButton)
+        )
+        self.btnClose.setToolTip("Close")
+
+        # Layout
+        lay = QtWidgets.QHBoxLayout(self)
+        lay.setContentsMargins(8, 2, 8, 2)
+        lay.addWidget(self.label, 1)
+        lay.addWidget(self.btnClose, 0)
+
+        # Keep label synced with dock title
+        dock.windowTitleChanged.connect(self.label.setText)
+
+        # Connect buttons
+        self.btnClose.clicked.connect(dock.close)
+        self._applyStyle()
+
+    # Click anywhere on title → signal (to activate dock)
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(ev)
+
+    def _set_active(self, active: bool):
+        if self._active != active:
+            self._active = active
+            self._applyStyle()
+
+    def _applyStyle(self):
+        # Use palette highlight to match platform themes
+        pal = self.palette()
+        if self._active:
+            bg = pal.color(QtGui.QPalette.Highlight)
+            fg = pal.color(QtGui.QPalette.HighlightedText)
+            # self.setStyleSheet(f"""
+            #     QWidget {{ background-color: {bg.name()}; }}
+            #     QLabel {{ color: {fg.name()}; font-weight: bold; }}
+            #     QToolButton {{ color: {fg.name()}; }}
+            # """)
+            self.setStyleSheet(f"""
+                QWidget {{ background-color: {bg.name()}; }}
+                QLabel {{ color: {fg.name()}; font-weight: bold; }}
+                QToolButton {{ color: {fg.name()}; }}
+            """)
+
+        else:
+            base = pal.color(QtGui.QPalette.AlternateBase)
+            text = pal.color(QtGui.QPalette.WindowText)
+            self.setStyleSheet(f"""
+                QWidget {{ background-color: {base.name()}; }}
+                QLabel {{ color: {text.name()}; font-weight: normal; }}
+            """)
+
+    # def _applyStyle(self):
+    #     if self._active:
+    #         self.setStyleSheet("""
+    #             QWidget {
+    #                 background-color: #3776d4;
+    #             }
+    #             QLabel {
+    #                 color: white;
+    #                 font-weight: bold;
+    #             }
+    #         """)
+    #     else:
+    #         self.setStyleSheet("""
+    #             QWidget {
+    #                 background-color: #e0e0e0;
+    #             }
+    #             QLabel {
+    #                 color: black;
+    #                 font-weight: normal;
+    #             }
+    #         """)
 
 
 class PlotDock(QDockWidget):
@@ -108,6 +208,11 @@ class PlotDock(QDockWidget):
             self.current_comp = None
         self.current_data_type = "Node"
 
+        titlebar = DockTitleBar(self)
+        titlebar.clicked.connect(lambda d=self: parent._set_active(d))
+        self.setTitleBarWidget(titlebar)
+        self._titlebar = titlebar  # keep reference
+
         parent.all_docks.append(self)
         parent._set_active(self)
 
@@ -160,6 +265,9 @@ class PlotDock(QDockWidget):
         if self.parent()._plane_widget_enabled:
             self.parent().enable_plane_widget()
 
+        if self.parent()._line_widget_enabled:
+            self.parent()._rebuild_line_widget()
+
     def closeEvent(self, event):
         self.plotter.close()  # libère le contexte VTK
         self.parent().all_docks.remove(self)
@@ -175,13 +283,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.active_dock = None
         self._clim_dialog = None  # clim windows if open
         self._clip_dialog = None  # clip windows if open
+        self._plot_over_line_dialog = None
+        self._pol_results_dialog = None
         self._renderer_dialog = None
         self._plot_dialog = None
         self._window_index = 1
 
-        self._plane_widget_enabled = (
-            False  # if plane_widget should be shown in the active dock
-        )
+        # if plane_widget or line wiget should be shown in the active dock
+        self._plane_widget_enabled = False
+        self._line_widget_enabled = False
 
         self.apply_options_to_all = True
 
@@ -431,6 +541,10 @@ class MainWindow(QtWidgets.QMainWindow):
         clipAction.triggered.connect(self.open_clip_dialog)
         tools_menu.addAction(clipAction)
 
+        plotOverLineAction = QtWidgets.QAction("Plot over line...", self)
+        plotOverLineAction.triggered.connect(self.open_plot_over_line_dialog)
+        tools_menu.addAction(plotOverLineAction)
+
         # --- Menu Windows ---
         windows_menu = menubar.addMenu("Windows")
 
@@ -496,7 +610,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setRange(0, 0)
 
         # Initialisation
-        self.setWindowIcon(QtGui.QIcon("fedoo_logo_simple.png"))
+        self.setWindowIcon(QtGui.QIcon("_viewer\\fedoo_logo_simple.png"))
         self.setWindowTitle("Fedoo Viewer")
 
     @property
@@ -519,11 +633,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
         dock.visibilityChanged.connect(
-            lambda v, d=dock: self._set_active(d) if v else None
+            lambda v, d=dock: self._set_active(d) if v else None  # self._hide_dock
         )
         dock.widget().installEventFilter(self)
         self._update_dock_selector()
         self.update_plot(lock_view=False)
+
+    # def _hide_dock(self, dock):
+    #     dock.setFloating(True)
+    #     dock.move(-10000, -10000)
 
     def copy_active_dock(self):
         dock = self.active_dock
@@ -696,12 +814,18 @@ class MainWindow(QtWidgets.QMainWindow):
         ]
         if self._plane_widget_enabled and self.active_dock:
             # remove plane widget from previous active dock
-            try:
-                self.plotter.clear_plane_widgets()
-            except Exception:
-                self.plotter.clear_widgets()
+            # try:
+            self.plotter.clear_plane_widgets()
+            # except Exception:
+            #     self.plotter.clear_widgets()
+        if self._line_widget_enabled and self.active_dock:
+            self.plotter.clear_line_widgets()
 
         self.active_dock = dock
+
+        for d in self.all_docks:
+            d._titlebar._set_active(d is dock)
+
         if hasattr(dock.data, "n_iter"):
             max_iter = dock.data.n_iter - 1
         else:
@@ -740,6 +864,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._clim_dialog.update_values()
         if self._plane_widget_enabled:
             self.enable_plane_widget()
+        if self._line_widget_enabled:
+            self._rebuild_line_widget()
         if self._clip_dialog:
             self._clip_dialog.update_values()
         if self.active_dock in self.all_docks:
@@ -1395,12 +1521,94 @@ class MainWindow(QtWidgets.QMainWindow):
     def disable_plane_widget(self):
         if not self._plane_widget_enabled:
             return
-        try:
-            self.plotter.clear_plane_widgets()
-        except Exception:
-            self.plotter.clear_widgets()
+        # try:
+        self.plotter.clear_plane_widgets()
+        # except Exception:
+        # self.plotter.clear_widgets()
         self._plane_widget = None
         self._plane_widget_enabled = False
+
+    #
+    # Dialog to show the results over a line
+    #
+    def open_plot_over_line_dialog(self):
+        # Create dialog only if not already exist
+        if self._plot_over_line_dialog is None:
+            self._plot_over_line_dialog = PlotOverLineDialog(self)
+            self._plot_over_line_dialog.plotRequested.connect(self.plot_over_line)
+
+            # connection to sync dialog with widget
+            self._plot_over_line_dialog.lineChanged.connect(self._on_pol_dialog_changed)
+            # if dialog closed, remove widget
+            self._plot_over_line_dialog.finished.connect(self._on_pol_dialog_closed)
+            self._plot_over_line_dialog.destroyed.connect(self._on_pol_dialog_closed)
+
+        self._line_widget_enabled = True
+        # Line widget
+        self.plotter.add_line_widget(callback=self.on_line_changed, use_vertices=True)
+
+        # Show dialog
+        self._plot_over_line_dialog.show()
+        self._plot_over_line_dialog.raise_()
+        self._plot_over_line_dialog.activateWindow()
+
+        # Activate plane widget et sync its values
+        # self.enable_plane_widget()
+
+    def _on_pol_dialog_closed(self, *args, **kwargs):
+        # remove line widget
+        self._line_widget_enabled = False
+        self.plotter.clear_line_widgets()
+
+    def _on_pol_dialog_changed(self, p1, p2):
+        self.plotter.line_widgets[0].SetPoint1(*p1)
+        self.plotter.line_widgets[0].SetPoint2(*p2)
+
+    def on_line_changed(self, p1, p2):
+        """Called interactively while moving the widget"""
+        self._plot_over_line_dialog.update_line(p1, p2)
+
+    def _rebuild_line_widget(self):
+        if self._plot_over_line_dialog:
+            p1 = self._plot_over_line_dialog.p1
+            p2 = self._plot_over_line_dialog.p2
+            self.plotter.add_line_widget(
+                callback=self.on_line_changed, use_vertices=True
+            )
+            self._on_pol_dialog_changed(p1, p2)
+
+    def plot_over_line(self, p1, p2, live=False):
+        """
+        Compute plot_over_line and push data to the Matplotlib dialog.
+        Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
+        """
+        # Compute line result (adapt resolution and array as needed)
+        # If you have specific scalar array, set `scalars='MyArrayName'`
+        res = self.plotter.mesh.sample_over_line(p1, p2, resolution=200)
+
+        # x-axis is 'Distance' column (PyVista creates it)
+        x = res["Distance"]
+        # y-axis uses active scalars; pick a named array if needed
+        y = res.active_scalars
+        try:
+            ylabel = (
+                self.active_dock.current_field + "_" + self.active_dock.current_comp
+            )
+        except:
+            ylabel = "Data"
+
+        # Update Matplotlib dialog
+        if self._pol_results_dialog is None:
+            self._pol_results_dialog = MplLinePlotDialog(
+                self, title="Plot Over Line - Result"
+            )
+        self._pol_results_dialog.update_curve(x, y, p1=p1, p2=p2, ylabel=ylabel)
+
+        # If you prefer to bring the dialog to front only on manual plot:
+        # if not live and not self.result_dialog.isVisible():
+        self._pol_results_dialog.show()
+        self._pol_results_dialog.raise_()
+        self._pol_results_dialog.activateWindow()
 
     def toggle_fullscreen(self):
         # Hide chrome (optional): menu + toolbars when in fullscreen
@@ -1916,7 +2124,7 @@ class RedererOptionsDialog(QtWidgets.QDialog):
 # Dialog non modale : ClipPlane
 # ----------------------------
 class ClipDialog(QtWidgets.QDialog):
-    """Fenêtre non modale pour définir origin / normal / invert (optionnel)."""
+    """Non modal window to select origin / normal / invert."""
 
     clipPlaneChanged = Signal(
         bool, object, object, bool
@@ -2055,6 +2263,140 @@ class ClipDialog(QtWidgets.QDialog):
             chk_blocker = QSignalBlocker(self.invertChk)
             self.invertChk.setChecked(bool(invert))
             del chk_blocker
+
+
+# Dialog non modale : Plot over line
+# ----------------------------
+
+
+class PlotOverLineDialog(QtWidgets.QDialog):
+    plotRequested = Signal(tuple, tuple)
+    lineChanged = Signal(object, object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Plot Over Line")
+        # self.setModal(False)
+
+        self.p1 = [0.0, 0.0, 0.0]
+        self.p2 = [1.0, 0.0, 0.0]
+
+        self._build_ui()
+
+    def _build_ui(self):
+        self.edits = []
+        form = QtWidgets.QFormLayout()
+
+        for label in ("P1 X", "P1 Y", "P1 Z", "P2 X", "P2 Y", "P2 Z"):
+            sb = QtWidgets.QDoubleSpinBox()
+            sb.setRange(-1e9, 1e9)
+            sb.setDecimals(6)
+            self.edits.append(sb)
+            form.addRow(label, sb)
+            sb.valueChanged.connect(self._emit_line_params)
+
+        self.plotBtn = QtWidgets.QPushButton("Plot over line")
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.plotBtn)
+
+        self.plotBtn.clicked.connect(self._emit_plot)
+
+    def _emit_line_params(self):
+        p1 = (self.edits[i].value() for i in range(3))
+        p2 = (self.edits[i].value() for i in range(3, 6))
+        self.lineChanged.emit(p1, p2)
+
+    def update_line(self, p1, p2):
+        """Called from PyVista widget callback"""
+        self.p1[:] = p1
+        self.p2[:] = p2
+
+        values = (*p1, *p2)
+        for edit, val in zip(self.edits, values):
+            edit.blockSignals(True)
+            edit.setValue(val)
+            edit.blockSignals(False)
+
+    def _emit_plot(self):
+        p1 = tuple(edit.value() for edit in self.edits[:3])
+        p2 = tuple(edit.value() for edit in self.edits[3:])
+        self.plotRequested.emit(p1, p2)
+
+
+class MplLinePlotDialog(QtWidgets.QDialog):
+    """Modeless dialog embedding a Matplotlib figure to show plot_over_line results."""
+
+    requestSave = Signal()  # optional external hook
+
+    def __init__(self, parent=None, title="Plot over line"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(False)
+
+        # --- Matplotlib figure/canvas ---
+        self.figure = Figure(constrained_layout=True)
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+
+        # --- Toolbar ---
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        # --- Header with line info + save ---
+        self.lblP1 = QtWidgets.QLabel("P1: (—, —, —)")
+        self.lblP2 = QtWidgets.QLabel("P2: (—, —, —)")
+        self.saveBtn = QtWidgets.QPushButton("Save as…")
+        self.saveBtn.clicked.connect(self._save_as)
+
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(self.lblP1)
+        header.addSpacing(10)
+        header.addWidget(self.lblP2)
+        header.addStretch(1)
+        header.addWidget(self.saveBtn)
+
+        # --- Main layout ---
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addLayout(header)
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+
+        # Internal state
+        self._line_plot = None
+
+    def update_curve(self, x, y, p1=None, p2=None, ylabel="Scalar", xlabel="Distance"):
+        """
+        Update the embedded plot with new data.
+        x: 1D sequence (distance)
+        y: 1D sequence (scalar values)
+        p1, p2: optional tuples for UI display
+        """
+        self.ax.clear()
+        (self._line_plot,) = self.ax.plot(x, y, lw=1.5)
+        self.ax.set_xlabel(xlabel)
+        self.ax.set_ylabel(ylabel)
+        self.ax.grid(True, alpha=0.3)
+        self.ax.set_title("Plot over line")
+
+        if p1 is not None:
+            self.lblP1.setText(f"P1: ({p1[0]:.3f}, {p1[1]:.3f}, {p1[2]:.3f})")
+        if p2 is not None:
+            self.lblP2.setText(f"P2: ({p2[0]:.3f}, {p2[1]:.3f}, {p2[2]:.3f})")
+
+        self.canvas.draw_idle()
+
+    def _save_as(self):
+        """Save the current figure to file."""
+        dlg = QtWidgets.QFileDialog(
+            self, "Save plot", "", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)"
+        )
+        dlg.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        if dlg.exec_():  # .exec() if PySide6
+            path = dlg.selectedFiles()[0]
+            # Choose DPI depending on format (optional)
+            dpi = 150 if path.lower().endswith(".png") else None
+            self.figure.savefig(path, dpi=dpi, bbox_inches="tight")
 
 
 def normalize(v):
