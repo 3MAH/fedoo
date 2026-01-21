@@ -1,33 +1,35 @@
-import fedoo as fd
-import numpy as np
-import sys
-from qtpy import QtWidgets, QtGui
-from qtpy.QtWidgets import (
-    QDockWidget,
-    QToolBar,
-    QHBoxLayout,
-    QVBoxLayout,
-    QLabel,
-    QSlider,
-    QSpinBox,
-    QPushButton,
-    QDoubleSpinBox,
-    QCheckBox,
-    QWidget,
-    QShortcut,
-)
-from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent, QSize
-import matplotlib as mpl  # only for colormap
-import pyvista as pv
-from pyvistaqt import QtInteractor
+try:
+    import fedoo as fd
+    import numpy as np
+    import sys
+    from qtpy import QtWidgets, QtGui
+    from qtpy.QtWidgets import (
+        QDockWidget,
+        QToolBar,
+        QHBoxLayout,
+        QVBoxLayout,
+        QLabel,
+        QSlider,
+        QSpinBox,
+        QPushButton,
+        QDoubleSpinBox,
+        QCheckBox,
+        QWidget,
+        QShortcut,
+    )
+    from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent, QSize
+    import matplotlib as mpl  # only for colormap
+    import pyvista as pv
+    from pyvistaqt import QtInteractor
+    from matplotlib.figure import Figure    
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
+    import os
+    import re
 
-from matplotlib.figure import Figure
-
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
-
-import os
-import re
+    USE_PYVISTA_QT = True
+except ImportError:
+    USE_PYVISTA_QT = False
 
 
 class DockTitleBar(QtWidgets.QWidget):
@@ -2554,6 +2556,12 @@ def normalize(v):
 
 
 def viewer(res=None):
+    if not (USE_PYVISTA_QT):
+        raise ImportError(
+            "pyvistaqt is required to launch the viewer. "
+            "Install it with: pip install pyvistaqt"
+        )
+        
     app = QtWidgets.QApplication(sys.argv)
     if res is None:
         window = MainWindow()

@@ -165,6 +165,7 @@ class DataSet:
         multiplot: bool | None = None,
         clip_args: tuple | None = None,
         lock_view: bool = False,
+        iteration: int | None = None,
         **kargs,
     ) -> None:
         """Plot a field on the surface of the associated mesh.
@@ -287,6 +288,12 @@ class DataSet:
             If ``True``, the camera position and background color are not
             modified. In this mode, any view‑modifying arguments such as
             ``azimuth``, ``elevation``, or ``roll`` are ignored.
+        
+        iteration: int, optional
+            ignored if the object is not a MultiFrameDataSet.
+            Index of the iteration to plot. If None, the current iteration is
+            plotted. If no current iteration is defined, the last iteration
+            is loaded and plotted.
 
         **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
@@ -299,14 +306,20 @@ class DataSet:
 
             >>> fedoo.get_config()['USE_PYVISTA_QT'] = False
         """
-
         if not (USE_PYVISTA):
-            raise NameError("Pyvista not installed.")
+            raise ImportError("Pyvista not installed.")
 
         if self.mesh is None:
             raise NameError(
                 "Can't generate a plot without an associated mesh. Set the mesh attribute first."
             )
+        
+        if isinstance(self, MultiFrameDataSet):
+            if iteration is None:
+                if self.loaded_iter is None:
+                    self.load(-1)  # load last iteration
+            else:
+                self.load(iteration)
 
         ndim = self.mesh.ndim
 
@@ -1189,160 +1202,9 @@ class MultiFrameDataSet(DataSet):
             DataSet.load(self, self.list_data[iteration])
             self.loaded_iter = iteration
 
-        else:
+        elif data:
             DataSet.load(self, data, load_mesh)
 
-    def plot(
-        self,
-        field: str | None = None,
-        component: int | str = 0,
-        data_type: str | None = None,
-        scale: float = 1,
-        show: bool = True,
-        show_edges: bool = True,
-        clim: list[float] | None = None,
-        node_labels: bool | list = False,
-        element_labels: bool | list = False,
-        show_nodes: bool | float = False,
-        show_normals: bool | float = False,
-        plotter: object = None,
-        screenshot: str | None = None,
-        azimuth: float = 30.0,
-        elevation: float = 15.0,
-        roll: float = 0,
-        iteration: int | None = None,
-        **kargs,
-    ) -> None:
-        """Plot a field on the surface of the associated mesh.
-
-        Same function as DataSet.plot, with an addition iteration parameter to
-        select the iteration from which the data should be plotted.
-
-        Parameters
-        ----------
-        field : str (optional)
-            The name of the field to plot. If no name is given, plot only the
-            mesh.
-
-        component : int | str, default = 0
-            The data component to plot in case of vector data.
-            The available str components are:
-
-            * 'X', 'Y' and 'Z'; respectively equivalent to 0, 1 and 2
-              for vector components.
-            * 'XX', 'YY', 'ZZ', 'XY', 'XZ' and 'YZ' are respectively
-              equivalent to 0, 1, 2, 3, 4 and 5 for tensor using
-              the voigt notations.
-            * 'vm' to plot the von-mises stress from a stress field.
-            * 'pressure' to extract the hydrostatic pressure of a stress field.
-            * 'norm' to compute the vector euclidean norm.
-
-        data_type : str in {'Node', 'Element', 'GaussPoint'} - Optional
-            The type of data to plot (defined at nodes, elements au gauss
-            integration points). If the existing data doesn't match to the
-            specified one, the data are converted before plotted.
-            For instance data_type = 'Node' make en average of data from
-            adjacent elements at nodes. This allow a more smooth plot.
-            It the type is not specified, look for any type of data and,
-            if the data is found, draw the field without conversion.
-
-        scale : float (default = 1)
-            The scale factor used for the nodes displacement, using the 'Disp'
-            vector field.
-            If scale = 0, the field is plotted on the underformed shape.
-
-        show : bool (default = True)
-
-            * If show = True, the plot is rendered in a new window.
-            * If show = False, the current pyvista plotter is returned
-              without rendering.
-            * show = False allow to customize the plot with pyvista before
-              rendering it.
-
-        show_edges : bool (default = True)
-            if True, the mesh edges are shown
-
-        clim: sequence[float], optional
-            Sequence of two float to define data boundaries for color bar.
-            Defaults to minimum and maximum of data.
-
-        node_labels : bool | list (default = False)
-            If True, show node labels (node indexe)
-            If a list is given, print the label given in node_labels[i] for
-            each node i.
-
-        element_labels : bool | list (default = False)
-            If True, show element labels (element indexe)
-            If a list is given, print the label given in element_labels[i] for
-            each element i.
-
-        show_nodes : bool|float (default = False)
-            Plot the nodes. If True, the nodes are shown with a default size.
-            If float, show_nodes is the required size.
-
-        show_normals : bool|float (default = False)
-            Plot the face normals. If True,
-            the vectors are shown with a default magnitude.
-            If float, show_normals is the required magnitude.
-            Only available for 1D or 2D mesh.
-
-        plotter : pyvista.Plotter object or str in {'qt', 'pv'}
-
-            * If pyvista.Plotter object, plot the mesh in the given plotter
-            * If 'qt': use the background plotter of pyvistaqt (need the lib pyvistaqt)
-            * If 'pv': use the standard pyvista plotter
-            * If None: use the background plotter if available, or pyvista plotter if not.
-
-        screenshot: str, optional
-            If defined, indicated a filename to save the plot.
-
-        azimuth: float, default = 30.
-            Azimuth angle of the camera around the scene
-            (not used for 2D scene)
-
-        elevation: float, default = 15.
-            Elevaltion angle of the camera around the scene
-            (not used for 2D scene).
-
-        roll: float, default = 0
-            Roll angle of the camera. The default state (roll angle = 0.)
-            is set with the y direction on the up.
-
-        iteration : int (Optional)
-            num of the iteration to plot. If None, the current iteration is
-            plotted. If no current iteration is defined, the last iteration
-            is loaded and plotted.
-
-        **kwargs: dict, optional
-            See pyvista.Plotter.add_mesh() in the document of pyvista for
-            additional usefull options.
-        """
-        if iteration is None:
-            if self.loaded_iter is None:
-                self.load(-1)  # load last iteration
-        else:
-            self.load(iteration)
-
-        return DataSet.plot(
-            self,
-            field,
-            component,
-            data_type,
-            scale,
-            show,
-            show_edges,
-            clim,
-            node_labels,
-            element_labels,
-            show_nodes,
-            show_normals,
-            plotter,
-            screenshot,
-            azimuth,
-            elevation,
-            roll,
-            **kargs,
-        )
 
     def write_movie(
         self,
@@ -1350,68 +1212,65 @@ class MultiFrameDataSet(DataSet):
         field: str | None = None,
         component: int | str = 0,
         data_type: str | None = None,
-        scale: float = 1,
-        show_edges: bool = True,
-        clim: list[float | None] | None = [None, None],
-        show_nodes: bool | float = False,
         **kargs,
     ):
-        """
-        Generate a video of the MultiFrameDataSet object by loading iteratively every frame.
+        """Create a video from the data.
+
+        Generate a video by loading iteratively every frame.
+        This method rely on the :py:meth:`fedoo.DataSet.plot` and then
+        accept the all its arguments as keyword arguments.
 
         Parameters
         ----------
         filename : str
-            Name of the videofile to write.
+            Name of the video file to write. The type of video generated
+            depend on the file extension. If no extension provided, a 'mp4'
+            file will be written.
         field : str (optional)
-            Name of the field to plot
+            Name of the field to plot. If no field provided, only the
+            mesh is ploted. 
         component : int, str (default = 0)
             The data component to plot in case of vector data
         data_type : str in {'Node', 'Element' or 'GaussPoint'}, optional
-            Type of the data. By default, the data_type is determined automatically by scanning the data arrays.
-        scale : scalar (default = 1)
-            The scale factor used for the nodes displacement, using the 'Disp' vector field
-        show_edges : bool (default = True)
-            if True, the mesh edges are shown
-        clim: sequence[float|None] or None
-            Sequence of two float to define data boundaries for color bar.
-            If clim is None, clim change at each iteration with the min and max.
-            If one of the  boundary is set to None, the value is replace by the min or max.
-            of data for the all iterations sequence.
-            Defaults to minimum and maximum of data for the all iterations sequence
-            (clim =[None,None]).
-        show_nodes : bool|float (default = False)
-            Plot the nodes. If True, the nodes are shown with a default size.
-            If float, show_nodes is the required size.
+            Type of the data. By default, the data_type is determined
+            automatically by scanning the data arrays.
         **kargs: dict
-            Other optional parameters (see notes below)
+            Other optional parameters. See notes below.
 
         Notes
-        -----------
-        Many options are available as keyword args. Some of these options are
-        directly related to pyvista options (for instance in the pyvista.plotter.add_mesh method).
-        Please, refer to the documentation of pyvista for more details.
+        -----
+        Many options are available as keyword args. Refer to the documentation
+        of :py:meth:`fedoo.DataSet.plot` method for details.
+        Below, only the specific arguments are presented.
 
         Available keyword arguments are:
 
-        * framerate : int (default = 24)
+        * clim : sequence[float|None] or None
+            Sequence of two float to define data boundaries for colorbar.
+            If clim is None, clim change at each iteration with the min and
+            max. If one of the boundary is set to None, the value is replace 
+            by the min or max of data for the all iterations sequence.
+            Defaults to minimum and maximum of data for the all iterations
+            sequence, ie clim =[None,None].
+        * framerate : int, default = 24
             Number of frames per second
-        * quality : int between 1 and 10 (default = 5)
-            Define the quality of the writen movie. Higher is better but take more place.
-        * azimuth: scalar (default = 30)
+        * quality : int between 1 and 10, default = 5
+            Define the quality of the writen movie if the movie writer accept
+            this parameter.
+            Higher is better but take more place.
+        * azimuth : scalar, default = 30
             Angle of azimuth (degree) at the begining of the video.
-        * elevation: scalar (default = 15)
+        * elevation : scalar, default = 15
             Angle of elevation (degree) at the begining of the video.
-        * rot_azimuth : scalar (default = 0)
-            Angle of azimuth rotation that is made at each new frame. Used to make easy video with camera moving around the scene.
-        * rot_elevation :  scalar (default = 0)
-            Angle of elevation rotation that is made at each new frame. Used to make easy video with camera moving around the scene.
-        * scalar_bar_args' :
-            dict containing the arguments related to scalar bar.
+        * rot_azimuth : scalar, default = 0
+            Angle of azimuth rotation that is made at each new frame.
+            Used to make easy video with camera moving around the scene.
+        * rot_elevation : scalar, default = 0
+            Angle of elevation rotation that is made at each new frame.
+            Used to make easy video with camera moving around the scene.
         * window_size : list of int (default = [1024, 768])
             Size of the video in pixel
         """
-
         if not (USE_PYVISTA):
             raise NameError("Pyvista not installed.")
 
@@ -1419,157 +1278,74 @@ class MultiFrameDataSet(DataSet):
             raise NameError(
                 "Can't generate a plot without an associated mesh. Set the mesh attribute first."
             )
-
-        ndim = self.mesh.ndim
-
+         
         field = kargs.pop("scalars", field)
-
+        
         framerate = kargs.pop("framerate", 24)
         quality = kargs.pop("quality", 5)
-
-        sargs = kargs.pop("scalar_bar_args", None)
-
         rot_azimuth = kargs.pop("rot_azimuth", 0)
         rot_elevation = kargs.pop("rot_elevation", 0)
-
+        window_size = kargs.pop("window_size", (1024, 768))
+         
         azimuth = kargs.pop("azimuth", 30)
         elevation = kargs.pop("elevation", 15)
-
-        if show_nodes == True:
-            show_nodes = 5  # default size of nodes
-
-        # auto compute boundary
+         
+        # auto compute boundary        
         Xmin, Xmax, clim_data = self.get_all_frame_lim(
-            field, component, data_type, scale
+            field, component, data_type, kargs.get("scale", 1)
         )
-        center = (Xmin + Xmax) / 2
-        if len(center) < 3:
-            center = np.hstack((center, np.zeros(3 - len(center))))
-        length = np.linalg.norm(Xmax - Xmin)
-
+        clim = kargs.pop("clim", [None, None])
         if clim is not None:
-            if clim[0] is None:
+            if clim[0] is None and clim_data is not None:
                 clim[0] = clim_data[0]
-            if clim[1] is None:
+            if clim[1] is None and clim_data is not None:
                 clim[1] = clim_data[1]
-
-        window_size = kargs.pop("window_size", [1024, 768])
-
-        self.load(0)
-
-        data, data_type = self.get_data(field, None, data_type, True)
-
-        if data_type == "GaussPoint":
-            if self.meshplot_gp is None:
-                self._build_mesh_gp()
-            meshplot = self.meshplot_gp
-            crd = self.mesh_gp.nodes
-
-        elif data is not None:
-            if self.meshplot is None:
-                meshplot = self.meshplot = self.mesh.to_pyvista()
-            else:
-                meshplot = self.meshplot
-            crd = self.mesh.nodes
+        
+        kargs["title"] = kargs.get("title", "")
+        kargs["clim"] = kargs.get("clim", clim)
+        
+        ext = os.path.splitext(filename)[1].lower()
+        if ext == "":
+            ext = ".mp4"
+            filename += ext
+        
+        if "plotter" not in kargs:
+            pl = pv.Plotter(window_size=window_size, off_screen=True)
+            lock_view = False
         else:
-            return NotImplemented
-
-        pl = pv.Plotter(window_size=window_size)
-
-        # pl = pv.Plotter()
-        pl.set_background("White")
-
-        if sargs is None:  # default value
-            sargs = dict(
-                interactive=True,
-                title_font_size=20,
-                label_font_size=16,
-                color="Black",
-                # n_colors= 10
+            pl = kargs["plotter"]
+            lock_view = True  # don't change the current view
+        
+        self.plot(field, component, data_type, iteration=0, plotter=pl, lock_view=lock_view, **kargs)
+        
+        if not lock_view and "cpos" not in kargs:
+            # set initial camera position
+            center = (Xmin + Xmax) / 2
+            if len(center) < 3:
+                center = np.hstack((center, np.zeros(3 - len(center))))
+            length = np.linalg.norm(Xmax - Xmin)
+            pl.camera.SetFocalPoint(center)
+            pl.camera.position = tuple(center + np.array([0, 0, 2 * length]))
+            pl.camera.up = tuple([0, 1, 0])
+            if  self.mesh.ndim == 3:
+                pl.camera.Azimuth(azimuth)
+                pl.camera.Elevation(elevation)
+        
+        if ext == ".gif":
+            pl.open_gif(filename, fps=framerate)
+        else:
+            pl.open_movie(
+                filename,
+                framerate=framerate,
+                quality=quality,
             )
-
-        pl.add_axes(color="Black", interactive=True)
-
-        pl.open_movie(filename + ".mp4", framerate=framerate, quality=quality)
-        # pl.open_movie(filename, framerate=framerate, quality = quality)
-
-        # pl.show(auto_close=False)  # only necessary for an off-screen movie
-
-        # camera position
-        pl.camera.SetFocalPoint(center)
-        pl.camera.position = tuple(center + np.array([0, 0, 2 * length]))
-        pl.camera.up = tuple([0, 1, 0])
-
-        if ndim == 3:
-            pl.camera.Azimuth(azimuth)
-            pl.camera.Elevation(elevation)
-
-        for i in range(0, self.n_iter):
-            self.load(i)
-            data = self.get_data(field, component, data_type)
-
-            if data_type == "GaussPoint":
-                data = self.mesh_gp.convert_data(
-                    data,
-                    convert_from="GaussPoint",
-                    convert_to="Node",
-                    n_elm_gp=len(data) // self.mesh.n_elements,
-                )
-                if "Disp" in self.node_data:
-                    U = (
-                        (
-                            self.node_data["Disp"]
-                            .reshape(ndim, -1)
-                            .T[self.mesh.elements.ravel()]
-                        ).T
-                    ).T
-                    meshplot.points = as_3d_coordinates(crd + scale * U)
-
-                if show_nodes:
-                    if "Disp" in self.node_data:
-                        crd_points = as_3d_coordinates(
-                            self.mesh.nodes + scale * self.node_data["Disp"].T
-                        )
-            else:
-                if "Disp" in self.node_data:
-                    meshplot.points = as_3d_coordinates(
-                        crd + scale * self.node_data["Disp"].T
-                    )
-                    crd_points = meshplot.points  # alias
-
-            if i == 0:
-                pl.add_mesh(
-                    meshplot,
-                    scalars=data,
-                    show_edges=show_edges,
-                    scalar_bar_args=sargs,
-                    cmap="jet",
-                    clim=clim,
-                    **kargs,
-                )
-                if show_nodes:
-                    pl.add_points(
-                        crd_points,
-                        render_points_as_spheres=True,
-                        point_size=show_nodes,
-                    )
-                    mesh_points = pl.mesh
-            else:
-                if clim is None:
-                    pl.update_scalar_bar_range([data.min(), data.max()])
-
-                meshplot[meshplot.active_scalars_name] = data
-                # pl.update_scalars(data, meshplot) #deprecated
-                if show_nodes:
-                    mesh_points.points = crd_points
-
-            if rot_azimuth:
+        pl.write_frame()        
+        for iteration in range(1, self.n_iter):
+            if rot_azimuth != 0:
                 pl.camera.Azimuth(rot_azimuth)
-            if rot_elevation:
+            if rot_elevation != 0:
                 pl.camera.Elevation(rot_elevation)
-
-            # Run through each frame
-            # pl.add_text(f"Iteration: {i}", name='time-label', color='Black')
+            self.plot(field, component, data_type, iteration=iteration, plotter=pl, lock_view=True, **kargs)
             pl.write_frame()
 
         pl.close()
@@ -1620,11 +1396,12 @@ class MultiFrameDataSet(DataSet):
 
         for i in range(0, self.n_iter):
             self.load(i)
-            data = self.get_data(field, component, data_type)
-            clim = [
-                np.min([data.min(), clim[0]]),
-                np.max([data.max(), clim[1]]),
-            ]
+            if field is not None:
+                data = self.get_data(field, component, data_type)
+                clim = [
+                    np.min([data.min(), clim[0]]),
+                    np.max([data.max(), clim[1]]),
+                ]
 
             if "Disp" in self.node_data:
                 new_crd = crd + scale * self.node_data["Disp"].T
@@ -1642,6 +1419,8 @@ class MultiFrameDataSet(DataSet):
         if "Disp" not in self.node_data:
             Xmin = self.mesh.bounding_box[0]
             Xmax = self.mesh.bounding_box[1]
+        if field is None:
+            clim = None
 
         return np.array(Xmin), np.array(Xmax), clim
 
