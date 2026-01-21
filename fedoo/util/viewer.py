@@ -262,6 +262,8 @@ class PlotDock(QDockWidget):
             title=self.opts["title_plot"],
             cmap=self.opts["cmap"],
         )
+        self.pv_mesh = plotter.mesh #alias of the mesh actor
+ 
         if self.parent()._plane_widget_enabled:
             self.parent().enable_plane_widget()
 
@@ -288,6 +290,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._renderer_dialog = None
         self._plot_dialog = None
         self._window_index = 1
+        self._picking_target = -1  #internal arg for picking tools. -1 = No target
 
         # if plane_widget or line wiget should be shown in the active dock
         self._plane_widget_enabled = False
@@ -1535,25 +1538,33 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create dialog only if not already exist
         if self._plot_over_line_dialog is None:
             self._plot_over_line_dialog = PlotOverLineDialog(self)
-            self._plot_over_line_dialog.plotRequested.connect(self.plot_over_line)
+            self._plot_over_line_dialog.plotRequested.connect(
+                self.plot_over_line
+            )
+            self._plot_over_line_dialog.requestPick.connect(
+                self._start_pick
+            )  # 0->P1, 1->P2
 
             # connection to sync dialog with widget
-            self._plot_over_line_dialog.lineChanged.connect(self._on_pol_dialog_changed)
+            self._plot_over_line_dialog.lineChanged.connect(
+                self._on_pol_dialog_changed
+            )
             # if dialog closed, remove widget
-            self._plot_over_line_dialog.finished.connect(self._on_pol_dialog_closed)
-            self._plot_over_line_dialog.destroyed.connect(self._on_pol_dialog_closed)
+            self._plot_over_line_dialog.finished.connect(
+                self._on_pol_dialog_closed
+            )
+            self._plot_over_line_dialog.destroyed.connect(
+                self._on_pol_dialog_closed
+            )
 
         self._line_widget_enabled = True
         # Line widget
-        self.plotter.add_line_widget(callback=self.on_line_changed, use_vertices=True)
-
+        self._line_widget = self.plotter.add_line_widget(
+            callback=self.on_line_changed, use_vertices=True
+        )
         # Show dialog
         self._plot_over_line_dialog.show()
         self._plot_over_line_dialog.raise_()
-        self._plot_over_line_dialog.activateWindow()
-
-        # Activate plane widget et sync its values
-        # self.enable_plane_widget()
 
     def _on_pol_dialog_closed(self, *args, **kwargs):
         # remove line widget
@@ -1561,8 +1572,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotter.clear_line_widgets()
 
     def _on_pol_dialog_changed(self, p1, p2):
-        self.plotter.line_widgets[0].SetPoint1(*p1)
-        self.plotter.line_widgets[0].SetPoint2(*p2)
+        #update widget (emit no signal)
+        self._line_widget.SetPoint1(p1)
+        self._line_widget.SetPoint2(p2)
 
     def on_line_changed(self, p1, p2):
         """Called interactively while moving the widget"""
@@ -1572,24 +1584,57 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._plot_over_line_dialog:
             p1 = self._plot_over_line_dialog.p1
             p2 = self._plot_over_line_dialog.p2
-            self.plotter.add_line_widget(
+            self.plotter.clear_line_widgets()
+            self._line_widget = self.plotter.add_line_widget(
                 callback=self.on_line_changed, use_vertices=True
             )
+            # value of p1 and p2 are changed by the callback function
+            # force values to the initial ones
             self._on_pol_dialog_changed(p1, p2)
+            self.on_line_changed(p1,p2) # update dialog values
 
-    def plot_over_line(self, p1, p2, live=False):
+
+    # ---------- Picking ----------
+    def _start_pick(self, which: int):
+        """Start one-shot picking for endpoint 'which' (0=P1, 1=P2)."""
+        self._picking_target = which
+
+        def _picked(point):
+            # Retrieve current other endpoint
+            p1 = tuple(self._plot_over_line_dialog.p1_edits[i].value() for i in range(3))
+            p2 = tuple(self._plot_over_line_dialog.p2_edits[i].value() for i in range(3))
+            if self._picking_target == 0:
+                p1 = tuple(point)
+            else:
+                p2 = tuple(point)
+
+            # Sync UI and scene
+            self._on_pol_dialog_changed(p1, p2) # update widget
+            self.on_line_changed(p1,p2) # update dialog values
+
+            # Stop picking
+            self.plotter.disable_picking()
+            self._picking_target = -1
+
+        # Enable one-shot point picking (left click)
+        self.plotter.disable_picking()
+        self.plotter.enable_point_picking(
+            callback=_picked,
+            left_clicking=True,
+            show_message=True,   # shows hint in the render window
+            # picker='point'        # snap to mesh points
+        )
+
+    def plot_over_line(self, p1, p2, resolution):
         """
         Compute plot_over_line and push data to the Matplotlib dialog.
         Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
         """
-        # Compute line result (adapt resolution and array as needed)
-        # If you have specific scalar array, set `scalars='MyArrayName'`
-        res = self.plotter.mesh.sample_over_line(p1, p2, resolution=200)
+        # Compute line result
+        res = self.active_dock.pv_mesh.sample_over_line(p1, p2, resolution=resolution)
 
-        # x-axis is 'Distance' column (PyVista creates it)
         x = res["Distance"]
-        # y-axis uses active scalars; pick a named array if needed
-        y = res.active_scalars
+        y = res["Data"]  # or y = res.active_scalars
         try:
             ylabel = (
                 self.active_dock.current_field + "_" + self.active_dock.current_comp
@@ -2270,8 +2315,9 @@ class ClipDialog(QtWidgets.QDialog):
 
 
 class PlotOverLineDialog(QtWidgets.QDialog):
-    plotRequested = Signal(tuple, tuple)
-    lineChanged = Signal(object, object)
+    plotRequested = Signal(tuple, tuple, int)
+    lineChanged = Signal(object, object)    
+    requestPick   = Signal(int)               # 0 -> pick P1, 1 -> pick P2
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2283,46 +2329,149 @@ class PlotOverLineDialog(QtWidgets.QDialog):
 
         self._build_ui()
 
+    # ------------------------------------------------------------------
     def _build_ui(self):
-        self.edits = []
-        form = QtWidgets.QFormLayout()
+        main_layout = QtWidgets.QVBoxLayout(self)        
 
-        for label in ("P1 X", "P1 Y", "P1 Z", "P2 X", "P2 Y", "P2 Z"):
+        # --- Point 1 group ---
+        self.p1_edits, p1_group = self._build_point_group(
+            title="Point 1",
+            pick_index=0
+        )
+
+        # --- Point 2 group ---
+        self.p2_edits, p2_group = self._build_point_group(
+            title="Point 2",
+            pick_index=1
+        )
+
+        # --- Resolution ---
+        self.resSpin = QtWidgets.QSpinBox()
+        self.resSpin.setRange(2, 10000)
+        self.resSpin.setSingleStep(10)
+        self.resSpin.setValue(200)
+
+        res_layout = QtWidgets.QFormLayout()
+        res_layout.addRow("Resolution", self.resSpin)
+        
+        # --- Plot and invert buttons ---
+        self.invertDirBtn = QtWidgets.QPushButton("Invert direction")
+        self.plotBtn = QtWidgets.QPushButton("Plot over line")
+        self.plotBtn.setDefault(True)
+
+        # --- Assemble layout ---
+        main_layout.addWidget(p1_group)
+        main_layout.addWidget(p2_group)
+        main_layout.addLayout(res_layout)
+        main_layout.addSpacing(6)
+        main_layout.addWidget(self.invertDirBtn)
+        main_layout.addWidget(self.plotBtn)
+
+        # --- Connections ---
+        self.invertDirBtn.clicked.connect(self._invert_direction)
+        self.plotBtn.clicked.connect(self._emit_plot)
+
+    # ------------------------------------------------------------------
+    def _build_point_group(self, title: str, pick_index: int):
+        """
+        Returns (edits, QGroupBox)
+        """
+        group = QtWidgets.QGroupBox(title)
+        grid = QtWidgets.QGridLayout(group)
+
+        # Spin boxes
+        edits = []
+        labels = ("X", "Y", "Z")
+        for col, lbl in enumerate(labels):
+            lab = QtWidgets.QLabel(lbl)
             sb = QtWidgets.QDoubleSpinBox()
             sb.setRange(-1e9, 1e9)
             sb.setDecimals(6)
-            self.edits.append(sb)
-            form.addRow(label, sb)
             sb.valueChanged.connect(self._emit_line_params)
 
-        self.plotBtn = QtWidgets.QPushButton("Plot over line")
+            grid.addWidget(lab, 0, col)
+            grid.addWidget(sb, 1, col)
+            edits.append(sb)
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(self.plotBtn)
+        # Pick button with icon
+        pick_btn = QtWidgets.QPushButton("Pick")
+        pick_btn.clicked.connect(lambda: self.requestPick.emit(pick_index))
 
-        self.plotBtn.clicked.connect(self._emit_plot)
+        grid.addWidget(pick_btn, 1, 3)
+        grid.setColumnStretch(4, 1)
 
-    def _emit_line_params(self):
-        p1 = (self.edits[i].value() for i in range(3))
-        p2 = (self.edits[i].value() for i in range(3, 6))
-        self.lineChanged.emit(p1, p2)
+        return edits, group
+
+    # def _build_ui(self):
+    #     self.edits = []
+    #     form = QtWidgets.QFormLayout()
+
+    #     for label in ("P1 X", "P1 Y", "P1 Z", "P2 X", "P2 Y", "P2 Z"):
+    #         sb = QtWidgets.QDoubleSpinBox()
+    #         sb.setRange(-1e9, 1e9)
+    #         sb.setDecimals(6)
+    #         self.edits.append(sb)
+    #         form.addRow(label, sb)
+    #         sb.valueChanged.connect(self._emit_line_params)
+
+    #     # Resolution spinbox
+    #     self.resSpin = QtWidgets.QSpinBox()
+    #     self.resSpin.setRange(2, 10000)
+    #     self.resSpin.setSingleStep(10)
+    #     self.resSpin.setValue(200)  # default
+    #     form.addRow("Resolution", self.resSpin)
+        
+    #     # Pick buttons
+    #     self.btnPickP1 = QtWidgets.QPushButton("Pick P1")
+    #     self.btnPickP2 = QtWidgets.QPushButton("Pick P2")
+
+        
+    #             
+    #     self.plotBtn = QtWidgets.QPushButton("Plot over line")
+
+    #     layout = QtWidgets.QVBoxLayout(self)
+    #     layout.addLayout(form)
+    #     layout.addWidget(self.invertDirBtn)
+    #     layout.addWidget(self.btnPickP1)
+    #     layout.addWidget(self.btnPickP2)
+    #     layout.addWidget(self.plotBtn)
+
+    #     # Connections
+    #     self.btnPickP1.clicked.connect(lambda: self.requestPick.emit(0))
+    #     self.btnPickP2.clicked.connect(lambda: self.requestPick.emit(1))
+
+    #     self.plotBtn.clicked.connect(self._emit_plot)
+
+    def _emit_line_params(self):        
+        self.p1 = tuple(edit.value() for edit in self.p1_edits)
+        self.p2 = tuple(edit.value() for edit in self.p2_edits)
+        self.lineChanged.emit(self.p1, self.p2)
 
     def update_line(self, p1, p2):
         """Called from PyVista widget callback"""
-        self.p1[:] = p1
-        self.p2[:] = p2
+        self.p1 = p1
+        self.p2 = p2
 
+        all_edits = (*self.p1_edits, *self.p2_edits)        
         values = (*p1, *p2)
-        for edit, val in zip(self.edits, values):
+        for edit, val in zip(all_edits, values):
             edit.blockSignals(True)
             edit.setValue(val)
             edit.blockSignals(False)
-
+    
+    def _invert_direction(self):
+        self.parent()._on_pol_dialog_changed(self.p2, self.p1)
+        self.update_line(self.p2, self.p1)
+        # for i in range(3):
+        #     self.p1_edits[i].setValue(self.p2[i])
+        #     self.p2_edits[i].setValue(self.p1[i])
+        
+        
     def _emit_plot(self):
-        p1 = tuple(edit.value() for edit in self.edits[:3])
-        p2 = tuple(edit.value() for edit in self.edits[3:])
-        self.plotRequested.emit(p1, p2)
+        p1 = tuple(edit.value() for edit in self.p1_edits)
+        p2 = tuple(edit.value() for edit in self.p2_edits)
+        resolution = int(self.resSpin.value())
+        self.plotRequested.emit(p1, p2, resolution)
 
 
 class MplLinePlotDialog(QtWidgets.QDialog):
