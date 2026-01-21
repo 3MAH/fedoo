@@ -1,7 +1,7 @@
 """
 Very simple example with multiple element type.
 
-The key point are:
+The key points are:
     - define two separated mesh that share to the same node
       list with different elements.
     - create two separated Assembly that are combined in a single AssemblySum
