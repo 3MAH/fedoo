@@ -24,8 +24,15 @@ from .core import (
     WeakFormSum,
     read_data,
 )
-from .util.viewer import viewer
-
+try:
+    from .util.viewer import viewer
+except ImportError:
+    # module not installed
+    def viewer(res=None):
+        raise ImportError(
+            "pyvistaqt is required to launch the viewer. "
+            "Install it with: pip install pyvistaqt"
+        )
 
 class get_config:
     """Extract the current fedoo configuration (state of optional modules)

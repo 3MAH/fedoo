@@ -82,17 +82,11 @@ class DockTitleBar(QtWidgets.QWidget):
         if self._active:
             bg = pal.color(QtGui.QPalette.Highlight)
             fg = pal.color(QtGui.QPalette.HighlightedText)
-            # self.setStyleSheet(f"""
-            #     QWidget {{ background-color: {bg.name()}; }}
-            #     QLabel {{ color: {fg.name()}; font-weight: bold; }}
-            #     QToolButton {{ color: {fg.name()}; }}
-            # """)
             self.setStyleSheet(f"""
                 QWidget {{ background-color: {bg.name()}; }}
                 QLabel {{ color: {fg.name()}; font-weight: bold; }}
                 QToolButton {{ color: {fg.name()}; }}
             """)
-
         else:
             base = pal.color(QtGui.QPalette.AlternateBase)
             text = pal.color(QtGui.QPalette.WindowText)
@@ -100,28 +94,6 @@ class DockTitleBar(QtWidgets.QWidget):
                 QWidget {{ background-color: {base.name()}; }}
                 QLabel {{ color: {text.name()}; font-weight: normal; }}
             """)
-
-    # def _applyStyle(self):
-    #     if self._active:
-    #         self.setStyleSheet("""
-    #             QWidget {
-    #                 background-color: #3776d4;
-    #             }
-    #             QLabel {
-    #                 color: white;
-    #                 font-weight: bold;
-    #             }
-    #         """)
-    #     else:
-    #         self.setStyleSheet("""
-    #             QWidget {
-    #                 background-color: #e0e0e0;
-    #             }
-    #             QLabel {
-    #                 color: black;
-    #                 font-weight: normal;
-    #             }
-    #         """)
 
 
 class PlotDock(QDockWidget):
@@ -214,6 +186,9 @@ class PlotDock(QDockWidget):
         self._titlebar = titlebar  # keep reference
 
         parent.all_docks.append(self)
+        if parent.active_dock is None:
+            for action in parent.actions_requiring_data:
+                action.setEnabled(True)
         parent._set_active(self)
 
     def update_plot(self, val=None, iteration=None, lock_view=True, plotter=None):
@@ -262,7 +237,7 @@ class PlotDock(QDockWidget):
             title=self.opts["title_plot"],
             cmap=self.opts["cmap"],
         )
-        self.pv_mesh = plotter.mesh #alias of the mesh actor
+        # self.pv_mesh = plotter.mesh #alias of the mesh actor
  
         if self.parent()._plane_widget_enabled:
             self.parent().enable_plane_widget()
@@ -271,9 +246,14 @@ class PlotDock(QDockWidget):
             self.parent()._rebuild_line_widget()
 
     def closeEvent(self, event):
-        self.plotter.close()  # libère le contexte VTK
+        self.plotter.close()
+        if self is self.parent().active_dock:
+            self.parent().active_dock = None
         self.parent().all_docks.remove(self)
         self.parent()._update_dock_selector()
+        if self.parent().active_dock is None:
+            for action in self.parent().actions_requiring_data:
+                action.setEnabled(False)
         super().closeEvent(event)
 
 
@@ -593,9 +573,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.f11_shortcut.setContext(Qt.ApplicationShortcut)
         self.f11_shortcut.activated.connect(self.toggle_fullscreen)
 
+        self.actions_requiring_data = [
+            plot_options_action,
+            clim_action,
+            renderer_options_action,
+            copy_action,
+            clipAction,
+            plotOverLineAction,
+            view_top_action,
+            view_bottom_action,
+            view_left_action,
+            view_right_action,
+            view_front_action,
+            view_back_action,
+            view_isometric_action,
+            ]
         # -------------------------
         # Dockable PyVista Widget
-        # -------------------------
+        # -------------------------        
         if data is not None:
             if isinstance(data, str):
                 title = os.path.basename(data)
@@ -611,9 +606,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # self.addDockWidget(Qt.RightDockWidgetArea, dock_plotter)
         else:
             self.setRange(0, 0)
+            for action in self.actions_requiring_data:
+                action.setEnabled(False),
 
         # Initialisation
-        self.setWindowIcon(QtGui.QIcon("_viewer\\fedoo_logo_simple.png"))
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        ICON_PATH = os.path.join(BASE_DIR, "_viewer", "fedoo_logo_simple.png")
+        self.setWindowIcon(QtGui.QIcon(ICON_PATH))
         self.setWindowTitle("Fedoo Viewer")
 
     @property
@@ -668,16 +667,17 @@ class MainWindow(QtWidgets.QMainWindow):
         blocker = QSignalBlocker(self.dock_selector_combo)
 
         self.dock_selector_combo.clear()
-        for dock in self.all_docks:  # assuming you keep a list of PlotDock
+        for dock in self.all_docks:
             self.dock_selector_combo.addItem(dock.windowTitle())
         if self.active_dock not in self.all_docks:
-            self._set_active(self.all_docks[0])
-        try:
+            if len(self.all_docks)>0:
+                self._set_active(self.all_docks[0])
+            else:
+                self.active_dock=None
+        if self.active_dock:
             self.dock_selector_combo.setCurrentIndex(
                 self.all_docks.index(self.active_dock)
             )
-        except:
-            self.active_dock = None
 
     def rename_active_dock_from_combo(self):
         dock = self.active_dock
@@ -790,21 +790,15 @@ class MainWindow(QtWidgets.QMainWindow):
                     if dock is not ref:
                         ref.plotter.link_views_across_plotters(dock.plotter)
         else:
-            # Unlink when disabled
-            cam = self.active_dock.plotter.camera_position
-            for dock in self.all_docks:
-                try:
-                    dock.plotter.unlink_views()
-                    dock.plotter.camera_position = cam
-                except Exception:
-                    pass
-
-            # # Sync all cameras to the active dock
-            # if self.active_dock:
-            #     cam = self.plotter.camera_position
-            #     for dock in self.all_docks:
-            #         if dock != self.active_dock:
-            #             dock.plotter.camera_position = cam
+            if len(self.all_docks) > 0:
+                # Unlink when disabled
+                cam = self.active_dock.plotter.camera_position
+                for dock in self.all_docks:
+                    try:
+                        dock.plotter.unlink_views()
+                        dock.plotter.camera_position = cam
+                    except Exception:
+                        pass
 
     def _set_active(self, dock):
         # block all signals to avoid replot
@@ -1631,8 +1625,13 @@ class MainWindow(QtWidgets.QMainWindow):
         Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
         """
         # Compute line result
-        res = self.active_dock.pv_mesh.sample_over_line(p1, p2, resolution=resolution)
+        # res = self.active_dock.pv_mesh.sample_over_line(p1, p2, resolution=resolution)
+        if 'data1' not in self.plotter.actors:
+            QtWidgets.QMessageBox.information(self, "No compatible data found.")
+            return
 
+        pv_mesh = pv.wrap(self.plotter.actors['data1'].GetMapper().GetInput())
+        res = pv_mesh.sample_over_line(p1, p2, resolution=resolution)
         x = res["Distance"]
         y = res["Data"]  # or y = res.active_scalars
         try:

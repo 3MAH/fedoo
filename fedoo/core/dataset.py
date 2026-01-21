@@ -486,6 +486,7 @@ class DataSet:
                 mesh_to_show,
                 show_edges=show_edges,
                 copy_mesh=copy_mesh,
+                name = "data1",
                 **kargs,
             )
             if title is None:
@@ -499,13 +500,14 @@ class DataSet:
                 cmap=cmap,
                 clim=clim,
                 copy_mesh=copy_mesh,
+                name = "data1",
                 **kargs,
             )
             if title is None:
                 title = f"{field}_{component}"
 
         if edges:
-            pl.add_mesh(edges, color="black", line_width=1.5)
+            pl.add_mesh(edges, color="black", line_width=1.7, name = "edges1")
 
         pl.add_text(title, name="name", color="Black", font_size=title_size)
 
