@@ -314,7 +314,7 @@ class DataSet:
                 "Can't generate a plot without an associated mesh. Set the mesh attribute first."
             )
         
-        if isinstance(self, MultiFrameDataSet):
+        if hasattr(self, "loaded_iter"):
             if iteration is None:
                 if self.loaded_iter is None:
                     self.load(-1)  # load last iteration

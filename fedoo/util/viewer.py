@@ -178,7 +178,10 @@ class PlotDock(QDockWidget):
             self.current_field = "disp"
             self.current_comp = "X"
         else:
-            self.current_field = field_names[0]
+            try:
+                self.current_field = field_names[0]
+            except:
+                self.current_field = None
             self.current_comp = None
         self.current_data_type = "Node"
 
@@ -949,7 +952,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_plot_with_clim(lock_view=True)
 
     def update_components(self, field):
-        if field == "" or self.active_dock is None:
+        if field == "" or not self.active_dock or not field:
             return [""]
 
         data = self.data
