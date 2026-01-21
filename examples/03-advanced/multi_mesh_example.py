@@ -63,7 +63,6 @@ pb.solve()
 #
 
 # extract the results from the two assembly objects
-fd.get_config()['USE_PYVISTA_QT'] = False
 results1 = pb.get_results(assembly1, output_list=["Stress", "Disp", "Strain"])
 results2 = pb.get_results(assembly2, output_list=["Stress", "Disp", "Strain"])
 
