@@ -237,7 +237,6 @@ class PlotDock(QDockWidget):
             title=self.opts["title_plot"],
             cmap=self.opts["cmap"],
         )
-        # self.pv_mesh = plotter.mesh #alias of the mesh actor
  
         if self.parent()._plane_widget_enabled:
             self.parent().enable_plane_widget()
@@ -1625,7 +1624,6 @@ class MainWindow(QtWidgets.QMainWindow):
         Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
         """
         # Compute line result
-        # res = self.active_dock.pv_mesh.sample_over_line(p1, p2, resolution=resolution)
         if 'data1' not in self.plotter.actors:
             QtWidgets.QMessageBox.information(self, "No compatible data found.")
             return
