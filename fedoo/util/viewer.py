@@ -110,6 +110,14 @@ class PlotDock(QDockWidget):
         self.data = data
 
         container = QWidget()
+        
+        # disable activate/desactivate capability
+        self.setContextMenuPolicy(Qt.PreventContextMenu)        
+        action = self.toggleViewAction()
+        action.setEnabled(False)
+        action.setVisible(False)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+
         layout = QVBoxLayout(container)
         self.plotter = QtInteractor(self)
         layout.addWidget(self.plotter.interactor)
