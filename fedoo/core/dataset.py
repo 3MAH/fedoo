@@ -337,6 +337,7 @@ class DataSet:
 
         return_cpos = kargs.pop("return_cpos", False)
         cmap = kargs.pop("cmap", "jet")  # if cmap not defined, default to "jet"
+        kargs["name"] = kargs.get("name", "data1")  # default mesh name
 
         if data_type == "GaussPoint":
             if self.meshplot_gp is None:
@@ -499,7 +500,6 @@ class DataSet:
                 mesh_to_show,
                 show_edges=show_edges,
                 copy_mesh=copy_mesh,
-                name = "data1",
                 **kargs,
             )
             if title is None:
@@ -513,7 +513,6 @@ class DataSet:
                 cmap=cmap,
                 clim=clim,
                 copy_mesh=copy_mesh,
-                name = "data1",
                 **kargs,
             )
             if title is None:
@@ -801,7 +800,7 @@ class DataSet:
             self.node_data = {k: v.T for k, v in data.point_data.items()}
             self.element_data = {k: v.T for k, v in data.cell_data.items()}
             if load_mesh:
-                Mesh.from_pyvista(data)
+                self.mesh = Mesh.from_pyvista(data)
         elif isinstance(data, Path):
             # used to load one iteration in fdz file
             data = np.load(data.open("rb"))

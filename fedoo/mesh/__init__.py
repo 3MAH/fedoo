@@ -91,6 +91,7 @@ from .functions import (
     extract_edges,
     change_elm_type,
     quad2tri,
+    axisymmetric_extrusion,
 )
 
 from .structured_mesh import (

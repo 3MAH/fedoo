@@ -275,10 +275,8 @@ we can plot the stress results after the example
 
 from .axi_to_3d import (
     axi_to_3d,
-    axi_to_3d_multi,
 )
 
 __all__ = [
     "axi_to_3d",
-    "axi_to_3d_multi",
 ]
