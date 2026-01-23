@@ -21,7 +21,7 @@ try:
     import matplotlib as mpl  # only for colormap
     import pyvista as pv
     from pyvistaqt import QtInteractor
-    from matplotlib.figure import Figure    
+    from matplotlib.figure import Figure
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
     import os
@@ -110,9 +110,9 @@ class PlotDock(QDockWidget):
         self.data = data
 
         container = QWidget()
-        
+
         # disable activate/desactivate capability
-        self.setContextMenuPolicy(Qt.PreventContextMenu)        
+        self.setContextMenuPolicy(Qt.PreventContextMenu)
         action = self.toggleViewAction()
         action.setEnabled(False)
         action.setVisible(False)
@@ -250,7 +250,7 @@ class PlotDock(QDockWidget):
             title=self.opts["title_plot"],
             cmap=self.opts["cmap"],
         )
- 
+
         if self.parent()._plane_widget_enabled:
             self.parent().enable_plane_widget()
 
@@ -282,7 +282,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._renderer_dialog = None
         self._plot_dialog = None
         self._window_index = 1
-        self._picking_target = -1  #internal arg for picking tools. -1 = No target
+        self._picking_target = -1  # internal arg for picking tools. -1 = No target
 
         # if plane_widget or line wiget should be shown in the active dock
         self._plane_widget_enabled = False
@@ -599,10 +599,10 @@ class MainWindow(QtWidgets.QMainWindow):
             view_front_action,
             view_back_action,
             view_isometric_action,
-            ]
+        ]
         # -------------------------
         # Dockable PyVista Widget
-        # -------------------------        
+        # -------------------------
         if data is not None:
             if isinstance(data, str):
                 title = os.path.basename(data)
@@ -619,7 +619,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.setRange(0, 0)
             for action in self.actions_requiring_data:
-                action.setEnabled(False),
+                (action.setEnabled(False),)
 
         # Initialisation
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -682,10 +682,10 @@ class MainWindow(QtWidgets.QMainWindow):
         for dock in self.all_docks:
             self.dock_selector_combo.addItem(dock.windowTitle())
         if self.active_dock not in self.all_docks:
-            if len(self.all_docks)>0:
+            if len(self.all_docks) > 0:
                 self._set_active(self.all_docks[0])
             else:
-                self.active_dock=None
+                self.active_dock = None
         if self.active_dock:
             self.dock_selector_combo.setCurrentIndex(
                 self.all_docks.index(self.active_dock)
@@ -1544,24 +1544,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create dialog only if not already exist
         if self._plot_over_line_dialog is None:
             self._plot_over_line_dialog = PlotOverLineDialog(self)
-            self._plot_over_line_dialog.plotRequested.connect(
-                self.plot_over_line
-            )
+            self._plot_over_line_dialog.plotRequested.connect(self.plot_over_line)
             self._plot_over_line_dialog.requestPick.connect(
                 self._start_pick
             )  # 0->P1, 1->P2
 
             # connection to sync dialog with widget
-            self._plot_over_line_dialog.lineChanged.connect(
-                self._on_pol_dialog_changed
-            )
+            self._plot_over_line_dialog.lineChanged.connect(self._on_pol_dialog_changed)
             # if dialog closed, remove widget
-            self._plot_over_line_dialog.finished.connect(
-                self._on_pol_dialog_closed
-            )
-            self._plot_over_line_dialog.destroyed.connect(
-                self._on_pol_dialog_closed
-            )
+            self._plot_over_line_dialog.finished.connect(self._on_pol_dialog_closed)
+            self._plot_over_line_dialog.destroyed.connect(self._on_pol_dialog_closed)
 
         self._line_widget_enabled = True
         # Line widget
@@ -1578,7 +1570,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotter.clear_line_widgets()
 
     def _on_pol_dialog_changed(self, p1, p2):
-        #update widget (emit no signal)
+        # update widget (emit no signal)
         self._line_widget.SetPoint1(p1)
         self._line_widget.SetPoint2(p2)
 
@@ -1597,8 +1589,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # value of p1 and p2 are changed by the callback function
             # force values to the initial ones
             self._on_pol_dialog_changed(p1, p2)
-            self.on_line_changed(p1,p2) # update dialog values
-
+            self.on_line_changed(p1, p2)  # update dialog values
 
     # ---------- Picking ----------
     def _start_pick(self, which: int):
@@ -1607,16 +1598,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         def _picked(point):
             # Retrieve current other endpoint
-            p1 = tuple(self._plot_over_line_dialog.p1_edits[i].value() for i in range(3))
-            p2 = tuple(self._plot_over_line_dialog.p2_edits[i].value() for i in range(3))
+            p1 = tuple(
+                self._plot_over_line_dialog.p1_edits[i].value() for i in range(3)
+            )
+            p2 = tuple(
+                self._plot_over_line_dialog.p2_edits[i].value() for i in range(3)
+            )
             if self._picking_target == 0:
                 p1 = tuple(point)
             else:
                 p2 = tuple(point)
 
             # Sync UI and scene
-            self._on_pol_dialog_changed(p1, p2) # update widget
-            self.on_line_changed(p1,p2) # update dialog values
+            self._on_pol_dialog_changed(p1, p2)  # update widget
+            self.on_line_changed(p1, p2)  # update dialog values
 
             # Stop picking
             self.plotter.disable_picking()
@@ -1627,7 +1622,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotter.enable_point_picking(
             callback=_picked,
             left_clicking=True,
-            show_message=True,   # shows hint in the render window
+            show_message=True,  # shows hint in the render window
             # picker='point'        # snap to mesh points
         )
 
@@ -1637,11 +1632,11 @@ class MainWindow(QtWidgets.QMainWindow):
         Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
         """
         # Compute line result
-        if 'data1' not in self.plotter.actors:
+        if "data1" not in self.plotter.actors:
             QtWidgets.QMessageBox.information(self, "No compatible data found.")
             return
 
-        pv_mesh = pv.wrap(self.plotter.actors['data1'].GetMapper().GetInput())
+        pv_mesh = pv.wrap(self.plotter.actors["data1"].GetMapper().GetInput())
         res = pv_mesh.sample_over_line(p1, p2, resolution=resolution)
         x = res["Distance"]
         y = res["Data"]  # or y = res.active_scalars
@@ -2326,8 +2321,8 @@ class ClipDialog(QtWidgets.QDialog):
 
 class PlotOverLineDialog(QtWidgets.QDialog):
     plotRequested = Signal(tuple, tuple, int)
-    lineChanged = Signal(object, object)    
-    requestPick   = Signal(int)               # 0 -> pick P1, 1 -> pick P2
+    lineChanged = Signal(object, object)
+    requestPick = Signal(int)  # 0 -> pick P1, 1 -> pick P2
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2341,19 +2336,13 @@ class PlotOverLineDialog(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------
     def _build_ui(self):
-        main_layout = QtWidgets.QVBoxLayout(self)        
+        main_layout = QtWidgets.QVBoxLayout(self)
 
         # --- Point 1 group ---
-        self.p1_edits, p1_group = self._build_point_group(
-            title="Point 1",
-            pick_index=0
-        )
+        self.p1_edits, p1_group = self._build_point_group(title="Point 1", pick_index=0)
 
         # --- Point 2 group ---
-        self.p2_edits, p2_group = self._build_point_group(
-            title="Point 2",
-            pick_index=1
-        )
+        self.p2_edits, p2_group = self._build_point_group(title="Point 2", pick_index=1)
 
         # --- Resolution ---
         self.resSpin = QtWidgets.QSpinBox()
@@ -2363,7 +2352,7 @@ class PlotOverLineDialog(QtWidgets.QDialog):
 
         res_layout = QtWidgets.QFormLayout()
         res_layout.addRow("Resolution", self.resSpin)
-        
+
         # --- Plot and invert buttons ---
         self.invertDirBtn = QtWidgets.QPushButton("Invert direction")
         self.plotBtn = QtWidgets.QPushButton("Plot over line")
@@ -2430,13 +2419,12 @@ class PlotOverLineDialog(QtWidgets.QDialog):
     #     self.resSpin.setSingleStep(10)
     #     self.resSpin.setValue(200)  # default
     #     form.addRow("Resolution", self.resSpin)
-        
+
     #     # Pick buttons
     #     self.btnPickP1 = QtWidgets.QPushButton("Pick P1")
     #     self.btnPickP2 = QtWidgets.QPushButton("Pick P2")
 
-        
-    #             
+    #
     #     self.plotBtn = QtWidgets.QPushButton("Plot over line")
 
     #     layout = QtWidgets.QVBoxLayout(self)
@@ -2452,7 +2440,7 @@ class PlotOverLineDialog(QtWidgets.QDialog):
 
     #     self.plotBtn.clicked.connect(self._emit_plot)
 
-    def _emit_line_params(self):        
+    def _emit_line_params(self):
         self.p1 = tuple(edit.value() for edit in self.p1_edits)
         self.p2 = tuple(edit.value() for edit in self.p2_edits)
         self.lineChanged.emit(self.p1, self.p2)
@@ -2462,21 +2450,20 @@ class PlotOverLineDialog(QtWidgets.QDialog):
         self.p1 = p1
         self.p2 = p2
 
-        all_edits = (*self.p1_edits, *self.p2_edits)        
+        all_edits = (*self.p1_edits, *self.p2_edits)
         values = (*p1, *p2)
         for edit, val in zip(all_edits, values):
             edit.blockSignals(True)
             edit.setValue(val)
             edit.blockSignals(False)
-    
+
     def _invert_direction(self):
         self.parent()._on_pol_dialog_changed(self.p2, self.p1)
         self.update_line(self.p2, self.p1)
         # for i in range(3):
         #     self.p1_edits[i].setValue(self.p2[i])
         #     self.p2_edits[i].setValue(self.p1[i])
-        
-        
+
     def _emit_plot(self):
         p1 = tuple(edit.value() for edit in self.p1_edits)
         p2 = tuple(edit.value() for edit in self.p2_edits)
@@ -2572,7 +2559,7 @@ def viewer(res=None):
             "pyvistaqt is required to launch the viewer. "
             "Install it with: pip install pyvistaqt"
         )
-        
+
     app = QtWidgets.QApplication(sys.argv)
     if res is None:
         window = MainWindow()

@@ -286,7 +286,7 @@ class DataSet:
             Name of an element set associated to the mesh (str), or list of
             element set indices. If specified, plot only the given elements
             or hide the element set if element_set_invert == True.
-        
+
         element_set_invert : bool, optional
             Used only if element_set is defined. Invert element set.
 
@@ -298,7 +298,7 @@ class DataSet:
             If ``True``, the camera position and background color are not
             modified. In this mode, any view‑modifying arguments such as
             ``azimuth``, ``elevation``, or ``roll`` are ignored.
-        
+
         iteration: int, optional
             ignored if the object is not a MultiFrameDataSet.
             Index of the iteration to plot. If None, the current iteration is
@@ -323,7 +323,7 @@ class DataSet:
             raise NameError(
                 "Can't generate a plot without an associated mesh. Set the mesh attribute first."
             )
-        
+
         if hasattr(self, "loaded_iter"):
             if iteration is None:
                 if self.loaded_iter is None:
@@ -473,16 +473,16 @@ class DataSet:
                 mesh_to_show.cell_data["Data"] = data
             elif data_type:
                 mesh_to_show.point_data["Data"] = data
-            
+
             if element_set is not None:
                 if isinstance(element_set, str):
                     element_set = self.mesh.element_sets[element_set]
                 mesh_to_show = mesh_to_show.extract_cells(
                     element_set,
-                    invert = element_set_invert,
+                    invert=element_set_invert,
                 )
 
-            if clip_args is not None:  
+            if clip_args is not None:
                 mesh_to_show = mesh_to_show.clip(**clip_args)
 
             if data_type == "Element":
@@ -538,7 +538,7 @@ class DataSet:
                 title = f"{field}_{component}"
 
         if edges:
-            pl.add_mesh(edges, color="black", line_width=1.7, name = "edges1")
+            pl.add_mesh(edges, color="black", line_width=1.7, name="edges1")
 
         pl.add_text(title, name="name", color="Black", font_size=title_size)
 
@@ -1223,7 +1223,6 @@ class MultiFrameDataSet(DataSet):
         elif data:
             DataSet.load(self, data, load_mesh)
 
-
     def write_movie(
         self,
         filename: str = "test",
@@ -1246,7 +1245,7 @@ class MultiFrameDataSet(DataSet):
             file will be written.
         field : str (optional)
             Name of the field to plot. If no field provided, only the
-            mesh is ploted. 
+            mesh is ploted.
         component : int, str (default = 0)
             The data component to plot in case of vector data
         data_type : str in {'Node', 'Element' or 'GaussPoint'}, optional
@@ -1266,7 +1265,7 @@ class MultiFrameDataSet(DataSet):
         * clim : sequence[float|None] or None
             Sequence of two float to define data boundaries for colorbar.
             If clim is None, clim change at each iteration with the min and
-            max. If one of the boundary is set to None, the value is replace 
+            max. If one of the boundary is set to None, the value is replace
             by the min or max of data for the all iterations sequence.
             Defaults to minimum and maximum of data for the all iterations
             sequence, ie clim =[None,None].
@@ -1296,19 +1295,19 @@ class MultiFrameDataSet(DataSet):
             raise NameError(
                 "Can't generate a plot without an associated mesh. Set the mesh attribute first."
             )
-         
+
         field = kargs.pop("scalars", field)
-        
+
         framerate = kargs.pop("framerate", 24)
         quality = kargs.pop("quality", 5)
         rot_azimuth = kargs.pop("rot_azimuth", 0)
         rot_elevation = kargs.pop("rot_elevation", 0)
         window_size = kargs.pop("window_size", (1024, 768))
-         
+
         azimuth = kargs.pop("azimuth", 30)
         elevation = kargs.pop("elevation", 15)
-         
-        # auto compute boundary        
+
+        # auto compute boundary
         Xmin, Xmax, clim_data = self.get_all_frame_lim(
             field, component, data_type, kargs.get("scale", 1)
         )
@@ -1318,24 +1317,32 @@ class MultiFrameDataSet(DataSet):
                 clim[0] = clim_data[0]
             if clim[1] is None and clim_data is not None:
                 clim[1] = clim_data[1]
-        
+
         kargs["title"] = kargs.get("title", "")
         kargs["clim"] = kargs.get("clim", clim)
-        
+
         ext = os.path.splitext(filename)[1].lower()
         if ext == "":
             ext = ".mp4"
             filename += ext
-        
+
         if "plotter" not in kargs:
             pl = pv.Plotter(window_size=window_size, off_screen=True)
             lock_view = False
         else:
             pl = kargs["plotter"]
             lock_view = True  # don't change the current view
-        
-        self.plot(field, component, data_type, iteration=0, plotter=pl, lock_view=lock_view, **kargs)
-        
+
+        self.plot(
+            field,
+            component,
+            data_type,
+            iteration=0,
+            plotter=pl,
+            lock_view=lock_view,
+            **kargs,
+        )
+
         if not lock_view and "cpos" not in kargs:
             # set initial camera position
             center = (Xmin + Xmax) / 2
@@ -1345,10 +1352,10 @@ class MultiFrameDataSet(DataSet):
             pl.camera.SetFocalPoint(center)
             pl.camera.position = tuple(center + np.array([0, 0, 2 * length]))
             pl.camera.up = tuple([0, 1, 0])
-            if  self.mesh.ndim == 3:
+            if self.mesh.ndim == 3:
                 pl.camera.Azimuth(azimuth)
                 pl.camera.Elevation(elevation)
-        
+
         if ext == ".gif":
             pl.open_gif(filename, fps=framerate)
         else:
@@ -1357,13 +1364,21 @@ class MultiFrameDataSet(DataSet):
                 framerate=framerate,
                 quality=quality,
             )
-        pl.write_frame()        
+        pl.write_frame()
         for iteration in range(1, self.n_iter):
             if rot_azimuth != 0:
                 pl.camera.Azimuth(rot_azimuth)
             if rot_elevation != 0:
                 pl.camera.Elevation(rot_elevation)
-            self.plot(field, component, data_type, iteration=iteration, plotter=pl, lock_view=True, **kargs)
+            self.plot(
+                field,
+                component,
+                data_type,
+                iteration=iteration,
+                plotter=pl,
+                lock_view=True,
+                **kargs,
+            )
             pl.write_frame()
 
         pl.close()

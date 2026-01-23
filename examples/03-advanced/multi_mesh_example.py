@@ -20,13 +20,13 @@ import fedoo as fd
 import numpy as np
 
 # Generate a mesh with a 'quad4' element
-mesh1 = fd.mesh.rectangle_mesh(2,2, elm_type = 'quad4')
+mesh1 = fd.mesh.rectangle_mesh(2, 2, elm_type="quad4")
 
 # Add a new node not connected to the quad mesh
-mesh1.add_nodes([0.5,1.866])
+mesh1.add_nodes([0.5, 1.866])
 
 # Generate a new 'tri3' mesh with the same list of nodes (important)
-mesh2 = fd.Mesh(mesh1.nodes, elements = np.array([[2,3,4]]), elm_type='tri3')
+mesh2 = fd.Mesh(mesh1.nodes, elements=np.array([[2, 3, 4]]), elm_type="tri3")
 
 # Define equations as usual (constitutivelaw + weakform)
 fd.ModelingSpace("2Dstress")
@@ -67,5 +67,5 @@ results1 = pb.get_results(assembly1, output_list=["Stress", "Disp", "Strain"])
 results2 = pb.get_results(assembly2, output_list=["Stress", "Disp", "Strain"])
 
 plotter = results1.plot("Stress", "vm", show=False)
-results2.plot("Stress", "vm", plotter = plotter)
+results2.plot("Stress", "vm", plotter=plotter)
 plotter.show()

@@ -683,13 +683,17 @@ def axisymmetric_extrusion(
     """
     if mesh2d.ndim != 2:
         raise ValueError(
-            "Input mesh should be in 2D. "
-            "If your mesh has 2D data, use mesh.as_2d()."
+            "Input mesh should be in 2D. " "If your mesh has 2D data, use mesh.as_2d()."
         )
 
     mesh = extrude(mesh2d, angle, n_theta)
-    if merge_nodes and angle == 2*np.pi:
-        mesh.merge_nodes(np.c_[range(0,mesh.n_nodes, n_theta), range(n_theta-1,mesh.n_nodes, n_theta)])
+    if merge_nodes and angle == 2 * np.pi:
+        mesh.merge_nodes(
+            np.c_[
+                range(0, mesh.n_nodes, n_theta),
+                range(n_theta - 1, mesh.n_nodes, n_theta),
+            ]
+        )
 
     r, z, theta = mesh.nodes.T
     mesh.nodes = np.c_[r * np.cos(theta), r * np.sin(theta), z]

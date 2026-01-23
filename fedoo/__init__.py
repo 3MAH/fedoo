@@ -24,6 +24,7 @@ from .core import (
     WeakFormSum,
     read_data,
 )
+
 # try:
 from .util.viewer import viewer
 # except ImportError:
@@ -34,9 +35,10 @@ from .util.viewer import viewer
 #             "Install it with: pip install pyvistaqt"
 #         )
 
+
 class get_config:
     """Extract the current fedoo configuration.
-    
+
     The current state of optional modules is extracted from submodules
     and returend into a dict form.
 
