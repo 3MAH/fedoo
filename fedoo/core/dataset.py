@@ -163,6 +163,8 @@ class DataSet:
         title_size: float = 18.0,
         window_size: list = None,
         multiplot: bool | None = None,
+        element_set: str | np.ndarray[int] | None = None,
+        element_set_invert: bool = False,
         clip_args: tuple | None = None,
         lock_view: bool = False,
         iteration: int | None = None,
@@ -279,6 +281,14 @@ class DataSet:
             all the plots.
             If None, uses separated scalarbars only if the pyvista plotter uses
             subplot.
+
+        element_set : str or array[int], optional
+            Name of an element set associated to the mesh (str), or list of
+            element set indices. If specified, plot only the given elements
+            or hide the element set if element_set_invert == True.
+        
+        element_set_invert : bool, optional
+            Used only if element_set is defined. Invert element set.
 
         clip_args : dict, optional
             Dictionary of arguments to pass to the pyvista clip filter in
@@ -457,19 +467,28 @@ class DataSet:
             sargs["title_font_size"] = 1
 
         mesh_to_show = meshplot
-        if clip_args is not None:
+        if element_set is not None or clip_args is not None:
             # add data field to mesh object to clip data with the mesh
             if data_type == "Element":
-                meshplot.cell_data["Data"] = data
+                mesh_to_show.cell_data["Data"] = data
             elif data_type:
-                meshplot.point_data["Data"] = data
-            mesh_to_show = meshplot.clip(**clip_args)
+                mesh_to_show.point_data["Data"] = data
+            
+            if element_set is not None:
+                if isinstance(element_set, str):
+                    element_set = self.mesh.element_sets[element_set]
+                mesh_to_show = mesh_to_show.extract_cells(
+                    element_set,
+                    invert = element_set_invert,
+                )
+
+            if clip_args is not None:  
+                mesh_to_show = mesh_to_show.clip(**clip_args)
+
             if data_type == "Element":
                 data = mesh_to_show.cell_data["Data"]
-                del meshplot.cell_data["Data"]
             elif data_type:
                 data = mesh_to_show.point_data["Data"]
-                del meshplot.point_data["Data"]
 
         edges = None
         if multiplot:
