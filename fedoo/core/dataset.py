@@ -483,6 +483,8 @@ class DataSet:
                 )
 
             if clip_args is not None:
+                if clip_args.pop("cell_ids", False):
+                    mesh_to_show.cell_data["cell_ids"] = np.arange(self.mesh.n_elements)
                 mesh_to_show = mesh_to_show.clip(**clip_args)
 
             if data_type == "Element":
@@ -564,8 +566,12 @@ class DataSet:
 
         if element_labels:
             if element_labels == True:
-                element_labels = list(range(self.mesh.n_elements))
-            pl.add_point_labels(meshplot.cell_centers(), element_labels)
+                if "cell_ids" in mesh_to_show.cell_data:
+                    element_labels = mesh_to_show.cell_data["cell_ids"]
+                    pl.add_point_labels(mesh_to_show.cell_centers(), element_labels)
+                else:
+                    element_labels = list(range(self.mesh.n_elements))
+                    pl.add_point_labels(meshplot.cell_centers(), element_labels)
 
         if show_nodes:
             if show_nodes == True:

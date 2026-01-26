@@ -204,6 +204,13 @@ class PlotDock(QDockWidget):
                 action.setEnabled(True)
         parent._set_active(self)
 
+    @property
+    def pv_mesh(self, id_mesh=1):
+        mesh_name = "data" + str(id_mesh)
+        if mesh_name not in self.plotter.actors:
+            return None
+        return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
+
     def update_plot(self, val=None, iteration=None, lock_view=True, plotter=None):
         if self.data.mesh is None:
             # don't plot anything without a mesh
@@ -433,6 +440,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dock_selector_combo.lineEdit().editingFinished.connect(
             self.rename_active_dock_from_combo
         )
+
+        # ------------------------------------------------
+        # Toolbar 4 Selection
+        # ------------------------------------------------
+        select_toolbar = QtWidgets.QToolBar("Select")
+        select_toolbar.setMovable(True)
+        self.addToolBar(Qt.TopToolBarArea, select_toolbar)
+
+        select_toolbar.addWidget(QtWidgets.QLabel("Select: "))
+
+        # Create a checkable action (toggle)
+        self.select_node_action = QtWidgets.QAction("Node", self)
+        self.select_node_action.setCheckable(True)
+        self.select_node_action.setChecked(False)
+        self.select_elm_action = QtWidgets.QAction("Element", self)
+        self.select_elm_action.setCheckable(True)
+        self.select_elm_action.setChecked(False)
+
+        select_toolbar.addAction(self.select_node_action)
+        select_toolbar.addAction(self.select_elm_action)
+
+        self.select_node_action.toggled.connect(self._on_select_node_changed)
+        self.select_elm_action.toggled.connect(self._on_select_elm_changed)
 
         # -------------------------
         # Connections
@@ -830,6 +860,16 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._line_widget_enabled and self.active_dock:
             self.plotter.clear_line_widgets()
 
+        # save node/element selector current values
+        node_selector_ischecked = self.select_node_action.isChecked()
+        elm_selector_ischecked = self.select_elm_action.isChecked()
+        if node_selector_ischecked:
+            self._on_select_node_changed(False)
+            self.statusBar().clearMessage()
+        if elm_selector_ischecked:
+            self._on_select_elm_changed(False)
+            self.statusBar().clearMessage()
+
         self.active_dock = dock
 
         for d in self.all_docks:
@@ -881,6 +921,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.dock_selector_combo.setCurrentIndex(
                 self.all_docks.index(self.active_dock)
             )
+        if node_selector_ischecked:
+            self._on_select_node_changed(True)
+        elif elm_selector_ischecked:
+            self._on_select_elm_changed(True)
 
     def _on_anim_tick(self):
         # go to next iteration
@@ -1472,6 +1516,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "normal": normal,
                 "origin": origin,
                 "invert": self.opts["clip_invert"],
+                "cell_ids": True,  # add 'cell_ids' to cell_data
+                # "crinkle": True,  # keep entire elements and add 'cell_ids'
             }
         else:
             self.opts["clip_args"] = None
@@ -1617,14 +1663,122 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plotter.disable_picking()
             self._picking_target = -1
 
+        # Remove active click actions
+        self.select_node_action.setChecked(False)
+        self.select_elm_action.setChecked(False)
         # Enable one-shot point picking (left click)
-        self.plotter.disable_picking()
         self.plotter.enable_point_picking(
             callback=_picked,
             left_clicking=True,
-            show_message=True,  # shows hint in the render window
-            # picker='point'        # snap to mesh points
+            show_message=False,  # shows hint in the render window
         )
+        self.plotter.endable_mesh_picking(show=False, left_clicking=True)
+
+    def _on_select_node_changed(self, checked: bool):
+        if checked:
+            self.select_elm_action.setChecked(False)
+            self.statusBar().setVisible(True)
+            self._pick_node()
+        else:
+            self.plotter.remove_actor("_picked_point")
+            self.plotter.disable_picking()
+            self.statusBar().setVisible(False)
+
+    def _on_select_elm_changed(self, checked: bool):
+        if checked:
+            self.select_node_action.setChecked(False)
+            self.statusBar().setVisible(True)
+            self._pick_element()
+        else:
+            if getattr(self, "_lbp_tag", None) is not None:
+                self.plotter.interactor.RemoveObserver(self._lbp_tag)
+                self._lbp_tag = None
+            self.plotter.remove_actor("_picked_cell")
+            # self.plotter.disable_picking()
+            self.statusBar().setVisible(False)
+
+    def _pick_node(self):
+        """Start one-shot picking to select node"""
+
+        def _picked(point):
+            mesh = self.active_dock.pv_mesh
+            try:
+                if self.opts["clip_args"]:
+                    # the mesh have been reconstructed, have to find nodes
+                    # in the original mesh
+                    if "Disp" in self.data.node_data:
+                        crd = self.data.mesh.nodes + self.data["Disp"].T
+                        pid = np.linalg.norm(crd - point, axis=1).argmin()
+                    else:
+                        pid = self.data.mesh.nearest_node(point)
+                else:
+                    pid = mesh.find_closest_point(point)
+                    if self.current_data_type == "GaussPoint":
+                        pid = self.data.mesh.elements.ravel()[pid]
+            except Exception:
+                pid = None
+
+            if mesh is not None and pid is not None and pid >= 0:
+                msg = f"Node id={pid} | "
+            else:
+                msg = ""
+            msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
+            name = self.current_field
+            if name:
+                msg += (
+                    f" | {name}={self.data[name, self.current_component, 'Node'][pid]}"
+                )
+
+            self.statusBar().showMessage(msg)
+
+        # Enable one-shot point picking (left click)
+        self.plotter.disable_picking()
+        self.plotter.enable_point_picking(
+            callback=_picked, left_clicking=True, show_message=False, picker="point"
+        )
+
+    def _pick_element(self):
+        import vtk
+
+        picker = vtk.vtkCellPicker()
+        picker.SetTolerance(0.0005)
+
+        def _on_click(obj, event):
+            x, y = self.plotter.interactor.GetEventPosition()
+            picker.Pick(x, y, 0, self.plotter.renderer)
+
+            cell_id = picker.GetCellId()
+            if cell_id < 0:
+                return
+
+            mesh = self.active_dock.pv_mesh
+            cell = mesh.extract_cells(cell_id)
+            self.plotter.remove_actor("_picked_cell")
+            self.plotter.add_mesh(cell, color="yellow", name="_picked_cell")
+
+            if self.opts["clip_args"]:
+                # retrieve true cell ids
+                cell_id = mesh.cell_data["cell_ids"][cell_id]
+
+            if mesh is not None and cell_id is not None:
+                msg = f"Element id={cell_id} | "
+            # msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
+            name = self.current_field
+            data_gp = self.data[name, self.current_component, "GaussPoint"].reshape(
+                -1, self.data.mesh.n_elements
+            )[:, cell_id]
+            if name:
+                msg += f"{name}_{self.current_component}={self.data[name, self.current_component, 'Element'][cell_id]}"
+                msg += f" | gp vals: {data_gp}"
+
+            self.statusBar().showMessage(msg)
+
+        self._lbp_tag = self.plotter.interactor.AddObserver(
+            "LeftButtonPressEvent", _on_click
+        )
+        # self.plotter.interactor.AddObserver(
+        #     "LeftButtonPressEvent", _on_click
+        # )
 
     def plot_over_line(self, p1, p2, resolution):
         """
@@ -1632,11 +1786,13 @@ class MainWindow(QtWidgets.QMainWindow):
         Set live=True if you call this frequently (dragging) and want to avoid titles/reflows.
         """
         # Compute line result
-        if "data1" not in self.plotter.actors:
-            QtWidgets.QMessageBox.information(self, "No compatible data found.")
+        pv_mesh = self.active_dock.pv_mesh
+        if pv_mesh is None:
+            QtWidgets.QMessageBox.information(
+                self, "Error", "No compatible data found."
+            )
             return
 
-        pv_mesh = pv.wrap(self.plotter.actors["data1"].GetMapper().GetInput())
         res = pv_mesh.sample_over_line(p1, p2, resolution=resolution)
         x = res["Distance"]
         y = res["Data"]  # or y = res.active_scalars
@@ -2401,45 +2557,6 @@ class PlotOverLineDialog(QtWidgets.QDialog):
 
         return edits, group
 
-    # def _build_ui(self):
-    #     self.edits = []
-    #     form = QtWidgets.QFormLayout()
-
-    #     for label in ("P1 X", "P1 Y", "P1 Z", "P2 X", "P2 Y", "P2 Z"):
-    #         sb = QtWidgets.QDoubleSpinBox()
-    #         sb.setRange(-1e9, 1e9)
-    #         sb.setDecimals(6)
-    #         self.edits.append(sb)
-    #         form.addRow(label, sb)
-    #         sb.valueChanged.connect(self._emit_line_params)
-
-    #     # Resolution spinbox
-    #     self.resSpin = QtWidgets.QSpinBox()
-    #     self.resSpin.setRange(2, 10000)
-    #     self.resSpin.setSingleStep(10)
-    #     self.resSpin.setValue(200)  # default
-    #     form.addRow("Resolution", self.resSpin)
-
-    #     # Pick buttons
-    #     self.btnPickP1 = QtWidgets.QPushButton("Pick P1")
-    #     self.btnPickP2 = QtWidgets.QPushButton("Pick P2")
-
-    #
-    #     self.plotBtn = QtWidgets.QPushButton("Plot over line")
-
-    #     layout = QtWidgets.QVBoxLayout(self)
-    #     layout.addLayout(form)
-    #     layout.addWidget(self.invertDirBtn)
-    #     layout.addWidget(self.btnPickP1)
-    #     layout.addWidget(self.btnPickP2)
-    #     layout.addWidget(self.plotBtn)
-
-    #     # Connections
-    #     self.btnPickP1.clicked.connect(lambda: self.requestPick.emit(0))
-    #     self.btnPickP2.clicked.connect(lambda: self.requestPick.emit(1))
-
-    #     self.plotBtn.clicked.connect(self._emit_plot)
-
     def _emit_line_params(self):
         self.p1 = tuple(edit.value() for edit in self.p1_edits)
         self.p2 = tuple(edit.value() for edit in self.p2_edits)
@@ -2492,15 +2609,15 @@ class MplLinePlotDialog(QtWidgets.QDialog):
         # --- Header with line info + save ---
         self.lblP1 = QtWidgets.QLabel("P1: (—, —, —)")
         self.lblP2 = QtWidgets.QLabel("P2: (—, —, —)")
-        self.saveBtn = QtWidgets.QPushButton("Save as…")
-        self.saveBtn.clicked.connect(self._save_as)
+        # self.saveBtn = QtWidgets.QPushButton("Save as…")
+        # self.saveBtn.clicked.connect(self._save_as)
 
         header = QtWidgets.QHBoxLayout()
         header.addWidget(self.lblP1)
         header.addSpacing(10)
         header.addWidget(self.lblP2)
         header.addStretch(1)
-        header.addWidget(self.saveBtn)
+        # header.addWidget(self.saveBtn)
 
         # --- Main layout ---
         layout = QtWidgets.QVBoxLayout(self)
@@ -2532,17 +2649,17 @@ class MplLinePlotDialog(QtWidgets.QDialog):
 
         self.canvas.draw_idle()
 
-    def _save_as(self):
-        """Save the current figure to file."""
-        dlg = QtWidgets.QFileDialog(
-            self, "Save plot", "", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)"
-        )
-        dlg.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
-        if dlg.exec_():  # .exec() if PySide6
-            path = dlg.selectedFiles()[0]
-            # Choose DPI depending on format (optional)
-            dpi = 150 if path.lower().endswith(".png") else None
-            self.figure.savefig(path, dpi=dpi, bbox_inches="tight")
+    # def _save_as(self):
+    #     """Save the current figure to file."""
+    #     dlg = QtWidgets.QFileDialog(
+    #         self, "Save plot", "", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)"
+    #     )
+    #     dlg.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+    #     if dlg.exec_():  # .exec() if PySide6
+    #         path = dlg.selectedFiles()[0]
+    #         # Choose DPI depending on format (optional)
+    #         dpi = 150 if path.lower().endswith(".png") else None
+    #         self.figure.savefig(path, dpi=dpi, bbox_inches="tight")
 
 
 def normalize(v):
