@@ -1554,10 +1554,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._clip_dialog._emit_clip_params()  # emit signal
                 self.update_plot()
 
+        def clamp_to_bounds(pt, b):
+            # to avoid origin outside the bounds
+            x = min(max(pt[0], b[0]), b[1])
+            y = min(max(pt[1], b[2]), b[3])
+            z = min(max(pt[2], b[4]), b[5])
+            return (x, y, z)
+
         self._plane_widget = self.plotter.add_plane_widget(
             callback=_cb,
             bounds=bounds,
-            origin=origin,
+            origin=clamp_to_bounds(origin, bounds),
             normal=normal,
             implicit=True,
             color="red",
@@ -1576,10 +1583,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def disable_plane_widget(self):
         if not self._plane_widget_enabled:
             return
-        # try:
-        self.plotter.clear_plane_widgets()
-        # except Exception:
-        # self.plotter.clear_widgets()
+        try:
+            self.plotter.clear_plane_widgets()
+        except Exception:
+            self.plotter.clear_widgets()
         self._plane_widget = None
         self._plane_widget_enabled = False
 
@@ -1672,7 +1679,6 @@ class MainWindow(QtWidgets.QMainWindow):
             left_clicking=True,
             show_message=False,  # shows hint in the render window
         )
-        self.plotter.endable_mesh_picking(show=False, left_clicking=True)
 
     def _on_select_node_changed(self, checked: bool):
         if checked:

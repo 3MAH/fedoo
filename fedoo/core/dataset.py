@@ -293,6 +293,9 @@ class DataSet:
         clip_args : dict, optional
             Dictionary of arguments to pass to the pyvista clip filter in
             order to clip the current plot.
+            If clip_args["cell_ids"] exist and is set to True, the "cell_ids"
+            array is passed to the pyvista mesh to track the original element
+            IDs in the clipped mesh.
 
         lock_view : bool, default = False
             If ``True``, the camera position and background color are not
@@ -321,7 +324,8 @@ class DataSet:
 
         if self.mesh is None:
             raise NameError(
-                "Can't generate a plot without an associated mesh. Set the mesh attribute first."
+                "Can't generate a plot without an associated mesh. "
+                "Set the mesh attribute first."
             )
 
         if hasattr(self, "loaded_iter"):
@@ -515,8 +519,11 @@ class DataSet:
                 .extract_feature_edges()
             )
 
+        if mesh_to_show.is_empty:
+            return pl
+
         if field is None:
-            meshplot.active_scalars_name = None
+            mesh_to_show.active_scalars_name = None
             pl.add_mesh(
                 mesh_to_show,
                 show_edges=show_edges,
@@ -607,7 +614,8 @@ class DataSet:
             pl.add_arrows(centers, normals, mag=show_normals, show_scalar_bar=False)
 
         # required to avoid bug for non adapted clipping range
-        pl.camera.reset_clipping_range()
+        # pl.camera.reset_clipping_range()
+        pl.renderer.ResetCameraClippingRange()
 
         if screenshot:
             ext = os.path.splitext(screenshot)[1]
