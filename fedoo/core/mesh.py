@@ -8,6 +8,7 @@ from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from fedoo.util.test_periodicity import is_periodic
 from scipy import sparse
 import warnings
+import re
 
 from os.path import splitext
 
@@ -202,32 +203,36 @@ class Mesh(MeshBase):
             else:
                 ndim = None
 
+            node_sets = {}
+            element_sets = {}
+            for field_name in pvmesh.field_data:
+                if field_name[:6] == "_nset_":
+                    node_sets[field_name[6:]] = pvmesh.field_data[field_name]
+                if field_name[:6] == "_eset_":
+                    element_sets[field_name[6:]] = pvmesh.field_data[field_name]
+
             if len(elements_dict) == 1:
                 return Mesh(
                     pvmesh.points,
                     elements_dict[elm_type],
                     elm_type,
+                    node_sets=node_sets,
+                    element_sets=element_sets,
                     ndim=ndim,
                     name=name,
                 )
             elif len(elements_dict) == 0:
                 raise NotImplementedError("This mesh contains no compatible element.")
             else:
+                if element_sets:
+                    warnings.warn("Element sets not imported in MultiMesh objects.")
                 return MultiMesh(
                     pvmesh.points,
                     elements_dict,
-                    ndim,
-                    name,
+                    node_sets=node_sets,
+                    ndim=ndim,
+                    name=name,
                 )
-
-            # elm = list(pvmesh.cells_dict.values())[0]
-            #     return Mesh(
-            #         pvmesh.points[:, : int(pvmesh.field_data["ndim"][0])],
-            #         elm,
-            #         elm_type,
-            #         name=name,
-            #     )
-
         else:
             raise NameError("Pyvista not installed.")
 
@@ -601,7 +606,11 @@ class Mesh(MeshBase):
         return np.linalg.norm(self.nodes - X, axis=1).argmin()
 
     def find_nodes(
-        self, selection_criterion: str, value: float = 0, tol: float = 1e-6
+        self,
+        selection_criterion: str,
+        value: float = 0,
+        tol: float = 1e-6,
+        name: str | None = None,
     ) -> np.ndarray[int]:
         """Return a list of nodes from a given selection criterion
 
@@ -639,25 +648,37 @@ class Mesh(MeshBase):
             Tolerance of the given criterion. Ignored if selection_criterion
             is an arbitrary expression
 
+        name : str, optional
+            If name is given a node_set is added to the mesh.
+
         Returns
         -------
         List of node index
 
         Notes
-        -----------
-        Aritrary expressions allow the use of "and" and "or" logical operator,
-        parenthesis, and the following compareason operators: ">", "<", "<=", ">=",
-        "==", "!=". The coordinates 'X', 'Y' and 'Z' are available in the expression.
-        In case of arbitrary expression, value and tol parameters are ignored
+        -----
+        Aritrary expressions accept the use of:
+          - node coordinates (at least one): 'X', 'Y', 'Z'
+          - arithmetic operators: +, -, *, **, /
+          - compareason (compulsory): >, <, !=, <=, >=, ==
+          - Logical: and, or, &, |
+          - function: abs(...)
+          - parentheses, numbers
 
         Example
         ---------------
-        Create a one element mesh from a 2d mesh in a 3d space:
+        Create a disk mesh and find nodes from an expression.
 
           >>> import fedoo as fd
           >>> mesh = fd.mesh.disk_mesh()
-          >>> mesh.find_nodes("(X>0.2 and X<0.5) or Y>0.4")
+          >>> mesh.find_nodes("(X**2>0.2 and X<0.5) or abs(Y)>0.4")
         """
+        if name:
+            if isinstance(name, str):
+                indices = self.find_nodes(selection_criterion, value, tol)
+                self.node_sets[name] = indices
+            else:
+                raise (TypeError, "str expected for node set name.")
         assert np.isscalar(tol), "tol should be a scalar"
         nodes = self.nodes
         if selection_criterion in ["X", "Y", "Z"]:
@@ -685,13 +706,7 @@ class Mesh(MeshBase):
             )[0]
         elif isinstance(selection_criterion, str):
             # assume arbitrary expression
-            expr = (
-                selection_criterion.replace("and", "&")
-                .replace("or", "|")
-                .replace(" ", "")
-            )
-
-            return np.where(self._eval_expr(expr))[0]
+            return np.where(self._eval_expr(selection_criterion))[0]
 
         else:
             raise NameError("selection_criterion should be a string'")
@@ -703,6 +718,7 @@ class Mesh(MeshBase):
         tol: float = 1e-6,
         select_by: str = "centers",
         all_nodes: bool = True,
+        name: str | None = None,
     ):
         """Return a list of elements from a given selection criterion
 
@@ -721,15 +737,25 @@ class Mesh(MeshBase):
             - if 'centers'(default), the element is selected if its center verify the criterion.
             - if 'nodes', the element is selected if one node or all its nodes verify the criterion.
               depending of all_nodes.
-        all_nodes: bool, default = True
+        all_nodes : bool, default = True
             Only used if select_by == 'nodes'.
             If True, get elements whose all nodes verify the criterion.
             If False, get elements that have at least 1 node verifying the criterion.
+        name : str, optional
+            If name is given an element_set is added to the mesh.
 
         Returns
         -------
         List of element index
         """
+        if name:
+            if isinstance(name, str):
+                indices = self.find_elements(
+                    selection_criterion, value, tol, select_by, all_nodes
+                )
+                self.element_sets[name] = indices
+            else:
+                raise (TypeError, "str expected for node set name.")
         if select_by == "centers":
             return Mesh(self.element_centers).find_nodes(
                 selection_criterion, value, tol
@@ -741,70 +767,48 @@ class Mesh(MeshBase):
         else:
             raise ValueError("select_by should be in {'centers', 'nodes'}")
 
-    def _eval_expr(self, expr):  # evaluate an expression within the find_nodes method
-        i = i_start = 0
-        logical_op = None
-        while i < len(expr):
-            if expr[i_start] == "(":
-                i_end = expr.find(")")
-                if i_end == -1:
-                    raise NameError("Invalid expression")
-                new_res = self._eval_expr(expr[i_start + 1 : i_end])
-                i_end = i_end + 1  # after ")"
-            elif expr[i_start] in ["X", "Y", "Z"]:
-                i += 1
-                # avialable operators
-                if expr[i : i + 2] == "<=":
-                    test_op = np.ndarray.__le__
-                    i += 2
-                elif expr[i : i + 2] == ">=":
-                    test_op = np.ndarray.__ge__
-                    i += 2
-                elif expr[i : i + 2] == "!=":
-                    test_op = np.ndarray.__ne__
-                    i += 2
-                elif expr[i : i + 2] == "==":
-                    test_op = np.ndarray.__eq__
-                    i += 2
-                elif expr[i : i + 1] == "<":
-                    test_op = np.ndarray.__lt__
-                    i += 1
-                elif expr[i : i + 1] == ">":
-                    test_op = np.ndarray.__gt__
-                    i += 1
-                else:
-                    raise NameError("Invalid expression")
+    def _eval_expr(
+        self, expr, nodes=None
+    ):  # evaluate an expression within the find_nodes method
+        TOKEN_RE = re.compile(
+            r"""
+            \s*(
+                (?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+\-]?\d+)? |   # numbers
+                [XYZ]                                       | # variables
+                abs(?=\s*\()                                | # abs()
+                and|or|&|\|                                 | # logic
+                <=|>=|==|!=|<|>                             | # comparisons
+                \+|\-|\*{1,2}|/                             | # arithmetic
+                \(|\)                                       | # parentheses
+            )
+        """,
+            re.VERBOSE,
+        )
+        tokens = TOKEN_RE.findall(expr)
+        if "".join(tokens).replace(" ", "") != expr.replace(" ", ""):
+            raise ValueError(f"Invalid token in expression: {expr}")
+        # enforce comparison presence
+        if not any(t in {">", "<", "==", "<=", ">=", "!="} for t in tokens):
+            raise ValueError("Expression must contain a comparison (>, <, ==, etc.)")
 
-                test = np.array([expr.find(crd_name, i) for crd_name in ["&", "|"]])
-                if test.max() == -1:
-                    i_end = -1
-                    value = float(expr[i:])
-                else:
-                    if test.min() == -1:
-                        i_end = test.max()
-                    else:
-                        i_end = test.min()
-                    value = float(expr[i:i_end])
+        mapping = {"and": ")&(", "or": ")|(", "&": ")&(", "|": ")|("}
 
-                crd_indices = {"X": 0, "Y": 1, "Z": 2}[expr[i_start]]
-                new_res = test_op(self.nodes[:, crd_indices], value)
-            else:
-                raise NameError("Invalid expression")
-
-            if logical_op is None:
-                res = new_res
-            elif logical_op == "&":
-                res = res & new_res
-            else:  # logical_op == '|'
-                res = res | new_res
-
-            logical_op = expr[i_end]
-            if i_end != -1:
-                i = i_start = i_end + 1
-            else:
-                i = len(expr)
-
-        return res
+        expr_n = "(" + "".join(mapping.get(t, t) for t in tokens) + ")"
+        if nodes is None:
+            nodes = self.nodes
+        env = {
+            "abs": np.abs,
+            "X": nodes[:, 0] if self.nodes.shape[1] >= 1 else None,
+            "Y": nodes[:, 1] if self.nodes.shape[1] >= 2 else None,
+            "Z": nodes[:, 2] if self.nodes.shape[1] >= 3 else None,
+        }
+        try:
+            result = eval(expr_n, {"__builtins__": {}}, env)
+        except Exception as e:
+            raise ValueError(f"Failed to evaluate: {e}")
+        if not (isinstance(result, np.ndarray) and result.dtype == bool):
+            raise ValueError("Expression did not evaluate to a boolean NumPy array.")
+        return result
 
     def get_elements_from_nodes(
         self, node_set: str | list[int], all_nodes: bool = True
@@ -914,9 +918,13 @@ class Mesh(MeshBase):
             name,
         )
 
-    def to_pyvista(self):
+    def to_pyvista(self, include_sets=False):
+        """Wrap the current mesh to a pyvista UnstructuredGrid.
+
+        If include_sets is True (default = False), the node and element sets
+        are included in the pyvista object as field data."""
         if self.ndim != 3:
-            pvmesh = self.as_3d().to_pyvista()
+            pvmesh = self.as_3d().to_pyvista(include_sets)
             pvmesh.field_data["ndim"] = self.ndim
             return pvmesh
         if USE_PYVISTA:
@@ -950,22 +958,37 @@ class Mesh(MeshBase):
             elm[:, 0] = n_elm_nodes  # self.elements.shape[1]
             elm[:, 1:] = self.elements[:, :n_elm_nodes]
 
-            return pv.UnstructuredGrid(
+            pvmesh = pv.UnstructuredGrid(
                 elm.ravel(),
                 np.full(len(elm), cell_type, dtype=int),
                 self.nodes,
             )
+            if include_sets:
+                for nset in self.node_sets:
+                    pvmesh.field_data["_nset_" + nset] = self.node_sets[nset]
+                for eset in self.element_sets:
+                    pvmesh.field_data["_eset_" + eset] = self.element_sets[eset]
+            return pvmesh
         else:
             raise NameError("Pyvista not installed.")
 
-    def save(self, filename: str, binary: bool = True) -> None:
-        """
-        Save the mesh object to file. This function use the save function of the pyvista UnstructuredGrid object
+    def save(
+        self,
+        filename: str,
+        binary: bool = True,
+    ) -> None:
+        """Save the mesh object to file.
+
+        This function use the save function of the pyvista UnstructuredGrid
+        object. If using a 'vtk' format, The node and element sets are saved
+        as field data with a prefix "_nset_" or "_eset_".
 
         Parameters
         ----------
         filename : str
-            Filename of output file including the path. Writer type is inferred from the extension of the filename. If no extension is set, 'vtk' is assumed.
+            Filename of output file including the path. Writer type is
+            inferred from the extension of the filename.
+            If no extension is set, 'vtk' is assumed.
         binary : bool, optional
             If True, write as binary. Otherwise, write as ASCII.
         """
@@ -973,7 +996,7 @@ class Mesh(MeshBase):
         if extension == "":
             filename = filename + ".vtk"
 
-        self.to_pyvista().save(filename, binary=binary)
+        self.to_pyvista(include_sets=True).save(filename, binary=binary)
 
     def plot(self, show_edges: bool = True, **kargs) -> None:
         """Simple plot function using pyvista.
@@ -1473,6 +1496,7 @@ class MultiMesh(Mesh):
         self,
         nodes: np.ndarray[float],
         elements_dict: dict = None,
+        node_sets: dict | None = None,
         ndim: int | None = None,
         name: str = "",
     ) -> None:

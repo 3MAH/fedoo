@@ -479,6 +479,8 @@ class DataSet:
                 mesh_to_show.point_data["Data"] = data
 
             if element_set is not None:
+                if len(element_set) == 0:
+                    return pl
                 if isinstance(element_set, str):
                     element_set = self.mesh.element_sets[element_set]
                 mesh_to_show = mesh_to_show.extract_cells(

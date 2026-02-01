@@ -108,6 +108,10 @@ class PlotDock(QDockWidget):
         title = f"{self._dock_index }: " + str(title)
         super().__init__(title, parent)
         self.data = data
+        self.element_sets = None
+        # visibility_mode to keep track on current_selection for element_sets dialog box
+        #  -> None for show all, "show" or "hide"
+        self.visibility_mode = None
 
         container = QWidget()
 
@@ -169,6 +173,9 @@ class PlotDock(QDockWidget):
                 "clip_origin": None,
                 "clip_normal": None,
                 "clip_invert": False,
+                # Element sets
+                "element_set": None,
+                # "element_set_invert": False,
             }
 
         if hasattr(data, "loaded_iter"):
@@ -255,6 +262,8 @@ class PlotDock(QDockWidget):
             clip_args=self.opts["clip_args"],
             lock_view=lock_view,
             title=self.opts["title_plot"],
+            element_set=self.opts["element_set"],
+            # element_set_invert = self.opts["element_set_invert"],
             cmap=self.opts["cmap"],
         )
 
@@ -288,8 +297,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pol_results_dialog = None
         self._renderer_dialog = None
         self._plot_dialog = None
+        self.element_sets_dialog = None
         self._window_index = 1
         self._picking_target = -1  # internal arg for picking tools. -1 = No target
+        self.window_layout = self._distribute_auto
 
         # if plane_widget or line wiget should be shown in the active dock
         self._plane_widget_enabled = False
@@ -570,6 +581,10 @@ class MainWindow(QtWidgets.QMainWindow):
         plotOverLineAction.triggered.connect(self.open_plot_over_line_dialog)
         tools_menu.addAction(plotOverLineAction)
 
+        element_sets_action = QtWidgets.QAction("Element sets...", self)
+        element_sets_action.triggered.connect(self.open_element_sets_dialog)
+        tools_menu.addAction(element_sets_action)
+
         # --- Menu Windows ---
         windows_menu = menubar.addMenu("Windows")
 
@@ -622,6 +637,7 @@ class MainWindow(QtWidgets.QMainWindow):
             copy_action,
             clipAction,
             plotOverLineAction,
+            element_sets_action,
             view_top_action,
             view_bottom_action,
             view_left_action,
@@ -680,6 +696,7 @@ class MainWindow(QtWidgets.QMainWindow):
             lambda v, d=dock: self._set_active(d) if v else None  # self._hide_dock
         )
         dock.widget().installEventFilter(self)
+        self.window_layout()
         self._update_dock_selector()
         self.update_plot(lock_view=False)
 
@@ -762,6 +779,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.tabifyDockWidget(first, dock)
         self._set_active(active_dock)
         self.active_dock.raise_()
+        self.window_layout = self._distribute_tabified
 
     def _distribute_vertical(self):
         if not self.all_docks:
@@ -771,6 +789,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         for dock in self.all_docks[1:]:
             self.splitDockWidget(self.all_docks[0], dock, Qt.Vertical)
+        self.window_layout = self._distribute_vertical
 
     def _distribute_horizontal(self):
         if not self.all_docks:
@@ -782,6 +801,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Split horizontally for the rest
         for dock in self.all_docks[1:]:
             self.splitDockWidget(self.all_docks[0], dock, Qt.Horizontal)
+        self.window_layout = self._distribute_horizontal
 
     def _distribute_auto(self):
         n = len(self.all_docks)
@@ -822,6 +842,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 #     # Subsequent columns: split horizontally
                 #     self.splitDockWidget(current_row_start, dock, Qt.Horizontal)
                 dock_index += 1
+        self.window_layout = self._distribute_auto
 
     def _toggle_link_views(self, checked):
         if checked:
@@ -859,6 +880,9 @@ class MainWindow(QtWidgets.QMainWindow):
             #     self.plotter.clear_widgets()
         if self._line_widget_enabled and self.active_dock:
             self.plotter.clear_line_widgets()
+        if self.element_sets_dialog:
+            self.element_sets_dialog._stop_picking()
+            self.plotter.remove_actor("_picked_cell")
 
         # save node/element selector current values
         node_selector_ischecked = self.select_node_action.isChecked()
@@ -917,6 +941,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self._rebuild_line_widget()
         if self._clip_dialog:
             self._clip_dialog.update_values()
+        if self.element_sets_dialog:
+            self.element_sets_dialog._refresh_sets_list()
+            if self.active_dock.visibility_mode:
+                if self.active_dock.visibility_mode == "show":
+                    self.element_sets_dialog.current_selection = set(
+                        self.opts["element_set"]
+                    )
+                else:
+                    self.element_sets_dialog.current_selection = (
+                        self.element_sets_dialog.all_elements()
+                        - set(self.opts["element_set"])
+                    )
+            else:
+                self.element_sets_dialog.current_selection = set()
+            self.element_sets_dialog._update_selection_info()
         if self.active_dock in self.all_docks:
             self.dock_selector_combo.setCurrentIndex(
                 self.all_docks.index(self.active_dock)
@@ -1014,9 +1053,21 @@ class MainWindow(QtWidgets.QMainWindow):
             comps = ["0"]
         else:
             if field == "Stress":
-                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ", "vm", "pressure"]
+                comps = [
+                    "XX",
+                    "YY",
+                    "ZZ",
+                    "XY",
+                    "XZ",
+                    "YZ",
+                    "vm",
+                    "pressure",
+                    "I",
+                    "II",
+                    "III",
+                ]
             elif field == "Strain":
-                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ"]
+                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ", "I", "II", "III"]
             elif field == "Disp":
                 if len(data["Disp"]) == 2:
                     comps = ["X", "Y", "norm"]
@@ -1822,6 +1873,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pol_results_dialog.raise_()
         self._pol_results_dialog.activateWindow()
 
+    def open_element_sets_dialog(self):
+        # Hook a menu action or button to open dialog
+        self.element_sets_dialog = ElementVisibilityDialog(parent=self)
+        self.element_sets_dialog.show()
+        self.element_sets_dialog.raise_()
+
     def toggle_fullscreen(self):
         # Hide chrome (optional): menu + toolbars when in fullscreen
         if not (self.isFullScreen()):
@@ -2592,6 +2649,473 @@ class PlotOverLineDialog(QtWidgets.QDialog):
         p2 = tuple(edit.value() for edit in self.p2_edits)
         resolution = int(self.resSpin.value())
         self.plotRequested.emit(p1, p2, resolution)
+
+
+class ElementVisibilityDialog(QtWidgets.QDialog):
+    """
+    Non-modal dialog to manage FEM element visibility and element sets.
+    """
+
+    def __init__(
+        self,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle("Element Visibility & Sets")
+        self.setModal(False)  # non modale
+
+        # self.setWindowModality(Qt.NonModal)
+        # Keep dialog on top if desired
+        # self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        # Don’t delete on close so it keeps state if reopened
+        # self.setAttribute(Qt.WA_DeleteOnClose, False)
+
+        # External references
+        self.mesh = self.parent().active_dock.data.mesh
+
+        # # Track selection and visibility (start fully visible)
+        self.current_selection = set()
+
+        # Build UI
+        self._build_ui()
+
+    def all_elements(self):
+        return set(range(self.parent().data.mesh.n_elements))
+
+    @property
+    def plotter(self):
+        return self.parent().plotter
+
+    @property
+    def visibility_mode(self):
+        return self.parent().active_dock.visibility_mode
+
+    @visibility_mode.setter
+    def visibility_mode(self, value):
+        self.parent().active_dock.visibility_mode = value
+
+    # -------------- UI -----------------
+    def _build_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        splitter = QtWidgets.QSplitter(Qt.Horizontal)
+        main_layout.addWidget(splitter)
+
+        # Left: Element sets management
+        sets_box = QtWidgets.QGroupBox("Element Sets")
+        sets_layout = QVBoxLayout(sets_box)
+
+        self.sets_list = QtWidgets.QListWidget()
+        self._refresh_sets_list()
+        sets_layout.addWidget(self.sets_list)
+
+        btn_row = QtWidgets.QHBoxLayout()
+
+        save_selection_btn = QPushButton("New set from selection")
+        save_selection_btn.clicked.connect(self._save_selection_as_new_set)
+        btn_row.addWidget(save_selection_btn)
+
+        rename_btn = QPushButton("Rename Set…")
+        rename_btn.clicked.connect(self._rename_selected_set)
+        btn_row.addWidget(rename_btn)
+
+        remove_btn = QPushButton("Remove Set")
+        remove_btn.clicked.connect(self._remove_selected_set)
+        btn_row.addWidget(remove_btn)
+
+        # Add the horizontal row to the left panel
+        sets_layout.addLayout(btn_row)
+
+        load_row = QtWidgets.QHBoxLayout()
+
+        load_label = QLabel("Element set → Selection: ")
+        load_label.setMinimumWidth(
+            load_label.fontMetrics().horizontalAdvance("Element set → Selection: ")
+        )
+        load_row.addWidget(load_label)
+
+        # Replace selection
+        load_replace_btn = QPushButton("Replace")
+        load_replace_btn.setToolTip("Replace current selection with the selected set")
+        load_replace_btn.clicked.connect(lambda: self._load_element_set("replace"))
+        load_row.addWidget(load_replace_btn)
+
+        # Add to selection
+        load_add_btn = QPushButton("Add")
+        load_add_btn.setToolTip("Add elements of the selected set to current selection")
+        load_add_btn.clicked.connect(lambda: self._load_element_set("add"))
+        load_row.addWidget(load_add_btn)
+
+        # Remove from selection
+        load_remove_btn = QPushButton("Remove")
+        load_remove_btn.setToolTip(
+            "Remove elements of the selected set from current selection"
+        )
+        load_remove_btn.clicked.connect(lambda: self._load_element_set("remove"))
+        load_row.addWidget(load_remove_btn)
+
+        # Optional: push the buttons to the left and keep consistent spacing
+        load_row.addStretch(1)
+
+        # Add the new row to the left panel
+        sets_layout.addLayout(load_row)
+
+        splitter.addWidget(sets_box)
+
+        # Right: Selection & visibility controls
+        right_box = QtWidgets.QGroupBox("Selection")
+        right_layout = QtWidgets.QVBoxLayout()
+        right_box.setLayout(right_layout)
+
+        # --- Top row: Clear + Invert + Selection info --------------------------------
+        sel_top_row = QtWidgets.QHBoxLayout()
+
+        clear_sel_btn = QPushButton("Clear Selection")
+        clear_sel_btn.setToolTip("Clear the current selection")
+        clear_sel_btn.clicked.connect(self._clear_selection)
+        sel_top_row.addWidget(clear_sel_btn)
+
+        invert_sel_btn = QPushButton("Invert")
+        invert_sel_btn.setToolTip("Invert the current selection")
+        invert_sel_btn.clicked.connect(self._invert_selection)  # implement this method
+        sel_top_row.addWidget(invert_sel_btn)
+
+        sel_top_row.addStretch(1)  # push the label to the right
+
+        self.sel_info_lbl = QLabel("Selection: 0 cells")
+        sel_top_row.addWidget(self.sel_info_lbl)
+
+        right_layout.addLayout(sel_top_row)
+
+        # --- Selection by picking ----------------------------------------------------
+        pick_group = QtWidgets.QGroupBox("Pick on Screen")
+        pick_layout = QtWidgets.QHBoxLayout()
+        pick_group.setLayout(pick_layout)
+
+        self.start_pick_btn = QPushButton("Start Picking")
+        self.start_pick_btn.clicked.connect(self._start_picking)
+        pick_layout.addWidget(self.start_pick_btn)
+
+        self.stop_pick_btn = QPushButton("Stop Picking")
+        self.stop_pick_btn.clicked.connect(self._stop_picking)
+        self.stop_pick_btn.setEnabled(False)
+        pick_layout.addWidget(self.stop_pick_btn)
+
+        right_layout.addWidget(pick_group)
+
+        # --- Selection by expression -------------------------------------------------
+        expr_group = QtWidgets.QGroupBox("Select by test on element positions")
+        expr_form = QtWidgets.QFormLayout()
+        expr_group.setLayout(expr_form)
+
+        self.expr_edit = QtWidgets.QLineEdit()
+        self.expr_edit.setPlaceholderText("X**2 + 5*Y**2 <= 0.5 or abs(X)>0.8")
+        expr_form.addRow(QLabel("Expression:"), self.expr_edit)
+
+        apply_expr_btn = QPushButton("Apply Expression → Selection")
+        apply_expr_btn.clicked.connect(self._apply_expression_to_selection)
+
+        expr_form.addRow(apply_expr_btn)
+
+        self.use_def_mesh = QCheckBox("Use deformed mesh")
+        self.use_def_mesh.setChecked(True)
+        expr_form.addRow(self.use_def_mesh)
+
+        right_layout.addWidget(expr_group)
+
+        # --- Show/Hide selected elements ------------------------
+        vis_group = QtWidgets.QGroupBox("Show/Hide elements")
+        vis_layout = QtWidgets.QHBoxLayout()
+        vis_group.setLayout(vis_layout)
+
+        show_all_btn = QPushButton("Show All")
+        show_all_btn.clicked.connect(lambda: self._apply_visibility("all"))
+        vis_layout.addWidget(show_all_btn)
+
+        add_btn = QPushButton("Show selected")
+        add_btn.clicked.connect(lambda: self._apply_visibility("show"))
+        vis_layout.addWidget(add_btn)
+
+        remove_btn = QPushButton("Hide selected")
+        remove_btn.clicked.connect(lambda: self._apply_visibility("hide"))
+        vis_layout.addWidget(remove_btn)
+
+        right_layout.addWidget(vis_group)
+
+        splitter.addWidget(right_box)
+        splitter.setSizes([300, 500])
+
+        # Info footer
+        self.status_lbl = QLabel("Ready.")
+        main_layout.addWidget(self.status_lbl)
+
+    def update_plot(self):
+        """Rebuild displayed geometry from visible_elements."""
+        self.parent().update_plot()
+
+    # -------------- Element sets UI helpers -------------
+    def _refresh_sets_list(self):
+        if self.element_sets is None:
+            element_sets = {
+                "All": None,  # or set(range(self.mesh.n_cells))
+                # add your pre-defined sets...
+            }
+            element_sets.update(self.parent().data.mesh.element_sets)
+            self.parent().active_dock.element_sets = element_sets
+        self.sets_list.clear()
+        for name in sorted(self.element_sets.keys()):
+            if self.element_sets[name]:
+                n_elements = len(self.element_sets[name])
+            else:
+                n_elements = self.parent().data.mesh.n_elements
+            item = QtWidgets.QListWidgetItem(f"{name} ({n_elements} elements)")
+            item.setData(Qt.UserRole, name)
+            self.sets_list.addItem(item)
+
+    def _selected_set_name(self):
+        item = self.sets_list.currentItem()
+        return item.data(Qt.UserRole) if item else None
+
+    def update_selection(self, selection, check_modifiers=False):
+        if check_modifiers:
+            # Check modifier keys
+            mods = QtWidgets.QApplication.keyboardModifiers()
+            ctrl_down = bool(mods & Qt.ControlModifier)
+            shift_down = bool(mods & Qt.ShiftModifier)
+
+            if shift_down:
+                self.current_selection -= selection
+            elif ctrl_down:
+                self.current_selection |= selection
+            else:
+                self.current_selection = selection
+
+        self.plotter.remove_actor("_picked_cell")
+        if self.visibility_mode:
+            if self.visibility_mode == "show":
+                # show selection
+                self.visible_elements = list(self.current_selection)
+            elif self.visibility_mode == "hide":
+                # hide selection
+                self.visible_elements = list(
+                    self.all_elements() - self.current_selection
+                )
+            self.update_plot()
+        else:
+            pvmesh = self.parent().active_dock.pv_mesh
+            if self.current_selection:
+                cell = pvmesh.extract_cells(list(self.current_selection))
+                self.plotter.remove_actor("_picked_cell")
+                self.plotter.add_mesh(
+                    cell, style="wireframe", color="pink", name="_picked_cell"
+                )
+        self._update_selection_info()
+
+        # self.status_lbl.setText(f"Selection updated -> {len(self.current_selection)} elements)")
+
+    # -------------- Picking integration -----------------
+    def _start_picking(self):
+        def _on_rectangle(rect_selection):
+            # rect_selection.frustum is a vtkPlanes; rect_selection.viewport is the 2D rectangle.
+            planes = rect_selection.frustum  # vtkPlanes (camera frustum through the drawn rectangle)  [1](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.enable_rectangle_picking)
+
+            # Compute cell-centers once; cache if your mesh is large
+            pvmesh = self.parent().active_dock.pv_mesh
+            centers = pvmesh.cell_centers().points  # (N,3)
+
+            f = planes.EvaluateFunction  # C++ method: <=0 means "inside" the convex volume. [2](https://vtk.org/doc/nightly/html/classvtkExtractSelectedFrustum.html)
+            inside_mask = np.fromiter(
+                (f(x, y, z) <= 0.0 for x, y, z in centers),
+                count=pvmesh.n_cells,
+                dtype=bool,
+            )
+            picked_ids = np.nonzero(inside_mask)[0].astype(int)
+            if "vtkOriginalCellIds" in pvmesh.cell_data:
+                picked_ids = pvmesh.cell_data["vtkOriginalCellIds"][picked_ids]
+
+            picked_ids = set(picked_ids)
+
+            self.status_lbl.setText(
+                f"{len(self.current_selection)} elements) selected from rectangle."
+            )
+            self.update_selection(picked_ids, True)
+
+        self.plotter.enable_rectangle_picking(
+            callback=_on_rectangle,
+            start=True,  # start immediately
+        )
+
+        self.start_pick_btn.setEnabled(False)
+        self.stop_pick_btn.setEnabled(True)
+        self.status_lbl.setText("Picking enabled: click cells to add to selection.")
+        # except Exception as e:
+        #     QtWidgets.QMessageBox.warning(self, "Picking error", f"Failed to enable picking:\n{e}")
+
+    def _stop_picking(self):
+        try:
+            self.plotter.disable_picking()
+            self.start_pick_btn.setEnabled(True)
+            self.stop_pick_btn.setEnabled(False)
+            self.status_lbl.setText("Picking disabled.")
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Picking error", f"Failed to disable picking:\n{e}"
+            )
+
+    def _clear_selection(self):
+        self.current_selection.clear()
+        self.update_selection(set())
+
+    def _invert_selection(self):
+        self.current_selection = self.all_elements() - self.current_selection
+        self.update_selection(self.current_selection)
+
+    def _update_selection_info(self):
+        self.sel_info_lbl.setText(f"Selection: {len(self.current_selection)} cells")
+
+    # -------------- Expression selection ----------------
+    def _apply_expression_to_selection(self):
+        expr = self.expr_edit.text().strip()
+        if not expr:
+            QtWidgets.QMessageBox.information(
+                self, "No expression", "Please enter an expression."
+            )
+            return
+        # try:
+        data = self.parent().data
+        if "Disp" in data.node_data and self.use_def_mesh.isChecked():
+            mesh = data.mesh.copy()
+            mesh.nodes = mesh.nodes + data.node_data["Disp"].T
+        else:
+            mesh = data.mesh
+        ids = set(mesh.find_elements(expr))
+        # Clamp to valid ids
+        self.current_selection = ids
+        self.update_selection(ids)
+        self.status_lbl.setText(f"Selection set from expression ({len(ids)} cells).")
+        # except Exception as e:
+        #     QtWidgets.QMessageBox.warning(self, "Expression error", f"Failed to parse:\n{e}")
+
+    @property
+    def visible_elements(self):
+        return self.parent().opts["element_set"]
+
+    @visible_elements.setter
+    def visible_elements(self, value):
+        self.parent().opts["element_set"] = value
+
+    @property
+    def element_sets(self):
+        return self.parent().active_dock.element_sets
+
+    # -------------- Visibility operations ----------------
+
+    def _load_element_set(self, mode: str):
+        if mode not in {"add", "remove", "replace"}:
+            return
+        name = self._selected_set_name()
+        if not name:
+            QtWidgets.QMessageBox.information(
+                self, "No set selected", "Please select a set to rename."
+            )
+            return
+
+        element_set = self.element_sets[name]
+        if element_set is None:
+            element_set = self.all_elements()
+        else:
+            element_set = set(element_set)
+
+        if mode == "add":
+            self.current_selection |= element_set
+        elif mode == "remove":
+            self.current_selection -= element_set
+        elif mode == "replace":
+            self.current_selection = element_set
+
+        self.update_selection(element_set)
+        self.status_lbl.setText(
+            f"Element set loaded with {len(self.current_selection)} elements"
+        )
+
+    def _apply_visibility(self, mode: str):
+        if mode not in {"all", "show", "hide"}:
+            return
+        self.visibility_mode = mode
+        if mode == "all":
+            self.visible_elements = None
+            self.visibility_mode = None
+            self.status_lbl.setText("All elements visible.")
+        elif mode == "show":
+            self.visible_elements = list(self.current_selection)
+            self.status_lbl.setText("Show selected elements.")
+        elif mode == "hide":
+            self.visible_elements = list(self.all_elements() - self.current_selection)
+            self.status_lbl.setText("Hide selected elements.")
+
+        self.update_plot()
+
+    def _inverse_visible(self):
+        self.visible_elements = list(self.all_elements() - set(self.visible_elements))
+        self.update_plot()
+        self.status_lbl.setText(
+            f"Visibility inverted. Visible={len(self.visible_elements)}"
+        )
+
+    # -------------- Element set management ----------------
+    def _rename_selected_set(self):
+        name = self._selected_set_name()
+        if not name:
+            QtWidgets.QMessageBox.information(
+                self, "No set selected", "Please select a set to rename."
+            )
+            return
+        new_name, ok = QtWidgets.QInputDialog.getText(
+            self, "Rename Set", f"New name for '{name}':", text=name
+        )
+        if not ok or not new_name.strip():
+            return
+        new_name = new_name.strip()
+        if new_name in self.element_sets and new_name != name:
+            QtWidgets.QMessageBox.warning(
+                self, "Name exists", f"A set named '{new_name}' already exists."
+            )
+            return
+        self.element_sets[new_name] = self.element_sets.pop(name)
+        self._refresh_sets_list()
+        self.status_lbl.setText(f"Renamed set '{name}' → '{new_name}'")
+
+    def _remove_selected_set(self):
+        name = self._selected_set_name()
+        if not name:
+            QtWidgets.QMessageBox.information(
+                self, "No set selected", "Please select a set to rename."
+            )
+            return
+        del self.element_sets[name]
+        self._refresh_sets_list()
+        self.status_lbl.setText(f"Set '{name}' removed")
+
+    def _save_selection_as_new_set(self):
+        new_name, ok = QtWidgets.QInputDialog.getText(
+            self, "Save Selection as Set", "Set name:"
+        )
+        if not ok or not new_name.strip():
+            return
+        new_name = new_name.strip()
+        if new_name in self.element_sets:
+            QtWidgets.QMessageBox.warning(
+                self, "Name exists", f"A set named '{new_name}' already exists."
+            )
+            return
+        if self.current_selection:
+            self.element_sets[new_name] = list(self.current_selection)
+        else:
+            QtWidgets.QMessageBox.warning("Empty selection.")
+            return
+        self._refresh_sets_list()
+        # self._refresh_sets_combo()
+        self.status_lbl.setText(f"Saved selection as set '{new_name}'")
 
 
 class MplLinePlotDialog(QtWidgets.QDialog):
