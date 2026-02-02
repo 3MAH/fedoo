@@ -84,11 +84,10 @@ if not (os.path.isdir("results")):
 results = pb.add_output(
     res_dir + filename,
     "Assembling",
-    ["Disp", "Stress", "Strain", "Statev", "Wm", "Fext"],
+    ["Disp", "Stress", "Strain", "Statev", "Wm", "Fext", "RigidDisp", "RigidRot"],
 )
 
 pb.bc.add(fd.constraint.RigidTie(right))
-
 # pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
 # pb.bc.add('Dirichlet','DispY', 0,nodes_top)
 # pb.bc.add('Dirichlet','DispZ', 0,nodes_top)

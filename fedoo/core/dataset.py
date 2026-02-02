@@ -635,8 +635,7 @@ class DataSet:
         return pl
 
     def get_data(self, field, component=None, data_type=None, return_data_type=False):
-        """
-        Retrieve data from the DataSet for a given field.
+        """Retrieve data from the DataSet for a given field.
 
         This method is equivalent to the `DataSet.__getitem__` magic method.
         One may prefer to use the shorthand syntax:
@@ -890,7 +889,7 @@ class DataSet:
         self.node_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "nd"}
         self.element_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "el"}
         self.gausspoint_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "gp"}
-        self.scalar_data = {k[:-3]: v.item() for k, v in data.items() if k[-2:] == "sc"}
+        self.scalar_data = {k[:-3]: v if np.size(v)>1 else v.item() for k, v in data.items() if k[-2:] == "sc"}
         # self.scalar_data = {k[:-3]:v for k,v in data.items() if k[-2:] == 'sc'}
 
     def to_pandas(self) -> pandas.DataFrame:
@@ -1012,7 +1011,7 @@ class DataSet:
                 pv_data.cell_data[key] = val.T
 
             for key, val in self.scalar_data.items():
-                pv_data.field_data[key] = val
+                pv_data.field_data[key] = np.array(val)
 
             if gp_data_to_node:
                 for key in self.gausspoint_data:
@@ -1400,40 +1399,140 @@ class MultiFrameDataSet(DataSet):
         pl.close()
         self.meshplot = None
 
-    def get_history(self, list_fields, list_indices=None, **kargs):
-        data_type = kargs.pop("data_type", None)
-        component = kargs.pop("component", 0)
+    def get_history(self, field, indices=None, component=None, data_type="Node"):
+        """Retrieve history data from the MultiFrameDataSet.
 
-        if isinstance(list_fields, str):
-            list_fields = [list_fields]
-            list_indices = [list_indices]
+        This method load every iteration and save the requested data
+        in array(s).
+
+        Parameters
+        ----------
+        field : str or list[str]
+            Name(s) of the data field(s) to retrieve. If a list of str is given
+            the function return a dict whose keys are each requested fields.
+            If field is a str, only the requested field array is returned.
+        indices : int, list[int], list[list[int]] optional
+            The node/elements/gauss point indice(s) over which the solution is
+            extracted.
+            indices as list or array of int is interpreted as set of indices.
+            To specify  different list of indices for each field, a list of 
+            list of int should be provided.
+        component : int, str, None or list[int|str|None], optional
+            Index or label of the component to extract if the data is
+            multi-dimensional.
+            If None, all components are returned.
+        data_type : str, None or list[str|None], default = "Node"
+            Desired data type to convert to. Can be one of 'Node', 'Element',
+            or 'GaussPoint'. If None, the original data type is preserved.
+            A list may be given to use different data type for many fields.
+
+        Returns
+        -------
+        history_data : dict or array
+            If multiple data fields are requested, a dict whose keys are the
+            field names is returned.
+            The returned arrays shape = (nb iterations, [nb_indices], [nb_comp])
+            If only one indice or component are extracted, the coresponding
+            dimensions are removed.
+
+        Notes
+        -----
+        This method may be costly, because it needed to load every iterations
+        in memory. It is generaly more efficient to extract several fields in
+        a single operation than to extract one field many times.
+        """
+        if isinstance(field, str):
+            list_fields = [field]
+            list_indices = [indices]
+            component = [component]
+            data_type = [data_type]
+            return_dict = False
         else:
-            if list_indices is None:
-                list_indices = [None for field in list_fields]
+            list_fields = field
+            return_dict = True
+            # if needed, convert indices, component and data_type to list 
+            if np.isscalar(indices) or indices is None or np.isscalar(indices[0]):
+                list_indices = [indices for f in list_fields]
+            else: 
+                list_indices = indices
+            if component is None or np.isscalar(component) or isinstance(component, str):
+                component = [component for f in list_fields]
+            if data_type is None or isinstance(data_type, str):
+                data_type = [data_type for f in list_fields]
 
-        history = [[] for field in list_fields]
+        history = [[] for f in list_fields]
         for it in range(self.n_iter):
             self.load(it)
             for i, field in enumerate(list_fields):
-                data = self.get_data(field, component, data_type)
-                if list_indices[i] is None or np.isscalar(data):
+                data = self.get_data(field, component[i], data_type[i])
+                if list_indices[i] is None or np.isscalar(data):  # modify for allowing scalar_data
                     history[i].append(data)
                 else:
-                    history[i].append(data[list_indices[i]])
+                    history[i].append(data[...,list_indices[i]])
 
-        return tuple(np.array(field_hist) for field_hist in history)
+        if return_dict:
+            return {field:np.array(field_hist) for field,field_hist in zip(list_fields, history)}
+        else:
+            return np.array(history[0])
 
     def plot_history(
         self,
         field: str,
-        indice: int,
-        data_type: str | None = None,
+        indices: int | list[int],
         component: int | str = 0,
+        data_type: str | None = "Node",
+        show_legend: bool = True,
         **kargs,
     ) -> None:
+        """Plot history data from the MultiFrameDataSet.
+
+        Parameters
+        ----------
+        field : str
+            Name of the data field to plot.
+        indices : int, list[int]
+            The node/elements/gauss point indice(s) over which the solution is
+            extracted.
+            If several indices as given, data extrated from each node/cell
+            indices are plot on the same graph.
+        component : int, str, None, optional
+            Index or label of the component to extract if the data is
+            multi-dimensional. If None, all components are ploted on
+            the same graph.
+        data_type : str, None, default = "Node"
+            Desired data type to convert to. Can be one of 'Node', 'Element',
+            or 'GaussPoint'. If None, the original data type is preserved.            
+        show_legend : bool, default = True
+            Whereas the legend should be plotted.
+            
+        Notes
+        -----
+        The GaussPoint indices are arange in gausspoint major ordering. For
+        instance, if n_elements = 3 and n_gp = 2 the stored values are:
+        [elem0_gp0, elem1_gp0, elem2_gp0, elem0_gp1, elem1_gp1, elem2_gp1]
+        """
         if USE_MPL:
-            t, data = self.get_history(["Time", field], [None, indice])
-            plt.plot(t, data)
+            data = self.get_history(["Time", field], [None, indices], [None, component], data_type)
+            # if data[field].ndim>2:
+            ydata = data[field].reshape(data[field].shape[0], -1)
+            plt.plot(data['Time'],ydata)
+            if show_legend:
+                if ydata.shape[1] >1:
+                    if data_type is None:
+                        _, data_type = self.get_data(field, return_data_type=True)
+                    if data[field].ndim==2:
+                        if np.size(indices)>1:
+                            legend = [f'{data_type} {ind}' for ind in indices]
+                        else:
+                            legend = [f"{field}_{comp}" for comp in range(data[field].shape[1])]
+                    else: 
+                        legend = [f'{field}_{comp} at {data_type} {ind}' for comp in range(data[field].shape[1]) for ind in indices]
+    
+                    plt.gca().legend(legend)
+                    plt.xlabel('Time')
+                    plt.ylabel(field)
+            # else:
+                # plt.plot(data['Time'], data[field])
         else:
             raise NameError("Matplotlib should be installed to plot the data history")
 

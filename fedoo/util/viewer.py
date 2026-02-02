@@ -280,6 +280,7 @@ class PlotDock(QDockWidget):
         self.parent().all_docks.remove(self)
         self.parent()._update_dock_selector()
         if self.parent().active_dock is None:
+            self.parent().field_combo.clear()
             for action in self.parent().actions_requiring_data:
                 action.setEnabled(False)
         super().closeEvent(event)
@@ -584,6 +585,12 @@ class MainWindow(QtWidgets.QMainWindow):
         element_sets_action = QtWidgets.QAction("Element sets...", self)
         element_sets_action.triggered.connect(self.open_element_sets_dialog)
         tools_menu.addAction(element_sets_action)
+
+        # --- History Plot Dialog ---
+        history_plot_action = QtWidgets.QAction("History plot...", self)
+        history_plot_action.triggered.connect(self.open_history_plot_dialog)
+        tools_menu.addAction(history_plot_action)
+        self._history_plot_dialog = None
 
         # --- Menu Windows ---
         windows_menu = menubar.addMenu("Windows")
@@ -1040,14 +1047,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_field_changed(self, field):
         self.update_components(field)
-        self.update_plot_with_clim(lock_view=True)
+        if self.active_dock:
+            self.update_plot_with_clim(lock_view=True)
 
-    def update_components(self, field):
-        if field == "" or not self.active_dock or not field:
+    def get_components(self, field):
+        if field == "":
             return [""]
-
         data = self.data
-        self.active_dock.current_field = field
+        if np.isscalar(data[field]):
+            return []
 
         if data[field].ndim == 1:
             comps = ["0"]
@@ -1075,6 +1083,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     comps = ["X", "Y", "Z", "norm"]
             else:
                 comps = [str(i) for i in range(data[field].shape[0])]
+
+        return comps
+        
+        
+    def update_components(self, field):
+        if not field or not self.active_dock:
+            comps = [""]
+        else:
+            comps = self.get_components(field)
+            self.active_dock.current_field = field
 
         blocker = QSignalBlocker(self.comp_combo)
         self.comp_combo.clear()
@@ -1878,6 +1896,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.element_sets_dialog = ElementVisibilityDialog(parent=self)
         self.element_sets_dialog.show()
         self.element_sets_dialog.raise_()
+
+    def open_history_plot_dialog(self):
+        if self._history_plot_dialog is None:
+            self._history_plot_dialog = HistoryPlotDialog(self)
+        self._history_plot_dialog.show()
+        self._history_plot_dialog.raise_()
+        self._history_plot_dialog.activateWindow()
 
     def toggle_fullscreen(self):
         # Hide chrome (optional): menu + toolbars when in fullscreen
@@ -3190,6 +3215,190 @@ class MplLinePlotDialog(QtWidgets.QDialog):
     #         # Choose DPI depending on format (optional)
     #         dpi = 150 if path.lower().endswith(".png") else None
     #         self.figure.savefig(path, dpi=dpi, bbox_inches="tight")
+
+
+# --- New Dialog for History Plot ---
+class HistoryPlotDialog(QtWidgets.QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("History Plot")
+        self.setModal(False)
+        self.resize(500, 400)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # --- QLineEdit for field_component filter ---
+        self.filter_edit = QtWidgets.QLineEdit()
+        self.filter_edit.setPlaceholderText("Type field_component (e.g. Stress_XY) or field for all components...")
+        layout.addWidget(self.filter_edit)
+
+        # Controls for field, component, data type, id
+        form_layout = QtWidgets.QFormLayout()
+        self.field_combo = QtWidgets.QComboBox()
+        self.comp_combo = QtWidgets.QComboBox()
+        self.data_type_combo = QtWidgets.QComboBox()
+        self.data_type_combo.addItems(["Node", "GaussPoint", "Element"])
+        self.id_spin = QtWidgets.QSpinBox()
+        self.id_spin.setMinimum(0)
+
+        form_layout.addRow("Field:", self.field_combo)
+        form_layout.addRow("Component:", self.comp_combo)
+        form_layout.addRow("Data type:", self.data_type_combo)
+        form_layout.addRow("Cell/Node ID:", self.id_spin)
+
+        layout.addLayout(form_layout)
+
+        # Axis selection
+        axis_layout = QtWidgets.QHBoxLayout()
+        self.x_axis_btn = QtWidgets.QPushButton("Set as X axis")
+        self.y_axis_btn = QtWidgets.QPushButton("Set as Y axis")
+        axis_layout.addWidget(self.x_axis_btn)
+        axis_layout.addWidget(self.y_axis_btn)
+        layout.addLayout(axis_layout)
+
+        # Button to plot
+        self.plot_btn = QtWidgets.QPushButton("Plot History")
+        layout.addWidget(self.plot_btn)
+
+        # Matplotlib Figure
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+        layout.addWidget(self.canvas)
+
+        # Internal state for axis selection
+        self.x_data = None
+        self.y_data = None
+
+        # Autocomplete setup
+        self.completion_model = QtGui.QStandardItemModel()
+        self.completer = QtWidgets.QCompleter(self.completion_model, self)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.filter_edit.setCompleter(self.completer)
+
+        # Connect signals
+        self.plot_btn.clicked.connect(self.plot_history)
+        self.x_axis_btn.clicked.connect(self.set_x_axis)
+        self.y_axis_btn.clicked.connect(self.set_y_axis)
+        self.field_combo.currentTextChanged.connect(self.update_components)
+        self.filter_edit.textChanged.connect(self.on_filter_edit)
+        self.comp_combo.currentTextChanged.connect(self.on_comp_combo_changed)
+
+        # Populate combos from parent data
+        self.parent = parent
+        self.update_fields()
+
+    def update_fields(self):
+        data = getattr(self.parent, "data", None)
+        if data is not None:
+            self.field_combo.clear()
+            self.field_combo.addItems(data.field_names())
+            self.field_combo.addItems(data.scalar_data.keys())
+            self.update_components(self.field_combo.currentText())
+            self.update_completer()
+
+    def update_components(self, field):
+        data = getattr(self.parent, "data", None)
+        self.comp_combo.blockSignals(True)
+        self.comp_combo.clear()
+        if not field or data is None:
+            self.comp_combo.blockSignals(False)
+            return
+        # Use get_components from parent
+        comps = []
+        if hasattr(self.parent, "get_components"):
+            comps = self.parent.get_components(field)
+        if comps:
+            self.comp_combo.addItems(comps)
+            self.comp_combo.addItem("All components")
+        else:
+            self.comp_combo.addItem("0")
+            self.comp_combo.addItem("All components")
+        self.comp_combo.blockSignals(False)
+
+    def update_completer(self):
+        # Build list of field_component strings for autocompletion
+        data = getattr(self.parent, "data", None)
+        items = []
+        if data is not None:
+            for field in data.field_names():
+                items.append(field)  # for 'All components'
+                comps = []
+                if hasattr(self.parent, "get_components"):
+                    comps = self.parent.get_components(field)
+                if comps:
+                    for comp in comps:
+                        items.append(f"{field}_{comp}")
+            for scalar in data.scalar_data:
+                items.append(scalar)
+                
+        self.completion_model.clear()
+        for item in items:
+            self.completion_model.appendRow(QtGui.QStandardItem(item))
+
+    def on_filter_edit(self, text):
+        # Parse text like 'Stress_XY' or 'Stress'
+        if "_" in text:
+            field, comp = text.split("_", 1)
+        else:
+            field, comp = text, "All components"
+        idx_field = self.field_combo.findText(field, Qt.MatchFixedString)
+        if idx_field >= 0:
+            self.field_combo.setCurrentIndex(idx_field)
+            self.update_components(field)
+            idx_comp = self.comp_combo.findText(comp, Qt.MatchFixedString)
+            if idx_comp >= 0:
+                self.comp_combo.setCurrentIndex(idx_comp)
+        # Optionally, update filter_edit if combo changes
+
+    def on_comp_combo_changed(self, comp):
+        # If 'All components' selected, update filter_edit to just field
+        if comp == "All components":
+            self.filter_edit.setText(self.field_combo.currentText())
+        else:
+            self.filter_edit.setText(f"{self.field_combo.currentText()}_{comp}")
+
+    def set_x_axis(self):
+        self.x_data = self.extract_history()
+
+    def set_y_axis(self):
+        self.y_data = self.extract_history()
+
+
+    def extract_history(self):
+        data = getattr(self.parent, "data", None)
+        if data is None:
+            return None
+        field = self.field_combo.currentText()
+        comp_text = self.comp_combo.currentText()
+        data_type = self.data_type_combo.currentText()
+        id_val = self.id_spin.value()
+        # If 'All components', pass None or special value
+        if comp_text == "All components":
+            comp = None
+        else:
+            try:
+                comp = int(comp_text) if comp_text.isdigit() else comp_text
+            except Exception:
+                comp = comp_text
+        # MultiFrameDataSet method assumed: get_history(field, component, data_type, id)
+        if hasattr(data, "get_history"):
+            return data.get_history(field, id_val, comp, data_type)
+        return None
+
+    def plot_history(self):
+        # If only y_data, use iteration as x
+        if self.y_data is None:
+            self.y_data = self.extract_history()
+        if self.x_data is None:
+            self.x_data = list(range(len(self.y_data))) if self.y_data is not None else []
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        ax.plot(self.x_data, self.y_data, marker="o")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_title("History Evolution")
+        self.canvas.draw()
 
 
 def normalize(v):

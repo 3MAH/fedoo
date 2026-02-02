@@ -68,8 +68,12 @@ Vnorm = np.linalg.norm(res.node_data["V"], axis=0)
 
 pl = res.plot("V", component="norm", show=False)
 
+# pl.mesh["vectors"] = np.c_[
+#     res["V"][:, : mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)
+# ]
+
 pl.mesh["vectors"] = np.c_[
-    res["V"][:, : mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)
+    res["V"][:, : mesh.n_nodes].T, np.zeros(mesh.n_nodes)
 ]
 
 line_streamlines = pl.mesh.streamlines(
