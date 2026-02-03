@@ -72,9 +72,7 @@ pl = res.plot("V", component="norm", show=False)
 #     res["V"][:, : mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)
 # ]
 
-pl.mesh["vectors"] = np.c_[
-    res["V"][:, : mesh.n_nodes].T, np.zeros(mesh.n_nodes)
-]
+pl.mesh["vectors"] = np.c_[res["V"][:, : mesh.n_nodes].T, np.zeros(mesh.n_nodes)]
 
 line_streamlines = pl.mesh.streamlines(
     "vectors",

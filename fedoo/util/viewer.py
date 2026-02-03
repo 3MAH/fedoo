@@ -645,6 +645,7 @@ class MainWindow(QtWidgets.QMainWindow):
             clipAction,
             plotOverLineAction,
             element_sets_action,
+            history_plot_action,
             view_top_action,
             view_bottom_action,
             view_left_action,
@@ -887,9 +888,15 @@ class MainWindow(QtWidgets.QMainWindow):
             #     self.plotter.clear_widgets()
         if self._line_widget_enabled and self.active_dock:
             self.plotter.clear_line_widgets()
+        if self.active_dock:
+            self.plotter.remove_actor("_picked_cell")  # if picked cell mesh exist
+            self.plotter.disable_picking()
         if self.element_sets_dialog:
             self.element_sets_dialog._stop_picking()
-            self.plotter.remove_actor("_picked_cell")
+        if self._history_plot_dialog:
+            if getattr(self, "_lbp_tag", None) is not None:
+                self.plotter.interactor.RemoveObserver(self._lbp_tag)
+                self._lbp_tag = None
 
         # save node/element selector current values
         node_selector_ischecked = self.select_node_action.isChecked()
@@ -963,6 +970,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.element_sets_dialog.current_selection = set()
             self.element_sets_dialog._update_selection_info()
+        if self._history_plot_dialog:
+            self._history_plot_dialog._on_change_active()
         if self.active_dock in self.all_docks:
             self.dock_selector_combo.setCurrentIndex(
                 self.all_docks.index(self.active_dock)
@@ -1085,8 +1094,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 comps = [str(i) for i in range(data[field].shape[0])]
 
         return comps
-        
-        
+
     def update_components(self, field):
         if not field or not self.active_dock:
             comps = [""]
@@ -1825,15 +1833,24 @@ class MainWindow(QtWidgets.QMainWindow):
             cell_id = picker.GetCellId()
             if cell_id < 0:
                 return
-
             mesh = self.active_dock.pv_mesh
-            cell = mesh.extract_cells(cell_id)
+            if "vtkOriginalCellIds" in mesh.cell_data:
+                save_original_cell_ids = mesh.cell_data["vtkOriginalCellIds"]
+                cell = mesh.extract_cells(cell_id)
+                mesh.cell_data["vtkOriginalCellIds"] = save_original_cell_ids
+            else:
+                cell = mesh.extract_cells(cell_id)
             self.plotter.remove_actor("_picked_cell")
-            self.plotter.add_mesh(cell, color="yellow", name="_picked_cell")
+            self.plotter.add_mesh(
+                cell, style="wireframe", color="pink", name="_picked_cell"
+            )
 
             if self.opts["clip_args"]:
                 # retrieve true cell ids
                 cell_id = mesh.cell_data["cell_ids"][cell_id]
+            elif "vtkOriginalCellIds" in mesh.cell_data:
+                # don't work !!!!
+                cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
 
             if mesh is not None and cell_id is not None:
                 msg = f"Element id={cell_id} | "
@@ -2965,6 +2982,7 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
             )
             self.update_selection(picked_ids, True)
 
+        self.plotter.disable_picking()
         self.plotter.enable_rectangle_picking(
             callback=_on_rectangle,
             start=True,  # start immediately
@@ -2978,6 +2996,7 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
     def _stop_picking(self):
         try:
+            self.plotter.enable_trackball_style()
             self.plotter.disable_picking()
             self.start_pick_btn.setEnabled(True)
             self.stop_pick_btn.setEnabled(False)
@@ -3142,6 +3161,10 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         # self._refresh_sets_combo()
         self.status_lbl.setText(f"Saved selection as set '{new_name}'")
 
+    def closeEvent(self, event):
+        self._stop_picking()
+        super().closeEvent(event)
+
 
 class MplLinePlotDialog(QtWidgets.QDialog):
     """Modeless dialog embedding a Matplotlib figure to show plot_over_line results."""
@@ -3218,19 +3241,27 @@ class MplLinePlotDialog(QtWidgets.QDialog):
 
 
 # --- New Dialog for History Plot ---
+
+
 class HistoryPlotDialog(QtWidgets.QDialog):
+    """
+    Dialog for selecting and configuring history plot parameters.
+    Opens the plot in a new modeless Matplotlib window (like MplLinePlotDialog) when plotting.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("History Plot")
         self.setModal(False)
-        self.resize(500, 400)
+        self.resize(600, 500)
 
         layout = QtWidgets.QVBoxLayout(self)
 
         # --- QLineEdit for field_component filter ---
         self.filter_edit = QtWidgets.QLineEdit()
-        self.filter_edit.setPlaceholderText("Type field_component (e.g. Stress_XY) or field for all components...")
+        self.filter_edit.setPlaceholderText(
+            "Type field_component (e.g. Stress_XY) or field for all components..."
+        )
         layout.addWidget(self.filter_edit)
 
         # Controls for field, component, data type, id
@@ -3241,34 +3272,69 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         self.data_type_combo.addItems(["Node", "GaussPoint", "Element"])
         self.id_spin = QtWidgets.QSpinBox()
         self.id_spin.setMinimum(0)
+        self.id_spin.setMaximum(parent.active_dock.data.mesh.n_nodes)
+
+        # Mesh pick button
+        self.pick_mesh_btn = QtWidgets.QPushButton("Pick from mesh")
 
         form_layout.addRow("Field:", self.field_combo)
         form_layout.addRow("Component:", self.comp_combo)
         form_layout.addRow("Data type:", self.data_type_combo)
-        form_layout.addRow("Cell/Node ID:", self.id_spin)
+        # Put id_spin and pick_mesh_btn on the same row
+        id_row = QtWidgets.QHBoxLayout()
+        id_row.addWidget(self.id_spin)
+        id_row.addWidget(self.pick_mesh_btn)
+        form_layout.addRow("Cell/Node ID:", id_row)
 
         layout.addLayout(form_layout)
 
         # Axis selection
+
         axis_layout = QtWidgets.QHBoxLayout()
         self.x_axis_btn = QtWidgets.QPushButton("Set as X axis")
-        self.y_axis_btn = QtWidgets.QPushButton("Set as Y axis")
         axis_layout.addWidget(self.x_axis_btn)
-        axis_layout.addWidget(self.y_axis_btn)
         layout.addLayout(axis_layout)
+
+        # Add Y data button below X axis
+        self.add_y_btn = QtWidgets.QPushButton("Add Y data")
+        layout.addWidget(self.add_y_btn)
+
+        # --- X info zone ---
+        self.x_info = QtWidgets.QTextEdit()
+        self.x_info.setReadOnly(True)
+        self.x_info.setMaximumHeight(40)
+        layout.addWidget(QtWidgets.QLabel("Current X data:"))
+        layout.addWidget(self.x_info)
+
+        # --- Y data table ---
+        y_table_layout = QtWidgets.QHBoxLayout()
+        self.y_table = QtWidgets.QTableWidget(0, 5)
+        self.y_table.setHorizontalHeaderLabels(
+            ["Field", "Component", "Data type", "ID", "Label"]
+        )
+        self.y_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.y_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.y_table.setMaximumHeight(120)
+        y_table_layout.addWidget(self.y_table)
+        # Add/Remove buttons
+        y_btns = QtWidgets.QVBoxLayout()
+        self.remove_y_btn = QtWidgets.QPushButton("Remove selected")
+        self.modify_y_btn = QtWidgets.QPushButton("Modify selected")
+        self.modify_y_btn.setEnabled(False)
+        y_btns.addWidget(self.remove_y_btn)
+        y_btns.addWidget(self.modify_y_btn)
+        y_btns.addStretch(1)
+        y_table_layout.addLayout(y_btns)
+        layout.addWidget(QtWidgets.QLabel("Y data to plot (multiple allowed):"))
+        layout.addLayout(y_table_layout)
 
         # Button to plot
         self.plot_btn = QtWidgets.QPushButton("Plot History")
         layout.addWidget(self.plot_btn)
 
-        # Matplotlib Figure
-        self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
-
         # Internal state for axis selection
-        self.x_data = None
-        self.y_data = None
+        self.x_data_info = None  # tuple: (field, comp, data_type, id)
+        self.y_data_list = []  # list of dicts: {field, comp, data_type, id, label, data}
 
         # Autocomplete setup
         self.completion_model = QtGui.QStandardItemModel()
@@ -3279,14 +3345,164 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         # Connect signals
         self.plot_btn.clicked.connect(self.plot_history)
         self.x_axis_btn.clicked.connect(self.set_x_axis)
-        self.y_axis_btn.clicked.connect(self.set_y_axis)
-        self.field_combo.currentTextChanged.connect(self.update_components)
+        self.add_y_btn.clicked.connect(self.add_y_data)
+        self.remove_y_btn.clicked.connect(self.remove_selected_y_data)
+        self.field_combo.currentTextChanged.connect(self.on_field_combo_changed)
+        self.data_type_combo.currentTextChanged.connect(self.update_data_type)
+
         self.filter_edit.textChanged.connect(self.on_filter_edit)
         self.comp_combo.currentTextChanged.connect(self.on_comp_combo_changed)
+
+        self.pick_mesh_btn.clicked.connect(self.on_pick_mesh)
+
+        self.y_table.itemSelectionChanged.connect(self.on_y_table_row_selected)
+        self.modify_y_btn.clicked.connect(self.on_modify_y_data)
 
         # Populate combos from parent data
         self.parent = parent
         self.update_fields()
+
+        # Set 'Time' as default X axis if it exists
+        data = getattr(self.parent, "data", None)
+        if (
+            data is not None
+            and hasattr(data, "scalar_data")
+            and "Time" in data.scalar_data
+        ):
+            self.field_combo.setCurrentText("Time")
+            self.comp_combo.setCurrentText("0")
+            self.data_type_combo.setCurrentText("Node")
+            self.id_spin.setValue(0)
+            self.update_x_info("Time", "0", "Node", 0)
+
+        # Track plot dialog
+        self._plot_dialog = None
+
+    def on_field_combo_changed(self, field):
+        data = getattr(self.parent, "data", None)
+        if data is not None and field in data.scalar_data:
+            self.data_type_combo.setEnabled(False)
+            self.id_spin.setEnabled(False)
+            self.pick_mesh_btn.setEnabled(False)
+        else:
+            self.data_type_combo.setEnabled(True)
+            self.id_spin.setEnabled(True)
+            self.pick_mesh_btn.setEnabled(True)
+
+        self.update_components(field)
+
+    def on_y_table_row_selected(self):
+        selected = self.y_table.selectionModel().selectedRows()
+        if len(selected) == 1:
+            idx = selected[0].row()
+            entry = self.y_data_list[idx]
+            # Update controls
+            self.field_combo.setCurrentText(entry["field"])
+            self.comp_combo.setCurrentText(str(entry["comp"]))
+            self.data_type_combo.setCurrentText(entry["data_type"])
+            self.id_spin.setValue(entry["id"])
+            self.modify_y_btn.setEnabled(True)
+        else:
+            self.modify_y_btn.setEnabled(False)
+
+    def on_modify_y_data(self):
+        selected = self.y_table.selectionModel().selectedRows()
+        if len(selected) != 1:
+            return
+        idx = selected[0].row()
+        # Update the entry with current controls
+        field = self.field_combo.currentText()
+        comp = self.comp_combo.currentText()
+        dtype = self.data_type_combo.currentText()
+        id_val = self.id_spin.value()
+        label = f"{field}_{comp} ({dtype}, ID={id_val})"
+        # data = self.extract_history()
+        # if data is None:
+        #     QtWidgets.QMessageBox.warning(self, "No data", "Could not extract Y data.")
+        #     return
+        entry = {
+            "field": field,
+            "comp": comp,
+            "data_type": dtype,
+            "id": id_val,
+            "label": label,
+        }
+        self.y_data_list[idx] = entry
+        self.y_table.setItem(idx, 0, QtWidgets.QTableWidgetItem(field))
+        self.y_table.setItem(idx, 1, QtWidgets.QTableWidgetItem(str(comp)))
+        self.y_table.setItem(idx, 2, QtWidgets.QTableWidgetItem(dtype))
+        self.y_table.setItem(idx, 3, QtWidgets.QTableWidgetItem(str(id_val)))
+        self.y_table.setItem(idx, 4, QtWidgets.QTableWidgetItem(label))
+
+    def on_pick_mesh(self):
+        # Determine pick type from data_type_combo
+        dtype = self.data_type_combo.currentText()
+        mainwin = self.parent
+        if dtype == "Node":
+            self._start_pick_node(mainwin)
+        else:
+            self._start_pick_element(mainwin)
+
+    def _start_pick_node(self, mainwin):
+        # Use MainWindow._pick_node logic, but update id_spin when picked
+        def _picked(point):
+            mesh = mainwin.active_dock.pv_mesh
+            # try:
+            if mainwin.opts["clip_args"]:
+                if "Disp" in mainwin.data.node_data:
+                    crd = mainwin.data.mesh.nodes + mainwin.data["Disp"].T
+                    pid = np.linalg.norm(crd - point, axis=1).argmin()
+                else:
+                    pid = mainwin.data.mesh.nearest_node(point)
+            else:
+                pid = mesh.find_closest_point(point)
+                if mainwin.current_data_type == "GaussPoint":
+                    pid = mainwin.data.mesh.elements.ravel()[pid]
+
+            if mesh is not None and pid is not None and pid >= 0:
+                self.id_spin.setValue(pid)
+
+            mainwin.plotter.disable_picking()
+
+        mainwin.plotter.disable_picking()
+        mainwin.plotter.enable_point_picking(
+            callback=_picked, left_clicking=True, show_message=True, picker="point"
+        )
+
+    def _start_pick_element(self, mainwin):
+        import vtk
+
+        picker = vtk.vtkCellPicker()
+        picker.SetTolerance(0.0005)
+
+        def _on_click(obj, event):
+            x, y = mainwin.plotter.interactor.GetEventPosition()
+            picker.Pick(x, y, 0, mainwin.plotter.renderer)
+            cell_id = picker.GetCellId()
+            if cell_id < 0:
+                return
+            mesh = mainwin.active_dock.pv_mesh
+            cell = mesh.extract_cells(cell_id)
+            mainwin.plotter.remove_actor("_picked_cell")
+            mainwin.plotter.add_mesh(
+                cell, style="wireframe", color="pink", name="_picked_cell"
+            )
+            if mainwin.opts["clip_args"]:
+                cell_id = mesh.cell_data["cell_ids"][cell_id]
+            if mesh is not None and cell_id is not None:
+                self.id_spin.setValue(cell_id)
+            # Remove observer after pick
+            if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
+                mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
+                self._lbp_tag = None
+
+        # Remove previous observer if any
+        if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
+            mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
+            self._lbp_tag = None
+        self._lbp_tag = mainwin.plotter.interactor.AddObserver(
+            "LeftButtonPressEvent", _on_click
+        )
 
     def update_fields(self):
         data = getattr(self.parent, "data", None)
@@ -3316,6 +3532,12 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             self.comp_combo.addItem("All components")
         self.comp_combo.blockSignals(False)
 
+    def update_data_type(self, data_type):
+        if data_type == "Node":
+            self.id_spin.setMaximum(self.parent.data.mesh.n_nodes)
+        else:
+            self.id_spin.setMaximum(self.parent.data.mesh.n_elements)
+
     def update_completer(self):
         # Build list of field_component strings for autocompletion
         data = getattr(self.parent, "data", None)
@@ -3331,13 +3553,14 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                         items.append(f"{field}_{comp}")
             for scalar in data.scalar_data:
                 items.append(scalar)
-                
+
         self.completion_model.clear()
         for item in items:
             self.completion_model.appendRow(QtGui.QStandardItem(item))
 
     def on_filter_edit(self, text):
         # Parse text like 'Stress_XY' or 'Stress'
+        field, comp = "", ""
         if "_" in text:
             field, comp = text.split("_", 1)
         else:
@@ -3345,60 +3568,202 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         idx_field = self.field_combo.findText(field, Qt.MatchFixedString)
         if idx_field >= 0:
             self.field_combo.setCurrentIndex(idx_field)
+            field = self.field_combo.currentText()  # update to match str case
             self.update_components(field)
             idx_comp = self.comp_combo.findText(comp, Qt.MatchFixedString)
             if idx_comp >= 0:
                 self.comp_combo.setCurrentIndex(idx_comp)
-        # Optionally, update filter_edit if combo changes
 
     def on_comp_combo_changed(self, comp):
-        # If 'All components' selected, update filter_edit to just field
         if comp == "All components":
             self.filter_edit.setText(self.field_combo.currentText())
         else:
             self.filter_edit.setText(f"{self.field_combo.currentText()}_{comp}")
 
     def set_x_axis(self):
-        self.x_data = self.extract_history()
+        self.update_x_info(
+            self.field_combo.currentText(),
+            self.comp_combo.currentText(),
+            self.data_type_combo.currentText(),
+            self.id_spin.value(),
+        )
 
-    def set_y_axis(self):
-        self.y_data = self.extract_history()
+    def update_x_info(self, field, comp, data_type, indice):
+        data = getattr(self.parent, "data", None)
+        if data is None:  # should never been triggered
+            self.x_info.setText("Not set")
+            return
 
+        n_comps = len(self.parent.get_components(field))
+        if n_comps > 1 and self.comp_combo.currentText() == "All components":
+            QtWidgets.QMessageBox.warning(
+                self,
+                "No components defined",
+                "A component must be selected for x axis data.",
+            )
+            return
 
-    def extract_history(self):
+        if field in data.scalar_data:
+            if n_comps <= 1:
+                self.x_info.setText(f"{field}")
+            else:
+                self.x_info.setText(f"{field}_{comp}")
+        else:
+            if n_comps <= 1:
+                self.x_info.setText(f"{field} ({data_type}, ID={indice})")
+            else:
+                self.x_info.setText(f"{field}_{comp} ({data_type}, ID={indice})")
+        self.x_data_info = (field, comp, data_type, indice)
+
+    def check_valide(self, field, comp, data_type, indice):
         data = getattr(self.parent, "data", None)
         if data is None:
-            return None
-        field = self.field_combo.currentText()
-        comp_text = self.comp_combo.currentText()
-        data_type = self.data_type_combo.currentText()
-        id_val = self.id_spin.value()
-        # If 'All components', pass None or special value
-        if comp_text == "All components":
-            comp = None
+            return False
+        if field in data.scalar_data:
+            # should also test the size of scalar data
+            return True
         else:
-            try:
-                comp = int(comp_text) if comp_text.isdigit() else comp_text
-            except Exception:
-                comp = comp_text
-        # MultiFrameDataSet method assumed: get_history(field, component, data_type, id)
-        if hasattr(data, "get_history"):
-            return data.get_history(field, id_val, comp, data_type)
-        return None
+            if field not in data.field_names():
+                return False
+            if comp not in self.parent.get_components(field):
+                return False
+            if data_type == "Node":
+                if indice >= data.mesh.n_nodes:
+                    return False
+            elif data_type == "Element":
+                if indice >= data.mesh.n_elements:
+                    return False
+            else:  # GaussPoint
+                if indice >= data[field, comp, "GaussPoint"].shape[-1]:
+                    return False
+        return True
+
+    def _on_change_active(self):
+        # update the maximal value
+        self.update_data_type(self.data_type_combo.currentText())
+        if self.x_data_info is not None:
+            if not self.check_valide(*self.x_data_info):
+                self.x_data_info = None
+                self.x_info.setText("Not set")
+        for i, ydat in enumerate(self.y_data_list):
+            if not self.check_valide(
+                ydat["field"], ydat["comp"], ydat["data_type"], ydat["id"]
+            ):
+                self.y_table.removeRow(i)
+                del self.y_data_list[i]
+        self.update_fields()
+
+    def add_y_data(self, **kargs):
+        indice = kargs.get("indice", None)
+        # Get current selection
+        field = self.field_combo.currentText()
+        comp = self.comp_combo.currentText()
+        dtype = self.data_type_combo.currentText()
+        if not indice:
+            idx = self.id_spin.value()
+        else:
+            idx = indice
+        data = getattr(self.parent, "data", None)
+        if data is None:
+            return
+        if field in data.scalar_data:
+            label = f"{field}_{comp}"
+        else:
+            if indice is None and dtype == "GaussPoint":
+                # add all gauss points values
+                n_elements = data.mesh.n_elements
+                n_gp = data[field, comp, "GaussPoint"].shape[-1] // n_elements
+                for i in range(n_gp):
+                    self.add_y_data(indice=idx + i * n_elements)
+                return
+            label = f"{field}_{comp} ({dtype}, ID={idx})"
+        # Add to list and table
+        entry = {
+            "field": field,
+            "comp": comp,
+            "data_type": dtype,
+            "id": idx,
+            "label": label,
+        }
+        self.y_data_list.append(entry)
+        row = self.y_table.rowCount()
+        self.y_table.insertRow(row)
+        self.y_table.setItem(row, 0, QtWidgets.QTableWidgetItem(field))
+        self.y_table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(comp)))
+        self.y_table.setItem(row, 2, QtWidgets.QTableWidgetItem(dtype))
+        self.y_table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(idx)))
+        self.y_table.setItem(row, 4, QtWidgets.QTableWidgetItem(label))
+
+    def remove_selected_y_data(self):
+        selected = self.y_table.selectionModel().selectedRows()
+        for idx in sorted([s.row() for s in selected], reverse=True):
+            self.y_table.removeRow(idx)
+            del self.y_data_list[idx]
 
     def plot_history(self):
-        # If only y_data, use iteration as x
-        if self.y_data is None:
-            self.y_data = self.extract_history()
-        if self.x_data is None:
-            self.x_data = list(range(len(self.y_data))) if self.y_data is not None else []
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.plot(self.x_data, self.y_data, marker="o")
-        ax.set_xlabel("X")
+        if not self.y_data_list:
+            QtWidgets.QMessageBox.warning(
+                self, "No Y data", "Add at least one Y data to plot."
+            )
+            return
+        if self.x_data_info is None:
+            QtWidgets.QMessageBox.warning(self, "No X data", "Set X axis data first.")
+            return
+        if self._plot_dialog is not None:
+            self._plot_dialog.close()
+        self._plot_dialog = MplLinePlotDialog(self, title="History Plot")
+        ax = self._plot_dialog.ax
+        ax.clear()
+        data = getattr(self.parent, "data", None)
+
+        list_comps = [self.x_data_info[1]] + [
+            entry["comp"] for entry in self.y_data_list
+        ]
+        list_comps = [
+            int(comp) if comp.isdigit() else None if comp == "All components" else comp
+            for comp in list_comps
+        ]
+
+        list_data = data.get_history(
+            [self.x_data_info[0]] + [entry["field"] for entry in self.y_data_list],
+            [self.x_data_info[3]] + [entry["id"] for entry in self.y_data_list],
+            list_comps,
+            [self.x_data_info[2]] + [entry["data_type"] for entry in self.y_data_list],
+            return_list=True,
+        )
+
+        # Only show label info for non-scalar_data
+        x_data = list_data[0]
+        for i, entry in enumerate(self.y_data_list):
+            ydata = list_data[i + 1]
+            if (
+                self.y_data_list[i]["comp"] == "All components"
+                and hasattr(ydata, "ndim")
+                and ydata.ndim == 2
+            ):
+                # Plot each component separately
+                n_comp = ydata.shape[1]
+                for j in range(n_comp):
+                    ax.plot(
+                        x_data,
+                        ydata[:, j],
+                        marker="o",
+                        label=f"{self.y_data_list[i]['field']}_{j}",
+                    )
+            else:
+                label = entry["label"]
+                ax.plot(x_data, ydata, marker="o", label=label)
+        ax.legend()
+        # X label: only show field if scalar_data
+        if self.x_data_info is not None:
+            xlabel = self.x_info.toPlainText()  # .replace("\n", ", ")
+        else:
+            xlabel = "X"
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("Y")
         ax.set_title("History Evolution")
-        self.canvas.draw()
+        self._plot_dialog.canvas.draw()
+        self._plot_dialog.show()
 
 
 def normalize(v):
