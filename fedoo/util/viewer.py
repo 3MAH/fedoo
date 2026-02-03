@@ -2843,6 +2843,20 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         self.stop_pick_btn.setEnabled(False)
         pick_layout.addWidget(self.stop_pick_btn)
 
+        # --- Add a stretch to push the labels to the far right ---
+        pick_layout.addStretch(1)
+
+        # --- Create a vertical column for the two labels ---
+        labels_col = QtWidgets.QVBoxLayout()
+        labels_col.setSpacing(0)  # optional: tighter stacking
+        labels_col.setContentsMargins(0, 0, 0, 0)  # optional: remove extra margins
+
+        labels_col.addWidget(QLabel("Press Ctrl to add to selection"))
+        labels_col.addWidget(QLabel("Press Maj to remove from selection"))
+
+        # Add the vertical layout to the horizontal layout
+        pick_layout.addLayout(labels_col)
+
         right_layout.addWidget(pick_group)
 
         # --- Selection by expression -------------------------------------------------
@@ -3709,12 +3723,18 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         if self.x_data_info is None:
             QtWidgets.QMessageBox.warning(self, "No X data", "Set X axis data first.")
             return
+        data = getattr(self.parent, "data", None)
+        if data is None or not hasattr(data, "loaded_iter"):
+            QtWidgets.QMessageBox.warning(
+                self, "No history data", "The active data have no time evolution."
+            )
+            return
+
         if self._plot_dialog is not None:
             self._plot_dialog.close()
         self._plot_dialog = MplLinePlotDialog(self, title="History Plot")
         ax = self._plot_dialog.ax
         ax.clear()
-        data = getattr(self.parent, "data", None)
 
         list_comps = [self.x_data_info[1]] + [
             entry["comp"] for entry in self.y_data_list

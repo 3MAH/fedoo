@@ -25,15 +25,15 @@ from .core import (
     read_data,
 )
 
-# try:
-from .util.viewer import viewer
-# except ImportError:
-#     # module not installed
-#     def viewer(res=None):
-#         raise ImportError(
-#             "pyvistaqt is required to launch the viewer. "
-#             "Install it with: pip install pyvistaqt"
-#         )
+try:
+    from .util.viewer import viewer
+except ImportError:
+    # module not installed
+    def viewer(res=None):
+        raise ImportError(
+            "pyvistaqt is required to launch the viewer. "
+            "Install it with: pip install pyvistaqt"
+        )
 
 
 class get_config:
