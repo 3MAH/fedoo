@@ -9,7 +9,7 @@ import numpy as np
 
 
 class StressEquilibriumBbar(StressEquilibrium):
-    """Weak formulation of the mechanical equilibrium equation for solids.
+    """Mechanical equilibrium equation for solids with the Fbar method.
 
     This method is still experimental ! Use with caution. The fbar method
     from the standard StressEquilibrium should be prefered.
