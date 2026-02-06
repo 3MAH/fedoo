@@ -24,31 +24,34 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    'numpy>=1.26',
-    'scipy'
+    'numpy>=2.00',
+    'scipy',
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,dataio,test]']
+all = ['fedoo[solver,plot,simcoon,dataio,test]']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'scikit-umfpack ; platform_machine=="arm64" or platform_machine=="aarch64"'
 ]
 plot = [
     'matplotlib',
-    'pyvista[io]'
+    'pyvista[io]',
+    'pyvistaqt'
 ]
 dataio = [
     'pandas'
+]
+simcoon = [
+    'simcoon'
 ]
 test = [
     'pytest',
     'pytest-cov'
 ]
 other = [
-    'microgen',
-    'simcoon'
+    'microgen'
 ]
 
 [project.urls]

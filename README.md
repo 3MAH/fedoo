@@ -13,6 +13,7 @@ and simcoon for the non linear material constitutive models in finite strain.
 
 Here are the main features:
 
+- *New* A full interactive viewer is now included to improve the results visualization.
 - Entirely written in Python 3
 - Implicit finite element Solver for Static and Dynamics poblems
 - Finite strain constitutive laws based on the simcoon library (simcoon is developped in C++ allowing a fast execution)

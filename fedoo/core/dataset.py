@@ -809,24 +809,33 @@ class DataSet:
 
     def load(self, data: object, load_mesh: bool = False, iteration: int = 0):
         """Load data from a data object.
+
+        This method replace the current data with new data.
         The old data are erased.
 
         Parameters
         ----------
-        data :
-        * if type(data) is dict:
-            load data using the load_dict method
-        * if type(data) is DataSet:
-            load data from another DataSet object without copy
-        * if type(data) is pyvista.UnstructuredGrid
-            load data from a pyvista UnstructuredGrid object without copy
-        * if type(data) is str
-            load data from a file. Available extention are 'vtk', 'msh', 'fdz', 'npz'
-        load_mesh : bool (default = False)
-            If True, the mesh is loaded from the file (if the file contans a mesh).
-            If False, only the data are loaded.
-        iteration : int
-            iteration loaded if data is a fdz object.
+        data : dict or DataSet or pyvista.UnstructuredGrid or str
+            Input data to load.
+
+            * **dict** :
+                Load data using the ``load_dict`` method.
+            * **DataSet** :
+                Load data from another ``DataSet`` object without copying.
+            * **pyvista.UnstructuredGrid** :
+                Load data from a PyVista ``UnstructuredGrid`` object without
+                copy.
+            * **str** :
+                Path to a data file. Supported file extensions are
+                ``'vtk'``, ``'msh'``, ``'fdz'``, and ``'npz'``.
+
+        load_mesh : bool, optional
+            If ``True``, the mesh is loaded from the file (when the file
+            contains a mesh). If ``False``, only the data are loaded.
+            Default is ``False``.
+
+        iteration : int, optional
+            Iteration index to load when ``data`` refers to an ``fdz`` file.
         """
         if isinstance(data, dict):
             self.load_dict(data)
@@ -893,6 +902,7 @@ class DataSet:
 
     def load_dict(self, data: dict) -> None:
         """Load data from a dict generated with the to_dict method.
+
         The old data are erased."""
         self.node_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "nd"}
         self.element_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "el"}
@@ -947,6 +957,7 @@ class DataSet:
 
     def to_csv(self, filename: str, save_mesh: bool = False) -> None:
         """Write data in a csv file.
+
         This method require the installation of pandas library
         and is available only if 1 type of data (node, element, gausspoint) is defined.
 
@@ -966,6 +977,7 @@ class DataSet:
 
     def to_excel(self, filename: str, save_mesh: bool = False) -> None:
         """Write data in a xlsx file (excel format).
+
         This method require the installation of pandas and openpyxl libraries
         and is available only if 1 type of data (node, element, gausspoint) is defined.
 
@@ -1034,8 +1046,9 @@ class DataSet:
             raise TypeError("Mesh should be defined befort converted to pyvista object")
 
     def to_msh(self, filename: str) -> None:
-        """Write a msh (gmsh format) file with the mesh and associated data
-        (gausspoint data not included).
+        """Write a msh (gmsh format) file with mesh and associated data.
+
+        Warning: gausspoint data are not included in the saved file.
 
         Parameters
         ----------
@@ -1121,6 +1134,10 @@ class DataSet:
 
     @staticmethod
     def read(filename: str, file_format: str = "fdz") -> DataSet | MultiFrameDataSet:
+        """Read a file from disk.
+
+        Same as :py:func:`fedoo.read_data`.
+        """
         return read_data(filename, file_format="fdz")
 
     @property
@@ -1643,14 +1660,28 @@ class MultiFrameDataSet(DataSet):
 
 
 def read_data(filename: str, file_format: str = "fdz"):
-    """Read a file from a disk.
+    """Read a file from disk.
 
-    The file may be a directory containing files from several iterations.
-    The file format may be specified in the filename extension or using
-    the file_format parameter (default = fdz) if the filename has no extension.
+    The file may be a single file or a directory containing files from
+    several iterations. The file format may be specified either by the
+    filename extension or by the ``file_format`` parameter (default is
+    ``"fdz"``) when the filename has no extension.
 
-    Available file format are 'fdz', 'vtk' and 'npz'.
-    For 'npz' a vtk mesh with the same base name is also searched.
+    Supported file formats are ``"fdz"``, ``"vtk"``, and ``"npz"``.
+    For ``"npz"`` files, a VTK mesh with the same base name is also searched.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the file or directory to read.
+    file_format : str, optional
+        File format identifier to use when the filename has no extension.
+        Default is ``"fdz"``.
+
+    Returns
+    -------
+    DataSet or MultiFrameDataSet
+        The loaded dataset.
     """
     extension = os.path.splitext(filename)[1]
     if extension != "":

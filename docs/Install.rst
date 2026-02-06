@@ -1,7 +1,7 @@
 Installation
 =================================
 
-Installation using conda (recommanded): 
+Installation using conda with recommanded dependencies: 
 
 .. code-block:: none
 
@@ -13,6 +13,12 @@ Minimal installation with pip:
 
     $ pip install fedoo
 
+Full installation with pip with all dependencies:
+
+.. code-block:: none
+
+    $ pip install fedoo[all]
+    
 
 The required dependencies that are automatically installed with fedoo are:
 
@@ -24,7 +30,7 @@ In addition, the conda package also includes some recommanded dependencies:
 
     * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_ 
       brings a lot of features (finite strain, non-linear constitutive
-      laws, ...).
+      laws, ...). Simcoon can be installed using conda or pip.
 
     * `PyVista <https://docs.pyvista.org/version/stable/>`_ 
       for results visulisation and mesh utils.
@@ -44,19 +50,12 @@ to improve performances:
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_
 
+To be able to launch the fedoo viewer, the module 
+`pyvistaqt <https://qtdocs.pyvista.org/>`_ is also required.
 
-It is also possible to install fedoo with all recommanded dependencies except
-simcoon in one line. However this installation needs to be done carefully
-because of potentiel version compatibility problems.
-
-.. code-block:: none
-
-    $ pip install fedoo[all]
-    
-
-A lot of features (finite strain, non-linear constitutive laws, ...) requires 
-the installation of simcoon. Simcoon is available on conda only and can be 
-installed alone with:
+As mentioned earlier, a lot of features (finite strain, non-linear
+constitutive laws, ...) requires the installation of simcoon. Simcoon can
+be installed from pip or conda. To install simcoon using conda:
 
 .. code-block:: none
 
