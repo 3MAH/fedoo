@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fedoo"
+version = "0.7.0"
 authors = [
     {name = "3MAH", email = 'set3mah@gmail.com'},
 ]
@@ -27,7 +28,6 @@ dependencies = [
     'numpy>=2.00',
     'scipy',
 ]
-dynamic = ["version"]
 
 [project.optional-dependencies]
 all = ['fedoo[solver,plot,simcoon,dataio,test]']

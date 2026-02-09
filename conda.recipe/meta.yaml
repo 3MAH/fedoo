@@ -1,6 +1,9 @@
+{% set pyproject = load_file_data("../pyproject.toml") %}
+{% set version = pyproject["project"]["version"] %}
+
 package:
   name: fedoo
-  version: "0.6.1"
+  version: {{ version }}
 
 source:
   git_url: https://github.com/3MAH/fedoo.git
