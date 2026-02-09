@@ -20,7 +20,7 @@ import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
 
-fd.get_config()['USE_PYVISTA_QT'] = False
+fd.get_config()["USE_PYVISTA_QT"] = False  # avoid rendering useless plot
 
 ###############################################################################
 # Geometry and mesh
@@ -92,9 +92,7 @@ pb.bc.add("Dirichlet", nodes_top, "DispX", -0.5)
 ###############################################################################
 # Solve the problem
 # ~~~~~~~~~~~~~~~~~
-pb.nlsolve(
-    dt=0.05, tmax=1.0, update_dt=True, interval_output=0.05, print_info=0
-)
+pb.nlsolve(dt=0.05, tmax=1.0, update_dt=True, interval_output=0.05, print_info=0)
 
 ###############################################################################
 # Basic visualization: von Mises stress

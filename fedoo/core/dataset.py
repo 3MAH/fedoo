@@ -351,7 +351,6 @@ class DataSet:
 
         return_cpos = kargs.pop("return_cpos", False)
         cmap = kargs.pop("cmap", "jet")  # if cmap not defined, default to "jet"
-        kargs["name"] = kargs.get("name", "data1")  # default mesh name
 
         if data_type == "GaussPoint":
             if self.meshplot_gp is None:
@@ -420,6 +419,13 @@ class DataSet:
             # try to use the given plotter
             # dont show
             pl = plotter
+
+        if "name" not in kargs:
+            # add default name = "data{i}"
+            i = 1
+            while f"data{i}" in pl.actors.keys():
+                i += 1
+            kargs["name"] = f"data{i}"
 
         if multiplot is None:
             if pl.renderers.shape == (1, 1):
