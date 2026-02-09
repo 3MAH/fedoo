@@ -19,7 +19,8 @@ import fedoo as fd
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
-from time import time
+
+fd.get_config()['USE_PYVISTA_QT'] = False
 
 ###############################################################################
 # Geometry and mesh
@@ -91,9 +92,9 @@ pb.bc.add("Dirichlet", nodes_top, "DispX", -0.5)
 ###############################################################################
 # Solve the problem
 # ~~~~~~~~~~~~~~~~~
-start = time()
-pb.nlsolve(dt=0.05, tmax=1.0, update_dt=True, interval_output=0.05)
-print(f"Solve time: {time() - start:.2f} s")
+pb.nlsolve(
+    dt=0.05, tmax=1.0, update_dt=True, interval_output=0.05, print_info=0
+)
 
 ###############################################################################
 # Basic visualization: von Mises stress
@@ -104,18 +105,14 @@ res_plot = results.plot(
     field="Stress",
     component="vm",
     data_type="Node",
-    show=False,
     show_edges=True,
     title="Von Mises stress",
 )
-res_plot.add_axes()
-res_plot.show()
 
 ###############################################################################
 # Side-by-side linked views
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 # Compare σ_xx and von Mises stress using linked cameras.
-#
 
 pl = pv.Plotter(shape=(1, 2))
 
@@ -129,6 +126,7 @@ results.plot(
     multiplot=True,
     title="Sigma_xx",
 )
+pl.camera.view_angle = 40.0
 
 pl.subplot(0, 1)
 results.plot(
@@ -140,8 +138,7 @@ results.plot(
     multiplot=True,
     title="Von Mises",
 )
-
-pl.link_views()
+pl.link_views()  # use same view angle for both subplots
 pl.show()
 
 ###############################################################################
@@ -160,16 +157,14 @@ pl = results.plot(
     "Node",
     clip_args=clip_args,
     show_edges=False,
-    show=False,
     title="Clipped von Mises stress",
 )
-pl.add_axes()
-pl.show()
 
 ###############################################################################
 # Element-set filtering from an expression
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Select elements inside a cylindrical region defined by X² + Y² < 0.25.
+# The element selection is based on element center coordinates.
 
 element_ids = mesh.find_elements("X**2 + Y**2 < 0.5")
 
@@ -178,11 +173,8 @@ pl = results.plot(
     "vm",
     "Node",
     element_set=element_ids,
-    show=False,
     title="Von Mises stress on selected element set",
 )
-pl.add_axes()
-pl.show()
 
 ###############################################################################
 # Sampling results along a line
@@ -194,9 +186,9 @@ pl = results.plot(
     "vm",
     # "Node",  # uncomment to avarage results at nodes
     scale=0,
-    show=False,
+    show=False,  # just used to build the mesh here
 )
-pv_mesh = pl.actors["data1"].mapper.dataset
+pv_mesh = pl.actors["data1"].mapper.dataset  # extract the mesh
 
 profile = pv_mesh.sample_over_line(
     (0.0, 0.5, 0.5),
