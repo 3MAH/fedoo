@@ -48,7 +48,6 @@ The WeakForm library contains the following classes:
 
 from .beam import BeamEquilibrium
 from .spring import SpringEquilibrium
-from .beam_parametric import ParametricBeam, ParametricBernoulliBeam
 from .heat_equation import (
     HeatEquation,
     SteadyHeatEquation,
