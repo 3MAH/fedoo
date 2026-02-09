@@ -75,7 +75,8 @@ class ShellBase(ConstitutiveLaw):
         assembly: Assembly
 
         position : float (optional)
-            Position in the thickness, given as a fraction of the demi thickness :
+            Position in the thickness, given as a fraction of the demi
+            thickness:
             z = position * total_thickness/2
             position = 1 for the top face (default)
             position = -1 for the bottom face
@@ -449,12 +450,13 @@ class ShellLaminate(ShellBase):
 
     def find_layer(self, position=1):
         """
-        Returns the num of layer corresponding to the given position in the thickness
+        Returns the num of layer at a given position in the thickness
 
         Parameters
         ----------
         position : float
-            Position in the thickness, given as a fraction of the demi thickness :
+            Position in the thickness, given as a fraction of the demi
+            thickness :
             z = position * total_thickness/2
             position = 1 for the top face (default)
             position = -1 for the bottom face

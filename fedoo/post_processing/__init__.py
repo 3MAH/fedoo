@@ -11,7 +11,7 @@ Get results from a problem
 In fedoo, most of the standard results are easily exportable using the
 :py:meth:`fedoo.Problem.get_results` method of the problem class.
 
-The get_results method returns a :py:class:`fedoo.DataSet` object which come
+The get_results method returns a :py:class:`fedoo.DataSet` object which comes
 with several methods for plotting, saving and loading mesh dependent results.
 
 
@@ -23,7 +23,7 @@ Once the required outputs are defined for a given problem, a call to the
 :py:meth:`fedoo.Problem.save_results` method allow to save all the defined
 fields on disk using the choosen file format, and associate the saved file to
 an iteration of the :py:class:`MultiFrameDataSet`. For non linear problems
-solved using :py:meth:`Problem.nlsolve`, results are automatically saved at
+solved using :py:meth:`fedoo.Problem.nlsolve`, results are automatically saved at
 some iterations dependending on the choosen parameters.
 
 The :py:class:`MultiFrameDataSet` store the path of the saved files for each
@@ -84,6 +84,8 @@ Read data from disk
 -------------------
 
 To read data saved on disk, use the function :py:func:`read_data`.
+The data are imported as :py:class:`DataSet` or
+:py:class:`MultiFrameDataSet` objects depending on the imported file(s).
 
 
 .. _very_simple_problem:
@@ -147,13 +149,65 @@ time interval (here the results are saved on a file).
 
 .. image:: ./_static/examples/example_plot_dataset_nl.png
 
+Fedoo interactive viewer
+========================
+
+Fedoo includes a graphical application to visulize a result file or
+a DataSet like object. To be able to launch the viewer, the
+package pyvistaqt has to be installed.
+
+Then the viewer can either be launched as a standalone application from
+command line:
+
+.. code-block:: none
+
+    $ python -m fedoo.viewer
+
+or from a python code. The code below show different ways to start the viewer
+inside a python code:
+
+.. code-block:: python
+
+    import fedoo as fd
+    result = fd.read_data('myfile.fdz')  # load a DataSet from file
+
+    fd.viewer()  # start the viewer with no file opened
+    fd.viewer(result)  # start the viewer and open the result DataSet
+    fd.viewer('myfile.fdz')  # start the viewer with the data from a file
+
+The viewer includes the following tools and features:
+
+* Management of multiple independent windows, which can be linked together.
+* Field and iteration selectors for data exploration.
+* A wide range of plotting options.
+* Show or hide elements from predefined sets, rectangular selections,
+  or arbitrary expressions.
+* Plot results along an interactively defined line.
+* Plot time-history data, when applicable.
+* Clip the current mesh using an interactively defined plane.
+* Save figures and create movies using the current visualization settings.
+
+
 Basic operations
 ================
+
+The principale methods/functions to extract, plot and manage
+result data are listed in this section.
+
+Extract data
+------------
+
+.. autosummary::
+   :toctree: generated/
+
+   DataSet.get_data
+   MultiFrameDataSet.get_history
+
 
 Plotting results
 ----------------
 
-A few convinient methods are proposed to generate image of movie from
+A few convenient methods are proposed to generate images or movies from
 :py:class:`DataSet` and :py:class:`MultiFrameDataSet` objects.
 
 .. autosummary::
@@ -275,10 +329,8 @@ we can plot the stress results after the example
 
 from .axi_to_3d import (
     axi_to_3d,
-    axi_to_3d_multi,
 )
 
 __all__ = [
     "axi_to_3d",
-    "axi_to_3d_multi",
 ]

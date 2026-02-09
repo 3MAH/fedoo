@@ -25,10 +25,22 @@ from .core import (
     read_data,
 )
 
+try:
+    from .util.viewer import viewer
+except ImportError:
+    # module not installed
+    def viewer(res=None):
+        raise ImportError(
+            "pyvistaqt is required to launch the viewer. "
+            "Install it with: pip install pyvistaqt"
+        )
+
 
 class get_config:
-    """Extract the current fedoo configuration (state of optional modules)
-    from submodules into a dict form.
+    """Extract the current fedoo configuration.
+
+    The current state of optional modules is extracted from submodules
+    and returend into a dict form.
 
     The returned information are:
         * 'fedoo version': The current version of fedoo (non modifiable)

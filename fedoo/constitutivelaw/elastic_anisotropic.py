@@ -11,7 +11,8 @@ class ElasticAnisotropic(Mechanical3D):
     """
     Linear full Anistropic constitutive law defined from the rigidity matrix H.
 
-    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    The constitutive Law should be associated with
+    :mod:`fedoo.weakform.StressEquilibrium`
 
     Parameters
     ----------

@@ -84,15 +84,10 @@ if not (os.path.isdir("results")):
 results = pb.add_output(
     res_dir + filename,
     "Assembling",
-    ["Disp", "Cauchy", "Strain", "Cauchy_vm", "Statev", "Wm", "Fext"],
+    ["Disp", "Stress", "Strain", "Statev", "Wm", "Fext", "RigidDisp", "RigidRot"],
 )
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Fext'])
-
-# Problem.add_output(res_dir+filename, 'Assembling', ['cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
-
 
 pb.bc.add(fd.constraint.RigidTie(right))
-
 # pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
 # pb.bc.add('Dirichlet','DispY', 0,nodes_top)
 # pb.bc.add('Dirichlet','DispZ', 0,nodes_top)

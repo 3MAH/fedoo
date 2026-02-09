@@ -204,7 +204,8 @@ def HeatEquation(thermal_constitutivelaw, name=None, nlgeom=False, space=None):
     nlgeom: bool (default = False)
 
     This weakform use mat_lumping for the time derivative assembly.
-    Without mat_lumping, the solution is generally wrong with notable temperature oscillations.
+    Without mat_lumping, the solution is generally wrong with notable
+    temperature oscillations.
 
     However, it is possible to change this parameter using:
 

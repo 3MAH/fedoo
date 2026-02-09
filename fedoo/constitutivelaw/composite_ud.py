@@ -14,7 +14,7 @@ class CompositeUD(ElasticAnisotropic):
     The fiber are assumed in the X direction. Use a local frame
     to rotate the material.
     The constitutive Law should be associated with a
-    :mod:`fedoo.weakform.SressEquilibrium` type of weakform.
+    :mod:`fedoo.weakform.StressEquilibrium` type of weakform.
 
     Parameters
     ----------

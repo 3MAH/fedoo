@@ -17,7 +17,7 @@ requirements:
     - python>=3.10
     - numpy>=1.26
     - scipy
-    - pyvista>=0.39
+    - pyvista>=0.42
     - simcoon>=1.9.6
     - {{ solver_backend }}
 

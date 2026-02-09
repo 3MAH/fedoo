@@ -109,10 +109,10 @@ class RigidTie(BCBase):
             self.center = np.asarray(self.center)
 
         dof_indice_disp = problem.add_global_dof(
-            ["RigidDispX", "RigidDispY", "RigidDispZ"], 1, "RidigDisp"
+            ["RigidDispX", "RigidDispY", "RigidDispZ"], 1, "RigidDisp"
         )
         dof_indice_rot = problem.add_global_dof(
-            ["RigidRotX", "RigidRotY", "RigidRotZ"], 1, "RidigRot"
+            ["RigidRotX", "RigidRotY", "RigidRotZ"], 1, "RigidRot"
         )
         self.var_cd = [
             "RigidDispX",

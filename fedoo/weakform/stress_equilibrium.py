@@ -15,7 +15,7 @@ import numpy as np
 
 
 class StressEquilibrium(WeakFormBase):
-    """Weak formulation of the mechanical equilibrium equation for solids.
+    """Mechanical equilibrium equation for solids.
 
     The main point to consider are:
       * This weak form can be used for solid in 3D or using a 2D plane

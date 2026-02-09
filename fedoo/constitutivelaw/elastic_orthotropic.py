@@ -9,9 +9,11 @@ import numpy as np
 
 class ElasticOrthotropic(ElasticAnisotropic):
     """
-    Linear Orthotropic constitutive law defined from the engineering coefficients in local material coordinates.
+    Linear Orthotropic constitutive law defined from the engineering
+    coefficients in local material coordinates.
 
-    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    The constitutive Law should be associated with
+    :mod:`fedoo.weakform.StressEquilibrium`
 
     Parameters
     ----------
