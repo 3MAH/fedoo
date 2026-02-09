@@ -5,7 +5,7 @@ Finite element library
 About
 -----
 
-Fedoo is an open source Finite Element library developed in Python.
+Fedoo is a free open source Finite Element library developed in Python.
 It is mainly dedicated for mechanical problems but is easily developpable for other kind of problems (thermal laws already included).
 One of the main application of fedoo is to simulate the mechanical response of heterogeneous materials. 
 For that purpose, fedoo is part of the 3mah set that also include microgen for the CAD and meshing of heterogeneous materials 
@@ -47,7 +47,7 @@ provided by readthedocs at
 
 Installation
 --------------
-Installation with conda with recommanded dependencices (including simcoon): 
+Installation with conda with recommanded dependencices: 
 ```
 conda install -c conda-forge -c set3mah fedoo
 ```
@@ -57,7 +57,7 @@ Minimal installation with pip:
 pip install fedoo
 ```
 
-Installation with pip including recommanded dependencies excepted simcoon:
+Installation with pip including recommanded dependencies:
 ```
 pip install fedoo[all]
 ```
