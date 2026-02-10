@@ -42,6 +42,9 @@ class _NonLinearBase:
               Use numpy.inf for the max value. Default is 2.
         """
 
+        self._step_size_callback = None
+        self._nr_min_subiter = 0  # SDI: minimum NR sub-iterations before accepting convergence
+
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
@@ -131,6 +134,13 @@ class _NonLinearBase:
         )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
         self.solve()
 
+        # CCD line search: limit step size to avoid intersections
+        if self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                self.set_X(dX * alpha)
+
         # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
         try:
             self._Xbc *= 0
@@ -142,6 +152,7 @@ class _NonLinearBase:
 
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
+        self._nr_min_subiter = 0  # reset SDI for new increment
         if not (np.isscalar(self._dU) and self._dU == 0):
             self._U += self._dU
             self._dU = 0
@@ -166,12 +177,18 @@ class _NonLinearBase:
 
     def to_start(self):
         self._dU = 0
+        self._nr_min_subiter = 0
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
 
     def NewtonRaphsonIncrement(self):
         # solve and update total displacement. A and D should up to date
         self.solve()
+        if self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                self.set_X(dX * alpha)
         self._dU += self.get_X()
 
     def update(self, compute="all", updateWeakForm=True):
@@ -348,7 +365,7 @@ class _NonLinearBase:
                     )
                 )
 
-            if normRes < tol_nr:  # convergence of the NR algorithm
+            if normRes < tol_nr and subiter >= self._nr_min_subiter:  # convergence of the NR algorithm
                 # Initialize the next increment
                 return 1, subiter, normRes
 
