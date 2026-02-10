@@ -54,8 +54,15 @@ because of potentiel version compatibility problems.
     $ pip install fedoo[all]
     
 
-A lot of features (finite strain, non-linear constitutive laws, ...) requires 
-the installation of simcoon. Simcoon is available on conda only and can be 
+For IPC (Incremental Potential Contact) support, install the optional
+``ipctk`` dependency:
+
+.. code-block:: none
+
+    $ pip install fedoo[ipc]
+
+A lot of features (finite strain, non-linear constitutive laws, ...) requires
+the installation of simcoon. Simcoon is available on conda only and can be
 installed alone with:
 
 .. code-block:: none

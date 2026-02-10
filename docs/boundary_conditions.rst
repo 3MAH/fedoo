@@ -135,10 +135,16 @@ fedoo. They can be created and add to the problem with the pb.bc.add method.
 Contact
 ==============================
 
-A first implementation of the contact is proposed for 2D problems. Contact
-is still in development and subject to slight change in future versions.
+Fedoo provides two contact approaches: a **penalty-based** method and an
+**IPC (Incremental Potential Contact)** method. Both are implemented as
+assembly objects and can be combined with other assemblies using
+:py:meth:`fedoo.Assembly.sum`.
 
-For now, only frictionless contact is implemented.
+Penalty-based contact
+______________________
+
+The penalty method uses a node-to-surface formulation. It is available for
+2D problems and supports frictionless contact.
 
 .. autosummary::
    :toctree: generated/
@@ -153,10 +159,52 @@ to a problem, we need first to create the contact assembly (using the class
 assembly with :py:meth:`fedoo.Assembly.sum`.
 
 
-Example
---------------
+IPC contact
+______________________
 
-Here an example of a contact between a square and a disk.
+The IPC (Incremental Potential Contact) method uses barrier potentials from
+the `ipctk <https://ipctk.xyz/>`_ library to guarantee intersection-free
+configurations.  It supports both 2D and 3D problems, friction, and optional
+CCD (Continuous Collision Detection) line search.
+
+Unlike the penalty method, IPC does **not** require tuning a penalty
+parameter.  The barrier stiffness :math:`\kappa` is automatically computed
+and adaptively updated to balance the elastic and contact forces.  The only
+physical parameter is ``dhat`` — the barrier activation distance that
+controls the minimum gap between surfaces (default: 0.1% of the bounding
+box diagonal).
+
+**Choosing dhat** --- The default ``dhat=1e-3`` (relative) means the
+barrier activates when surfaces are within 0.1 % of the bounding-box
+diagonal.  For problems with a very small initial gap, increase ``dhat``
+(e.g. ``1e-2``) so the barrier catches contact early.  For tight-fitting
+assemblies where a visible gap is unacceptable, decrease it (e.g.
+``1e-4``), but expect more Newton–Raphson iterations.
+
+**CCD line search** --- Enabling ``use_ccd=True`` is recommended for
+problems where first contact occurs suddenly (e.g. a punch hitting a
+plate) or where self-contact can cause rapid topology changes.
+
+The ``ipctk`` package is required and can be installed with:
+
+.. code-block:: bash
+
+   pip install ipctk
+   # or
+   pip install fedoo[ipc]
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.constraint.IPCContact
+   fedoo.constraint.IPCSelfContact
+
+
+Penalty contact example
+__________________________
+
+Here an example of a contact between a square and a disk using the penalty method.
 
 .. code-block:: python
 
@@ -195,13 +243,13 @@ Here an example of a contact between a square and a disk.
     contact.contact_search_once = True
     contact.eps_n = 5e5
 
-    #---- Material properties --------------    
+    #---- Material properties --------------
     props = np.array([200e3, 0.3, 1e-5, 300, 1000, 0.3])
-    # E, nu, alpha (non used), Re, k, m 
-    material_rect = fd.constitutivelaw.Simcoon("EPICP", props)    
+    # E, nu, alpha (non used), Re, k, m
+    material_rect = fd.constitutivelaw.Simcoon("EPICP", props)
     material_disk = fd.constitutivelaw.ElasticIsotrop(50e3, 0.3) #E, nu
     material = fd.constitutivelaw.Heterogeneous(
-        (material_rect, material_disk), 
+        (material_rect, material_disk),
         ('rect', 'disk')
         )
 
@@ -245,13 +293,91 @@ Here an example of a contact between a square and a disk.
     # Write movie with default options
     # ------------------------------------
     results.write_movie(filename,
-                        'Stress', 
-                        component = 'XX', 
-                        data_type = 'Node', 
-                        framerate = 24, 
-                        quality = 5, 
+                        'Stress',
+                        component = 'XX',
+                        data_type = 'Node',
+                        framerate = 24,
+                        quality = 5,
                         clim = [-3e3, 3e3]
                        )
 
-Video of results: 
+Video of results:
 :download:`contact video <./_static/examples/disk_rectangle_contact.mp4>`
+
+
+IPC contact example
+__________________________
+
+The same disk-rectangle contact problem can be solved with the IPC method.
+The IPC method does not require choosing slave/master nodes or tuning a
+penalty parameter. The barrier stiffness is automatically computed and
+adapted.
+
+.. code-block:: python
+
+    import fedoo as fd
+    import numpy as np
+
+    fd.ModelingSpace("2D")
+
+    #---- Create geometries (same as penalty example) --------------
+    mesh_rect = fd.mesh.rectangle_mesh(nx=11, ny=21,
+                                       x_min=0, x_max=1, y_min=0, y_max=1,
+                                       elm_type='quad4', name='Domain')
+    mesh_disk = fd.mesh.disk_mesh(radius=0.5, nr=6, nt=6, elm_type='quad4')
+    mesh_disk.nodes += np.array([1.5, 0.48])
+    mesh = fd.Mesh.stack(mesh_rect, mesh_disk)
+
+    #---- Define IPC contact --------------
+    surf = fd.mesh.extract_surface(mesh)
+    ipc_contact = fd.constraint.IPCContact(
+        mesh, surface_mesh=surf,
+        friction_coefficient=0.3,     # Coulomb friction coefficient
+        use_ccd=True,                 # enable CCD line search for robustness
+    )
+    # barrier_stiffness is auto-computed; dhat defaults to 1e-3 * bbox_diag
+
+    #---- Material and problem setup --------------
+    material = fd.constitutivelaw.ElasticIsotrop(200e3, 0.3)
+    wf = fd.weakform.StressEquilibrium(material, nlgeom=True)
+    solid_assembly = fd.Assembly.create(wf, mesh)
+    assembly = fd.Assembly.sum(solid_assembly, ipc_contact)
+
+    pb = fd.problem.NonLinear(assembly)
+    res = pb.add_output('results', solid_assembly, ['Disp', 'Stress'])
+    # ... add BCs ...
+    pb.nlsolve(dt=0.005, tmax=1)
+
+.. note::
+
+   When using ``add_output``, pass the **solid assembly** (not the sum).
+   ``AssemblySum`` objects cannot be used directly for output extraction.
+
+
+IPC self-contact example
+__________________________
+
+For self-contact problems, use :py:class:`~fedoo.constraint.IPCSelfContact`
+which automatically extracts the surface from the volumetric mesh.
+
+.. code-block:: python
+
+    import fedoo as fd
+    import numpy as np
+
+    fd.ModelingSpace("3D")
+
+    mesh = fd.Mesh.read("gyroid.vtk")
+    material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
+
+    # Self-contact: auto surface extraction, auto barrier stiffness
+    contact = fd.constraint.IPCSelfContact(mesh, use_ccd=True)
+
+    wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")
+    solid = fd.Assembly.create(wf, mesh)
+    assembly = fd.Assembly.sum(solid, contact)
+
+    pb = fd.problem.NonLinear(assembly)
+    res = pb.add_output("results", solid, ["Disp", "Stress"])
+    # ... add BCs ...
+    pb.nlsolve(dt=0.05, tmax=1, update_dt=True)
