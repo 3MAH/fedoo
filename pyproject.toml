@@ -30,7 +30,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,simcoon,dataio,test]']
+all = ['fedoo[solver,plot,simcoon,dataio,test,ipc]']
+ipc = ['ipctk']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'scikit-umfpack ; platform_machine=="arm64" or platform_machine=="aarch64"'

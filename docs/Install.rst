@@ -56,6 +56,25 @@ To be able to launch the fedoo viewer, the module
 As mentioned earlier, a lot of features (finite strain, non-linear
 constitutive laws, ...) requires the installation of simcoon. Simcoon can
 be installed from pip or conda. To install simcoon using conda:
+It is also possible to install fedoo with all recommanded dependencies except
+simcoon in one line. However this installation needs to be done carefully
+because of potentiel version compatibility problems.
+
+.. code-block:: none
+
+    $ pip install fedoo[all]
+    
+
+For IPC (Incremental Potential Contact) support, install the optional
+``ipctk`` dependency:
+
+.. code-block:: none
+
+    $ pip install fedoo[ipc]
+
+A lot of features (finite strain, non-linear constitutive laws, ...) requires
+the installation of simcoon. Simcoon is available on conda only and can be
+installed alone with:
 
 .. code-block:: none
 
