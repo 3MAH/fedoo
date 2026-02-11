@@ -1,7 +1,7 @@
 Installation
 =================================
 
-Installation using conda (recommanded): 
+Installation using conda (recommended):
 
 .. code-block:: none
 
@@ -17,55 +17,74 @@ Minimal installation with pip:
 The required dependencies that are automatically installed with fedoo are:
 
     * `Numpy <https://numpy.org/>`_
-    
-    * `Scipy <https://scipy.org/>`_ mainly for sparse matrices. 
 
-In addition, the conda package also includes some recommanded dependencies:
+    * `Scipy <https://scipy.org/>`_ mainly for sparse matrices.
 
-    * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_ 
+In addition, the conda package also includes some recommended dependencies:
+
+    * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_
       brings a lot of features (finite strain, non-linear constitutive
       laws, ...).
 
-    * `PyVista <https://docs.pyvista.org/version/stable/>`_ 
-      for results visulisation and mesh utils.
-      
+    * `PyVista <https://docs.pyvista.org/version/stable/>`_
+      for results visualization and mesh utils.
+
     * An efficient sparse matrix solver (pypardiso or petsc4py) depending
       on the processor as described below.
 
 
-It is highly recommanded to also install a fast direct sparse matrix solver
+Full pip install
+----------------
+
+It is also possible to install fedoo with all recommended pip dependencies
+(sparse solver, plotting, IPC contact) in one line:
+
+.. code-block:: none
+
+    $ pip install fedoo[all]
+
+This installs the following optional groups: ``solver``, ``plot``,
+``dataio``, ``test`` and ``ipc``.
+
+.. note::
+   Simcoon is only available through conda and is **not** included in
+   ``fedoo[all]``.  See the Simcoon section below for its installation.
+
+
+Individual optional groups
+--------------------------
+
+You can also install optional groups individually:
+
+.. code-block:: none
+
+    $ pip install fedoo[solver]      # fast sparse solver (pypardiso or umfpack)
+    $ pip install fedoo[plot]        # matplotlib + pyvista
+    $ pip install fedoo[ipc]         # IPC contact (ipctk)
+
+
+Sparse solvers
+--------------
+
+It is highly recommended to install a fast direct sparse matrix solver
 to improve performances:
 
-    * `Pypardiso <https://pypi.org/project/pypardiso/>`_ 
+    * `Pypardiso <https://pypi.org/project/pypardiso/>`_
       for intel processors (binding to the pardiso solver)
-    
+
     * `Petsc4Py <https://pypi.org/project/petsc4py/>`_
       mainly compatible with linux or macos including the MUMPS solver.
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_
 
 
-It is also possible to install fedoo with all recommanded dependencies except
-simcoon in one line. However this installation needs to be done carefully
-because of potentiel version compatibility problems.
+Simcoon
+-------
 
-.. code-block:: none
-
-    $ pip install fedoo[all]
-    
-
-For IPC (Incremental Potential Contact) support, install the optional
-``ipctk`` dependency:
-
-.. code-block:: none
-
-    $ pip install fedoo[ipc]
-
-A lot of features (finite strain, non-linear constitutive laws, ...) requires
+A lot of features (finite strain, non-linear constitutive laws, ...) require
 the installation of simcoon. Simcoon is available on conda only and can be
-installed alone with:
+installed with:
 
 .. code-block:: none
 
     $ conda install -c conda-forge -c set3mah simcoon
-    
