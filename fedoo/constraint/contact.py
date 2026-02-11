@@ -135,9 +135,6 @@ class Contact(AssemblyBase):
         self.sv = {}
         """ Dictionary of state variables associated to the associated for the current problem."""
         self.sv_start = {}
-        # self.bc_type = 'Contact'
-        # BCBase.__init__(self, name)
-        # self._update_during_inc = 1
 
         self.normal_law = normal_law.lower()
         """Name of the contact law. The normal law can be run using the "run_normal_law" method."""
@@ -199,6 +196,10 @@ class Contact(AssemblyBase):
         indices = []
         contact_elements = []
         contact_g = []
+
+        is_axi = self.space._dimension == "2Daxi"
+        if is_axi:
+            contact_r = []  # radial coordinate for 2πr weighting
 
         data_Ns = []
         if dim == 1:
@@ -405,6 +406,8 @@ class Contact(AssemblyBase):
 
             contact_g.append(g)
             contact_elements.append(el)
+            if is_axi:
+                contact_r.append(surf.nodes[slave_node, 0])
 
             # if vec_xi > 1:
             #     shape_func_val = np.array([0.,1.])
@@ -525,7 +528,15 @@ class Contact(AssemblyBase):
         #     print('Warning, contact have been loosing')
 
         Fcontact, eps = self.run_normal_law(contact_g - self.clearance)
-        # print(Fcontact)
+
+        # Apply 2πr circumferential weighting for axisymmetric problems
+        if is_axi:
+            axi_weight = 2 * np.pi * np.array(contact_r)
+            Fcontact = Fcontact * axi_weight
+            if np.isscalar(eps):
+                eps = eps * axi_weight
+            else:
+                eps = eps * axi_weight
 
         if dim == 1:
             F_div_l = sparse.diags(
@@ -729,12 +740,8 @@ class Contact(AssemblyBase):
         self.sv["contact_list"] = self.current.contact_search(
             self.sv["contact_list"], self.update_contact
         )
-        # if self.update_contact:
-        #     print(self.sv['contact_list'])
         if self.contact_search_once:
             self.update_contact = False
-
-        # self.current.assemble_global_mat(compute)
 
     def run_normal_law(self, g):
         if self.normal_law == "linear":
