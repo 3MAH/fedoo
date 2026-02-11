@@ -43,6 +43,7 @@ class _NonLinearBase:
         """
 
         self._step_size_callback = None
+        self._step_filter_callback = None  # OGC per-vertex filter
         self._nr_min_subiter = 0  # SDI: minimum NR sub-iterations before accepting convergence
 
         self.__assembly = assembly
@@ -134,8 +135,11 @@ class _NonLinearBase:
         )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
         self.solve()
 
-        # CCD line search: limit step size to avoid intersections
-        if self._step_size_callback is not None:
+        # OGC per-vertex filter or CCD scalar line search
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=True)
+        elif self._step_size_callback is not None:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
@@ -184,7 +188,10 @@ class _NonLinearBase:
     def NewtonRaphsonIncrement(self):
         # solve and update total displacement. A and D should up to date
         self.solve()
-        if self._step_size_callback is not None:
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=False)
+        elif self._step_size_callback is not None:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
