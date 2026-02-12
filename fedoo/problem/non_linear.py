@@ -45,6 +45,7 @@ class _NonLinearBase:
         self._step_size_callback = None
         self._step_filter_callback = None  # OGC per-vertex filter
         self._nr_min_subiter = 0  # SDI: minimum NR sub-iterations before accepting convergence
+        self._t_fact_inc = None  # frozen t_fact for the current increment
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
@@ -183,6 +184,7 @@ class _NonLinearBase:
     def to_start(self):
         self._dU = 0
         self._nr_min_subiter = 0
+        self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
 
@@ -229,6 +231,7 @@ class _NonLinearBase:
         self._dU = 0
 
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
+        self._t_fact_inc = None
         self.t0 = 0
         self.tmax = 1
         self.__iter = 0
@@ -255,33 +258,27 @@ class _NonLinearBase:
         if len(dof_free) == 0:
             return 0
         if self._err0 is None:  # if self._err0 is None -> initialize the value of err0
-            # if self.nr_parameters["criterion"] == "Displacement":
-            #     self._err0 = np.linalg.norm(
-            #         (self._U + self._dU)[dof_free], norm_type
-            #     )  # Displacement criterion
-            #     if self._err0 == 0:
-            #         self._err0 = 1
-            #         return 1
-            #     return np.max(np.abs(self.get_X()[dof_free])) / self._err0
-            # else:
-            #     self._err0 = 1
-            #     self._err0 = self.NewtonRaphsonError()
-            #     return 1
             if self.nr_parameters["criterion"] == "Displacement":
-                err0 = np.linalg.norm((self._U + self._dU), norm_type)
-                if err0 == 0:
-                    err0 = 1
-                return np.max(np.abs(self.get_X()[dof_free])) / err0
+                # Normalize by the current increment (not the total
+                # accumulated displacement) so the criterion does not
+                # become progressively looser as loading proceeds.
+                self._err0 = np.linalg.norm(self._dU, norm_type)
+                if self._err0 == 0:
+                    self._err0 = 1
+                    return 1
+                return (
+                    np.linalg.norm(self.get_X()[dof_free], norm_type)
+                    / self._err0
+                )
             else:
                 self._err0 = 1
                 self._err0 = self.NewtonRaphsonError()
                 return 1
         else:
             if self.nr_parameters["criterion"] == "Displacement":
-                # return np.max(np.abs(self.get_X()[dof_free]))/self._err0  #Displacement criterion
                 return (
                     np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
-                )  # Displacement criterion
+                )
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
                 if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
@@ -357,6 +354,12 @@ class _NonLinearBase:
         if tol_nr is None:
             tol_nr = self.nr_parameters["tol"]
 
+        # Freeze t_fact for the duration of this increment so that
+        # any modification of self.dtime (e.g. by a CCD callback)
+        # does not change the target time seen by boundary conditions
+        # or subiter print output.
+        self._t_fact_inc = self.t_fact
+
         self.elastic_prediction()
         for subiter in range(max_subiter):  # newton-raphson iterations
             # update Stress and initial displacement and Update stiffness matrix
@@ -375,11 +378,10 @@ class _NonLinearBase:
 
             if normRes < tol_nr and subiter >= self._nr_min_subiter:  # convergence of the NR algorithm
                 # Initialize the next increment
+                self._t_fact_inc = None
                 return 1, subiter, normRes
 
             # --------------- Solve --------------------------------------------------------
-            # self.__Assembly.current.assemble_global_mat(compute = 'matrix')
-            # self.set_A(self.__Assembly.current.get_global_matrix())
             self.update(
                 compute="matrix", updateWeakForm=False
             )  # assemble the tangeant matrix
@@ -387,6 +389,7 @@ class _NonLinearBase:
 
             self.NewtonRaphsonIncrement()
 
+        self._t_fact_inc = None
         return 0, subiter, normRes
 
     def nlsolve(
@@ -594,7 +597,14 @@ class _NonLinearBase:
 
     @property
     def t_fact(self):
-        """Adimensional time used for boundary conditions."""
+        """Adimensional time used for boundary conditions.
+
+        Frozen during ``solve_time_increment`` so that modifications to
+        ``self.dtime`` (e.g. by a CCD step-size callback) do not alter
+        the target time factor mid-increment.
+        """
+        if self._t_fact_inc is not None:
+            return self._t_fact_inc
         return (self.time + self.dtime - self.t0) / (self.tmax - self.t0)
 
     @property

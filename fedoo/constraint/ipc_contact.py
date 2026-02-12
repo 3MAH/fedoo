@@ -966,8 +966,14 @@ class IPCContact(AssemblyBase):
             # Scale min_subiter by proximity: more iterations when closer
             if min_d_val is not None and min_d_val < 0.01 * self._actual_dhat:
                 self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 3)
-            else:
-                self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 1)
+
+        # Always force at least 1 NR iteration when IPC is active.
+        # The Displacement criterion's reference error grows with
+        # accumulated displacement, making the tolerance progressively
+        # looser.  Without this floor, many steps are accepted at
+        # iter 0 (elastic prediction only), accumulating equilibrium
+        # errors that cause stress oscillations.
+        self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 1)
 
         # Build friction collisions if enabled
         if self.friction_coefficient > 0:
