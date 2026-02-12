@@ -203,6 +203,8 @@ class IPCContact(AssemblyBase):
         self._pb = None  # reference to problem (for accessing elastic gradient)
         self._n_collisions_at_start = 0  # collision count at start of increment
         self._kappa_boosted_this_increment = False  # prevent repeated within-NR boosts
+        self._nr_prev_min_distance = None  # min distance at previous NR iteration
+        self._bbox_diag = None  # bounding box diagonal (cached)
 
         # OGC trust-region state
         self._ogc_trust_region = None
@@ -340,10 +342,7 @@ class IPCContact(AssemblyBase):
         """
         ipctk = _import_ipctk()
 
-        bbox_diag = np.linalg.norm(
-            self._rest_positions.max(axis=0)
-            - self._rest_positions.min(axis=0)
-        )
+        bbox_diag = self._bbox_diag
 
         # Barrier gradient on surface DOFs
         n_surf_dof = len(self._surface_node_indices) * self.space.ndim
@@ -454,7 +453,17 @@ class IPCContact(AssemblyBase):
                 )
 
     def _ccd_line_search(self, pb, dX):
-        """Compute max collision-free step size using CCD.
+        """Compute step size using CCD + energy-based backtracking.
+
+        **Phase 1 — CCD**: limits alpha to the largest collision-free
+        step.
+
+        **Phase 2 — Energy backtracking**: starting from the CCD alpha,
+        halves the step until the total energy decreases.  Barrier
+        energy is evaluated exactly from ipctk; elastic energy change
+        is approximated via a quadratic model (Lt * deps at the global
+        level) using the already-computed elastic residual and tangent
+        stiffness — no ``umat()`` call needed.
 
         Parameters
         ----------
@@ -466,7 +475,8 @@ class IPCContact(AssemblyBase):
         Returns
         -------
         alpha : float
-            Maximum step size in (0, 1] that is collision-free.
+            Step size in (0, 1] that is collision-free and decreases
+            total energy.
         """
         ipctk = _import_ipctk()
         ndim = self.space.ndim
@@ -485,12 +495,7 @@ class IPCContact(AssemblyBase):
 
         vertices_next = vertices_current + surf_disp
 
-        # When no contacts exist at the start of the step, the elastic
-        # prediction has no barrier terms and surfaces can freely jump
-        # from d > dhat to d << dhat.  Use min_distance = 0.1*dhat to
-        # prevent this deep penetration into the barrier zone.
-        # When contacts already exist, barrier terms are included in the
-        # elastic prediction and standard CCD (min_distance=0) suffices.
+        # --- Phase 1: CCD (collision-free step size) ---
         if self._n_collisions_at_start == 0:
             min_distance = 0.1 * self._actual_dhat
         else:
@@ -516,8 +521,67 @@ class IPCContact(AssemblyBase):
                 broad_phase=self._broad_phase,
             )
 
-        # Apply a small safety factor
-        return 0.9 * alpha if alpha < 1.0 else 1.0
+        if alpha < 1.0:
+            alpha *= 0.9
+
+        if alpha <= 0:
+            return alpha
+
+        # --- Phase 2: Energy-based backtracking ---
+        # Skip during elastic prediction: the elastic residual D_e is
+        # near zero (previous step converged) and doesn't account for
+        # external work from the BC increment, so the quadratic model
+        # would incorrectly predict energy increase.  CCD alone
+        # suffices for elastic prediction safety.
+        is_elastic_prediction = np.isscalar(pb._dU) and pb._dU == 0
+        if is_elastic_prediction:
+            return alpha
+
+        # Skip if no contacts exist and none expected at trial position
+        if len(self._collisions) == 0 and self._n_collisions_at_start == 0:
+            return alpha
+
+        # Barrier energy at current position
+        E_barrier_current = self._kappa * self._barrier_potential(
+            self._collisions, self._collision_mesh, vertices_current)
+
+        # Quadratic elastic energy approximation:
+        #   ΔΠ_elastic ≈ α*c1 + 0.5*α²*c2
+        # where c1 = -D_elastic·dX (gradient·step),
+        #       c2 = dX^T · K_elastic · dX (curvature)
+        # Uses already-computed elastic residual and tangent from the
+        # current NR iteration — no umat() needed at trial points.
+        c1, c2 = 0.0, 0.0
+        parent = self.associated_assembly_sum
+        if parent is not None:
+            for asm in parent._list_assembly:
+                if asm is not self:
+                    D_e = asm.current.get_global_vector()
+                    K_e = asm.current.get_global_matrix()
+                    if D_e is not None and K_e is not None:
+                        c1 = -np.dot(D_e, dX)
+                        c2 = np.dot(dX, K_e @ dX)
+                    break
+
+        for _ls_iter in range(12):
+            vertices_trial = vertices_current + alpha * surf_disp
+
+            # Rebuild collisions at trial position
+            trial_collisions = ipctk.NormalCollisions()
+            trial_collisions.build(
+                self._collision_mesh, vertices_trial, self._actual_dhat,
+                broad_phase=self._broad_phase)
+            E_barrier_trial = self._kappa * self._barrier_potential(
+                trial_collisions, self._collision_mesh, vertices_trial)
+
+            dE_elastic = alpha * c1 + 0.5 * alpha**2 * c2
+            dE_total = dE_elastic + (E_barrier_trial - E_barrier_current)
+
+            if dE_total <= 0:
+                break
+            alpha *= 0.5
+
+        return alpha
 
     # ------------------------------------------------------------------
     # OGC trust-region methods
@@ -751,13 +815,15 @@ class IPCContact(AssemblyBase):
             faces,
         )
 
+        # Cache bounding-box diagonal (used for dhat, kappa, energy line search)
+        self._bbox_diag = np.linalg.norm(
+            self._rest_positions.max(axis=0)
+            - self._rest_positions.min(axis=0)
+        )
+
         # Compute actual dhat
         if self._dhat_is_relative:
-            bbox_diag = np.linalg.norm(
-                self._rest_positions.max(axis=0)
-                - self._rest_positions.min(axis=0)
-            )
-            self._actual_dhat = self._dhat * bbox_diag
+            self._actual_dhat = self._dhat * self._bbox_diag
         else:
             self._actual_dhat = self._dhat
 
@@ -830,10 +896,7 @@ class IPCContact(AssemblyBase):
         Kappa can only increase through this method.
         """
         ipctk = _import_ipctk()
-        bbox_diag = np.linalg.norm(
-            self._rest_positions.max(axis=0)
-            - self._rest_positions.min(axis=0)
-        )
+        bbox_diag = self._bbox_diag
 
         if len(self._collisions) > 0:
             min_dist = self._collisions.compute_minimum_distance(
@@ -865,7 +928,8 @@ class IPCContact(AssemblyBase):
 
         2. **Adaptive doubling** — ``ipctk.update_barrier_stiffness``
            doubles kappa when the gap is small and decreasing.  This
-           runs between time steps only (not within the NR loop).
+           runs both between time steps and within the NR loop
+           (conservative doubling only, never re-initialisation).
         """
         self.sv_start = dict(self.sv)
 
@@ -897,6 +961,7 @@ class IPCContact(AssemblyBase):
         # Track collision count for detecting new contacts during NR
         self._n_collisions_at_start = len(self._collisions)
         self._kappa_boosted_this_increment = False
+        self._nr_prev_min_distance = None  # reset for new increment
 
         # Store last vertices for next increment
         self._last_vertices = vertices
@@ -975,6 +1040,37 @@ class IPCContact(AssemblyBase):
         # errors that cause stress oscillations.
         self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 1)
 
+        # Conservative kappa doubling within NR (reference IPC algorithm).
+        # Uses ipctk.update_barrier_stiffness which only doubles kappa
+        # when the minimum distance is small AND still decreasing —
+        # meaning the barrier is failing to push surfaces apart.
+        # Skips the first NR iteration (no previous distance to compare).
+        if (self._adaptive_barrier_stiffness
+                and n_collisions_now > 0
+                and self._nr_prev_min_distance is not None
+                and self._max_kappa is not None):
+            if min_d_val is None:
+                min_d_val = self._collisions.compute_minimum_distance(
+                    self._collision_mesh, vertices)
+            eps_scale = self._actual_dhat / self._bbox_diag
+            new_kappa = _import_ipctk().update_barrier_stiffness(
+                self._nr_prev_min_distance, min_d_val,
+                self._max_kappa, self._kappa, self._bbox_diag,
+                dhat_epsilon_scale=eps_scale,
+            )
+            if new_kappa > self._kappa:
+                self._kappa = new_kappa
+                self.sv["kappa"] = self._kappa
+
+        # Track minimum distance for next NR iteration's kappa update
+        if n_collisions_now > 0:
+            if min_d_val is None:
+                min_d_val = self._collisions.compute_minimum_distance(
+                    self._collision_mesh, vertices)
+            self._nr_prev_min_distance = min_d_val
+        else:
+            self._nr_prev_min_distance = np.inf
+
         # Build friction collisions if enabled
         if self.friction_coefficient > 0:
             self._friction_collisions.build(
@@ -1008,6 +1104,7 @@ class IPCContact(AssemblyBase):
         self._prev_min_distance = self.sv_start.get("prev_min_distance", self._prev_min_distance)
         self._max_kappa_set = self.sv_start.get("max_kappa_set", self._max_kappa_set)
         self._kappa_boosted_this_increment = False
+        self._nr_prev_min_distance = None  # reset on NR failure
 
         # Recompute from current displacement state
         vertices = self._get_current_vertices(pb)
