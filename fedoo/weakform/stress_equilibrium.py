@@ -476,8 +476,7 @@ class StressEquilibrium(WeakFormBase):
             elif value in ["gn", "green_naghdi"]:
                 self._corate_func = _comp_gn_strain
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
-                # No direct GN→DSDE tag in simcoon, fall back to Lie
-                self._convert_Lt_tag_std = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_GND_2_DSDE"
             elif value == "jaumann":
                 self._corate_func = _comp_jaumann_strain
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
