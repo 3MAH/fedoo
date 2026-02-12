@@ -143,7 +143,8 @@ class _NonLinearBase:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
-                self.set_X(dX * alpha)
+                # Scale only free DOFs; preserve prescribed Dirichlet values
+                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
 
         # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
         try:

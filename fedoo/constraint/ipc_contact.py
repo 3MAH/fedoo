@@ -597,7 +597,10 @@ class IPCContact(AssemblyBase):
             if alpha < 1.0:
                 alpha *= 0.9
 
+            # Scale only free DOFs; preserve prescribed Dirichlet values
+            Xbc = pb._Xbc
             dX *= alpha
+            dX += Xbc * (1 - alpha)
 
     def _ogc_filter_step(self, pb, dX):
         """Filter a Newton–Raphson displacement step using OGC.
