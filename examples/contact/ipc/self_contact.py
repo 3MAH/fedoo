@@ -53,9 +53,10 @@ res = pb.add_output("results/self_contact_ipc", solid_assembly,
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, "Disp", [0, -70])
-pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=10)
+pb.set_nr_criterion("Displacement", tol=1e-2, max_subiter=15)
 
-pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=1, interval_output=0.01)
+pb.nlsolve(dt=0.05, tmax=1, update_dt=True, dt_increase_niter=8,
+           print_info=1, interval_output=0.01)
 
 # --- Static plot ---
 res.plot("Stress", "vm", "Node", show=False, scale=1)
