@@ -181,6 +181,7 @@ class StressEquilibrium(WeakFormBase):
                 )
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
+                self.geometric_stiffness = True
                 if self.space._dimension == "2Daxi":
                     raise NotImplementedError(
                         "'2Daxi' ModelingSpace is not implemented with \
@@ -254,11 +255,19 @@ class StressEquilibrium(WeakFormBase):
                     assembly.sv["F"]
                 )
 
+                # Select the correct conversion tag based on whether the
+                # constitutive law tangent is defined w.r.t. F (Lie tangent)
+                # or w.r.t. the corotational strain measure.
+                if self.constitutivelaw._Lt_from_F:
+                    tag = self._convert_Lt_tag
+                else:
+                    tag = self._convert_Lt_tag_std
+
                 assembly.sv["TangentMatrix"] = sim.Lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     assembly.sv["Stress"].asarray(),
-                    self._convert_Lt_tag,
+                    tag,
                 )
 
             else:  # _Lt_from_F = True and assembly._nlgeom == "UL"
@@ -459,21 +468,28 @@ class StressEquilibrium(WeakFormBase):
             if value == "log":
                 self._corate_func = _comp_log_strain
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_2_DSDE"
             elif value == "log_inc":
                 self._corate_func = _comp_log_strain_inc
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_2_DSDE"
             elif value in ["gn", "green_naghdi"]:
                 self._corate_func = _comp_gn_strain
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                # No direct GN→DSDE tag in simcoon, fall back to Lie
+                self._convert_Lt_tag_std = "Dsigma_LieDD_2_DSDE"
             elif value == "jaumann":
                 self._corate_func = _comp_jaumann_strain
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_JaumannDD_2_DSDE"
             elif value == "log_r":
                 self._corate_func = _comp_log_strain_R
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_2_DSDE"
             elif value == "log_r_inc":
                 self._corate_func = _comp_log_strain_R_inc
                 self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag_std = "DsigmaDe_2_DSDE"
             else:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
