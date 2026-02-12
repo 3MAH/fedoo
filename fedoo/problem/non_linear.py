@@ -399,6 +399,7 @@ class _NonLinearBase:
         tmax: float | None = None,
         t0: float | None = None,
         dt_min: float = 1e-6,
+        dt_increase_niter: int = 2,
         max_subiter: int | None = None,
         tol_nr: float | None = None,
         print_info: int | None = None,
@@ -416,7 +417,8 @@ class _NonLinearBase:
         update_dt: bool, default = True
             If True, the time increment may be modified during resolution:
             * decrease if the solver has not converged
-            * increase if the solver has converged in one iteration.
+            * increase if the solver has converged quickly (see
+              ``dt_increase_niter``).
         tmax: float, optional.
             Time at the end of the time step.
             If omitted, the attribute tmax is considered (default = 1.)
@@ -427,6 +429,14 @@ class _NonLinearBase:
             else, the attribute t0 is modified.
         dt_min: float, default = 1e-6
             Minimal time increment
+        dt_increase_niter: int, default = 2
+            When ``update_dt`` is ``True``, the time increment is multiplied
+            by 1.25 if the Newton–Raphson loop converges in strictly fewer
+            than ``dt_increase_niter`` iterations.  The default (2) only
+            increases dt when NR converges in 0 or 1 iterations.  For
+            contact problems where NR typically needs several iterations,
+            a higher value (e.g. ``max_subiter // 2``) allows dt to
+            recover after an earlier reduction.
         max_subiter: int, optional
             Maximal number of newton raphson iteration at for each time increment.
             If omitted, the 'max_subiter' field in the nr_parameters attribute
@@ -543,9 +553,8 @@ class _NonLinearBase:
                     )
 
                 # Check if dt can be increased
-                if update_dt and nbNRiter < 2 and dt == self.dtime:
+                if update_dt and nbNRiter < dt_increase_niter and dt == self.dtime:
                     dt *= 1.25
-                    # print('Increase the time increment to {:.5f}'.format(dt))
 
             else:
                 if update_dt:
