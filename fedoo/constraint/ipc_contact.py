@@ -71,6 +71,12 @@ class IPCContact(AssemblyBase):
     penalising distant vertices for a tight contact elsewhere.
     ``use_ogc`` and ``use_ccd`` are mutually exclusive.
 
+    .. warning::
+       OGC is only supported for **shell / surface meshes** where every
+       node lies on the contact surface.  Solid meshes with interior
+       nodes must use ``use_ccd=True`` instead.  An error is raised at
+       initialization if ``use_ogc=True`` is used with a solid mesh.
+
     Parameters
     ----------
     mesh : fedoo.Mesh
@@ -122,7 +128,9 @@ class IPCContact(AssemblyBase):
         Enable OGC (Offset Geometric Contact) trust-region step
         filtering.  Per-vertex displacement clamping replaces the
         uniform scalar step of CCD.  Mutually exclusive with
-        ``use_ccd``.
+        ``use_ccd``.  **Only supported for shell / surface meshes**
+        where all nodes are on the surface; raises ``ValueError``
+        for solid meshes with interior nodes.
     space : ModelingSpace, optional
         Modeling space.  If ``None``, the active ``ModelingSpace`` is used.
     name : str, default="IPC Contact"
@@ -654,48 +662,12 @@ class IPCContact(AssemblyBase):
             broad_phase=self._broad_phase,
         )
 
-        if self._all_nodes_on_surface:
-            # Shell/surface mesh: per-vertex OGC filtering is exact
-            filtered_disp = x_start - self._ogc_vertices_at_start
-            for d in range(ndim):
-                dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
-                    filtered_disp[:, d]
-                )
-        else:
-            # Solid mesh with interior nodes: use CCD global alpha to
-            # scale all DOFs uniformly (avoids interior/surface mismatch)
-            vertices_start = self._ogc_vertices_at_start
-            vertices_next = vertices_start + surf_disp
-
-            if self._n_collisions_at_start == 0:
-                min_distance = 0.1 * self._actual_dhat
-            else:
-                min_distance = 0.0
-
-            alpha = ipctk.compute_collision_free_stepsize(
-                self._collision_mesh,
-                vertices_start,
-                vertices_next,
-                min_distance=min_distance,
-                broad_phase=self._broad_phase,
+        # Per-vertex OGC filtering (all nodes are on the surface)
+        filtered_disp = x_start - self._ogc_vertices_at_start
+        for d in range(ndim):
+            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
+                filtered_disp[:, d]
             )
-
-            if alpha <= 0 and min_distance > 0:
-                alpha = ipctk.compute_collision_free_stepsize(
-                    self._collision_mesh,
-                    vertices_start,
-                    vertices_next,
-                    min_distance=0.0,
-                    broad_phase=self._broad_phase,
-                )
-
-            if alpha < 1.0:
-                alpha *= 0.9
-
-            # Scale only free DOFs; preserve prescribed Dirichlet values
-            Xbc = pb._Xbc
-            dX *= alpha
-            dX += Xbc * (1 - alpha)
 
     def _ogc_filter_step(self, pb, dX):
         """Filter a Newton–Raphson displacement step using OGC.
@@ -720,37 +692,14 @@ class IPCContact(AssemblyBase):
                 disp_ranks[d] * n_nodes + self._surface_node_indices
             ]
 
-        # filter_step modifies surf_dx in-place
-        if self._all_nodes_on_surface:
-            # Shell/surface mesh: per-vertex OGC filtering is exact
-            self._ogc_trust_region.filter_step(
-                self._collision_mesh, vertices_current, surf_dx
+        # Per-vertex OGC filtering (all nodes are on the surface)
+        self._ogc_trust_region.filter_step(
+            self._collision_mesh, vertices_current, surf_dx
+        )
+        for d in range(ndim):
+            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
+                surf_dx[:, d]
             )
-            for d in range(ndim):
-                dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
-                    surf_dx[:, d]
-                )
-        else:
-            # Solid mesh with interior nodes: run filter_step to maintain
-            # OGC state, then use CCD global alpha for uniform scaling
-            surf_dx_orig = surf_dx.copy()
-            self._ogc_trust_region.filter_step(
-                self._collision_mesh, vertices_current, surf_dx
-            )
-
-            vertices_next = vertices_current + surf_dx_orig
-            alpha = ipctk.compute_collision_free_stepsize(
-                self._collision_mesh,
-                vertices_current,
-                vertices_next,
-                min_distance=0.0,
-                broad_phase=self._broad_phase,
-            )
-
-            if alpha < 1.0:
-                alpha *= 0.9
-
-            dX *= alpha
 
     def _ogc_step_filter_callback(self, pb, dX, is_elastic_prediction=False):
         """Dispatch to warm-start or NR filter depending on context."""
@@ -802,12 +751,17 @@ class IPCContact(AssemblyBase):
         # Get surface node indices (global indices in the full mesh)
         self._surface_node_indices = np.unique(surf_mesh.elements)
 
-        # True for shell/surface meshes where every node is on the surface.
-        # OGC per-vertex filtering is only valid when there are no interior
-        # DOFs; otherwise a CCD-based global alpha is used instead.
-        self._all_nodes_on_surface = (
-            len(self._surface_node_indices) == self.mesh.n_nodes
-        )
+        # OGC per-vertex filtering is only valid for shell/surface meshes
+        # where every node is on the surface.  Solid meshes with interior
+        # DOFs cannot be handled correctly by per-vertex clamping.
+        if self._use_ogc and len(self._surface_node_indices) != self.mesh.n_nodes:
+            raise ValueError(
+                "use_ogc=True requires a shell/surface mesh where all nodes "
+                "are on the surface.  This mesh has interior nodes "
+                f"({self.mesh.n_nodes - len(self._surface_node_indices)} "
+                f"interior, {len(self._surface_node_indices)} surface).  "
+                "Use use_ccd=True instead for solid meshes."
+            )
 
         # Build mapping from global node indices to local surface ordering
         global_to_local = np.full(self.mesh.n_nodes, -1, dtype=int)
@@ -1175,7 +1129,8 @@ class IPCSelfContact(IPCContact):
         when ``use_ccd=True`` (see :py:class:`IPCContact`).
     use_ogc : bool, default=False
         Enable OGC trust-region step filtering.  Mutually exclusive
-        with ``use_ccd``.
+        with ``use_ccd``.  **Only supported for shell / surface
+        meshes**; raises ``ValueError`` for solid meshes.
     space : ModelingSpace, optional
         Modeling space.
     name : str, default="IPC Self Contact"
