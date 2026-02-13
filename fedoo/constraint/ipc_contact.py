@@ -110,6 +110,14 @@ class IPCContact(AssemblyBase):
         enabled, the Newton–Raphson step size is limited so that no
         intersection can occur between iterations.  Mutually exclusive
         with ``use_ogc``.
+    line_search_energy : bool or None, default=None
+        Controls energy-based backtracking after CCD line search.  The
+        step is halved until total energy (exact barrier + quadratic
+        elastic approximation) decreases.  When ``None`` (default),
+        automatically enabled when ``use_ccd=True`` — this matches the
+        reference IPC algorithm.  Set to ``False`` to disable (faster
+        but may degrade convergence).  Has no effect when ``use_ogc``
+        is enabled.
     use_ogc : bool, default=False
         Enable OGC (Offset Geometric Contact) trust-region step
         filtering.  Per-vertex displacement clamping replaces the
@@ -153,6 +161,7 @@ class IPCContact(AssemblyBase):
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
         use_ccd=False,
+        line_search_energy=None,
         use_ogc=False,
         space=None,
         name="IPC Contact",
@@ -178,6 +187,12 @@ class IPCContact(AssemblyBase):
         self._broad_phase_str = broad_phase
         self._adaptive_barrier_stiffness = adaptive_barrier_stiffness
         self._use_ccd = use_ccd
+        # Auto-enable energy backtracking when CCD is active (reference IPC
+        # algorithm always uses energy-based line search after CCD filtering)
+        if line_search_energy is None:
+            self._line_search_energy = use_ccd
+        else:
+            self._line_search_energy = line_search_energy
         self._use_ogc = use_ogc
 
         self.current = self
@@ -408,12 +423,22 @@ class IPCContact(AssemblyBase):
             self.global_vector = -self._kappa * (P @ grad_surf)
 
         if compute != "vector":
-            hess_surf = self._barrier_potential.hessian(
-                self._collisions,
-                self._collision_mesh,
-                vertices,
-                project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
-            )
+            try:
+                hess_surf = self._barrier_potential.hessian(
+                    self._collisions,
+                    self._collision_mesh,
+                    vertices,
+                    project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
+                )
+            except RuntimeError:
+                # CLAMP/ABS projection can fail on degenerate contact
+                # pairs (zero-distance); skip projection entirely.
+                hess_surf = self._barrier_potential.hessian(
+                    self._collisions,
+                    self._collision_mesh,
+                    vertices,
+                    project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
+                )
             self.global_matrix = self._kappa * (P @ hess_surf @ P.T)
 
         # Friction contributions
@@ -495,6 +520,10 @@ class IPCContact(AssemblyBase):
         vertices_next = vertices_current + surf_disp
 
         # --- Phase 1: CCD (collision-free step size) ---
+        # When no contacts at step start, use conservative min_distance
+        # to prevent jumping deep into the barrier zone.
+        # When contacts already exist, use min_distance=0 to avoid
+        # ipctk "initial distance <= d_min" warnings and double CCD.
         if self._n_collisions_at_start == 0:
             min_distance = 0.1 * self._actual_dhat
         else:
@@ -526,7 +555,10 @@ class IPCContact(AssemblyBase):
         if alpha <= 0:
             return alpha
 
-        # --- Phase 2: Energy-based backtracking ---
+        # --- Phase 2: Energy-based backtracking (opt-in) ---
+        if not self._line_search_energy:
+            return alpha
+
         # Skip during elastic prediction: the elastic residual D_e is
         # near zero (previous step converged) and doesn't account for
         # external work from the BC increment, so the quadratic model
@@ -886,13 +918,14 @@ class IPCContact(AssemblyBase):
             self._ogc_trust_region = ipctk.ogc.TrustRegion(self._actual_dhat)
             pb._step_filter_callback = self._ogc_step_filter_callback
 
+
     def _update_kappa_adaptive(self, vertices):
         """Double kappa when the gap is small and decreasing.
 
-        Uses ``ipctk.update_barrier_stiffness`` with a corrected
-        ``dhat_epsilon_scale`` so the doubling triggers within the
-        barrier zone (not only at 1e-9 * bbox as per the ipctk default).
-        Kappa can only increase through this method.
+        Uses ``ipctk.update_barrier_stiffness`` with
+        ``dhat_epsilon_scale = dhat / bbox_diag`` so the doubling
+        triggers within the barrier zone.  Only called between time
+        steps (in ``set_start``), never inside the NR loop.
         """
         ipctk = _import_ipctk()
         bbox_diag = self._bbox_diag
@@ -1137,6 +1170,9 @@ class IPCSelfContact(IPCContact):
     use_ccd : bool, default=False
         Enable CCD line search for robustness.  Mutually exclusive
         with ``use_ogc``.
+    line_search_energy : bool or None, default=None
+        Energy-based backtracking after CCD.  ``None`` auto-enables
+        when ``use_ccd=True`` (see :py:class:`IPCContact`).
     use_ogc : bool, default=False
         Enable OGC trust-region step filtering.  Mutually exclusive
         with ``use_ccd``.
@@ -1181,6 +1217,7 @@ class IPCSelfContact(IPCContact):
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
         use_ccd=False,
+        line_search_energy=None,
         use_ogc=False,
         space=None,
         name="IPC Self Contact",
@@ -1197,6 +1234,7 @@ class IPCSelfContact(IPCContact):
             broad_phase=broad_phase,
             adaptive_barrier_stiffness=adaptive_barrier_stiffness,
             use_ccd=use_ccd,
+            line_search_energy=line_search_energy,
             use_ogc=use_ogc,
             space=space,
             name=name,
