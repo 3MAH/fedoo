@@ -185,6 +185,24 @@ assemblies where a visible gap is unacceptable, decrease it (e.g.
 problems where first contact occurs suddenly (e.g. a punch hitting a
 plate) or where self-contact can cause rapid topology changes.
 
+**Energy-based backtracking** --- When ``use_ccd=True``, an
+energy-based backtracking phase is automatically enabled after CCD
+filtering: the step is halved until total energy (exact barrier +
+quadratic elastic approximation) decreases.  This matches the
+reference IPC algorithm and improves convergence robustness.  Set
+``line_search_energy=False`` to disable (faster but may degrade
+convergence for difficult contact scenarios).
+
+**Convergence criterion** --- The ``'Force'`` convergence criterion
+is recommended for IPC contact problems.  It measures the relative
+decrease of the force residual, matching the gradient-norm convergence
+used by reference IPC implementations::
+
+    pb.set_nr_criterion('Force', tol=5e-3, max_subiter=15)
+
+The ``'Displacement'`` criterion may become unreliable as contact
+stiffness grows.
+
 The ``ipctk`` package is required and can be installed with:
 
 .. code-block:: bash
@@ -371,6 +389,7 @@ which automatically extracts the surface from the volumetric mesh.
     material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
 
     # Self-contact: auto surface extraction, auto barrier stiffness
+    # Add line_search_energy=True for extra robustness (slower)
     contact = fd.constraint.IPCSelfContact(mesh, use_ccd=True)
 
     wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")

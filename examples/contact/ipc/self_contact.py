@@ -12,6 +12,7 @@ and EPICP elasto-plastic material.
 .. note::
    Requires ``ipctk`` and ``simcoon``.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -28,7 +29,10 @@ mesh = fd.mesh.hole_plate_mesh(nr=15, nt=15, length=100, height=100, radius=45)
 # the default 1e-3 to give the barrier room when the hole collapses.
 # use_ccd=True prevents surfaces from crossing between NR iterations.
 contact = fd.constraint.IPCSelfContact(
-    mesh, dhat=3e-3, dhat_is_relative=True, use_ccd=True,
+    mesh,
+    dhat=3e-3,
+    dhat_is_relative=True,
+    use_ccd=True,
 )
 
 nodes_top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
@@ -48,15 +52,22 @@ pb = fd.problem.NonLinear(assembly)
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-res = pb.add_output("results/self_contact_ipc", solid_assembly,
-                    ["Disp", "Stress", "Strain"])
+res = pb.add_output(
+    "results/self_contact_ipc", solid_assembly, ["Disp", "Stress", "Strain"]
+)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, "Disp", [0, -70])
-pb.set_nr_criterion("Displacement", tol=1e-2, max_subiter=15)
+pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
 
-pb.nlsolve(dt=0.05, tmax=1, update_dt=True, dt_increase_niter=8,
-           print_info=1, interval_output=0.01)
+pb.nlsolve(
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    dt_increase_niter=8,
+    print_info=1,
+    interval_output=0.01,
+)
 
 # --- Static plot ---
 res.plot("Stress", "vm", "Node", show=False, scale=1)
