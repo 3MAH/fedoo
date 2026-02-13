@@ -24,7 +24,7 @@ class Contact(AssemblyBase):
         slave_nodes: list[int] | Mesh,
         surface_mesh: Mesh,
         normal_law: str = "linear",
-        search_algorithm: str = "bucket",  #'bucket', #'search_nearest'
+        search_algorithm: str = "bucket",  # 'bucket', 'search_nearest', 'ipctk'
         space: ModelingSpace | None = None,
         name: str = "Contact nodes 2 surface",
     ):
@@ -103,6 +103,8 @@ class Contact(AssemblyBase):
 
             self.bucket_size = np.sqrt(2) * max_edge_size
             # self.bucket_size = self.mesh.bounding_box.size.max()/10 #bucket size #bounding box includes all nodes
+        elif self.search_algorithm == "ipctk":
+            self._setup_ipctk_broad_phase(space.ndim)
         elif search_algorithm.lower() != "search_nearest":
             raise (NameError, f"Search alogithm {search_algorithm} not unknown.")
 
@@ -148,8 +150,185 @@ class Contact(AssemblyBase):
     def global_search(self):
         if self.search_algorithm == "bucket":
             return self._nearest_node_bucket_sort()
+        elif self.search_algorithm == "ipctk":
+            return self._nearest_element_ipctk()
         else:  #'search_nearest'
             return self._nearest_node()
+
+    def _setup_ipctk_broad_phase(self, ndim):
+        """Initialise ipctk collision mesh for broad-phase contact search.
+
+        Called once from ``__init__`` when ``search_algorithm="ipctk"``.
+        Builds a compact CollisionMesh containing only the relevant
+        (master + slave) nodes and the master surface elements.  Slave
+        nodes that are not part of any master element become
+        *codimensional* vertices in ipctk, which automatically
+        generates edge-vertex (2D) or face-vertex (3D) broad-phase
+        candidates.
+
+        Slave nodes that also belong to master elements (shared nodes)
+        are handled by adding them a second time as extra codimensional
+        vertices, with a mapping back to the original slave index.
+        """
+        try:
+            import ipctk
+
+            self._ipctk = ipctk
+        except ImportError:
+            raise ImportError(
+                "The 'ipctk' package is required for search_algorithm='ipctk'. "
+                "Install it with: pip install ipctk"
+            )
+
+        # Identify slave nodes that are also master nodes (shared)
+        master_set = set(self.master_nodes)
+        shared_slaves = np.array(
+            [nd for nd in self.slave_nodes if nd in master_set], dtype=int
+        )
+
+        # Compact vertex set: union of master and slave nodes,
+        # plus duplicated entries for shared slave nodes
+        all_relevant = np.union1d(self.master_nodes, self.slave_nodes)
+        n_base = len(all_relevant)
+
+        # Mapping: original mesh index -> compact index (for non-shared)
+        orig_to_compact = np.full(self.mesh.n_nodes, -1, dtype=int)
+        orig_to_compact[all_relevant] = np.arange(n_base)
+
+        # For shared slave nodes, add extra codimensional vertices
+        # These duplicates ensure they generate EV/FV candidates
+        n_shared = len(shared_slaves)
+        self._ipctk_shared_slaves = shared_slaves
+        self._ipctk_shared_compact_ids = np.arange(
+            n_base, n_base + n_shared, dtype=int
+        )
+        self._ipctk_all_relevant = all_relevant
+
+        # Re-index master elements to compact ordering
+        compact_elements = orig_to_compact[self.mesh.elements]
+        self._ipctk_compact_elements = compact_elements
+
+        # Slave node lookup: compact_index -> position in self.slave_nodes
+        slave_list = list(self.slave_nodes)
+        slave_compact_to_idx = {}
+        for i, nd in enumerate(self.slave_nodes):
+            if nd in master_set:
+                # Map the duplicate codimensional vertex
+                shared_pos = np.searchsorted(shared_slaves, nd)
+                c_id = int(self._ipctk_shared_compact_ids[shared_pos])
+            else:
+                c_id = int(orig_to_compact[nd])
+            slave_compact_to_idx[c_id] = i
+        self._ipctk_slave_compact_to_idx = slave_compact_to_idx
+
+        # Rest positions in 3D (ipctk always works in 3D)
+        rest_pos = self.mesh.nodes[all_relevant].copy()
+        # Append positions for shared slave duplicates
+        if n_shared > 0:
+            rest_pos = np.vstack([rest_pos, self.mesh.nodes[shared_slaves]])
+        if rest_pos.shape[1] == 2:
+            rest_pos = np.hstack(
+                [rest_pos, np.zeros((rest_pos.shape[0], 1))]
+            )
+        rest_pos = np.asfortranarray(rest_pos, dtype=float)
+
+        # Build edges / faces from master surface elements
+        if ndim == 2:
+            edges = compact_elements
+            faces = np.empty((0, 3), dtype=int)
+        else:  # 3D
+            edges = ipctk.edges(compact_elements)
+            faces = compact_elements
+
+        self._ipctk_collision_mesh = ipctk.CollisionMesh(rest_pos, edges, faces)
+        self._ipctk_ndim = ndim
+
+        # Compute inflation radius from mesh size (tighter than max_dist)
+        elm_nodes_crd = self.mesh.nodes[self.mesh.elements]
+        if self.mesh.elements.shape[1] == 2:
+            max_edge_size = np.linalg.norm(
+                elm_nodes_crd[:, 1, :] - elm_nodes_crd[:, 0, :], axis=1
+            ).max()
+        else:  # tri3
+            max_edge_size = max(
+                np.linalg.norm(
+                    elm_nodes_crd[:, j, :] - elm_nodes_crd[:, i, :], axis=1
+                ).max()
+                for i, j in [(0, 1), (1, 2), (2, 0)]
+            )
+        self._ipctk_inflation_radius = np.sqrt(2) * max_edge_size
+
+    def _nearest_element_ipctk(self):
+        """Find candidate master elements for each slave node using ipctk.
+
+        Uses ipctk's spatial hashing (HashGrid) to build edge-vertex (2D)
+        or face-vertex (3D) broad-phase candidates, then filters to keep
+        only slave-node ↔ master-element pairs.
+
+        The inflation radius is derived from the maximum element edge
+        length (same scale as the bucket sort's bucket size) to avoid
+        returning the entire mesh when ``max_dist`` is large.  The
+        ``max_dist`` filter is applied in the narrow phase by
+        ``contact_search``.
+
+        Returns
+        -------
+        possible_elements : list[list[int]]
+            ``possible_elements[i]`` is the list of master element indices
+            that may be in contact with the *i*-th slave node.
+        """
+        ipctk = self._ipctk
+        compact_elements = self._ipctk_compact_elements
+        slave_lookup = self._ipctk_slave_compact_to_idx
+        is_self = isinstance(self, SelfContact)
+
+        # Current vertex positions (compact + shared duplicates, 3D)
+        verts = self.mesh.nodes[self._ipctk_all_relevant].copy()
+        if len(self._ipctk_shared_slaves) > 0:
+            verts = np.vstack(
+                [verts, self.mesh.nodes[self._ipctk_shared_slaves]]
+            )
+        if verts.shape[1] == 2:
+            verts = np.hstack([verts, np.zeros((verts.shape[0], 1))])
+        verts = np.asfortranarray(verts, dtype=float)
+
+        # Inflation = min(max_dist, mesh-size-based radius)
+        inflation = min(self.max_dist, self._ipctk_inflation_radius)
+
+        # Build broad-phase candidates
+        candidates = ipctk.Candidates()
+        candidates.build(
+            self._ipctk_collision_mesh,
+            verts,
+            inflation,
+            broad_phase=ipctk.HashGrid(),
+        )
+
+        n_slave = len(self.slave_nodes)
+        possible_elements = [[] for _ in range(n_slave)]
+
+        if self._ipctk_ndim == 2:
+            for ev in candidates.ev_candidates:
+                v_id = ev.vertex_id
+                e_id = ev.edge_id  # = master element index
+                idx = slave_lookup.get(v_id)
+                if idx is None:
+                    continue
+                if is_self and v_id in compact_elements[e_id]:
+                    continue
+                possible_elements[idx].append(e_id)
+        else:  # 3D
+            for fv in candidates.fv_candidates:
+                v_id = fv.vertex_id
+                f_id = fv.face_id  # = master element index
+                idx = slave_lookup.get(v_id)
+                if idx is None:
+                    continue
+                if is_self and v_id in compact_elements[f_id]:
+                    continue
+                possible_elements[idx].append(f_id)
+
+        return possible_elements
 
     def assemble_global_mat(self, compute="all"):
         pass
