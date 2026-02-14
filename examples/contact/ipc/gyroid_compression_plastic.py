@@ -23,7 +23,10 @@ MESH_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../../../util/meshes/gyroid_per.vtk"
 )
 mesh = fd.Mesh.read(MESH_PATH)
-material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
+
+E, nu = 200e3, 0.3
+props = np.array([E, nu, 1e-5, 300, 1000, 0.3])
+material = fd.constitutivelaw.Simcoon("EPICP", props)
 
 # --- IPC self-contact ---
 contact = fd.constraint.IPCSelfContact(
@@ -41,7 +44,7 @@ pb = fd.problem.NonLinear(assembly)
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-res = pb.add_output("results/gyroid_ipc", solid_assembly, ["Disp", "Stress"])
+res = pb.add_output("results/gyroid_ipc_plastic", solid_assembly, ["Disp", "Stress"])
 
 # --- BCs: compression 50% ---
 nodes_top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
