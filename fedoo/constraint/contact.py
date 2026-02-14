@@ -76,32 +76,7 @@ class Contact(AssemblyBase):
 
         self.search_algorithm = search_algorithm.lower()
         if self.search_algorithm == "bucket":
-            # by default bucket_size should be set to max sqrt(2)*max(edge_size)
-            if self.mesh.elements.shape[1] == 2:
-                max_edge_size = np.linalg.norm(
-                    self.mesh.nodes[self.mesh.elements[:, 1]]
-                    - self.mesh.nodes[self.mesh.elements[:, 0]],
-                    axis=1,
-                ).max()
-            elif self.mesh.elements.shape[1] == 3:
-                max_edge_size = np.max(
-                    [
-                        np.linalg.norm(
-                            self.mesh.nodes[self.mesh.elements[:, ind[1]]]
-                            - self.mesh.nodes[self.mesh.elements[:, ind[0]]],
-                            axis=1,
-                        ).max()
-                        for ind in [[0, 1], [1, 2], [2, 0]]
-                    ]
-                )
-            else:
-                raise NotImplementedError(
-                    f"'{self.mesh.elm_type}' elements are not "
-                    "supported in contact. Use either 'tri3' "
-                    "or 'lin2' elements."
-                )
-
-            self.bucket_size = np.sqrt(2) * max_edge_size
+            self.bucket_size = np.sqrt(2) * self._compute_max_edge_size()
             # self.bucket_size = self.mesh.bounding_box.size.max()/10 #bucket size #bounding box includes all nodes
         elif self.search_algorithm == "ipctk":
             self._setup_ipctk_broad_phase(space.ndim)
@@ -155,24 +130,31 @@ class Contact(AssemblyBase):
         else:  #'search_nearest'
             return self._nearest_node()
 
+    def _compute_max_edge_size(self):
+        """Maximum edge length across all master surface elements."""
+        elm_crd = self.mesh.nodes[self.mesh.elements]
+        n_per_elm = elm_crd.shape[1]
+        if n_per_elm == 2:  # lin2
+            return np.linalg.norm(elm_crd[:, 1] - elm_crd[:, 0], axis=1).max()
+        elif n_per_elm == 3:  # tri3
+            return max(
+                np.linalg.norm(elm_crd[:, j] - elm_crd[:, i], axis=1).max()
+                for i, j in [(0, 1), (1, 2), (2, 0)]
+            )
+        else:
+            raise NotImplementedError(
+                f"'{self.mesh.elm_type}' elements are not supported in "
+                "contact. Use either 'tri3' or 'lin2' elements."
+            )
+
     def _setup_ipctk_broad_phase(self, ndim):
-        """Initialise ipctk collision mesh for broad-phase contact search.
+        """Build ipctk CollisionMesh for broad-phase contact search.
 
-        Called once from ``__init__`` when ``search_algorithm="ipctk"``.
-        Builds a compact CollisionMesh containing only the relevant
-        (master + slave) nodes and the master surface elements.  Slave
-        nodes that are not part of any master element become
-        *codimensional* vertices in ipctk, which automatically
-        generates edge-vertex (2D) or face-vertex (3D) broad-phase
-        candidates.
-
-        Slave nodes that also belong to master elements (shared nodes)
-        are handled by adding them a second time as extra codimensional
-        vertices, with a mapping back to the original slave index.
+        Slave nodes already in master elements get codimensional
+        duplicates so ipctk still generates EV/FV candidates for them.
         """
         try:
             import ipctk
-
             self._ipctk = ipctk
         except ImportError:
             raise ImportError(
@@ -180,155 +162,95 @@ class Contact(AssemblyBase):
                 "Install it with: pip install ipctk"
             )
 
-        # Identify slave nodes that are also master nodes (shared)
-        master_set = set(self.master_nodes)
-        shared_slaves = np.array(
-            [nd for nd in self.slave_nodes if nd in master_set], dtype=int
-        )
-
-        # Compact vertex set: union of master and slave nodes,
-        # plus duplicated entries for shared slave nodes
+        # Compact vertex set: master ∪ slave
         all_relevant = np.union1d(self.master_nodes, self.slave_nodes)
         n_base = len(all_relevant)
 
-        # Mapping: original mesh index -> compact index (for non-shared)
-        orig_to_compact = np.full(self.mesh.n_nodes, -1, dtype=int)
-        orig_to_compact[all_relevant] = np.arange(n_base)
+        # Shared slaves need codimensional duplicates for EV/FV candidates
+        shared_mask = np.isin(self.slave_nodes, self.master_nodes)
+        shared_slaves = self.slave_nodes[shared_mask]
 
-        # For shared slave nodes, add extra codimensional vertices
-        # These duplicates ensure they generate EV/FV candidates
-        n_shared = len(shared_slaves)
-        self._ipctk_shared_slaves = shared_slaves
-        self._ipctk_shared_compact_ids = np.arange(
-            n_base, n_base + n_shared, dtype=int
-        )
+        # Global → compact index mapping
+        g2c = np.full(self.mesh.n_nodes, -1, dtype=int)
+        g2c[all_relevant] = np.arange(n_base)
+
+        # Compact vertex ID for each slave (shared ones get duplicate IDs)
+        slave_cvids = g2c[self.slave_nodes].copy()
+        slave_cvids[shared_mask] = n_base + np.arange(shared_mask.sum())
+
+        # Reverse lookup: compact vertex ID → slave index (-1 = not slave)
+        n_verts = n_base + len(shared_slaves)
+        cvid_to_slave = np.full(n_verts, -1, dtype=int)
+        cvid_to_slave[slave_cvids] = np.arange(len(self.slave_nodes))
+
+        # For self-contact: map duplicate IDs back to element-space IDs
+        vid_to_orig = np.arange(n_verts, dtype=int)
+        if len(shared_slaves):
+            vid_to_orig[n_base:] = g2c[shared_slaves]
+
+        self._ipctk_cvid_to_slave = cvid_to_slave
+        self._ipctk_vid_to_orig = vid_to_orig
+        self._ipctk_compact_elements = g2c[self.mesh.elements]
         self._ipctk_all_relevant = all_relevant
-
-        # Re-index master elements to compact ordering
-        compact_elements = orig_to_compact[self.mesh.elements]
-        self._ipctk_compact_elements = compact_elements
-
-        # Slave node lookup: compact_index -> position in self.slave_nodes
-        slave_list = list(self.slave_nodes)
-        slave_compact_to_idx = {}
-        for i, nd in enumerate(self.slave_nodes):
-            if nd in master_set:
-                # Map the duplicate codimensional vertex
-                shared_pos = np.searchsorted(shared_slaves, nd)
-                c_id = int(self._ipctk_shared_compact_ids[shared_pos])
-            else:
-                c_id = int(orig_to_compact[nd])
-            slave_compact_to_idx[c_id] = i
-        self._ipctk_slave_compact_to_idx = slave_compact_to_idx
-
-        # Rest positions in 3D (ipctk always works in 3D)
-        rest_pos = self.mesh.nodes[all_relevant].copy()
-        # Append positions for shared slave duplicates
-        if n_shared > 0:
-            rest_pos = np.vstack([rest_pos, self.mesh.nodes[shared_slaves]])
-        if rest_pos.shape[1] == 2:
-            rest_pos = np.hstack(
-                [rest_pos, np.zeros((rest_pos.shape[0], 1))]
-            )
-        rest_pos = np.asfortranarray(rest_pos, dtype=float)
-
-        # Build edges / faces from master surface elements
-        if ndim == 2:
-            edges = compact_elements
-            faces = np.empty((0, 3), dtype=int)
-        else:  # 3D
-            edges = ipctk.edges(compact_elements)
-            faces = compact_elements
-
-        self._ipctk_collision_mesh = ipctk.CollisionMesh(rest_pos, edges, faces)
+        self._ipctk_shared_slaves = shared_slaves
         self._ipctk_ndim = ndim
 
-        # Compute inflation radius from mesh size (tighter than max_dist)
-        elm_nodes_crd = self.mesh.nodes[self.mesh.elements]
-        if self.mesh.elements.shape[1] == 2:
-            max_edge_size = np.linalg.norm(
-                elm_nodes_crd[:, 1, :] - elm_nodes_crd[:, 0, :], axis=1
-            ).max()
-        else:  # tri3
-            max_edge_size = max(
-                np.linalg.norm(
-                    elm_nodes_crd[:, j, :] - elm_nodes_crd[:, i, :], axis=1
-                ).max()
-                for i, j in [(0, 1), (1, 2), (2, 0)]
-            )
-        self._ipctk_inflation_radius = np.sqrt(2) * max_edge_size
+        # Build CollisionMesh
+        pos = self._ipctk_build_vertices()
+        elems = self._ipctk_compact_elements
+        if ndim == 2:
+            edges, faces = elems, np.empty((0, 3), dtype=int)
+        else:
+            edges, faces = ipctk.edges(elems), elems
+        self._ipctk_cmesh = ipctk.CollisionMesh(pos, edges, faces)
+        self._ipctk_inflation = np.sqrt(2) * self._compute_max_edge_size()
+
+    def _ipctk_build_vertices(self):
+        """Current vertex positions for ipctk (compact + shared dups, 3D, F-contiguous)."""
+        pos = self.mesh.nodes[self._ipctk_all_relevant]
+        if len(self._ipctk_shared_slaves):
+            pos = np.vstack([pos, self.mesh.nodes[self._ipctk_shared_slaves]])
+        if pos.shape[1] == 2:
+            pos = np.hstack([pos, np.zeros((len(pos), 1))])
+        return np.asfortranarray(pos, dtype=float)
 
     def _nearest_element_ipctk(self):
-        """Find candidate master elements for each slave node using ipctk.
+        """Broad-phase search using ipctk HashGrid.
 
-        Uses ipctk's spatial hashing (HashGrid) to build edge-vertex (2D)
-        or face-vertex (3D) broad-phase candidates, then filters to keep
-        only slave-node ↔ master-element pairs.
-
-        The inflation radius is derived from the maximum element edge
-        length (same scale as the bucket sort's bucket size) to avoid
-        returning the entire mesh when ``max_dist`` is large.  The
-        ``max_dist`` filter is applied in the narrow phase by
-        ``contact_search``.
-
-        Returns
-        -------
-        possible_elements : list[list[int]]
-            ``possible_elements[i]`` is the list of master element indices
-            that may be in contact with the *i*-th slave node.
+        Returns list of candidate master element indices per slave node.
         """
-        ipctk = self._ipctk
-        compact_elements = self._ipctk_compact_elements
-        slave_lookup = self._ipctk_slave_compact_to_idx
-        is_self = isinstance(self, SelfContact)
-
-        # Current vertex positions (compact + shared duplicates, 3D)
-        verts = self.mesh.nodes[self._ipctk_all_relevant].copy()
-        if len(self._ipctk_shared_slaves) > 0:
-            verts = np.vstack(
-                [verts, self.mesh.nodes[self._ipctk_shared_slaves]]
-            )
-        if verts.shape[1] == 2:
-            verts = np.hstack([verts, np.zeros((verts.shape[0], 1))])
-        verts = np.asfortranarray(verts, dtype=float)
-
-        # Inflation = min(max_dist, mesh-size-based radius)
-        inflation = min(self.max_dist, self._ipctk_inflation_radius)
-
-        # Build broad-phase candidates
-        candidates = ipctk.Candidates()
-        candidates.build(
-            self._ipctk_collision_mesh,
-            verts,
-            inflation,
-            broad_phase=ipctk.HashGrid(),
+        cands = self._ipctk.Candidates()
+        cands.build(
+            self._ipctk_cmesh,
+            self._ipctk_build_vertices(),
+            min(self.max_dist, self._ipctk_inflation),
+            broad_phase=self._ipctk.HashGrid(),
         )
 
-        n_slave = len(self.slave_nodes)
-        possible_elements = [[] for _ in range(n_slave)]
+        elems = self._ipctk_compact_elements
+        cvid_to_slave = self._ipctk_cvid_to_slave
+        vid_to_orig = self._ipctk_vid_to_orig
+        is_self = isinstance(self, SelfContact)
+        result = [[] for _ in range(len(self.slave_nodes))]
 
         if self._ipctk_ndim == 2:
-            for ev in candidates.ev_candidates:
-                v_id = ev.vertex_id
-                e_id = ev.edge_id  # = master element index
-                idx = slave_lookup.get(v_id)
-                if idx is None:
+            for c in cands.ev_candidates:
+                si = cvid_to_slave[c.vertex_id]
+                if si < 0:
                     continue
-                if is_self and v_id in compact_elements[e_id]:
+                if is_self and vid_to_orig[c.vertex_id] in elems[c.edge_id]:
                     continue
-                possible_elements[idx].append(e_id)
-        else:  # 3D
-            for fv in candidates.fv_candidates:
-                v_id = fv.vertex_id
-                f_id = fv.face_id  # = master element index
-                idx = slave_lookup.get(v_id)
-                if idx is None:
+                result[si].append(c.edge_id)
+        else:
+            for c in cands.fv_candidates:
+                si = cvid_to_slave[c.vertex_id]
+                if si < 0:
                     continue
-                if is_self and v_id in compact_elements[f_id]:
+                if is_self and vid_to_orig[c.vertex_id] in elems[c.face_id]:
                     continue
-                possible_elements[idx].append(f_id)
+                result[si].append(c.face_id)
 
-        return possible_elements
+        return result
 
     def assemble_global_mat(self, compute="all"):
         pass
