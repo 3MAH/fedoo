@@ -32,7 +32,7 @@ except ImportError:
     def viewer(res=None):
         raise ImportError(
             "pyvistaqt is required to launch the viewer. "
-            "Install it with: pip install pyvistaqt"
+            "Install it with: pip install pyvistaqt pyqt5"
         )
 
 

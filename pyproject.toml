@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,simcoon,dataio,test]']
+all = ['fedoo[solver,plot,simcoon,test]']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'scikit-umfpack ; platform_machine=="arm64" or platform_machine=="aarch64"'
@@ -38,10 +38,6 @@ solver = [
 plot = [
     'matplotlib',
     'pyvista[io]',
-    'pyvistaqt'
-]
-dataio = [
-    'pandas'
 ]
 simcoon = [
     'simcoon'
@@ -49,6 +45,13 @@ simcoon = [
 test = [
     'pytest',
     'pytest-cov'
+]
+gui = [
+    'pyvistaqt',
+    'pyside6',
+]
+dataio = [
+    'pandas'
 ]
 other = [
     'microgen'

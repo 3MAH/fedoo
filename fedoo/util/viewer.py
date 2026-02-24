@@ -87,11 +87,12 @@ class DockTitleBar(QtWidgets.QWidget):
                 QToolButton {{ color: {fg.name()}; }}
             """)
         else:
-            base = pal.color(QtGui.QPalette.AlternateBase)
-            text = pal.color(QtGui.QPalette.WindowText)
+            # Use explicit light gray for inactive titlebar (Windows default)
+            bg = "#CCCCCC"
+            text = "#000000"
             self.setStyleSheet(f"""
-                QWidget {{ background-color: {base.name()}; }}
-                QLabel {{ color: {text.name()}; font-weight: normal; }}
+                QWidget {{ background-color: {bg}; }}
+                QLabel {{ color: {text}; font-weight: normal; }}
             """)
 
 
@@ -3925,10 +3926,13 @@ def viewer(res=None):
     if not (USE_PYVISTA_QT):
         raise ImportError(
             "pyvistaqt is required to launch the viewer. "
-            "Install it with: pip install pyvistaqt"
+            "Install it with: pip install pyvistaqt pyqt5"
         )
 
-    app = QtWidgets.QApplication(sys.argv)
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+
     if res is None:
         window = MainWindow()
     else:
