@@ -215,6 +215,42 @@ class PlotDock(QDockWidget):
             return None
         return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
 
+    def get_components(self, field):
+        if field == "":
+            return [""]
+        data = self.data
+        if np.isscalar(data[field]):
+            return []
+
+        if data[field].ndim == 1:
+            comps = ["0"]
+        else:
+            if field == "Stress":
+                comps = [
+                    "XX",
+                    "YY",
+                    "ZZ",
+                    "XY",
+                    "XZ",
+                    "YZ",
+                    "vm",
+                    "pressure",
+                    "I",
+                    "II",
+                    "III",
+                ]
+            elif field == "Strain":
+                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ", "I", "II", "III"]
+            elif field == "Disp":
+                if len(data["Disp"]) == 2:
+                    comps = ["X", "Y", "norm"]
+                else:
+                    comps = ["X", "Y", "Z", "norm"]
+            else:
+                comps = [str(i) for i in range(data[field].shape[0])]
+
+        return comps
+
     def update_plot(self, val=None, iteration=None, lock_view=True, plotter=None):
         if self.data.mesh is None:
             # don't plot anything without a mesh
@@ -289,6 +325,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.all_docks = []
         self.active_dock = None
+        self._sync_field = (
+            False  # if True, all docks will share the same field/component/data_type
+        )
+        self._sync_iter = False  # if True, all docks will share the same iteration
         self._clim_dialog = None  # clim windows if open
         self._clip_dialog = None  # clip windows if open
         self._plot_over_line_dialog = None
@@ -554,10 +594,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Menu View ---
         view_menu = menubar.addMenu("View")
         # add same actions as view toolbar
-        link_views_action = QtWidgets.QAction("Link views", self)
-        link_views_action.setCheckable(True)
-        link_views_action.triggered.connect(self._toggle_link_views)
-        view_menu.addAction(link_views_action)
+        self._link_views_action = QtWidgets.QAction("Link views", self)
+        self._link_views_action.setCheckable(True)
+        self._link_views_action.triggered.connect(self._toggle_link_views)
+        view_menu.addAction(self._link_views_action)
 
         view_menu.addAction(view_top_action)
         view_menu.addAction(view_bottom_action)
@@ -615,6 +655,41 @@ class MainWindow(QtWidgets.QMainWindow):
         auto_action = QtWidgets.QAction("Automatic Layout", self)
         auto_action.triggered.connect(self._distribute_auto)
         distribute_menu.addAction(auto_action)
+
+        # --- Link Windows Menu ---
+        link_windows_menu = windows_menu.addMenu("Link windows")
+
+        # Link field action
+        self._link_field_action = QtWidgets.QAction("Link field", self)
+        self._link_field_action.setCheckable(True)
+        self._link_field_action.setChecked(self._sync_field)
+        self._link_field_action.triggered.connect(self._toggle_sync_field)
+        link_windows_menu.addAction(self._link_field_action)
+
+        # Link iteration action
+        self._link_iter_action = QtWidgets.QAction("Link iteration", self)
+        self._link_iter_action.setCheckable(True)
+        self._link_iter_action.setChecked(self._sync_iter)
+        self._link_iter_action.triggered.connect(self._toggle_sync_iter)
+        link_windows_menu.addAction(self._link_iter_action)
+
+        # Link view action
+        self._link_view_action = QtWidgets.QAction("Link view", self)
+        self._link_view_action.setCheckable(True)
+        self._link_view_action.triggered.connect(self._toggle_link_views)
+        link_windows_menu.addAction(self._link_view_action)
+
+        link_windows_menu.addSeparator()
+
+        # Link all action
+        link_all_action = QtWidgets.QAction("Link all", self)
+        link_all_action.triggered.connect(self._link_all)
+        link_windows_menu.addAction(link_all_action)
+
+        # Unlink all action
+        unlink_all_action = QtWidgets.QAction("Unlink all", self)
+        unlink_all_action.triggered.connect(self._unlink_all)
+        link_windows_menu.addAction(unlink_all_action)
 
         act_fullscreen = QtWidgets.QAction("Full Screen\tF11", self)
         act_fullscreen.triggered.connect(self.toggle_fullscreen)
@@ -850,6 +925,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window_layout = self._distribute_auto
 
     def _toggle_link_views(self, checked):
+        # Synchronize both menu items
+        self._link_views_action.setChecked(checked)
+        self._link_view_action.setChecked(checked)
+
         if checked:
             # Sync all cameras to the active dock
             if len(self.all_docks) > 1:
@@ -867,6 +946,52 @@ class MainWindow(QtWidgets.QMainWindow):
                         dock.plotter.camera_position = cam
                     except Exception:
                         pass
+
+    def _toggle_sync_field(self, checked):
+        """Toggle field synchronization across windows."""
+        self._sync_field = checked
+        if checked and self.active_dock:
+            # Synchronize all docks to active dock's current state
+            for dock in self.all_docks:
+                if dock is not self.active_dock:
+                    if self.active_dock.current_field in dock.data.field_names():
+                        dock.current_field = self.active_dock.current_field
+                        comps = dock.get_components(self.active_dock.current_field)
+                        if self.active_dock.current_comp in comps:
+                            dock.current_comp = self.active_dock.current_comp
+                    dock.current_data_type = self.active_dock.current_data_type
+                    dock.update_plot()
+
+    def _toggle_sync_iter(self, checked):
+        """Toggle iteration synchronization across windows."""
+        self._sync_iter = checked
+        if checked and self.active_dock:
+            # Synchronize all docks to active dock's current iteration
+            active_iter = self.active_dock.current_iter
+            for dock in self.all_docks:
+                if dock is not self.active_dock and dock.data.n_iter > active_iter:
+                    dock.current_iter = active_iter
+                    dock.update_plot(iteration=active_iter)
+
+    def _link_all(self):
+        """Enable all link options: field, iteration, and view."""
+        if not self._sync_field:
+            self._toggle_sync_field(True)
+        if not self._sync_iter:
+            self._toggle_sync_iter(True)
+        self._toggle_link_views(True)
+        self._link_field_action.setChecked(True)
+        self._link_iter_action.setChecked(True)
+        self._link_view_action.setChecked(True)
+
+    def _unlink_all(self):
+        """Disable all link options: field, iteration, and view."""
+        self._sync_field = False
+        self._sync_iter = False
+        self._link_field_action.setChecked(False)
+        self._link_iter_action.setChecked(False)
+        self._link_view_action.setChecked(False)
+        self._toggle_link_views(False)
 
     def _set_active(self, dock):
         # block all signals to avoid replot
@@ -996,20 +1121,38 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.iter_spin.value() != val:
             old_state = self.iter_spin.blockSignals(True)
             self.iter_spin.setValue(val)
-            self.active_dock.current_iter = val
             self.iter_spin.blockSignals(old_state)
 
-        self.update_plot(iteration=self.iteration)
+        if self.active_dock:
+            self.active_dock.current_iter = val
+
+        # Sync iteration across all docks if enabled
+        if self._sync_iter:
+            for dock in self.all_docks:
+                if dock.data.n_iter > val:  # only update if the dock has this iteration
+                    dock.current_iter = val
+                    dock.update_plot(iteration=val)
+        else:
+            self.update_plot(iteration=self.iteration)
 
     def _on_spin_changed(self, val: int):
         # sync slider without emit signal
         if self.iter_slider.value() != val:
             old_state = self.iter_slider.blockSignals(True)
             self.iter_slider.setValue(val)
-            self.active_dock.current_iter = val
             self.iter_slider.blockSignals(old_state)
 
-        self.update_plot(iteration=self.iteration)
+        if self.active_dock:
+            self.active_dock.current_iter = val
+
+        # Sync iteration across all docks if enabled
+        if self._sync_iter:
+            for dock in self.all_docks:
+                if dock.data.n_iter > val:  # only update if the dock has this iteration
+                    dock.current_iter = val
+                    dock.update_plot(iteration=val)
+        else:
+            self.update_plot(iteration=self.iteration)
 
     # set slider and iteration spinbox min/max values
     def setRange(self, min_iter: int, max_iter: int):
@@ -1057,40 +1200,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.update_plot_with_clim(lock_view=True)
 
     def get_components(self, field):
-        if field == "":
-            return [""]
-        data = self.data
-        if np.isscalar(data[field]):
-            return []
-
-        if data[field].ndim == 1:
-            comps = ["0"]
-        else:
-            if field == "Stress":
-                comps = [
-                    "XX",
-                    "YY",
-                    "ZZ",
-                    "XY",
-                    "XZ",
-                    "YZ",
-                    "vm",
-                    "pressure",
-                    "I",
-                    "II",
-                    "III",
-                ]
-            elif field == "Strain":
-                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ", "I", "II", "III"]
-            elif field == "Disp":
-                if len(data["Disp"]) == 2:
-                    comps = ["X", "Y", "norm"]
-                else:
-                    comps = ["X", "Y", "Z", "norm"]
-            else:
-                comps = [str(i) for i in range(data[field].shape[0])]
-
-        return comps
+        return self.active_dock.get_components(field)
 
     def update_components(self, field):
         if not field or not self.active_dock:
@@ -1265,19 +1375,39 @@ class MainWindow(QtWidgets.QMainWindow):
             dock.opts["diffuse"] = float(self._renderer_dialog.diffuse_spin.value())
             dock.update_plot()
 
-    def update_plot_with_clim(self, val=None, iteration=None, lock_view=True):
-        self.active_dock.current_comp = self.current_component
-        self.active_dock.current_data_type = self.current_data_type
-        if self.opts["clim_mode"] == "all":
-            if hasattr(self.data, "get_all_frame_lim"):
-                self.opts["clim"] = self.data.get_all_frame_lim(
-                    field=self.current_field,
-                    component=self.current_component,
-                    data_type=self.current_data_type,
+    def update_plot_with_clim(
+        self, val=None, iteration=None, lock_view=True, dock=None
+    ):
+        if dock is None:
+            if self._sync_field:
+                for d in self.all_docks:
+                    if self.current_field in d.data.field_names():
+                        d.current_field = self.current_field
+                        # Only set component if field exists in this dock
+                        comps = d.get_components(self.current_field)
+                        if self.current_component in comps:
+                            d.current_comp = self.current_component
+                    self.update_plot_with_clim(val, iteration, lock_view, dock=d)
+                return
+            else:
+                dock = self.active_dock
+                if dock:
+                    dock.current_comp = self.current_component
+                else:
+                    return
+
+        dock.current_data_type = self.current_data_type
+
+        if dock.opts["clim_mode"] == "all":
+            if hasattr(dock.data, "get_all_frame_lim"):
+                dock.opts["clim"] = dock.data.get_all_frame_lim(
+                    field=dock.current_field,
+                    component=dock.current_comp,
+                    data_type=dock.current_data_type,
                 )[2]
             else:
-                self.opts["clim"] = None
-        self.update_plot(val=val, iteration=iteration, lock_view=lock_view)
+                dock.opts["clim"] = None
+        dock.update_plot(val=val, iteration=iteration, lock_view=lock_view)
 
     def save_image_dialog(self):
         """Open a dialogbox to save an image."""
