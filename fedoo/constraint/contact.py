@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-# from fedoo.core.base   import ProblemBase
 import numpy as np
 from fedoo.core.base import AssemblyBase
 
-# from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
-from fedoo.core.base import ProblemBase
-from fedoo.core.mesh import MeshBase, Mesh
+from fedoo.core.mesh import Mesh
 from fedoo.lib_elements.element_list import get_element
 from scipy import sparse, spatial
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.mesh import extract_surface as extract_surface_mesh
 from copy import copy
-
-import time
 
 
 class Contact(AssemblyBase):
@@ -28,39 +23,42 @@ class Contact(AssemblyBase):
         space: ModelingSpace | None = None,
         name: str = "Contact nodes 2 surface",
     ):
-        """
-        Assembly related to surface 2 surface contact, using a node 2 surface formulation
-        with a penality method.
+        """Contact Assembly based on a node 2 surface penality formulation.
 
         Parameters
         ----------
-
         slave_nodes: numpy array of int or Mesh
             List of nodes indices: nodes that belong to the slave surface
-            or Mesh of the slave surface (in this case, the slave node indices are
-            extracted).
+            or Mesh of the slave surface (in this case, the slave node indices
+            are extracted).
         surface_mesh: fedoo.Mesh
             Mesh of the master surface
         normal_law: str in {'linear', 'bilinear'}, default = 'linear'
             Type of contact law for the normal contact.
         space: ModelingSpace
-            Modeling space associated to the weakform. If None is specified, the active ModelingSpace is considered.
+            Modeling space associated to the weakform. If None is specified,
+            the active ModelingSpace is considered.
         name: str
             The name of contact assembly
 
         Notes
-        --------------------------
+        -----
         Several attributes can be modified to change the contact behavior:
-          * eps_n: contact penalty parameter. Need to be adjusted depending of the rigidity of the material in contact.
+          * eps_n: contact penalty parameter. Need to be adjusted depending of
+            the rigidity of the material in contact.
           * clearance: Contact clearance to adjust the two surfaces.
-          * contact_search_once: If True (default) the elmement in contact are only searched at the begining of iteration.
-            It avoid oscilations between contact and non contact state during the NR iterations.
+          * contact_search_once: If True (default), the elmement in contact
+            are only searched at the begining of iteration.
+            It avoid oscilations between contact and non contact state during
+            the NR iterations.
           * tol: Tolerance for possible slide of a node outside an element.
           * max_dist: Max distance from nodes at which contact is considered.
-          * eps_a: Penalty parameter for soft contact in bilinear contact law (only used if bilinear law is choosen).
-          * limit_soft_contact: For bilinear contact law, define the penetration limit between soft contact
-            (stiffness eps_a), and hard contact (stiffness eps_n) - only used if bilinear law is choosen.
-
+          * eps_a: Penalty parameter for soft contact in bilinear contact law
+            (only used if bilinear law is choosen).
+          * limit_soft_contact: For bilinear contact law, define the
+            penetration limit between soft contact (stiffness eps_a),
+            and hard contact (stiffness eps_n) - only used if bilinear law is
+            choosen.
         """
         if space is None:
             space = ModelingSpace.get_active()
@@ -155,6 +153,7 @@ class Contact(AssemblyBase):
         """
         try:
             import ipctk
+
             self._ipctk = ipctk
         except ImportError:
             raise ImportError(
@@ -320,12 +319,8 @@ class Contact(AssemblyBase):
             first_indices_disp
         )  # number of dof involved in a contact point
 
-        list_nodes = np.unique(surf.elements)
-
         if update_contact:
-            t0 = time.time()
             list_possible_elements = self.global_search()
-            # print('temps: ', time.time()-t0)
 
         for i_nd, slave_node in enumerate(nodes):
             # if self.no_slip and slave_node in contact_list:
@@ -1096,48 +1091,6 @@ class SelfContact(Contact):
 
         super().__init__(nodes, mesh, normal_law, search_algorithm, space, name)
 
-    # def global_search(self):
-    #     """Find a list of elements that may be in contact for all slave nodes.
-
-    #     This method find the nearest neighbor of all slave nodes and return the
-    #     associated elements if the nearest_neighbor is near enough
-    #     (criterion givien by the max_dist attribute).
-
-    #     Returns
-    #     -------
-    #     possible_elements: list[list[int]]
-    #     possible_elements[i] is the list of indices of the master surface elements
-    #     that may be in contact with the ith slave nodes
-    #     are given in possible_elements[i]. If no element can be
-    #     in contact, possible_elements[i] is an empty list.
-    #     """
-    #     return self.nearest_node_self()
-
-    #     possible_elements = []
-    #     for id_nd,slave_node in enumerate(self.slave_nodes):
-    #         dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[self.master_nodes], axis=1)
-
-    #         #get the indice with the minimal distance without considering the distance of slave_node between itself
-    #         trial_nodes_indices = []
-    #         if id_nd != 0:
-    #             trial_nodes_indices.append(dist_slave_nodes[:id_nd].argmin())
-
-    #         if id_nd != len(self.master_nodes)-1:
-    #             trial_nodes_indices.append(dist_slave_nodes[id_nd+1:].argmin() + id_nd+1)
-
-    #         trial_node_indice = trial_nodes_indices[np.argmin(dist_slave_nodes[trial_nodes_indices])]
-
-    #         if dist_slave_nodes[trial_node_indice] > self.max_dist:
-    #             #to improve performance, ignore contact if distance to the closest node is to high
-    #             possible_elements.append([])
-    #         else:
-
-    #             nearest_neighbors = self.master_nodes[trial_node_indice]
-    #             possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
-    #             # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]])
-
-    #     return possible_elements
-
     def _nearest_node(self):
         """Find a list of elements that may be in contact for all slave nodes.
 
@@ -1343,177 +1296,3 @@ class SelfContact(Contact):
             ).nonzero()[0]
             for slave_nd, nn in zip(slave_nodes, nearest_neighbors)
         ]
-
-
-# Have not been tested for now
-class NodeContact(AssemblyBase):
-    """Class that define a node 2 node contact"""
-
-    def __init__(
-        self, mesh, nodes1, nodes2, space=None, name="Contact nodes 2 surface"
-    ):
-        """
-        In development.
-        """
-        if space is None:
-            space = ModelingSpace.get_active()
-        AssemblyBase.__init__(self, name, space)
-
-        self.nodes1 = nodes1
-        self.nodes2 = nodes2
-        self.mesh = mesh
-
-        self.current = self
-
-        self.eps_n = 1e7
-        """ Contact penalty parameter. """
-
-        self.max_dist = 0.5
-        """ Max distance from nodes at which contact is considered"""
-
-        self.sv = {}
-        """ Dictionary of state variables associated to the associated for the current problem."""
-        self.sv_start = {}
-
-    def assemble_global_mat(self, compute="all"):
-        pass
-
-    def contact_search(self):
-        nodes1 = self.nodes1
-        nodes2 = self.nodes2
-        if update_contact:
-            # update contact connection
-            new_contact_list = {}
-
-        # look for contact
-        contact_nodes = []
-        contact_g = []
-
-        # matrix for special treatment -> node 2 node if two nodes are close
-        # should be move in a node_2_node contact assembly
-        Xs = []
-        indices_n2n = []
-        data_n2n = []
-        # end
-
-        list_nodes = np.unique(surf.elements)
-
-        for nd in nodes1:
-            dist_nodes = np.linalg.norm(mesh.nodes[nd] - mesh.nodes[nodes2], axis=1)
-            trial_node_indice = dist_nodes.argmin()
-
-            if dist_nodes[trial_node_indice] >= self.max_dist:
-                # to improve performance, ignore contact if distance to the closest node is to high
-                continue
-
-            # asses which elements are in contact
-            list_contact_nodes = np.where(dist_nodes < self.max_dist)[0]
-
-            for nd2 in list_contact_nodes:
-                t = mesh.nodes[nd] - mesh.nodes[nd2]  # x1-x2
-                Xs.extend(t)
-
-                # n2n_global_vector[[slave_node,slave_node+surf.n_nodes]] = -self.eps_nn*t
-                # n2n_global_vector[[master_node,master_node+surf.n_nodes]] = self.eps_nn*t
-                normal = t / np.linalg.norm(t)
-
-                contact_nodes = np.array([nd, nd2])
-
-                sorted_indices = contact_nodes.argsort()
-                indices_n2n.extend(
-                    list(
-                        (
-                            contact_nodes[sorted_indices]
-                            + np.array([[0], [mesh.n_nodes]])
-                        ).ravel()
-                    )
-                )
-                data_n2n.extend(list(np.tile(np.array([-1, 1])[sorted_indices], 2)))
-
-        M_n2n = sparse.csr_array(
-            (data_n2n, indices_n2n, np.arange(0, len(indices_n2n) + 1, 2)),
-            shape=(len(indices_n2n) // 2, self.space.nvar * surf.n_nodes),
-        )
-
-        # contact law -> put it in function
-        # Fc0 = self.eps_a*self.clearance
-        # eps = (contact_g <= 0) * self.eps_n + (contact_g > 0) * self.eps_a
-        # Fcontact = (-self.eps_n * contact_g + Fc0) * (contact_g <= 0) \
-        #            +(self.eps_a * (self.clearance - contact_g)) * (contact_g > 0)
-
-        self.global_matrix = (-self.eps_n) * M_n2n.T @ M_n2n
-
-        self.global_vector = self.eps_n * M_n2n.T @ np.array(Xs)
-
-        # voir eq 9.35 et 9.36 (page 241 du pdf) avec def 9.18 et 9.19 page 239
-
-    def set_disp(self, disp):
-        if np.isscalar(disp) and disp == 0:
-            self.current = self
-        else:
-            new_crd = self.mesh.nodes + disp.T
-            if self.current == self:
-                # initialize a new
-                new_mesh = copy(self.mesh)
-                new_mesh.nodes = new_crd
-                new_assembly = copy(self)
-                new_assembly.mesh = new_mesh
-                self.current = new_assembly
-            else:
-                self.current.mesh.nodes = new_crd
-
-    def initialize(self, pb):
-        # self.update(problem)
-        # initialize the contact list
-        self.current.contact_search()  # initialize contact state
-        self.sv_start = dict(self.sv)
-
-    def set_start(self, problem):
-        self.sv_start = dict(
-            self.sv
-        )  # create a new dict with alias inside (not deep copy)
-
-    def to_start(self, pb):
-        self.sv = dict(self.sv_start)
-        self.set_disp(pb.get_disp())
-        self.current.contact_search()  # initialize global_matrix and global_vector
-
-    def update(self, pb, compute="all"):
-        self.set_disp(pb.get_disp())
-        self.current.contact_search()
-
-
-# def global_search_bucket_sort(self):
-#     possible_elements = []
-
-#     #bucket_sort
-#     w = self.mesh.bounding_box.size.max()/10 #bucket size
-#     n_buckets =  (self.mesh.bounding_box.size // w).astype(int)
-
-#     temp = ((self.mesh.nodes[self.slave_nodes] - self.mesh.bounding_box[0])/w).astype(int)
-#     bucket_id = temp[:,0] + temp[:,1] * n_buckets[0]  + temp[:,2] * n_buckets[0]*n_buckets[1] #only work in 3D -> improve
-
-#     sorted_indices = bucket_id.argsort()
-
-#     temp = [0] + [i for i in range(1,len(bucket_id)) if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i-1]]]
-
-#     bucket = {bucket_id[sorted_indices[temp[i]]]: sorted_indices[temp[i]:temp[i+1]] for i in range(0, len(temp)-1)} #bucket[2] contain the ith bucket -> perhaps best to include all bucket coordinates (list of list for instance)
-
-#     neighbors_buckets = {i: (i+np.array([-1,0,1])+n_buckets[0]*np.array([-1,0,1]).reshape(-1,1) + n_buckets[0]*n_buckets[1]*np.array([-1,0,1]).reshape(-1,1,1)).flatten() for i in bucket}
-
-#     for id_b in bucket:
-#         #closest_node technique:
-#         slave_node = bucket[id_b]
-#         master_nodes = sum([list(bucket.get(i,[])) for i in neighbors_buckets[id_b]],[])
-
-#         # dist_slave_nodes = np.linalg.norm(self.mesh.nodes[slave_node]-self.mesh.nodes[master_nodes], axis=1)
-#         dist_slave_nodes = self.mesh.nodes[slave_node] @ self.mesh.nodes[master_nodes].T
-#         trial_node_indice = dist_slave_nodes.argmin()
-#         if dist_slave_nodes[trial_node_indice] > self.max_dist:
-#             #to improve performance, ignore contact if distance to the closest node is to high
-#             possible_elements.append([])
-#         else:
-
-#             nearest_neighbors = self.master_nodes[trial_node_indice]
-#             # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
-#             possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]])
