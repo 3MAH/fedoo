@@ -11,6 +11,7 @@ Large strain (Updated Lagrangian with logarithmic corotational).
 .. note::
    Requires ``simcoon`` for the EPICP elasto-plastic material.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -45,8 +46,9 @@ pb = fd.problem.NonLinear(assembly)
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-res = pb.add_output("results/self_contact_penalty", solid_assembly,
-                    ["Disp", "Stress", "Strain"])
+res = pb.add_output(
+    "results/self_contact_penalty", solid_assembly, ["Disp", "Stress", "Strain"]
+)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, "Disp", [0, -70])

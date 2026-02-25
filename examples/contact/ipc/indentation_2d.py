@@ -40,13 +40,13 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 fd.ModelingSpace("2D")
 
 # Units: N, mm, MPa
-E_plate = 1e3   # soft plate
-E_disk = 1e5    # stiff disk (quasi-rigid, 100x stiffer)
+E_plate = 1e3  # soft plate
+E_disk = 1e5  # stiff disk (quasi-rigid, 100x stiffer)
 nu = 0.3
-R = 5.0         # disk radius
+R = 5.0  # disk radius
 plate_half = 30.0  # half-width of the plate
-plate_h = 40.0     # plate height
-gap = 0.1       # initial gap between disk bottom and plate top
+plate_h = 40.0  # plate height
+gap = 0.1  # initial gap between disk bottom and plate top
 imposed_disp = -2.0  # total vertical displacement of disk top
 
 # =========================================================================
@@ -59,7 +59,11 @@ gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 1)
 
 plate_tag = gmsh.model.occ.addRectangle(
-    -plate_half, 0, 0, 2 * plate_half, plate_h,
+    -plate_half,
+    0,
+    0,
+    2 * plate_half,
+    plate_h,
 )
 gmsh.model.occ.synchronize()
 gmsh.model.addPhysicalGroup(2, [plate_tag], tag=1, name="plate")
@@ -103,7 +107,9 @@ print(f"Disk mesh:  {mesh_disk.n_nodes} nodes, {mesh_disk.n_elements} elems")
 
 # Stack into single mesh
 mesh = fd.Mesh.stack(mesh_plate, mesh_disk)
-print(f"Total mesh: {mesh.n_nodes} nodes, {mesh.n_elements} elems, type={mesh.elm_type}")
+print(
+    f"Total mesh: {mesh.n_nodes} nodes, {mesh.n_elements} elems, type={mesh.elm_type}"
+)
 
 # =========================================================================
 # IPC contact
@@ -113,7 +119,7 @@ surf = fd.mesh.extract_surface(mesh)
 ipc_contact = fd.constraint.IPCContact(
     mesh,
     surface_mesh=surf,
-    dhat=0.05,               # absolute dhat (< gap)
+    dhat=0.05,  # absolute dhat (< gap)
     dhat_is_relative=False,
     use_ccd=True,
 )
@@ -125,7 +131,8 @@ ipc_contact = fd.constraint.IPCContact(
 mat_plate = fd.constitutivelaw.ElasticIsotrop(E_plate, nu)
 mat_disk = fd.constitutivelaw.ElasticIsotrop(E_disk, nu)
 material = fd.constitutivelaw.Heterogeneous(
-    (mat_plate, mat_disk), ("plate", "disk"),
+    (mat_plate, mat_disk),
+    ("plate", "disk"),
 )
 
 wf = fd.weakform.StressEquilibrium(material, nlgeom=False)
@@ -166,7 +173,11 @@ print("=" * 60)
 print("2D DISK INDENTATION -- IPC CONTACT")
 print("=" * 60)
 pb.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, callback=track,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    callback=track,
 )
 
 # =========================================================================
@@ -209,8 +220,7 @@ try:
 
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.plot(delta, Fy, "o-", ms=4, label="FEM (IPC)")
-    ax.plot(delta_hertz, F_hertz, "--", lw=2,
-            label="Hertz (2D half-space)")
+    ax.plot(delta_hertz, F_hertz, "--", lw=2, label="Hertz (2D half-space)")
     ax.set_xlabel("Indentation depth (mm)")
     ax.set_ylabel("Force per unit thickness (N/mm)")
     ax.set_title("2D Hertz Indentation -- Disk on Rectangle")

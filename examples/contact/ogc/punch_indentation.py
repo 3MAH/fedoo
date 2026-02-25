@@ -10,6 +10,7 @@ Both bodies are meshed with gmsh for proper curved geometry.
 .. note::
    Requires ``ipctk`` and ``gmsh``.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -39,15 +40,23 @@ gmsh.option.setNumber("General.Verbosity", 1)
 
 sphere_tag = gmsh.model.occ.addSphere(0, 0, punch_base_z + R_punch, R_punch)
 cut_box = gmsh.model.occ.addBox(
-    -R_punch - 1, -R_punch - 1, punch_base_z + R_punch,
-    2 * (R_punch + 1), 2 * (R_punch + 1), R_punch + 1,
+    -R_punch - 1,
+    -R_punch - 1,
+    punch_base_z + R_punch,
+    2 * (R_punch + 1),
+    2 * (R_punch + 1),
+    R_punch + 1,
 )
 hemi = gmsh.model.occ.cut([(3, sphere_tag)], [(3, cut_box)])[0]
 hemi_tag = hemi[0][1]
 
 cyl_tag = gmsh.model.occ.addCylinder(
-    0, 0, punch_base_z + R_punch,
-    0, 0, H_cyl,
+    0,
+    0,
+    punch_base_z + R_punch,
+    0,
+    0,
+    H_cyl,
     R_punch,
 )
 
@@ -90,8 +99,12 @@ gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 1)
 
 plate_tag = gmsh.model.occ.addBox(
-    -plate_half, -plate_half, 0,
-    2 * plate_half, 2 * plate_half, plate_h,
+    -plate_half,
+    -plate_half,
+    0,
+    2 * plate_half,
+    2 * plate_half,
+    plate_h,
 )
 gmsh.model.occ.synchronize()
 gmsh.model.addPhysicalGroup(3, [plate_tag], tag=1, name="plate")
@@ -138,14 +151,18 @@ nodes_punch_top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
 
 surf_ipc = fd.mesh.extract_surface(mesh, quad2tri=True)
 ipc_contact = fd.constraint.IPCContact(
-    mesh, surface_mesh=surf_ipc,
-    dhat=1e-2, dhat_is_relative=True,
+    mesh,
+    surface_mesh=surf_ipc,
+    dhat=1e-2,
+    dhat_is_relative=True,
     use_ogc=True,
 )
 
 mat = fd.constitutivelaw.Heterogeneous(
-    (fd.constitutivelaw.ElasticIsotrop(E_plate, nu),
-     fd.constitutivelaw.ElasticIsotrop(E_punch, nu)),
+    (
+        fd.constitutivelaw.ElasticIsotrop(E_plate, nu),
+        fd.constitutivelaw.ElasticIsotrop(E_punch, nu),
+    ),
     ("plate", "punch"),
 )
 wf = fd.weakform.StressEquilibrium(mat, nlgeom=True)
@@ -165,12 +182,10 @@ pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=8)
 print("=" * 60)
 print("HEMISPHERICAL PUNCH -- OGC TRUST-REGION")
 print("=" * 60)
-pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1,
-           interval_output=0.05)
+pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.05)
 
 # --- Static plot ---
-res.plot("Stress", "vm", "Node", show=False, scale=1,
-         elevation=75, azimuth=20)
+res.plot("Stress", "vm", "Node", show=False, scale=1, elevation=75, azimuth=20)
 
 # --- Video output (uncomment to export MP4) ---
 # res.write_movie("results/punch_ogc", "Stress", "vm", "Node",

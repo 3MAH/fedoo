@@ -327,7 +327,7 @@ class IPCContact(AssemblyBase):
         # The parent assembly is the AssemblySum containing this IPC assembly
         # We need the elastic part only (without IPC contribution)
         assembly = self._pb.assembly
-        if not hasattr(assembly, '_list_assembly'):
+        if not hasattr(assembly, "_list_assembly"):
             return None
 
         # Sum global vectors from all assemblies except this one
@@ -475,13 +475,13 @@ class IPCContact(AssemblyBase):
         # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC)
         if self._n_global_dof > 0:
             if compute != "matrix":
-                self.global_vector = np.pad(
-                    self.global_vector, (0, self._n_global_dof)
-                )
+                self.global_vector = np.pad(self.global_vector, (0, self._n_global_dof))
             if compute != "vector":
                 self.global_matrix = sparse.block_diag(
-                    [self.global_matrix,
-                     sparse.csr_array((self._n_global_dof, self._n_global_dof))],
+                    [
+                        self.global_matrix,
+                        sparse.csr_array((self._n_global_dof, self._n_global_dof)),
+                    ],
                 )
 
     def _ccd_line_search(self, pb, dX):
@@ -521,9 +521,7 @@ class IPCContact(AssemblyBase):
         n_nodes = self.mesh.n_nodes
         surf_disp = np.zeros((len(self._surface_node_indices), ndim))
         for d in range(ndim):
-            surf_disp[:, d] = dX[
-                disp_ranks[d] * n_nodes + self._surface_node_indices
-            ]
+            surf_disp[:, d] = dX[disp_ranks[d] * n_nodes + self._surface_node_indices]
 
         vertices_next = vertices_current + surf_disp
 
@@ -582,7 +580,8 @@ class IPCContact(AssemblyBase):
 
         # Barrier energy at current position
         E_barrier_current = self._kappa * self._barrier_potential(
-            self._collisions, self._collision_mesh, vertices_current)
+            self._collisions, self._collision_mesh, vertices_current
+        )
 
         # Quadratic elastic energy approximation:
         #   ΔΠ_elastic ≈ α*c1 + 0.5*α²*c2
@@ -608,10 +607,14 @@ class IPCContact(AssemblyBase):
             # Rebuild collisions at trial position
             trial_collisions = ipctk.NormalCollisions()
             trial_collisions.build(
-                self._collision_mesh, vertices_trial, self._actual_dhat,
-                broad_phase=self._broad_phase)
+                self._collision_mesh,
+                vertices_trial,
+                self._actual_dhat,
+                broad_phase=self._broad_phase,
+            )
             E_barrier_trial = self._kappa * self._barrier_potential(
-                trial_collisions, self._collision_mesh, vertices_trial)
+                trial_collisions, self._collision_mesh, vertices_trial
+            )
 
             dE_elastic = alpha * c1 + 0.5 * alpha**2 * c2
             dE_total = dE_elastic + (E_barrier_trial - E_barrier_current)
@@ -643,9 +646,7 @@ class IPCContact(AssemblyBase):
         # Surface displacement extracted from dX (fedoo blocked layout)
         surf_disp = np.zeros((n_surf, ndim))
         for d in range(ndim):
-            surf_disp[:, d] = dX[
-                disp_ranks[d] * n_nodes + self._surface_node_indices
-            ]
+            surf_disp[:, d] = dX[disp_ranks[d] * n_nodes + self._surface_node_indices]
 
         # Predicted position = start-of-increment position + displacement
         # ipctk requires F-contiguous arrays; x_start must also be writeable
@@ -665,9 +666,9 @@ class IPCContact(AssemblyBase):
         # Per-vertex OGC filtering (all nodes are on the surface)
         filtered_disp = x_start - self._ogc_vertices_at_start
         for d in range(ndim):
-            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
-                filtered_disp[:, d]
-            )
+            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = filtered_disp[
+                :, d
+            ]
 
     def _ogc_filter_step(self, pb, dX):
         """Filter a Newton–Raphson displacement step using OGC.
@@ -686,20 +687,16 @@ class IPCContact(AssemblyBase):
         vertices_current = np.asfortranarray(self._get_current_vertices(pb))
 
         # Surface displacement from dX (F-contiguous + writeable for ipctk)
-        surf_dx = np.zeros((n_surf, ndim), order='F')
+        surf_dx = np.zeros((n_surf, ndim), order="F")
         for d in range(ndim):
-            surf_dx[:, d] = dX[
-                disp_ranks[d] * n_nodes + self._surface_node_indices
-            ]
+            surf_dx[:, d] = dX[disp_ranks[d] * n_nodes + self._surface_node_indices]
 
         # Per-vertex OGC filtering (all nodes are on the surface)
         self._ogc_trust_region.filter_step(
             self._collision_mesh, vertices_current, surf_dx
         )
         for d in range(ndim):
-            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = (
-                surf_dx[:, d]
-            )
+            dX[disp_ranks[d] * n_nodes + self._surface_node_indices] = surf_dx[:, d]
 
     def _ogc_step_filter_callback(self, pb, dX, is_elastic_prediction=False):
         """Dispatch to warm-start or NR filter depending on context."""
@@ -757,7 +754,7 @@ class IPCContact(AssemblyBase):
         if self._use_ogc and len(self._surface_node_indices) != self.mesh.n_nodes:
             raise ValueError(
                 "use_ogc=True requires a shell/surface mesh where all nodes "
-                "are on the surface.  This mesh has interior nodes "
+                "are on the surface. This mesh has interior nodes "
                 f"({self.mesh.n_nodes - len(self._surface_node_indices)} "
                 f"interior, {len(self._surface_node_indices)} surface).  "
                 "Use use_ccd=True instead for solid meshes."
@@ -802,8 +799,7 @@ class IPCContact(AssemblyBase):
 
         # Cache bounding-box diagonal (used for dhat, kappa, energy line search)
         self._bbox_diag = np.linalg.norm(
-            self._rest_positions.max(axis=0)
-            - self._rest_positions.min(axis=0)
+            self._rest_positions.max(axis=0) - self._rest_positions.min(axis=0)
         )
 
         # Compute actual dhat
@@ -872,7 +868,6 @@ class IPCContact(AssemblyBase):
             self._ogc_trust_region = ipctk.ogc.TrustRegion(self._actual_dhat)
             pb._step_filter_callback = self._ogc_step_filter_callback
 
-
     def _update_kappa_adaptive(self, vertices):
         """Double kappa when the gap is small and decreasing.
 
@@ -886,14 +881,19 @@ class IPCContact(AssemblyBase):
 
         if len(self._collisions) > 0:
             min_dist = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices)
+                self._collision_mesh, vertices
+            )
         else:
             min_dist = np.inf
 
         eps_scale = self._actual_dhat / bbox_diag
         new_kappa = ipctk.update_barrier_stiffness(
-            self._prev_min_distance, min_dist, self._max_kappa,
-            self._kappa, bbox_diag, dhat_epsilon_scale=eps_scale,
+            self._prev_min_distance,
+            min_dist,
+            self._max_kappa,
+            self._kappa,
+            bbox_diag,
+            dhat_epsilon_scale=eps_scale,
         )
         if new_kappa > self._kappa:
             self._kappa = new_kappa
@@ -934,8 +934,7 @@ class IPCContact(AssemblyBase):
         # prevents kappa from decreasing.  max_kappa is set once
         # (the first time contacts appear) and kept fixed so that it
         # actually caps the adaptive doubling.
-        if (self._barrier_stiffness_init is None
-                and len(self._collisions) > 0):
+        if self._barrier_stiffness_init is None and len(self._collisions) > 0:
             self._initialize_kappa(vertices)
             if not self._max_kappa_set:
                 self._max_kappa_set = True
@@ -988,30 +987,33 @@ class IPCContact(AssemblyBase):
         # Initialize kappa when contacts first appear during an
         # increment that started with zero contacts.  MAX guard in
         # _initialize_kappa ensures kappa never decreases.
-        if (not self._kappa_boosted_this_increment
-                and self._n_collisions_at_start == 0
-                and self._barrier_stiffness_init is None
-                and len(self._collisions) > 0):
+        if (
+            not self._kappa_boosted_this_increment
+            and self._n_collisions_at_start == 0
+            and self._barrier_stiffness_init is None
+            and len(self._collisions) > 0
+        ):
             self._initialize_kappa(vertices)
             self._kappa_boosted_this_increment = True
             # Set generous max_kappa ceiling
-            self._max_kappa = max(
-                self._max_kappa, 1e4 * max(self._kappa, 1.0))
+            self._max_kappa = max(self._max_kappa, 1e4 * max(self._kappa, 1.0))
 
         # SDI: force at least one NR correction when contact state
         # changed (collision count differs from start) or when surfaces
         # are dangerously close (min_d/dhat < 0.1).
         n_collisions_now = len(self._collisions)
-        need_sdi = (n_collisions_now != self._n_collisions_at_start)
+        need_sdi = n_collisions_now != self._n_collisions_at_start
         min_d_val = None
         if not need_sdi and n_collisions_now > 0:
             min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices)
+                self._collision_mesh, vertices
+            )
             if min_d_val < 0.1 * self._actual_dhat:
                 need_sdi = True
         elif n_collisions_now > 0:
             min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices)
+                self._collision_mesh, vertices
+            )
         if need_sdi:
             # Scale min_subiter by proximity: more iterations when closer
             if min_d_val is not None and min_d_val < 0.01 * self._actual_dhat:
@@ -1039,8 +1041,11 @@ class IPCContact(AssemblyBase):
         # Update OGC trust regions after rebuilding collisions
         if self._use_ogc and self._ogc_trust_region is not None:
             self._ogc_trust_region.update_if_needed(
-                self._collision_mesh, np.asfortranarray(vertices),
-                self._collisions, broad_phase=self._broad_phase)
+                self._collision_mesh,
+                np.asfortranarray(vertices),
+                self._collisions,
+                broad_phase=self._broad_phase,
+            )
 
         # Compute contributions
         self._compute_ipc_contributions(vertices, compute)
@@ -1055,7 +1060,9 @@ class IPCContact(AssemblyBase):
         self.sv = dict(self.sv_start)
         self._kappa = self.sv_start.get("kappa", self._kappa)
         self._max_kappa = self.sv_start.get("max_kappa", self._max_kappa)
-        self._prev_min_distance = self.sv_start.get("prev_min_distance", self._prev_min_distance)
+        self._prev_min_distance = self.sv_start.get(
+            "prev_min_distance", self._prev_min_distance
+        )
         self._max_kappa_set = self.sv_start.get("max_kappa_set", self._max_kappa_set)
         self._kappa_boosted_this_increment = False
 
@@ -1085,16 +1092,14 @@ class IPCContact(AssemblyBase):
         # Reset OGC trust region on NR failure
         if self._use_ogc:
             self._ogc_vertices_at_start = vertices.copy()
-            self._ogc_trust_region = _import_ipctk().ogc.TrustRegion(
-                self._actual_dhat
-            )
+            self._ogc_trust_region = _import_ipctk().ogc.TrustRegion(self._actual_dhat)
 
 
 class IPCSelfContact(IPCContact):
     r"""Self-contact Assembly using the IPC method.
 
     Convenience wrapper around :py:class:`IPCContact` that automatically
-    extracts the surface mesh from the volumetric mesh.  Useful for
+    extracts the surface mesh from the volumetric mesh. Useful for
     problems where a single body may come into contact with itself (e.g.
     buckling, folding, compression of porous structures).
 

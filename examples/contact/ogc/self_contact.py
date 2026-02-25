@@ -11,6 +11,7 @@ and EPICP elasto-plastic material.
 .. note::
    Requires ``ipctk`` and ``simcoon``.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -24,7 +25,10 @@ mesh = fd.mesh.hole_plate_mesh(nr=15, nt=15, length=100, height=100, radius=45)
 
 # --- IPC self-contact with OGC trust-region ---
 contact = fd.constraint.IPCSelfContact(
-    mesh, dhat=3e-3, dhat_is_relative=True, use_ogc=True,
+    mesh,
+    dhat=3e-3,
+    dhat_is_relative=True,
+    use_ogc=True,
 )
 
 nodes_top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
@@ -44,8 +48,9 @@ pb = fd.problem.NonLinear(assembly)
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-res = pb.add_output("results/self_contact_ogc", solid_assembly,
-                    ["Disp", "Stress", "Strain"])
+res = pb.add_output(
+    "results/self_contact_ogc", solid_assembly, ["Disp", "Stress", "Strain"]
+)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, "Disp", [0, -70])

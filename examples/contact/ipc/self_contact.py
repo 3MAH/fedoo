@@ -59,6 +59,8 @@ res = pb.add_output(
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, "Disp", [0, -70])
 pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
+# pb.set_nr_criterion("Force", tol=1e-2, max_subiter=15)
+
 
 pb.nlsolve(
     dt=0.05,

@@ -34,14 +34,14 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 fd.ModelingSpace("3D")
 
 # Units: N, mm, MPa
-E_plate = 1e3       # soft plate
-E_sphere = 1e5      # stiff sphere (quasi-rigid, 100x stiffer)
+E_plate = 1e3  # soft plate
+E_sphere = 1e5  # stiff sphere (quasi-rigid, 100x stiffer)
 nu = 0.3
-R = 5.0             # sphere radius
-plate_half = 25.0   # half-width of the plate
-plate_h = 25.0      # plate thickness
-gap = 0.1           # initial gap between sphere bottom and plate top
-imposed_disp = -2.0 # total vertical displacement of sphere top
+R = 5.0  # sphere radius
+plate_half = 25.0  # half-width of the plate
+plate_h = 25.0  # plate thickness
+gap = 0.1  # initial gap between sphere bottom and plate top
+imposed_disp = -2.0  # total vertical displacement of sphere top
 
 sphere_cz = plate_h + R + gap  # sphere centre z-coordinate
 
@@ -93,8 +93,12 @@ gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 1)
 
 plate_tag = gmsh.model.occ.addBox(
-    -plate_half, -plate_half, 0,
-    2 * plate_half, 2 * plate_half, plate_h,
+    -plate_half,
+    -plate_half,
+    0,
+    2 * plate_half,
+    2 * plate_half,
+    plate_h,
 )
 gmsh.model.occ.synchronize()
 gmsh.model.addPhysicalGroup(3, [plate_tag], tag=1, name="plate")
@@ -141,7 +145,7 @@ surf = fd.mesh.extract_surface(mesh, quad2tri=True)
 ipc_contact = fd.constraint.IPCContact(
     mesh,
     surface_mesh=surf,
-    dhat=0.05,               # absolute dhat (< gap to avoid initial contact)
+    dhat=0.05,  # absolute dhat (< gap to avoid initial contact)
     dhat_is_relative=False,
     use_ccd=True,
 )
@@ -153,7 +157,8 @@ ipc_contact = fd.constraint.IPCContact(
 mat_plate = fd.constitutivelaw.ElasticIsotrop(E_plate, nu)
 mat_sphere = fd.constitutivelaw.ElasticIsotrop(E_sphere, nu)
 material = fd.constitutivelaw.Heterogeneous(
-    (mat_plate, mat_sphere), ("plate", "sphere"),
+    (mat_plate, mat_sphere),
+    ("plate", "sphere"),
 )
 
 wf = fd.weakform.StressEquilibrium(material, nlgeom=False)
@@ -194,7 +199,11 @@ print("=" * 60)
 print("3D SPHERE INDENTATION -- IPC CONTACT")
 print("=" * 60)
 pb.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, callback=track,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    callback=track,
 )
 
 # =========================================================================
@@ -238,8 +247,7 @@ except ImportError:
 # Stress plot
 # =========================================================================
 
-res.plot("Stress", "vm", "Node", show=False, scale=1,
-         elevation=75, azimuth=20)
+res.plot("Stress", "vm", "Node", show=False, scale=1, elevation=75, azimuth=20)
 
 # --- Video output (uncomment to export MP4) ---
 # res.write_movie("results/indentation_3d", "Stress", "vm", "Node",

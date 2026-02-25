@@ -43,7 +43,11 @@ gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 1)
 
 plate_tag = gmsh.model.occ.addRectangle(
-    -plate_half, 0, 0, 2 * plate_half, plate_h,
+    -plate_half,
+    0,
+    0,
+    2 * plate_half,
+    plate_h,
 )
 gmsh.model.occ.synchronize()
 gmsh.model.addPhysicalGroup(2, [plate_tag], tag=1, name="plate")
@@ -82,7 +86,9 @@ mesh_disk.element_sets["disk"] = np.arange(mesh_disk.n_elements)
 print(f"Disk mesh:  {mesh_disk.n_nodes} nodes, {mesh_disk.n_elements} elems")
 
 mesh = fd.Mesh.stack(mesh_plate, mesh_disk)
-print(f"Total mesh: {mesh.n_nodes} nodes, {mesh.n_elements} elems, type={mesh.elm_type}")
+print(
+    f"Total mesh: {mesh.n_nodes} nodes, {mesh.n_elements} elems, type={mesh.elm_type}"
+)
 
 # =========================================================================
 # IPC contact with OGC trust-region
@@ -104,7 +110,8 @@ ipc_contact = fd.constraint.IPCContact(
 mat_plate = fd.constitutivelaw.ElasticIsotrop(E_plate, nu)
 mat_disk = fd.constitutivelaw.ElasticIsotrop(E_disk, nu)
 material = fd.constitutivelaw.Heterogeneous(
-    (mat_plate, mat_disk), ("plate", "disk"),
+    (mat_plate, mat_disk),
+    ("plate", "disk"),
 )
 
 wf = fd.weakform.StressEquilibrium(material, nlgeom=False)
@@ -145,7 +152,11 @@ print("=" * 60)
 print("2D DISK INDENTATION -- OGC TRUST-REGION")
 print("=" * 60)
 pb.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, callback=track,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    callback=track,
 )
 
 # =========================================================================
@@ -176,8 +187,7 @@ try:
 
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.plot(delta, Fy, "o-", ms=4, label="FEM (OGC)")
-    ax.plot(delta_hertz, F_hertz, "--", lw=2,
-            label="Hertz (2D half-space)")
+    ax.plot(delta_hertz, F_hertz, "--", lw=2, label="Hertz (2D half-space)")
     ax.set_xlabel("Indentation depth (mm)")
     ax.set_ylabel("Force per unit thickness (N/mm)")
     ax.set_title("2D Hertz Indentation -- OGC Trust-Region")

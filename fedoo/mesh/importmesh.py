@@ -263,7 +263,9 @@ def import_msh(
 
                 for i in range(NbEntityBlocks):
                     l = msh.pop(0).split()
-                    entityDim = int(l[0])  # 0 for point, 1 for curve, 2 for surface, 3 for volume
+                    entityDim = int(
+                        l[0]
+                    )  # 0 for point, 1 for curve, 2 for surface, 3 for volume
                     entityTag = l[1]  # id of the entity
                     elementType = l[2]
                     numElementsInBlock = int(l[3])

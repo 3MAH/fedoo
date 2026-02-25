@@ -31,19 +31,19 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 # =========================================================================
 # Parameters
 # =========================================================================
-lam = 1.0          # wavelength
-A = 0.02           # amplitude (2% of wavelength)
-H = 2.0            # elastic block height (2*lam)
-H_rigid = 0.1      # rigid plate thickness
-gap = 0.005        # initial gap between peak and plate
+lam = 1.0  # wavelength
+A = 0.02  # amplitude (2% of wavelength)
+H = 2.0  # elastic block height (2*lam)
+H_rigid = 0.1  # rigid plate thickness
+gap = 0.005  # initial gap between peak and plate
 
 E = 1000.0
 nu = 0.3
-E_star = E / (1.0 - nu**2)      # plane strain modulus
-E_rigid = 1e6                    # quasi-rigid
+E_star = E / (1.0 - nu**2)  # plane strain modulus
+E_rigid = 1e6  # quasi-rigid
 nu_rigid = 0.3
 
-p_star = np.pi * E_star * A / lam   # complete contact pressure
+p_star = np.pi * E_star * A / lam  # complete contact pressure
 
 # Mesh resolution
 nx = 80
@@ -51,7 +51,7 @@ ny_block = 80
 ny_plate = 2
 
 # Prescribed displacement at tmax=1
-delta_max = 0.06   # total descent of rigid plate top
+delta_max = 0.06  # total descent of rigid plate top
 
 
 # =========================================================================
@@ -112,6 +112,7 @@ def filter_surface_no_lateral(surf_mesh, vol_mesh, tol=1e-8):
     if len(keep) == len(surf_mesh.elements):
         return surf_mesh  # nothing to filter
     from fedoo.core.mesh import Mesh
+
     new_elements = surf_mesh.elements[keep]
     return Mesh(nodes, new_elements, surf_mesh.elm_type, name="filtered_surface")
 
@@ -128,9 +129,12 @@ def build_mesh_and_material():
 
     # --- Elastic block ---
     mesh_block = fd.mesh.rectangle_mesh(
-        nx=nx + 1, ny=ny_block + 1,
-        x_min=0, x_max=lam,
-        y_min=0, y_max=H,
+        nx=nx + 1,
+        ny=ny_block + 1,
+        x_min=0,
+        x_max=lam,
+        y_min=0,
+        y_max=H,
         elm_type="tri3",
     )
     # Sinusoidal deformation of top surface (blended through height)
@@ -142,9 +146,12 @@ def build_mesh_and_material():
     y_plate_bot = H + A + gap
     y_plate_top = y_plate_bot + H_rigid
     mesh_plate = fd.mesh.rectangle_mesh(
-        nx=nx + 1, ny=ny_plate + 1,
-        x_min=0, x_max=lam,
-        y_min=y_plate_bot, y_max=y_plate_top,
+        nx=nx + 1,
+        ny=ny_plate + 1,
+        x_min=0,
+        x_max=lam,
+        y_min=y_plate_bot,
+        y_max=y_plate_top,
         elm_type="tri3",
     )
     mesh_plate.element_sets["plate"] = np.arange(mesh_plate.n_elements)
@@ -161,7 +168,8 @@ def build_mesh_and_material():
     mat_block = fd.constitutivelaw.ElasticIsotrop(E, nu)
     mat_plate = fd.constitutivelaw.ElasticIsotrop(E_rigid, nu_rigid)
     material = fd.constitutivelaw.Heterogeneous(
-        (mat_block, mat_plate), ("block", "plate"),
+        (mat_block, mat_plate),
+        ("block", "plate"),
     )
 
     return mesh, material, nodes_bottom, nodes_top_plate, n_block
@@ -174,9 +182,7 @@ print("=" * 62)
 print("  IPC CONTACT  (Westergaard sinusoidal benchmark)")
 print("=" * 62)
 
-mesh, material, nodes_bottom, nodes_top_plate, n_block = (
-    build_mesh_and_material()
-)
+mesh, material, nodes_bottom, nodes_top_plate, n_block = build_mesh_and_material()
 
 # Extract surface and remove left/right edges to avoid spurious contacts
 surf_raw = fd.mesh.extract_surface(mesh)
@@ -213,8 +219,13 @@ add_symmetry_bc(pb_ipc, mesh)
 pb_ipc.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
 
 # --- Tracking ---
-history_ipc = {"time": [], "reaction_y": [], "n_collisions": [],
-               "kappa": [], "min_distance": []}
+history_ipc = {
+    "time": [],
+    "reaction_y": [],
+    "n_collisions": [],
+    "kappa": [],
+    "min_distance": [],
+}
 
 
 def track_ipc(pb):
@@ -226,7 +237,8 @@ def track_ipc(pb):
     verts = ipc_contact._get_current_vertices(pb)
     if len(ipc_contact._collisions) > 0:
         min_d = ipc_contact._collisions.compute_minimum_distance(
-            ipc_contact._collision_mesh, verts,
+            ipc_contact._collision_mesh,
+            verts,
         )
     else:
         min_d = float("inf")
@@ -235,8 +247,13 @@ def track_ipc(pb):
 
 t0 = time()
 pb_ipc.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.2,
-    callback=track_ipc, exec_callback_at_each_iter=True,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.2,
+    callback=track_ipc,
+    exec_callback_at_each_iter=True,
 )
 ipc_time = time() - t0
 print(f"\nIPC solve time: {ipc_time:.2f} s")
@@ -249,23 +266,26 @@ print("\n" + "=" * 62)
 print("  PENALTY CONTACT  (Westergaard sinusoidal benchmark)")
 print("=" * 62)
 
-mesh2, material2, nodes_bottom2, nodes_top_plate2, n_block2 = (
-    build_mesh_and_material()
-)
+mesh2, material2, nodes_bottom2, nodes_top_plate2, n_block2 = build_mesh_and_material()
 
 # Slave nodes: top of elastic block (sinusoidal surface)
 surf_block = fd.mesh.extract_surface(mesh2.extract_elements("block"))
 block_boundary = set(np.unique(surf_block.elements).tolist())
-nodes_block_top = np.array([
-    n for n in block_boundary
-    if mesh2.nodes[n, 1] > H * 0.9  # top ~10% of block
-])
+nodes_block_top = np.array(
+    [
+        n
+        for n in block_boundary
+        if mesh2.nodes[n, 1] > H * 0.9  # top ~10% of block
+    ]
+)
 
 # Master surface: bottom of rigid plate
 surf_plate = fd.mesh.extract_surface(mesh2.extract_elements("plate"))
 
 penalty_contact = fd.constraint.Contact(
-    nodes_block_top, surf_plate, search_algorithm="bucket",
+    nodes_block_top,
+    surf_plate,
+    search_algorithm="bucket",
 )
 penalty_contact.contact_search_once = False
 penalty_contact.eps_n = 1e5
@@ -301,8 +321,13 @@ def track_penalty(pb):
 
 t0 = time()
 pb_penalty.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.2,
-    callback=track_penalty, exec_callback_at_each_iter=True,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.2,
+    callback=track_penalty,
+    exec_callback_at_each_iter=True,
 )
 penalty_time = time() - t0
 print(f"\nPenalty solve time: {penalty_time:.2f} s")
@@ -317,24 +342,32 @@ print("  PERFORMANCE COMPARISON: IPC vs Penalty")
 print("=" * 62)
 
 rows = [
-    ("Total solve time",
-     f"{ipc_time:.2f} s",
-     f"{penalty_time:.2f} s"),
-    ("Total increments",
-     str(len(history_ipc["time"])),
-     str(len(history_penalty["time"]))),
-    ("Final reaction Fy",
-     f"{history_ipc['reaction_y'][-1]:.4f}" if history_ipc["reaction_y"] else "N/A",
-     f"{history_penalty['reaction_y'][-1]:.4f}" if history_penalty["reaction_y"] else "N/A"),
-    ("p* (analytical)",
-     f"{p_star:.4f}", f"{p_star:.4f}"),
-    ("IPC min gap distance",
-     f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}"
-     if any(np.isfinite(d) for d in history_ipc["min_distance"]) else "inf",
-     "N/A"),
-    ("IPC final kappa",
-     f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A",
-     "N/A"),
+    ("Total solve time", f"{ipc_time:.2f} s", f"{penalty_time:.2f} s"),
+    (
+        "Total increments",
+        str(len(history_ipc["time"])),
+        str(len(history_penalty["time"])),
+    ),
+    (
+        "Final reaction Fy",
+        f"{history_ipc['reaction_y'][-1]:.4f}" if history_ipc["reaction_y"] else "N/A",
+        f"{history_penalty['reaction_y'][-1]:.4f}"
+        if history_penalty["reaction_y"]
+        else "N/A",
+    ),
+    ("p* (analytical)", f"{p_star:.4f}", f"{p_star:.4f}"),
+    (
+        "IPC min gap distance",
+        f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}"
+        if any(np.isfinite(d) for d in history_ipc["min_distance"])
+        else "inf",
+        "N/A",
+    ),
+    (
+        "IPC final kappa",
+        f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A",
+        "N/A",
+    ),
 ]
 
 w_label, w_val = 28, 18
@@ -396,23 +429,40 @@ try:
 
     # --- Normalized pressure vs displacement ---
     ax = axes[0]
-    ax.plot(delta_ana / A, p_bar_ana / p_star, "k-", linewidth=2,
-            label="Analytical (corrected)")
+    ax.plot(
+        delta_ana / A,
+        p_bar_ana / p_star,
+        "k-",
+        linewidth=2,
+        label="Analytical (corrected)",
+    )
 
     # IPC results
     if history_ipc["reaction_y"]:
         delta_ipc = np.array(history_ipc["time"]) * delta_max
         # Mean pressure = -reaction_y / lam (reaction is negative for compression)
         p_bar_ipc = -np.array(history_ipc["reaction_y"]) / lam
-        ax.plot(delta_ipc / A, p_bar_ipc / p_star, "s-",
-                color="tab:blue", markersize=4, label="IPC")
+        ax.plot(
+            delta_ipc / A,
+            p_bar_ipc / p_star,
+            "s-",
+            color="tab:blue",
+            markersize=4,
+            label="IPC",
+        )
 
     # Penalty results
     if history_penalty["reaction_y"]:
         delta_pen = np.array(history_penalty["time"]) * delta_max
         p_bar_pen = -np.array(history_penalty["reaction_y"]) / lam
-        ax.plot(delta_pen / A, p_bar_pen / p_star, "o-",
-                color="tab:orange", markersize=4, label="Penalty")
+        ax.plot(
+            delta_pen / A,
+            p_bar_pen / p_star,
+            "o-",
+            color="tab:orange",
+            markersize=4,
+            label="Penalty",
+        )
 
     ax.set_xlabel(r"$\delta / A$")
     ax.set_ylabel(r"$\bar{p} / p^*$")
@@ -426,17 +476,23 @@ try:
 
     # --- IPC-specific: min gap and kappa ---
     ax = axes[1]
-    finite_gaps = [(t, d) for t, d in zip(history_ipc["time"],
-                   history_ipc["min_distance"]) if np.isfinite(d)]
+    finite_gaps = [
+        (t, d)
+        for t, d in zip(history_ipc["time"], history_ipc["min_distance"])
+        if np.isfinite(d)
+    ]
     if finite_gaps:
         t_gap, d_gap = zip(*finite_gaps)
-        ax.plot(t_gap, d_gap, "s-", color="tab:green", markersize=3,
-                label="Min gap")
+        ax.plot(t_gap, d_gap, "s-", color="tab:green", markersize=3, label="Min gap")
     if hasattr(ipc_contact, "_actual_dhat") and ipc_contact._actual_dhat is not None:
-        ax.axhline(y=ipc_contact._actual_dhat, color="blue",
-                   linestyle="--", alpha=0.5, label=f"dhat = {ipc_contact._actual_dhat:.4f}")
-    ax.axhline(y=0, color="red", linestyle="--", alpha=0.5,
-               label="Zero (penetration)")
+        ax.axhline(
+            y=ipc_contact._actual_dhat,
+            color="blue",
+            linestyle="--",
+            alpha=0.5,
+            label=f"dhat = {ipc_contact._actual_dhat:.4f}",
+        )
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.5, label="Zero (penetration)")
     ax.set_xlabel("Time")
     ax.set_ylabel("Min gap distance")
     ax.set_title("IPC Minimum Gap Distance")

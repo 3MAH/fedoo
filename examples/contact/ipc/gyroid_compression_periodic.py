@@ -12,6 +12,7 @@ barrier stiffness, and the contact force norm at each converged step.
 .. note::
    Requires ``ipctk``.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -21,7 +22,9 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 fd.ModelingSpace("3D")
 
 # --- Geometry ---
-MESH_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../util/meshes/gyroid_per.vtk")
+MESH_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../../../util/meshes/gyroid_per.vtk"
+)
 mesh = fd.Mesh.read(MESH_PATH)
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
 
@@ -63,13 +66,21 @@ pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=10)
 # --- Diagnostic callback ---
 def diag(pb):
     n_coll = len(contact._collisions) if contact._collisions is not None else 0
-    kappa = getattr(contact, '_kappa', None)
-    gv_norm = np.linalg.norm(contact.global_vector) if contact.global_vector is not None else 0
-    print(f"  [IPC] t={pb.time:.4f}  collisions={n_coll}  kappa={kappa}  |Fcontact|={gv_norm:.4e}")
+    kappa = getattr(contact, "_kappa", None)
+    gv_norm = (
+        np.linalg.norm(contact.global_vector)
+        if contact.global_vector is not None
+        else 0
+    )
+    print(
+        f"  [IPC] t={pb.time:.4f}  collisions={n_coll}  kappa={kappa}  |Fcontact|={gv_norm:.4e}"
+    )
 
 
 # --- Solve ---
-pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1, callback=diag)
+pb.nlsolve(
+    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1, callback=diag
+)
 
 # --- Static plot ---
 # res.plot("Stress", "vm", "Node", show=True, scale=1)

@@ -36,22 +36,22 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 # =========================================================================
 # Parameters
 # =========================================================================
-R = 10.0            # sphere radius
-E = 1000.0          # elastic modulus (substrate)
-nu = 0.3            # Poisson's ratio
-E_star = E / (1.0 - nu**2)     # effective modulus (rigid indenter)
-E_rigid = 1e6       # quasi-rigid indenter
+R = 10.0  # sphere radius
+E = 1000.0  # elastic modulus (substrate)
+nu = 0.3  # Poisson's ratio
+E_star = E / (1.0 - nu**2)  # effective modulus (rigid indenter)
+E_rigid = 1e6  # quasi-rigid indenter
 nu_rigid = 0.3
 
-gap = 0.05          # initial gap at r=0 between substrate top and indenter
-delta_max = 0.5     # max indentation at tmax=1
+gap = 0.05  # initial gap at r=0 between substrate top and indenter
+delta_max = 0.5  # max indentation at tmax=1
 
 a_max = np.sqrt(R * delta_max)  # max contact radius ~ 2.236
 
-R_domain = 25.0     # substrate radial extent (~11 * a_max)
-H_sub = 25.0        # substrate height
-R_indenter = 5.0    # indenter radial extent (~2.2 * a_max)
-H_indenter = 2.0    # indenter thickness
+R_domain = 25.0  # substrate radial extent (~11 * a_max)
+H_sub = 25.0  # substrate height
+R_indenter = 5.0  # indenter radial extent (~2.2 * a_max)
+H_indenter = 2.0  # indenter thickness
 
 # Mesh resolution (number of nodes along each axis)
 nx_sub = 101
@@ -69,9 +69,7 @@ def hertz_analytical(R, E_star, delta):
     d_pos = np.maximum(delta, 0.0)
     F = 4.0 / 3.0 * E_star * np.sqrt(R) * d_pos**1.5
     a = np.sqrt(R * d_pos)
-    p0 = np.where(delta > 0,
-                  2.0 * E_star / np.pi * np.sqrt(d_pos / R),
-                  0.0)
+    p0 = np.where(delta > 0, 2.0 * E_star / np.pi * np.sqrt(d_pos / R), 0.0)
     return F, a, p0
 
 
@@ -82,20 +80,28 @@ fd.ModelingSpace("2Daxi")
 
 # --- Substrate (elastic half-space approximation) ---
 mesh_sub = fd.mesh.rectangle_mesh(
-    nx=nx_sub, ny=ny_sub,
-    x_min=0, x_max=1, y_min=0, y_max=1,
+    nx=nx_sub,
+    ny=ny_sub,
+    x_min=0,
+    x_max=1,
+    y_min=0,
+    y_max=1,
     elm_type="quad4",
 )
 # Biased node placement: dense near r=0 and z=H_sub (contact zone)
 nodes = mesh_sub.nodes
-nodes[:, 0] = R_domain * nodes[:, 0]**1.5               # radial grading
-nodes[:, 1] = H_sub * (1.0 - (1.0 - nodes[:, 1])**1.5)  # axial: dense at top
+nodes[:, 0] = R_domain * nodes[:, 0] ** 1.5  # radial grading
+nodes[:, 1] = H_sub * (1.0 - (1.0 - nodes[:, 1]) ** 1.5)  # axial: dense at top
 mesh_sub.element_sets["substrate"] = np.arange(mesh_sub.n_elements)
 
 # --- Indenter (quasi-rigid parabolic body) ---
 mesh_ind = fd.mesh.rectangle_mesh(
-    nx=nx_ind, ny=ny_ind,
-    x_min=0, x_max=1, y_min=0, y_max=1,
+    nx=nx_ind,
+    ny=ny_ind,
+    x_min=0,
+    x_max=1,
+    y_min=0,
+    y_max=1,
     elm_type="quad4",
 )
 ind_nodes = mesh_ind.nodes
@@ -135,9 +141,13 @@ nodes_sub_top = nodes_sub_top[nodes_sub_top < n_sub]  # only substrate nodes
 
 # Master surface: bottom of indenter only (filter out top/side edges)
 surf_ind_full = fd.mesh.extract_surface(mesh.extract_elements("indenter"))
-keep = [i for i, elem in enumerate(surf_ind_full.elements)
-        if all(int(n) in indenter_bottom_global for n in elem)]
+keep = [
+    i
+    for i, elem in enumerate(surf_ind_full.elements)
+    if all(int(n) in indenter_bottom_global for n in elem)
+]
 from fedoo.core.mesh import Mesh as _Mesh
+
 surf_indenter = _Mesh(
     mesh.nodes,
     surf_ind_full.elements[keep],
@@ -150,10 +160,12 @@ print(f"Indenter bottom edges: {len(keep)}")
 print(f"a_max = {a_max:.3f},  E* = {E_star:.1f},  gap = {gap}")
 
 contact = fd.constraint.Contact(
-    nodes_sub_top, surf_indenter, search_algorithm="bucket",
+    nodes_sub_top,
+    surf_indenter,
+    search_algorithm="bucket",
 )
 contact.contact_search_once = False
-contact.eps_n = 1e5     # ~100*E, penalty stiffness
+contact.eps_n = 1e5  # ~100*E, penalty stiffness
 contact.max_dist = gap + delta_max + 0.5
 
 
@@ -163,7 +175,8 @@ contact.max_dist = gap + delta_max + 0.5
 mat_sub = fd.constitutivelaw.ElasticIsotrop(E, nu)
 mat_ind = fd.constitutivelaw.ElasticIsotrop(E_rigid, nu_rigid)
 material = fd.constitutivelaw.Heterogeneous(
-    (mat_sub, mat_ind), ("substrate", "indenter"),
+    (mat_sub, mat_ind),
+    ("substrate", "indenter"),
 )
 
 
@@ -216,7 +229,7 @@ def track(pb):
     # the displacement drops below half the center value.
     disp = pb.get_disp()
     uy = disp[1, nodes_sub_top]
-    uy_center = np.min(uy)          # most negative = max compression
+    uy_center = np.min(uy)  # most negative = max compression
     if uy_center < -1e-10:
         in_contact = uy < 0.5 * uy_center
         a = np.max(r_top[in_contact]) if np.any(in_contact) else 0.0
@@ -231,8 +244,13 @@ print("=" * 62)
 
 t0 = time()
 pb.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.2,
-    callback=track, exec_callback_at_each_iter=True,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.2,
+    callback=track,
+    exec_callback_at_each_iter=True,
 )
 solve_time = time() - t0
 print(f"\nSolve time: {solve_time:.2f} s")
@@ -242,8 +260,8 @@ print(f"\nSolve time: {solve_time:.2f} s")
 # Comparison with analytical solution
 # =========================================================================
 t_num = np.array(history["time"])
-F_num = -np.array(history["reaction_y"])    # reaction is negative (compression)
-delta_num = delta_max * t_num - gap         # effective indentation
+F_num = -np.array(history["reaction_y"])  # reaction is negative (compression)
+delta_num = delta_max * t_num - gap  # effective indentation
 
 # Analytical curve
 delta_ana = np.linspace(0, delta_max - gap, 200)
@@ -281,7 +299,9 @@ print()
 print("-" * 62)
 print("  Per-increment detail")
 print("-" * 62)
-print(f"{'Inc':>4} {'Time':>8} {'Delta':>10} {'F_num':>12} {'F_ana':>12} {'Err%':>8} {'a_num':>8} {'a_ana':>8}")
+print(
+    f"{'Inc':>4} {'Time':>8} {'Delta':>10} {'F_num':>12} {'F_ana':>12} {'Err%':>8} {'a_num':>8} {'a_ana':>8}"
+)
 for i in range(len(history["time"])):
     d = delta_num[i]
     f_n = F_num[i]
@@ -294,7 +314,9 @@ for i in range(len(history["time"])):
         f_a = 0.0
         err = 0.0
         a_a = 0.0
-    print(f"{i+1:4d} {t_num[i]:8.4f} {d:10.4f} {f_n:12.2f} {f_a:12.2f} {err:8.2f} {a_n:8.4f} {a_a:8.4f}")
+    print(
+        f"{i+1:4d} {t_num[i]:8.4f} {d:10.4f} {f_n:12.2f} {f_a:12.2f} {err:8.2f} {a_n:8.4f} {a_a:8.4f}"
+    )
 print()
 
 
@@ -312,8 +334,14 @@ try:
     ax.plot(delta_ana, F_ana, "k-", linewidth=2, label="Hertz analytical")
     mask = delta_num > 0
     if np.any(mask):
-        ax.plot(delta_num[mask], F_num[mask], "o-", color="tab:blue",
-                markersize=4, label="FEM (penalty)")
+        ax.plot(
+            delta_num[mask],
+            F_num[mask],
+            "o-",
+            color="tab:blue",
+            markersize=4,
+            label="FEM (penalty)",
+        )
     ax.set_xlabel(r"Indentation $\delta$")
     ax.set_ylabel(r"Contact force $F$")
     ax.set_title(r"Force vs Indentation: $F = \frac{4}{3} E^* \sqrt{R}\, \delta^{3/2}$")
@@ -324,13 +352,20 @@ try:
 
     # --- Contact radius vs indentation ---
     ax = axes[1]
-    ax.plot(delta_ana, a_ana, "k-", linewidth=2,
-            label=r"Analytical $a = \sqrt{R\,\delta}$")
+    ax.plot(
+        delta_ana, a_ana, "k-", linewidth=2, label=r"Analytical $a = \sqrt{R\,\delta}$"
+    )
     # Plot FEM contact radius at each increment (only where delta > 0)
     mask_a = delta_num > 0
     if np.any(mask_a):
-        ax.plot(delta_num[mask_a], a_num_arr[mask_a], "o-", color="tab:blue",
-                markersize=4, label="FEM (penalty)")
+        ax.plot(
+            delta_num[mask_a],
+            a_num_arr[mask_a],
+            "o-",
+            color="tab:blue",
+            markersize=4,
+            label="FEM (penalty)",
+        )
     ax.set_xlabel(r"Indentation $\delta$")
     ax.set_ylabel(r"Contact radius $a$")
     ax.set_title(r"Contact Radius: $a = \sqrt{R\,\delta}$")

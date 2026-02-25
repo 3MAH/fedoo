@@ -50,6 +50,7 @@ MAX_SUBITER = 8
 # Helper: build the full problem (mesh + material + BCs)
 # =========================================================================
 
+
 def build_problem(method):
     """Build and return (pb, solid, nodes_disk_top, history).
 
@@ -67,7 +68,11 @@ def build_problem(method):
     gmsh.option.setNumber("General.Verbosity", 1)
 
     plate_tag = gmsh.model.occ.addRectangle(
-        -plate_half, 0, 0, 2 * plate_half, plate_h,
+        -plate_half,
+        0,
+        0,
+        2 * plate_half,
+        plate_h,
     )
     gmsh.model.occ.synchronize()
     gmsh.model.addPhysicalGroup(2, [plate_tag], tag=1, name="plate")
@@ -115,8 +120,10 @@ def build_problem(method):
 
     # --- Material & assembly ---
     mat = fd.constitutivelaw.Heterogeneous(
-        (fd.constitutivelaw.ElasticIsotrop(E_plate, nu),
-         fd.constitutivelaw.ElasticIsotrop(E_disk, nu)),
+        (
+            fd.constitutivelaw.ElasticIsotrop(E_plate, nu),
+            fd.constitutivelaw.ElasticIsotrop(E_disk, nu),
+        ),
         ("plate", "disk"),
     )
     wf = fd.weakform.StressEquilibrium(mat, nlgeom=False)
@@ -140,6 +147,7 @@ def build_problem(method):
 # =========================================================================
 # Instrumented solve: capture NR iteration count per increment
 # =========================================================================
+
 
 def solve_instrumented(pb, solid, nodes_disk_top, history, label):
     """Run nlsolve while tracking per-increment NR iterations."""
@@ -168,7 +176,11 @@ def solve_instrumented(pb, solid, nodes_disk_top, history, label):
     print("=" * 60)
     t0 = time()
     pb.nlsolve(
-        dt=DT, tmax=TMAX, update_dt=True, print_info=1, callback=track,
+        dt=DT,
+        tmax=TMAX,
+        update_dt=True,
+        print_info=1,
+        callback=track,
     )
     wall_time = time() - t0
     print(f"{label} solve time: {wall_time:.2f} s")
@@ -194,6 +206,7 @@ wt_ogc = solve_instrumented(pb_ogc, solid_ogc, ndt_ogc, hist_ogc, "OGC")
 # Summary table
 # =========================================================================
 
+
 def summary(label, hist, wt):
     iters = np.array(hist["nr_iters"])
     return {
@@ -205,6 +218,7 @@ def summary(label, hist, wt):
         "wall_time": wt,
     }
 
+
 s_ccd = summary("CCD", hist_ccd, wt_ccd)
 s_ogc = summary("OGC", hist_ogc, wt_ogc)
 
@@ -215,8 +229,10 @@ header = f"{'':12s} {'Increments':>10s} {'Total NR':>10s} {'Mean NR':>10s} {'Max
 print(header)
 print("-" * len(header))
 for s in (s_ccd, s_ogc):
-    print(f"{s['label']:12s} {s['increments']:10d} {s['total_nr']:10d} "
-          f"{s['mean_nr']:10.2f} {s['max_nr']:10d} {s['wall_time']:10.2f}")
+    print(
+        f"{s['label']:12s} {s['increments']:10d} {s['total_nr']:10d} "
+        f"{s['mean_nr']:10.2f} {s['max_nr']:10d} {s['wall_time']:10.2f}"
+    )
 
 
 # =========================================================================
@@ -264,10 +280,20 @@ try:
 
     # Right: NR iterations per increment
     ax = axes[1]
-    ax.bar(np.arange(len(hist_ccd["nr_iters"])) - 0.2,
-           hist_ccd["nr_iters"], width=0.4, label="CCD", alpha=0.8)
-    ax.bar(np.arange(len(hist_ogc["nr_iters"])) + 0.2,
-           hist_ogc["nr_iters"], width=0.4, label="OGC", alpha=0.8)
+    ax.bar(
+        np.arange(len(hist_ccd["nr_iters"])) - 0.2,
+        hist_ccd["nr_iters"],
+        width=0.4,
+        label="CCD",
+        alpha=0.8,
+    )
+    ax.bar(
+        np.arange(len(hist_ogc["nr_iters"])) + 0.2,
+        hist_ogc["nr_iters"],
+        width=0.4,
+        label="OGC",
+        alpha=0.8,
+    )
     ax.set_xlabel("Increment")
     ax.set_ylabel("NR iterations")
     ax.set_title("Newton--Raphson iterations per increment")

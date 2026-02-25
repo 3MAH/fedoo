@@ -47,6 +47,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
 # Shared geometry and material builder
 # =========================================================================
 
+
 def build_mesh_and_material():
     """Build the hole plate geometry and elasto-plastic material.
 
@@ -55,7 +56,11 @@ def build_mesh_and_material():
     fd.ModelingSpace("2D")
 
     mesh = fd.mesh.hole_plate_mesh(
-        nr=15, nt=15, length=100, height=100, radius=45,
+        nr=15,
+        nt=15,
+        length=100,
+        height=100,
+        radius=45,
     )
 
     # Material: elasto-plastic (EPICP) — same as tube_compression example
@@ -88,7 +93,9 @@ nodes_bot, nodes_top = get_bc_nodes(mesh)
 
 surf = fd.mesh.extract_surface(mesh)
 penalty_contact = fd.constraint.SelfContact(
-    surf, "linear", search_algorithm="bucket",
+    surf,
+    "linear",
+    search_algorithm="bucket",
 )
 penalty_contact.contact_search_once = True
 penalty_contact.eps_n = 1e6
@@ -103,7 +110,9 @@ pb_penalty = fd.problem.NonLinear(assembly)
 if not os.path.isdir("results"):
     os.mkdir("results")
 res_penalty = pb_penalty.add_output(
-    "results/ring_crush_penalty", solid_assembly, ["Disp", "Stress"],
+    "results/ring_crush_penalty",
+    solid_assembly,
+    ["Disp", "Stress"],
 )
 
 pb_penalty.bc.add("Dirichlet", nodes_bot, "Disp", 0)
@@ -122,8 +131,12 @@ def track_penalty(pb):
 
 t0_penalty = time()
 pb_penalty.nlsolve(
-    dt=0.01, tmax=1, update_dt=True, print_info=1,
-    callback=track_penalty, exec_callback_at_each_iter=True,
+    dt=0.01,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    callback=track_penalty,
+    exec_callback_at_each_iter=True,
 )
 penalty_time = time() - t0_penalty
 print(f"\nPenalty solve time: {penalty_time:.2f} s")
@@ -155,7 +168,9 @@ assembly2 = fd.Assembly.sum(solid_assembly2, ipc_contact)
 pb_ipc = fd.problem.NonLinear(assembly2)
 
 res_ipc = pb_ipc.add_output(
-    "results/ring_crush_ipc", solid_assembly2, ["Disp", "Stress"],
+    "results/ring_crush_ipc",
+    solid_assembly2,
+    ["Disp", "Stress"],
 )
 
 pb_ipc.bc.add("Dirichlet", nodes_bot2, "Disp", 0)
@@ -164,8 +179,11 @@ pb_ipc.set_nr_criterion("Displacement", tol=5e-3, max_subiter=5)
 
 # --- Tracking callback ---
 history_ipc = {
-    "time": [], "reaction_y": [],
-    "n_collisions": [], "kappa": [], "min_distance": [],
+    "time": [],
+    "reaction_y": [],
+    "n_collisions": [],
+    "kappa": [],
+    "min_distance": [],
 }
 
 
@@ -178,7 +196,8 @@ def track_ipc(pb):
     verts = ipc_contact._get_current_vertices(pb)
     if len(ipc_contact._collisions) > 0:
         min_d = ipc_contact._collisions.compute_minimum_distance(
-            ipc_contact._collision_mesh, verts,
+            ipc_contact._collision_mesh,
+            verts,
         )
     else:
         min_d = float("inf")
@@ -187,8 +206,12 @@ def track_ipc(pb):
 
 t0_ipc = time()
 pb_ipc.nlsolve(
-    dt=0.01, tmax=1, update_dt=True, print_info=1,
-    callback=track_ipc, exec_callback_at_each_iter=True,
+    dt=0.01,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    callback=track_ipc,
+    exec_callback_at_each_iter=True,
 )
 ipc_time = time() - t0_ipc
 print(f"\nIPC solve time: {ipc_time:.2f} s")
@@ -207,24 +230,32 @@ n_inc_pen = len(history_penalty["time"])
 n_inc_ipc = len(history_ipc["time"])
 
 rows = [
-    ("Total solve time",
-     f"{penalty_time:.2f} s",
-     f"{ipc_time:.2f} s"),
-    ("Total increments",
-     str(n_inc_pen), str(n_inc_ipc)),
-    ("Final reaction Fy (top)",
-     f"{history_penalty['reaction_y'][-1]:.1f}" if history_penalty["reaction_y"] else "N/A",
-     f"{history_ipc['reaction_y'][-1]:.1f}" if history_ipc["reaction_y"] else "N/A"),
-    ("IPC min gap distance",
-     "N/A",
-     f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}"
-     if any(np.isfinite(d) for d in history_ipc["min_distance"]) else "inf"),
-    ("IPC final barrier kappa",
-     "N/A",
-     f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A"),
-    ("IPC max active collisions",
-     "N/A",
-     str(max(history_ipc["n_collisions"])) if history_ipc["n_collisions"] else "N/A"),
+    ("Total solve time", f"{penalty_time:.2f} s", f"{ipc_time:.2f} s"),
+    ("Total increments", str(n_inc_pen), str(n_inc_ipc)),
+    (
+        "Final reaction Fy (top)",
+        f"{history_penalty['reaction_y'][-1]:.1f}"
+        if history_penalty["reaction_y"]
+        else "N/A",
+        f"{history_ipc['reaction_y'][-1]:.1f}" if history_ipc["reaction_y"] else "N/A",
+    ),
+    (
+        "IPC min gap distance",
+        "N/A",
+        f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}"
+        if any(np.isfinite(d) for d in history_ipc["min_distance"])
+        else "inf",
+    ),
+    (
+        "IPC final barrier kappa",
+        "N/A",
+        f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A",
+    ),
+    (
+        "IPC max active collisions",
+        "N/A",
+        str(max(history_ipc["n_collisions"])) if history_ipc["n_collisions"] else "N/A",
+    ),
 ]
 
 w_label, w_val = 28, 16
@@ -285,10 +316,20 @@ try:
     disp_ipc = [t * 40 for t in history_ipc["time"]]
 
     ax = axes[0, 0]
-    ax.plot(disp_pen, [-f for f in history_penalty["reaction_y"]],
-            "o-", label="Penalty", markersize=3)
-    ax.plot(disp_ipc, [-f for f in history_ipc["reaction_y"]],
-            "s-", label="IPC", markersize=3)
+    ax.plot(
+        disp_pen,
+        [-f for f in history_penalty["reaction_y"]],
+        "o-",
+        label="Penalty",
+        markersize=3,
+    )
+    ax.plot(
+        disp_ipc,
+        [-f for f in history_ipc["reaction_y"]],
+        "s-",
+        label="IPC",
+        markersize=3,
+    )
     ax.set_xlabel("Top displacement (mm)")
     ax.set_ylabel("Reaction force Fy (N/mm)")
     ax.set_title("Force-Displacement Curve")
@@ -297,8 +338,13 @@ try:
 
     # --- IPC collisions ---
     ax = axes[0, 1]
-    ax.plot(history_ipc["time"], history_ipc["n_collisions"],
-            "s-", color="tab:red", markersize=3)
+    ax.plot(
+        history_ipc["time"],
+        history_ipc["n_collisions"],
+        "s-",
+        color="tab:red",
+        markersize=3,
+    )
     ax.set_xlabel("Time")
     ax.set_ylabel("Active collisions")
     ax.set_title("IPC Active Collision Count")
@@ -306,8 +352,13 @@ try:
 
     # --- IPC kappa evolution ---
     ax = axes[1, 0]
-    ax.plot(history_ipc["time"], history_ipc["kappa"],
-            "s-", color="tab:orange", markersize=3)
+    ax.plot(
+        history_ipc["time"],
+        history_ipc["kappa"],
+        "s-",
+        color="tab:orange",
+        markersize=3,
+    )
     ax.set_xlabel("Time")
     ax.set_ylabel("Barrier stiffness kappa")
     ax.set_title("IPC Barrier Stiffness")
@@ -316,17 +367,23 @@ try:
 
     # --- IPC min gap ---
     ax = axes[1, 1]
-    finite_gaps = [(t, d) for t, d in zip(history_ipc["time"],
-                   history_ipc["min_distance"]) if np.isfinite(d)]
+    finite_gaps = [
+        (t, d)
+        for t, d in zip(history_ipc["time"], history_ipc["min_distance"])
+        if np.isfinite(d)
+    ]
     if finite_gaps:
         t_gap, d_gap = zip(*finite_gaps)
-        ax.plot(t_gap, d_gap, "s-", color="tab:green", markersize=3,
-                label="Min gap")
+        ax.plot(t_gap, d_gap, "s-", color="tab:green", markersize=3, label="Min gap")
     if ipc_contact._actual_dhat is not None:
-        ax.axhline(y=ipc_contact._actual_dhat, color="blue",
-                   linestyle="--", alpha=0.5, label="dhat")
-    ax.axhline(y=0, color="red", linestyle="--", alpha=0.5,
-               label="Zero (penetration)")
+        ax.axhline(
+            y=ipc_contact._actual_dhat,
+            color="blue",
+            linestyle="--",
+            alpha=0.5,
+            label="dhat",
+        )
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.5, label="Zero (penetration)")
     ax.set_xlabel("Time")
     ax.set_ylabel("Min gap distance")
     ax.set_title("IPC Minimum Gap Distance")

@@ -11,6 +11,7 @@ Demonstrates the legacy penalty-based contact approach
 .. note::
    Requires ``simcoon`` for the EPICP elasto-plastic material.
 """
+
 import fedoo as fd
 import numpy as np
 import os
@@ -21,7 +22,13 @@ fd.ModelingSpace("2D")
 
 # --- Geometry ---
 mesh_rect = fd.mesh.rectangle_mesh(
-    nx=11, ny=21, x_min=0, x_max=1, y_min=0, y_max=1, elm_type="quad4",
+    nx=11,
+    ny=21,
+    x_min=0,
+    x_max=1,
+    y_min=0,
+    y_max=1,
+    elm_type="quad4",
 )
 mesh_rect.element_sets["rect"] = np.arange(mesh_rect.n_elements)
 
@@ -60,8 +67,9 @@ pb = fd.problem.NonLinear(assembly)
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-res = pb.add_output("results/disk_rectangle_contact", solid_assembly,
-                    ["Disp", "Stress", "Strain"])
+res = pb.add_output(
+    "results/disk_rectangle_contact", solid_assembly, ["Disp", "Stress", "Strain"]
+)
 
 # --- Step 1: push ---
 pb.bc.add("Dirichlet", nodes_left, "Disp", 0)

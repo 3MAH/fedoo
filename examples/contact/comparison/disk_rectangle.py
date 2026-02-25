@@ -33,8 +33,12 @@ def build_mesh_and_material():
 
     # --- Rectangle mesh ---
     mesh_rect = fd.mesh.rectangle_mesh(
-        nx=11, ny=21,
-        x_min=0, x_max=1, y_min=0, y_max=1,
+        nx=11,
+        ny=21,
+        x_min=0,
+        x_max=1,
+        y_min=0,
+        y_max=1,
         elm_type="quad4",
     )
     mesh_rect.element_sets["rect"] = np.arange(mesh_rect.n_elements)
@@ -130,8 +134,13 @@ def track_penalty(pb):
 
 t0 = time()
 pb_penalty.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1,
-    callback=track_penalty, exec_callback_at_each_iter=True,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.1,
+    callback=track_penalty,
+    exec_callback_at_each_iter=True,
 )
 penalty_solve_time = time() - t0
 print(f"Penalty solve time: {penalty_solve_time:.2f} s")
@@ -161,10 +170,10 @@ surf_ipc = fd.mesh.extract_surface(mesh2)
 ipc_contact = fd.constraint.IPCContact(
     mesh2,
     surface_mesh=surf_ipc,
-    dhat=1e-3,                     # relative to bbox diagonal
+    dhat=1e-3,  # relative to bbox diagonal
     dhat_is_relative=True,
-    friction_coefficient=0.0,      # frictionless (same as penalty)
-    use_ccd=True,                  # CCD line search for robustness
+    friction_coefficient=0.0,  # frictionless (same as penalty)
+    use_ccd=True,  # CCD line search for robustness
 )
 
 wf2 = fd.weakform.StressEquilibrium(material2, nlgeom=True)
@@ -173,9 +182,7 @@ assembly2 = fd.Assembly.sum(solid_assembly2, ipc_contact)
 
 pb_ipc = fd.problem.NonLinear(assembly2)
 
-res_ipc = pb_ipc.add_output(
-    "results/ipc_contact", solid_assembly2, ["Disp", "Stress"]
-)
+res_ipc = pb_ipc.add_output("results/ipc_contact", solid_assembly2, ["Disp", "Stress"])
 
 pb_ipc.bc.add("Dirichlet", nodes_left2, "Disp", 0)
 pb_ipc.bc.add("Dirichlet", nodes_bc2, "Disp", [-0.05, 0.025])
@@ -205,9 +212,7 @@ def track_ipc(pb):
     F = pb.get_ext_forces("Disp")
     history_ipc["reaction_x"].append(np.sum(F[0, nodes_left2]))
     # Contact force norm
-    history_ipc["contact_force_norm"].append(
-        np.linalg.norm(ipc_contact.global_vector)
-    )
+    history_ipc["contact_force_norm"].append(np.linalg.norm(ipc_contact.global_vector))
     # Max X-displacement at contact interface (rectangle right face)
     disp = pb.get_disp()
     history_ipc["max_disp_x"].append(np.max(np.abs(disp[0, nodes_contact2])))
@@ -227,8 +232,13 @@ def track_ipc(pb):
 
 t0 = time()
 pb_ipc.nlsolve(
-    dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1,
-    callback=track_ipc, exec_callback_at_each_iter=True,
+    dt=0.05,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.1,
+    callback=track_ipc,
+    exec_callback_at_each_iter=True,
 )
 ipc_solve_time = time() - t0
 print(f"IPC solve time: {ipc_solve_time:.2f} s")
@@ -248,39 +258,67 @@ total_nr_ipc = sum(history_ipc["nr_iters"])
 
 # Build rows: (label, penalty_value, ipc_value)
 rows = [
-    ("Total solve time",
-     f"{penalty_solve_time:.2f} s",
-     f"{ipc_solve_time:.2f} s"),
-    ("Total increments",
-     str(len(history_penalty["time"])),
-     str(len(history_ipc["time"]))),
-    ("Total NR iterations",
-     str(total_nr_penalty),
-     str(total_nr_ipc)),
-    ("Avg NR iter / increment",
-     f"{total_nr_penalty / max(len(history_penalty['time']), 1):.1f}",
-     f"{total_nr_ipc / max(len(history_ipc['time']), 1):.1f}"),
-    ("Final reaction Fx",
-     f"{history_penalty['reaction_x'][-1]:.1f}" if history_penalty["reaction_x"] else "N/A",
-     f"{history_ipc['reaction_x'][-1]:.1f}" if history_ipc["reaction_x"] else "N/A"),
-    ("Max contact force norm",
-     f"{max(history_penalty['contact_force_norm']):.1f}" if history_penalty["contact_force_norm"] else "N/A",
-     f"{max(history_ipc['contact_force_norm']):.1f}" if history_ipc["contact_force_norm"] else "N/A"),
-    ("Final contact force norm",
-     f"{history_penalty['contact_force_norm'][-1]:.1f}" if history_penalty["contact_force_norm"] else "N/A",
-     f"{history_ipc['contact_force_norm'][-1]:.1f}" if history_ipc["contact_force_norm"] else "N/A"),
-    ("Max |disp_x|",
-     f"{max(history_penalty['max_disp_x']):.6f}" if history_penalty["max_disp_x"] else "N/A",
-     f"{max(history_ipc['max_disp_x']):.6f}" if history_ipc["max_disp_x"] else "N/A"),
-    ("IPC min gap distance",
-     "N/A",
-     f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}" if any(np.isfinite(d) for d in history_ipc["min_distance"]) else "inf"),
-    ("IPC final barrier kappa",
-     "N/A",
-     f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A"),
-    ("IPC max active collisions",
-     "N/A",
-     str(max(history_ipc["n_collisions"])) if history_ipc["n_collisions"] else "N/A"),
+    ("Total solve time", f"{penalty_solve_time:.2f} s", f"{ipc_solve_time:.2f} s"),
+    (
+        "Total increments",
+        str(len(history_penalty["time"])),
+        str(len(history_ipc["time"])),
+    ),
+    ("Total NR iterations", str(total_nr_penalty), str(total_nr_ipc)),
+    (
+        "Avg NR iter / increment",
+        f"{total_nr_penalty / max(len(history_penalty['time']), 1):.1f}",
+        f"{total_nr_ipc / max(len(history_ipc['time']), 1):.1f}",
+    ),
+    (
+        "Final reaction Fx",
+        f"{history_penalty['reaction_x'][-1]:.1f}"
+        if history_penalty["reaction_x"]
+        else "N/A",
+        f"{history_ipc['reaction_x'][-1]:.1f}" if history_ipc["reaction_x"] else "N/A",
+    ),
+    (
+        "Max contact force norm",
+        f"{max(history_penalty['contact_force_norm']):.1f}"
+        if history_penalty["contact_force_norm"]
+        else "N/A",
+        f"{max(history_ipc['contact_force_norm']):.1f}"
+        if history_ipc["contact_force_norm"]
+        else "N/A",
+    ),
+    (
+        "Final contact force norm",
+        f"{history_penalty['contact_force_norm'][-1]:.1f}"
+        if history_penalty["contact_force_norm"]
+        else "N/A",
+        f"{history_ipc['contact_force_norm'][-1]:.1f}"
+        if history_ipc["contact_force_norm"]
+        else "N/A",
+    ),
+    (
+        "Max |disp_x|",
+        f"{max(history_penalty['max_disp_x']):.6f}"
+        if history_penalty["max_disp_x"]
+        else "N/A",
+        f"{max(history_ipc['max_disp_x']):.6f}" if history_ipc["max_disp_x"] else "N/A",
+    ),
+    (
+        "IPC min gap distance",
+        "N/A",
+        f"{min(d for d in history_ipc['min_distance'] if np.isfinite(d)):.2e}"
+        if any(np.isfinite(d) for d in history_ipc["min_distance"])
+        else "inf",
+    ),
+    (
+        "IPC final barrier kappa",
+        "N/A",
+        f"{history_ipc['kappa'][-1]:.2e}" if history_ipc["kappa"] else "N/A",
+    ),
+    (
+        "IPC max active collisions",
+        "N/A",
+        str(max(history_ipc["n_collisions"])) if history_ipc["n_collisions"] else "N/A",
+    ),
 ]
 
 # Print formatted table
@@ -344,10 +382,16 @@ try:
 
     # Reaction force vs time
     ax = axes[0, 0]
-    ax.plot(history_penalty["time"], history_penalty["reaction_x"],
-            "o-", label="Penalty", markersize=3)
-    ax.plot(history_ipc["time"], history_ipc["reaction_x"],
-            "s-", label="IPC", markersize=3)
+    ax.plot(
+        history_penalty["time"],
+        history_penalty["reaction_x"],
+        "o-",
+        label="Penalty",
+        markersize=3,
+    )
+    ax.plot(
+        history_ipc["time"], history_ipc["reaction_x"], "s-", label="IPC", markersize=3
+    )
     ax.set_xlabel("Time")
     ax.set_ylabel("Reaction Fx")
     ax.set_title("Reaction Force (X) at Left Boundary")
@@ -356,10 +400,20 @@ try:
 
     # Contact force norm vs time
     ax = axes[0, 1]
-    ax.plot(history_penalty["time"], history_penalty["contact_force_norm"],
-            "o-", label="Penalty", markersize=3)
-    ax.plot(history_ipc["time"], history_ipc["contact_force_norm"],
-            "s-", label="IPC", markersize=3)
+    ax.plot(
+        history_penalty["time"],
+        history_penalty["contact_force_norm"],
+        "o-",
+        label="Penalty",
+        markersize=3,
+    )
+    ax.plot(
+        history_ipc["time"],
+        history_ipc["contact_force_norm"],
+        "s-",
+        label="IPC",
+        markersize=3,
+    )
     ax.set_xlabel("Time")
     ax.set_ylabel("||F_contact||")
     ax.set_title("Contact Force Norm")
@@ -368,10 +422,18 @@ try:
 
     # NR iterations per increment
     ax = axes[1, 0]
-    ax.bar(np.arange(len(history_penalty["nr_iters"])) - 0.2,
-           history_penalty["nr_iters"], width=0.4, label="Penalty")
-    ax.bar(np.arange(len(history_ipc["nr_iters"])) + 0.2,
-           history_ipc["nr_iters"], width=0.4, label="IPC")
+    ax.bar(
+        np.arange(len(history_penalty["nr_iters"])) - 0.2,
+        history_penalty["nr_iters"],
+        width=0.4,
+        label="Penalty",
+    )
+    ax.bar(
+        np.arange(len(history_ipc["nr_iters"])) + 0.2,
+        history_ipc["nr_iters"],
+        width=0.4,
+        label="IPC",
+    )
     ax.set_xlabel("Increment")
     ax.set_ylabel("NR Iterations")
     ax.set_title("Newton-Raphson Iterations per Increment")
@@ -380,8 +442,11 @@ try:
 
     # IPC-specific: min gap and kappa
     ax = axes[1, 1]
-    finite_gaps = [(t, d) for t, d in zip(history_ipc["time"], history_ipc["min_distance"])
-                   if np.isfinite(d)]
+    finite_gaps = [
+        (t, d)
+        for t, d in zip(history_ipc["time"], history_ipc["min_distance"])
+        if np.isfinite(d)
+    ]
     if finite_gaps:
         t_gap, d_gap = zip(*finite_gaps)
         ax.plot(t_gap, d_gap, "s-", color="tab:green", markersize=3, label="Min gap")
