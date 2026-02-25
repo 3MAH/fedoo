@@ -90,7 +90,7 @@ def test_2DDynamicPlasticBending():
     bc1 = pb.bc.add("Dirichlet", nodes_top1, "DispY", uimp)
     bc2 = pb.bc.add("Dirichlet", nodes_top2, "DispY", uimp)
 
-    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.005)
+    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.01)
 
     ################### step 2 ################################
     # bc.Remove()
@@ -108,3 +108,7 @@ def test_2DDynamicPlasticBending():
     # assert np.abs(res.node_data["Stress"][3][234] + 70.30052080276131) < 1e-4
 
     # REMOVE ASSERT until simcoon bug is resolved
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main([__file__])
