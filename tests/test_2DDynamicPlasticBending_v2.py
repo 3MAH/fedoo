@@ -116,6 +116,8 @@ def test_2DDynamicPlasticBending_v2():
 
     # REMOVE ASSERT until simcoon bug is resolved
 
+
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])
