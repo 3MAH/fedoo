@@ -55,7 +55,7 @@ contact = fd.constraint.contact.SelfContact(surf)
 
 # contact parameters
 contact.contact_search_once = True
-contact.eps_n = 1e6  # contact penalty
+contact.eps_n = 1e6 / (2 * np.pi * 24)  # contact penalty (scaled for 2πr weighting)
 contact.max_dist = 1.5  # max distance for the contact search
 
 ###############################################################################

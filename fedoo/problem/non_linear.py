@@ -25,7 +25,8 @@ class _NonLinearBase:
             "err0": None,  # default error for NR error estimation
             "criterion": "Displacement",
             "tol": 1e-3,
-            "max_subiter": 5,
+            "max_subiter": 10,
+            "dt_increase_niter": None,
             "norm_type": 2,
         }
         """
@@ -36,11 +37,23 @@ class _NonLinearBase:
               ['Displacement', 'Force', 'Work'].
               Default is 'Displacement'.
             * 'tol': Error tolerance for convergence. Default is 1e-3.
-            * 'max_subiter': Number of nr iteration before returning a
-              convergence error. Default is 5.
+            * 'max_subiter': Number of nr iterations before returning a
+              convergence error. Default is 6.
+            * 'dt_increase_niter': number of nr iterations threshold that
+              define an easy convergence. In problem allowing automatic
+              convergence, if the Newton–Raphson loop converges in strictly
+              fewer iterations, the time step is increased.
+              If None, the value is initialized to ``max_subiter // 3``. 
             * 'norm_type': define the norm used to test the criterion
               Use numpy.inf for the max value. Default is 2.
         """
+
+        self._step_size_callback = None
+        self._step_filter_callback = None  # OGC per-vertex filter
+        self._nr_min_subiter = (
+            0  # SDI: minimum NR sub-iterations before accepting convergence
+        )
+        self._t_fact_inc = None  # frozen t_fact for the current increment
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
@@ -131,6 +144,17 @@ class _NonLinearBase:
         )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
         self.solve()
 
+        # OGC per-vertex filter or CCD scalar line search
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=True)
+        elif self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                # Scale only free DOFs; preserve prescribed Dirichlet values
+                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+
         # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
         try:
             self._Xbc *= 0
@@ -142,6 +166,7 @@ class _NonLinearBase:
 
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
+        self._nr_min_subiter = 0  # reset SDI for new increment
         if not (np.isscalar(self._dU) and self._dU == 0):
             self._U += self._dU
             self._dU = 0
@@ -166,12 +191,22 @@ class _NonLinearBase:
 
     def to_start(self):
         self._dU = 0
+        self._nr_min_subiter = 0
+        self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
 
     def NewtonRaphsonIncrement(self):
         # solve and update total displacement. A and D should up to date
         self.solve()
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=False)
+        elif self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                self.set_X(dX * alpha)
         self._dU += self.get_X()
 
     def update(self, compute="all", updateWeakForm=True):
@@ -199,11 +234,11 @@ class _NonLinearBase:
         # self.set_A(self.__assembly.current.get_global_matrix()) #tangent stiffness
         # self.set_D(self.__assembly.current.get_global_vector())
 
-        B = 0
         self._U = 0
         self._dU = 0
 
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
+        self._t_fact_inc = None
         self.t0 = 0
         self.tmax = 1
         self.__iter = 0
@@ -229,34 +264,46 @@ class _NonLinearBase:
         dof_free = self._dof_free
         if len(dof_free) == 0:
             return 0
-        if self._err0 is None:  # if self._err0 is None -> initialize the value of err0
-            # if self.nr_parameters["criterion"] == "Displacement":
-            #     self._err0 = np.linalg.norm(
-            #         (self._U + self._dU)[dof_free], norm_type
-            #     )  # Displacement criterion
-            #     if self._err0 == 0:
-            #         self._err0 = 1
-            #         return 1
-            #     return np.max(np.abs(self.get_X()[dof_free])) / self._err0
-            # else:
-            #     self._err0 = 1
-            #     self._err0 = self.NewtonRaphsonError()
-            #     return 1
+        if self._err0 is None:  # assess err0 from current state
             if self.nr_parameters["criterion"] == "Displacement":
-                err0 = np.linalg.norm((self._U + self._dU), norm_type)
+                # Normalize by the current increment (not the total
+                # accumulated displacement) so the criterion does not
+                # become progressively looser as loading proceeds.
+                err0 = np.linalg.norm(self._dU, norm_type)
+                # if not np.array_equal(self._U, 0):
+                #     err0 += 0.01 * np.linalg.norm(self._U, norm_type)
+                # err0 += 1e-8*np.max(self.mesh.bounding_box.size)
                 if err0 == 0:
                     err0 = 1
-                return np.max(np.abs(self.get_X()[dof_free])) / err0
-            else:
+                    return 1
+                return np.linalg.norm(self.get_X()[dof_free], norm_type) / err0
+            elif self.nr_parameters["criterion"] == "Force":
+                # Normalize by external force
+                err0 = np.linalg.norm(
+                    self.get_ext_forces(include_mpc=False),
+                    norm_type,
+                )
+                # err0 += 1e-8  # to avoid divizion by 0
+                if err0 == 0:
+                    err0 = 1
+                    return 1
+                if np.isscalar(self.get_D()) and self.get_D() == 0:
+                    return np.linalg.norm(self.get_B()[dof_free], norm_type) / err0
+                else:
+                    return (
+                        np.linalg.norm(
+                            self.get_B()[dof_free] + self.get_D()[dof_free],
+                            norm_type,
+                        )
+                        / err0
+                    )
+            else:  # initialize the value of self._err0
                 self._err0 = 1
                 self._err0 = self.NewtonRaphsonError()
                 return 1
         else:
             if self.nr_parameters["criterion"] == "Displacement":
-                # return np.max(np.abs(self.get_X()[dof_free]))/self._err0  #Displacement criterion
-                return (
-                    np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
-                )  # Displacement criterion
+                return np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
                 if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
@@ -306,8 +353,13 @@ class _NonLinearBase:
               If None (default), err0 is automatically computed.
             * 'tol': float, default is 1e-3.
               Error tolerance for convergence.
-            * 'max_subiter': int, default = 5.
+            * 'max_subiter': int, default = 10.
               Number of nr iteration before returning a convergence error.
+            * 'dt_increase_niter': number of nr iterations threshold that
+              define an easy convergence. In problem allowing automatic
+              convergence, if the Newton–Raphson loop converges in strictly
+              fewer iterations, the time step is increased.
+              Default is set to max_subiter//3.
             * 'norm_type': int or numpy.inf, default = 2.
               Define the norm used to test the criterion
         """
@@ -318,10 +370,17 @@ class _NonLinearBase:
         self.nr_parameters["criterion"] = criterion
 
         for key in kargs:
-            if key not in ["err0", "tol", "max_subiter", "norm_type"]:
+            if key not in [
+                "err0",
+                "tol",
+                "max_subiter",
+                "dt_increase_niter",
+                "norm_type",
+            ]:
                 raise NameError(
                     "Newton Raphson parameters should be in "
-                    "['err0', 'tol', 'max_subiter', 'norm_type']"
+                    "['err0', 'tol', 'max_subiter', 'dt_increase_niter', "
+                    "'norm_type']"
                 )
 
             self.nr_parameters[key] = kargs[key]
@@ -331,6 +390,12 @@ class _NonLinearBase:
             max_subiter = self.nr_parameters["max_subiter"]
         if tol_nr is None:
             tol_nr = self.nr_parameters["tol"]
+
+        # Freeze t_fact for the duration of this increment so that
+        # any modification of self.dtime (e.g. by a CCD callback)
+        # does not change the target time seen by boundary conditions
+        # or subiter print output.
+        self._t_fact_inc = self.t_fact
 
         self.elastic_prediction()
         for subiter in range(max_subiter):  # newton-raphson iterations
@@ -348,13 +413,14 @@ class _NonLinearBase:
                     )
                 )
 
-            if normRes < tol_nr:  # convergence of the NR algorithm
+            if (
+                normRes < tol_nr and subiter >= self._nr_min_subiter
+            ):  # convergence of the NR algorithm
                 # Initialize the next increment
+                self._t_fact_inc = None
                 return 1, subiter, normRes
 
             # --------------- Solve --------------------------------------------------------
-            # self.__Assembly.current.assemble_global_mat(compute = 'matrix')
-            # self.set_A(self.__Assembly.current.get_global_matrix())
             self.update(
                 compute="matrix", updateWeakForm=False
             )  # assemble the tangeant matrix
@@ -362,6 +428,7 @@ class _NonLinearBase:
 
             self.NewtonRaphsonIncrement()
 
+        self._t_fact_inc = None
         return 0, subiter, normRes
 
     def nlsolve(
@@ -372,6 +439,7 @@ class _NonLinearBase:
         t0: float | None = None,
         dt_min: float = 1e-6,
         max_subiter: int | None = None,
+        dt_increase_niter: int | None = None,
         tol_nr: float | None = None,
         print_info: int | None = None,
         save_at_exact_time: bool | None = None,
@@ -388,7 +456,8 @@ class _NonLinearBase:
         update_dt: bool, default = True
             If True, the time increment may be modified during resolution:
             * decrease if the solver has not converged
-            * increase if the solver has converged in one iteration.
+            * increase if the solver has converged quickly (see
+              ``dt_increase_niter``).
         tmax: float, optional.
             Time at the end of the time step.
             If omitted, the attribute tmax is considered (default = 1.)
@@ -400,9 +469,21 @@ class _NonLinearBase:
         dt_min: float, default = 1e-6
             Minimal time increment
         max_subiter: int, optional
-            Maximal number of newton raphson iteration at for each time increment.
-            If omitted, the 'max_subiter' field in the nr_parameters attribute
-            (ie nr_parameters['max_subiter']) is considered (default = 5).
+            Maximal number of newton raphson iteration allowed for each time
+            increment, after the initial linear guess.
+            If omitted, the 'max_subiter' field in the nr_parameters
+            attribute (ie nr_parameters['max_subiter']) is considered
+            (default = 10).
+        dt_increase_niter: int, optional
+            When ``update_dt`` is ``True``, the time increment is multiplied
+            by 1.25 if the Newton–Raphson loop converges in strictly fewer
+            than ``dt_increase_niter`` iterations. If omitted, the
+            'dt_increase_niter' field in the nr_parameters attribute
+            (ie nr_parameters['dt_increase_niter']) is considered
+            (default = ``max_subiter // 3``).
+            For contact problems where NR typically needs several iterations,
+            a higher value (e.g. ``max_subiter // 2``) allows dt to recover
+            after an earlier reduction.
         tol_nr: float, optional
             Tolerance of the newton-raphson algorithm.
             If omitted, the 'tol' field in the nr_parameters attribute
@@ -414,23 +495,27 @@ class _NonLinearBase:
             If 2, iterations and newton-raphson sub iterations info are printed.
             If omitted, the print_info attribute is considered (default = 1).
         save_at_exact_time: bool, optional
-            If True, the time increment is modified to stop at times defined by interval_output and allow to save results.
-            If omitted, the save_at_exact_time attribute is considered (default = True).
+            If True, the time increment is modified to stop at times defined by
+            interval_output and allow to save results. If omitted, the
+            save_at_exact_time attribute is considered (default = True).
             The given value is stored in the save_at_exact_time attribute.
         interval_output: int|float, optional
-            Time step for output if save_at_exact_time is True (default) else number of iter increments between 2 output
-            If interval_output == -1, the results is saved at each initial time_step intervals or each increment depending on the save_at_exact_time value.
-            If omitted, the interval_output attribute is considred (default -1)
+            Time step for output if save_at_exact_time is True (default) else
+            number of iter increments between 2 output. If
+            interval_output == -1, the results is saved at each initial
+            time_step intervals or each increment depending on the
+            save_at_exact_time value. If omitted, the interval_output attribute
+            is considred (default -1)
         callback: function, optional
-            The callback function is executed automatically during the non linear resolution.
-            By default, the callback function is executed when output is requested
-            (defined by the interval_output argument). If
-            exec_callback_at_each_iter is True, the callback function is excuted
-            at each time iteration.
+            The callback function is executed automatically during the non
+            linear resolution. By default, the callback function is executed
+            when output is requested (defined by the interval_output argument).
+            If exec_callback_at_each_iter is True, the callback function is
+            excuted at each time iteration.
         exec_callback_at_each_iter, bool, default = False
-            If True, the callback function is executed after each time iteration.
+            If True, the callback function is executed after each time
+            iteration.
         """
-
         # parameters
         if tmax is not None:
             self.tmax = tmax
@@ -438,6 +523,10 @@ class _NonLinearBase:
             self.t0 = t0  # time at the start of the time step
         if max_subiter is None:
             max_subiter = self.nr_parameters["max_subiter"]
+        if dt_increase_niter is None:
+            dt_increase_niter = self.nr_parameters["dt_increase_niter"]
+            if dt_increase_niter is None:
+                dt_increase_niter = max_subiter // 3
         if tol_nr is None:
             tol_nr = self.nr_parameters["tol"]
         if print_info is not None:
@@ -515,9 +604,8 @@ class _NonLinearBase:
                     )
 
                 # Check if dt can be increased
-                if update_dt and nbNRiter < 2 and dt == self.dtime:
+                if update_dt and nbNRiter < dt_increase_niter and dt == self.dtime:
                     dt *= 1.25
-                    # print('Increase the time increment to {:.5f}'.format(dt))
 
             else:
                 if update_dt:
@@ -569,7 +657,14 @@ class _NonLinearBase:
 
     @property
     def t_fact(self):
-        """Adimensional time used for boundary conditions."""
+        """Adimensional time used for boundary conditions.
+
+        Frozen during ``solve_time_increment`` so that modifications to
+        ``self.dtime`` (e.g. by a CCD step-size callback) do not alter
+        the target time factor mid-increment.
+        """
+        if self._t_fact_inc is not None:
+            return self._t_fact_inc
         return (self.time + self.dtime - self.t0) / (self.tmax - self.t0)
 
     @property

@@ -62,7 +62,7 @@ class Problem(ProblemBase):
         self.__X = 0  # np.ndarray( self.n_dof ) #empty array
         self._Xbc = 0
 
-        self._dof_slave = np.array([])
+        self._dof_slave = np.array([])  # dof from dirichlet bc or mpc
         self._dof_free = np.array([])
 
         # prepering output demand to export results
@@ -340,8 +340,8 @@ class Problem(ProblemBase):
         F = np.zeros(n_dof)
 
         build_mpc = False
-        dof_blocked = set()  # only dirichlet bc
-        dof_slave = set()
+        dof_blocked = set()  # only dirichlet bc dof
+        dof_slave = set()  # dirichlet + mpc elminated dof
         data = []
         row = []
         col = []
@@ -399,7 +399,7 @@ class Problem(ProblemBase):
             # modification col numbering from dof_free to np.arange(len(dof_free))
             changeInd = np.full(
                 n_dof, np.nan
-            )  # mettre des nan plutôt que des zeros pour générer une erreur si pb
+            )  # nan used instead of 0 to generate an error
             changeInd[dof_free] = np.arange(len(dof_free))
             col = changeInd[np.hstack(col)]
 
@@ -409,13 +409,12 @@ class Problem(ProblemBase):
             row = row[mask]
             data = data[mask]
 
-            # self._MFext = M.tocsr().T
             self._MFext = M
             self._dof_blocked = dof_blocked
         else:
             self._MFext = None
 
-        # #adding identity for free nodes
+        # adding identity for free nodes
         col = np.hstack(
             (col, np.arange(len(dof_free)))
         )  # np.hstack((col,dof_free)) #col.append(dof_free)
@@ -502,9 +501,8 @@ class Problem(ProblemBase):
             col = np.hstack((M.col, dof_idt))
             row = np.hstack((M.row, dof_idt))
             data = np.hstack((M.data, np.ones(len(dof_idt))))
-            M = M.tocsr().T
-            # need to be checked
-            # M = self._MFext + scipy.sparse.identity(self.n_dof, dtype='d')
+            M = sparse.coo_matrix((data, (row, col)), shape=M.shape).tocsr().T
+            # M = M.tocsr().T
             if np.isscalar(self.get_D()) and self.get_D() == 0:
                 return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
             else:
