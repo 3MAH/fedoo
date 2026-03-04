@@ -3,15 +3,16 @@ from fedoo.core.base import ConstitutiveLaw
 
 
 class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration.
-    """
-    Weak formulation of the mechanical equilibrium equation for plate models.
-    *weakform.PlateEquilibrium should be prefered unless you know what you are doing:
-    This weakform use a full integration of the equation that leads to locking for
-    elements with linear interpolation.*
-    This weak form has to be used in combination with a Shell Constitutive Law
-    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or `fedoo.constitutivelaw.ShellLaminate`.
-    Geometrical non linearities not implemented for now.
+    """Mechanical equilibrium equation for plate models, with full integration.
 
+    *:mod:`fedoo.weakform.PlateEquilibrium` should be prefered unless you know
+    what you are doing.*
+    This weakform use a full integration of the equation that leads to locking
+    for elements with linear interpolation.
+    Should be used in combination with a Shell Constitutive Law
+    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
+    :mod:`fedoo.constitutivelaw.ShellLaminate`.
+    Geometrical non linearities not implemented for now.
 
     Parameters
     ----------
@@ -176,15 +177,18 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):  # plate without shear 
 def PlateEquilibriumSI(
     PlateConstitutiveLaw, name=None, space=None
 ):  # plate weakform which force reduced integration for shear terms
-    """
-    Weak formulation of the mechanical equilibrium equation for plate models.
-    *weakform.PlateEquilibrium should be prefered unless you know what you are doing:
-    This weakform use a reduced integration to treat the shear terms. That avoid locking problems
-    for elements with linear interpolation but may lead to instability when used with quadratic interpolations.*
-    This weak form has to be used in combination with a Shell Constitutive Law
-    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or `fedoo.constitutivelaw.ShellLaminate`.
-    Geometrical non linearities not implemented for now.
+    """Mechanical equilibrium equation for plate models.
 
+    *:mod:`fedoo.weakform.PlateEquilibrium` should be prefered unless you know
+    what you are doing.*
+    This weakform use a reduced integration to treat the shear terms. That
+    avoid locking problems for elements with linear interpolation but may lead
+    to instability when used with quadratic interpolations.
+
+    Should be used in combination with a Shell Constitutive Law
+    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
+    :mod:`fedoo.constitutivelaw.ShellLaminate`.
+    Geometrical non linearities not implemented for now.
 
     Parameters
     ----------
@@ -208,15 +212,15 @@ def PlateEquilibriumSI(
 
 
 def PlateEquilibrium(PlateConstitutiveLaw, name=None, space=None):
-    """
-    Weak formulation of the mechanical equilibrium equation for plate models.
-    The shear terms are treated with a full or reduced integration depending on
-    the order of the element interpolation (reduced integration for linear element
-    or full integration for quadratic element).
-    This weak form has to be used in combination with a Shell Constitutive Law
-    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or `fedoo.constitutivelaw.ShellLaminate`.
-    Geometrical non linearities not implemented for now.
+    """Mechanical equilibrium equation for plate models.
 
+    The shear terms are treated with a full or reduced integration depending on
+    the order of the element interpolation (reduced integration for linear
+    element or full integration for quadratic element).
+    This weak form has to be used in combination with a Shell Constitutive Law
+    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
+    :mod:`fedoo.constitutivelaw.ShellLaminate`.
+    Geometrical non linearities not implemented for now.
 
     Parameters
     ----------

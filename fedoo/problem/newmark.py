@@ -4,9 +4,10 @@ from fedoo.core.problem import Problem
 
 
 class _NewmarkBase:
-    """
-    Define a Newmark problem
-    The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324
+    """Define a Newmark problem.
+
+    The algorithm come from:
+        Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324
     """
 
     def __init__(

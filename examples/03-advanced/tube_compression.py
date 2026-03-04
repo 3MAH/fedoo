@@ -106,13 +106,14 @@ res.plot("Stress", component="YY", data_type="Node")
 #   For instance, the 'XX' component of 'Stress' is the radial stress whereas
 #   the 'X' component of displacement is the true 3d displacement along x.
 
-clim = res.get_all_frame_lim("P")[2]
+clim = res.get_all_frame_lim("P")[2]  # extract the min/max values
+data_3d = fd.post_processing.axi_to_3d(res)  # recontructed 3d data
 pl = pv.Plotter(window_size=[400, 600], off_screen=True)
 pl.open_gif("tube_compression.gif", fps=20)
-for i in range(res.n_iter):
-    res.load(i)
+for i in range(data_3d.n_iter):
+    data_3d.load(i)
     pl.clear_actors()
-    fd.post_processing.axi_to_3d(res, 41).plot(
+    data_3d.plot(
         "P",
         plotter=pl,
         clim=clim,
@@ -129,7 +130,6 @@ for i in range(res.n_iter):
 pl.close()
 
 # We can also write a mp4 movie with:
-# data_3d = fd.post_processing.axi_to_3d_multi('full_3d_data', res)
 # data_3d.write_movie('tube_compression', 'P')
 
 ###############################################################################
@@ -137,8 +137,8 @@ pl.close()
 # renderic availbale through pyvista.
 
 pl = pv.Plotter(window_size=[608, 800])
-res.load(62)
-fd.post_processing.axi_to_3d(res, 41).plot(
+data_3d.load(62)  # load iteration 62
+data_3d.plot(
     "Disp",
     "Z",
     show_edges=False,
@@ -165,9 +165,9 @@ pl.show()
 # pl.set_environment_texture(cubemap)
 # pl.open_movie("tube_compression.mp4", quality=6)
 
-# for i in range(res.n_iter):
-#     res.load(i)
-#     fd.post_processing.axi_to_3d(res, 41).plot(
+# for i in range(data_3d.n_iter):
+#     data_3d.load(i)
+#     data_3d.plot(
 #         show_edges=False,
 #         pbr=True,
 #         metallic=0.9,

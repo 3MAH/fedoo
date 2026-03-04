@@ -11,7 +11,8 @@ class CohesiveLaw(Spring):
     """
     Bilinear cohesive Law based on the Crisfield model
 
-    This constitutive Law should be associated with :mod:`fedoo.weakform.InterfaceForce`
+    This constitutive Law should be associated with
+    :mod:`fedoo.weakform.InterfaceForce`
 
     Parameters
     ----------
@@ -28,7 +29,9 @@ class CohesiveLaw(Spring):
     KII: scalar
         Initial interface rigidity before damage
     axis: int
-        axis should be eiter 0,1 or 2 (default). It define the normal direction to the failure plane the is used for mode identification. The axis is defined in local coordinate system.
+        axis should be eiter 0,1 or 2 (default). It define the normal
+        direction to the failure plane the is used for mode identification.
+        The axis is defined in local coordinate system.
     name: str, optional
         The name of the constitutive law
     """

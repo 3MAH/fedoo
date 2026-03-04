@@ -1,4 +1,3 @@
-from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.weakform import WeakFormBase
 
 

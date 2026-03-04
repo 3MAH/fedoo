@@ -10,9 +10,12 @@ import numpy as np
 class ElastoPlasticity(Mechanical3D):
     """
     Elasto-Plastic constitutive law.
-    This law is based on the assumption of isotropic hardening with the Von-Mises plasticity criterion.
-    After creating an ElastoPlasticity object, the hardening function must be set with the Method 'SetHardeningFunction'
-    This constitutive Law should be associated with :mod:`fedoo.weakform.StressEquilibrium`
+
+    This law is based on the assumption of isotropic hardening with the
+    Von-Mises plasticity criterion. After creating an ElastoPlasticity object,
+    the hardening function must be set with the Method 'SetHardeningFunction'
+    This constitutive Law should be associated with
+    :mod:`fedoo.weakform.StressEquilibrium`
 
     Parameters
     ----------

@@ -4,8 +4,6 @@
 """
 
 import fedoo as fd
-import numpy as np
-import time
 
 # --------------- Pre-Treatment --------------------------------------------------------
 

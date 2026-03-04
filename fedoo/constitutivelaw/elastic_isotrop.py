@@ -9,9 +9,11 @@ import numpy as np
 
 class ElasticIsotrop(ElasticAnisotropic):
     """
-    A simple linear elastic isotropic constitutive law defined from a Yound Modulus and a Poisson Ratio.
+    A simple linear elastic isotropic constitutive law defined from a Yound
+    Modulus and a Poisson Ratio.
 
-    The constitutive Law should be associated with :mod:`fedoo.weakform.InternalForce`
+    The constitutive Law should be associated with
+    :mod:`fedoo.weakform.StressEquilibrium`
 
     Parameters
     ----------

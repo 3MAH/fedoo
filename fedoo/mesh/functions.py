@@ -44,7 +44,7 @@ def extract_surface(
         the surface mesh will include only face whose corner nodes are all
         in the given node_set.
     element_set: str | array_like, optional
-        if element_set is defined (array of node indices or node_set name),
+        if element_set is defined (array of element indices or element_set name),
         the surface mesh will include only
         face that belong to elements in the given element_set.
 
@@ -536,22 +536,26 @@ def extract_edges(
     node_set: str | np.typing.ArrayLike | None = None,
     element_set: str | np.typing.ArrayLike | None = None,
 ):
-    """Extract a mesh with edges from a given 2D or 3D mesh.
+    """Extract edges from a given 2D or 3D mesh.
+
+    The edges are returned as a new mesh with 'lin2' or 'lin3' element types
+    depending on the element order of the input mesh. 'lin2' elements can be
+    forced by setting the reduce_order argument.
 
     Parameters
     ----------
     mesh : fd.Mesh
-        Mesh from which we want to extract the surface
+        Mesh from which we want to extract the edges
     reduce_order: bool, default = False
         If True, only 2-nodes edges will be extracted in any cases
     node_set: str | array_like, optional
         if node_set is defined (array of node indices or node_set name),
-        the surface mesh will include only face whose corner nodes are all
+        the edge mesh will include only edges whose nodes are all
         in the given node_set.
     element_set: str | array_like, optional
-        if element_set is defined (array of node indices or node_set name),
-        the surface mesh will include only
-        face that belong to elements in the given element_set.
+        if element_set is defined (array of element indicees or element_set
+        name), the edge mesh will include only
+        edges that belong to elements in the given element_set.
 
     Returns
     -------
@@ -651,3 +655,46 @@ def extract_edges(
         ind_element = ind_element[mask]
 
     return Mesh(mesh.nodes, edge_elements, edge_elm_type)
+
+
+def axisymmetric_extrusion(
+    mesh2d: Mesh,
+    n_theta: int = 41,
+    angle: float = 2 * np.pi,
+    merge_nodes: bool = True,
+):
+    """Extrude a 2D mesh to an axisymmetric 3D mesh.
+
+    If angle is not set to 2*pi, the mesh will be only extruded
+    to the given angle.
+
+    Parameters
+    ----------
+    mesh2d: Mesh
+        Input 2D mesh.
+    n_theta: int, default=41
+        Number of nodes used to build the 3D mesh along the
+        theta direction in cylindrical coordinates.
+    angle: float, default = 2*pi
+        Extrusion angle. By default, the full axisymmetric mesh
+        is built.
+    merge_nodes: bool, default = True
+        Merge the boundary nodes. Ignored if angle is not 2*pi.
+    """
+    if mesh2d.ndim != 2:
+        raise ValueError(
+            "Input mesh should be in 2D. " "If your mesh has 2D data, use mesh.as_2d()."
+        )
+
+    mesh = extrude(mesh2d, angle, n_theta)
+    if merge_nodes and angle == 2 * np.pi:
+        mesh.merge_nodes(
+            np.c_[
+                range(0, mesh.n_nodes, n_theta),
+                range(n_theta - 1, mesh.n_nodes, n_theta),
+            ]
+        )
+
+    r, z, theta = mesh.nodes.T
+    mesh.nodes = np.c_[r * np.cos(theta), r * np.sin(theta), z]
+    return mesh

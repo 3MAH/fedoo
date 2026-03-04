@@ -24,7 +24,8 @@ class FE2(Mechanical3D):
 
     Parameters
     ----------
-    assemb: Assembly or Assembly name (str), or list of Assembly (with len(list) = number of integration points).
+    assemb: Assembly or Assembly name (str), or list of Assembly
+        (with len(list) = number of integration points).
         Assembly that correspond to the microscopic problem
     name: str, optional
         The name of the constitutive law

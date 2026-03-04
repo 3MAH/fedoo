@@ -8,19 +8,44 @@ import numpy as np
 
 class ImplicitDynamic(WeakFormBase):
     """
-    Weak formulation.
+    Weak formulation for implicit dynamic problem.
+
+    Similar as the :mod:`fedoo.weakform.StressEquilibrium` weak formulation
+    with the adition of inertia effect. The inertia effects are introduced
+    using an Implicit Newmark Scheme.
+
 
     Parameters
     ----------
-    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
+    constitutivelaw : ConstitutiveLaw name (str) or ConstitutiveLaw object
+        Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    density : float, np.array(float)
+        Material density as constant value or array of gausspoint values
+    beta, gamma : float
+        Newmark parameters.
+        Default values use the average acceleration method.
+    name : str
         name of the WeakForm
-    nlgeom: bool (default = False)
+    nlgeom : bool, 'UL' or 'TL', optional
+        If True, the geometrical non linearities are activate based on the
+        updated lagrangian method.
+        If nlgeom == 'UL' the updated lagrangian method is used (same as True).
+        If nlgeom == 'TL' the total lagrangian method is used.
+        If not defined, the problem.nlgeom parameter is used instead.
+    space : ModelingSpace
+        Modeling space associated to the weakform. If None is specified,
+        the active ModelingSpace is considered.
     """
 
     def __init__(
-        self, constitutivelaw, density, beta, gamma, name="", nlgeom=False, space=None
+        self,
+        constitutivelaw,
+        density,
+        beta=0.25,
+        gamma=0.5,
+        name="",
+        nlgeom=False,
+        space=None,
     ):
         super().__init__(name, space)
 
@@ -276,17 +301,7 @@ class ImplicitDynamic(WeakFormBase):
 
 
 class _NewmarkInertia(WeakFormBase):
-    """
-    Weak formulation of the steady heat equation (without time evolution).
-
-    Parameters
-    ----------
-    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
-        name of the WeakForm
-    nlgeom: bool (default = False)
-    """
+    """Newmark inertia Weakform. Not intended to be used alone."""
 
     def __init__(self, density, beta, gamma, name="", nlgeom=False, space=None):
         super().__init__(name, space)
@@ -394,6 +409,10 @@ class _NewmarkInertia(WeakFormBase):
 def ImplicitDynamic2(
     constitutivelaw, density, beta, gamma, name="", nlgeom=False, space=None
 ):
+    """Aleternative implementation of the ImplicitDynamic class.
+
+    Should be 100% equivalent.
+    """
     stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
     time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
     time_integration.assembly_options["assume_sym"] = True
