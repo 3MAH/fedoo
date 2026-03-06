@@ -20,14 +20,19 @@ class _NonLinearBase:
         self._dU = 0  # displacement increment
 
         self._err0 = None  # initial error for NR error estimation
+        self._alpha = 1  # line search current parameter
 
         self.nr_parameters = {
             "err0": None,  # default error for NR error estimation
-            "criterion": "Displacement",
-            "tol": 1e-3,
+            "criterion": "Force",
+            "tol": 5e-3,
             "max_subiter": 10,
             "dt_increase_niter": None,
             "norm_type": 2,
+            "adaptive_stiffness": False,
+            "assume_cvg_at_max_subiter": False,
+            "eigenvalue_shift": False,
+            "eigenvalue_shift_factor": 0.1,
         }
         """
         Parameters to set the newton raphson algorithm:
@@ -44,8 +49,28 @@ class _NonLinearBase:
               convergence, if the Newton–Raphson loop converges in strictly
               fewer iterations, the time step is increased.
               If None, the value is initialized to ``max_subiter // 3``. 
+            * 'adaptive_stiffness': bool, to use an adaptative stiffness
+              parameter to enhance convergence. Default is False.
             * 'norm_type': define the norm used to test the criterion
               Use numpy.inf for the max value. Default is 2.
+            * 'assume_cvg_at_max_subiter': bool, default = False.
+              WARNING: This is a dangerous parameter. If True, the Newton-Raphson
+              algorithm assumes convergence after max_subiter iterations are reached,
+              regardless of whether the tolerance criterion has been satisfied.
+              Use only for special cases where you want to force convergence even
+              with unconverged solutions. Default False ensures proper convergence
+              checking. The error is still computed for informational purposes
+              if print_info > 0.
+            * 'eigenvalue_shift': bool, default = False.
+              If True, adds a shifted identity matrix to improve conditioning:
+              A_eff = A + alpha*I
+              The shift magnitude is alpha = eigenvalue_shift_factor * R,
+              where R is the Rayleigh quotient estimate of the matrix.
+            * 'eigenvalue_shift_factor': float, default = 0.1.
+              Scaling factor for the eigenvalue shift. The actual shift is:
+              alpha = eigenvalue_shift_factor * |Rayleigh quotient|.
+              Larger values = stronger stabilization but less accuracy.
+              Smaller values = more accurate but weaker stabilization.
         """
 
         self._step_size_callback = None
@@ -61,6 +86,7 @@ class _NonLinearBase:
         self.t0 = 0
         self.tmax = 1
         self.time = 0
+        self.dtime = 0
         self.__iter = 0
         self.__compteurOutput = 0
 
@@ -132,37 +158,7 @@ class _NonLinearBase:
 
     def initialize(self):
         self.__assembly.initialize(self)
-
-    def elastic_prediction(self):
-        # update the boundary conditions with the time variation
-        self.apply_boundary_conditions(self.t_fact, self.t_fact_old)
-
-        # build and solve the linearized system with elastic rigidty matrix
-        self.updateA()  # should be the elastic rigidity matrix
-        self.updateD(
-            start=True
-        )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
-        self.solve()
-
-        # OGC per-vertex filter or CCD scalar line search
-        if self._step_filter_callback is not None:
-            dX = self.get_X()
-            self._step_filter_callback(self, dX, is_elastic_prediction=True)
-        elif self._step_size_callback is not None:
-            dX = self.get_X()
-            alpha = self._step_size_callback(self, dX)
-            if alpha < 1.0:
-                # Scale only free DOFs; preserve prescribed Dirichlet values
-                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
-
-        # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
-        try:
-            self._Xbc *= 0
-        except:
-            self._ProblemPGD__Xbc = 0
-
-        # update displacement increment
-        self._dU += self.get_X()
+        self.set_A(0)
 
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
@@ -254,6 +250,93 @@ class _NonLinearBase:
         if update:
             self.update()
 
+    def _apply_eigenvalue_shift(self, A, shift_factor=None):
+        """
+        Apply eigenvalue shift to improve matrix conditioning.
+
+        Adds alpha*I to the matrix if eigenvalue_shift is enabled and shift is
+        significant. Handles both sparse and dense matrices.
+
+        Parameters
+        ----------
+        A : sparse or dense matrix
+            The matrix to shift
+        shif_factor : float, default = 0.01.
+            Scaling factor for the eigenvalue shift.
+            Larger values = stronger stabilization but less accuracy.
+            Smaller values = more accurate but weaker stabilization.
+
+        Returns
+        -------
+        matrix
+            The shifted matrix A + alpha*I, or original A if shift is negligible
+        """
+        alpha_shift = self._estimate_eigenvalue_shift(A, shift_factor)
+        if alpha_shift <= 1e-16:  # Shift too small to apply
+            return A
+
+        try:
+            from scipy import sparse
+
+            n = A.shape[0]
+            if sparse.issparse(A):
+                A_shifted = A + alpha_shift * sparse.identity(n, format=A.format)
+            else:
+                A_shifted = A + alpha_shift * np.eye(n)
+
+            if self.print_info > 1:
+                print("          Eigenvalue shift alpha: {:.4e}".format(alpha_shift))
+            return A_shifted
+        except Exception:
+            # If shift fails, return unmodified matrix
+            return A
+
+    def _estimate_eigenvalue_shift(self, A, shift_factor=0.01):
+        """
+        Estimate eigenvalue shift parameter using Rayleigh quotient.
+
+        The shift improves matrix conditioning by adding alpha*I to the stiffness.
+        Uses a cheap estimate based on Rayleigh quotient with current displacement.
+
+        Parameters
+        ----------
+        A : sparse or dense matrix
+            The matrix for which to estimate eigenvalue shift (typically KT or KE)
+        shift_factor : float, default = 0.01.
+            Scaling factor for the eigenvalue shift.
+            Larger values = stronger stabilization but less accuracy.
+            Smaller values = more accurate but weaker stabilization.
+
+        Returns
+        -------
+        float
+            Estimated shift parameter alpha >= 0
+        """
+        try:
+            # Get current displacement increment to use for Rayleigh quotient
+            x = self.get_X()
+            if np.isscalar(x) or x.size == 0:
+                return 0.0
+
+            # Compute Rayleigh quotient: r = (x^T A x) / (x^T x)
+            # This estimates the largest eigenvalue
+            x_norm_sq = np.dot(x, x)
+            if np.isscalar(A):
+                return 0.0
+
+            Ax = A @ x
+            rayleigh = np.dot(x, Ax) / (x_norm_sq + 1e-16)
+
+            # Use a fraction of estimated largest eigenvalue as shift
+            # For positive definite systems, shift smallest eigenvalue upward
+            alpha = shift_factor * abs(rayleigh)
+
+            return max(alpha, 0.0)  # Ensure non-negative shift
+
+        except Exception:
+            # If estimation fails, return zero shift
+            return 0.0
+
     def NewtonRaphsonError(self):
         """
         Compute the error of the Newton-Raphson algorithm
@@ -270,13 +353,17 @@ class _NonLinearBase:
                 # accumulated displacement) so the criterion does not
                 # become progressively looser as loading proceeds.
                 err0 = np.linalg.norm(self._dU, norm_type)
-                # if not np.array_equal(self._U, 0):
-                #     err0 += 0.01 * np.linalg.norm(self._U, norm_type)
+                if not np.array_equal(self._U, 0):
+                    # to avoid numerical error related to high U values
+                    # compared to dU
+                    err0 += 0.01 * np.linalg.norm(self._U, norm_type)
                 # err0 += 1e-8*np.max(self.mesh.bounding_box.size)
                 if err0 == 0:
                     err0 = 1
                     return 1
-                return np.linalg.norm(self.get_X()[dof_free], norm_type) / err0
+                return np.linalg.norm(self.get_X()[dof_free], norm_type) / (
+                    err0 * self._alpha
+                )
             elif self.nr_parameters["criterion"] == "Force":
                 # Normalize by external force
                 err0 = np.linalg.norm(
@@ -303,7 +390,9 @@ class _NonLinearBase:
                 return 1
         else:
             if self.nr_parameters["criterion"] == "Displacement":
-                return np.linalg.norm(self.get_X()[dof_free], norm_type) / self._err0
+                return np.linalg.norm(self.get_X()[dof_free], norm_type) / (
+                    self._err0 * self._alpha
+                )
             elif self.nr_parameters["criterion"] == "Force":  # Force criterion
                 if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
@@ -351,17 +440,37 @@ class _NonLinearBase:
             * 'err0': float or None, default = None.
               The reference error.
               If None (default), err0 is automatically computed.
-            * 'tol': float, default is 1e-3.
+            * 'tol': float, default is 5e-3.
               Error tolerance for convergence.
             * 'max_subiter': int, default = 10.
-              Number of nr iteration before returning a convergence error.
-            * 'dt_increase_niter': number of nr iterations threshold that
-              define an easy convergence. In problem allowing automatic
-              convergence, if the Newton–Raphson loop converges in strictly
-              fewer iterations, the time step is increased.
-              Default is set to max_subiter//3.
+              Number of nr iterations before returning a convergence error.
+            * 'dt_increase_niter': int or None, default = None.
+              Number of nr iterations threshold that define an easy convergence.
+              In problem allowing automatic convergence, if the Newton–Raphson
+              loop converges in strictly fewer iterations, the time step is increased.
+              If None, defaults to max_subiter//3.
             * 'norm_type': int or numpy.inf, default = 2.
-              Define the norm used to test the criterion
+              Define the norm used to test the criterion.
+            * 'adaptive_stiffness': bool, default = False.
+              Enable adaptive stiffness algorithm with xi-blending between safe
+              (often elastic) and tangent stiffness matrices to enhance convergence
+              robustness. Only works if the weak form provides an elastic stiffness
+              matrix at the beginning of the increment, when set_start is triggered
+              (e.g. not for contact problems).
+            * 'assume_cvg_at_max_subiter': bool, default = False.
+              WARNING: DANGEROUS PARAMETER. If True, assumes convergence when
+              max_subiter iterations are reached, regardless of tolerance criterion.
+              Use only for special cases requiring forced convergence. Skips
+              convergence tolerance check when iteration limit is reached.
+            * 'eigenvalue_shift': bool, default = False.
+              If True, adds a shifted identity matrix to improve conditioning:
+              A_eff = A + alpha*I where alpha = eigenvalue_shift_factor * R.
+              R is estimated via Rayleigh quotient of the current stiffness.
+            * 'eigenvalue_shift_factor': float, default = 0.1.
+              Scaling factor multiplied by the estimated eigenvalue (Rayleigh quotient)
+              to determine shift magnitude: alpha = eigenvalue_shift_factor * |R|.
+              Larger values = stronger stabilization but less accuracy.
+              Smaller values = more accurate but weaker stabilization.
         """
         if criterion not in ["Displacement", "Force", "Work"]:
             raise NameError(
@@ -376,29 +485,99 @@ class _NonLinearBase:
                 "max_subiter",
                 "dt_increase_niter",
                 "norm_type",
+                "adaptive_stiffness",
+                "assume_cvg_at_max_subiter",
+                "eigenvalue_shift",
+                "eigenvalue_shift_factor",
             ]:
                 raise NameError(
                     "Newton Raphson parameters should be in "
                     "['err0', 'tol', 'max_subiter', 'dt_increase_niter', "
-                    "'norm_type']"
+                    "'adaptive_stiffness', 'norm_type', 'assume_cvg_at_max_subiter', "
+                    "'eigenvalue_shift', 'eigenvalue_shift_factor']"
                 )
 
             self.nr_parameters[key] = kargs[key]
+
+    def elastic_prediction(self):
+        # update the boundary conditions with the time variation
+        self._alpha = 1
+        self.apply_boundary_conditions(self.t_fact, self.t_fact_old)
+
+        # For the elastic prediction, it is more efficient to reuse the tangent
+        # matrix from the last converged iteration of the previous time step.
+        # A new tangent matrix is computed only for the very first increment,
+        # where the matrix has its initial value of 0.
+        if np.isscalar(self.get_A()) and self.get_A() == 0:
+            self.updateA()
+
+        self.updateD(
+            start=True
+        )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
+        self.solve()
+
+        # OGC per-vertex filter or CCD scalar line search
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=True)
+        elif self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                # Scale only free DOFs; preserve prescribed Dirichlet values
+                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+                self._alpha = alpha
+
+        # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
+        try:
+            self._Xbc *= 0
+        except:
+            self._ProblemPGD__Xbc = 0
+
+        # update displacement increment
+        self._dU += self.get_X()
 
     def solve_time_increment(self, max_subiter=None, tol_nr=None):
         if max_subiter is None:
             max_subiter = self.nr_parameters["max_subiter"]
         if tol_nr is None:
             tol_nr = self.nr_parameters["tol"]
+        assume_cvg_at_max_subiter = self.nr_parameters.get(
+            "assume_cvg_at_max_subiter", False
+        )
 
-        # Freeze t_fact for the duration of this increment so that
-        # any modification of self.dtime (e.g. by a CCD callback)
-        # does not change the target time seen by boundary conditions
-        # or subiter print output.
         self._t_fact_inc = self.t_fact
-
         self.elastic_prediction()
-        for subiter in range(max_subiter):  # newton-raphson iterations
+
+        adaptive_stiffness = self.nr_parameters.get("adaptive_stiffness", False)
+        eigenvalue_shift = self.nr_parameters.get("eigenvalue_shift", False)
+
+        update_eigenvalue_shift_factor = False
+        if eigenvalue_shift:
+            if self.nr_parameters.get("eigenvalue_shift_factor", None) is None:
+                update_eigenvalue_shift_factor = True
+                if not hasattr(self, "_eigenvalue_shift_factor"):
+                    self._eigenvalue_shift_factor = 0.01
+            else:
+                update_eigenvalue_shift_factor = False
+                self._eigenvalue_shift_factor = self.nr_parameters.get(
+                    "eigenvalue_shift_factor", 0
+                )
+
+        if adaptive_stiffness:
+            # we take the assembly computed after set_start and before
+            # update("matrix"). This should be the elastic or "safe" stiffness.
+            # If notadaptive_stiffness algorithm will not work as expected.
+            KE = self.get_A().copy()
+            xi = 0.0
+            consecutive_decreases = 0
+            consecutive_increases = 0
+            xi_increased_this_step = False
+
+        prev_normRes = float("inf")
+        subiter = 0
+        normRes = 0.0
+        while subiter < max_subiter:
             # update Stress and initial displacement and Update stiffness matrix
             self.update(compute="vector")  # update the out of balance force vector
             self.updateD()  # required to compute the NR error
@@ -407,29 +586,96 @@ class _NonLinearBase:
             normRes = self.NewtonRaphsonError()
 
             if self.print_info > 1:
-                print(
-                    "     Subiter {} - Time: {:.5f} - Err: {:.5f}".format(
-                        subiter, self.time + self.dtime, normRes
-                    )
+                print_str = "     Subiter {} - Time: {:.5f} - Err: {:.5f}".format(
+                    subiter, self.time + self.dtime, normRes
                 )
+                if adaptive_stiffness:
+                    print_str += " - xi: {:.4f}".format(xi)
+                print(print_str)
 
-            if (
-                normRes < tol_nr and subiter >= self._nr_min_subiter
-            ):  # convergence of the NR algorithm
-                # Initialize the next increment
+            if adaptive_stiffness:
+                # Track residual trend
+                if normRes > prev_normRes:
+                    consecutive_increases += 1
+                    consecutive_decreases = 0
+                    # Diverging - switch to elastic stiffness
+                    if consecutive_increases >= 2 and xi < 1.0:
+                        self._dU -= self.get_X()
+                        xi = 1.0
+                        xi_increased_this_step = True
+                        consecutive_decreases = 0
+                        consecutive_increases = 0
+                        if self.print_info > 1:
+                            print(
+                                "     Diverging. Switching to elastic matrix (xi=1.0)."
+                            )
+                        continue  # Redo iteration
+                else:
+                    # Improving - try to reduce xi
+                    consecutive_increases = 0
+                    consecutive_decreases += 1
+                    if xi == 1.0:
+                        threshold = 2 if xi_increased_this_step else 3
+                        if consecutive_decreases >= threshold:
+                            xi = 0.25
+                            consecutive_decreases = 0
+                    elif xi > 0:
+                        xi /= 4.0
+                        if xi < 0.0156:
+                            xi = 0.0
+
+                prev_normRes = normRes
+
+            if update_eigenvalue_shift_factor:
+                if normRes > prev_normRes:
+                    self._eigenvalue_shift_factor *= 5
+                    if self._eigenvalue_shift_factor >= 1:
+                        self._eigenvalue_shift_factor = 1
+                    else:
+                        if self.print_info > 1:
+                            print("     Diverging. Increase eigenvalue_shift_factor.")
+                else:
+                    # Improving - try to reduce eigenvalue_shift_factor
+                    self._eigenvalue_shift_factor *= 0.95
+
+                prev_normRes = normRes
+
+            # Check convergence
+            if normRes < tol_nr and subiter >= self._nr_min_subiter:
                 self._t_fact_inc = None
                 return 1, subiter, normRes
+
+            subiter += 1
+
+            if subiter >= max_subiter:
+                if assume_cvg_at_max_subiter:
+                    self._t_fact_inc = None
+                    return 1, subiter, normRes
+                break
 
             # --------------- Solve --------------------------------------------------------
             self.update(
                 compute="matrix", updateWeakForm=False
             )  # assemble the tangeant matrix
-            self.updateA()
+
+            if adaptive_stiffness:
+                KT = self.__assembly.current.get_global_matrix()
+                A = xi * KE + (1 - xi) * KT
+            else:
+                A = self.__assembly.current.get_global_matrix()
+
+            # Apply eigenvalue shift if enabled
+            if eigenvalue_shift:
+                self.set_A(
+                    self._apply_eigenvalue_shift(A, self._eigenvalue_shift_factor)
+                )
+            else:
+                self.set_A(A)
 
             self.NewtonRaphsonIncrement()
 
         self._t_fact_inc = None
-        return 0, subiter, normRes
+        return 0, subiter - 1, normRes
 
     def nlsolve(
         self,

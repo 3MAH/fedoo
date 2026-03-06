@@ -286,6 +286,21 @@ class DiffOp:
     #     return same_as_next, sorted_indices
     #     # return [intForSort[i] for i in sorted_indices], sorted_indices
 
+    def split_mat_vec(self):
+        vec_item = [ii for ii in range(len(self.op)) if self.op[ii] == 1]
+        mat_item = [ii for ii in range(len(self.op)) if self.op[ii] != 1]
+        vec = DiffOp(
+            [self.op[ii] for ii in vec_item],
+            [self.op_vir[ii] for ii in vec_item],
+            [self.coef[ii] for ii in vec_item],
+        )
+        mat = DiffOp(
+            [self.op[ii] for ii in mat_item],
+            [self.op_vir[ii] for ii in mat_item],
+            [self.coef[ii] for ii in mat_item],
+        )
+        return mat, vec
+
     def nvar(self):
         return max([op.u for op in self.op]) + 1
 
