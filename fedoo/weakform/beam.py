@@ -1,4 +1,3 @@
-from fedoo.core.base import ConstitutiveLaw
 from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.weakform import WeakFormBase
 from scipy.spatial.transform import Rotation

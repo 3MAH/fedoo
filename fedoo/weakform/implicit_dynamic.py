@@ -1,5 +1,6 @@
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.weakform.inertia import Inertia
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
 import numpy as np
@@ -332,12 +333,16 @@ class ImplicitDynamic2(WeakFormBase):
 class _NewmarkInertia(WeakFormBase):
     """Newmark inertia Weakform. Not intended to be used alone."""
 
-    def __init__(self, density, beta, gamma, name="", nlgeom=False, space=None):
+    def __init__(self, wf, beta, gamma, name="", nlgeom=None, space=None):
         super().__init__(name, space)
         self.beta = beta
         self.gamma = gamma
-        self.density = density
-        self.__nlgeom = nlgeom
+        if not isinstance(wf, WeakFormBase):
+            # wf is a density. Build a standard 2D or 3D mass weakform
+            density = wf
+            wf = Inertia(density)
+        self.mass_wf = wf
+        self.nlgeom = nlgeom
         self.damping_coef = None  # for Rayleigh damping
 
     def initialize(self, assembly, pb):
@@ -346,17 +351,10 @@ class _NewmarkInertia(WeakFormBase):
         assembly.sv_type["_DeltaDisp"] = "Node"
         assembly.sv["Velocity"] = 0
         assembly.sv["Acceleration"] = 0
-        assembly.sv["Velocity_GP"] = np.zeros((self.space.ndim, 1))
-        assembly.sv["Acceleration_GP"] = np.zeros((self.space.ndim, 1))
-        assembly.sv["_DeltaDisp"] = np.zeros((self.space.ndim, 1))
-        assembly.sv["_DeltaDisp_GP"] = np.zeros((self.space.ndim, 1))
+        assembly.sv["_DeltaDisp"] = 0
 
     def update(self, assembly, pb):
         assembly.sv["_DeltaDisp"] = pb._get_vect_component(pb._dU, "Disp")
-
-        assembly.sv["_DeltaDisp_GP"] = assembly.convert_data(
-            assembly.sv["_DeltaDisp"], convert_from="Node", convert_to="GaussPoint"
-        )
 
     def update_2(self, assembly, pb):
         pass
@@ -377,25 +375,11 @@ class _NewmarkInertia(WeakFormBase):
                 (1 - self.gamma) * assembly.sv["Acceleration"]
                 + self.gamma * new_acceleration
             )
-
             assembly.sv["Acceleration"] = new_acceleration
-
-            # save gauss point values
-            assembly.sv["Velocity_GP"] = assembly.convert_data(
-                assembly.sv["Velocity"], convert_from="Node", convert_to="GaussPoint"
-            )
-            assembly.sv["Acceleration_GP"] = assembly.convert_data(
-                assembly.sv["Acceleration"],
-                convert_from="Node",
-                convert_to="GaussPoint",
-            )
             # reset acumulated displacement
             assembly.sv["_DeltaDisp"] = np.zeros((self.space.ndim, 1))
-            assembly.sv["_DeltaDisp_GP"] = np.zeros((self.space.ndim, 1))
 
     def get_weak_equation(self, assembly, pb):
-        op_dU = self.space.op_disp()  # displacement increment (incremental formulation)
-        op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
         dt = pb.dtime
         if dt == 0:
             return 0
@@ -406,43 +390,35 @@ class _NewmarkInertia(WeakFormBase):
         alpha = self.damping_coef if self.damping_coef is not None else 0.0
 
         # Current NR Iteration state
-        a_n = assembly.sv["Acceleration_GP"]  # at t_n
-        v_n = assembly.sv["Velocity_GP"]  # at t_n
-        delta_disp = assembly.sv["_DeltaDisp_GP"]  # accumulated since step start
+        a_n = assembly.sv["Acceleration"]  # at t_n
+        v_n = assembly.sv["Velocity"]  # at t_n
+        delta_disp = assembly.sv["_DeltaDisp"]  # accumulated since step start
 
         # Current estimate of acc and vel (includes accumulated delta_disp)
         acc_i = a0 * (delta_disp - dt * v_n) + (1 - 0.5 / self.beta) * a_n
         vel_i = v_n + dt * ((1 - self.gamma) * a_n + self.gamma * acc_i)
 
         # Integration: delta_u * rho * [ (a0 + alpha*c0)*du + (acc_i + alpha*vel_i) ]
-        tangent_coeff = self.density * (a0 + alpha * c0)
-        residual_val = self.density * (acc_i + alpha * vel_i)
-
-        diff_op = sum(
-            [
-                op_dU_vir[i] * (tangent_coeff * op_dU[i] + residual_val[i])
-                for i in range(self.space.ndim)
-                if op_dU_vir[i] != 0
-            ]
-        )
+        tangent_coeff = a0 + alpha * c0
+        residual_val = acc_i + alpha * vel_i
+        wf = self.mass_wf.get_weak_equation(assembly, pb)
+        diff_op = tangent_coeff * wf
+        # Apply the operator to the nodal v_curr to get the damping force residual
+        if not np.array_equal(residual_val, 0):
+            diff_op += assembly.operator_apply(wf, residual_val.ravel())
         if self.space._dimension == "2Daxi":
             rr = assembly.sv["_R_gausspoints"]
             return diff_op * ((2 * np.pi) * rr)
         else:
             return diff_op
 
-    @property
-    def nlgeom(self):
-        return self.__nlgeom
 
-
-class _StressEquilibriumRayleighDamping(StressEquilibrium):
-    """Stress Equilibirum with Rayleigh Damping used for Newmark weak form.
+class _NewmarkStiffness(WeakFormBase):
+    """Stiffness with Rayleigh Damping used for Newmark weak form.
 
     Not intended to be used alone."""
 
-    def __init__(self, constitutivelaw, beta, gamma, name="", nlgeom=None, space=None):
-        super().__init__(constitutivelaw, name, nlgeom, space)
+    def __init__(self, beta, gamma):
         self.beta = beta
         self.gamma = gamma
         self.damping_coef = None  # for Rayleigh damping
@@ -483,36 +459,18 @@ class _StressEquilibriumRayleighDamping(StressEquilibrium):
         # Current velocity: v_curr = v_n + dt*((1-gamma)*a_n + gamma*a_curr)
         v_curr = v_n_node + dt * ((1 - self.gamma) * a_n_node + self.gamma * a_curr)
 
-        # Ensure correct shape for the operator application
-        if v_curr.ndim > 1 and v_curr.shape[1] == 1:
-            v_curr = v_curr * np.ones(assembly.mesh.n_nodes)
-
         # 4. Build the damping residual: delta_eps * (beta_ray * H * eps(v_curr))
-        eps = self.space.op_strain()
-        if self.space._dimension == "2Daxi":
-            rr = assembly.sv["_R_gausspoints"]
+        if not np.array_equal(v_curr, 0):
+            # Apply the operator to the nodal v_curr to get the damping force residual
+            damping_force_wf = self.damping_coef * assembly.operator_apply(
+                mat, v_curr.ravel()
+            )
+            if self.space._dimension == "2Daxi":
+                rr = assembly.sv["_R_gausspoints"]
+                damping_force_wf = damping_force_wf * ((2 * np.pi) * rr)
+            return scaled_mat + vec + damping_force_wf
 
-            # nlgeom = False
-            eps[2] = self.space.variable("DispX") * np.divide(
-                1, rr, out=np.zeros_like(rr), where=rr != 0
-            )  # put zero if X==0 (division by 0)
-
-        H = assembly.sv["TangentMatrix"]
-
-        # Define the operator for sigma_damping = H * eps(v_curr)
-        op_sigma_v = [
-            sum([0 if eps[j] == 0 else eps[j] * H[i][j] for j in range(6)])
-            for i in range(6)
-        ]
-
-        # Apply the operator to the nodal v_curr to get the damping force residual
-        damping_force_wf = self.damping_coef * assembly.operator_apply(
-            mat, v_curr.ravel()
-        )
-        if self.space._dimension == "2Daxi":
-            damping_force_wf = damping_force_wf * ((2 * np.pi) * rr)
-
-        return scaled_mat + vec + damping_force_wf
+        return scaled_mat + vec
 
 
 class ImplicitDynamicSum(WeakFormSum):
@@ -541,13 +499,75 @@ class ImplicitDynamicSum(WeakFormSum):
 def ImplicitDynamic(
     constitutivelaw, density, beta=0.25, gamma=0.5, name="", nlgeom=False, space=None
 ):
-    """Aleternative implementation of the ImplicitDynamic class.
+    r"""Weak formulation for implicit dynamic problems.
 
-    Should be 100% equivalent.
+    Constructs a dynamic weak formulation by combining internal forces
+    (stiffness matrix) to inertia (mass matrix). Time integration is
+    performed using the Newmark-beta scheme.
+
+    By default, the **Constant Average Acceleration** method is used
+    (:math:`\\gamma=0.5, \\beta=0.25`), which is unconditionally stable
+    and energy-preserving.
+
+
+    Parameters
+    ----------
+    stiffness : str, ConstitutiveLaw, WeakForm
+        Defines the internal forces (stiffness).
+        - If `str` or `ConstitutiveLaw`: Automatically creates a
+          :class:`~fedoo.weakform.StressEquilibrium` instance based on
+          the given constitutive law.
+        - If `WeakForm`: Uses the provided weakform as the stiffness component.
+    density : float, ndarray, or WeakForm
+        Defines the mass inertia component.
+        - If `float` or `ndarray`: Material density at Gauss points for 3D/2D
+          solid model.
+        - If `WeakForm`: A custom weakform used for mass assembly.
+    beta : float, default=0.25
+        Newmark integration parameter $\beta$. Controls the acceleration
+        variation over the time step.
+    gamma : float, default=0.5
+        Newmark integration parameter $\gamma$. Controls numerical damping.
+    name : str, optional
+        Name of the WeakForm instance.
+    nlgeom : bool or {'UL', 'TL'}, optional
+        Enable geometric nonlinearities:
+
+        * ``True`` or ``'UL'``: Updated Lagrangian method.
+        * ``'TL'``: Total Lagrangian method.
+        * ``None``: Uses the global ``problem.nlgeom`` setting.
+    space : ModelingSpace, optional
+        Modeling space for the weakform. Defaults to the currently active
+        ``ModelingSpace``.
+
+    Returns
+    -------
+    ImplicitDynamicSum
+        A weakform containing both stiffness and inertia components
+        configured for Newmark time integration.
+
+    Notes
+    -----
+    * **Stability:** The method is unconditionally stable if $\gamma \ge 0.5$
+      and $\beta \ge 0.25(\gamma + 0.5)^2$.
+    * **Numerical Damping:** Use $\gamma > 0.5$ to introduce algorithmic
+      damping, useful for filtering high-frequency parasitic oscillations.
+    * **Physical Damping:** To include Rayleigh damping ($\mathbf{C} = \alpha \mathbf{M} + \beta_R \mathbf{K}$),
+      modify the `rayleigh_damping` attribute of the returned object.
     """
-    stiffness_weakform = _StressEquilibriumRayleighDamping(
-        constitutivelaw, beta, gamma, "", nlgeom, space
-    )
+    if isinstance(constitutivelaw, WeakFormBase):
+        # weakform used to build the stiffness matrix
+        stiffness_weakform = constitutivelaw
+    else:
+        stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
+    parent = type(stiffness_weakform)
+
+    class NewmarkStiffness(_NewmarkStiffness, parent):
+        pass
+
+    stiffness_weakform.__class__ = NewmarkStiffness
+    _NewmarkStiffness.__init__(stiffness_weakform, beta, gamma)
+
     time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
     time_integration.assembly_options["assume_sym"] = True
     return ImplicitDynamicSum([stiffness_weakform, time_integration], name)

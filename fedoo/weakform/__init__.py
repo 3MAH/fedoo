@@ -39,11 +39,13 @@ The WeakForm library contains the following classes:
    PlateEquilibriumFI
    PlateEquilibriumSI
    Inertia
+   RotaryInertia
    InterfaceForce
    DistributedLoad
    ExternalPressure
    HourglassStiffness
    StressEquilibriumFbar
+   ArtificialDamping
 """
 
 from .beam import BeamEquilibrium
@@ -54,7 +56,7 @@ from .heat_equation import (
     TemperatureTimeDerivative,
 )
 from .implicit_dynamic import ImplicitDynamic, ImplicitDynamic2
-from .inertia import Inertia
+from .inertia import Inertia, RotaryInertia
 from .interface_force import InterfaceForce
 from .plate import (
     PlateEquilibrium,
@@ -69,12 +71,14 @@ from .stress_equilibrium_bbar import (
     StressEquilibriumRI,
     HourglassStiffness,
 )
+from .damping_stabilization import ArtificialDamping
 from .distributed_load import ExternalPressure, DistributedLoad
 
 __all__ = [
     "BeamEquilibrium",
     "SpringEquilibrium",
     "Inertia",
+    "RotaryInertia",
     "InterfaceForce",
     "PlateEquilibrium",
     "PlateEquilibriumFI",
@@ -94,4 +98,5 @@ __all__ = [
     "ParametricBernoulliBeam",
     "DistributedLoad",
     "ExternalPressure",
+    "ArtificialDamping",
 ]

@@ -166,6 +166,12 @@ class Assembly(AssemblyBase):
 
         nvar = self.space.nvar
         wf = self.weakform.get_weak_equation(self, self._pb)
+        if wf == 0:
+            if compute != "vector":
+                self.global_matrix = 0
+            if compute != "matrix":
+                self.global_vector = 0
+            return
 
         mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()
         mat_change_of_basis = self.get_change_of_basis_mat()
