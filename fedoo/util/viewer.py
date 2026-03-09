@@ -419,51 +419,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.addToolBarBreak(Qt.TopToolBarArea)
 
         # ------------------------------------------------
-        # Toolbar 3 View
-        # ------------------------------------------------
-        view_toolbar = QtWidgets.QToolBar("View")
-        view_toolbar.setMovable(True)
-        self.addToolBar(Qt.TopToolBarArea, view_toolbar)
-
-        # Define actions for tool bars and menu
-        view_top_action = QtWidgets.QAction("Top (Z-)", self)
-        view_top_action.setShortcut("Ctrl+1")
-        view_top_action.triggered.connect(self.view_top)
-
-        view_bottom_action = QtWidgets.QAction("Bottom (Z+)", self)
-        view_bottom_action.setShortcut("Ctrl+2")
-        view_bottom_action.triggered.connect(self.view_bottom)
-
-        view_front_action = QtWidgets.QAction("Front (Y-)", self)
-        view_front_action.setShortcut("Ctrl+3")
-        view_front_action.triggered.connect(self.view_front)
-
-        view_back_action = QtWidgets.QAction("Back (Y+)", self)
-        view_back_action.setShortcut("Ctrl+4")
-        view_back_action.triggered.connect(self.view_back)
-
-        view_left_action = QtWidgets.QAction("Left (X-)", self)
-        view_left_action.setShortcut("Ctrl+5")
-        view_left_action.triggered.connect(self.view_left)
-
-        view_right_action = QtWidgets.QAction("Right (X+)", self)
-        view_right_action.setShortcut("Ctrl+6")
-        view_right_action.triggered.connect(self.view_right)
-
-        view_isometric_action = QtWidgets.QAction("Isometric", self)
-        view_isometric_action.setShortcut("Ctrl+0")
-        view_isometric_action.triggered.connect(self.view_isometric)
-
-        # add view actions to toolbars
-        view_toolbar.addAction(view_top_action)
-        view_toolbar.addAction(view_bottom_action)
-        view_toolbar.addAction(view_front_action)
-        view_toolbar.addAction(view_back_action)
-        view_toolbar.addAction(view_left_action)
-        view_toolbar.addAction(view_right_action)
-        view_toolbar.addAction(view_isometric_action)
-
-        # ------------------------------------------------
         # Toolbar 3 Window
         # ------------------------------------------------
         window_toolbar = QtWidgets.QToolBar("Dock Selector")
@@ -513,6 +468,56 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.select_node_action.toggled.connect(self._on_select_node_changed)
         self.select_elm_action.toggled.connect(self._on_select_elm_changed)
+
+        # ------------------------------------------------
+        # Toolbar 5 View
+        # ------------------------------------------------
+        view_toolbar = QtWidgets.QToolBar("View")
+        view_toolbar.setMovable(True)
+        self.addToolBar(Qt.TopToolBarArea, view_toolbar)
+
+        # Define actions for tool bars and menu
+        view_top_action = QtWidgets.QAction("Top (Z-)", self)
+        view_top_action.setShortcut("Ctrl+1")
+        view_top_action.triggered.connect(self.view_top)
+
+        view_bottom_action = QtWidgets.QAction("Bottom (Z+)", self)
+        view_bottom_action.setShortcut("Ctrl+2")
+        view_bottom_action.triggered.connect(self.view_bottom)
+
+        view_front_action = QtWidgets.QAction("Front (Y-)", self)
+        view_front_action.setShortcut("Ctrl+3")
+        view_front_action.triggered.connect(self.view_front)
+
+        view_back_action = QtWidgets.QAction("Back (Y+)", self)
+        view_back_action.setShortcut("Ctrl+4")
+        view_back_action.triggered.connect(self.view_back)
+
+        view_left_action = QtWidgets.QAction("Left (X-)", self)
+        view_left_action.setShortcut("Ctrl+5")
+        view_left_action.triggered.connect(self.view_left)
+
+        view_right_action = QtWidgets.QAction("Right (X+)", self)
+        view_right_action.setShortcut("Ctrl+6")
+        view_right_action.triggered.connect(self.view_right)
+
+        view_isometric_action = QtWidgets.QAction("Isometric", self)
+        view_isometric_action.setShortcut("Ctrl+0")
+        view_isometric_action.triggered.connect(self.view_isometric)
+
+        reset_camera_action = QtWidgets.QAction("Reset", self)
+        reset_camera_action.setToolTip("Reset camera to fit all visible actors")
+        reset_camera_action.triggered.connect(self.reset_camera)
+
+        # add view actions to toolbars
+        view_toolbar.addAction(view_top_action)
+        view_toolbar.addAction(view_bottom_action)
+        view_toolbar.addAction(view_front_action)
+        view_toolbar.addAction(view_back_action)
+        view_toolbar.addAction(view_left_action)
+        view_toolbar.addAction(view_right_action)
+        view_toolbar.addAction(view_isometric_action)
+        view_toolbar.addAction(reset_camera_action)
 
         # -------------------------
         # Connections
@@ -607,6 +612,7 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(view_left_action)
         view_menu.addAction(view_right_action)
         view_menu.addAction(view_isometric_action)
+        view_menu.addAction(reset_camera_action)
 
         # --- Menu Tools ---
         tools_menu = menubar.addMenu("Tools")
@@ -726,6 +732,7 @@ class MainWindow(QtWidgets.QMainWindow):
             view_front_action,
             view_back_action,
             view_isometric_action,
+            reset_camera_action,
         ]
         # -------------------------
         # Dockable PyVista Widget
@@ -1672,6 +1679,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def view_isometric(self):
         self.plotter.view_isometric()
+        self.plotter.render()
+
+    def reset_camera(self):
+        self.plotter.reset_camera()
         self.plotter.render()
 
     # Clip dialog : Open and close
