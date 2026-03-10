@@ -6,6 +6,7 @@ from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 try:
     from simcoon import simmit as sim
+    from simcoon import Rotation as SimRotation
 
     USE_SIMCOON = True
 except ModuleNotFoundError:
@@ -282,27 +283,27 @@ class StressEquilibrium(WeakFormBase):
         """Start a new time increment."""
         if assembly._nlgeom:
             if "DStrain" in assembly.sv:
-                # rotate strain and stress -> need to be checked
+                # rotate strain and stress
+                rot = SimRotation.from_matrix(
+                    assembly.sv["DR"].transpose(2, 0, 1)
+                )
                 assembly.sv["Strain"] = StrainTensorList(
-                    sim.rotate_strain_R(
+                    rot.apply_strain(
                         assembly.sv_start["Strain"].asarray(),
-                        assembly.sv["DR"],
                     )
                     + assembly.sv["DStrain"]
                 )
                 assembly.sv["DStrain"] = StrainTensorList(
                     np.zeros((6, assembly.n_gauss_points), order="F")
                 )
-            # or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a
-            # nul sum
 
-            # update cauchy stress
-            if not (np.array_equal(assembly.sv["DispGradient"], 0)):
-                # True when the problem have been updated once
-                stress = assembly.sv["Stress"].asarray()
-                assembly.sv["Stress"] = StressTensorList(
-                    sim.rotate_stress_R(stress, assembly.sv["DR"])
-                )
+                # update cauchy stress
+                if not (np.array_equal(assembly.sv["DispGradient"], 0)):
+                    # True when the problem have been updated once
+                    stress = assembly.sv["Stress"].asarray()
+                    assembly.sv["Stress"] = StressTensorList(
+                        rot.apply_stress(stress)
+                    )
                 if assembly._nlgeom == "TL":
                     assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                         assembly.sv["F"]
