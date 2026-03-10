@@ -76,6 +76,7 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
             PeriodicBC(
                 "small_strain",
                 meshperio=meshperio,
+                dic_closest_points_on_boundaries=kargs.get("dic_closest_points_on_boundaries", None),
             )
         )
 
