@@ -2785,6 +2785,11 @@ class PeriodicBC(BCBase):
                 )
                 res = self._list_MPC_non_periodic_node_distance()
 
+        # Enforce continuity of rotation DOFs (RotX, RotY, RotZ) if present
+        self._add_additional_rot_dof(
+            problem, res, lambda key: getattr(self, key)
+        )
+
         res.initialize(problem)
         self.list_mpc = res
 
