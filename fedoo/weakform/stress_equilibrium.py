@@ -284,9 +284,7 @@ class StressEquilibrium(WeakFormBase):
         if assembly._nlgeom:
             if "DStrain" in assembly.sv:
                 # rotate strain and stress
-                rot = SimRotation.from_matrix(
-                    assembly.sv["DR"].transpose(2, 0, 1)
-                )
+                rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
                 assembly.sv["Strain"] = StrainTensorList(
                     rot.apply_strain(
                         assembly.sv_start["Strain"].asarray(),
@@ -301,9 +299,7 @@ class StressEquilibrium(WeakFormBase):
                 if not (np.array_equal(assembly.sv["DispGradient"], 0)):
                     # True when the problem have been updated once
                     stress = assembly.sv["Stress"].asarray()
-                    assembly.sv["Stress"] = StressTensorList(
-                        rot.apply_stress(stress)
-                    )
+                    assembly.sv["Stress"] = StressTensorList(rot.apply_stress(stress))
                 if assembly._nlgeom == "TL":
                     assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                         assembly.sv["F"]

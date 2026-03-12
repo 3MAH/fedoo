@@ -33,7 +33,7 @@ class LocalFrame(np.ndarray):
         -------
         self
         """
-        if angle is not 0:
+        if angle != 0:
             rot = Rotation.from_euler(axis.upper(), angle, degrees=True)
             self[:] = np.matmul(self, rot.as_matrix().T)
             return self
