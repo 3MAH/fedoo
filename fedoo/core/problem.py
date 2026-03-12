@@ -1,15 +1,9 @@
 # base class
 import numpy as np
 import scipy.sparse as sparse
-import scipy.sparse.linalg
 
-from fedoo.core.assembly import Assembly
 from fedoo.core.base import ProblemBase, AssemblyBase
-from fedoo.core.boundary_conditions import BoundaryCondition, MPC
 from fedoo.core.output import _ProblemOutput, _get_results
-from fedoo.core.dataset import DataSet
-
-import time
 
 
 class Problem(ProblemBase):
@@ -286,22 +280,22 @@ class Problem(ProblemBase):
             if len(self._dof_free) != 0:
                 if np.isscalar(self.__D) and self.__D == 0:
                     self.__X[self._dof_free] = self._solve(
-                        self.__MatCB.T @ self.__A @ self.__MatCB,
-                        self.__MatCB.T @ (self.__B - self.__A @ self._Xbc),
+                        self._MatCB.T @ self.__A @ self._MatCB,
+                        self._MatCB.T @ (self.__B - self.__A @ self._Xbc),
                     )
                 else:
                     self.__X[self._dof_free] = self._solve(
-                        self.__MatCB.T @ self.__A @ self.__MatCB,
-                        self.__MatCB.T @ (self.__B + self.__D - self.__A @ self._Xbc),
+                        self._MatCB.T @ self.__A @ self._MatCB,
+                        self._MatCB.T @ (self.__B + self.__D - self.__A @ self._Xbc),
                     )
 
-                self.__X = self.__MatCB * self.__X[self._dof_free] + self._Xbc
+                self.__X = self._MatCB * self.__X[self._dof_free] + self._Xbc
             else:
                 self.__X[:] = self._Xbc[:]
 
             # compute matrix conditionment. Uncomment for debug purpose
-            # lambda_min = sparse.linalg.eigs(self.__MatCB.T @ self.__A @ self.__MatCB , 1, which="SM", return_eigenvectors=False)
-            # lambda_max = sparse.linalg.eigs(self.__MatCB.T @ self.__A @ self.__MatCB , 1, which="LM", return_eigenvectors=False)
+            # lambda_min = sparse.linalg.eigs(self._MatCB.T @ self.__A @ self._MatCB , 1, which="SM", return_eigenvectors=False)
+            # lambda_max = sparse.linalg.eigs(self._MatCB.T @ self.__A @ self._MatCB , 1, which="LM", return_eigenvectors=False)
             # print('cond: ', lambda_max/lambda_min)
 
         elif (
@@ -333,8 +327,6 @@ class Problem(ProblemBase):
         self._set_vect_component(self.__X, name, value)
 
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
-        n = self.mesh.n_nodes
-        nvar = self.space.nvar
         n_dof = self.n_dof
         self._Xbc = np.zeros(n_dof)
         F = np.zeros(n_dof)
@@ -362,15 +354,11 @@ class Problem(ProblemBase):
                 build_mpc = True
 
                 n_fact = len(e._factors)  # only factor for non eliminated (master) dof
-                # shape e.__Fact should be n_fact*nbMPC
-                # shape self.__Index should be nbMPC
-                # shape self.__IndexMaster should be n_fact*nbMPC
                 data.append(np.array(e._factors.T).ravel())
                 row.append(
                     (np.array(e._dof_index[0]).reshape(-1, 1) * np.ones(n_fact)).ravel()
-                )
-                col.append(e._dof_index[1:].T.ravel())
-                # col.append((e.IndexMaster + np.c_[e.VariableMaster]*n).T.ravel())
+                )  # slave dof (elimated)
+                col.append(e._dof_index[1:].T.ravel())  # master dofs
 
         dof_slave.update(dof_blocked)
         dof_slave = np.fromiter(dof_slave, int, len(dof_slave))
@@ -404,7 +392,6 @@ class Problem(ProblemBase):
             col = changeInd[np.hstack(col)]
 
             mask = np.logical_not(np.isnan(col))  # mask to delete nan value
-            # print(len(col) - len(col[mask]))
             col = col[mask]
             row = row[mask]
             data = data[mask]
@@ -423,9 +410,9 @@ class Problem(ProblemBase):
             (data, np.ones(len(dof_free)))
         )  # data.append(np.ones(len(dof_free)))
 
-        self.__MatCB = sparse.coo_matrix(
+        self._MatCB = sparse.coo_matrix(
             (data, (row, col)), shape=(n_dof, len(dof_free))
-        ).tocsc()  # so that self.__MatCB.T is csr
+        ).tocsc()  # so that self._MatCB.T is csr
 
         self.__B = F
         self._dof_slave = dof_slave
@@ -462,7 +449,7 @@ class Problem(ProblemBase):
         - Inertia forces
 
         Parameters
-        ------------
+        ----------
         name : str
             Can be either the name of a variable associated to the requested force,
             the name of a vector or 'all'.
@@ -472,7 +459,7 @@ class Problem(ProblemBase):
             is that the external force can't be accessed on the mpc slave dof.
 
         Returns
-        ------------
+        -------
         np.ndarray
             The external forces. If a vector name is given, the function returns
             the external force of every vector component.
@@ -481,7 +468,7 @@ class Problem(ProblemBase):
             to separated components by using: pb.get_ext_forces().reshape(pb.space.nvar,-1)
 
         Notes
-        ---------
+        -----
         The "force" mentionned here must be seen as a generic term.
         The true physical meanings of the "external forces" depends
         on the problem and the nature of the dof (for instance moment for rotational dof or

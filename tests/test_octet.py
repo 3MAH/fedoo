@@ -77,8 +77,8 @@ def test_octet():
     TensorStrain = res.gausspoint_data["Strain"]
     TensorStress = res.gausspoint_data["Stress"]
 
-    assert np.abs(TensorStress[4][222] - 72.3765265291865) < 1e-3
-    assert np.abs(TensorStrain[2][876] - 0.03046909551762696) < 1e-6
+    assert np.abs(TensorStress[4][222] - 81.37703546761797) < 1e-3
+    assert np.abs(TensorStrain[2][876] - 0.030039991967348946) < 1e-6
 
 
 if __name__ == "__main__":

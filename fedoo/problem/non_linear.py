@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
-from typing import Callable, Any
+from typing import Callable
 
 
 class _NonLinearBase:
@@ -46,7 +46,7 @@ class _NonLinearBase:
               convergence error. Default is 6.
             * 'dt_increase_niter': number of nr iterations threshold that
               define an easy convergence. In problem allowing automatic
-              convergence, if the Newton–Raphson loop converges in strictly
+              convergence, if the Newton–Raphson loop converges in
               fewer iterations, the time step is increased.
               If None, the value is initialized to ``max_subiter // 3``. 
             * 'adaptive_stiffness': bool, to use an adaptative stiffness
@@ -192,7 +192,7 @@ class _NonLinearBase:
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
 
-    def NewtonRaphsonIncrement(self):
+    def solve_nr_increment(self):
         # solve and update total displacement. A and D should up to date
         self.solve()
         if self._step_filter_callback is not None:
@@ -337,7 +337,7 @@ class _NonLinearBase:
             # If estimation fails, return zero shift
             return 0.0
 
-    def NewtonRaphsonError(self):
+    def compute_nr_error(self):
         """
         Compute the error of the Newton-Raphson algorithm
         For Force and Work error criterion, the problem must be updated
@@ -347,8 +347,8 @@ class _NonLinearBase:
         dof_free = self._dof_free
         if len(dof_free) == 0:
             return 0
-        if self._err0 is None:  # assess err0 from current state
-            if self.nr_parameters["criterion"] == "Displacement":
+        if self.nr_parameters["criterion"] == "Displacement":
+            if self._err0 is None:  # assess err0 from current state
                 # Normalize by the current increment (not the total
                 # accumulated displacement) so the criterion does not
                 # become progressively looser as loading proceeds.
@@ -361,10 +361,13 @@ class _NonLinearBase:
                 if err0 == 0:
                     err0 = 1
                     return 1
-                return np.linalg.norm(self.get_X()[dof_free], norm_type) / (
-                    err0 * self._alpha
-                )
-            elif self.nr_parameters["criterion"] == "Force":
+            else:
+                err0 = self._err0
+            return np.linalg.norm(self.get_X()[dof_free], norm_type) / (
+                err0 * self._alpha
+            )
+        elif self.nr_parameters["criterion"] == "Force":
+            if self._err0 is None:
                 # Normalize by external force
                 err0 = np.linalg.norm(
                     self.get_ext_forces(include_mpc=False),
@@ -374,39 +377,33 @@ class _NonLinearBase:
                 if err0 == 0:
                     err0 = 1
                     return 1
-                if np.isscalar(self.get_D()) and self.get_D() == 0:
-                    return np.linalg.norm(self.get_B()[dof_free], norm_type) / err0
-                else:
-                    return (
-                        np.linalg.norm(
-                            self.get_B()[dof_free] + self.get_D()[dof_free],
-                            norm_type,
-                        )
-                        / err0
+            else:
+                err0 = self._err0
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
+                return np.linalg.norm(self._MatCB.T @ self.get_B(), norm_type) / err0
+                # return np.linalg.norm(self.get_B()[dof_free], norm_type) / err0
+            else:
+                return (
+                    np.linalg.norm(
+                        self._MatCB.T @ (self.get_B() + self.get_D()),
+                        norm_type,
                     )
-            else:  # initialize the value of self._err0
-                self._err0 = 1
-                self._err0 = self.NewtonRaphsonError()
-                return 1
-        else:
-            if self.nr_parameters["criterion"] == "Displacement":
-                return np.linalg.norm(self.get_X()[dof_free], norm_type) / (
-                    self._err0 * self._alpha
+                    / err0
                 )
-            elif self.nr_parameters["criterion"] == "Force":  # Force criterion
-                if np.isscalar(self.get_D()) and self.get_D() == 0:
-                    return (
-                        np.linalg.norm(self.get_B()[dof_free], norm_type) / self._err0
-                    )
-                else:
-                    return (
-                        np.linalg.norm(
-                            self.get_B()[dof_free] + self.get_D()[dof_free],
-                            norm_type,
-                        )
-                        / self._err0
-                    )
-            else:  # self.nr_parameters['criterion'] == 'Work': #work criterion
+                # return (
+                #     np.linalg.norm(
+                #         self.get_B()[dof_free] + self.get_D()[dof_free],
+                #         norm_type,
+                #     )
+                #     / err0
+                # )
+        else:  # self.nr_parameters['criterion'] == 'Work': work criterion
+            # initialize the value of self._err0
+            if self._err0 is None:
+                self._err0 = 1
+                self._err0 = self.compute_nr_error()
+                return 1
+            else:
                 if np.isscalar(self.get_D()) and self.get_D() == 0:
                     return (
                         np.linalg.norm(
@@ -570,50 +567,61 @@ class _NonLinearBase:
             # If notadaptive_stiffness algorithm will not work as expected.
             KE = self.get_A().copy()
             xi = 0.0
-            consecutive_decreases = 0
-            consecutive_increases = 0
             xi_increased_this_step = False
 
-        prev_normRes = float("inf")
+        prev_error = float("inf")
+        consecutive_decreases = 0
+        consecutive_increases = 0
         subiter = 0
-        normRes = 0.0
+        error = 0.0
         while subiter < max_subiter:
+            subiter += 1
+
             # update Stress and initial displacement and Update stiffness matrix
             self.update(compute="vector")  # update the out of balance force vector
             self.updateD()  # required to compute the NR error
 
             # Check convergence
-            normRes = self.NewtonRaphsonError()
+            error = self.compute_nr_error()
+            if error < tol_nr and subiter >= self._nr_min_subiter:
+                self._t_fact_inc = None
+                return 1, subiter, error
+
+            if subiter >= max_subiter:
+                if assume_cvg_at_max_subiter:
+                    self._t_fact_inc = None
+                    return 1, subiter, error
+                break
+
+            # Track convergence trend
+            if error > prev_error:
+                consecutive_increases += 1
+                consecutive_decreases = 0
+            else:
+                consecutive_increases = 0
+                consecutive_decreases += 1
 
             if self.print_info > 1:
                 print_str = "     Subiter {} - Time: {:.5f} - Err: {:.5f}".format(
-                    subiter, self.time + self.dtime, normRes
+                    subiter, self.time + self.dtime, error
                 )
                 if adaptive_stiffness:
                     print_str += " - xi: {:.4f}".format(xi)
                 print(print_str)
 
             if adaptive_stiffness:
-                # Track residual trend
-                if normRes > prev_normRes:
-                    consecutive_increases += 1
-                    consecutive_decreases = 0
+                if consecutive_increases >= 2 and xi < 1.0:
                     # Diverging - switch to elastic stiffness
-                    if consecutive_increases >= 2 and xi < 1.0:
-                        self._dU -= self.get_X()
-                        xi = 1.0
-                        xi_increased_this_step = True
-                        consecutive_decreases = 0
-                        consecutive_increases = 0
-                        if self.print_info > 1:
-                            print(
-                                "     Diverging. Switching to elastic matrix (xi=1.0)."
-                            )
-                        continue  # Redo iteration
-                else:
+                    xi = 1.0
+                    xi_increased_this_step = True
+                    if self.print_info > 1:
+                        print("     Diverging. Switching to elastic matrix (xi=1.0).")
+                    # redo last iteration
+                    self._dU -= self.get_X()
+                    consecutive_increases -= 1
+                    continue
+                elif consecutive_decreases > 0:
                     # Improving - try to reduce xi
-                    consecutive_increases = 0
-                    consecutive_decreases += 1
                     if xi == 1.0:
                         threshold = 2 if xi_increased_this_step else 3
                         if consecutive_decreases >= threshold:
@@ -624,10 +632,10 @@ class _NonLinearBase:
                         if xi < 0.0156:
                             xi = 0.0
 
-                prev_normRes = normRes
+                prev_error = error
 
             if update_eigenvalue_shift_factor:
-                if normRes > prev_normRes:
+                if error > prev_error:
                     self._eigenvalue_shift_factor *= 5
                     if self._eigenvalue_shift_factor >= 1:
                         self._eigenvalue_shift_factor = 1
@@ -638,20 +646,7 @@ class _NonLinearBase:
                     # Improving - try to reduce eigenvalue_shift_factor
                     self._eigenvalue_shift_factor *= 0.95
 
-                prev_normRes = normRes
-
-            # Check convergence
-            if normRes < tol_nr and subiter >= self._nr_min_subiter:
-                self._t_fact_inc = None
-                return 1, subiter, normRes
-
-            subiter += 1
-
-            if subiter >= max_subiter:
-                if assume_cvg_at_max_subiter:
-                    self._t_fact_inc = None
-                    return 1, subiter, normRes
-                break
+                prev_error = error
 
             # --------------- Solve --------------------------------------------------------
             self.update(
@@ -672,10 +667,10 @@ class _NonLinearBase:
             else:
                 self.set_A(A)
 
-            self.NewtonRaphsonIncrement()
+            self.solve_nr_increment()
 
         self._t_fact_inc = None
-        return 0, subiter - 1, normRes
+        return 0, subiter, error
 
     def nlsolve(
         self,
@@ -722,7 +717,7 @@ class _NonLinearBase:
             (default = 10).
         dt_increase_niter: int, optional
             When ``update_dt`` is ``True``, the time increment is multiplied
-            by 1.25 if the Newton–Raphson loop converges in strictly fewer
+            by 1.25 if the Newton–Raphson loop converges in fewer
             than ``dt_increase_niter`` iterations. If omitted, the
             'dt_increase_niter' field in the nr_parameters attribute
             (ie nr_parameters['dt_increase_niter']) is considered
@@ -834,7 +829,7 @@ class _NonLinearBase:
                 self.set_start(save_results, callback)
 
             # self.solve_time_increment = Newton Raphson loop
-            convergence, nbNRiter, normRes = self.solve_time_increment(
+            convergence, nb_nr_iter, error = self.solve_time_increment(
                 max_subiter, tol_nr
             )
 
@@ -845,12 +840,12 @@ class _NonLinearBase:
                 if self.print_info > 0:
                     print(
                         "Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}".format(
-                            self.__iter, self.time, dt, nbNRiter, normRes
+                            self.__iter, self.time, dt, nb_nr_iter, error
                         )
                     )
 
                 # Check if dt can be increased
-                if update_dt and nbNRiter < dt_increase_niter and dt == self.dtime:
+                if update_dt and nb_nr_iter <= dt_increase_niter and dt == self.dtime:
                     dt *= 1.25
 
             else:
@@ -859,7 +854,7 @@ class _NonLinearBase:
                     if self.print_info > 0:
                         print(
                             "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                                normRes, dt
+                                error, dt
                             )
                         )
 
@@ -873,7 +868,7 @@ class _NonLinearBase:
                 else:
                     raise NameError(
                         "Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True".format(
-                            normRes
+                            error
                         )
                     )
 
