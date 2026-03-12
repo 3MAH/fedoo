@@ -337,11 +337,24 @@ class _NonLinearBase:
             # If estimation fails, return zero shift
             return 0.0
 
+    def _get_free_dof_residual(self):
+        if not hasattr(self, "_MatCB"):
+            dof_free = self._dof_free
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
+                return self.get_B()[dof_free]
+            else:
+                return self.get_B()[dof_free] + self.get_D()[dof_free]
+        else:
+            if np.isscalar(self.get_D()) and self.get_D() == 0:
+                return self._MatCB.T @ self.get_B()
+            else:
+                return self._MatCB.T @ (self.get_B() + self.get_D())
+
     def compute_nr_error(self):
-        """
-        Compute the error of the Newton-Raphson algorithm
+        """Compute the error of the Newton-Raphson algorithm.
+
         For Force and Work error criterion, the problem must be updated
-        (Update method).
+        (update method).
         """
         norm_type = self.nr_parameters["norm_type"]
         dof_free = self._dof_free
@@ -379,24 +392,7 @@ class _NonLinearBase:
                     return 1
             else:
                 err0 = self._err0
-            if np.isscalar(self.get_D()) and self.get_D() == 0:
-                return np.linalg.norm(self._MatCB.T @ self.get_B(), norm_type) / err0
-                # return np.linalg.norm(self.get_B()[dof_free], norm_type) / err0
-            else:
-                return (
-                    np.linalg.norm(
-                        self._MatCB.T @ (self.get_B() + self.get_D()),
-                        norm_type,
-                    )
-                    / err0
-                )
-                # return (
-                #     np.linalg.norm(
-                #         self.get_B()[dof_free] + self.get_D()[dof_free],
-                #         norm_type,
-                #     )
-                #     / err0
-                # )
+            return np.linalg.norm(self._get_free_dof_residual(), norm_type) / err0
         else:  # self.nr_parameters['criterion'] == 'Work': work criterion
             # initialize the value of self._err0
             if self._err0 is None:
