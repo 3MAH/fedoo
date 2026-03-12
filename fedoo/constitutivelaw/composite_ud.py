@@ -3,6 +3,7 @@
 
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.constitutivelaw.elastic_anisotropic import ElasticAnisotropic
+from simcoon import Rotation
 
 import numpy as np
 
@@ -194,34 +195,18 @@ class CompositeUD(ElasticAnisotropic):
         if not (
             np.isscalar(self.__parameters["angle"]) and self.__parameters["angle"] == 0
         ):
-            # angle in degree
-            angle_pli = self.__parameters["angle"] / 180.0 * np.pi
-            s = np.sin(angle_pli)
-            c = np.cos(angle_pli)
-            zero = 0 * s
-            one = zero + 1
-
-            R_epsilon = np.array(
-                [
-                    [c**2, s**2, zero, s * c, zero, zero],
-                    [s**2, c**2, zero, -s * c, zero, zero],
-                    [zero, zero, one, zero, zero, zero],
-                    [-2 * s * c, 2 * s * c, zero, c**2 - s**2, zero, zero],
-                    [zero, zero, zero, zero, c, s],
-                    [zero, zero, zero, zero, -s, c],
-                ]
+            rot = Rotation.from_euler(
+                "Z", np.atleast_1d(self.__parameters["angle"]), degrees=True
             )
-
-            if len(R_epsilon.shape) == 3:
-                R_epsilon = np.transpose(R_epsilon, [2, 0, 1])
-                R_sigma_inv = np.transpose(R_epsilon, [0, 2, 1])
-            else:
-                R_sigma_inv = R_epsilon.T
-            if len(H.shape) == 3:
+            QS = rot.as_voigt_stress_rotation()  # (N, 6, 6)
+            if H.ndim == 3:
                 H = np.rollaxis(H, 2, 0)
-            H = np.matmul(R_sigma_inv, np.matmul(H, R_epsilon))
-            if len(H.shape) == 3:
-                H = np.rollaxis(H, 0, 3)
+            H = np.matmul(QS, np.matmul(H, QS.transpose(0, 2, 1)))
+            if H.ndim == 3:
+                if H.shape[0] == 1:
+                    H = H[0]
+                else:
+                    H = np.rollaxis(H, 0, 3)
 
         H = self.local2global_H(H)
         if dimension == "2Dstress":
