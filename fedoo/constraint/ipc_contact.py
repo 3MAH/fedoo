@@ -570,8 +570,7 @@ class IPCContact(AssemblyBase):
         # external work from the BC increment, so the quadratic model
         # would incorrectly predict energy increase.  CCD alone
         # suffices for elastic prediction safety.
-        is_elastic_prediction = np.isscalar(pb._dU) and pb._dU == 0
-        if is_elastic_prediction:
+        if not (pb._boundary_is_0):
             return alpha
 
         # Skip if no contacts exist and none expected at trial position

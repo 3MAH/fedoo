@@ -6,18 +6,18 @@ import numpy as np
 def _line_search_manager(pb, dX):
     """Combine several reistered line search algorithms.
 
-    Manager function that evaluates all registered line search algorithms 
+    Manager function that evaluates all registered line search algorithms
     and returns the most restrictive (minimum) step size.
     """
     if not pb._ls_callbacks:
         return 1.0  # Default full Newton step if nothing is registered
-    
+
     alpha_min = 1.0
-    
+
     # Evaluate every registered callback
     for name, callback in pb._ls_callbacks.items():
         alpha_trial = callback(pb, dX)
-        
+
         if alpha_trial < alpha_min:
             alpha_min = alpha_trial
     return alpha_min

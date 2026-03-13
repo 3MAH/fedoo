@@ -329,15 +329,14 @@ class _NonLinearBase:
             # If estimation fails, return zero shift
             return 0.0
 
-
     def _update_step_size_callback(self):
         """Update the line search callback from 'ls_callbacks' attribute."""
         if not self._ls_callbacks:
             self._step_size_callback = None
-            
+
         elif len(self._ls_callbacks) == 1:
             self._step_size_callback = next(iter(self._ls_callbacks.values()))
-            
+
         else:
             # Multiple constraints exist: use the manager
             self._step_size_callback = _line_search_manager
@@ -363,11 +362,11 @@ class _NonLinearBase:
               onto the search direction). Ideal for snap-through/buckling.
             * **'Quadratic'**: Performs a parabolic interpolation of the objective
               function to jump directly to the estimated minimum.
-            * **callable**: If a function is provided, it must follow the signature 
-              ``user_line_search(pb, dX) -> float`` and will be assigned directly 
+            * **callable**: If a function is provided, it must follow the signature
+              ``user_line_search(pb, dX) -> float`` and will be assigned directly
               as the line search callback.
         name : str, optional
-            A unique identifier for the line search. If not provided, it defaults 
+            A unique identifier for the line search. If not provided, it defaults
             to 'standard' for built-in methods, or the function's name for callables.
 
         Notes
@@ -403,7 +402,9 @@ class _NonLinearBase:
             )
         else:
             # Remove any existing entry that uses the standard line_search function
-            self._ls_callbacks = {k: v for k, v in self._ls_callbacks.items() if v != line_search}
+            self._ls_callbacks = {
+                k: v for k, v in self._ls_callbacks.items() if v != line_search
+            }
 
             self.nr_parameters["ls_method"] = method
             self._ls_callbacks[name or "standard"] = line_search
@@ -420,8 +421,10 @@ class _NonLinearBase:
         else:
             removed = self._ls_callbacks.pop(name, None)
             if removed is None:
-                warnings.warn(f"Line search '{name}' not found. No action taken.", UserWarning)
-                
+                warnings.warn(
+                    f"Line search '{name}' not found. No action taken.", UserWarning
+                )
+
         self._update_step_size_callback()
 
     def _get_free_dof_residual(self):
@@ -596,6 +599,7 @@ class _NonLinearBase:
         )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
         self.solve()
 
+        self._boundary_is_0 = False
         # OGC per-vertex filter or CCD scalar line search
         if self._step_filter_callback is not None:
             dX = self.get_X()
@@ -605,14 +609,17 @@ class _NonLinearBase:
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
                 # Scale only free DOFs; preserve prescribed Dirichlet values
-                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+                # self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+                dX *= alpha
                 self._alpha = alpha
+        if self._alpha == 1:
+            self._boundary_is_0 = True
 
-        # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
-        try:
+        if self._boundary_is_0:
+            # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
             self._Xbc *= 0
-        except:
-            self._ProblemPGD__Xbc = 0
+        else:
+            self._Xbc *= 1 - alpha
 
         # update displacement increment
         self._dU += self.get_X()
@@ -626,8 +633,16 @@ class _NonLinearBase:
         elif self._step_size_callback is not None:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
+            self._alpha = alpha
             if alpha < 1.0:
                 self.set_X(dX * alpha)
+            if not self._boundary_is_0:
+                if alpha < 1.0:
+                    self._Xbc *= 1 - alpha
+                else:
+                    self._Xbc *= 0
+                    self._boundary_is_0 = True
+
         self._dU += self.get_X()
 
     def solve_time_increment(self, max_subiter=None, tol_nr=None):
@@ -679,7 +694,11 @@ class _NonLinearBase:
 
             # Check convergence
             error = self.compute_nr_error()
-            if error < tol_nr and subiter >= self._nr_min_subiter:
+            if (
+                error < tol_nr
+                and subiter >= self._nr_min_subiter
+                and self._boundary_is_0
+            ):
                 self._t_fact_inc = None
                 return 1, subiter, error
 
@@ -703,6 +722,8 @@ class _NonLinearBase:
                 )
                 if adaptive_stiffness:
                     print_str += " - xi: {:.4f}".format(xi)
+                if self._step_size_callback:
+                    print_str += " - alpha: {:.4f}".format(self._alpha)
                 print(print_str)
 
             if adaptive_stiffness:

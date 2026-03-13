@@ -146,7 +146,7 @@ nodes_disk_top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_disk_top, "Disp", [0, imposed_disp])
-pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=8)
+pb.set_nr_criterion("Force", tol=5e-3, max_subiter=8)
 
 # =========================================================================
 # Output and tracking callback
