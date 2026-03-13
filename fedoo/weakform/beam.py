@@ -171,10 +171,9 @@ class BeamEquilibrium(WeakFormBase):
                     ] = u2x
 
                     # update saved values for next iteration
-                    assembly.sv["_ElementVectors"] = element_vectors
-                    assembly.sv["RigidRotation"] = rigid_rot
-                    # print(pb.get_rot()[[1,7]])
-                    # pass
+                    if not pb._line_search_update:
+                        assembly.sv["_ElementVectors"] = element_vectors
+                        assembly.sv["RigidRotation"] = rigid_rot
 
                 else:  # ndim === 3
                     # values from initial and last iterations
@@ -277,65 +276,71 @@ class BeamEquilibrium(WeakFormBase):
                         * n_dof_per_var
                     ] = u2x
 
-                    # update saved values for next iteration
-                    # assembly.sv["_ElementVectors"] = element_vectors
-                    assembly.sv["RigidRotationMat"] = rigid_rotmat
-                    assembly.sv["_NodesRotationMatrix"] = nodes_rotmat
-                    assembly.current._element_local_frame = rigid_rotmat.reshape(
-                        mesh.n_elements, -1, self.space.ndim, self.space.ndim
-                    )
-
-                    # update rot values and dirichlet boundary conditions
-
-                    rot_var = self.space.get_rank_vector("Rot")
-                    ### WARNING only work if vectors are contigous in the variable order
-                    if np.isscalar(pb._U) and pb._U == 0:
-                        pb._dU[
-                            rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            * assembly.mesh.n_nodes
-                        ] = (Rotation.from_matrix(nodes_rotmat).as_rotvec().T).ravel()
-                    else:
-                        nodes_rotmat_from_U = Rotation.from_rotvec(
-                            pb._U[
-                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                                * assembly.mesh.n_nodes
-                            ]
-                            .reshape(3, -1)
-                            .T
-                        ).as_matrix()
-
-                        # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
-                        pb._dU[
-                            rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            * assembly.mesh.n_nodes
-                        ] = (
-                            Rotation.from_matrix(
-                                nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
-                            )
-                            .as_rotvec()
-                            .T.ravel()
+                    if not pb._line_search_update:
+                        # update saved values for next iteration
+                        # don't do for line_search iteration that is only a trial
+                        assembly.sv["RigidRotationMat"] = rigid_rotmat
+                        assembly.sv["_NodesRotationMatrix"] = nodes_rotmat
+                        assembly.current._element_local_frame = rigid_rotmat.reshape(
+                            mesh.n_elements, -1, self.space.ndim, self.space.ndim
                         )
 
-                        # Or equivalent bug sigularité if angle > pi
-                        # pb._dU[
-                        #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                        #     * assembly.mesh.n_nodes
-                        # ] = (
-                        #     Rotation.from_matrix(nodes_rotmat).as_rotvec().T
-                        # ).ravel() - pb._U[
-                        #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                        #     * assembly.mesh.n_nodes
-                        # ]
+                        # update rot values and dirichlet boundary conditions
 
-                    for bc in pb.bc.list_all():
-                        if bc.bc_type == "Dirichlet":
-                            if bc.variable in rot_var:
-                                # if bc._dof_index[0] == 605:
-                                #     print(bc.get_true_value(pb._t_fact))
-                                pb._Xbc[bc._dof_index] = (
-                                    bc.get_true_value(pb.t_fact)
-                                    - pb.get_dof_solution()[bc._dof_index]
+                        rot_var = self.space.get_rank_vector("Rot")
+                        ### WARNING only work if vectors are contigous in the variable order
+                        if np.isscalar(pb._U) and pb._U == 0:
+                            pb._dU[
+                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                                * assembly.mesh.n_nodes
+                            ] = (
+                                Rotation.from_matrix(nodes_rotmat).as_rotvec().T
+                            ).ravel()
+                        else:
+                            nodes_rotmat_from_U = Rotation.from_rotvec(
+                                pb._U[
+                                    rot_var[0] * assembly.mesh.n_nodes : (
+                                        rot_var[0] + 3
+                                    )
+                                    * assembly.mesh.n_nodes
+                                ]
+                                .reshape(3, -1)
+                                .T
+                            ).as_matrix()
+
+                            # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
+                            pb._dU[
+                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                                * assembly.mesh.n_nodes
+                            ] = (
+                                Rotation.from_matrix(
+                                    nodes_rotmat
+                                    @ nodes_rotmat_from_U.transpose(0, 2, 1)
                                 )
+                                .as_rotvec()
+                                .T.ravel()
+                            )
+
+                            # Or equivalent bug sigularité if angle > pi
+                            # pb._dU[
+                            #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                            #     * assembly.mesh.n_nodes
+                            # ] = (
+                            #     Rotation.from_matrix(nodes_rotmat).as_rotvec().T
+                            # ).ravel() - pb._U[
+                            #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
+                            #     * assembly.mesh.n_nodes
+                            # ]
+
+                        for bc in pb.bc.list_all():
+                            if bc.bc_type == "Dirichlet":
+                                if bc.variable in rot_var:
+                                    # if bc._dof_index[0] == 605:
+                                    #     print(bc.get_true_value(pb._t_fact))
+                                    pb._Xbc[bc._dof_index] = (
+                                        bc.get_true_value(pb.t_fact)
+                                        - pb.get_dof_solution()[bc._dof_index]
+                                    )
 
                 # compute the beam strain at gausspoint
                 assembly.sv["BeamStrain"] = _BeamComponentList(
@@ -368,14 +373,17 @@ class BeamEquilibrium(WeakFormBase):
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
             if self.space.ndim == 3:
-                assembly.current._element_local_frame = assembly.sv_start[
-                    "RigidRotationMat"
-                ].reshape(
-                    assembly.current.mesh.n_elements,
-                    -1,
-                    self.space.ndim,
-                    self.space.ndim,
-                )
+                if "RigidRotationMat" in assembly.sv_start:
+                    assembly.current._element_local_frame = assembly.sv_start[
+                        "RigidRotationMat"
+                    ].reshape(
+                        assembly.current.mesh.n_elements,
+                        -1,
+                        self.space.ndim,
+                        self.space.ndim,
+                    )
+                else:
+                    assembly.current._element_local_frame = None
 
     def set_start(self, assembly, pb):
         if self.nlgeom and self.space.ndim == 3:  # only UL for now

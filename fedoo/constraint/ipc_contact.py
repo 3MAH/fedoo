@@ -863,7 +863,7 @@ class IPCContact(AssemblyBase):
 
         # Register line-search / step-filter callback
         if self._use_ccd:
-            pb._step_size_callback = self._ccd_line_search
+            pb.add_line_search(self._ccd_line_search, name="ccd")
         elif self._use_ogc:
             self._ogc_trust_region = ipctk.ogc.TrustRegion(self._actual_dhat)
             pb._step_filter_callback = self._ogc_step_filter_callback

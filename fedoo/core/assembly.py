@@ -1622,6 +1622,19 @@ class Assembly(AssemblyBase):
         """Alias for the sv dict containing the state variables."""
         return self.sv
 
+    def _save_sv(self):
+        """shallow copy of state variables in _sv_saved attribute."""
+        self._sv_saved = dict(self.sv)
+
+    def _load_sv(self):
+        """reload a saved copy of state variables."""
+        if not hasattr(self, "_sv_saved"):
+            raise RuntimeError("no saved state variables")
+        # self.sv = dict(self._sv_saved)
+        self.sv.clear()
+        self.sv.update(self._sv_saved)
+        del self._sv_saved
+
     @staticmethod
     def sum(*listAssembly, name="", **kargs):
         """

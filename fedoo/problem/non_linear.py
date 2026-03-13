@@ -2,6 +2,8 @@ from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.problem.line_search import line_search, _line_search_manager
+import warnings
 from typing import Callable
 
 
@@ -73,7 +75,10 @@ class _NonLinearBase:
               Smaller values = more accurate but weaker stabilization.
         """
 
+        # attributes used for line search algorithm or contact management
         self._step_size_callback = None
+        self._ls_callbacks = {}  # dict of line search functions
+        self._line_search_update = False  # tag used during line_search update
         self._step_filter_callback = None  # OGC per-vertex filter
         self._nr_min_subiter = (
             0  # SDI: minimum NR sub-iterations before accepting convergence
@@ -191,19 +196,6 @@ class _NonLinearBase:
         self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
-
-    def solve_nr_increment(self):
-        # solve and update total displacement. A and D should up to date
-        self.solve()
-        if self._step_filter_callback is not None:
-            dX = self.get_X()
-            self._step_filter_callback(self, dX, is_elastic_prediction=False)
-        elif self._step_size_callback is not None:
-            dX = self.get_X()
-            alpha = self._step_size_callback(self, dX)
-            if alpha < 1.0:
-                self.set_X(dX * alpha)
-        self._dU += self.get_X()
 
     def update(self, compute="all", updateWeakForm=True):
         """
@@ -336,6 +328,101 @@ class _NonLinearBase:
         except Exception:
             # If estimation fails, return zero shift
             return 0.0
+
+
+    def _update_step_size_callback(self):
+        """Update the line search callback from 'ls_callbacks' attribute."""
+        if not self._ls_callbacks:
+            self._step_size_callback = None
+            
+        elif len(self._ls_callbacks) == 1:
+            self._step_size_callback = next(iter(self._ls_callbacks.values()))
+            
+        else:
+            # Multiple constraints exist: use the manager
+            self._step_size_callback = _line_search_manager
+
+    def add_line_search(self, method="Quadratic", name=None):
+        r"""Add line search algorithm for the Newton-Raphson solver.
+
+        Line search improves global convergence by scaling the displacement
+        increment :math:`dX` by a step size :math:`\alpha \in (0, 1]`. This is
+        particularly useful for problems with sharp non-linearities or when
+        the initial guess is far from the equilibrium.
+
+        Parameters
+        ----------
+        method : {'Armijo', 'Residual', 'Energy', 'Quadratic'} or callable, default 'Quadratic'
+            The strategy used to determine or refine the step size:
+
+            * **'Armijo'**: Ensures a "sufficient decrease" in the residual
+              using a least-square assumption. Standard for most nonlinear applications.
+            * **'Residual'**: Simple backtracking that accepts any step reducing
+              the residual norm. Fast but less robust.
+            * **'Energy'**: Minimizes the out-of-balance work (residual projected
+              onto the search direction). Ideal for snap-through/buckling.
+            * **'Quadratic'**: Performs a parabolic interpolation of the objective
+              function to jump directly to the estimated minimum.
+            * **callable**: If a function is provided, it must follow the signature 
+              ``user_line_search(pb, dX) -> float`` and will be assigned directly 
+              as the line search callback.
+        name : str, optional
+            A unique identifier for the line search. If not provided, it defaults 
+            to 'standard' for built-in methods, or the function's name for callables.
+
+        Notes
+        -----
+        * **Implementation**: This method sets the `_step_size_callback` attribute
+          of the problem instance. Parameters like `ls_max_iter` and `ls_method`
+          are stored within the `self.nr_parameters` dictionary.
+        * **Objective Function**: For 'Armijo' and 'Quadratic' methods, the solver
+          minimizes the squared L2-norm of the residual:
+
+          .. math:: \phi(\alpha) = \frac{1}{2} \|R(u + \alpha dX)\|^2
+
+        * **Work Criterion**: The 'Energy' method minimizes the directional
+          derivative of the potential energy (the external work).
+        * **Safeguards**: To prevent solver stagnation, interpolated values are
+          clipped such that :math:`\alpha_{new} \in [0.1\alpha, 0.5\alpha]`.
+
+        Example
+        -------
+        >>> # Using a built-in method
+        >>> my_problem.add_line_search(method="Quadratic")
+        >>> # Using a custom function
+        >>> def my_ls(pb, dX): return 0.5
+        >>> my_problem.add_line_search(method=my_ls)
+        """
+        if callable(method):
+            cb_name = name or getattr(method, "__name__", "custom_ls")
+            self._ls_callbacks[cb_name] = method
+        elif method not in ["Residual", "Energy", "Armijo", "Quadratic"]:
+            raise ValueError(
+                "Line search method should be either 'Residual', "
+                "'Energy', 'Armijo' or 'Quadratic'"
+            )
+        else:
+            # Remove any existing entry that uses the standard line_search function
+            self._ls_callbacks = {k: v for k, v in self._ls_callbacks.items() if v != line_search}
+
+            self.nr_parameters["ls_method"] = method
+            self._ls_callbacks[name or "standard"] = line_search
+
+        self._update_step_size_callback()
+
+    def remove_line_search(self, name=None):
+        """Remove a line search algorithm by its name.
+
+        If no name provided, remove all defined algorithm.
+        """
+        if name is None:
+            self._ls_callbacks.clear()
+        else:
+            removed = self._ls_callbacks.pop(name, None)
+            if removed is None:
+                warnings.warn(f"Line search '{name}' not found. No action taken.", UserWarning)
+                
+        self._update_step_size_callback()
 
     def _get_free_dof_residual(self):
         if not hasattr(self, "_MatCB"):
@@ -528,6 +615,19 @@ class _NonLinearBase:
             self._ProblemPGD__Xbc = 0
 
         # update displacement increment
+        self._dU += self.get_X()
+
+    def solve_nr_increment(self):
+        # solve and update total displacement. A and D should up to date
+        self.solve()
+        if self._step_filter_callback is not None:
+            dX = self.get_X()
+            self._step_filter_callback(self, dX, is_elastic_prediction=False)
+        elif self._step_size_callback is not None:
+            dX = self.get_X()
+            alpha = self._step_size_callback(self, dX)
+            if alpha < 1.0:
+                self.set_X(dX * alpha)
         self._dU += self.get_X()
 
     def solve_time_increment(self, max_subiter=None, tol_nr=None):
