@@ -111,11 +111,11 @@ class IPCContact(AssemblyBase):
     adaptive_barrier_stiffness : bool, default=True
         If ``True``, :math:`\kappa` is updated adaptively at each converged
         time increment using ``ipctk.update_barrier_stiffness``.
-    use_ccd : bool, default=False
-        Enable CCD (Continuous Collision Detection) line search.  When
-        enabled, the Newton–Raphson step size is limited so that no
-        intersection can occur between iterations.  Mutually exclusive
-        with ``use_ogc``.
+    use_ccd : bool, optional
+        Enable Continuous Collision Detection (CCD) line search. When active,
+        the Newton–Raphson step size is limited to prevent interpenetration
+        between iterations. Default is True unless ``use_ogc`` is enabled.
+        Note: ``use_ccd`` and ``use_ogc`` are mutually exclusive.
     line_search_energy : bool or None, default=None
         Controls energy-based backtracking after CCD line search.  The
         step is halved until total energy (exact barrier + quadratic
@@ -168,12 +168,14 @@ class IPCContact(AssemblyBase):
         eps_v=1e-3,
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
-        use_ccd=False,
+        use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
         space=None,
         name="IPC Contact",
     ):
+        if use_ccd is None:
+            use_ccd = not use_ogc
         if use_ccd and use_ogc:
             raise ValueError(
                 "use_ccd and use_ogc are mutually exclusive. "
@@ -735,7 +737,7 @@ class IPCContact(AssemblyBase):
         if self._extract_surface and self._surface_mesh is None:
             from fedoo.mesh import extract_surface as extract_surface_mesh
 
-            self._surface_mesh = extract_surface_mesh(self.mesh)
+            self._surface_mesh = extract_surface_mesh(self.mesh, reduce_order=True)
 
         if self._surface_mesh is None:
             raise ValueError(
@@ -1175,7 +1177,7 @@ class IPCSelfContact(IPCContact):
         eps_v=1e-3,
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
-        use_ccd=False,
+        use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
         space=None,
