@@ -54,6 +54,11 @@ def line_search(pb, dX):
 
     To be assigned to self._step_size_callback.
     """
+    if not (pb._boundary_is_0):
+        # avoid using line_search if dirichlet boundary conditions are not 0
+        # to avoid problems related to BC scaling.
+        return 1
+
     # Configuration
     method = pb.nr_parameters.get("ls_method", "Residual")
     alpha = 1.0
