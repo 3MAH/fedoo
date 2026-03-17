@@ -5,8 +5,7 @@ class Inertia(WeakFormBase):
     """
     Weak formulation related to the inertia effect into dynamical simulation.
 
-    Used among others for :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark`
-    or :mod:`fedoo.weakform.ArtificialDamping`
+    Used for :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark`
 
     Parameters
     ----------
@@ -44,8 +43,7 @@ class RotaryInertia(WeakFormBase):
     """
     Rotary inertia effect into dynamical simulation.
 
-    Used among others for :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark`
-    or :mod:`fedoo.weakform.ArtificialDamping`
+    Used for :mod:`fedoo.problem.Newmark`,  :mod:`fedoo.problem.NonLinearNewmark`
 
     Parameters
     ----------

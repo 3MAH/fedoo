@@ -1,7 +1,6 @@
 import numpy as np
 from fedoo.core.weakform import WeakFormBase
 from fedoo.weakform.inertia import Inertia
-# Assuming WeakFormBase is imported
 
 
 class ArtificialDamping(WeakFormBase):
@@ -28,15 +27,14 @@ class ArtificialDamping(WeakFormBase):
         The stabilization coefficient. If ``energy_fraction`` is True, this is
         interpreted as the target ratio of dissipated stabilization energy to
         external work.
-    mass_wf : WeakForm, optional
-        The artificial mass matrix used for damping (the :math:`M^*` matrix).
-        Defaults to ``Inertia(1)`` (mass matrix with unit density), which
-        provides a volume-weighted distribution ensuring mesh-independent
-        results.
     energy_fraction : bool, default=True
         If True, the coefficient ``c_stab`` is automatically adapted at each
         increment to maintain a target energy ratio, ensuring the stabilization
         remains "invisible" to the physical results.
+    variables : str | list[str], optional
+        The variables or vectors (e.g., 'Disp', 'Rot') to which damping is
+        applied. By default, all displacement and rotational variables in the
+        space are included.
     mat_lumping : bool, default=True
         If True, the stabilization matrix is lumped (diagonalized). This is
         recommended as it ensures that stabilization forces are
@@ -61,37 +59,43 @@ class ArtificialDamping(WeakFormBase):
 
     def __init__(
         self,
-        c_stab=2e-4,
-        mass_wf=None,
+        c_stab=2e-4,        
         energy_fraction=True,
+        variables=None,
         mat_lumping=True,
         name="",
         space=None,
     ):
-        super().__init__(name, space)
-        # The base weak form representing the spatial distribution (M*)
-        if mass_wf is None:
-            mass_wf = Inertia(1)
-        self.mass_wf = mass_wf
-
-        # c_stab is the stabilization coefficient.
-        # if energy_fraction, the coefficient is interpreted as a enery ratio
-        if energy_fraction:
-            self.target_ratio = c_stab
-            self.c_stab = 1e-3 * c_stab  # we start with a low energy ratio
-            self.c_stab_initialized = False
-
+        super().__init__(name, space)        
+        self.damped_variables = variables
+        self.c_stab = c_stab
         self.energy_fraction = energy_fraction
+
         if mat_lumping:
-            self.mass_wf.assembly_options["mat_lumping"] = True
+            self.assembly_options["mat_lumping"] = True
+
+    def initialize(self, assembly, pb):
+        if self.damped_variables is None:
+            self.damped_variables = [vec for vec in ['Disp', 'Rot'] if vec in self.space.list_vectors()]
+        if isinstance(self.damped_variables, str):
+            self.damped_variables = [self.damped_variables]
+        self.damped_variables = [
+            item 
+            for var in self.damped_variables 
+            for item in (self.space.get_vector(var) if var in self.space.list_vectors() else [var])
+        ]
+
+        # Initialize the global stabilization factor
+        if self.energy_fraction:
+            self.target_ratio = self.c_stab  # alias
+            # Start with a very small global fraction
+            self._c_stab = 1e-3 * self.target_ratio  
+            self._c_stab_initialized = False
 
     def set_start(self, assembly, pb):
         """Update historical variables and adapt c_stab based on energy ratio."""
         if self.energy_fraction:
             dt = pb.dtime
-            # if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
-            #     assembly.sv["_DeltaDisp"] = 0
-            #     return
 
             # 1. Skip if it's the very first initialization or a zero-time step
             if dt == 0:
@@ -112,11 +116,10 @@ class ArtificialDamping(WeakFormBase):
 
             # F_damp = c_stab * M* * (delta_u / dt)
             # M  = assembly.get_global_matrix()
-            # delta_E_damp = self.c_stab/dt * (delta_u @ M @ delta_u)
+            # delta_E_damp = self._c_stab/dt * (delta_u @ M @ delta_u)
             delta_E_damp = delta_u @ assembly.get_global_vector()
 
             # 5. Adaptive Adjustment
-
             # We only adjust if there is significant external work being done
             # Otherwise, we keep the current c_stab to avoid division by zero
             if abs(delta_W_ext) > 1e-10:
@@ -127,25 +130,24 @@ class ArtificialDamping(WeakFormBase):
                     # Calculate adjustment: c_new = c_old * (target / current)
                     adjustment = self.target_ratio / current_ratio
 
-                    if self.c_stab_initialized:
+                    if self._c_stab_initialized:
                         # Safeguard: Don't let c_stab change by more than a factor of 10
                         # in a single step to maintain numerical stability.
-                        self.c_stab *= np.clip(adjustment, 0.1, 10.0)
+                        self._c_stab *= np.clip(adjustment, 0.1, 10.0)
                     else:
-                        self.c_stab *= adjustment
+                        self._c_stab *= adjustment
 
         # 6. Reset the accumulated displacement for the new increment
         assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
 
     def update(self, assembly, pb):
-        # assembly.sv["_DeltaDisp"] = pb._get_vect_component(pb._dU, "Disp")
         assembly.sv["_DeltaDisp"] = pb._dU.reshape(-1, pb.mesh.n_nodes)
 
     def get_weak_equation(self, assembly, pb):
         dt = pb.dtime
 
         # If dt is 0, we can't compute pseudo-velocity. Return 0 to avoid division by zero.
-        if dt == 0 or self.c_stab == 0.0:
+        if dt == 0:
             return 0
 
         # 1. Retrieve the current displacement increment
@@ -154,33 +156,34 @@ class ArtificialDamping(WeakFormBase):
         delta_u = assembly.sv["_DeltaDisp"]
 
         # 2. Compute Pseudo-Velocity
-        v_pseudo = delta_u / dt
+        # v_pseudo = delta_u / dt
 
-        # 3. Get the Base Matrix (M*) from the input weakform
-        base_wf = self.mass_wf.get_weak_equation(assembly, pb)
-
-        if hasattr(base_wf, "split_mat_vec"):
-            mat, vec = base_wf.split_mat_vec()
-        else:
-            mat = base_wf
-            vec = 0
-
+        # 3. Weak equation of the virtual mass matrix (M*)
+        op_var = [self.space.variable(var) for var in self.damped_variables]
+        op_var_vir = [op.virtual if op != 0 else 0 for op in op_var]
+        
         # 4. Calculate Tangent Contribution: (c_stab / dt) * M*
-        tangent_matrix = mat * (self.c_stab / dt)
+        tangent_matrix = sum(
+            [
+                a * b * (self._c_stab/dt)
+                for (a, b) in zip(op_var_vir, op_var)
+            ]
+        )
 
-        # 5. Calculate Residual Contribution: c_stab * M* * v_pseudo
-        if not np.array_equal(v_pseudo, 0):
+        # 4. Calculate Residual Contribution: c_stab * M* * v_pseudo
+        if not np.array_equal(delta_u, 0):
             # Scale by the stabilization coefficient
-            v_pseudo *= self.c_stab
+            # v_pseudo[self._variables_id] *= self._vec_c_stab[:,np.newaxis]
 
             # Apply the matrix operator to the pseudo-velocity array
-            damping_force = assembly.operator_apply(mat, v_pseudo.ravel())
+            damping_force = assembly.operator_apply(tangent_matrix, delta_u.ravel())
 
-            # Axisymmetric correction if your framework requires it here
+            # Axisymmetric correction
             # if self.space is not None and getattr(self.space, "_dimension", "") == "2Daxi":
             #     rr = assembly.sv["_R_gausspoints"]
             #     damping_force = damping_force * ((2 * np.pi) * rr)
 
-            return tangent_matrix + vec + damping_force
+            return tangent_matrix + damping_force
 
-        return tangent_matrix + vec
+        return tangent_matrix
+
