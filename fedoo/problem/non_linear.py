@@ -35,6 +35,7 @@ class _NonLinearBase:
             "assume_cvg_at_max_subiter": False,
             "eigenvalue_shift": False,
             "eigenvalue_shift_factor": 0.1,
+            "check_early_divergence": True,
         }
         """
         Parameters to set the newton raphson algorithm:
@@ -554,6 +555,12 @@ class _NonLinearBase:
               to determine shift magnitude: alpha = eigenvalue_shift_factor * |R|.
               Larger values = stronger stabilization but less accuracy.
               Smaller values = more accurate but weaker stabilization.
+            * 'check_early_divergence': bool, default = True.
+              If True, aborts the time step early if convergence trends are poor. 
+              A step is considered diverging if:
+              1. The error remains "unproductive" (new_error > 0.999 * previous_error) 
+                 for 3 consecutive Newton-Raphson iterations.
+              2. The error spikes to more than 100 times the previous error.
         """
         if criterion not in ["Displacement", "Force", "Work"]:
             raise NameError(
@@ -572,12 +579,13 @@ class _NonLinearBase:
                 "assume_cvg_at_max_subiter",
                 "eigenvalue_shift",
                 "eigenvalue_shift_factor",
+                "check_early_divergence",
             ]:
                 raise NameError(
                     "Newton Raphson parameters should be in "
                     "['err0', 'tol', 'max_subiter', 'dt_increase_niter', "
                     "'adaptive_stiffness', 'norm_type', 'assume_cvg_at_max_subiter', "
-                    "'eigenvalue_shift', 'eigenvalue_shift_factor']"
+                    "'eigenvalue_shift', 'eigenvalue_shift_factor', 'check_early_divergence']"
                 )
 
             self.nr_parameters[key] = kargs[key]
@@ -653,13 +661,9 @@ class _NonLinearBase:
         assume_cvg_at_max_subiter = self.nr_parameters.get(
             "assume_cvg_at_max_subiter", False
         )
-
-        self._t_fact_inc = self.t_fact
-        self.elastic_prediction()
-
+        check_early_divergence = self.nr_parameters.get("check_early_divergence", True)
         adaptive_stiffness = self.nr_parameters.get("adaptive_stiffness", False)
         eigenvalue_shift = self.nr_parameters.get("eigenvalue_shift", False)
-
         update_eigenvalue_shift_factor = False
         if eigenvalue_shift:
             if self.nr_parameters.get("eigenvalue_shift_factor", None) is None:
@@ -672,6 +676,9 @@ class _NonLinearBase:
                     "eigenvalue_shift_factor", 0
                 )
 
+        self._t_fact_inc = self.t_fact
+        self.elastic_prediction()
+
         if adaptive_stiffness:
             # we take the assembly computed after set_start and before
             # update("matrix"). This should be the elastic or "safe" stiffness.
@@ -680,19 +687,17 @@ class _NonLinearBase:
             xi = 0.0
             xi_increased_this_step = False
 
-        prev_error = float("inf")
         consecutive_decreases = 0
         consecutive_increases = 0
-        subiter = 0
-        error = 0.0
+        subiter = 1
+        error = float("inf")
         while subiter < max_subiter:
-            subiter += 1
-
             # update Stress and initial displacement and Update stiffness matrix
             self.update(compute="vector")  # update the out of balance force vector
             self.updateD()  # required to compute the NR error
 
             # Check convergence
+            prev_error = error
             error = self.compute_nr_error()
             if (
                 error < tol_nr
@@ -701,17 +706,16 @@ class _NonLinearBase:
             ):
                 self._t_fact_inc = None
                 return 1, subiter, error
-
-            if subiter >= max_subiter:
-                if assume_cvg_at_max_subiter:
-                    self._t_fact_inc = None
-                    return 1, subiter, error
-                break
+            elif check_early_divergence and (not np.isfinite(error) or error > 100* prev_error):
+                # suspected ill-conditioned matrix
+                return 0, subiter, error
 
             # Track convergence trend
-            if error > prev_error:
+            if error > 0.999*prev_error:  # if decrease non significant, considered as increase
                 consecutive_increases += 1
                 consecutive_decreases = 0
+                if consecutive_increases >= 3 and check_early_divergence:
+                    return 0, subiter, error
             else:
                 consecutive_increases = 0
                 consecutive_decreases += 1
@@ -749,8 +753,6 @@ class _NonLinearBase:
                         if xi < 0.0156:
                             xi = 0.0
 
-                prev_error = error
-
             if update_eigenvalue_shift_factor:
                 if error > prev_error:
                     self._eigenvalue_shift_factor *= 5
@@ -763,9 +765,8 @@ class _NonLinearBase:
                     # Improving - try to reduce eigenvalue_shift_factor
                     self._eigenvalue_shift_factor *= 0.95
 
-                prev_error = error
-
             # --------------- Solve --------------------------------------------------------
+            subiter += 1  # start a new nr iteration
             self.update(
                 compute="matrix", updateWeakForm=False
             )  # assemble the tangeant matrix
@@ -786,7 +787,9 @@ class _NonLinearBase:
 
             self.solve_nr_increment()
 
-        self._t_fact_inc = None
+        self._t_fact_inc = None        
+        if assume_cvg_at_max_subiter:
+            return 1, subiter, error
         return 0, subiter, error
 
     def nlsolve(
@@ -966,27 +969,31 @@ class _NonLinearBase:
                     dt *= 1.25
 
             else:
+                if self.print_info > 0:
+                    print(
+                        "Convergence Failed - dt {:.5f} - NR iter: {} - Err: {:.5f}".format(
+                            dt, nb_nr_iter, error
+                        )
+                    )
                 if update_dt:
                     dt *= 0.25
-                    if self.print_info > 0:
-                        print(
-                            "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                                error, dt
-                            )
-                        )
+                    # if self.print_info > 0:
+                        # print(
+                        #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
+                        #         error, dt
+                        #     )
+                        # )
 
                     if dt < dt_min:
-                        raise NameError(
+                        raise RuntimeError(
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
                     restart = True
                     continue
                 else:
-                    raise NameError(
-                        "Newton Raphson iteration has not converged (err: {:.5f})- Reduce the time step or use update_dt = True".format(
-                            error
-                        )
+                    raise RuntimeError(
+                        "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )
 
         self.set_start(True, callback)
