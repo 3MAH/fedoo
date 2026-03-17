@@ -721,7 +721,7 @@ class _NonLinearBase:
             if error > 0.999*prev_error:  # if decrease non significant, considered as increase
                 consecutive_increases += 1
                 consecutive_decreases = 0
-                if consecutive_increases >= 3 and check_early_divergence:
+                if consecutive_increases >= 4 and check_early_divergence:
                     return 0, subiter, error
             else:
                 consecutive_increases = 0
