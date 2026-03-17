@@ -1179,12 +1179,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def start_animation(self):
         if self.anim_timer.isActive():
             return
-        # Si la plage est vide, ne rien faire
         if self.iter_slider.maximum() <= self.iter_slider.minimum():
             self.animate_btn.setChecked(False)
             return
         self.animate_btn.setText("⏸ Pause")
-        self.anim_timer.start()  # interval déjà réglé par _on_anim_fps_changed
+        self.anim_timer.start()
 
     def stop_animation(self):
         if not self.anim_timer.isActive():
@@ -2089,8 +2088,9 @@ class MainWindow(QtWidgets.QMainWindow):
         return self.active_dock.plotter
 
     def closeEvent(self, event):
+        self.stop_animation()  # remove timer if present
         for dock in self.all_docks:
-            dock.plotter.close()  # libère le contexte VTK
+            dock.plotter.close()  # free vtk context
         super().closeEvent(event)
 
 
