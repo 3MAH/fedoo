@@ -102,10 +102,10 @@ class ArtificialDamping(WeakFormBase):
                 return
 
             # 2. Get the converged displacement increment from the PREVIOUS step
-            # Note: ravel() ensures we can perform dot products easily
+            # note: pb._dU = 0 here so we need te get the saved value in sv
             if "_DeltaDisp" not in assembly.sv:
                 return
-            delta_u = assembly.sv["_DeltaDisp"].ravel()
+            delta_u = assembly.sv["_DeltaDisp"]
 
             # 3. Calculate Incremental External Work (dW_ext = du * F_ext)
             f_ext = pb.get_ext_forces(include_mpc=False).ravel()
@@ -138,10 +138,10 @@ class ArtificialDamping(WeakFormBase):
                         self._c_stab *= adjustment
 
         # 6. Reset the accumulated displacement for the new increment
-        assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
+        assembly.sv["_DeltaDisp"] = 0
 
     def update(self, assembly, pb):
-        assembly.sv["_DeltaDisp"] = pb._dU.reshape(-1, pb.mesh.n_nodes)
+        assembly.sv["_DeltaDisp"] = pb._dU  # alias required for set_start
 
     def get_weak_equation(self, assembly, pb):
         dt = pb.dtime
@@ -151,9 +151,7 @@ class ArtificialDamping(WeakFormBase):
             return 0
 
         # 1. Retrieve the current displacement increment
-        if "_DeltaDisp" not in assembly.sv:
-            return 0
-        delta_u = assembly.sv["_DeltaDisp"]
+        delta_u = pb._dU
 
         # 2. Compute Pseudo-Velocity
         # v_pseudo = delta_u / dt
@@ -176,7 +174,7 @@ class ArtificialDamping(WeakFormBase):
             # v_pseudo[self._variables_id] *= self._vec_c_stab[:,np.newaxis]
 
             # Apply the matrix operator to the pseudo-velocity array
-            damping_force = assembly.operator_apply(tangent_matrix, delta_u.ravel())
+            damping_force = assembly.operator_apply(tangent_matrix, delta_u)
 
             # Axisymmetric correction
             # if self.space is not None and getattr(self.space, "_dimension", "") == "2Daxi":
