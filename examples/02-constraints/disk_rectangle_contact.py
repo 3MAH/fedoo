@@ -93,7 +93,7 @@ pb.bc.add("Dirichlet", nodes_left, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_bc, "Disp", [-0.05, 0.025])
 
 # set newton-raphson convergence criterion
-pb.set_nr_criterion("Displacement", err0=None, tol=5e-3, max_subiter=5)
+pb.set_nr_criterion("Displacement", err0=None, tol=5e-3, max_subiter=10)
 
 # solve load step
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1)

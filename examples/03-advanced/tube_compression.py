@@ -67,7 +67,7 @@ contact.max_dist = 1.5  # max distance for the contact search
 
 NLGEOM = "UL"
 pb = fd.problem.NonLinear(assembly + contact, nlgeom=NLGEOM)
-pb.set_nr_criterion("Displacement", err0=None, tol=1e-2, max_subiter=5)
+pb.set_nr_criterion("Displacement", err0=None, tol=1e-2, max_subiter=10)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
