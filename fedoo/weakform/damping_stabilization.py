@@ -1,19 +1,20 @@
+"""ArtificialDamping weakform."""
+
 import numpy as np
 from fedoo.core.weakform import WeakFormBase
-from fedoo.weakform.inertia import Inertia
 
 
 class ArtificialDamping(WeakFormBase):
-    """
-    Weak formulation for artificial viscous stabilization.
+    r"""Weak formulation for artificial viscous stabilization.
 
-    This class provides an artifical damping to stabilize unstable increments
-    in both static and dynamic problems. It introduces a velocity-dependent
-    damping force that regularizes the system when the stiffness matrix is
-    singular or non-positive definite (e.g., during buckling, snap-through, or
-    material softening).
+    This class provides artificial damping to stabilize unstable increments in
+    both static and dynamic problems. It introduces a velocity-dependent damping
+    force that regularizes the system when the stiffness matrix is singular or
+    non-positive definite (e.g., during buckling, snap-through, or material
+    softening).
 
     The damping force is defined as:
+
     .. math::
         F_{stab} = c_{stab} \cdot M^* \cdot v
 
@@ -34,10 +35,10 @@ class ArtificialDamping(WeakFormBase):
     variables : str | list[str], optional
         The variables or vectors (e.g., 'Disp', 'Rot') to which damping is
         applied. By default, all displacement and rotational variables in the
-        space are included.
+        modeling space are included.
     mat_lumping : bool, default=True
         If True, the stabilization matrix is lumped (diagonalized). This is
-        recommended as it ensures that stabilization forces are
+        highly recommended as it ensures that stabilization forces are
         localized and independent for each degree of freedom, improving
         numerical robustness.
     name : str, optional
@@ -47,14 +48,26 @@ class ArtificialDamping(WeakFormBase):
 
     Notes
     -----
-    * The default mass matrix doesn't add rotational damping.
+    When using ``energy_fraction=True``, the reference energy is the work of the
+    external loads (forces, torques, etc.) during the last converged iteration.
+    It is approximated by :math:`\Delta u \cdot F_t`, where :math:`F_t` is the
+    external force vector at the end of the iteration.
+
+    Limitations and Best Practices:
+    * **Initial Step**: The simulation should ideally be stable enough to
+      converge its first increment with minimal damping. If the very first
+      step diverges, consider setting ``energy_fraction=False``.
+    * **Load Discontinuities**: If the external load changes abruptly between
+      increments, damping based on the previous iteration's work may become
+      unreliable or unadapted.
 
     Examples
     --------
     .. code-block:: python
 
         wf = fd.weakform.StressEquilibrium(material)
-        wf += fd.weakform.ArtificialDamping(c_stab=0.05)
+        # Add 5% energy-based artificial damping
+        wf += fd.weakform.ArtificialDamping(c_stab=0.05, energy_fraction=True)
     """
 
     def __init__(

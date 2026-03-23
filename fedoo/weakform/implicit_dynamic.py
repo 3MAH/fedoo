@@ -552,8 +552,13 @@ def ImplicitDynamic(
       and $\beta \ge 0.25(\gamma + 0.5)^2$.
     * **Numerical Damping:** Use $\gamma > 0.5$ to introduce algorithmic
       damping, useful for filtering high-frequency parasitic oscillations.
-    * **Physical Damping:** To include Rayleigh damping ($\mathbf{C} = \alpha \mathbf{M} + \beta_R \mathbf{K}$),
+    * **Physical Damping:** To include Rayleigh damping ($\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}$),
       modify the `rayleigh_damping` attribute of the returned object.
+
+      .. code-block:: python
+
+          wf = fd.weakform.ImplicitDynamic(material, density)
+          wf.rayleigh_damping = [alpha, beta]
     """
     if isinstance(constitutivelaw, WeakFormBase):
         # weakform used to build the stiffness matrix

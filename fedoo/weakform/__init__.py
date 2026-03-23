@@ -30,7 +30,7 @@ The WeakForm library contains the following classes:
 
    StressEquilibrium
    ImplicitDynamic
-   StressEquilibriumRI   
+   StressEquilibriumRI
    StressEquilibriumMixed
    StressEquilibriumFbar
    SteadyHeatEquation

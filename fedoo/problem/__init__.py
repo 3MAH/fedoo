@@ -1,4 +1,4 @@
-"""Problem module.
+r"""Problem module.
 
 =============================================
 Problem (:mod:`fedoo.problem`)
@@ -176,7 +176,41 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
       assembly = fd.Assembly.create(wf, my_mesh, elm_type="quad8lbb")
 
 
-2. Line Search Algorithms
+2. Numerical Damping (Artificial Viscosity)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+One of the most effective ways to stabilize a problem is through numerical damping. 
+This introduces an artificial viscous force that regularizes the system when the 
+stiffness matrix is singular or non-positive definite.
+
+* **Mechanism**: Introduces a velocity-dependent damping force:
+  
+  .. math:: F_{stab} = c_{stab} \cdot M^* \cdot \frac{\Delta u}{\Delta t}
+
+  where :math:`M^*` is an artificial mass matrix (unit-density volume integrator).
+* **Usage**: Add the :class:`fedoo.weakform.ArtificialDamping` weak form to your 
+  equilibrium equation:
+
+  .. code-block:: python
+
+      wf = fd.weakform.StressEquilibrium(material)
+      # Add 5% energy-based stabilization
+      wf += fd.weakform.ArtificialDamping(c_stab=0.05, energy_fraction=True)
+
+* **Energy-Based Adaptation**: If ``energy_fraction=True``, the coefficient 
+  ``c_stab`` is automatically scaled at each increment to maintain a target 
+  ratio of dissipated stabilization energy to external work. This ensures the 
+  damping remains "invisible" to the final physical results.
+* **Important Considerations**:
+    * **Lumping**: Setting ``mat_lumping=True`` (default) is recommended to 
+      diagonalize the stabilization matrix, improving numerical robustness.
+    * **Load Jumps**: If external loads change abruptly between iterations, 
+      energy-based damping may become unadapted as it relies on the previous 
+      converged state's work.
+    * **Initial Step**: The very first iteration should be stable enough to 
+      converge with minimal damping. If it diverges immediately, consider 
+      setting ``energy_fraction=False`` to provide a constant damping floor.
+
+3. Line Search Algorithms
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 Line search prevents the solver from taking steps that are too large, which can 
 lead to non-physical states or divergence.
@@ -186,7 +220,7 @@ lead to non-physical states or divergence.
   factor :math:`\eta \in (0, 1]` to minimize the residual norm along the 
   search direction.
 
-3. Adaptive Stiffness (Blending)
+4. Adaptive Stiffness (Blending)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Useful for elastoplasticity or damage modeling where a sudden change in 
 direction requires a "safe" search direction.
@@ -203,7 +237,7 @@ direction requires a "safe" search direction.
   stability. It then attempts to decrease :math:`\xi` back to 0 as 
   convergence improves.
 
-4. Eigenvalue Shifting
+5. Eigenvalue Shifting
 ~~~~~~~~~~~~~~~~~~~~~~
 For strong instabilities (such as buckling or snap-through) where the tangent 
 stiffness matrix becomes non-positive definite, the **Eigenvalue Shift** technique might
@@ -216,13 +250,15 @@ expensive with limited results, and should only be used as a last resort.
 * **Benefit**: Forces the matrix to remain positive definite, ensuring the 
   solver always finds a descent direction.
 
-5. Static vs. Dynamic Fallback
+6. Static vs. Dynamic Fallback
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 If a static simulation fails despite the above techniques, the problem may be 
 inherently dynamic (e.g., rapid snap-through or post-buckling).
 
-* **Strategy**: Switch to a **Dynamic Solver**. 
-* **Stabilization**: Add **Rayleigh Damping** (:math:`\mathbf{C} = a\mathbf{M} + b\mathbf{K}`) to dissipate high-frequency 
+* **Strategy**: Switch to a **Dynamic Solver**, using the
+  :class:`fedoo.weakform.ImplicitDynamic` weak form. 
+* **Stabilization**: Add **Rayleigh Damping**
+  (:math:`\mathbf{C} = a\mathbf{M} + b\mathbf{K}`) to dissipate high-frequency 
   numerical noise and stabilize the inertial response during sudden transitions.
 """
 
