@@ -59,14 +59,14 @@ class ArtificialDamping(WeakFormBase):
 
     def __init__(
         self,
-        c_stab=2e-4,        
+        c_stab=2e-4,
         energy_fraction=True,
         variables=None,
         mat_lumping=True,
         name="",
         space=None,
     ):
-        super().__init__(name, space)        
+        super().__init__(name, space)
         self.damped_variables = variables
         self.c_stab = c_stab
         self.energy_fraction = energy_fraction
@@ -76,20 +76,26 @@ class ArtificialDamping(WeakFormBase):
 
     def initialize(self, assembly, pb):
         if self.damped_variables is None:
-            self.damped_variables = [vec for vec in ['Disp', 'Rot'] if vec in self.space.list_vectors()]
+            self.damped_variables = [
+                vec for vec in ["Disp", "Rot"] if vec in self.space.list_vectors()
+            ]
         if isinstance(self.damped_variables, str):
             self.damped_variables = [self.damped_variables]
         self.damped_variables = [
-            item 
-            for var in self.damped_variables 
-            for item in (self.space.get_vector(var) if var in self.space.list_vectors() else [var])
+            item
+            for var in self.damped_variables
+            for item in (
+                self.space.get_vector(var)
+                if var in self.space.list_vectors()
+                else [var]
+            )
         ]
 
         # Initialize the global stabilization factor
         if self.energy_fraction:
             self.target_ratio = self.c_stab  # alias
             # Start with a very small global fraction
-            self._c_stab = 1e-3 * self.target_ratio  
+            self._c_stab = 1e-3 * self.target_ratio
             self._c_stab_initialized = False
 
     def set_start(self, assembly, pb):
@@ -159,13 +165,10 @@ class ArtificialDamping(WeakFormBase):
         # 3. Weak equation of the virtual mass matrix (M*)
         op_var = [self.space.variable(var) for var in self.damped_variables]
         op_var_vir = [op.virtual if op != 0 else 0 for op in op_var]
-        
+
         # 4. Calculate Tangent Contribution: (c_stab / dt) * M*
         tangent_matrix = sum(
-            [
-                a * b * (self._c_stab/dt)
-                for (a, b) in zip(op_var_vir, op_var)
-            ]
+            [a * b * (self._c_stab / dt) for (a, b) in zip(op_var_vir, op_var)]
         )
 
         # 4. Calculate Residual Contribution: c_stab * M* * v_pseudo
@@ -184,4 +187,3 @@ class ArtificialDamping(WeakFormBase):
             return tangent_matrix + damping_force
 
         return tangent_matrix
-

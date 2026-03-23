@@ -94,6 +94,9 @@ class _Derivative:  # derivative operator used in DiffOp
 
 
 class DiffOp:
+    # Set priority higher than NumPy's (usually 0.0 or 1.0)
+    __array_priority__ = 100.0
+
     def __init__(self, u, x=0, ordre=0, decentrement=0, vir=0, u_name=None):
         self.mesh = None
 
@@ -188,7 +191,7 @@ class DiffOp:
     def __rmul__(self, A):
         return self * A
 
-    def __div__(self, A):
+    def __truediv__(self, A):
         return self * (1 / A)
 
     def __getitem__(self, item):

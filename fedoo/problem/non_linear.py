@@ -282,34 +282,52 @@ class _NonLinearBase:
             return 0.0
         if np.isscalar(A):
             return 0.0
-        # --- 1. Get Scale Estimate (The "Physics" of the problem) ---            
+        # --- 1. Get Scale Estimate (The "Physics" of the problem) ---
         x_norm_sq = np.dot(x, x)
-        if x_norm_sq < 1e-20: # Prevent div by zero
+        if x_norm_sq < 1e-20:  # Prevent div by zero
             return 0.0
         Ax = A @ x
         # rayleigh_max estimates the scale of the "active" stiffness
         rayleigh = np.dot(x, Ax) / x_norm_sq
-        
+
         # Define a physics-aware margin
         margin = shift_factor * max(abs(rayleigh), 1.0)
-    
+
         # --- 2. Two-Stage Lanczos Check ---
         # Stage 1: Check for massive material negative eigenvalues
         # (Algebraically Smallest 'SA' without shift-invert)
         try:
             # We use a very loose tolerance (0.1) and low maxiter for speed
             if assume_sym:
-                vals = eigsh(A, k=1, which='SA', maxiter=10, tol=0.1, v0=x, return_eigenvectors=False)
+                vals = eigsh(
+                    A,
+                    k=1,
+                    which="SA",
+                    maxiter=10,
+                    tol=0.1,
+                    v0=x,
+                    return_eigenvectors=False,
+                )
                 lambda_min = vals[0]
             else:
-                vals = eigs(A, k=1, which='SR', maxiter=10, tol=0.1, v0=x, return_eigenvectors=False)
-                lambda_min = vals[0].real  # eigs returns complex numbers; get real part.
-            
+                vals = eigs(
+                    A,
+                    k=1,
+                    which="SR",
+                    maxiter=10,
+                    tol=0.1,
+                    v0=x,
+                    return_eigenvectors=False,
+                )
+                lambda_min = vals[
+                    0
+                ].real  # eigs returns complex numbers; get real part.
+
             # If we found a significant negative eigenvalue (beyond our margin)
             if lambda_min < -margin:
                 return abs(lambda_min) + margin
         except (ArpackNoConvergence, Exception):
-            # If standard Lanczos fails to find a "loud" negative value, 
+            # If standard Lanczos fails to find a "loud" negative value,
             # the instability is likely subtle and clustered near zero.
             pass
 
@@ -318,18 +336,24 @@ class _NonLinearBase:
         try:
             # sigma=0 turns the "near zero" into the "easiest to find"
             if assume_sym:
-                vals = eigsh(A, k=1, sigma=0.0, which='LM', tol=0.1, return_eigenvectors=False)
+                vals = eigsh(
+                    A, k=1, sigma=0.0, which="LM", tol=0.1, return_eigenvectors=False
+                )
                 lambda_near_zero = vals[0]
             else:
-                vals = eigs(A, k=1, sigma=0.0, which='LM', tol=0.1, return_eigenvectors=False)
+                vals = eigs(
+                    A, k=1, sigma=0.0, which="LM", tol=0.1, return_eigenvectors=False
+                )
                 lambda_near_zero = vals[0].real
-                
+
             if lambda_near_zero < margin:
                 # Shift enough to push it comfortably past zero
                 return abs(lambda_near_zero) + margin
         except Exception as e:
             if self.print_info > 1:
-                print(f"        [Diagnostic] Shift-invert failed (Likely singular matrix): {e}")
+                print(
+                    f"        [Diagnostic] Shift-invert failed (Likely singular matrix): {e}"
+                )
 
         # --- 3. Rayleigh estimation of eig ---
         if rayleigh < -1e-12:
@@ -564,13 +588,13 @@ class _NonLinearBase:
               Larger values = stronger stabilization but less accuracy.
               Smaller values = more accurate but weaker stabilization.
             * 'eigenvalue_assume_sym': bool, default = True.
-              If True, uses the symmetric Lanczos solver (eigsh) for efficiency. 
-              If False, uses the general Arnoldi solver (eigs) to account for 
+              If True, uses the symmetric Lanczos solver (eigsh) for efficiency.
+              If False, uses the general Arnoldi solver (eigs) to account for
               non-symmetric tangent terms.
             * 'check_early_divergence': bool, default = True.
-              If True, aborts the time step early if convergence trends are poor. 
+              If True, aborts the time step early if convergence trends are poor.
               A step is considered diverging if:
-              1. The error remains "unproductive" (new_error > 0.999 * previous_error) 
+              1. The error remains "unproductive" (new_error > 0.999 * previous_error)
                  for 3 consecutive Newton-Raphson iterations.
               2. The error spikes to more than 100 times the previous error.
         """
@@ -590,7 +614,7 @@ class _NonLinearBase:
                 "adaptive_stiffness",
                 "assume_cvg_at_max_subiter",
                 "eigenvalue_shift",
-                "eigenvalue_shift_factor", 
+                "eigenvalue_shift_factor",
                 "eigenvalue_assume_sym",
                 "check_early_divergence",
             ]:
@@ -679,8 +703,12 @@ class _NonLinearBase:
         adaptive_stiffness = self.nr_parameters.get("adaptive_stiffness", False)
         eigenvalue_shift = self.nr_parameters.get("eigenvalue_shift", False)
         if eigenvalue_shift:
-            eigenvalue_assume_sym = self.nr_parameters.get("eigenvalue_assume_sym", True)
-            eigenvalue_shift_factor = self.nr_parameters.get("eigenvalue_shift_factor", 1e-4)
+            eigenvalue_assume_sym = self.nr_parameters.get(
+                "eigenvalue_assume_sym", True
+            )
+            eigenvalue_shift_factor = self.nr_parameters.get(
+                "eigenvalue_shift_factor", 1e-4
+            )
 
         self._t_fact_inc = self.t_fact
         self.elastic_prediction()
@@ -689,7 +717,7 @@ class _NonLinearBase:
             # we take the assembled matrix computed after set_start and before
             # update. This should be the elastic or "safe" stiffness.
             # If not, adaptive_stiffness algorithm will not work as expected.
-            self.assembly.current.assemble_global_mat('matrix')
+            self.assembly.current.assemble_global_mat("matrix")
             KE = self.assembly.get_global_matrix()
             xi = 0.0
             xi_increased_this_step = False
@@ -713,12 +741,16 @@ class _NonLinearBase:
             ):
                 self._t_fact_inc = None
                 return 1, subiter, error
-            elif check_early_divergence and (not np.isfinite(error) or error > 100* prev_error):
+            elif check_early_divergence and (
+                not np.isfinite(error) or error > 100 * prev_error
+            ):
                 # suspected ill-conditioned matrix
                 return 0, subiter, error
 
             # Track convergence trend
-            if error > 0.999*prev_error:  # if decrease non significant, considered as increase
+            if (
+                error > 0.999 * prev_error
+            ):  # if decrease non significant, considered as increase
                 consecutive_increases += 1
                 consecutive_decreases = 0
                 if consecutive_increases >= 4 and check_early_divergence:
@@ -747,7 +779,7 @@ class _NonLinearBase:
                     xi = 1.0
                     consecutive_increases = 0
                     xi_increased_this_step = True
-                    if subiter==3:
+                    if subiter == 3:
                         # restart the iteration withthe elastic stiffness
                         self.to_start()
                         subiter = 1
@@ -758,7 +790,7 @@ class _NonLinearBase:
                     else:
                         # redo last iteration
                         self._dU = self._dU_old
-                        subiter = max(subiter-2, 1)
+                        subiter = max(subiter - 2, 1)
                         continue
                 elif consecutive_decreases > 0:
                     # Improving - try to reduce xi
@@ -787,14 +819,16 @@ class _NonLinearBase:
             # Apply eigenvalue shift if enabled
             if eigenvalue_shift:
                 self.set_A(
-                    self._apply_eigenvalue_shift(A, eigenvalue_shift_factor, eigenvalue_assume_sym)
+                    self._apply_eigenvalue_shift(
+                        A, eigenvalue_shift_factor, eigenvalue_assume_sym
+                    )
                 )
             else:
                 self.set_A(A)
 
             self.solve_nr_increment()
 
-        self._t_fact_inc = None        
+        self._t_fact_inc = None
         if assume_cvg_at_max_subiter:
             return 1, subiter, error
         return 0, subiter, error
@@ -985,11 +1019,11 @@ class _NonLinearBase:
                 if update_dt:
                     dt *= 0.25
                     # if self.print_info > 0:
-                        # print(
-                        #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                        #         error, dt
-                        #     )
-                        # )
+                    # print(
+                    #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
+                    #         error, dt
+                    #     )
+                    # )
 
                     if dt < dt_min:
                         raise RuntimeError(

@@ -140,7 +140,9 @@ def _get_results(
 
         elif res == "Fext":
             # Only node dof
-            data = pb.get_ext_forces()[: pb.n_node_dof].reshape(pb.space.nvar, -1)
+            data = pb.get_ext_forces(include_mpc=False)[: pb.n_node_dof].reshape(
+                pb.space.nvar, -1
+            )
             data_type = "Node"
 
         elif res[:5] == "Fext(" and res[-1] == ")":
