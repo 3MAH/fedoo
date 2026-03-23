@@ -30,7 +30,9 @@ The WeakForm library contains the following classes:
 
    StressEquilibrium
    ImplicitDynamic
-   StressEquilibriumRI
+   StressEquilibriumRI   
+   StressEquilibriumMixed
+   StressEquilibriumFbar
    SteadyHeatEquation
    HeatEquation
    BeamEquilibrium
@@ -44,7 +46,6 @@ The WeakForm library contains the following classes:
    DistributedLoad
    ExternalPressure
    HourglassStiffness
-   StressEquilibriumFbar
    ArtificialDamping
 """
 
@@ -88,6 +89,7 @@ __all__ = [
     "PlateShearEquilibrium",
     "StressEquilibrium",
     "StressEquilibriumFbar",
+    "StressEquilibriumMixed",
     "StressEquilibriumRI",
     "HourglassStiffness",
     "HeatEquation",
