@@ -68,6 +68,18 @@ These laws should be associated with :py:class:`fedoo.weakform.PlateEquilibrium`
    ShellLaminate
    ShellHomogeneous
 
+Phase-field fracture constitutive law
+======================================
+
+These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium`
+and :py:class:`fedoo.weakform.PhaseFieldEvolution`
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   PhaseFieldDamage
+
 Thermal constitutive law
 ======================================
 
@@ -95,6 +107,7 @@ from .heterogeneous import Heterogeneous
 from .shell import ShellBase, ShellHomogeneous, ShellLaminate
 from .simcoon_umat import Simcoon
 from .spring import Spring
+from .phasefield import PhaseFieldDamage
 from .thermal_prop import ThermalProperties
 from .viso_elastic_orthotropic import ViscoElasticComposites
 
@@ -115,6 +128,7 @@ __all__ = [
     "ShellBase",
     "ShellHomogeneous",
     "ShellLaminate",
+    "PhaseFieldDamage",
     "Simcoon",
     "Spring",
     "ThermalProperties",

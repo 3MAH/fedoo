@@ -44,6 +44,7 @@ The WeakForm library contains the following classes:
    ExternalPressure
    HourglassStiffness
    StressEquilibriumFbar
+   PhaseFieldEvolution
 """
 
 from .beam import BeamEquilibrium
@@ -70,6 +71,7 @@ from .stress_equilibrium_bbar import (
     HourglassStiffness,
 )
 from .distributed_load import ExternalPressure, DistributedLoad
+from .phase_field import PhaseFieldEvolution
 
 __all__ = [
     "BeamEquilibrium",
@@ -94,4 +96,5 @@ __all__ = [
     "ParametricBernoulliBeam",
     "DistributedLoad",
     "ExternalPressure",
+    "PhaseFieldEvolution",
 ]
