@@ -247,7 +247,6 @@ def _split_amor(E, nu, eps, dimension):
     Compressive part: negative volumetric only.
     """
     K, mu = _get_bulk_shear(E, nu)
-    n = len(eps[0]) if not np.isscalar(eps[0]) else 1
 
     trace_eps = eps[0] + eps[1] + eps[2]
     trace_plus = np.maximum(trace_eps, 0)
@@ -291,7 +290,6 @@ def _split_miehe(E, nu, eps, dimension):
     to the tensile part.
     """
     lam, mu = _get_lame(E, nu)
-    n = len(eps[0]) if not np.isscalar(eps[0]) else 1
 
     if np.isscalar(eps[0]):
         eps = np.array([np.atleast_1d(e) for e in eps])
@@ -393,8 +391,6 @@ def _amor_tangent_plus(K, mu, trace_eps, dimension):
     When trace(eps) > 0: H_plus = K * I_vol + 2*mu * I_dev
     When trace(eps) <= 0: H_plus = 2*mu * I_dev (volumetric part protected)
     """
-    n = len(trace_eps) if not np.isscalar(trace_eps) else 1
-
     # Indicator: 1 where trace_eps > 0, 0 otherwise
     if np.isscalar(trace_eps):
         ind = 1.0 if trace_eps > 0 else 0.0
@@ -403,20 +399,7 @@ def _amor_tangent_plus(K, mu, trace_eps, dimension):
 
     K_eff = K * ind  # only contribute when trace > 0
 
-    H = [[0] * 6 for _ in range(6)]
-    # Volumetric + deviatoric: K_eff * (1/3)I x I + 2*mu*(I_sym - (1/3)I x I)
-    # = (K_eff - 2*mu/3) * I x I + 2*mu * I_sym
-    for i in range(3):
-        for j in range(3):
-            H[i][j] = K_eff / 3.0 + 2 * mu * (1.0 / 3.0 if i == j else 0) - 2 * mu / 3.0
-            # Simplify: K_eff/3 + 2mu*(delta_ij/3 - 1/3)  wrong
-    # Actually: H_ij = K_eff * delta_vol + 2*mu * I_dev
-    # I_dev = I_sym - 1/3 * I x I
-    # So H = (K_eff - 2*mu/3) * I_x_I + 2*mu * I_sym
-    # where I_x_I[i][j] = 1 for i,j < 3, 0 otherwise
-    # and I_sym[i][j] = delta_ij for all i,j in 0..5
-
-    # Redo properly
+    # H = (K_eff - 2mu/3) * I_x_I + 2*mu * I_sym
     H = [[0] * 6 for _ in range(6)]
     for i in range(3):
         for j in range(3):

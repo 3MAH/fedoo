@@ -147,5 +147,5 @@ class PhaseFieldEvolution(WeakFormBase):
     def reset(self):
         pass
 
-    def to_start(self):
+    def to_start(self, assembly, pb):
         pass

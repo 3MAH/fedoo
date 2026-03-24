@@ -108,7 +108,7 @@ d_init[notch_nodes] = 1.0
 
 
 # ======================== Staggered Solution ========================
-print(f"Phase-field fracture: SENT benchmark")
+print("Phase-field fracture: SENT benchmark")
 print(f"Model: {model}, Split: {split}")
 print(f"Mesh: {nx}x{ny} = {n_nodes} nodes")
 print(f"l0 = {l0}, Gc = {Gc}, E = {E}, nu = {nu}")
