@@ -79,10 +79,9 @@ class StressEquilibriumMixed(StressEquilibrium):
 
         if assembly._nlgeom:
             # For finite strain, Constitutive Law evaluated with F_bar.
-            # Stress_iso is extracted in update_2 and H is the isochoric
-            # tangent as it is computed from F_bar.
-
-            sigma_dev = assembly.sv.get("Stress_iso", initial_stress)
+            # StressDev is directly the output of the constitutive law in update_2.
+            # H is the isochoric part of the tangent as it is computed from F_bar.
+            sigma_dev = assembly.sv.get("StressDev", initial_stress)
             H_dev = [list(row) for row in H]  # Copy to avoid modifying SV directly
 
             # # Correction term: -2/3 * (sigma_dev_i + sigma_dev_j)
@@ -132,12 +131,11 @@ class StressEquilibriumMixed(StressEquilibrium):
         # -----------------------------------------------------------
         # 3. Pressure Variables
         # -----------------------------------------------------------
-        # P_inc: Incremental pressure (unknown variable in the system)
+        # P_inc: Incremental pressure (operator used to build the stiffness matrix)
         P_inc = self.space.variable("Pressure")
 
         # P_curr: Current total pressure at gauss points
         P_curr = assembly.sv["_Pressure_gp"]
-        # P_curr = assembly.get_gp_results(P_inc, pb.get_dof_solution())
 
         # Total Pressure used for equilibrium
         P_total = P_inc + P_curr
@@ -191,8 +189,7 @@ class StressEquilibriumMixed(StressEquilibrium):
                 )
 
             # Retrieve the TOTAL J saved from _comp_F
-            J_curr = assembly.sv.get("J", np.ones(assembly.n_gauss_points))
-            lnJ_curr = np.log(J_curr)
+            lnJ_curr = assembly.sv.get("lnJ", np.zeros(assembly.n_gauss_points))
             eps_vol = eps[0] + eps[1] + eps[2]
 
             # Linearized constraint: delta_p * (lnJ_curr - P_curr/K + eps_vol - P_inc/K) = 0
@@ -226,10 +223,21 @@ class StressEquilibriumMixed(StressEquilibrium):
 
     def initialize(self, assembly, pb):
         super().initialize(assembly, pb)
-        # assembly.sv['StrainIso'] = assembly.sv["TotalStrain"] = assembly.sv["Strain"]
-        # assembly.sv['StressIso'] = 0
         assembly.sv["_Pressure_gp"] = 0
-        assembly.sv["StressIso"] = assembly.sv["Stress"]
+        assembly.sv["StressDev"] = assembly.sv["Stress"]
+        assembly.sv["StrainIsochoric"] = assembly.sv["Strain"]
+
+    def set_start(self, assembly, pb):
+        """Start a new time increment."""
+        super().update(assembly, pb)
+        if assembly._nlgeom and not np.array_equal(assembly.sv["Stress"], 0):
+            # Stress and Strain has been rotated. Update StressDev and StrainIsochoric.
+            assembly.sv["StressDev"] = assembly.sv["Stress"].copy(asarray=True)
+            assembly.sv["StressDev"].array[:3] += assembly.sv["_Pressure_gp"]
+            assembly.sv["StrainIsochoric"] = assembly.sv["Strain"].copy(asarray=True)
+            assembly.sv["StrainIsochoric"].array[:3] -= (1/3.0) * assembly.sv["lnJ"]
+    
+
 
     def update(self, assembly, pb):
         """Update the weakform to the current state.
@@ -238,15 +246,17 @@ class StressEquilibriumMixed(StressEquilibrium):
         stiffness matrix).
         """
         super().update(assembly, pb)
-        # get the current pressure at GaussPoint from the pressure field
+        # get and store the current pressure at GaussPoint from the pressure field
         pressure_gp = assembly.get_gp_results(
             self.space.variable("Pressure"), pb.get_dof_solution()
         )
         assembly.sv["_Pressure_gp"] = pressure_gp
         if assembly._nlgeom:
             # put the isochoric stress in entry of the constitutive law
-            assembly.sv["Stress"] = assembly.sv["StressIso"]
-            assembly.sv_start["Stress"] = assembly.sv["StressIso"]
+            # strain is already the isochoric part here, but not the start value
+            assembly.sv["Stress"] = assembly.sv["StressDev"]
+            assembly.sv_start["Stress"] = assembly.sv_start["StressDev"]
+            assembly.sv_start["Strain"] = assembly.sv_start["StrainIsochoric"]
 
     def update_2(self, assembly, pb):
         """Update the weakform to the current state.
@@ -260,10 +270,15 @@ class StressEquilibriumMixed(StressEquilibrium):
             pressure_gp = assembly.sv["_Pressure_gp"]
 
             # the stress computed by the constitutive law is the isochor stress
-            assembly.sv["StressIso"] = assembly.sv["Stress"]
+            assembly.sv["StressDev"] = assembly.sv["Stress"]
             assembly.sv["Stress"] = assembly.sv["Stress"].copy(asarray=True)
-            assembly.sv["Stress"].array[:3] -= pressure_gp
-
+            assembly.sv["Stress"].array[:3] -= pressure_gp    
+            # strain from _comp_F is the isochoric part as it comes from Fbar
+            assembly.sv["StrainIsochoric"] = assembly.sv["Strain"]
+            assembly.sv["Strain"] = assembly.sv["Strain"].copy(asarray=True)
+            assembly.sv["Strain"].array[:3] += (1/3.0) * assembly.sv["lnJ"]
+            
+            
     @property
     def fbar(self):
         """Set to True to use the F-bar method.
@@ -281,16 +296,16 @@ class StressEquilibriumMixed(StressEquilibrium):
             raise ValueError("fbar can't be activated for Mixed formulation")
 
     def _comp_F(self, assembly, displacement):
-        # compute only the isochor part of F and volume change J
+        # compute only the isochoric part of F and volume change J
         grad_values = _comp_grad_disp(assembly, displacement)
 
         eye_3 = np.empty((3, 3, 1), order="F")
         eye_3[:, :, 0] = np.eye(3)
         F1 = np.add(eye_3, grad_values, order="F")
 
-        # Calculate TOTAL J and save it for the pressure constraint!
+        # Calculate J and save its log for the pressure constraint
         J = np.linalg.det(F1.transpose((2, 0, 1)))
-        assembly.sv["J"] = J
+        assembly.sv["lnJ"] = np.log(J)
 
         F1 = F1 * (J.reshape(assembly.n_elm_gp, -1).ravel() ** (-1 / 3))
 

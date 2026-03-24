@@ -138,12 +138,12 @@ class _NonLinearBase:
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
         self._nr_min_subiter = 0  # reset SDI for new increment
+        self._err0 = self.nr_parameters[
+            "err0"
+        ]  # initial error for NR error estimation
         if not (np.isscalar(self._dU) and self._dU == 0):
             self._U += self._dU
             self._dU = 0
-            self._err0 = self.nr_parameters[
-                "err0"
-            ]  # initial error for NR error estimation
             self.__assembly.set_start(self)
 
             # Save results
@@ -155,9 +155,6 @@ class _NonLinearBase:
                 if self.exec_callback_at_each_iter or save_results:
                     callback(self)
         else:
-            self._err0 = self.nr_parameters[
-                "err0"
-            ]  # initial error for NR error estimation
             self.__assembly.set_start(self)
 
     def to_start(self):
