@@ -124,6 +124,5 @@ def line_search(pb, dX):
             # Standard backtracking for Residual, Armijo, and Energy
             alpha *= rho
 
-    # If the loop finishes without returning, criteria were not met.
-    # logging.warning(f"Line search ({method}) reached max_iter={max_iter}. Fallback to best alpha={best_alpha:.4f}.")
+    # Criteria were not met within max_iter. Fallback to best alpha found.
     return best_alpha

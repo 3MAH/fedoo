@@ -116,9 +116,6 @@ class _NewmarkStiffness(WeakFormBase):
         # This is updated at each Newton-Raphson iteration
         delta_u = assembly.sv["_DeltaDisp"]
 
-        # if np.isscalar(a_n_node) or np.isscalar(v_n_node):
-        #     return wf
-
         # Newmark Coefficients
         # c0 is the factor multiplying the tangent: d(vel)/d(delta_u) = gamma / (beta * dt)
         c0 = self.gamma / (self.beta * dt)
@@ -129,10 +126,9 @@ class _NewmarkStiffness(WeakFormBase):
         scaled_mat = mat * (1 + self.damping_coef * c0)
 
         # 3. Current Velocity Calculation (v_curr)
-        # Current acceleration: a_curr = a0*(delta_u - dt*v_n) - (1/(2*beta)-1)*a_n
+        # a_curr = a0*(delta_u - dt*v_n) - (1/(2*beta)-1)*a_n
         a_curr = a0 * (delta_u - dt * v_n_node) - (0.5 / self.beta - 1) * a_n_node
-
-        # Current velocity: v_curr = v_n + dt*((1-gamma)*a_n + gamma*a_curr)
+        # v_curr = v_n + dt*((1-gamma)*a_n + gamma*a_curr)
         v_curr = v_n_node + dt * ((1 - self.gamma) * a_n_node + self.gamma * a_curr)
 
         # 4. Build the damping residual: delta_eps * (beta_ray * H * eps(v_curr))
@@ -318,24 +314,14 @@ class ImplicitDynamic2(WeakFormBase):
             assembly.sv["_DeltaDisp"], convert_from="Node", convert_to="GaussPoint"
         )
 
-        # self.inertia_weakform.update(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator == 0 else
-        #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
-
     def update_2(self, assembly, pb):
         self.stiffness_weakform.update_2(assembly, pb)
-        # self.inertia_weakform.update_2(assembly, pb)
-        # assembly.sv['TempGradient'] = [0 if operator == 0 else
-        #             assembly.get_gp_results(operator, pb.get_dof_solution()) for operator in self.__op_grad_temp]
 
-    # def reset(self): #to update
-    #     pass
-
-    def to_start(self, assembly, pb):  # to update
+    def to_start(self, assembly, pb):
         self.stiffness_weakform.to_start(assembly, pb)
 
-    def set_start(self, assembly, pb):  # to update
-        dt = pb.dtime  ### dt is the time step of the previous increment
+    def set_start(self, assembly, pb):
+        dt = pb.dtime
         if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
@@ -376,15 +362,6 @@ class ImplicitDynamic2(WeakFormBase):
             velocity = assembly.sv["Velocity_GP"]
 
             diff_op = self.stiffness_weakform.get_weak_equation(assembly, pb)
-
-            # if delta_disp.shape[1] == 1: delta_disp = delta_disp.ravel()
-            # if acceleration.shape[1] == 1: acceleration = acceleration.ravel()
-            # if velocity.shape[1] == 1: velocity = velocity.ravel()
-            # diff_op += sum([op_dU_vir[i]*( \
-            #         (op_dU[i]+delta_disp[i])*(self.density/(self.beta*dt**2)) -
-            #           velocity[i]*(self.density/(self.beta*dt)) -
-            #           acceleration[i] * (self.density*(0.5/self.beta - 1)) )
-            #           if op_dU_vir[i]!=0 else 0 for i in range(self.space.ndim)])
 
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 delta_disp - dt * velocity
@@ -427,12 +404,9 @@ class ImplicitDynamic2(WeakFormBase):
                 if self.space._dimension == "2Daxi":
                     raise NotImplementedError("2Daxi not implemented.")
                 #     rr = assembly.sv["_R_gausspoints"]
-
-                #     # nlgeom = False
                 #     eps[2] = self.space.variable("DispX") * np.divide(
                 #         1, rr, out=np.zeros_like(rr), where=rr != 0
-                #     )  # put zero if X==0 (division by 0)
-                #     # eps[2] = self.space.variable('DispX') * (1/rr)
+                #     )
                 initial_stress = assembly.sv[
                     "Stress"
                 ]  # Stress = Cauchy for updated lagrangian method
@@ -449,8 +423,8 @@ class ImplicitDynamic2(WeakFormBase):
             )
 
             if not (np.isscalar(initial_stress) and initial_stress == 0):
+                # TODO: geometrical stiffness not included in Rayleigh damping term
                 # if self.nlgeom:
-                #     # geometrical stiffness not included
                 #     stiffness_mat_wf = stiffness_wf + sum(
                 #         [
                 #             0
@@ -531,10 +505,6 @@ class ImplicitDynamic2(WeakFormBase):
             )
             # if self.space._dimension == "2Daxi":
             #     diff_op = diff_op * ((2 * np.pi) * rr)
-
-            # mat_sigma_velocity = [0 if op_sigma[i] == 0 else assembly.get_gp_results(op_sigma[i], new_velocity.ravel()) for i in range(6)]
-            # diff_op += sum([0 if eps[i] == 0 else \
-            #                 eps[i].virtual * mat_sigma_velocity[i] for i in range(6)])
 
         return diff_op
 

@@ -775,7 +775,7 @@ class _NonLinearBase:
                     consecutive_increases = 0
                     xi_increased_this_step = True
                     if subiter == 3:
-                        # restart the iteration withthe elastic stiffness
+                        # restart the iteration with the elastic stiffness
                         self.to_start()
                         subiter = 1
                         error = float("inf")
@@ -811,8 +811,9 @@ class _NonLinearBase:
             else:
                 A = self.__assembly.current.get_global_matrix()
 
-            # Apply eigenvalue shift if enabled
-            if eigenvalue_shift:
+            # Apply eigenvalue shift only when divergence is detected
+            # (ARPACK calls are expensive, avoid at every iteration)
+            if eigenvalue_shift and consecutive_increases >= 1:
                 self.set_A(
                     self._apply_eigenvalue_shift(
                         A, eigenvalue_shift_factor, eigenvalue_assume_sym

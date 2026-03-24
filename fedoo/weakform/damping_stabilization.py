@@ -172,24 +172,17 @@ class ArtificialDamping(WeakFormBase):
         # 1. Retrieve the current displacement increment
         delta_u = pb._dU
 
-        # 2. Compute Pseudo-Velocity
-        # v_pseudo = delta_u / dt
-
-        # 3. Weak equation of the virtual mass matrix (M*)
+        # 2. Weak equation of the virtual mass matrix (M*)
         op_var = [self.space.variable(var) for var in self.damped_variables]
         op_var_vir = [op.virtual if op != 0 else 0 for op in op_var]
 
-        # 4. Calculate Tangent Contribution: (c_stab / dt) * M*
+        # 3. Tangent Contribution: (c_stab / dt) * M*
         tangent_matrix = sum(
             [a * b * (self._c_stab / dt) for (a, b) in zip(op_var_vir, op_var)]
         )
 
-        # 4. Calculate Residual Contribution: c_stab * M* * v_pseudo
+        # 4. Residual Contribution: c_stab * M* * v_pseudo
         if not np.array_equal(delta_u, 0):
-            # Scale by the stabilization coefficient
-            # v_pseudo[self._variables_id] *= self._vec_c_stab[:,np.newaxis]
-
-            # Apply the matrix operator to the pseudo-velocity array
             damping_force = assembly.operator_apply(tangent_matrix, delta_u)
 
             # Axisymmetric correction
