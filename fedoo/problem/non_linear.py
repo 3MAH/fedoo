@@ -138,9 +138,7 @@ class _NonLinearBase:
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
         self._nr_min_subiter = 0  # reset SDI for new increment
-        self._err0 = self.nr_parameters[
-            "err0"
-        ]  # initial error for NR error estimation
+        self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         if not (np.isscalar(self._dU) and self._dU == 0):
             self._U += self._dU
             self._dU = 0

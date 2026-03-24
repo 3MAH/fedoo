@@ -235,9 +235,7 @@ class StressEquilibriumMixed(StressEquilibrium):
             assembly.sv["StressDev"] = assembly.sv["Stress"].copy(asarray=True)
             assembly.sv["StressDev"].array[:3] += assembly.sv["_Pressure_gp"]
             assembly.sv["StrainIsochoric"] = assembly.sv["Strain"].copy(asarray=True)
-            assembly.sv["StrainIsochoric"].array[:3] -= (1/3.0) * assembly.sv["lnJ"]
-    
-
+            assembly.sv["StrainIsochoric"].array[:3] -= (1 / 3.0) * assembly.sv["lnJ"]
 
     def update(self, assembly, pb):
         """Update the weakform to the current state.
@@ -272,13 +270,12 @@ class StressEquilibriumMixed(StressEquilibrium):
             # the stress computed by the constitutive law is the isochor stress
             assembly.sv["StressDev"] = assembly.sv["Stress"]
             assembly.sv["Stress"] = assembly.sv["Stress"].copy(asarray=True)
-            assembly.sv["Stress"].array[:3] -= pressure_gp    
+            assembly.sv["Stress"].array[:3] -= pressure_gp
             # strain from _comp_F is the isochoric part as it comes from Fbar
             assembly.sv["StrainIsochoric"] = assembly.sv["Strain"]
             assembly.sv["Strain"] = assembly.sv["Strain"].copy(asarray=True)
-            assembly.sv["Strain"].array[:3] += (1/3.0) * assembly.sv["lnJ"]
-            
-            
+            assembly.sv["Strain"].array[:3] += (1 / 3.0) * assembly.sv["lnJ"]
+
     @property
     def fbar(self):
         """Set to True to use the F-bar method.

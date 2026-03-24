@@ -5,6 +5,7 @@ from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
 import numpy as np
 
+
 class _NewmarkInertia(WeakFormBase):
     """Newmark inertia Weakform. Not intended to be used alone."""
 
