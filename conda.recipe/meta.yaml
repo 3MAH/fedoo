@@ -21,7 +21,7 @@ requirements:
     - numpy>=1.26
     - scipy
     - pyvista>=0.42
-    - simcoon>=1.9.6
+    - simcoon>=1.11.0
     - {{ solver_backend }}
 
 test:
