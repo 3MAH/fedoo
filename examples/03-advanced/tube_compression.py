@@ -67,7 +67,14 @@ contact.max_dist = 1.5  # max distance for the contact search
 
 NLGEOM = "UL"
 pb = fd.problem.NonLinear(assembly + contact, nlgeom=NLGEOM)
-pb.set_nr_criterion("Displacement", err0=None, tol=1e-2, max_subiter=10)
+pb.set_nr_criterion(
+    "Displacement",
+    err0=None,
+    tol=1e-2,
+    max_subiter=10,
+    adaptive_stiffness=True,
+    check_early_divergence=False,
+)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
@@ -83,7 +90,6 @@ top = mesh.node_sets["top"]
 
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
 pb.bc.add("Dirichlet", top, "Disp", [0, -150])
-pb.set_nr_criterion("Displacement", tol=1e-3)
 pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0, dt_min=1e-8)
 
 
