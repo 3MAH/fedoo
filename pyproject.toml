@@ -41,7 +41,7 @@ plot = [
     'pyvista[io]',
 ]
 simcoon = [
-    'simcoon'
+    'simcoon>=1.11.0'
 ]
 test = [
     'pytest',
