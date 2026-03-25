@@ -83,6 +83,7 @@ top = mesh.node_sets["top"]
 
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
 pb.bc.add("Dirichlet", top, "Disp", [0, -150])
+pb.set_nr_criterion("Displacement", tol=1e-3)
 pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0, dt_min=1e-8)
 
 
