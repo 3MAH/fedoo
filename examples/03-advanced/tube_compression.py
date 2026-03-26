@@ -71,7 +71,7 @@ pb.set_nr_criterion(
     "Displacement",
     err0=None,
     tol=1e-2,
-    max_subiter=10,
+    max_subiter=15,
     adaptive_stiffness=True,
     check_early_divergence=False,
 )
