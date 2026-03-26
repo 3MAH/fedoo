@@ -164,7 +164,7 @@ data_3d.plot(
 pl.show()
 
 ###############################################################################
-# This example generate a relastic mp4 movie of the 3d deformation of the
+# This example generate a realistic mp4 movie of the 3d deformation of the
 # cylinder. It is commented because it is not possible to render the mp4 movie
 # with sphinx-gallery.
 
