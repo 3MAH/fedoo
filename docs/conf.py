@@ -104,7 +104,6 @@ sphinx_gallery_conf = {
     "gallery_dirs": ["examples"],
     # Pattern to search for example files
     "filename_pattern": r"\.py",
-    "ignore_pattern": r"__init__\.py|tube_compression\.py",
     # Sort gallery example by file name instead of number of lines (default)
     "within_subsection_order": FileNameSortKey,
     "image_scrapers": (DynamicScraper(), "matplotlib"),

@@ -1,4 +1,3 @@
-from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.weakform.inertia import Inertia
 from fedoo.weakform.stress_equilibrium import StressEquilibrium

@@ -58,8 +58,7 @@ def test_2DDynamicPlasticBending_v2():
     wf = fd.weakform.implicit_dynamic.ImplicitDynamic(
         "ConstitutiveLaw", rho, 0.25, 0.5, nlgeom=NLGEOM
     )
-    # wf.rayleigh_damping = [0.1,0]
-    # wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+    wf.rayleigh_damping = [0.1, 0.1]
 
     # note set for boundary conditions
     nodes_bottomLeft = np.where((crd[:, 0] == 0) * (crd[:, 1] == 0))[0]
