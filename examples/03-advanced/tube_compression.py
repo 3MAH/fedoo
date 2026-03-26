@@ -93,7 +93,7 @@ top = mesh.node_sets["top"]
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
 pb.bc.add("Dirichlet", top, "Disp", [0, -150])
 pb.add_line_search()
-pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=1, dt_min=1e-8)
+pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0, dt_min=1e-8)
 
 
 ###############################################################################
