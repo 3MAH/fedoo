@@ -10,8 +10,6 @@ os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"
 import fedoo as fd
 import numpy as np
 from time import time
-import pylab as plt
-from numpy import linalg
 
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
