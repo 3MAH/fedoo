@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
+"""Symmetric tensor objects based on the voigt notations."""
+
 import numpy as np
-from copy import deepcopy
 
 try:
     from simcoon import simmit as sim
@@ -9,48 +9,18 @@ try:
 except ImportError:
     USE_SIMCOON = False
 
-# class StressTensorArray(np.ndarray):
-
-#     def __new__(cls, input_array):
-#         # Input array is an already formed ndarray instance
-#         # We first cast to be our class type
-#         if len(input_array) != 6: raise NameError('lenght for StressTensorArray object must be 6')
-#         obj = np.asarray(input_array).view(cls)
-
-#         # # add the new attribute to the created instance
-#         # obj.info = info
-#         # Finally, we must return the newly created object:
-#         return obj
-
-#     def vtk_format(self):
-#         """
-#         Return a array adapted to export symetric tensor data in a vtk file
-#         See the utilities.ExportData class for more details
-#         """
-#         return np.vstack((self[0:4].reshape(4,-1), self[5], self[4])).astype(float)
-
-#     def to_tensor(self):
-#         return np.array([[self[0],self[3],self[4]], [self[3], self[1], self[5]], [self[4], self[5], self[2]]])
-
-#     def von_mises(self):
-#         """
-#         Return the Von Mises stress
-#         """
-#         return np.sqrt( 0.5 * ((self[0]-self[1])**2 + (self[1]-self[2])**2 + (self[0]-self[2])**2 \
-#                          + 6 * (self[3]**2 + self[4]**2 + self[5]**2) ) )
-
-
-# def __array_finalize__(self, obj):
-#     # see InfoArray.__array_finalize__ for comments
-#     if obj is None: return
-#     self.info = getattr(obj, 'info', None)
-
 
 class _SymetricTensorList(list):  # base class for StressTensorList and StrainTensorList
+    """Base class for handling collections of symmetric tensors in Voigt notation.
+
+    The 6 components are stored as either scalars or NumPy arrays (one value per point).
+    Order: [11, 22, 33, 12, 13, 23] (standard Voigt).
+    """
+
     def __init__(self, l):
         if len(l) != 6:
-            raise NameError(
-                "list lenght for " + str(self.__class__.__name__) + " object must be 6"
+            raise ValueError(
+                "list length for " + str(self.__class__.__name__) + " object must be 6"
             )
         if isinstance(l, np.ndarray):
             self.array = l
@@ -96,17 +66,14 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             return self
         return self.__class__(self.asarray() - tensor_list.asarray())
 
+    def __copy__(self):
+        return self.copy()
+
     def __deepcopy__(self, memo=None):
-        if self.array is None:
-            return deepcopy(self, memo)
-        else:
-            return self.__class__(self.array.copy())
+        return self.copy(asarray=False)
 
     def vtk_format(self):
-        """
-        Return a array adapted to export symetric tensor data in a vtk file
-        See the utilities.ExportData class for more details
-        """
+        """Return a array adapted to export symetric tensor data in a vtk file."""
         try:
             return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
         except:
@@ -114,6 +81,13 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             return np.vstack([self[i] for i in [0, 1, 2, 3, 5, 4]]).astype(float)
 
     def to_tensor(self):
+        """Reconstruct the 3x3 symmetric tensor(s).
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (3, 3, n_points).
+        """
         return np.array(
             [
                 [self[0], self[3], self[4]],
@@ -122,7 +96,20 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             ]
         )
 
-    def asarray(self):
+    def asarray(self, copy=False):
+        """Return the data as a single NumPy array of shape (6, n_points).
+
+        Parameters
+        ----------
+        copy : bool, default False
+            If True, returns a copy of the underlying array. If False,
+            returns a view if possible or builds a new array from components.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (6, n_points).
+        """
         if self.array is None:
             try:
                 return np.array(self)
@@ -132,12 +119,13 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
                     res[i] = self[i]
                 return res
         else:
-            return self.array
+            if copy:
+                return self.array.copy()
+            else:
+                return self.array
 
     def deviatoric(self):
-        """
-        Return the deviatoric part of the Tensor using voigt form
-        """
+        """Deviatoric part of the Tensor using voigt form."""
         return self.__class__(
             [
                 2 / 3 * self[0] - 1 / 3 * self[1] - 1 / 3 * self[2],
@@ -150,23 +138,19 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         )
 
     def trace(self):
+        """Trace of the symmetric tensor."""
         return self[0] + self[1] + self[2]
 
     def hydrostatic(self):
-        """
-        Return the hydrostatic part of the Tensor using void form
-        """
+        """Hydrostatic part of the Tensor using void form."""
         trace = (1 / 3) * self.trace()
         return self.__class__([trace, trace, trace, 0, 0, 0])
 
     def diagonalize(self):
-        """
-        Return the principal values and principal directions of the tensor for
-        all points.
+        """Compute principal values and directions of the tensor for all points.
 
         Returns
         -------
-
         A tuple (eigenvalues, eigenvectors):
 
         eigenvalues : (3, n_points) numpy.ndarray
@@ -181,8 +165,7 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         return eigenvalues.T, eigenvectors.transpose(2, 1, 0)
 
     def eigvalues(self):
-        """
-        Return the principal values of the tensor for all points.
+        """Return the principal values of the tensor for all points.
 
         Returns
         -------
@@ -194,6 +177,12 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         return np.linalg.eigvalsh(full_tensor).T
 
     def fill_zeros(self):
+        """Replace null scalar components with arrays of zeros.
+
+        This method synchronizes the memory layout by ensuring all components
+        have the same length (n_points), which is necessary for some
+        vectorized operations or exports.
+        """
         n = self.n_points
         for i in range(6):
             if np.isscalar(self[i]) and self[i] == 0:
@@ -203,6 +192,30 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
         return self.__class__(
             [assemb.convert_data(S, convert_from, convert_to) for S in self]
         )
+
+    def copy(self, asarray=False):
+        """Create a copy of the tensor list.
+
+        Parameters
+        ----------
+        asarray : bool, default False
+            If True, the copy is backed by a single unified NumPy array.
+            If False, preserves the hybrid scalar/array storage for memory efficiency.
+
+        Returns
+        -------
+        _SymetricTensorList
+            A new instance of the same class.
+        """
+        if self.array is None:
+            if asarray:
+                return self.__class__(self.asarray(copy=True))
+            else:
+                return self.__class__(
+                    [comp if np.isscalar(comp) else comp.copy() for comp in self]
+                )
+        else:
+            return self.__class__(self.array.copy())
 
     @property
     def n_points(self):
@@ -218,15 +231,47 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
 
 
 class StressTensorList(_SymetricTensorList):
+    """A list of symmetric stress tensors.
+
+    Supports operations like Von Mises stress, hydrostatic pressure,
+    and PK2/Cauchy conversions.
+    """
+
     def cauchy_to_pk2(self, F):
+        """Convert Cauchy stress tensors to Second Piola-Kirchhoff (PK2) stress tensors.
+
+        Requires the deformation gradient tensor F.
+
+        Parameters
+        ----------
+        F : array_like
+            Deformation gradient tensor of shape (3, 3, n_points).
+
+        Returns
+        -------
+        StressTensorList
+            The converted stress tensors in PK2 formulation.
+        """
         if USE_SIMCOON:
             return StressTensorList(
                 sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy=False)
             )
         else:
-            raise NameError("Install simcoon to allow conversion from cauchy to pk2")
+            raise ImportError("Install simcoon to allow conversion from cauchy to pk2")
 
     def pk2_to_cauchy(self, F):
+        """Convert Second Piola-Kirchhoff (PK2) stress tensors to Cauchy stress tensors.
+
+        Parameters
+        ----------
+        F : array_like
+            Deformation gradient tensor of shape (3, 3, n_points).
+
+        Returns
+        -------
+        StressTensorList
+            The converted stress tensors in Cauchy formulation.
+        """
         if USE_SIMCOON:
             return StressTensorList(
                 sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy=False)
@@ -234,7 +279,6 @@ class StressTensorList(_SymetricTensorList):
         else:
             pk2 = self.to_tensor().transpose(2, 0, 1)
 
-            #            GradX = [[Assembly.get_all()['Assembling'].get_node_results(GradOp[i][j], Mesh.get_all()[meshname].nodes.T.reshape(-1)+Problem.get_disp()) for j in range(3)] for i in range(3)]
             F = np.transpose(np.array(F)[:, :, :], (2, 0, 1))
             J = np.linalg.det(F)
             FT = F.transpose(0, 2, 1)
@@ -252,24 +296,57 @@ class StressTensorList(_SymetricTensorList):
             )
 
     def cauchy_to_pk1(self, F):
+        """Convert Cauchy stress tensors to First Piola-Kirchhoff (PK1) stress tensors.
+
+        Requires the deformation gradient tensor F.
+
+        Parameters
+        ----------
+        F : array_like
+            Deformation gradient tensor of shape (3, 3, n_points).
+
+        Returns
+        -------
+        StressTensorList
+            The converted stress tensors in PK2 formulation.
+        """
         if USE_SIMCOON:
             return StressTensorList(
                 sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy=False)
             )
         else:
-            raise NameError("Install simcoon to allow conversion from cauchy to pk1")
+            raise ImportError("Install simcoon to allow conversion from cauchy to pk1")
 
     def pk1_to_cauchy(self, F):
+        """Convert First Piola-Kirchhoff (PK1) stress tensors to Cauchy stress tensors.
+
+        Parameters
+        ----------
+        F : array_like
+            Deformation gradient tensor of shape (3, 3, n_points).
+
+        Returns
+        -------
+        StressTensorList
+            The converted stress tensors in Cauchy formulation.
+        """
         if USE_SIMCOON:
             return StressTensorList(
                 sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
             )
         else:
-            raise NameError("Install simcoon to allow conversion from pk1 to cauchy")
+            raise ImportError("Install simcoon to allow conversion from pk1 to cauchy")
 
     def von_mises(self):
-        """
-        Return the vonMises stress
+        """Calculate the Von Mises equivalent stress.
+
+        The calculation is vectorized for all points.
+
+        Returns
+        -------
+        float or numpy.ndarray
+            The Von Mises stress value(s). Returns a scalar if n_points=1,
+            otherwise an array of shape (n_points,).
         """
         # sim.Mises_stress(self.asarray()) # not vectorized for now
         return np.sqrt(
@@ -283,22 +360,43 @@ class StressTensorList(_SymetricTensorList):
         )
 
     def pressure(self):
+        """Calculate the hydrostatic pressure.
+
+        Defined as -1/3 * trace(sigma).
+
+        Returns
+        -------
+        float or numpy.ndarray
+            The pressure value(s) for all points.
+        """
         return (-1 / 3) * self.trace()
 
     def to_strain(self):
+        """Convert current object to StrainTensorList."""
         return StrainTensorList(self[:3] + [self[i] * 2 for i in [3, 4, 5]])
 
     def to_stress(self):
+        """Convert current object to StressTensorList."""
         return self
 
 
 class StrainTensorList(_SymetricTensorList):
-    def vtk_format(self):
-        """
-        Return a array adapted to export symetric tensor data in a vtk file
-        See the utilities.ExportData class for more details
-        """
+    """A list of symmetric strain tensors.
 
+    Handles specific Voigt scaling for VTK export and tensor reconstruction.
+    """
+
+    def vtk_format(self):
+        """Format the symmetric tensor data for VTK export.
+
+        Rearranges components to match the VTK symmetric tensor convention
+        (XX, YY, ZZ, XY, YZ, XZ).
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape (6, n_points) with float type.
+        """
         try:
             return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
         except:
@@ -306,6 +404,13 @@ class StrainTensorList(_SymetricTensorList):
             return np.vstack(self[:3] + [self[i] / 2 for i in [3, 5, 4]]).astype(float)
 
     def to_tensor(self):
+        """Reconstruct the 3x3 symmetric tensor(s).
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (3, 3, n_points).
+        """
         return np.array(
             [
                 [self[0], self[3] / 2, self[4] / 2],
@@ -315,7 +420,9 @@ class StrainTensorList(_SymetricTensorList):
         )
 
     def to_stress(self):
+        """Convert current object to StressTensorList."""
         return StressTensorList(self[:3] + [self[i] / 2 for i in [3, 4, 5]])
 
     def to_strain(self):
+        """Convert current object to StrainTensorList."""
         return self

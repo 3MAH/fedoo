@@ -10,8 +10,6 @@ os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"
 import fedoo as fd
 import numpy as np
 from time import time
-import pylab as plt
-from numpy import linalg
 
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
@@ -65,9 +63,7 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="constitutivelaw")
 
-wf = fd.weakform.StressEquilibrium("constitutivelaw", nlgeom=NLGEOM)
-wf.corate = "green_naghdi"
-wf.fbar = True
+wf = fd.weakform.StressEquilibriumFbar("constitutivelaw", nlgeom=NLGEOM)
 
 # or alternatively with reduced integration + hourglass stiffness :
 # wf = fd.weakform.StressEquilibriumRI("constitutivelaw", nlgeom = True)
@@ -92,11 +88,7 @@ assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 pb = fd.problem.NonLinear("Assembling")
 # pb.set_solver('cg', precond = True)
 # pb.set_solver('petsc', solver_type='preonly', pc_type='lu', pc_factor_mat_solver_type='mumps')
-pb.set_nr_criterion("Displacement", err0=None, tol=5e-3, max_subiter=5)
-
-# Problem.set_nr_criterion("Displacement")
-# pb.set_nr_criterion("Work")
-# Problem.set_nr_criterion("Force")
+pb.set_nr_criterion("Force", tol=5e-3, max_subiter=16)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
@@ -107,7 +99,7 @@ if not (os.path.isdir("results")):
 res = pb.add_output(
     "results/bendingPlastic3D",
     "Assembling",
-    ["Disp", "Cauchy", "Strain", "Cauchy_vm"],
+    ["Disp", "Stress", "Strain"],
     file_format="fdz",
 )
 
@@ -118,7 +110,7 @@ pb.bc.add("Dirichlet", nodes_bottomLeft, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_bottomRight, "DispY", 0)
 bc = pb.bc.add("Dirichlet", nodes_topCenter, "DispY", uimp)
 
-pb.nlsolve(dt=0.025, tmax=1, update_dt=False, print_info=1, interval_output=0.05)
+pb.nlsolve(dt=0.025, tmax=1, update_dt=True, print_info=1, interval_output=0.05)
 
 E = assemb.sv["Strain"]
 # E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T

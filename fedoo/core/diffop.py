@@ -94,6 +94,9 @@ class _Derivative:  # derivative operator used in DiffOp
 
 
 class DiffOp:
+    # Set priority higher than NumPy's (usually 0.0 or 1.0)
+    __array_priority__ = 100.0
+
     def __init__(self, u, x=0, ordre=0, decentrement=0, vir=0, u_name=None):
         self.mesh = None
 
@@ -188,7 +191,7 @@ class DiffOp:
     def __rmul__(self, A):
         return self * A
 
-    def __div__(self, A):
+    def __truediv__(self, A):
         return self * (1 / A)
 
     def __getitem__(self, item):
@@ -285,6 +288,21 @@ class DiffOp:
 
     #     return same_as_next, sorted_indices
     #     # return [intForSort[i] for i in sorted_indices], sorted_indices
+
+    def split_mat_vec(self):
+        vec_item = [ii for ii in range(len(self.op)) if self.op[ii] == 1]
+        mat_item = [ii for ii in range(len(self.op)) if self.op[ii] != 1]
+        vec = DiffOp(
+            [self.op[ii] for ii in vec_item],
+            [self.op_vir[ii] for ii in vec_item],
+            [self.coef[ii] for ii in vec_item],
+        )
+        mat = DiffOp(
+            [self.op[ii] for ii in mat_item],
+            [self.op_vir[ii] for ii in mat_item],
+            [self.coef[ii] for ii in mat_item],
+        )
+        return mat, vec
 
     def nvar(self):
         return max([op.u for op in self.op]) + 1

@@ -142,7 +142,7 @@ def change_iter(value):
         show_edges=True,
     )
     pl.hide_axes()
-    pl.write_frame()
+    # pl.write_frame()
 
 
 slider = pl.add_text_slider_widget(

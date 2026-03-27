@@ -1,6 +1,5 @@
 import fedoo as fd
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 # --------------- Pre-Treatment --------------------------------------------------------
 

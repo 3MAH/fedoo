@@ -41,6 +41,9 @@ plot = [
     'matplotlib',
     'pyvista[io]',
 ]
+simcoon = [
+    'simcoon>=1.11.0'
+]
 test = [
     'pytest',
     'pytest-cov'

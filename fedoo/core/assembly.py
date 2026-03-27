@@ -166,6 +166,12 @@ class Assembly(AssemblyBase):
 
         nvar = self.space.nvar
         wf = self.weakform.get_weak_equation(self, self._pb)
+        if wf == 0:
+            if compute != "vector":
+                self.global_matrix = 0
+            if compute != "matrix":
+                self.global_vector = 0
+            return
 
         mat_gaussian_quadrature = self._get_gaussian_quadrature_mat()
         mat_change_of_basis = self.get_change_of_basis_mat()
@@ -705,6 +711,7 @@ class Assembly(AssemblyBase):
 
         self.current.assemble_global_mat("all")
         # no need to compute vector if the previous iteration has converged and (dt hasn't changed or dt isn't used in the weakform)
+        # in principle, need to compute 'matrix' only if tangent stiffness has been updated to elastic.
         # in those cases, self.assemble_global_mat(compute = 'matrix') should be more efficient
         # save statev start values
 
@@ -1065,10 +1072,10 @@ class Assembly(AssemblyBase):
         # TODO : can be accelerated by avoiding RowBlocMatrix (need to be checked) -> For each elementary
         # 1 - reshape U to separate each var U = U.reshape(var, -1)
         # 2 - in the loop : res += coef_PG * (Assembly._get_elementary_operator(mesh, operator.op[ii], elm_type, n_elm_gp) , nvar, var, coef) * U[var]
-
+        # WARNING : work if the length of U is not consistent with n_gp
+        # because we force the good shape with RowBlockMatrix
         res = 0
         nvar = self.space.nvar
-
         mesh = self.mesh
         elm_type = self.elm_type
         if n_elm_gp is None:
@@ -1115,8 +1122,6 @@ class Assembly(AssemblyBase):
         # not very optimized (sum of RowBlocMatrix use scipy add operator that is not efficient (change sparse structure))
         nvar = self.space.nvar
 
-        mesh = self.mesh
-        elm_type = self.elm_type
         if n_elm_gp is None:
             n_elm_gp = self.n_elm_gp
 
@@ -1171,6 +1176,73 @@ class Assembly(AssemblyBase):
                 matrix += coef_matrix @ M
 
         return matrix
+
+    def operator_apply(self, wf, nodal_vector):
+        """Apply a discrete nodal vector to the trial space of a bilinear operator.
+
+        This function performs a contraction of a bilinear form a(v, u*) with
+        a known field 'v'. It replaces the trial function (v) with the
+        interpolated field defined by the nodal_vector, while keeping the
+        virtual/test field (u*) symbolic.
+
+        Parameters
+        ----------
+        Args:
+        wf : DiffOp
+            A bilinear opearator associated with a weakform that may be used
+            to build a global matrix (e.g., stiffness or mass matrix).
+
+        nodal_vector : array_like
+            The discrete values (Degrees of Freedom) used to instantiate
+            the trial field.
+
+        Return:
+            DiffOp : An operator containing only the virtual (test) operator,
+                ready for vector assembly.
+        """
+        n_nodes = self.mesh.n_nodes
+        new_wf = type(wf)([], [], [])
+        associatedVariables = (
+            self._get_associated_variables()
+        )  # for element requiring many variable such as beam with disp and rot dof
+        for ii in range(len(wf.op)):
+            if np.isscalar(wf.op[ii]) and wf.op[ii] == 1:
+                continue
+
+            if ii == 0 or wf.op[ii] != wf.op[ii - 1]:
+                # operator is not the same as previous. recompute
+                var = [wf.op[ii].u]
+                coef = [1]
+                if var[0] in associatedVariables:
+                    # add rot dof for instance
+                    var.extend(associatedVariables[var[0]][0])
+                    coef.extend(associatedVariables[var[0]][1])
+
+                gp_values = (
+                    self._get_elementary_operator(wf.op[ii])[0]
+                    @ nodal_vector[var[0] * n_nodes : (var[0] + 1) * n_nodes]
+                )
+                if len(var) > 1:
+                    for jj, v in enumerate(var[1:]):
+                        gp_values += (
+                            self._get_elementary_operator(wf.op[ii])[jj + 1]
+                            @ nodal_vector[v * n_nodes : (v + 1) * n_nodes]
+                        )
+                # or:
+                # gp_values = self.get_gp_results(type(wf)([wf.op[ii]], [1], [1]), nodal_vector)
+
+            # add gp_values to wf.coef[ii]
+            new_wf.op.append(1)
+            new_wf.op_vir.append(wf.op_vir[ii])
+            if np.isscalar(wf.coef[ii]) or len(wf.coef[ii]) == 1:
+                # if n_elm_gp == 0, coef_PG = nodal values (finite diffirences)
+                new_wf.coef.append(wf.coef[ii] * gp_values)
+            else:  # coef is an array. convert to gp if needed.
+                new_wf.coef.append(
+                    self.mesh.data_to_gausspoint(wf.coef[ii][:]) * gp_values
+                )
+
+        return new_wf
 
     def get_node_results(self, operator, U):
         """
@@ -1549,6 +1621,19 @@ class Assembly(AssemblyBase):
     def state_variables(self):
         """Alias for the sv dict containing the state variables."""
         return self.sv
+
+    def _save_sv(self):
+        """shallow copy of state variables in _sv_saved attribute."""
+        self._sv_saved = dict(self.sv)
+
+    def _load_sv(self):
+        """reload a saved copy of state variables."""
+        if not hasattr(self, "_sv_saved"):
+            raise RuntimeError("no saved state variables")
+        # self.sv = dict(self._sv_saved)
+        self.sv.clear()
+        self.sv.update(self._sv_saved)
+        del self._sv_saved
 
     @staticmethod
     def sum(*listAssembly, name="", **kargs):
