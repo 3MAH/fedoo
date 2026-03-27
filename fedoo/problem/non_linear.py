@@ -32,6 +32,8 @@ class _NonLinearBase:
             "max_subiter": 10,
             "dt_increase_niter": None,
             "norm_type": 2,
+            "force_elastic_stiffness": False,
+            "elastic_initial_guess": False,
             "adaptive_stiffness": False,
             "assume_cvg_at_max_subiter": False,
             "eigenvalue_shift": False,
@@ -54,6 +56,7 @@ class _NonLinearBase:
             0  # SDI: minimum NR sub-iterations before accepting convergence
         )
         self._t_fact_inc = None  # frozen t_fact for the current increment
+        self._force_elastic_next_iter = False  # flag to force the use of elastic matrix
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
@@ -537,9 +540,16 @@ class _NonLinearBase:
                         / self._err0
                     )
 
-    def set_nr_criterion(self, criterion="Displacement", **kargs):
+    def force_elastic_matrix_next_iter(self):
         """
-        Define the convergence criterion of the newton raphson algorith.
+        Flags the solver to use the elastic stiffness matrix at the begining of the
+        next new iteration.
+        """
+        self._force_elastic_next_iter = True
+
+    def set_nr_criterion(self, criterion="Force", **kargs):
+        """Define the convergence criterion of the newton raphson algorithm.
+
         For a problem pb, the newton raphson parameters can also be directly set in the
         pb.nr_parameters dict.
 
@@ -563,12 +573,20 @@ class _NonLinearBase:
               If None, defaults to max_subiter//3.
             * 'norm_type': int or numpy.inf, default = 2.
               Define the norm used to test the criterion.
+            * 'force_elastic_stiffness': bool, default = False.
+              If True, always forces the use of the elastic stiffness matrix (KE)
+              for all NR iterations (Quasi-Newton / Initial Stiffness method).
+            * 'elastic_initial_guess': bool, default = False.
+              If True, forces the use of the elastic matrix for the initial
+              guess (first iteration) of a time increment.
+              Ignored if force_elastic_stiffness is True.
             * 'adaptive_stiffness': bool, default = False.
               Enable adaptive stiffness algorithm with xi-blending between safe
               (often elastic) and tangent stiffness matrices to enhance convergence
               robustness. Only works if the weak form provides an elastic stiffness
               matrix at the beginning of the increment, when set_start is triggered
               (e.g. not for contact problems).
+              Ignored if force_elastic_stiffness is True.
             * 'assume_cvg_at_max_subiter': bool, default = False.
               WARNING: DANGEROUS PARAMETER. If True, assumes convergence when
               max_subiter iterations are reached, regardless of tolerance criterion.
@@ -599,26 +617,26 @@ class _NonLinearBase:
             )
         self.nr_parameters["criterion"] = criterion
 
+        allowed_keys = [
+            "err0",
+            "tol",
+            "max_subiter",
+            "dt_increase_niter",
+            "norm_type",
+            "adaptive_stiffness",
+            "assume_cvg_at_max_subiter",
+            "eigenvalue_shift",
+            "eigenvalue_shift_factor",
+            "eigenvalue_assume_sym",
+            "check_early_divergence",
+            "force_elastic_stiffness",
+            "elastic_initial_guess",
+        ]
+
         for key in kargs:
-            if key not in [
-                "err0",
-                "tol",
-                "max_subiter",
-                "dt_increase_niter",
-                "norm_type",
-                "adaptive_stiffness",
-                "assume_cvg_at_max_subiter",
-                "eigenvalue_shift",
-                "eigenvalue_shift_factor",
-                "eigenvalue_assume_sym",
-                "check_early_divergence",
-            ]:
+            if key not in allowed_keys:
                 raise NameError(
-                    "Newton Raphson parameters should be in "
-                    "['err0', 'tol', 'max_subiter', 'dt_increase_niter', "
-                    "'adaptive_stiffness', 'norm_type', 'assume_cvg_at_max_subiter', "
-                    "'eigenvalue_shift', 'eigenvalue_shift_factor', 'eigenvalue_assume_sym', "
-                    "'check_early_divergence']"
+                    f"Newton Raphson parameters should be in {allowed_keys}"
                 )
 
             self.nr_parameters[key] = kargs[key]
@@ -695,7 +713,18 @@ class _NonLinearBase:
             "assume_cvg_at_max_subiter", False
         )
         check_early_divergence = self.nr_parameters.get("check_early_divergence", True)
-        adaptive_stiffness = self.nr_parameters.get("adaptive_stiffness", False)
+        force_elastic_stiffness = self.nr_parameters.get(
+            "force_elastic_stiffness", False
+        )
+        if force_elastic_stiffness:
+            adaptive_stiffness = False
+            elastic_initial_guess = True
+        else:
+            adaptive_stiffness = self.nr_parameters.get("adaptive_stiffness", False)
+            elastic_initial_guess = self.nr_parameters.get(
+                "elastic_initial_guess", False
+            )
+
         eigenvalue_shift = self.nr_parameters.get("eigenvalue_shift", False)
         if eigenvalue_shift:
             eigenvalue_assume_sym = self.nr_parameters.get(
@@ -706,13 +735,22 @@ class _NonLinearBase:
             )
 
         self._t_fact_inc = self.t_fact
+        if elastic_initial_guess or self._force_elastic_next_iter:
+            # udpate assembly to the initial siffness given by the constitutive law
+            self.assembly.current.assemble_global_mat("matrix")
+            if self._force_elastic_next_iter:
+                self._force_elastic_next_iter = (
+                    False  # next iteration will be recomputed.
+                )
+
         self.elastic_prediction()
 
-        if adaptive_stiffness:
+        if adaptive_stiffness or force_elastic_stiffness:
             # we take the assembled matrix computed after set_start and before
             # update. This should be the elastic or "safe" stiffness.
             # If not, adaptive_stiffness algorithm will not work as expected.
-            self.assembly.current.assemble_global_mat("matrix")
+            if not elastic_initial_guess:
+                self.assembly.current.assemble_global_mat("matrix")
             KE = self.assembly.get_global_matrix()
             xi = 0.0
             xi_increased_this_step = False
@@ -808,6 +846,8 @@ class _NonLinearBase:
             if adaptive_stiffness:
                 KT = self.__assembly.current.get_global_matrix()
                 A = xi * KE + (1 - xi) * KT
+            elif force_elastic_stiffness:
+                A = KE
             else:
                 A = self.__assembly.current.get_global_matrix()
 

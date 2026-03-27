@@ -45,14 +45,15 @@ Newton-Raphson Algorithm
 ------------------------
 
 The Newton-Raphson algorithm is an iterative process used to find the equilibrium state
-of a non-linear system. Starting from an initial guess from :meth:`nonlinear.elastic_prediction`,
+of a non-linear system. Starting from an initial guess from
+:meth:`NonLinear.elastic_prediction`,
 the solver iteratively updates the displacement increment until the internal and
 external forces are balanced within a specified tolerance.
 
 Available Convergence Criteria
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can define how the solver determines convergence via :meth:`nonlinear.set_nr_criterion`.
+You can define how the solver determines convergence via :meth:`NonLinear.set_nr_criterion`.
 Three criteria are available:
 
 * **Force** (default): Measures the residual (out-of-balance) forces relative to the
@@ -65,7 +66,7 @@ Three criteria are available:
 Key Newton-Raphson Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following parameters can be adjusted via :meth:`nonlinear.set_nr_criterion` or the 
+The following parameters can be adjusted via :meth:`NonLinear.set_nr_criterion` or the 
 ``nr_parameters`` dictionary:
 
 * **tol**: The convergence tolerance (default: ``5e-3``). A smaller value increases 
@@ -95,7 +96,7 @@ The following parameters can be adjusted via :meth:`nonlinear.set_nr_criterion` 
 The ``nlsolve`` Method
 ----------------------
 
-The :meth:`nonlinear.nlsolve` method manages the time-steering logic, calling the NR 
+The :meth:`NonLinear.nlsolve` method manages the time-steering logic, calling the NR 
 loop for each increment and handling time-step adaptations.
 
 Time-Steering Parameters
@@ -215,27 +216,43 @@ stiffness matrix is singular or non-positive definite.
 Line search prevents the solver from taking steps that are too large, which can 
 lead to non-physical states or divergence.
 
-* **Usage**: Enable via the :meth:`nonlinear.add_line_search` method.
+* **Usage**: Enable via the :meth:`NonLinear.add_line_search` method.
 * **Mechanism**: Scales the displacement increment :math:`d\mathbf{U}` by a 
   factor :math:`\eta \in (0, 1]` to minimize the residual norm along the 
   search direction.
 
-4. Adaptive Stiffness (Blending)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4. Stiffness Strategies (Blending & Elastic Overrides)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Useful for elastoplasticity or damage modeling where a sudden change in 
 direction requires a "safe" search direction.
 
-* **Mechanism**: Blends the tangent matrix :math:`\mathbf{K_T}` with the 
-  initial elastic matrix :math:`\mathbf{K_E}` using a scalar :math:`\xi`:
-  
-  .. math:: \mathbf{K} = (1-\xi)\mathbf{K_T} + \xi\mathbf{K_E}
+* **Adaptive Stiffness (Blending)**:
+    * **Mechanism**: Blends the tangent matrix :math:`\mathbf{K_T}` with the 
+      initial elastic matrix :math:`\mathbf{K_E}` using a scalar :math:`\xi`:
+      
+      .. math:: \mathbf{K} = (1-\xi)\mathbf{K_T} + \xi\mathbf{K_E}
+    
+    * **Usage**: Enable ``adaptive_stiffness=True`` in the Newton-Raphson 
+      parameters via :meth:`NonLinear.set_nr_criterion`.
+    * **Benefit**: If the tangent prediction diverges, the solver automatically 
+      increases :math:`\xi` (shifting toward the elastic matrix) to restore 
+      stability. It then attempts to decrease :math:`\xi` back to 0 as 
+      convergence improves.
 
-* **Usage**: Enable ``adaptive_stiffness=True`` in the Newton-Raphson 
-  parameters via :meth:`nonlinear.set_nr_criterion`.
-* **Benefit**: If the tangent prediction diverges, the solver automatically 
-  increases :math:`\xi` (shifting toward the elastic matrix) to restore 
-  stability. It then attempts to decrease :math:`\xi` back to 0 as 
-  convergence improves.
+* **Forced Elastic Stiffness**:
+    * **force_elastic_stiffness**: If ``True``, the solver performs a
+      Modified Newton-Raphson (Initial Stiffness) solution, using
+      :math:`\mathbf{K_E}` for all iterations. This is slower to converge (linear)
+      but highly robust against tangent singularities.
+    * **elastic_initial_guess**: If ``True``, forces the use of :math:`\mathbf{K_E}`
+      only for the very first iteration of every time increment to provide a stable
+      initial direction.
+
+* **One-Time Manual Override**:
+    * :meth:`NonLinear.force_elastic_matrix_next_iter`: Use this method to flag the
+      solver to recompute and use the elastic stiffness matrix for the **very next**
+      Newton-Raphson initial guess only. This is ideal for manually
+      "restarting" a stalled increment.
 
 5. Eigenvalue Shifting
 ~~~~~~~~~~~~~~~~~~~~~~
