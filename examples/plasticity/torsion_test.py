@@ -56,35 +56,25 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
+wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
 
-# fd.Assembly.create("ConstitutiveLaw", mesh, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-assemb = fd.Assembly.create(
-    "wf", mesh, name="Assembling"
-)  # uses MeshChange=True when the mesh change during the time
+assemb = fd.Assembly.create("wf", mesh, name="Assembling")
 
 # node set for boundary conditions
 left = mesh.find_nodes("X", 0)
 right = mesh.find_nodes("X", 1)
 
 pb = fd.problem.NonLinear("Assembling")
-# Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0=1, tol=1e-3, max_subiter=5)
-
-# Problem.set_nr_criterion("Displacement")
-# Problem.set_nr_criterion("Work")
-# Problem.set_nr_criterion("Force")
+pb.set_nr_criterion(max_subiter=20)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
 results = pb.add_output(
     res_dir + filename,
     "Assembling",
-    ["Disp", "Stress", "Strain", "Statev", "Wm", "Fext", "RigidDisp", "RigidRot"],
+    ["Disp", "Stress", "Strain", "P", "EP", "Wm", "Fext", "RigidDisp", "RigidRot"],
 )
 
 pb.bc.add(fd.constraint.RigidTie(right))
@@ -107,13 +97,6 @@ pb.bc.add("Dirichlet", "RigidRotX", 2 * np.pi / 2)  # Rigid rotation of the righ
 
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.025)
 
-E = np.array(
-    fd.Assembly.get_all()["Assembling"].get_strain(
-        pb.get_dof_solution(), "GaussPoint", False
-    )
-).T
-
-
 # =============================================================
 # Example of plots with pyvista - uncomment the desired plot
 # =============================================================
@@ -131,7 +114,7 @@ results.write_movie(res_dir + filename, "Stress_vm", framerate=12, quality=5)
 # ------------------------------------
 # Save pdf plot
 # ------------------------------------
-# pl = results.plot(scalars = 'Cauchy_vm', show = False)
+# pl = results.plot('Stress', 'vm', show = False)
 # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
 
 # ------------------------------------

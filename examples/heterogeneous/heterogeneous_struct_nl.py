@@ -73,8 +73,6 @@ pb.bc.add("Dirichlet", left, "Disp", 0)
 # displacement on right (ux=0.1mm)
 pb.bc.add("Dirichlet", right, "Disp", [20, 0])
 
-pb.apply_boundary_conditions()
-
 # Solve problem
 pb.nlsolve(dt=0.1, print_info=1)
 
