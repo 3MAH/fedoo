@@ -111,11 +111,11 @@ class IPCContact(AssemblyBase):
     adaptive_barrier_stiffness : bool, default=True
         If ``True``, :math:`\kappa` is updated adaptively at each converged
         time increment using ``ipctk.update_barrier_stiffness``.
-    use_ccd : bool, default=False
-        Enable CCD (Continuous Collision Detection) line search.  When
-        enabled, the Newton–Raphson step size is limited so that no
-        intersection can occur between iterations.  Mutually exclusive
-        with ``use_ogc``.
+    use_ccd : bool, optional
+        Enable Continuous Collision Detection (CCD) line search. When active,
+        the Newton–Raphson step size is limited to prevent interpenetration
+        between iterations. Default is True unless ``use_ogc`` is enabled.
+        Note: ``use_ccd`` and ``use_ogc`` are mutually exclusive.
     line_search_energy : bool or None, default=None
         Controls energy-based backtracking after CCD line search.  The
         step is halved until total energy (exact barrier + quadratic
@@ -168,12 +168,14 @@ class IPCContact(AssemblyBase):
         eps_v=1e-3,
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
-        use_ccd=False,
+        use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
         space=None,
         name="IPC Contact",
     ):
+        if use_ccd is None:
+            use_ccd = not use_ogc
         if use_ccd and use_ogc:
             raise ValueError(
                 "use_ccd and use_ogc are mutually exclusive. "
@@ -706,8 +708,7 @@ class IPCContact(AssemblyBase):
         # external work from the BC increment, so the quadratic model
         # would incorrectly predict energy increase.  CCD alone
         # suffices for elastic prediction safety.
-        is_elastic_prediction = np.isscalar(pb._dU) and pb._dU == 0
-        if is_elastic_prediction:
+        if not (pb._boundary_is_0):
             return alpha
 
         # Skip if no contacts exist and none expected at trial position
@@ -872,7 +873,7 @@ class IPCContact(AssemblyBase):
         if self._extract_surface and self._surface_mesh is None:
             from fedoo.mesh import extract_surface as extract_surface_mesh
 
-            self._surface_mesh = extract_surface_mesh(self.mesh)
+            self._surface_mesh = extract_surface_mesh(self.mesh, reduce_order=True)
 
         if self._surface_mesh is None:
             raise ValueError(
@@ -1015,7 +1016,7 @@ class IPCContact(AssemblyBase):
 
         # Register line-search / step-filter callback
         if self._use_ccd:
-            pb._step_size_callback = self._ccd_line_search
+            pb.add_line_search(self._ccd_line_search, name="ccd")
         elif self._use_ogc:
             self._ogc_trust_region = ipctk.ogc.TrustRegion(self._actual_dhat)
             pb._step_filter_callback = self._ogc_step_filter_callback
@@ -1338,7 +1339,7 @@ class IPCSelfContact(IPCContact):
         eps_v=1e-3,
         broad_phase="hash_grid",
         adaptive_barrier_stiffness=True,
-        use_ccd=False,
+        use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
         space=None,

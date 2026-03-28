@@ -168,6 +168,18 @@ class AssemblySum(AssemblyBase):
             assembly.reset()
         self.delete_global_mat()
 
+    def _save_sv(self):
+        """shallow copy of state variables in _sv_saved attribute."""
+        for assembly in self._list_assembly:
+            if hasattr(assembly, "_save_sv"):
+                assembly._save_sv()
+
+    def _load_sv(self):
+        """reload a saved copy of state variables."""
+        for assembly in self._list_assembly:
+            if hasattr(assembly, "_load_sv"):
+                assembly._load_sv()
+
     @property
     def list_assembly(self):
         return self._list_assembly

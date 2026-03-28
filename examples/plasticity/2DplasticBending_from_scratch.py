@@ -191,8 +191,7 @@ pb.save_results(ii)
 
 # change boundary conditions
 pb.bc.remove("disp")
-pb.bc.add("Neumann", top_center, "DispY", 0)  # no force applied = relaxation
-
+# pb.bc.add("Neumann", top_center, "DispY", 0)  # no force applied = relaxation
 
 pb.assembly.set_start(
     pb
@@ -204,7 +203,6 @@ pb.apply_boundary_conditions(t_fact=1, t_fact_old=0)
 pb.set_A(pb.assembly.get_global_matrix())
 pb.set_D(pb.assembly.get_global_vector())
 
-# pb.updateD(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
 pb.solve()
 
 # update displacement
@@ -219,5 +217,5 @@ pb.save_results(ii + 1)
 
 print(time() - start)
 
-res.plot("Stress", "vm")
-res.write_movie("test", "Stress", "vm")
+# res.plot("Stress", "vm")
+# res.write_movie("test", "Stress", "vm")

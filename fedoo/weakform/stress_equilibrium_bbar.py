@@ -308,6 +308,11 @@ class StressEquilibriumFbar(StressEquilibrium):
                 self.space.new_vector("_Disp", ("_DispX", "_DispY", "_DispZ"))
             else:
                 self.space.new_vector("_Disp", ("_DispX", "_DispY"))
+        else:
+            raise ValueError(
+                "Incompatible element: StressEquilibirumFbar "
+                "should used either 'hex8sri' or 'quad4sri' elements."
+            )
 
 
 class HourglassStiffness(WeakFormBase):

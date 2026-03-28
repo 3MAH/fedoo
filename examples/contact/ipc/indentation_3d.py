@@ -172,7 +172,7 @@ nodes_sphere_top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_sphere_top, "Disp", [0, 0, imposed_disp])
-pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=8)
+pb.set_nr_criterion("Force", tol=5e-3, max_subiter=8)
 
 # =========================================================================
 # Output and tracking callback
@@ -202,7 +202,7 @@ pb.nlsolve(
     dt=0.05,
     tmax=1,
     update_dt=True,
-    print_info=1,
+    print_info=2,
     callback=track,
 )
 

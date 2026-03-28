@@ -509,7 +509,10 @@ class BoundaryCondition(BCBase):
         """
         factor = self._get_factor(t_fact, t_fact_old)
         if factor == 0:
-            return 0
+            if self.bc_type == "Neumann":
+                return self.start_value
+            else:
+                return 0
         elif self.start_value is None:
             return factor * self.value
         else:  # in case there is an initial value
@@ -542,7 +545,10 @@ class BoundaryCondition(BCBase):
         """
         factor = self._get_factor(t_fact, t_fact_old)
         if factor == 0:
-            return 0
+            if self.start_value is None:
+                return 0
+            else:
+                return self.start_value
         elif self.start_value is None:
             return factor * self.value
         else:  # in case there is an initial value
