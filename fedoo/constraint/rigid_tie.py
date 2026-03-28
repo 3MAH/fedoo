@@ -3,8 +3,10 @@
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 
-
-from scipy.spatial.transform import Rotation
+try:
+    from simcoon import Rotation
+except ImportError:
+    from scipy.spatial.transform import Rotation
 
 
 class RigidTie(BCBase):
@@ -22,7 +24,7 @@ class RigidTie(BCBase):
     * "RigidDisp" = ["RigidDispX", "RigidDispY", "RigidDispZ"] for rigid displacement
     * "RigidRot" = ["RigidRotX", "RigidRotY", "RigidRotZ"] for rigid rotation
 
-    If several RigidTime constraints are used with the same problem, all the previous
+    If several RigidTie constraints are used with the same problem, all the previous
     variables will contains several dof, the indice of the dof being associated to
     order in which the constraint has been added.
     For instance, pb.global_dof['RigidDispX'][0] will be associated to the first
@@ -33,11 +35,17 @@ class RigidTie(BCBase):
     ----------
     list_nodes: list (int) or 1d np.array
         List of nodes that will be eliminated considering a rigid body tie.
-    center: int of np.array[float] with shape = (3), optional
+    center: int or np.array[float] with shape = (3), optional
         If center is an int, the rotation center will be initialized at the coordinates
         of the corresponding node in the mesh. If center is an array (or list, ...)
         it contains the initial coordinates of the rotation center. By default, the
-        center is set at the midle of the rigid sets.
+        center is set at the middle of the rigid sets.
+    use_quaternion: bool, optional
+        If True (default), use a multiplicative quaternion update to avoid
+        gimbal lock for large rotations. The rotation DOFs (RigidRotX/Y/Z)
+        are interpreted as incremental Euler angles relative to a quaternion
+        base state that is updated at each converged increment.
+        If False, use the original Euler angle formulation.
     name : str, optional
         Name of the created boundary condition. The default is "Rigid Tie".
 
@@ -46,13 +54,26 @@ class RigidTie(BCBase):
     -----------------------
     A convention needs to be defined the orders of rotations.
     The convention used in this class is: First rotation around X, then
-    rotation around Y' (Y' being the new Y afte r rotation around X)
-    and finaly the rotation arould Z" (Z" beging the new Z after the 2 first
+    rotation around Y' (Y' being the new Y after rotation around X)
+    and finally the rotation around Z" (Z" being the new Z after the 2 first
     rotations).
 
     We can note that this convention can also be interpreted using global axis
     not attached to the solid by applying first the rotation around Z, then the
     rotation around Y and finally, the rotation around X.
+
+    When ``use_quaternion=True`` (default), the total rotation is stored as a
+    quaternion (via ``simcoon.Rotation``) using a multiplicative update:
+
+    - The Euler angle DOFs represent a **small incremental** rotation from
+      the current quaternion base state ``Q_base``.
+    - At each converged increment, the increment is composed:
+      ``Q_base = Rotation.from_euler("XYZ", delta) * Q_base``
+    - The total rotation is exact for arbitrarily large angles — no gimbal
+      lock, no small-angle approximation.
+    - The rotation derivatives ``dR/d(angle)`` used in the MPC linearization
+      are evaluated at the small increment (well-conditioned), then composed
+      with ``R_base`` via the chain rule for exact consistency.
 
 
     Notes
@@ -81,9 +102,10 @@ class RigidTie(BCBase):
         rigid_tie = fd.constraint.RigidTie(right_face)
     """
 
-    def __init__(self, list_nodes, center=None, name="Rigid Tie"):
+    def __init__(self, list_nodes, center=None, use_quaternion=True, name="Rigid Tie"):
         self.list_nodes = list_nodes
         self.center = center
+        self.use_quaternion = use_quaternion
         self.bc_type = "RigidTie"
         BCBase.__init__(self, name)
         self._keep_at_end = True
@@ -140,56 +162,60 @@ class RigidTie(BCBase):
             + self.list_nodes[:, None]
         )
 
-    def generate(self, problem, t_fact=1, t_fact_old=None):
-        mesh = problem.mesh
-        var_cd = self.var_cd
-        node_cd = self.node_cd
-        list_nodes = self.list_nodes
+        # Quaternion base state for multiplicative rotation update
+        if self.use_quaternion:
+            self._Q_base = Rotation.identity()
+            self._Q_base_backup = Rotation.identity()
+            self._angles_at_base = np.zeros(3)
 
+    def _get_dof_ref(self, problem):
+        """Read current values of the 6 rigid DOFs from the problem."""
         dof_cd = [
             problem.n_node_dof
-            + problem._global_dof.indice_start(var_cd[i])
-            + node_cd[i]
-            for i in range(len(var_cd))
+            + problem._global_dof.indice_start(self.var_cd[i])
+            + self.node_cd[i]
+            for i in range(6)
         ]
-
-        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
-            dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
+        dof_sol = problem.get_dof_solution()
+        xbc = problem._Xbc
+        if np.isscalar(dof_sol) and dof_sol == 0:
+            if np.isscalar(xbc) and xbc == 0:
+                return np.zeros(6), dof_cd
+            return np.array([xbc[dof] for dof in dof_cd]), dof_cd
         else:
-            dof_ref = np.array(
-                [problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd]
-            )
+            if np.isscalar(xbc) and xbc == 0:
+                return np.array([dof_sol[dof] for dof in dof_cd]), dof_cd
+            return np.array([dof_sol[dof] + xbc[dof] for dof in dof_cd]), dof_cd
 
-        disp_ref = dof_ref[:3]  # reference displacement
-        angles = dof_ref[3:]  # rotation angle
+    def _compute_rotation(self, angles):
+        """Compute total rotation matrix and Euler derivatives.
 
-        sin = np.sin(angles)
-        cos = np.cos(angles)
+        When use_quaternion=True, the rotation is composed multiplicatively:
+            R_total = R_inc(delta) * Q_base
+        where delta = angles - angles_at_base is always small.
 
-        R = Rotation.from_euler("XYZ", angles).as_matrix()
-        # #or
-        # R = np.array([[cos[1]*cos[2], -cos[1]*sin[2], sin[1]],
-        #           [cos[0]*sin[2] + cos[2]*sin[0]*sin[1], cos[0]*cos[2]-sin[0]*sin[1]*sin[2], -cos[1]*sin[0]],
-        #           [sin[0]*sin[2] - cos[0]*cos[2]*sin[1], cos[2]*sin[0]+cos[0]*sin[1]*sin[2], cos[0]*cos[1]]] )
+        Returns R (3x3), dR_drx, dR_dry, dR_drz (3x3 each).
+        """
+        if self.use_quaternion and hasattr(self, "_Q_base"):
+            delta = angles - self._angles_at_base
+            if np.any(np.isnan(delta)) or np.any(np.isinf(delta)):
+                delta = np.zeros(3)
+            R_inc = Rotation.from_euler("XYZ", delta)
+            R_total = R_inc * self._Q_base
+            R = R_total.as_matrix()
+            R_base_mat = self._Q_base.as_matrix()
 
-        # Correct displacement of slave nodes to be consistent with the master nodes
-        new_disp = (
-            (mesh.nodes[list_nodes] - self.center) @ R.T
-            + self.center
-            + disp_ref
-            - mesh.nodes[list_nodes]
-        )
+            # Derivatives of R_inc at delta, composed with R_base
+            sin = np.sin(delta)
+            cos = np.cos(delta)
+        else:
+            R = Rotation.from_euler("XYZ", angles).as_matrix()
+            R_base_mat = np.eye(3)
+            sin = np.sin(angles)
+            cos = np.cos(angles)
 
-        if not (np.array_equal(problem._dU, 0)):
-            if np.array_equal(problem._U, 0):
-                problem._dU[self._disp_indices] = new_disp
-            else:
-                problem._dU[self._disp_indices] = (
-                    new_disp - problem._U[self._disp_indices]
-                )
-
-        # approche incrémentale:
-        dR_drx = np.array(
+        # Euler XYZ derivatives (same formulas, evaluated at delta or angles)
+        dRinc_drx = np.array(
             [
                 [0, 0, 0],
                 [
@@ -204,24 +230,14 @@ class RigidTie(BCBase):
                 ],
             ]
         )
-
-        dR_dry = np.array(
+        dRinc_dry = np.array(
             [
-                [-sin[1] * cos[2], +sin[1] * sin[2], cos[1]],
-                [
-                    cos[2] * sin[0] * cos[1],
-                    -sin[0] * cos[1] * sin[2],
-                    sin[1] * sin[0],
-                ],
-                [
-                    -cos[0] * cos[2] * cos[1],
-                    cos[0] * cos[1] * sin[2],
-                    -cos[0] * sin[1],
-                ],
+                [-sin[1] * cos[2], sin[1] * sin[2], cos[1]],
+                [cos[2] * sin[0] * cos[1], -sin[0] * cos[1] * sin[2], sin[1] * sin[0]],
+                [-cos[0] * cos[2] * cos[1], cos[0] * cos[1] * sin[2], -cos[0] * sin[1]],
             ]
         )
-
-        dR_drz = np.array(
+        dRinc_drz = np.array(
             [
                 [-cos[1] * sin[2], -cos[1] * cos[2], 0],
                 [
@@ -237,22 +253,105 @@ class RigidTie(BCBase):
             ]
         )
 
+        # Chain rule: dR_total/d(angle_i) = dR_inc/d(angle_i) @ R_base
+        dR_drx = dRinc_drx @ R_base_mat
+        dR_dry = dRinc_dry @ R_base_mat
+        dR_drz = dRinc_drz @ R_base_mat
+
+        return R, dR_drx, dR_dry, dR_drz
+
+    def _compute_slave_disp(self, problem, disp_ref, R):
+        """Compute and write slave node displacements from rigid body state."""
+        mesh = problem.mesh
+        list_nodes = self.list_nodes
+        new_disp = (
+            (mesh.nodes[list_nodes] - self.center) @ R.T
+            + self.center
+            + disp_ref
+            - mesh.nodes[list_nodes]
+        )
+        if not np.array_equal(problem._dU, 0):
+            if np.array_equal(problem._U, 0):
+                problem._dU[self._disp_indices] = new_disp
+            else:
+                problem._dU[self._disp_indices] = (
+                    new_disp - problem._U[self._disp_indices]
+                )
+        return new_disp
+
+    def pre_update(self, problem):
+        """Refresh slave node positions in _dU before assembly update.
+
+        Called by the solver BEFORE assembly.update() so that other assemblies
+        (e.g. IPCContact) see the correct geometry of the rigid body surface.
+        """
+        dof_ref, _ = self._get_dof_ref(problem)
+        disp_ref = dof_ref[:3]
+        angles = dof_ref[3:]
+        R, _, _, _ = self._compute_rotation(angles)
+        self._compute_slave_disp(problem, disp_ref, R)
+
+    def set_start(self, problem):
+        """Absorb the converged incremental rotation into the quaternion base.
+
+        Called by the solver after a converged increment, before _dU is reset.
+        """
+        if not self.use_quaternion or not hasattr(self, "_Q_base"):
+            return
+        dof_ref, _ = self._get_dof_ref(problem)
+        angles = dof_ref[3:]
+        if np.any(np.isnan(angles)) or np.any(np.isinf(angles)):
+            self._Q_base_backup = self._Q_base
+            return
+        delta = angles - self._angles_at_base
+        if not np.allclose(delta, 0, atol=1e-15):
+            R_inc = Rotation.from_euler("XYZ", delta)
+            self._Q_base_backup = self._Q_base
+            self._Q_base = R_inc * self._Q_base
+            self._angles_at_base = angles.copy()
+        else:
+            self._Q_base_backup = self._Q_base
+
+    def to_start_bc(self, problem):
+        """Revert the quaternion base after a failed increment.
+
+        Called by the solver when an increment does not converge and
+        the state must be rolled back.
+        """
+        if not self.use_quaternion:
+            return
+        self._Q_base = self._Q_base_backup
+
+    @property
+    def Q_total(self):
+        """Current total rotation as a Rotation object (quaternion-backed)."""
+        if self.use_quaternion:
+            return self._Q_base
+        return None
+
+    def generate(self, problem, t_fact=1, t_fact_old=None):
+        mesh = problem.mesh
+        var_cd = self.var_cd
+        node_cd = self.node_cd
+        list_nodes = self.list_nodes
+
+        dof_ref, dof_cd = self._get_dof_ref(problem)
+        disp_ref = dof_ref[:3]
+        angles = dof_ref[3:]
+
+        # Compute rotation and derivatives
+        R, dR_drx, dR_dry, dR_drz = self._compute_rotation(angles)
+
+        # Set slave node displacements
+        self._compute_slave_disp(problem, disp_ref, R)
+
+        # MPC linearization
         crd = mesh.nodes[list_nodes] - self.center
         du_drx = crd @ dR_drx.T
         du_dry = crd @ dR_dry.T
-        du_drz = (
-            crd @ dR_drz.T
-        )  # shape = (nnodes, nvar) with nvar = 3 in 3d (ux, uy, uz)
+        du_drz = crd @ dR_drz.T
 
         #### MPC ####
-
-        # dU - dU_ref - du_drx*drx_ref - du_dry*dry_ref - du_drz*drz_ref = 0
-        # with shapes: dU, du_drx, ... -> (nnodes, nvar) - dU_ref -> (nvar), drx_ref, ... -> scalar
-        # dU are associated to eliminated dof and should be different than ref dof
-        # or
-        # dUx - dUx_ref - du_drx[:,0]*drx_ref - du_dry[:,0]*dry_ref - du_drz[:,0]*drz_ref = 0
-        # dUy - dUy_ref - du_drx[1]*drx_ref - du_dry[1]*dry_ref - du_drz[1]*drz_ref = 0
-        # dUz - dUz_ref - du_drx[2]*drx_ref - du_dry[2]*dry_ref - du_drz[2]*drz_ref = 0
         res = ListBC()
         res.append(
             MPC(

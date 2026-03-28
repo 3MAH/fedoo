@@ -235,6 +235,34 @@ class IPCContact(AssemblyBase):
         self.sv = {}
         self.sv_start = {}
 
+        # Rigid body support: list of (node_indices, rigid_body) tuples
+        self._rigid_bodies = []
+        self._rigid_node_set = None  # set of rigid node indices (built in initialize)
+
+    def add_rigid_body(self, node_indices, rigid_body):
+        """Register surface nodes as belonging to a rigid body.
+
+        When rigid bodies are registered, the scatter matrix maps their
+        surface DOFs directly onto the 6 rigid body global DOFs via the
+        contact Jacobian ``J = [I_3 | dR/d(angle)]``, instead of placing
+        forces at the per-node DOF positions.
+
+        This is intended for mixed rigid-deformable contact problems where
+        rigid body surfaces and deformable surfaces are in the same
+        IPCContact assembly. For pure rigid-body problems, prefer
+        ``RigidBody.solve()`` which uses a faster direct 6x6 solver.
+
+        Parameters
+        ----------
+        node_indices : array_like
+            Global node indices in the full mesh that belong to this
+            rigid body's surface.
+        rigid_body : RigidBody
+            The rigid body object (must have ``.constraint`` and
+            ``.assembly`` attributes).
+        """
+        self._rigid_bodies.append((np.asarray(node_indices), rigid_body))
+
     def _create_broad_phase(self):
         """Create an ipctk BroadPhase instance from the string name."""
         ipctk = _import_ipctk()
@@ -252,13 +280,20 @@ class IPCContact(AssemblyBase):
             )
         return cls()
 
-    def _build_scatter_matrix(self, surface_node_indices, n_nodes, ndim):
+    def _build_scatter_matrix(
+        self, surface_node_indices, n_nodes, ndim, pb=None, vertices=None
+    ):
         """Build sparse matrix mapping ipctk surface DOFs to fedoo full DOFs.
 
         ipctk uses interleaved layout for surface nodes:
             [x0, y0, z0, x1, y1, z1, ...]
         fedoo uses blocked layout for all nodes:
-            [ux_0..ux_N, uy_0..uy_N, uz_0..uz_N]
+            [ux_0..ux_N, uy_0..uy_N, uz_0..uz_N, global_DOFs...]
+
+        For deformable nodes, the mapping is a permutation (identity values).
+        For rigid body nodes, the mapping uses the exact contact Jacobian
+        derived from the RigidTie rotation derivatives, projecting surface
+        DOFs directly onto the 6 rigid body global DOFs.
 
         Parameters
         ----------
@@ -268,31 +303,121 @@ class IPCContact(AssemblyBase):
             Total number of nodes in the full mesh.
         ndim : int
             Number of spatial dimensions (2 or 3).
+        pb : Problem, optional
+            Problem instance (needed for rigid body global DOF indices).
+        vertices : ndarray, optional
+            Current surface vertex positions, shape (n_surf, ndim).
+            Needed for rigid body Jacobian computation.
 
         Returns
         -------
         P : sparse csc_matrix
-            Shape (nvar * n_nodes, n_surf * ndim).
+            Shape (n_dof, n_surf * ndim) where n_dof includes global DOFs.
         """
         disp_ranks = np.array(self.space.get_rank_vector("Disp"))
         n_surf = len(surface_node_indices)
         nvar = self.space.nvar
+        n_global_dof = pb.n_global_dof if pb is not None else self._n_global_dof
+        n_dof = nvar * n_nodes + n_global_dof
 
-        rows = np.empty(n_surf * ndim, dtype=int)
-        cols = np.empty(n_surf * ndim, dtype=int)
+        # Collect sparse entries
+        all_rows = []
+        all_cols = []
+        all_data = []
 
-        for d in range(ndim):
-            start = d * n_surf
-            end = (d + 1) * n_surf
-            # fedoo blocked row: disp_ranks[d] * n_nodes + global_node
-            rows[start:end] = disp_ranks[d] * n_nodes + surface_node_indices
-            # ipctk interleaved col: local_i * ndim + d
-            cols[start:end] = np.arange(n_surf) * ndim + d
+        # Identify which surface nodes are rigid
+        if self._rigid_node_set is not None and len(self._rigid_node_set) > 0:
+            is_rigid = np.isin(surface_node_indices, list(self._rigid_node_set))
+        else:
+            is_rigid = np.zeros(n_surf, dtype=bool)
+        deformable_mask = ~is_rigid
 
-        data = np.ones(n_surf * ndim)
+        # --- Deformable nodes: identity mapping ---
+        deform_local = np.where(deformable_mask)[0]
+        if len(deform_local) > 0:
+            deform_global = surface_node_indices[deform_local]
+            for d in range(ndim):
+                all_rows.append(disp_ranks[d] * n_nodes + deform_global)
+                all_cols.append(deform_local * ndim + d)
+                all_data.append(np.ones(len(deform_local)))
+
+        # --- Rigid body nodes: contact Jacobian ---
+        for node_set, rb in self._rigid_bodies:
+            rt = rb.constraint
+            dof_indices = rb.assembly._dof_indices  # (6,) global DOF positions
+
+            # Find which surface indices belong to this rigid body
+            mask = np.isin(surface_node_indices, node_set)
+            local_indices = np.where(mask)[0]
+            if len(local_indices) == 0:
+                continue
+
+            n_rb = len(local_indices)
+
+            # Get exact rotation derivatives from RigidTie
+            if pb is not None:
+                dof_ref, _ = rt._get_dof_ref(pb)
+                angles = dof_ref[3:]
+                center_disp = dof_ref[:3]
+            else:
+                angles = np.zeros(3)
+                center_disp = np.zeros(3)
+
+            R, dR_drx, dR_dry, dR_drz = rt._compute_rotation(angles)
+            center = rt.center  # initial center position
+
+            # Lever arms in reference frame
+            if vertices is not None:
+                # Use current positions to get lever arms
+                vertex_pos = vertices[local_indices]  # (n_rb, 3)
+                current_center = center + center_disp
+                r = vertex_pos - current_center  # (n_rb, 3)
+            else:
+                # Use rest positions
+                r_ref = self._rest_positions[local_indices] - center
+                r = (R @ r_ref.T).T  # rotate to current frame
+
+            # Translation part: J_i[:3, :3] = I_3
+            for d in range(ndim):
+                all_rows.append(np.full(n_rb, dof_indices[d]))
+                all_cols.append(local_indices * ndim + d)
+                all_data.append(np.ones(n_rb))
+
+            # Rotation part: exact derivatives from RigidTie
+            # J_i[d, 3+k] = (dR_drk @ r_ref_i)[d]
+            # where r_ref = vertex_ref - center (in reference config)
+            r_ref = self._rest_positions[local_indices] - center  # (n_rb, 3)
+            du_drx = r_ref @ dR_drx.T  # (n_rb, 3)
+            du_dry = r_ref @ dR_dry.T
+            du_drz = r_ref @ dR_drz.T
+
+            for d in range(ndim):
+                # RotX contribution
+                nonzero = np.abs(du_drx[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[3]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_drx[nonzero, d])
+                # RotY contribution
+                nonzero = np.abs(du_dry[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[4]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_dry[nonzero, d])
+                # RotZ contribution
+                nonzero = np.abs(du_drz[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[5]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_drz[nonzero, d])
+
+        rows = np.concatenate(all_rows) if all_rows else np.array([], dtype=int)
+        cols = np.concatenate(all_cols) if all_cols else np.array([], dtype=int)
+        data = np.concatenate(all_data) if all_data else np.array([])
+
         P = sparse.csc_matrix(
             (data, (rows, cols)),
-            shape=(nvar * n_nodes, n_surf * ndim),
+            shape=(n_dof, n_surf * ndim),
         )
         return P
 
@@ -345,9 +470,18 @@ class IPCContact(AssemblyBase):
         if grad_energy_full is None:
             return None
 
-        # Truncate to mesh DOFs (remove global DOFs like PeriodicBC)
-        n_mesh_dof = self.space.nvar * self.mesh.n_nodes
-        grad_energy_full = grad_energy_full[:n_mesh_dof]
+        # When rigid bodies are present, P includes global DOF rows,
+        # so keep the full vector. Otherwise truncate to mesh DOFs.
+        if not self._rigid_bodies:
+            n_mesh_dof = self.space.nvar * self.mesh.n_nodes
+            grad_energy_full = grad_energy_full[:n_mesh_dof]
+
+        # Ensure dimension matches P rows
+        n_P_rows = self._scatter_matrix.shape[0]
+        if len(grad_energy_full) < n_P_rows:
+            grad_energy_full = np.pad(
+                grad_energy_full, (0, n_P_rows - len(grad_energy_full))
+            )
 
         # Project to surface DOFs: P^T @ full_grad -> surface_grad
         return self._scatter_matrix.T @ grad_energy_full
@@ -472,8 +606,10 @@ class IPCContact(AssemblyBase):
                     )
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
-        # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC)
-        if self._n_global_dof > 0:
+        # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC).
+        # When rigid bodies are present, P already maps to n_dof (including
+        # global DOFs), so no padding is needed.
+        if self._n_global_dof > 0 and not self._rigid_bodies:
             if compute != "matrix":
                 self.global_vector = np.pad(self.global_vector, (0, self._n_global_dof))
             if compute != "vector":
@@ -772,9 +908,25 @@ class IPCContact(AssemblyBase):
         # Rest positions of surface vertices
         self._rest_positions = self.mesh.nodes[self._surface_node_indices]
 
+        # Build rigid body node lookup set
+        if self._rigid_bodies:
+            self._rigid_node_set = set()
+            for node_set, rb in self._rigid_bodies:
+                self._rigid_node_set.update(node_set.tolist())
+
+            # Validate: CCD and OGC not supported with rigid bodies
+            if self._use_ccd:
+                raise ValueError(
+                    "use_ccd=True is not yet supported with rigid bodies. "
+                    "Use use_ccd=False (default)."
+                )
+            if self._use_ogc:
+                raise ValueError("use_ogc=True is not supported with rigid bodies.")
+
         # Build scatter matrix for DOF mapping (ipctk surface -> fedoo full)
+        vertices = self._get_current_vertices(pb)
         self._scatter_matrix = self._build_scatter_matrix(
-            self._surface_node_indices, self.mesh.n_nodes, ndim
+            self._surface_node_indices, self.mesh.n_nodes, ndim, pb, vertices
         )
 
         # Create broad phase instance
@@ -975,6 +1127,16 @@ class IPCContact(AssemblyBase):
         """
         vertices = self._get_current_vertices(pb)
         self._last_vertices = vertices
+
+        # Rebuild scatter matrix for rigid bodies (Jacobian depends on position)
+        if self._rigid_bodies:
+            self._scatter_matrix = self._build_scatter_matrix(
+                self._surface_node_indices,
+                self.mesh.n_nodes,
+                self.space.ndim,
+                pb,
+                vertices,
+            )
 
         # Rebuild collision set
         self._collisions.build(

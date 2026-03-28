@@ -168,6 +168,11 @@ class _NonLinearBase:
         # dt not used for static problem
         self._nr_min_subiter = 0  # reset SDI for new increment
         if not (np.isscalar(self._dU) and self._dU == 0):
+            # Notify constraints of accepted increment (before _dU is reset)
+            for bc in self.bc:
+                if hasattr(bc, "set_start"):
+                    bc.set_start(self)
+
             self._U += self._dU
             self._dU = 0
             self._err0 = self.nr_parameters[
@@ -190,6 +195,11 @@ class _NonLinearBase:
             self.__assembly.set_start(self)
 
     def to_start(self):
+        # Notify constraints of reverted increment
+        for bc in self.bc:
+            if hasattr(bc, "to_start_bc"):
+                bc.to_start_bc(self)
+
         self._dU = 0
         self._nr_min_subiter = 0
         self._t_fact_inc = None
@@ -218,6 +228,14 @@ class _NonLinearBase:
             - Change in constitutive law (internal variable)
         Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
         """
+        # Pre-update hook: refresh slave positions (e.g. RigidTie) before
+        # assembly update so that other assemblies (e.g. IPCContact) see
+        # the correct geometry.
+        if self.bc._update_during_inc:
+            for bc in self.bc:
+                if hasattr(bc, "pre_update"):
+                    bc.pre_update(self)
+
         if updateWeakForm == True:
             self.__assembly.update(self, compute)
         else:

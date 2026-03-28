@@ -52,28 +52,35 @@ class _NonLinearNewmarkBase:
         self.__Velocity = 0
         self.__Acceleration = 0
 
+    def _get_damping_matrix(self):
+        """Compute the damping matrix C from Rayleigh model or explicit assembly.
+
+        Returns None if no damping is configured.
+        Rayleigh damping: C = alpha * M + beta * K
+        """
+        if self.__RayleighDamping is not None:
+            return (
+                self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
+                + self.__RayleighDamping[1]
+                * self.__StiffnessAssembly.get_global_matrix()
+            )
+        elif self.__DampingAssembly is not None:
+            return self.__DampingAssembly.get_global_matrix()
+        return None
+
     def updateA(self):  # internal function to be used when modifying M, K or C
         dt = self.dtime
-        if self.__DampingAssembly is None:
-            self.set_A(
-                self.__StiffnessAssembly.get_global_matrix()
-                + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
-            )
-        else:
-            if self.__RayleighDamping is not None:
-                # In this case, self.__RayleighDamping = [alpha, beta]
-                DampMatrix = (
-                    self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
-                    + self.__RayleighDamping[1]
-                    * self.__StiffnessAssembly.get_global_matrix()
-                )
-            else:
-                DampMatrix = self.__DampingAssembly.get_global_matrix()
+        K = self.__StiffnessAssembly.get_global_matrix()
+        M = self.__MassAssembly.get_global_matrix()
+        C = self._get_damping_matrix()
 
+        if C is None:
+            self.set_A(K + 1 / (self.__Beta * (dt**2)) * M)
+        else:
             self.set_A(
-                self.__StiffnessAssembly.get_global_matrix()
-                + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
-                + self.__Gamma / (self.__Beta * dt) * DampMatrix
+                K
+                + 1 / (self.__Beta * (dt**2)) * M
+                + self.__Gamma / (self.__Beta * dt) * C
             )
 
     def updateD(self, start=False):
@@ -87,7 +94,6 @@ class _NonLinearNewmarkBase:
                 self.set_D(0)
                 return
         else:
-            # DeltaDisp = self._NonLinear__TotalDisplacementOld - self._NonLinear__TotalDisplacementStart
             DeltaDisp = self._dU
 
         D = (
@@ -99,32 +105,17 @@ class _NonLinearNewmarkBase:
             )
             + self.__StiffnessAssembly.get_global_vector()
         )
-        if self.__DampingAssembly is not None:
-            if self.__RayleighDamping is not None:
-                # In this case, self.__RayleighDamping = [alpha, beta]
-                DampMatrix = (
-                    self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
-                    + self.__RayleighDamping[1]
-                    * self.__StiffnessAssembly.get_global_matrix()
-                )
-            else:
-                DampMatrix = self.__DampingAssembly.get_global_matrix()
 
-            assert 0, "Non linear Dynamic problem with damping needs to be checked"
-            # need to be cheched
-
-            # new_velocity = dt * 0.5*(2 - self.gamma/self.beta)*acceleration +(ou -)
-            #                self.gamma/(self.beta*dt)) * delta_disp
-            #                (1 - self.gamma/(self.beta))*velocity
-
-            # D += DampMatrix * (-new_velocity)
-            # check if same as below
-
-            D += DampMatrix * (
-                (self.__Gamma / (self.__Beta * dt)) * DisplacementStart
-                + (self.__Gamma / self.__Beta - 1) * self.__Velocity
-                + (0.5 * dt * (self.__Gamma / self.__Beta - 2)) * self.__Acceleration
+        # Damping contribution: D += -C * v_new
+        # where v_new = (1 - γ/β)*V + (γ/(β*dt))*ΔU + dt*(1 - γ/(2β))*A
+        C = self._get_damping_matrix()
+        if C is not None:
+            new_velocity = (
+                (1 - self.__Gamma / self.__Beta) * self.__Velocity
+                + (self.__Gamma / (self.__Beta * dt)) * DeltaDisp
+                + dt * (1 - self.__Gamma / (2 * self.__Beta)) * self.__Acceleration
             )
+            D += C @ (-new_velocity)
 
         self.set_D(D)
 
@@ -136,9 +127,15 @@ class _NonLinearNewmarkBase:
             self.__DampingAssembly.initialize(self)
 
     def to_start(self):
-        self._dU = 0
+        # Notify constraints of reverted increment
+        for bc in self.bc:
+            if hasattr(bc, "to_start_bc"):
+                bc.to_start_bc(self)
 
-        self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
+        self._dU = 0
+        self._nr_min_subiter = 0
+        self._t_fact_inc = None
+        self._err0 = self.nr_parameters["err0"]
 
         self.__MassAssembly.to_start(self)
         self.__StiffnessAssembly.to_start(self)
@@ -146,36 +143,38 @@ class _NonLinearNewmarkBase:
         #     self.__DampingAssembly.to_start()
 
     def set_start(self, save_results=False, callback=None):
-        dt = self.dtime  ### dt is the time step of the previous increment
+        dt = self.dtime
+        self._nr_min_subiter = 0
         if not (np.isscalar(self._dU) and self._dU == 0):
+            # Notify constraints of accepted increment (before _dU is reset)
+            for bc in self.bc:
+                if hasattr(bc, "set_start"):
+                    bc.set_start(self)
+
             # update velocity and acceleration
-            NewAcceleration = (1 / self.__Beta / (dt**2)) * (
+            new_acceleration = (1 / self.__Beta / (dt**2)) * (
                 self._dU - dt * self.__Velocity
             ) - 1 / self.__Beta * (0.5 - self.__Beta) * self.__Acceleration
             self.__Velocity += dt * (
                 (1 - self.__Gamma) * self.__Acceleration
-                + self.__Gamma * NewAcceleration
+                + self.__Gamma * new_acceleration
             )
-            self.__Acceleration = NewAcceleration
+            self.__Acceleration = new_acceleration
+
+            # Save results and callback BEFORE _dU is reset
+            if save_results:
+                self.save_results(self._NonLinearBase__compteurOutput)
+                self._NonLinearBase__compteurOutput += 1
+            if callback is not None:
+                if self.exec_callback_at_each_iter or save_results:
+                    callback(self)
 
             self._U += self._dU
             self._dU = 0
 
-        self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
+        self._err0 = self.nr_parameters["err0"]
         self.__MassAssembly.set_start(self)
         self.__StiffnessAssembly.set_start(self)
-        # if self.__DampingAssembly is not None:
-        #     self.__DampingAssembly.set_start(self,dt)
-
-        # Save results
-        if not (np.isscalar(self._dU) and self._dU == 0):
-            if save_results:
-                self.save_results(self.__compteurOutput)
-                self.__compteurOutput += 1
-
-            if callback is not None:
-                if self.exec_callback_at_each_iter or save_results:
-                    callback(self)
 
     # def NewTimeIncrement(self, dt):
     #     ### dt is the time step of the previous increment
@@ -201,6 +200,12 @@ class _NonLinearNewmarkBase:
             - Change in constitutive law (internal variable)
         Update the problem with the new assembled global matrix and global vector
         """
+        # Pre-update hook: refresh slave positions (e.g. RigidTie)
+        if self.bc._update_during_inc:
+            for bc in self.bc:
+                if hasattr(bc, "pre_update"):
+                    bc.pre_update(self)
+
         if updateWeakForm == True:
             self.__StiffnessAssembly.update(self, compute)
             # self.__MassAssembly.update(self,dt,compute)
