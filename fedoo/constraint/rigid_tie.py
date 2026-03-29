@@ -68,7 +68,7 @@ class RigidTie(BCBase):
     - The Euler angle DOFs represent a **small incremental** rotation from
       the current quaternion base state ``Q_base``.
     - At each converged increment, the increment is composed:
-      ``Q_base = Rotation.from_euler("XYZ", delta) * Q_base``
+      ``Q_base = Rotation.from_rotvec(delta) * Q_base``
     - The total rotation is exact for arbitrarily large angles — no gimbal
       lock, no small-angle approximation.
     - The rotation derivatives ``dR/d(angle)`` used in the MPC linearization
@@ -188,77 +188,113 @@ class RigidTie(BCBase):
             return np.array([dof_sol[dof] + xbc[dof] for dof in dof_cd]), dof_cd
 
     def _compute_rotation(self, angles):
-        """Compute total rotation matrix and Euler derivatives.
+        """Compute total rotation matrix and derivatives w.r.t. rotation DOFs.
 
-        When use_quaternion=True, the rotation is composed multiplicatively:
-            R_total = R_inc(delta) * Q_base
-        where delta = angles - angles_at_base is always small.
+        When ``use_quaternion=True``, the rotation is composed multiplicatively:
+        ``R_total = R_inc(delta) * Q_base`` where ``delta`` is always small.
 
-        Returns R (3x3), dR_drx, dR_dry, dR_drz (3x3 each).
+        The rotation DOFs are **rotation vector** components (exponential map):
+        ``rotvec = theta * axis``. This is convention-free (no XYZ ordering)
+        and consistent with Fedoo's beam elements.
+
+        Derivatives ``dR/dω_k`` use the exact Rodrigues differentiation
+        (Gallego & Yezzi 2015).
+
+        Returns R (3x3), dR_dw0, dR_dw1, dR_dw2 (3x3 each).
         """
         if self.use_quaternion and hasattr(self, "_Q_base"):
             delta = angles - self._angles_at_base
             if np.any(np.isnan(delta)) or np.any(np.isinf(delta)):
                 delta = np.zeros(3)
-            R_inc = Rotation.from_euler("XYZ", delta)
+            R_inc = Rotation.from_rotvec(delta)
             R_total = R_inc * self._Q_base
             R = R_total.as_matrix()
             R_base_mat = self._Q_base.as_matrix()
-
-            # Derivatives of R_inc at delta, composed with R_base
-            sin = np.sin(delta)
-            cos = np.cos(delta)
+            omega = delta
         else:
-            R = Rotation.from_euler("XYZ", angles).as_matrix()
+            R = Rotation.from_rotvec(angles).as_matrix()
             R_base_mat = np.eye(3)
-            sin = np.sin(angles)
-            cos = np.cos(angles)
+            omega = angles
 
-        # Euler XYZ derivatives (same formulas, evaluated at delta or angles)
-        dRinc_drx = np.array(
+        # Exact derivatives dR_inc/dω_k via Rodrigues differentiation
+        dRinc = self._dR_drotvec(omega)
+
+        # Chain rule: dR_total/dω_k = dR_inc/dω_k @ R_base
+        dR_dw0 = dRinc[0] @ R_base_mat
+        dR_dw1 = dRinc[1] @ R_base_mat
+        dR_dw2 = dRinc[2] @ R_base_mat
+
+        return R, dR_dw0, dR_dw1, dR_dw2
+
+    @staticmethod
+    def _dR_drotvec(omega):
+        """Exact derivatives of R(ω) w.r.t. rotation vector components.
+
+        Uses the Rodrigues formula differentiation:
+        ``R = I + (sin θ)/θ [ω]× + (1-cos θ)/θ² [ω]×²``
+
+        For small ``||ω|| < 1e-10``, returns ``dR/dωₖ ≈ [eₖ]×`` (skew of
+        unit vector), which is exact in the limit.
+
+        Parameters
+        ----------
+        omega : ndarray (3,)
+            Rotation vector.
+
+        Returns
+        -------
+        dR : tuple of 3 ndarrays (3x3)
+            (dR/dω₀, dR/dω₁, dR/dω₂).
+
+        References
+        ----------
+        Gallego & Yezzi, "A Compact Formula for the Derivative of a 3-D
+        Rotation in Exponential Coordinates", J. Math. Imaging Vis., 2015.
+        """
+        theta = np.linalg.norm(omega)
+
+        # Skew-symmetric matrix of omega
+        W = np.array(
             [
-                [0, 0, 0],
-                [
-                    -sin[0] * sin[2] + cos[2] * cos[0] * sin[1],
-                    -sin[0] * cos[2] - cos[0] * sin[1] * sin[2],
-                    -cos[1] * cos[0],
-                ],
-                [
-                    cos[0] * sin[2] + sin[0] * cos[2] * sin[1],
-                    cos[2] * cos[0] - sin[0] * sin[1] * sin[2],
-                    -sin[0] * cos[1],
-                ],
+                [0, -omega[2], omega[1]],
+                [omega[2], 0, -omega[0]],
+                [-omega[1], omega[0], 0],
             ]
         )
-        dRinc_dry = np.array(
-            [
-                [-sin[1] * cos[2], sin[1] * sin[2], cos[1]],
-                [cos[2] * sin[0] * cos[1], -sin[0] * cos[1] * sin[2], sin[1] * sin[0]],
-                [-cos[0] * cos[2] * cos[1], cos[0] * cos[1] * sin[2], -cos[0] * sin[1]],
-            ]
-        )
-        dRinc_drz = np.array(
-            [
-                [-cos[1] * sin[2], -cos[1] * cos[2], 0],
-                [
-                    cos[0] * cos[2] - sin[2] * sin[0] * sin[1],
-                    -cos[0] * sin[2] - sin[0] * sin[1] * cos[2],
-                    0,
-                ],
-                [
-                    sin[0] * cos[2] + cos[0] * sin[2] * sin[1],
-                    -sin[2] * sin[0] + cos[0] * sin[1] * cos[2],
-                    0,
-                ],
-            ]
-        )
 
-        # Chain rule: dR_total/d(angle_i) = dR_inc/d(angle_i) @ R_base
-        dR_drx = dRinc_drx @ R_base_mat
-        dR_dry = dRinc_dry @ R_base_mat
-        dR_drz = dRinc_drz @ R_base_mat
+        if theta < 1e-10:
+            # Small angle limit: dR/dωₖ = [eₖ]×
+            return (
+                np.array([[0, 0, 0], [0, 0, -1], [0, 1, 0]]),
+                np.array([[0, 0, 1], [0, 0, 0], [-1, 0, 0]]),
+                np.array([[0, -1, 0], [1, 0, 0], [0, 0, 0]]),
+            )
 
-        return R, dR_drx, dR_dry, dR_drz
+        s, c = np.sin(theta), np.cos(theta)
+        t2 = theta * theta
+
+        # Rodrigues coefficients and their derivatives w.r.t. θ
+        a = s / theta  # sin(θ)/θ
+        b = (1 - c) / t2  # (1-cos(θ))/θ²
+        da = (c * theta - s) / t2  # d(sin(θ)/θ)/dθ
+        db = (s * theta - 2 * (1 - c)) / (t2 * theta)  # d((1-cos(θ))/θ²)/dθ
+
+        W2 = W @ W
+        e = np.eye(3)
+        dR = []
+        for k in range(3):
+            # dW/dωₖ = [eₖ]×
+            dW = np.array(
+                [[0, -e[k, 2], e[k, 1]], [e[k, 2], 0, -e[k, 0]], [-e[k, 1], e[k, 0], 0]]
+            )
+            # dW²/dωₖ = dW @ W + W @ dW
+            dW2 = dW @ W + W @ dW
+            # dθ/dωₖ = ωₖ / θ
+            dtk = omega[k] / theta
+
+            dR.append(da * dtk * W + a * dW + db * dtk * W2 + b * dW2)
+
+        return tuple(dR)
 
     def _compute_slave_disp(self, problem, disp_ref, R):
         """Compute and write slave node displacements from rigid body state."""
@@ -305,7 +341,7 @@ class RigidTie(BCBase):
             return
         delta = angles - self._angles_at_base
         if not np.allclose(delta, 0, atol=1e-15):
-            R_inc = Rotation.from_euler("XYZ", delta)
+            R_inc = Rotation.from_rotvec(delta)
             self._Q_base_backup = self._Q_base
             self._Q_base = R_inc * self._Q_base
             self._angles_at_base = angles.copy()

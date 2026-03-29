@@ -639,7 +639,7 @@ class RigidBody:
             # Absorb rotation into quaternion base
             delta = q[3:] - rt._angles_at_base
             if np.any(np.abs(delta) > 1e-14):
-                rt._Q_base = Rotation.from_euler("XYZ", delta) * rt._Q_base
+                rt._Q_base = Rotation.from_rotvec(delta) * rt._Q_base
                 rt._angles_at_base = q[3:].copy()
 
             # Adaptive barrier stiffness via ipctk heuristics

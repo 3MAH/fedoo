@@ -140,7 +140,7 @@ except ImportError:
 
 for i in frame_indices:
     qi = q_hist[i]
-    R = Rotation.from_euler("XYZ", qi[3:]).as_matrix()
+    R = Rotation.from_rotvec(qi[3:]).as_matrix()
     vis_cow.points[:] = (pts_ref - center) @ R.T + center + qi[:3]
     vis_cow.GetPoints().Modified()
     pl.add_text(

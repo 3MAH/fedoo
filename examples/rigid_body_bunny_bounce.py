@@ -140,7 +140,7 @@ for i in frame_indices:
     angles = q_i[3:]
 
     # Apply full rigid body transform: rotate around center, then translate
-    R = Rotation.from_euler("XYZ", angles).as_matrix()
+    R = Rotation.from_rotvec(angles).as_matrix()
     pts_rotated = (pts_ref - center) @ R.T + center + disp
     vis.points[:] = pts_rotated
     vis.GetPoints().Modified()
