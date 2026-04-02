@@ -1901,11 +1901,13 @@ class PeriodicBC(BCBase):
         corner_XpYpZm = self.corner_XpYpZm
         corner_XpYpZp = self.corner_XpYpZp
 
-        D_xyz = np.array([
-            [-dx, -sc * dx, -sc * dx],
-            [-sc * dy, -dy, -sc * dy],
-            [-sc * dz, -sc * dz, -dz],
-        ])
+        D_xyz = np.array(
+            [
+                [-dx, -sc * dx, -sc * dx],
+                [-sc * dy, -dy, -sc * dy],
+                [-sc * dz, -sc * dz, -dz],
+            ]
+        )
 
         list_disp = ["DispX", "DispY", "DispZ"]
 
@@ -2781,14 +2783,13 @@ class PeriodicBC(BCBase):
                 )
             else:
                 self._construct_faces_edges_corners_from_dic_non_periodic_node_distance(
-                    dic_closest_points_on_boundaries, dic_closest_points_on_boundaries.get("d_rve", None)
+                    dic_closest_points_on_boundaries,
+                    dic_closest_points_on_boundaries.get("d_rve", None),
                 )
                 res = self._list_MPC_non_periodic_node_distance()
 
         # Enforce continuity of rotation DOFs (RotX, RotY, RotZ) if present
-        self._add_additional_rot_dof(
-            problem, res, lambda key: getattr(self, key)
-        )
+        self._add_additional_rot_dof(problem, res, lambda key: getattr(self, key))
 
         res.initialize(problem)
         self.list_mpc = res
