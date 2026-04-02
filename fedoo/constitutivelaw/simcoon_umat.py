@@ -2,23 +2,8 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-import warnings
-
-try:
-    from simcoon import simmit as sim
-
-    try:
-        from simcoon import __version__
-
-        USE_SIMCOON = True
-    except ImportError:
-        warnings.warn("Simcoon version is to old. Simcoon ignored.")
-        USE_SIMCOON = False
-
-except ImportError:
-    USE_SIMCOON = False
-
+from fedoo.util.voigt_tensors import StressTensorList
+import simcoon as sim
 import numpy as np
 
 
@@ -39,11 +24,6 @@ class Simcoon(Mechanical3D):
     """
 
     def __init__(self, umat_name, props, name=""):
-        if not (USE_SIMCOON):
-            raise NameError(
-                "Simcoon library need to be installed for using the constitutive laws"
-            )
-
         # props is a nparray containing all the material variables
         # nstatev is a nparray containing all the material variables
         Mechanical3D.__init__(self, name)  # heritage
@@ -461,7 +441,7 @@ class Simcoon(Mechanical3D):
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
     def initialize(self, assembly, pb):
-        if "Statev" not in assembly.sv:
+        if "Statev" not in assembly.sv or not (self.is_initialized):
             # initialize data with the right shapes
             assembly.sv["Statev"] = np.zeros(
                 (self.n_statev, assembly.n_gauss_points), order="F"
@@ -483,10 +463,7 @@ class Simcoon(Mechanical3D):
             else:
                 F = np.array([])
 
-            if "Temp" in assembly.sv:
-                temp = assembly.sv["Temp"]
-            else:
-                temp = None
+            temp = self.get_temp_gp(assembly, pb)
 
             assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
             # assembly.sv["Stress"] = StressTensorList(
@@ -531,16 +508,15 @@ class Simcoon(Mechanical3D):
             if self.use_elastic_lt:
                 assembly.sv["ElasticMatrix"] = assembly.sv["TangentMatrix"]
 
+            self.is_initialized = True
+
     def update(self, assembly, pb):
         if "DStrain" in assembly.sv:
             de = assembly.sv["DStrain"]
         else:
             de = assembly.sv["Strain"] - assembly.sv_start["Strain"]
 
-        if "Temp" in assembly.sv:
-            temp = assembly.sv["Temp"]
-        else:
-            temp = None
+        temp = self.get_temp_gp(assembly, pb)
 
         if assembly._nlgeom:
             F0 = assembly.sv_start["F"]
@@ -591,6 +567,26 @@ class Simcoon(Mechanical3D):
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:
             assembly.sv["TangentMatrix"] = assembly.sv["ElasticMatrix"]
+
+    def get_temp_gp(self, assembly, pb):
+        """Get the current temperature field at Gauss Point.
+
+        If a temperature field 'Temp' is defined in the ModelingSpace, extract the
+        node values from the problem and them to Gauss Points.
+        If not, check if the 'Temp' field is defined in the assembly.sv dict (among
+        state variables). If no temperature is found or if it is set to 0, return None.
+        """
+        if "Temp" in assembly.space.list_variables():
+            temp = assembly.convert_data(
+                pb.get_dof_solution("Temp"), "Node", "GaussPoint"
+            )
+        elif "Temp" in assembly.sv:
+            temp = assembly.sv["Temp"]
+        else:
+            return None
+        if np.isscalar(temp) and temp == 0:
+            return None
+        return temp
 
     def get_tangent_matrix(self, assembly, dimension=None):
         if dimension is None:

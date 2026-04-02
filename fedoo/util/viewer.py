@@ -1182,6 +1182,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.iter_slider.maximum() <= self.iter_slider.minimum():
             self.animate_btn.setChecked(False)
             return
+        if self.iter_slider.value() == self.iter_slider.maximum():
+            self.iter_slider.setValue(self.iter_slider.minimum())
+
         self.animate_btn.setText("⏸ Pause")
         self.anim_timer.start()
 

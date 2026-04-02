@@ -31,6 +31,7 @@ class ElasticAnisotropic(Mechanical3D):
         # self._grad_disp = 0
 
     def initialize(self, assembly, pb):
+        self.is_initialized = True
         assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly)
 
     def update(self, assembly, pb):

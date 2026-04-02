@@ -17,18 +17,18 @@ class Mechanical3D(ConstitutiveLaw):
         # _Lt_from_F attribute is True if the tangent matrix is related
         # to F instead of log epsilonn, ie for hyper elastic materials
 
-    def initialize(self, assembly, pb):
-        pass
-        # #function called to initialize the constutive law
-        # assembly.sv['Strain'] = 0
-        # assembly.sv['Stress'] = 0
-        # assembly.sv['DispGradient'] = 0
-        # assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
+    # def initialize(self, assembly, pb):
+    #     pass
+    # #function called to initialize the constutive law
+    # assembly.sv['Strain'] = 0
+    # assembly.sv['Stress'] = 0
+    # assembly.sv['DispGradient'] = 0
+    # assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
 
-    def update(self, assembly, pb):
-        pass
-        # function called to update the state of constitutive law
-        # assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
+    # def update(self, assembly, pb):
+    #     pass
+    # function called to update the state of constitutive law
+    # assembly.sv['TangentMatrix'] = self.get_tangent_matrix(assembly)
 
     # def get_tangent_matrix(self, assembly, dimension=None): #Tangent Matrix in lobal coordinate system (no change of basis)
     #     return NotImplemented

@@ -44,7 +44,6 @@ class get_config:
 
     The returned information are:
         * 'fedoo version': The current version of fedoo (non modifiable)
-        * 'USE_SIMCOON': bool that define if the simcoon librairie may be used
         * 'USE_PYPARDISO': bool that define if the pardiso direct solver may be used
         * 'USE_PETSC': bool that define if the mumps direct solver should be used.
         * 'USE_UMFPACK': bool that define if the scikit-umfpack solver may be used
@@ -69,7 +68,6 @@ class get_config:
     def __init__(self):
         self._dict = {
             "fedoo version": __version__,
-            "USE_SIMCOON": constitutivelaw.simcoon_umat.USE_SIMCOON,
             "USE_PYPARDISO": core.base.USE_PYPARDISO,
             "USE_PETSC": core.base.USE_PETSC,
             "USE_UMFPACK": core.base.USE_UMFPACK,
@@ -93,11 +91,8 @@ class get_config:
 
     def __setitem__(self, item, value):
         if item == "fedoo version":
-            raise NameError("fedoo version is not modifiable")
-        if item == "USE_SIMCOON":
-            constitutivelaw.simcoon_umat.USE_SIMCOON = value
-            weakform.stress_equilibrium.USE_SIMCOON = value
-        elif item == "USE_PYPARDISO":
+            raise ValueError("fedoo version is not modifiable")
+        if item == "USE_PYPARDISO":
             core.base.USE_PYPARDISO = value
             if value:
                 core.base.USE_UMFPACK = False
