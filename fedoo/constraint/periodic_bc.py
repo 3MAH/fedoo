@@ -83,6 +83,7 @@ class PeriodicBC(BCBase):
         meshperio: bool = True,
         tol: float = 1e-8,
         name: str = "Periodicity",
+        dic_closest_points_on_boundaries: dict = None,
     ):
         if not isinstance(periodicity_type, str):
             raise TypeError("periodicity_type should be a string")
@@ -100,6 +101,7 @@ class PeriodicBC(BCBase):
         self.meshperio = meshperio  # if True, the mesh is periodic
         self.tol = tol
         self.bc_type = "PeriodicBC"
+        self._dic_closest_points_on_boundaries = dic_closest_points_on_boundaries
         BCBase.__init__(self, name)
         self.periodicity_type = periodicity_type
 
@@ -1804,34 +1806,63 @@ class PeriodicBC(BCBase):
     def _construct_faces_edges_corners_from_dic_non_periodic_node_distance(
         self, dic_closest_points_on_boundaries, d_rve
     ):
-        self.face_Xm = dic_closest_points_on_boundaries("face_Xm")
-        self.face_Ym = dic_closest_points_on_boundaries("face_Ym")
-        self.face_Zm = dic_closest_points_on_boundaries("face_Zm")
-        self.face_Xp = dic_closest_points_on_boundaries("face_Xp")
-        self.face_Yp = dic_closest_points_on_boundaries("face_Yp")
-        self.face_Zp = dic_closest_points_on_boundaries("face_Zp")
-        self.edge_XmYm = dic_closest_points_on_boundaries("edge_XmYm")
-        self.edge_XmZm = dic_closest_points_on_boundaries("edge_XmZm")
-        self.edge_YmZm = dic_closest_points_on_boundaries("edge_YmZm")
-        self.edge_XpYm = dic_closest_points_on_boundaries("edge_XpYm")
-        self.edge_XpYp = dic_closest_points_on_boundaries("edge_XpYp")
-        self.edge_XmYp = dic_closest_points_on_boundaries("edge_XmYp")
-        self.edge_XpZm = dic_closest_points_on_boundaries("edge_XpZm")
-        self.edge_XpZp = dic_closest_points_on_boundaries("edge_XpZp")
-        self.edge_XmZp = dic_closest_points_on_boundaries("edge_XmZp")
-        self.edge_YpZm = dic_closest_points_on_boundaries("edge_YpZm")
-        self.edge_YpZp = dic_closest_points_on_boundaries("edge_YpZp")
-        self.edge_YmZp = dic_closest_points_on_boundaries("edge_YmZp")
-        self.corner_XmYmZm = dic_closest_points_on_boundaries("corner_XmYmZm")
-        self.corner_XmYmZp = dic_closest_points_on_boundaries("corner_XmYmZp")
-        self.corner_XmYpZm = dic_closest_points_on_boundaries("corner_XmYpZm")
-        self.corner_XmYpZp = dic_closest_points_on_boundaries("corner_XmYpZp")
-        self.corner_XpYmZm = dic_closest_points_on_boundaries("corner_XpYmZm")
-        self.corner_XpYmZp = dic_closest_points_on_boundaries("corner_XpYmZp")
-        self.corner_XpYpZm = dic_closest_points_on_boundaries("corner_XpYpZm")
-        self.corner_XpYpZp = dic_closest_points_on_boundaries("corner_XpYpZp")
+        self.face_Xm = dic_closest_points_on_boundaries["face_Xm"]
+        self.face_Ym = dic_closest_points_on_boundaries["face_Ym"]
+        self.face_Zm = dic_closest_points_on_boundaries["face_Zm"]
+        self.face_Xp = dic_closest_points_on_boundaries["face_Xp"]
+        self.face_Yp = dic_closest_points_on_boundaries["face_Yp"]
+        self.face_Zp = dic_closest_points_on_boundaries["face_Zp"]
+        self.edge_XmYm = dic_closest_points_on_boundaries["edge_XmYm"]
+        self.edge_XmZm = dic_closest_points_on_boundaries["edge_XmZm"]
+        self.edge_YmZm = dic_closest_points_on_boundaries["edge_YmZm"]
+        self.edge_XpYm = dic_closest_points_on_boundaries["edge_XpYm"]
+        self.edge_XpYp = dic_closest_points_on_boundaries["edge_XpYp"]
+        self.edge_XmYp = dic_closest_points_on_boundaries["edge_XmYp"]
+        self.edge_XpZm = dic_closest_points_on_boundaries["edge_XpZm"]
+        self.edge_XpZp = dic_closest_points_on_boundaries["edge_XpZp"]
+        self.edge_XmZp = dic_closest_points_on_boundaries["edge_XmZp"]
+        self.edge_YpZm = dic_closest_points_on_boundaries["edge_YpZm"]
+        self.edge_YpZp = dic_closest_points_on_boundaries["edge_YpZp"]
+        self.edge_YmZp = dic_closest_points_on_boundaries["edge_YmZp"]
+        self.corner_XmYmZm = dic_closest_points_on_boundaries["corner_XmYmZm"]
+        self.corner_XmYmZp = dic_closest_points_on_boundaries["corner_XmYmZp"]
+        self.corner_XmYpZm = dic_closest_points_on_boundaries["corner_XmYpZm"]
+        self.corner_XmYpZp = dic_closest_points_on_boundaries["corner_XmYpZp"]
+        self.corner_XpYmZm = dic_closest_points_on_boundaries["corner_XpYmZm"]
+        self.corner_XpYmZp = dic_closest_points_on_boundaries["corner_XpYmZp"]
+        self.corner_XpYpZm = dic_closest_points_on_boundaries["corner_XpYpZm"]
+        self.corner_XpYpZp = dic_closest_points_on_boundaries["corner_XpYpZp"]
 
         self.d_rve = d_rve
+
+    @staticmethod
+    def _mpc_from_2d(node_sets_2d, variables, factors_2d):
+        """Create MPC from (n_mpc, n_terms) arrays by converting to list-of-arrays format."""
+        ns = [node_sets_2d[:, j] for j in range(node_sets_2d.shape[1])]
+        fs = [factors_2d[:, j] for j in range(factors_2d.shape[1])]
+        return MPC(ns, variables, fs)
+
+    @staticmethod
+    def _distance_weights(dist_array):
+        """Compute normalized distance weights, handling exact matches (dist=0).
+
+        For k=1 or when all distances in a row are zero (exact match),
+        assigns weight 1.0 to the closest neighbor.
+        """
+        dist = np.asarray(dist_array, dtype=float)
+        if dist.ndim == 1:
+            dist = dist.reshape(-1, 1)
+        row_sums = np.sum(dist, axis=1)
+        exact = row_sums == 0
+        row_sums[exact] = 1.0  # avoid division by zero
+        weights = dist / row_sums.reshape(-1, 1)
+        # For exact matches: weight=1 for first neighbor (if k=1, that's the only one)
+        if dist.shape[1] == 1:
+            weights[exact, 0] = 1.0
+        else:
+            # For k>1 with exact matches, set uniform weights
+            weights[exact, :] = 1.0 / dist.shape[1]
+        return weights
 
     def _list_MPC_non_periodic_node_distance(self):
         node_cd = self.node_cd
@@ -1870,11 +1901,11 @@ class PeriodicBC(BCBase):
         corner_XpYpZm = self.corner_XpYpZm
         corner_XpYpZp = self.corner_XpYpZp
 
-        D_xyz = [
+        D_xyz = np.array([
             [-dx, -sc * dx, -sc * dx],
             [-sc * dy, -dy, -sc * dy],
             [-sc * dz, -sc * dz, -dz],
-        ]
+        ])
 
         list_disp = ["DispX", "DispY", "DispZ"]
 
@@ -1884,9 +1915,7 @@ class PeriodicBC(BCBase):
 
         # face Xm/Xp
         face_Xp_asarray = np.asarray(face_Xp[1])
-        dimensions_to_factors_rescaled = face_Xp_asarray / np.sum(
-            face_Xp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(face_Xp_asarray)
         for i in range(0, nbDOF):
             p1 = 0
             list_node_sets = np.concatenate(
@@ -1898,7 +1927,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, face_Xp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, face_Xp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -1910,13 +1939,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # face Ym/Yp
         face_Yp_asarray = np.asarray(face_Yp[1])
-        dimensions_to_factors_rescaled = face_Yp_asarray / np.sum(
-            face_Yp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(face_Yp_asarray)
         for i in range(0, nbDOF):
             p1 = 1
             list_node_sets = np.concatenate(
@@ -1928,7 +1955,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, face_Yp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, face_Yp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -1940,13 +1967,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # face Zm/Zp
         face_Zp_asarray = np.asarray(face_Zp[1])
-        dimensions_to_factors_rescaled = face_Zp_asarray / np.sum(
-            face_Zp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(face_Zp_asarray)
         for i in range(0, nbDOF):
             p1 = 2
             list_node_sets = np.concatenate(
@@ -1958,7 +1983,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, face_Zp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, face_Zp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -1970,13 +1995,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XpYm
         edge_XpYm_asarray = np.asarray(edge_XpYm[1])
-        dimensions_to_factors_rescaled = edge_XpYm_asarray / np.sum(
-            edge_XpYm_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XpYm_asarray)
         for i in range(0, nbDOF):
             p1 = 0
             list_node_sets = np.concatenate(
@@ -1988,7 +2011,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XpYm_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XpYm_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2000,13 +2023,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XpYp
         edge_XpYp_asarray = np.asarray(edge_XpYp[1])
-        dimensions_to_factors_rescaled = edge_XpYp_asarray / np.sum(
-            edge_XpYp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XpYp_asarray)
         for i in range(0, nbDOF):
             p1 = 0
             p2 = 1
@@ -2020,7 +2041,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XpYp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XpYp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
                 + [var_cd[p2][i]]
@@ -2034,13 +2055,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XmYp
         edge_XmYp_asarray = np.asarray(edge_XmYp[1])
-        dimensions_to_factors_rescaled = edge_XmYp_asarray / np.sum(
-            edge_XmYp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XmYp_asarray)
         for i in range(0, nbDOF):
             p1 = 1
             list_node_sets = np.concatenate(
@@ -2052,7 +2071,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XmYp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XmYp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2064,13 +2083,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XpZm
         edge_XpZm_asarray = np.asarray(edge_XpZm[1])
-        dimensions_to_factors_rescaled = edge_XpZm_asarray / np.sum(
-            edge_XpZm_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XpZm_asarray)
         for i in range(0, nbDOF):
             p1 = 0
             list_node_sets = np.concatenate(
@@ -2082,7 +2099,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XpZm_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XpZm_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2094,13 +2111,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XpZp
         edge_XpZp_asarray = np.asarray(edge_XpZp[1])
-        dimensions_to_factors_rescaled = edge_XpZp_asarray / np.sum(
-            edge_XpZp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XpZp_asarray)
         for i in range(0, nbDOF):
             p1 = 0
             p2 = 2
@@ -2114,7 +2129,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XpZp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XpZp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
                 + [var_cd[p2][i]]
@@ -2128,13 +2143,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_XmZp
         edge_XmZp_asarray = np.asarray(edge_XmZp[1])
-        dimensions_to_factors_rescaled = edge_XmZp_asarray / np.sum(
-            edge_XmZp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_XmZp_asarray)
         for i in range(0, nbDOF):
             p1 = 2
             list_node_sets = np.concatenate(
@@ -2146,37 +2159,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_XmZp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmZm, -1),
-                    np.full_like(edge_XmZm, D_xyz[p1, i], dtZpe=float),
-                ),
-                axis=1,
-            )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
-
-        # edge_XpZm
-        edge_XpZm_asarray = np.asarray(edge_XpZm[1])
-        dimensions_to_factors_rescaled = edge_XpZm_asarray / np.sum(
-            edge_XpZm_asarray, axis=1
-        ).reshape(-1, 1)
-        for i in range(0, nbDOF):
-            p1 = 0
-            list_node_sets = np.concatenate(
-                (
-                    edge_XpZm[0],
-                    edge_XmZm,
-                    np.full_like(edge_XmZm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for i in range(0, edge_XpZm_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_XmZp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2188,13 +2171,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_YpZm
         edge_YpZm_asarray = np.asarray(edge_YpZm[1])
-        dimensions_to_factors_rescaled = edge_YpZm_asarray / np.sum(
-            edge_YpZm_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_YpZm_asarray)
         for i in range(0, nbDOF):
             p1 = 1
             list_node_sets = np.concatenate(
@@ -2206,7 +2187,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_YpZm_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_YpZm_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2218,13 +2199,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_YpZp
         edge_YpZp_asarray = np.asarray(edge_YpZp[1])
-        dimensions_to_factors_rescaled = edge_YpZp_asarray / np.sum(
-            edge_YpZp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_YpZp_asarray)
         for i in range(0, nbDOF):
             p1 = 1
             p2 = 2
@@ -2238,7 +2217,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_YpZp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_YpZp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
                 + [var_cd[p2][i]]
@@ -2252,13 +2231,11 @@ class PeriodicBC(BCBase):
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # edge_YmZp
         edge_YmZp_asarray = np.asarray(edge_YmZp[1])
-        dimensions_to_factors_rescaled = edge_YmZp_asarray / np.sum(
-            edge_YmZp_asarray, axis=1
-        ).reshape(-1, 1)
+        dimensions_to_factors_rescaled = self._distance_weights(edge_YmZp_asarray)
         for i in range(0, nbDOF):
             p1 = 2
             list_node_sets = np.concatenate(
@@ -2270,7 +2247,7 @@ class PeriodicBC(BCBase):
                 axis=1,
             )
             list_variables = (
-                [list_disp[i] for i in range(0, edge_YmZp_asarray.shape[1])]
+                [list_disp[i] for _ in range(0, edge_YmZp_asarray.shape[1])]
                 + [list_disp[i]]
                 + [var_cd[p1][i]]
             )
@@ -2278,11 +2255,11 @@ class PeriodicBC(BCBase):
                 (
                     dimensions_to_factors_rescaled,
                     np.full_like(edge_YmZm, -1),
-                    np.full_like(edge_YmZm, D_xyz[p1, i], dtZpe=float),
+                    np.full_like(edge_YmZm, D_xyz[p1, i], dtype=float),
                 ),
                 axis=1,
             )
-            res.append(MPC(list_node_sets, list_variables, list_factors))
+            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
 
         # Corners
         for i in range(0, nbDOF):
@@ -2632,6 +2609,9 @@ class PeriodicBC(BCBase):
                 )
 
     def initialize(self, problem, dic_closest_points_on_boundaries=None):
+        # Use stored dictionary if none provided explicitly
+        if dic_closest_points_on_boundaries is None:
+            dic_closest_points_on_boundaries = self._dic_closest_points_on_boundaries
         """
         Initialize a periodic boundary condition object using several multi-point constraints. The constraint drivers are constructed as follows, depending on `periodicity_type` and `dim`:
         - For `periodicity_type="small_strain"`:
@@ -2795,11 +2775,20 @@ class PeriodicBC(BCBase):
                 # res = ListBC([self._list_MPC_periodic(), self._list_MPC_rotation()])
         else:
             if dic_closest_points_on_boundaries is None:
-                raise
-            else:
-                res = self._list_MPC_non_periodic_node_distance(
-                    dic_closest_points_on_boundaries, self.d_rve
+                raise ValueError(
+                    "dic_closest_points_on_boundaries is required when meshperio=False. "
+                    "Use microgen.BoxMesh.closest_points_on_boundaries() to generate it."
                 )
+            else:
+                self._construct_faces_edges_corners_from_dic_non_periodic_node_distance(
+                    dic_closest_points_on_boundaries, dic_closest_points_on_boundaries.get("d_rve", None)
+                )
+                res = self._list_MPC_non_periodic_node_distance()
+
+        # Enforce continuity of rotation DOFs (RotX, RotY, RotZ) if present
+        self._add_additional_rot_dof(
+            problem, res, lambda key: getattr(self, key)
+        )
 
         res.initialize(problem)
         self.list_mpc = res
