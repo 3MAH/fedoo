@@ -81,7 +81,7 @@ pb = fd.problem.NonLinear(assembly)
 
 # add some output that are automatically saved
 results = pb.add_output(
-    "contact_example", solid_assembly, ["Disp", "Stress", "Strain", "Statev", "Fext"]
+    "contact_example", solid_assembly, ["Disp", "Stress", "Strain", "P", "Fext"]
 )
 
 # boundary conditions
