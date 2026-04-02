@@ -191,8 +191,9 @@ class StressEquilibrium(WeakFormBase):
         displacement = pb.get_dof_solution()
         if np.isscalar(displacement) and displacement == 0:
             assembly.sv["DispGradient"] = 0
-            assembly.sv["Stress"] = 0
-            assembly.sv["Strain"] = 0
+            if "Stress" not in assembly.sv:
+                assembly.sv["Stress"] = 0
+                assembly.sv["Strain"] = 0
         else:
             # Compute the strain required for the constitutive law.
             if assembly._nlgeom:
