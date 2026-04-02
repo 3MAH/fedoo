@@ -3,7 +3,7 @@
 
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.core.assembly import Assembly
-from copy import deepcopy
+# from copy import deepcopy
 # from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 
@@ -12,27 +12,29 @@ import numpy as np
 
 class _SubAssembly(Assembly):
     # Assembly with new definition of sv and sv_start that allow maping the global assembly id to the sub_assembly
-    def __init__(self, assembly, elset, copied_fields):
-        self.assembly = assembly
+    def __init__(self, assembly, elset, assembly_id, copied_fields):
+        self.assembly = assembly  # base full assembly
         self.elset = elset
         self.copied_fields = copied_fields
+        self.assembly_id = assembly_id  # int used for assembly id
         super().__init__(
             assembly.weakform, assembly.mesh.extract_elements(elset), assembly.elm_type
         )
 
     @property
     def sv(self):
-        if isinstance(self.elset, str):
-            return _SubSV(
-                self.assembly,
-                self.assembly.sv,
-                self.assembly.mesh.element_sets[self.elset],
-                self.copied_fields,
-            )
-        else:
-            return _SubSV(
-                self.assembly, self.assembly.sv, self.elset, self.copied_fields
-            )
+        elset = (
+            self.assembly.mesh.element_sets[self.elset]
+            if isinstance(self.elset, str)
+            else self.elset
+        )
+        return _SubSV(
+            self.assembly,
+            self.assembly.sv,
+            elset,
+            self.assembly_id,
+            self.copied_fields,
+        )
 
     @sv.setter
     def sv(self, value):
@@ -40,15 +42,18 @@ class _SubAssembly(Assembly):
 
     @property
     def sv_start(self):
-        if isinstance(self.elset, str):
-            return _SubSV(
-                self.assembly,
-                self.assembly.sv_start,
-                self.assembly.mesh.element_sets[self.elset],
-                set(),
-            )
-        else:
-            return _SubSV(self.assembly, self.assembly.sv_start, self.elset, set())
+        elset = (
+            self.assembly.mesh.element_sets[self.elset]
+            if isinstance(self.elset, str)
+            else self.elset
+        )
+        return _SubSV(
+            self.assembly,
+            self.assembly.sv_start,
+            elset,
+            self.assembly_id,
+            set(),
+        )
 
     @sv_start.setter
     def sv_start(self, value):
@@ -57,10 +62,11 @@ class _SubAssembly(Assembly):
 
 class _SubSV:
     # class just here to map the good id for elset in the global state variable
-    def __init__(self, assembly, sv, elset, copied_fields):
+    def __init__(self, assembly, sv, elset, assembly_id, copied_fields):
         self.sv = sv
         self.elset = elset
         self.assembly = assembly
+        self.assembly_id = assembly_id
         self.copied_fields = copied_fields
 
     def __contains__(self, item):
@@ -69,8 +75,14 @@ class _SubSV:
     def __getitem__(self, k):
         # assume sv values are defined on gauss points.
         # perhaps it may be usefull to allow other definitions
+        if k == "Statev":
+            # Don't merge constitutive law state variables (ie 'Statev')
+            # cause it may have non consistent shape
+            return self.sv[f"_Statev_{self.assembly_id}"]
+
         if np.isscalar(self.sv[k]) and self.sv[k] == 0:
             return 0
+
         elset = (
             np.array(self.elset)
             + np.c_[
@@ -88,17 +100,35 @@ class _SubSV:
         else:  # shoud be array
             return self.sv[k][..., elset]  # gp id should be the last axis
 
-    def __setitem__(self, k, v):  # todefine properly
+    def __setitem__(self, k, v):  # to define property
         # assume sv values are defined on gauss points.
         # perhaps it may be usefull to allow other definitions
 
+        # --- Treat fields with non consistent  ---
+        if k == "Statev":  # for now, only statev need a special treatment
+            local_key = f"_{k}_{self.assembly_id}"
+
+            # Handle copy-on-write
+            if local_key not in self.copied_fields:
+                if local_key in self.sv:
+                    self.sv[local_key] = self.sv[local_key].copy()
+                self.copied_fields.add(local_key)
+
+            # Assign the raw array directly to the base assembly's dictionary
+            self.sv[local_key] = v
+            return
+        # -----------------------------------------------------------------
+
         if k in self.sv:  # or k in self.copied_fields:
-            if k not in self.copied_fields:
-                self.sv[k] = deepcopy(self.sv[k])
-                self.copied_fields.add(k)
             if np.isscalar(self.sv[k]) and self.sv[k] == 0:
+                # force a filled value of sv
                 del self.sv[k]
                 self.__setitem__(k, v)
+
+            if k not in self.copied_fields:
+                self.sv[k] = self.sv[k].copy()
+                # self.sv[k] = deepcopy(self.sv[k])
+                self.copied_fields.add(k)
 
             elset = (
                 np.array(self.elset)
@@ -109,16 +139,17 @@ class _SubSV:
                 ]
             ).reshape(-1)
 
-            if isinstance(
-                self.sv[k], list
-            ):  # assume it is a ListStressTensor or a ListStrainTensor object
+            if hasattr(self.sv[k], "array"):  # ie ListStressTensor or ListStrainTensor
                 self.sv[k].array[..., elset] = v
             else:
-                try:
-                    self.sv[k][..., elset] = v
-                except:
-                    # try if scalar values are given
-                    self.sv[k][..., elset] = v[..., np.newaxis]
+                if isinstance(v, list):
+                    self._set_value_recursively(self.sv[k], v, elset)
+                else:  # v should be array or scalar
+                    if np.isscalar(v) or self.sv[k].ndim == v.ndim:
+                        self.sv[k][..., elset] = v
+                    else:
+                        # try if scalar values are given for each components
+                        self.sv[k][..., elset] = np.expand_dims(v, axis=-1)
         else:
             if isinstance(v, np.ndarray):
                 isarray = True
@@ -145,20 +176,260 @@ class _SubSV:
             self.copied_fields.add(k)
             self.__setitem__(k, v)
 
+    def _set_value_recursively(self, target, value, points):
+        """Safely navigates nested lists/arrays and assigns them to the target view."""
+        # Check if 'value' is a list/tuple OR an object-type array (jagged)
+        if isinstance(value, (list, tuple)):
+            for i, item in enumerate(value):
+                # Recurse into the next dimension: target[i] is a view
+                self._set_value_recursively(target[i], item, points)
+        else:
+            # We've reached a 'leaf' (a single array or a scalar)
+            # Convert to array only here to avoid 'inhomogeneous' errors earlier
+            target[..., points] = value
+
+
+class _SubSVComponentMapper:
+    """Virtual proxy that maps global component requests to sub-assembly fields.
+
+    This class is dedicated to map state variable components from sub assemblies
+    - in the context of Heterogeneous constitutive law - to full assembly. This is
+    usefull to allow extracting non homogeneous results, ie mainly the 'Statev' field
+    created by the simcoon umats.
+    """
+
+    def __init__(self, heter_cl, base_assembly, target_dict, base_key):
+        self.heter_cl = heter_cl
+        self.base_assembly = base_assembly
+        self.target_dict = target_dict  # e.g., assembly.sv or assembly.sv_start
+        self.base_key = base_key  # e.g., 'Statev'
+
+    def _get_local_key(self, assembly_id):
+        return f"_{self.base_key}_{assembly_id}"
+
+    def __getitem__(self, indices):
+        sample_data = None
+        valid_phases = []
+
+        # 1. Test which sub-assemblies contain these indices
+        for i, sub_assemb in enumerate(self.heter_cl.list_assembly):
+            local_key = self._get_local_key(i)
+            if local_key in self.target_dict:
+                local_sv = self.target_dict[local_key]
+                try:
+                    # Attempt to slice. If this phase has fewer state variables,
+                    # it will raise an IndexError and be skipped safely.
+                    sliced_data = local_sv[indices]
+                    if sample_data is None:
+                        sample_data = sliced_data
+                    valid_phases.append((i, sub_assemb, sliced_data))
+                except IndexError:
+                    continue
+
+        if sample_data is None:
+            raise IndexError(
+                f"Indices {indices} for field '{self.base_key}' not found in any phase."
+            )
+
+        # 2. Initialize the global reconstructed array
+        global_shape = list(sample_data.shape)
+        global_shape[-1] = self.base_assembly.n_gauss_points
+        global_data = np.zeros(global_shape)
+
+        # 3. Stitch valid fragments into the global array
+        for i, sub_assemb, local_data in valid_phases:
+            elset_gp = (
+                np.array(sub_assemb.elset)
+                + np.c_[
+                    np.arange(
+                        0,
+                        self.base_assembly.n_gauss_points,
+                        self.base_assembly.mesh.n_elements,
+                    )
+                ]
+            ).reshape(-1)
+
+            global_data[..., elset_gp] = local_data
+
+        return global_data
+
+    def __setitem__(self, indices, value):
+        for i, sub_assemb in enumerate(self.heter_cl.list_assembly):
+            local_key = self._get_local_key(i)
+            if local_key in self.target_dict:
+                local_sv = self.target_dict[local_key]
+                try:
+                    # Test if the index is valid for this phase
+                    _ = local_sv[indices]
+                except IndexError:
+                    continue
+
+                # Track modified fields for shallow copy management
+                if (
+                    self.target_dict is self.base_assembly.sv
+                    and local_key not in self.heter_cl._copied_fields
+                ):
+                    if local_key in self.target_dict:
+                        self.target_dict[local_key] = self.target_dict[local_key].copy()
+                    self.heter_cl._copied_fields.add(local_key)
+
+                elset_gp = (
+                    np.array(sub_assemb.elset)
+                    + np.c_[
+                        np.arange(
+                            0,
+                            self.base_assembly.n_gauss_points,
+                            self.base_assembly.mesh.n_elements,
+                        )
+                    ]
+                ).reshape(-1)
+
+                if np.isscalar(value):
+                    self.target_dict[local_key][indices] = value
+                else:
+                    self.target_dict[local_key][indices] = value[..., elset_gp]
+
+
+class _SubSVComponentMapper:
+    """Virtual proxy that maps global component requests to sub-assembly fields.
+
+    This class is dedicated to map state variable components from sub assemblies
+    - in the context of Heterogeneous constitutive law - to full assembly. This is
+    usefull to allow extracting non homogeneous results, ie mainly the 'Statev' field
+    created by the simcoon umats.
+    """
+
+    def __init__(self, heter_cl, base_assembly, target_dict, base_key):
+        self.heter_cl = heter_cl  # heterogeneous constitutive law
+        self.base_assembly = base_assembly
+        self.target_dict = target_dict  # e.g. assembly.sv or assembly.sv_start
+        self.base_key = base_key  # e.g., 'Statev' or 'InternalVars'
+
+    def _get_local_key(self, assembly_id):
+        return f"_{self.base_key}_{assembly_id}"
+
+    def __getitem__(self, identifier):
+        sample_data = None
+        valid_phases = []
+
+        # Scenario A: The identifier is a component string name (e.g., 'Damage')
+        if isinstance(identifier, str):
+            for i, sub_assemb in enumerate(self.heter_cl.list_assembly):
+                if (
+                    hasattr(sub_assemb, "sv_component")
+                    and identifier in sub_assemb.sv_component
+                ):
+                    sv_name, local_idx = sub_assemb.sv_component[identifier]
+                    if sv_name == self.base_key:
+                        local_key = self._get_local_key(i)
+                        if local_key in self.target_dict:
+                            sliced_data = self.target_dict[local_key][local_idx]
+                            if sample_data is None:
+                                sample_data = sliced_data
+                            valid_phases.append((i, sub_assemb, sliced_data))
+
+            if sample_data is None:
+                raise KeyError(
+                    f"Component '{identifier}' not found in any sub-assembly for field '{self.base_key}'"
+                )
+
+        # Scenario B: The identifier is a direct integer/slice (fallback)
+        else:
+            for i, sub_assemb in enumerate(self.heter_cl.list_assembly):
+                local_key = self._get_local_key(i)
+                if local_key in self.target_dict:
+                    try:
+                        sliced_data = self.target_dict[local_key][identifier]
+                        if sample_data is None:
+                            sample_data = sliced_data
+                        valid_phases.append((i, sub_assemb, sliced_data))
+                    except IndexError:
+                        continue
+
+            if sample_data is None:
+                raise IndexError(
+                    f"Index {identifier} not found in any phase for field '{self.base_key}'."
+                )
+
+        # Reconstruct and stitch the global array
+        global_shape = list(sample_data.shape)
+        global_shape[-1] = self.base_assembly.n_gauss_points
+        global_data = np.zeros(global_shape)
+
+        for i, sub_assemb, local_data in valid_phases:
+            elset = (
+                self.base_assembly.mesh.element_sets[sub_assemb.elset]
+                if isinstance(sub_assemb.elset, str)
+                else sub_assemb.elset
+            )
+            elset_gp = (
+                np.array(elset)
+                + np.c_[
+                    np.arange(
+                        0,
+                        self.base_assembly.n_gauss_points,
+                        self.base_assembly.mesh.n_elements,
+                    )
+                ]
+            ).reshape(-1)
+
+            global_data[..., elset_gp] = local_data
+
+        return global_data
+
+    def __setitem__(self, indices, value):
+        for i, sub_assemb in enumerate(self.heter_cl.list_assembly):
+            local_key = self._get_local_key(i)
+            if local_key in self.target_dict:
+                local_sv = self.target_dict[local_key]
+                try:
+                    # Test if the index is valid for this phase
+                    _ = local_sv[indices]
+                except IndexError:
+                    continue
+
+                # Track modified fields for shallow copy management
+                if (
+                    self.target_dict is self.base_assembly.sv
+                    and local_key not in self.heter_cl._copied_fields
+                ):
+                    if local_key in self.target_dict:
+                        self.target_dict[local_key] = self.target_dict[local_key].copy()
+                    self.heter_cl._copied_fields.add(local_key)
+                elset = (
+                    self.base_assembly.mesh.element_sets[sub_assemb.elset]
+                    if isinstance(sub_assemb.elset, str)
+                    else sub_assemb.elset
+                )
+                elset_gp = (
+                    np.array(elset)
+                    + np.c_[
+                        np.arange(
+                            0,
+                            self.base_assembly.n_gauss_points,
+                            self.base_assembly.mesh.n_elements,
+                        )
+                    ]
+                ).reshape(-1)
+
+                if np.isscalar(value):
+                    self.target_dict[local_key][indices] = value
+                else:
+                    self.target_dict[local_key][indices] = value[..., elset_gp]
+
 
 class Heterogeneous(Mechanical3D):
     """Constitutive Law that allowing to define an heterogeneous constitutive laws.
     
-    To define constitutive 
-    
-    from a list of phase constitutive laws, an a list of element sets
+    To define constitutive from a list of phase constitutive laws, and a list of
+    element sets.
         
     Parameters
     ----------
     
-    tup_cl: tuple|list
+    tup_cl: tuple or list
         list of constitutive laws for each phase.
-    tup_elset: tuple|list=
+    tup_elset: tuple or list
         list of element set that may be given as str (if present in the mesh.element_sets dictionnary)
         or as list of element index.
     name: str
@@ -231,12 +502,39 @@ class Heterogeneous(Mechanical3D):
         # it will also modified assembly.sv_start (shallow copy for performance reason)
         # copied_fields is a set that keep in memory the field that have already been copied.
         self.list_assembly = [
-            _SubAssembly(assembly, elset, self._copied_fields)
-            for elset in self.list_elset
+            _SubAssembly(assembly, elset, i, self._copied_fields)
+            for i, elset in enumerate(self.list_elset)
         ]
 
         for i, cl in enumerate(self.list_cl):
             cl.initialize(self.list_assembly[i], pb)
+
+        # Fields that should be managed via the Mapper Proxy
+        fragmented_fields = ["Statev"]
+
+        # Bubble up sv_component to the base assembly
+        for sub_assemb in self.list_assembly:
+            if hasattr(sub_assemb, "sv_component"):
+                for comp_name, (sv_name, local_idx) in sub_assemb.sv_component.items():
+                    if sv_name in fragmented_fields:
+                        # Replace the local integer index with the string name
+                        # so the script requests: proxy['Damage']
+                        assembly.sv_component[comp_name] = (sv_name, comp_name)
+                    else:
+                        # For global fields, just use the local index directly
+                        assembly.sv_component[comp_name] = (sv_name, local_idx)
+
+        # Inject Mappers for each fragmented field directly into the base assembly
+        for field in fragmented_fields:
+            if field in assembly.sv or any(
+                f"_{field}_{i}" in assembly.sv for i in range(len(self.list_cl))
+            ):
+                assembly.sv[field] = _SubSVComponentMapper(
+                    self, assembly, assembly.sv, field
+                )
+                assembly.sv_start[field] = _SubSVComponentMapper(
+                    self, assembly, assembly.sv_start, field
+                )
 
     def update(self, assembly, pb):
         self._copied_fields.clear()  # to force a new copy of each modified fields
