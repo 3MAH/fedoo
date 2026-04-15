@@ -72,6 +72,8 @@ class RigidBodyAssembly(AssemblyBase):
         rigid_tie,
         mesh=None,
         space=None,
+        beta=0.25,
+        gamma=0.5,
         name="RigidBodyAssembly",
     ):
         if space is None:
@@ -84,9 +86,20 @@ class RigidBodyAssembly(AssemblyBase):
         self.rigid_tie = rigid_tie
         self.force = np.zeros(6)
         self.mesh = mesh
+        self.beta = beta
+        self.gamma = gamma
+        self.rayleigh_alpha = 0.0
 
         self._dof_indices = None
         self._pb_ref = None
+
+        # Newmark state variables (6-DOF)
+        self.sv = {
+            "Velocity": np.zeros(6),
+            "Acceleration": np.zeros(6),
+            "_DeltaDisp": np.zeros(6),
+        }
+        self.sv_start = dict(self.sv)
 
         # IPC contact state (set by RigidBody.enable_ipc_contact)
         self._ipc_collision_mesh = None
@@ -230,54 +243,125 @@ class RigidBodyAssembly(AssemblyBase):
         return self._contact_force, self._contact_stiffness
 
     # ------------------------------------------------------------------
-    # Fedoo assembly interface (for use with NonLinearNewmark)
+    # Fedoo assembly interface (compatible with NonLinear solver)
     # ------------------------------------------------------------------
 
+    def _get_mass_matrix(self):
+        """6x6 mass matrix in global frame."""
+        M = np.zeros((6, 6))
+        M[0, 0] = M[1, 1] = M[2, 2] = self.mass
+        Q = self.rigid_tie.Q_total
+        M[3:, 3:] = (
+            Q.apply_tensor(self.inertia_body) if Q is not None else self.inertia_body
+        )
+        return M
+
+    def _get_n_dof(self):
+        if self._pb_ref is not None:
+            return self._pb_ref.n_dof
+        return max(
+            self.mesh.n_nodes * self.space.nvar,
+            int(self._dof_indices.max()) + 1,
+        )
+
     def assemble_global_mat(self, compute="all"):
+        """Assemble effective dynamic stiffness and residual.
+
+        Implements Newmark time integration directly on the 6 rigid DOFs:
+        - Matrix: K_eff = K_contact + (a0 + α·c0)·M
+        - Vector: D = F_ext + F_contact + M·(inertia residual) + C·(damping residual)
+
+        where a0 = 1/(β·dt²), c0 = γ/(β·dt).
+        """
         if self._dof_indices is None:
             return
 
-        n = (
-            self._pb_ref.n_dof
-            if self._pb_ref is not None
-            else (
-                max(
-                    self.mesh.n_nodes * self.space.nvar,
-                    int(self._dof_indices.max()) + 1,
-                )
-            )
-        )
+        n = self._get_n_dof()
         idx = self._dof_indices
+        dt = self._pb_ref.dtime if self._pb_ref is not None else 1.0
+
+        M = self._get_mass_matrix()
+        a0 = 1.0 / (self.beta * dt**2)
+        c0 = self.gamma / (self.beta * dt)
+        alpha = self.rayleigh_alpha
 
         if compute in ("all", "matrix"):
-            M = np.zeros((6, 6))
-            M[0, 0] = M[1, 1] = M[2, 2] = self.mass
-            Q = self.rigid_tie.Q_total
-            M[3:, 3:] = (
-                Q.apply_tensor(self.inertia_body)
-                if Q is not None
-                else self.inertia_body
-            )
-
+            # K_eff = K_contact + (a0 + α·c0)·M
+            K_eff_6 = self._contact_stiffness + (a0 + alpha * c0) * M
             self.global_matrix = sparse.csr_matrix(
-                (M.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
+                (K_eff_6.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
                 shape=(n, n),
             )
 
         if compute in ("all", "vector"):
+            v_n = self.sv["Velocity"]
+            a_n = self.sv["Acceleration"]
+            delta_u = self.sv["_DeltaDisp"]
+
+            # Predicted acceleration and velocity from Newmark
+            a_pred = a0 * (delta_u - dt * v_n) + (1 - 0.5 / self.beta) * a_n
+            v_pred = (
+                (1 - self.gamma / self.beta) * v_n
+                + (c0 * delta_u)
+                + dt * (1 - self.gamma / (2 * self.beta)) * a_n
+            )
+
+            # Damping: C = α·M
+            C = alpha * M
+
+            # Residual: D = F_ext + F_contact - M·a_pred - C·v_pred
+            D_6 = self.force + self._contact_force - M @ a_pred - C @ v_pred
             vec = np.zeros(n)
-            vec[idx] = self.force + self._contact_force
+            vec[idx] = D_6
             self.global_vector = vec
 
     def update(self, pb, compute="all"):
+        """Update state from current displacement increment."""
         self._pb_ref = pb
+        # Read accumulated displacement at rigid DOFs
+        dof_sol = pb.get_dof_solution()
+        if not (np.isscalar(dof_sol) and dof_sol == 0):
+            # _DeltaDisp = current total increment for this time step
+            if np.isscalar(pb._dU) and pb._dU == 0:
+                self.sv["_DeltaDisp"] = np.zeros(6)
+            else:
+                self.sv["_DeltaDisp"] = pb._dU[self._dof_indices]
+
+        # Update IPC contact from current q
+        if self._ipc_collision_mesh is not None:
+            q = dof_sol[self._dof_indices] if not np.isscalar(dof_sol) else np.zeros(6)
+            self.compute_contact(q, self.rigid_tie, compute="all")
+
         self.assemble_global_mat(compute)
 
     def set_start(self, pb):
+        """Accept converged increment: update velocity and acceleration."""
         self._pb_ref = pb
+        dt = pb.dtime
+        delta_u = self.sv["_DeltaDisp"]
+        v_n = self.sv["Velocity"]
+        a_n = self.sv["Acceleration"]
+
+        # Save for to_start rollback
+        self.sv_start = {
+            k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv.items()
+        }
+
+        # Newmark velocity/acceleration update
+        new_a = (
+            (1 / (self.beta * dt**2)) * delta_u
+            - (1 / (self.beta * dt)) * v_n
+            - (0.5 / self.beta - 1) * a_n
+        )
+        self.sv["Velocity"] = v_n + dt * ((1 - self.gamma) * a_n + self.gamma * new_a)
+        self.sv["Acceleration"] = new_a
+        self.sv["_DeltaDisp"] = np.zeros(6)
 
     def to_start(self, pb):
-        pass
+        """Revert to start of failed increment."""
+        self.sv = {
+            k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv_start.items()
+        }
 
 
 class RigidBody:
@@ -401,6 +485,7 @@ class RigidBody:
     def set_rayleigh_damping(self, alpha):
         """Set mass-proportional damping: C = alpha * M."""
         self._rayleigh_alpha = float(alpha)
+        self.assembly.rayleigh_alpha = float(alpha)
 
     # ------------------------------------------------------------------
     # IPC contact
@@ -471,41 +556,15 @@ class RigidBody:
         return self.constraint.Q_total
 
     # ------------------------------------------------------------------
-    # Direct 6x6 Newmark solver
+    # Convenience solver (wraps NonLinear)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _ccd_filter(asm, rt, q_current, dq_step):
-        """Limit dq_step so the trajectory is collision-free (Tight-Inclusion CCD).
+    def solve(self, dt, tmax, t0=0, print_info=1):
+        """Solve rigid body dynamics using Fedoo's NonLinear solver.
 
-        Computes the maximal alpha in [0, 1] such that the linear motion
-        from q_current to q_current + alpha*dq_step produces no collision,
-        then returns alpha * dq_step.
-        """
-        from fedoo.constraint.ipc_contact import _import_ipctk
-
-        ipctk = _import_ipctk()
-
-        v0 = asm._ipc_vertices(q_current, rt)
-        v1 = asm._ipc_vertices(q_current + dq_step, rt)
-
-        alpha = ipctk.compute_collision_free_stepsize(
-            asm._ipc_collision_mesh,
-            v0,
-            v1,
-            broad_phase=asm._ipc_broad_phase,
-        )
-
-        if alpha < 1.0:
-            # Leave a small margin (0.9 factor) to stay inside barrier zone
-            return 0.9 * alpha * dq_step
-        return dq_step
-
-    def solve(self, dt, tmax, t0=0, callback=None, print_info=True):
-        """Solve rigid body dynamics with a direct 6x6 Newmark integrator.
-
-        Bypasses the Fedoo FEM solver — solves directly in the 6-DOF
-        rigid body space with IPC contact and Rayleigh damping.
+        Creates an internal ``NonLinear`` problem and calls ``nlsolve``.
+        The ``RigidBodyAssembly`` handles Newmark time integration,
+        IPC contact, and Rayleigh damping internally.
 
         Parameters
         ----------
@@ -515,190 +574,20 @@ class RigidBody:
             End time.
         t0 : float
             Start time.
-        callback : callable, optional
-            Called at each step: ``callback(t, q, v)``.
-        print_info : bool
-            Print progress.
+        print_info : int
+            Verbosity (0=silent, 1=iterations).
 
         Returns
         -------
-        q : ndarray (6,)
-            Final DOFs [dx, dy, dz, rx, ry, rz].
-        v : ndarray (6,)
-            Final velocity.
-        a : ndarray (6,)
-            Final acceleration.
+        pb : NonLinear
+            The solved problem (access DOFs via ``pb.get_dof_solution()``).
         """
-        n_steps = int(round((tmax - t0) / dt))
-        q = np.zeros(6)
-        v = np.zeros(6)
-        a = np.zeros(6)
-        beta, gamma = 0.25, 0.5
-        rt = self.constraint
-        asm = self.assembly
+        from fedoo.problem.non_linear import NonLinear
 
-        # Ensure quaternion state is initialized
-        if not hasattr(rt, "_Q_base") or rt._Q_base is None:
-            rt._Q_base = Rotation.identity()
-            rt._Q_base_backup = Rotation.identity()
-            rt._angles_at_base = np.zeros(3)
-
-        nr_tol = 1e-10 * max(np.linalg.norm(asm.force), 1.0)
-
-        for step in range(n_steps):
-            t = t0 + (step + 1) * dt
-
-            # Mass matrix
-            M = np.zeros((6, 6))
-            M[0, 0] = M[1, 1] = M[2, 2] = self.mass
-            Q = rt._Q_base
-            M[3:, 3:] = (
-                Q.apply_tensor(self.inertia_tensor)
-                if Q is not None
-                else self.inertia_tensor
-            )
-
-            # Damping
-            C = (
-                self._rayleigh_alpha * M
-                if self._rayleigh_alpha > 0
-                else np.zeros((6, 6))
-            )
-
-            # Initial prediction
-            F_c, K_c = asm.compute_contact(q, rt, compute="all")
-            A_eff = K_c + (1 / (beta * dt**2)) * M + (gamma / (beta * dt)) * C
-            v_pred = (1 - gamma / beta) * v + dt * (1 - gamma / (2 * beta)) * a
-            rhs = (
-                asm.force
-                + F_c
-                + M @ (-(1 / (beta * dt)) * v - (0.5 / beta - 1) * a)
-                + C @ (-v_pred)
-            )
-
-            try:
-                dq = np.linalg.solve(A_eff, rhs)
-            except np.linalg.LinAlgError:
-                if print_info:
-                    print(f"  Singular at t={t:.4f}s")
-                break
-
-            # CCD: limit step to collision-free trajectory
-            if asm._ipc_collision_mesh is not None:
-                dq = self._ccd_filter(asm, rt, q, dq)
-
-            # Newton-Raphson with line search
-            for nr_iter in range(20):
-                F_c, K_c = asm.compute_contact(q + dq, rt, compute="all")
-                new_a = (
-                    (1 / (beta * dt**2)) * dq
-                    - (1 / (beta * dt)) * v
-                    - (0.5 / beta - 1) * a
-                )
-                new_v = v + dt * ((1 - gamma) * a + gamma * new_a)
-                res = asm.force + F_c - M @ new_a - C @ new_v
-                res_norm = np.linalg.norm(res)
-
-                if res_norm < nr_tol:
-                    break
-
-                A_eff = K_c + (1 / (beta * dt**2)) * M + (gamma / (beta * dt)) * C
-                try:
-                    ddq = np.linalg.solve(A_eff, res)
-                except np.linalg.LinAlgError:
-                    break
-
-                # CCD-filtered line search
-                ddq_safe = self._ccd_filter(asm, rt, q + dq, ddq)
-                alpha_ls = 1.0
-                for _ in range(8):
-                    dq_test = dq + alpha_ls * ddq_safe
-                    F_test, _ = asm.compute_contact(q + dq_test, rt, compute="force")
-                    a_test = (
-                        (1 / (beta * dt**2)) * dq_test
-                        - (1 / (beta * dt)) * v
-                        - (0.5 / beta - 1) * a
-                    )
-                    v_test = v + dt * ((1 - gamma) * a + gamma * a_test)
-                    if (
-                        np.linalg.norm(asm.force + F_test - M @ a_test - C @ v_test)
-                        < res_norm
-                    ):
-                        break
-                    alpha_ls *= 0.5
-                dq = dq + alpha_ls * ddq_safe
-
-            # Update state
-            new_a = (
-                (1 / (beta * dt**2)) * dq - (1 / (beta * dt)) * v - (0.5 / beta - 1) * a
-            )
-            v = v + dt * ((1 - gamma) * a + gamma * new_a)
-            a = new_a
-            q = q + dq
-
-            # Absorb rotation into quaternion base
-            delta = q[3:] - rt._angles_at_base
-            if np.any(np.abs(delta) > 1e-14):
-                rt._Q_base = Rotation.from_rotvec(delta) * rt._Q_base
-                rt._angles_at_base = q[3:].copy()
-
-            # Adaptive barrier stiffness via ipctk heuristics
-            if asm._ipc_collision_mesh is not None and len(asm._ipc_collisions) > 0:
-                min_dist = asm._ipc_collisions.compute_minimum_distance(
-                    asm._ipc_collision_mesh,
-                    asm._ipc_vertices(q, rt),
-                )
-                if not hasattr(asm, "_prev_min_dist"):
-                    # First contact: initialize kappa
-                    from fedoo.constraint.ipc_contact import _import_ipctk
-
-                    _ipctk = _import_ipctk()
-                    bbox_diag = np.linalg.norm(
-                        asm._ipc_collision_mesh.rest_positions.max(axis=0)
-                        - asm._ipc_collision_mesh.rest_positions.min(axis=0)
-                    )
-                    grad_barrier = asm._ipc_barrier.gradient(
-                        asm._ipc_collisions,
-                        asm._ipc_collision_mesh,
-                        asm._ipc_vertices(q, rt),
-                    )
-                    J = asm._build_ipc_jacobian(rt, q[3:])
-                    grad_b_proj = J.T @ grad_barrier
-                    kappa_init, kappa_max = _ipctk.initial_barrier_stiffness(
-                        bbox_diag,
-                        asm._ipc_barrier.barrier,
-                        asm._ipc_dhat,
-                        self.mass,
-                        asm.force,
-                        grad_b_proj,
-                    )
-                    asm._ipc_kappa = max(asm._ipc_kappa, kappa_init)
-                    asm._ipc_kappa_max = kappa_max
-                    asm._bbox_diag = bbox_diag
-                    asm._prev_min_dist = min_dist
-                else:
-                    from fedoo.constraint.ipc_contact import _import_ipctk
-
-                    _ipctk = _import_ipctk()
-                    asm._ipc_kappa = _ipctk.update_barrier_stiffness(
-                        asm._prev_min_dist,
-                        min_dist,
-                        asm._ipc_kappa_max,
-                        asm._ipc_kappa,
-                        asm._bbox_diag,
-                    )
-                    asm._prev_min_dist = min_dist
-
-            if callback is not None:
-                callback(t, q, v)
-
-            if print_info and step % max(1, n_steps // 20) == 0:
-                n_c = len(asm._ipc_collisions) if asm._ipc_collisions is not None else 0
-                print(
-                    f"    t={t:.3f}s  z={self.center_of_mass[2]+q[2]:.4f}m  contacts={n_c}"
-                )
-
-        return q, v, a
+        pb = NonLinear(self.assembly)
+        self.add_to_problem(pb)
+        pb.nlsolve(dt=dt, tmax=tmax, t0=t0, print_info=print_info, update_dt=False)
+        return pb
 
     # ------------------------------------------------------------------
     # Inertia computation

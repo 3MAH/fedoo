@@ -1,8 +1,7 @@
-"""Stanford bunny (convex hull) bouncing on a plane — 6x6 solver + IPC.
+"""Bunny bouncing on a plane — NonLinear + IPC contact.
 
-The bunny_coarse mesh has 658 open edges, so we use its convex hull
-(watertight, manifold). The shape is simplified but still asymmetric,
-producing interesting tumbling on impact.
+Convex hull of Stanford bunny (watertight). Demonstrates tumbling
+on impact with asymmetric geometry.
 """
 
 import sys
@@ -13,12 +12,17 @@ import pyvista as pv
 sys.path.insert(0, "/Users/ychemisky/Documents/GitHub/fedoo")
 import fedoo as fd
 
+try:
+    from simcoon import Rotation
+except ImportError:
+    from scipy.spatial.transform import Rotation
+
 g = 9.81
 dt = 5e-4
 t_end = 2.0
 
 print("=" * 60)
-print("BUNNY BOUNCE — 6x6 Newmark + IPC contact")
+print("BUNNY BOUNCE — NonLinear + IPC contact")
 print("=" * 60)
 
 space = fd.ModelingSpace("3D")
@@ -27,45 +31,41 @@ space.new_variable("DispY")
 space.new_variable("DispZ")
 space.new_vector("Disp", ("DispX", "DispY", "DispZ"))
 
-# Build watertight bunny from convex hull of decimated full bunny
-pv_raw = pv.examples.download_bunny().decimate(0.95)
+# Watertight bunny from convex hull
+pv_raw = pv.examples.download_bunny().decimate(0.97)
 pv_bunny = pv_raw.delaunay_3d().extract_surface().triangulate().clean()
-
-# Scale and position
-bounds = pv_bunny.bounds
-size = max(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4])
-pv_bunny = pv_bunny.scale(0.25 / size, inplace=False)
+s = max(
+    pv_bunny.bounds[1] - pv_bunny.bounds[0],
+    pv_bunny.bounds[3] - pv_bunny.bounds[2],
+    pv_bunny.bounds[5] - pv_bunny.bounds[4],
+)
+pv_bunny = pv_bunny.scale(0.25 / s, inplace=False)
 pv_bunny = pv_bunny.translate(
-    [-pv_bunny.center[0], -pv_bunny.center[1], -pv_bunny.bounds[4] + 0.4],
-    inplace=False,
+    [-pv_bunny.center[0], -pv_bunny.center[1], -pv_bunny.bounds[4] + 0.4], inplace=False
 )
 pv_bunny = pv_bunny.compute_normals(consistent_normals=True, auto_orient_normals=True)
 
 bunny_mesh = fd.Mesh.from_pyvista(pv_bunny)
-print(f"  Bunny: {bunny_mesh.n_nodes} nodes, {bunny_mesh.n_elements} faces")
-print(f"  Manifold: {pv_bunny.is_manifold}, Open edges: {pv_bunny.n_open_edges}")
-
-# Plane
-pv_plane = pv.Plane(
-    center=(0, 0, 0),
-    direction=(0, 0, 1),
-    i_size=1.5,
-    j_size=1.5,
-    i_resolution=6,
-    j_resolution=6,
+plane_mesh = fd.Mesh.from_pyvista(
+    pv.Plane(
+        center=(0, 0, 0),
+        direction=(0, 0, 1),
+        i_size=1.5,
+        j_size=1.5,
+        i_resolution=6,
+        j_resolution=6,
+    ).triangulate()
 )
-plane_mesh = fd.Mesh.from_pyvista(pv_plane.triangulate())
 
-# Rigid body — box inertia approximation
 mass = 0.5
 bb = pv_bunny.bounds
 lx, ly, lz = bb[1] - bb[0], bb[3] - bb[2], bb[5] - bb[4]
-I_approx = (mass / 12) * np.diag([ly**2 + lz**2, lx**2 + lz**2, lx**2 + ly**2])
+I = (mass / 12) * np.diag([ly**2 + lz**2, lx**2 + lz**2, lx**2 + ly**2])
 
 body = fd.constraint.RigidBody(
     bunny_mesh,
     mass=mass,
-    inertia_tensor=I_approx,
+    inertia_tensor=I,
     center_of_mass=np.array(pv_bunny.center),
     name="Bunny",
 )
@@ -73,107 +73,79 @@ body.set_force([0, 0, -mass * g])
 body.set_rayleigh_damping(1.0)
 body.enable_ipc_contact(plane_mesh, dhat=0.008, kappa=1e8)
 
-print(f"  mass={mass}kg, center_z={body.center_of_mass[2]:.3f}m")
-print(f"  dt={dt}s → {int(t_end/dt)} steps")
+print(f"  Bunny: {bunny_mesh.n_nodes} nodes, mass={mass}kg")
 
-# Solve — store full q (6 DOFs) for rotation animation
+# Solve with manual loop for trajectory
+pb = fd.problem.NonLinear(body.assembly)
+body.add_to_problem(pb)
+pb.initialize()
+
+idx = body.assembly._dof_indices
 q_hist = [np.zeros(6)]
 t_hist = [0.0]
 
-
-def collect(t, q, v):
-    q_hist.append(q.copy())
-    t_hist.append(t)
-
-
 t0 = time.time()
-q_final, v, a = body.solve(dt=dt, tmax=t_end, callback=collect, print_info=True)
-elapsed = time.time() - t0
+n_steps = int(round(t_end / dt))
+for step in range(n_steps):
+    pb.dtime = dt
+    pb.solve_time_increment()
+    pb.set_start()
+    dof = pb.get_dof_solution()
+    q_hist.append(dof[idx].copy())
+    t_hist.append((step + 1) * dt)
 
+elapsed = time.time() - t0
 t_hist = np.array(t_hist)
 q_hist = np.array(q_hist)
 z_hist = body.center_of_mass[2] + q_hist[:, 2]
 print(
-    f"\n  {len(t_hist)} steps in {elapsed:.1f}s ({elapsed/len(t_hist)*1000:.1f}ms/step)"
+    f"  {len(t_hist)} steps in {elapsed:.1f}s ({elapsed / len(t_hist) * 1000:.1f}ms/step)"
 )
 print(f"  z_min={z_hist.min():.4f}m")
-print(
-    f"  max rotation (deg): rx={np.degrees(q_hist[:,3].max()):.1f} ry={np.degrees(q_hist[:,4].max()):.1f} rz={np.degrees(q_hist[:,5].max()):.1f}"
-)
 
-# Animation
-print("\nGenerating PyVista animation...")
-out_dir = "/Users/ychemisky/Documents/GitHub/fedoo/examples"
-gif_path = f"{out_dir}/rigid_body_bunny_bounce.gif"
-
-fps = 25
+# Animation (low res for file size)
+out = "/Users/ychemisky/Documents/GitHub/fedoo/examples/rigid_body_bunny_bounce.gif"
+fps = 15
 frame_skip = max(1, int(1.0 / (fps * dt)))
 frame_indices = np.arange(0, len(t_hist), frame_skip)
 
 vis = pv_bunny.copy()
 pts_ref = vis.points.copy()
-vis_plane = pv.Plane(
-    center=(0, 0, 0),
-    direction=(0, 0, 1),
-    i_size=1.5,
-    j_size=1.5,
-    i_resolution=10,
-    j_resolution=10,
-)
+center = body.center_of_mass
 
-pl = pv.Plotter(window_size=[900, 600], off_screen=True)
+pl = pv.Plotter(window_size=[600, 400], off_screen=True)
 pl.set_background("white")
-pl.add_mesh(vis_plane, color="lightgrey", opacity=0.8, show_edges=True)
+pl.add_mesh(
+    pv.Plane(
+        center=(0, 0, 0),
+        direction=(0, 0, 1),
+        i_size=1.5,
+        j_size=1.5,
+        i_resolution=8,
+        j_resolution=8,
+    ),
+    color="lightgrey",
+    opacity=0.8,
+    show_edges=True,
+)
 pl.add_mesh(vis, color="sandybrown", smooth_shading=True)
 pl.camera_position = [(1.0, -1.0, 0.7), (0, 0, 0.2), (0, 0, 1)]
-pl.open_gif(gif_path, fps=fps)
+pl.open_gif(out, fps=fps)
 
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
-
-center = body.center_of_mass
 for i in frame_indices:
-    q_i = q_hist[i]
-    disp = q_i[:3]
-    angles = q_i[3:]
-
-    # Apply full rigid body transform: rotate around center, then translate
-    R = Rotation.from_rotvec(angles).as_matrix()
-    pts_rotated = (pts_ref - center) @ R.T + center + disp
-    vis.points[:] = pts_rotated
+    qi = q_hist[i]
+    R = Rotation.from_rotvec(qi[3:]).as_matrix()
+    vis.points[:] = (pts_ref - center) @ R.T + center + qi[:3]
     vis.GetPoints().Modified()
-
     pl.add_text(
-        f"t={t_hist[i]:.2f}s  z={z_hist[i]:.3f}m  rx={np.degrees(angles[0]):.1f}°",
+        f"t={t_hist[i]:.2f}s z={z_hist[i]:.3f}m",
         position="upper_edge",
         font_size=10,
         color="black",
-        name="title",
+        name="t",
     )
     pl.render()
     pl.write_frame()
 
 pl.close()
-print(f"  Saved: {gif_path}")
-
-# Plot
-try:
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(t_hist, z_hist, "b-", linewidth=1)
-    ax.axhline(y=0, color="grey", linestyle=":", alpha=0.5)
-    ax.set_xlabel("t (s)")
-    ax.set_ylabel("z (m)")
-    ax.set_title(
-        f"Bunny bounce — {bunny_mesh.n_nodes} nodes, {elapsed:.1f}s ({elapsed/len(t_hist)*1000:.1f}ms/step)"
-    )
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/rigid_body_bunny_bounce.png", dpi=150)
-    plt.close()
-    print(f"  Saved: {out_dir}/rigid_body_bunny_bounce.png")
-except ImportError:
-    pass
+print(f"  Saved: {out}")

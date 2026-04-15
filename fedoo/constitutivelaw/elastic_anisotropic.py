@@ -46,6 +46,11 @@ class ElasticAnisotropic(Mechanical3D):
         else:
             total_strain = assembly.sv["Strain"]
 
+        # Handle uninitialized strain (e.g. first Newmark step with zero displacement)
+        if np.isscalar(total_strain) and total_strain == 0:
+            assembly.sv["Stress"] = 0
+            return
+
         assembly.sv["Stress"] = StressTensorList(
             [
                 sum(
