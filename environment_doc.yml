@@ -25,3 +25,5 @@ dependencies:
   - trame-vuetify
   - trame
   - ipywidgets
+  - pip:
+    - --no-deps microgen
