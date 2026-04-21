@@ -4,12 +4,11 @@ Convex hull of Stanford bunny (watertight). Demonstrates tumbling
 on impact with asymmetric geometry.
 """
 
-import sys
+import os
 import time
 import numpy as np
 import pyvista as pv
 
-sys.path.insert(0, "/Users/ychemisky/Documents/GitHub/fedoo")
 import fedoo as fd
 
 try:
@@ -104,7 +103,7 @@ print(
 print(f"  z_min={z_hist.min():.4f}m")
 
 # Animation (low res for file size)
-out = "/Users/ychemisky/Documents/GitHub/fedoo/examples/rigid_body_bunny_bounce.gif"
+out = os.path.join(os.path.dirname(__file__), "rigid_body_bunny_bounce.gif")
 fps = 15
 frame_skip = max(1, int(1.0 / (fps * dt)))
 frame_indices = np.arange(0, len(t_hist), frame_skip)

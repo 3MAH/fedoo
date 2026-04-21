@@ -29,11 +29,6 @@ from scipy import sparse
 from fedoo.core.base import AssemblyBase
 from fedoo.constraint.rigid_tie import RigidTie
 
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
-
 
 class RigidBodyAssembly(AssemblyBase):
     """Assembly contributing rigid body mass and generalized forces.
@@ -93,20 +88,17 @@ class RigidBodyAssembly(AssemblyBase):
         self._dof_indices = None
         self._pb_ref = None
 
-        # Newmark state variables (6-DOF)
         self.sv = {
             "Velocity": np.zeros(6),
             "Acceleration": np.zeros(6),
             "_DeltaDisp": np.zeros(6),
         }
-        self.sv_start = dict(self.sv)
+        self.sv_start = {k: v.copy() for k, v in self.sv.items()}
 
-        # IPC contact state (set by RigidBody.enable_ipc_contact)
         self._ipc_collision_mesh = None
         self._ipc_collisions = None
         self._ipc_barrier = None
         self._ipc_kappa = None
-        self._ipc_kappa_auto = False
         self._ipc_dhat = None
         self._ipc_broad_phase = None
         self._ipc_rest_positions = None
@@ -134,10 +126,6 @@ class RigidBodyAssembly(AssemblyBase):
     def dof_indices(self):
         """Global DOF indices [Fx,Fy,Fz,Mx,My,Mz] in the problem."""
         return self._dof_indices
-
-    # ------------------------------------------------------------------
-    # IPC contact: Jacobian and force/stiffness computation
-    # ------------------------------------------------------------------
 
     def _build_ipc_jacobian(self, rt, angles):
         """Build contact Jacobian J mapping 6 rigid DOFs to all vertex DOFs.
@@ -214,13 +202,11 @@ class RigidBodyAssembly(AssemblyBase):
 
         J = self._build_ipc_jacobian(rt, q[3:])
 
-        # Gradient → force
         grad = self._ipc_barrier.gradient(
             self._ipc_collisions, self._ipc_collision_mesh, vertices
         )
         self._contact_force = -self._ipc_kappa * (J.T @ grad)
 
-        # Hessian → stiffness (skipped in line-search for efficiency)
         if compute in ("all", "stiffness"):
             try:
                 hess = self._ipc_barrier.hessian(
@@ -241,10 +227,6 @@ class RigidBodyAssembly(AssemblyBase):
             self._contact_stiffness[:] = 0
 
         return self._contact_force, self._contact_stiffness
-
-    # ------------------------------------------------------------------
-    # Fedoo assembly interface (compatible with NonLinear solver)
-    # ------------------------------------------------------------------
 
     def _get_mass_matrix(self):
         """6x6 mass matrix in global frame."""
@@ -286,7 +268,6 @@ class RigidBodyAssembly(AssemblyBase):
         alpha = self.rayleigh_alpha
 
         if compute in ("all", "matrix"):
-            # K_eff = K_contact + (a0 + α·c0)·M
             K_eff_6 = self._contact_stiffness + (a0 + alpha * c0) * M
             self.global_matrix = sparse.csr_matrix(
                 (K_eff_6.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
@@ -298,18 +279,14 @@ class RigidBodyAssembly(AssemblyBase):
             a_n = self.sv["Acceleration"]
             delta_u = self.sv["_DeltaDisp"]
 
-            # Predicted acceleration and velocity from Newmark
             a_pred = a0 * (delta_u - dt * v_n) + (1 - 0.5 / self.beta) * a_n
             v_pred = (
                 (1 - self.gamma / self.beta) * v_n
                 + (c0 * delta_u)
                 + dt * (1 - self.gamma / (2 * self.beta)) * a_n
             )
-
-            # Damping: C = α·M
             C = alpha * M
 
-            # Residual: D = F_ext + F_contact - M·a_pred - C·v_pred
             D_6 = self.force + self._contact_force - M @ a_pred - C @ v_pred
             vec = np.zeros(n)
             vec[idx] = D_6
@@ -318,16 +295,13 @@ class RigidBodyAssembly(AssemblyBase):
     def update(self, pb, compute="all"):
         """Update state from current displacement increment."""
         self._pb_ref = pb
-        # Read accumulated displacement at rigid DOFs
         dof_sol = pb.get_dof_solution()
         if not (np.isscalar(dof_sol) and dof_sol == 0):
-            # _DeltaDisp = current total increment for this time step
             if np.isscalar(pb._dU) and pb._dU == 0:
                 self.sv["_DeltaDisp"] = np.zeros(6)
             else:
                 self.sv["_DeltaDisp"] = pb._dU[self._dof_indices]
 
-        # Update IPC contact from current q
         if self._ipc_collision_mesh is not None:
             q = dof_sol[self._dof_indices] if not np.isscalar(dof_sol) else np.zeros(6)
             self.compute_contact(q, self.rigid_tie, compute="all")
@@ -342,12 +316,10 @@ class RigidBodyAssembly(AssemblyBase):
         v_n = self.sv["Velocity"]
         a_n = self.sv["Acceleration"]
 
-        # Save for to_start rollback
         self.sv_start = {
             k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv.items()
         }
 
-        # Newmark velocity/acceleration update
         new_a = (
             (1 / (self.beta * dt**2)) * delta_u
             - (1 / (self.beta * dt)) * v_n
@@ -376,11 +348,8 @@ class RigidBody:
     approximation). IPC barrier contact is handled via direct Jacobian
     projection ``J^T @ F`` in the 6-DOF space.
 
-    Two solver modes:
-    - ``body.solve(dt, tmax)`` — direct 6x6 Newmark integrator (fast,
-      standalone, no Fedoo Problem needed).
-    - ``body.add_to_problem(pb)`` — integrate with Fedoo's
-      NonLinearNewmark for mixed rigid-deformable problems.
+    Solve via ``body.solve(dt, tmax)`` (wraps ``NonLinear``) or integrate
+    into an existing problem with ``body.add_to_problem(pb)``.
 
     Parameters
     ----------
@@ -464,11 +433,6 @@ class RigidBody:
             mesh=mesh,
             name=f"{name}_asm",
         )
-        self._rayleigh_alpha = 0.0
-
-    # ------------------------------------------------------------------
-    # Forces and damping
-    # ------------------------------------------------------------------
 
     def set_force(self, force):
         """Set external force [Fx, Fy, Fz] on translational DOFs."""
@@ -484,12 +448,7 @@ class RigidBody:
 
     def set_rayleigh_damping(self, alpha):
         """Set mass-proportional damping: C = alpha * M."""
-        self._rayleigh_alpha = float(alpha)
         self.assembly.rayleigh_alpha = float(alpha)
-
-    # ------------------------------------------------------------------
-    # IPC contact
-    # ------------------------------------------------------------------
 
     def enable_ipc_contact(self, obstacle_mesh, dhat=0.01, kappa=None):
         """Enable IPC barrier contact with an obstacle surface.
@@ -535,16 +494,11 @@ class RigidBody:
         if kappa is None:
             kappa = 1e9
         asm._ipc_kappa = kappa
-        asm._ipc_kappa_auto = False
         asm._ipc_dhat = dhat
         asm._ipc_broad_phase = ipctk.HashGrid()
         asm._ipc_rest_positions = body_nodes.copy()
         asm._ipc_n_body = n_body
         asm._ipc_obstacle_nodes = obst_nodes.copy()
-
-    # ------------------------------------------------------------------
-    # Fedoo integration
-    # ------------------------------------------------------------------
 
     def add_to_problem(self, pb):
         """Register the rigid body constraint with a Fedoo problem."""
@@ -554,10 +508,6 @@ class RigidBody:
     def Q_total(self):
         """Current total rotation as a Rotation object."""
         return self.constraint.Q_total
-
-    # ------------------------------------------------------------------
-    # Convenience solver (wraps NonLinear)
-    # ------------------------------------------------------------------
 
     def solve(self, dt, tmax, t0=0, print_info=1):
         """Solve rigid body dynamics using Fedoo's NonLinear solver.
@@ -588,10 +538,6 @@ class RigidBody:
         self.add_to_problem(pb)
         pb.nlsolve(dt=dt, tmax=tmax, t0=t0, print_info=print_info, update_dt=False)
         return pb
-
-    # ------------------------------------------------------------------
-    # Inertia computation
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _compute_inertia(mesh, density, center_of_mass):

@@ -4,18 +4,12 @@ Uses RigidBody with Newmark integration built into the assembly,
 solved by Fedoo's standard NonLinear solver.
 """
 
-import sys
+import os
 import time
 import numpy as np
 import pyvista as pv
 
-sys.path.insert(0, "/Users/ychemisky/Documents/GitHub/fedoo")
 import fedoo as fd
-
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
 
 g = 9.81
 mass = 1.0
@@ -87,8 +81,7 @@ print(
 print(f"  z_min={z_hist.min():.4f}m, z_max={z_hist.max():.4f}m")
 
 # Animation
-out_dir = "/Users/ychemisky/Documents/GitHub/fedoo/examples"
-gif_path = f"{out_dir}/rigid_body_bounce_ipc.gif"
+gif_path = os.path.join(os.path.dirname(__file__), "rigid_body_bounce_ipc.gif")
 fps = 25
 frame_skip = max(1, int(1.0 / (fps * dt)))
 frame_indices = np.arange(0, len(t_hist), frame_skip)

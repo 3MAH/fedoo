@@ -4,12 +4,10 @@ A rigid sphere falls under gravity. Compared with z(t) = z0 - 0.5*g*t^2.
 Uses RigidBody + NonLinear (Fedoo's standard solver).
 """
 
-import sys
 import time
 import numpy as np
 import pyvista as pv
 
-sys.path.insert(0, "/Users/ychemisky/Documents/GitHub/fedoo")
 import fedoo as fd
 
 g = 9.81
