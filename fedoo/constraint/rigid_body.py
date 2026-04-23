@@ -325,6 +325,9 @@ class RigidBodyAssembly(AssemblyBase):
             k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv.items()
         }
 
+        if not np.any(delta_u):
+            return
+
         new_a = (
             (1 / (self.beta * dt**2)) * delta_u
             - (1 / (self.beta * dt)) * v_n
