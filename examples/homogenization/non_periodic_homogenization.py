@@ -54,7 +54,7 @@ dic.update(box_mesh.faces)
 dic.update(box_mesh.edges)
 dic.update(box_mesh.corners)
 dic.update(box_mesh.closest_points_on_boundaries(k_neighbours=3))
-dic["d_rve"] = list(box_mesh.rve.dim)
+dic["rve_size"] = list(box_mesh.rve.dim)
 
 ###############################################################################
 # Define the material and weak formulation

@@ -179,19 +179,19 @@ class PeriodicBC(BCBase):
         :return: A dictionnary containing all the mesh listes (faces, edges, corners)
         """
 
-        d_rve = []
+        rve_size = []
         crd = mesh.nodes
 
         xmax = np.max(crd[:, 0])
         xmin = np.min(crd[:, 0])
         ymax = np.max(crd[:, 1])
         ymin = np.min(crd[:, 1])
-        d_rve.append(xmax - xmin)
-        d_rve.append(ymax - ymin)
+        rve_size.append(xmax - xmin)
+        rve_size.append(ymax - ymin)
         if self.dim == 3:
             zmax = np.max(crd[:, 2])
             zmin = np.min(crd[:, 2])
-            d_rve.append(zmax - zmin)
+            rve_size.append(zmax - zmin)
 
         face_Xm = np.where(np.abs(crd[:, 0] - xmin) < tol)[0]
         face_Xp = np.where(np.abs(crd[:, 0] - xmax) < tol)[0]
@@ -376,7 +376,7 @@ class PeriodicBC(BCBase):
             bn["x+y+z-"] = corner_XpYpZm
             bn["x+y+z+"] = corner_XpYpZp
 
-        self.d_rve = d_rve
+        self.rve_size = rve_size
 
     def _list_MPC_rotation(self):
         """
@@ -968,7 +968,7 @@ class PeriodicBC(BCBase):
     def _build_D_matrix(self):
         """Build the displacement-gradient factor matrix D[dof, direction]."""
         ndim = self.dim
-        d = np.array(self.d_rve[:ndim])
+        d = np.array(self.rve_size[:ndim])
         sc = self.shear_coef
         D = -sc * np.tile(d, (ndim, 1))
         np.fill_diagonal(D, -d)
@@ -1036,7 +1036,7 @@ class PeriodicBC(BCBase):
         return self._list_MPC_from_spec(self.boundary_nodes, spec)
 
     def _construct_faces_edges_corners_from_dic_non_periodic_node_distance(
-        self, dic_closest_points_on_boundaries, d_rve
+        self, dic_closest_points_on_boundaries, rve_size
     ):
         """Populate boundary_nodes from a microgen-style dictionary.
 
@@ -1047,9 +1047,9 @@ class PeriodicBC(BCBase):
         for key in self._KEYS_3D:
             bn[key] = dic_closest_points_on_boundaries[key]
 
-        if d_rve is None:
-            d_rve = dic_closest_points_on_boundaries.get("d_rve")
-        self.d_rve = d_rve
+        if rve_size is None:
+            rve_size = dic_closest_points_on_boundaries.get("rve_size")
+        self.rve_size = rve_size
 
     @staticmethod
     def _mpc_from_2d(node_sets_2d, variables, factors_2d):
@@ -1456,7 +1456,7 @@ class PeriodicBC(BCBase):
             else:
                 self._construct_faces_edges_corners_from_dic_non_periodic_node_distance(
                     dic_closest_points_on_boundaries,
-                    dic_closest_points_on_boundaries.get("d_rve", None),
+                    dic_closest_points_on_boundaries.get("rve_size", None),
                 )
                 res = self._list_MPC_non_periodic_node_distance()
 
