@@ -112,7 +112,8 @@ print(
 print(f"  z_min={z_hist.min():.4f}m")
 
 # Animation
-gif_path = os.path.join(os.path.dirname(__file__), "rigid_body_cow_bounce.gif")
+_here = os.path.dirname(__file__) if "__file__" in globals() else os.getcwd()
+gif_path = os.path.join(_here, "rigid_body_cow_bounce.gif")
 fps = 25
 frame_skip = max(1, int(1.0 / (fps * dt)))
 frame_indices = np.arange(0, len(t_hist), frame_skip)

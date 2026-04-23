@@ -122,6 +122,11 @@ class RigidBodyAssembly(AssemblyBase):
         if self.mesh is None:
             self.mesh = pb.mesh
 
+        if not np.any(self.sv["Acceleration"]):
+            M = self._get_mass_matrix()
+            self.sv["Acceleration"] = np.linalg.solve(M, self.force)
+            self.sv_start["Acceleration"] = self.sv["Acceleration"].copy()
+
     @property
     def dof_indices(self):
         """Global DOF indices [Fx,Fy,Fz,Mx,My,Mz] in the problem."""
