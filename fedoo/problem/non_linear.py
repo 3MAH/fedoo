@@ -29,7 +29,7 @@ class _NonLinearBase:
             "err0": None,  # default error for NR error estimation
             "criterion": "Force",
             "tol": 5e-3,
-            "max_subiter": 10,
+            "max_subiter": 16,
             "dt_increase_niter": None,
             "norm_type": 2,
             "force_elastic_stiffness": False,
@@ -41,7 +41,7 @@ class _NonLinearBase:
             "eigenvalue_shift_factor": 1e-4,
             "check_early_divergence": True,
         }
-        """Parameters to set the newton raphson algorithm.
+        """Parameters to set the Newton-Raphson algorithm.
 
         The available parameters can be modified with the method
         :py:meth:`fedoo.problem.non_linear.set_nr_criterion`.
@@ -582,7 +582,7 @@ class _NonLinearBase:
               If None (default), err0 is automatically computed.
             * 'tol': float, default is 5e-3.
               Error tolerance for convergence.
-            * 'max_subiter': int, default = 10.
+            * 'max_subiter': int, default = 16.
               Number of nr iterations before returning a convergence error.
             * 'dt_increase_niter': int or None, default = None.
               Number of nr iterations threshold that define an easy convergence.

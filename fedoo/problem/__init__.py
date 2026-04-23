@@ -72,7 +72,7 @@ The following parameters can be adjusted via :meth:`NonLinear.set_nr_criterion` 
 * **tol**: The convergence tolerance (default: ``5e-3``). A smaller value increases 
   precision but may require more iterations.
 * **max_subiter**: The maximum number of NR iterations allowed per time step 
-  before failure. The default is 10, but for contact or highly non-linear 
+  before failure. The default is 16, but for contact or highly non-linear 
   behavior, it is recommended to increase this value.
 * **err0**: The reference error used for normalization. If ``None`` (default), 
   it is assessed based on the criterion:

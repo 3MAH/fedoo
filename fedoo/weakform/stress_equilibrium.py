@@ -3,16 +3,9 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-
-try:
-    from simcoon import simmit as sim
-    from simcoon import Rotation as SimRotation
-
-    USE_SIMCOON = True
-except ModuleNotFoundError:
-    USE_SIMCOON = False
-
 import numpy as np
+import simcoon as sim
+from simcoon import Rotation as SimRotation
 
 
 class StressEquilibrium(WeakFormBase):
@@ -175,11 +168,6 @@ class StressEquilibrium(WeakFormBase):
             )
 
         if assembly._nlgeom:
-            if not (USE_SIMCOON):
-                raise ModuleNotFoundError(
-                    "Simcoon library need to be installed to deal with \
-                     geometric non linearities (nlgeom = True)"
-                )
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
                 if self.space._dimension == "2Daxi":
@@ -203,8 +191,9 @@ class StressEquilibrium(WeakFormBase):
         displacement = pb.get_dof_solution()
         if np.isscalar(displacement) and displacement == 0:
             assembly.sv["DispGradient"] = 0
-            assembly.sv["Stress"] = 0
-            assembly.sv["Strain"] = 0
+            if "Stress" not in assembly.sv:
+                assembly.sv["Stress"] = 0
+                assembly.sv["Strain"] = 0
         else:
             # Compute the strain required for the constitutive law.
             if assembly._nlgeom:

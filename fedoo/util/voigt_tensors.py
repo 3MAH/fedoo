@@ -1,13 +1,7 @@
 """Symmetric tensor objects based on the voigt notations."""
 
 import numpy as np
-
-try:
-    from simcoon import simmit as sim
-
-    USE_SIMCOON = True
-except ImportError:
-    USE_SIMCOON = False
+import simcoon as sim
 
 
 class _SymetricTensorList(list):  # base class for StressTensorList and StrainTensorList
@@ -252,12 +246,9 @@ class StressTensorList(_SymetricTensorList):
         StressTensorList
             The converted stress tensors in PK2 formulation.
         """
-        if USE_SIMCOON:
-            return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy=False)
-            )
-        else:
-            raise ImportError("Install simcoon to allow conversion from cauchy to pk2")
+        return StressTensorList(
+            sim.stress_convert(self.asarray(), F, "Cauchy2PKII", copy=False)
+        )
 
     def pk2_to_cauchy(self, F):
         """Convert Second Piola-Kirchhoff (PK2) stress tensors to Cauchy stress tensors.
@@ -272,28 +263,9 @@ class StressTensorList(_SymetricTensorList):
         StressTensorList
             The converted stress tensors in Cauchy formulation.
         """
-        if USE_SIMCOON:
-            return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy=False)
-            )
-        else:
-            pk2 = self.to_tensor().transpose(2, 0, 1)
-
-            F = np.transpose(np.array(F)[:, :, :], (2, 0, 1))
-            J = np.linalg.det(F)
-            FT = F.transpose(0, 2, 1)
-
-            cauchy = (1 / J).reshape(-1, 1, 1) * (F @ pk2 @ FT)
-            return StressTensorList(
-                [
-                    cauchy[:, 0, 0],
-                    cauchy[:, 1, 1],
-                    cauchy[:, 2, 2],
-                    cauchy[:, 0, 1],
-                    cauchy[:, 0, 2],
-                    cauchy[:, 1, 2],
-                ]
-            )
+        return StressTensorList(
+            sim.stress_convert(self.asarray(), F, "PKII2Cauchy", copy=False)
+        )
 
     def cauchy_to_pk1(self, F):
         """Convert Cauchy stress tensors to First Piola-Kirchhoff (PK1) stress tensors.
@@ -310,12 +282,9 @@ class StressTensorList(_SymetricTensorList):
         StressTensorList
             The converted stress tensors in PK2 formulation.
         """
-        if USE_SIMCOON:
-            return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy=False)
-            )
-        else:
-            raise ImportError("Install simcoon to allow conversion from cauchy to pk1")
+        return StressTensorList(
+            sim.stress_convert(self.asarray(), F, "Cauchy2PKI", copy=False)
+        )
 
     def pk1_to_cauchy(self, F):
         """Convert First Piola-Kirchhoff (PK1) stress tensors to Cauchy stress tensors.
@@ -330,12 +299,9 @@ class StressTensorList(_SymetricTensorList):
         StressTensorList
             The converted stress tensors in Cauchy formulation.
         """
-        if USE_SIMCOON:
-            return StressTensorList(
-                sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
-            )
-        else:
-            raise ImportError("Install simcoon to allow conversion from pk1 to cauchy")
+        return StressTensorList(
+            sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
+        )
 
     def von_mises(self):
         """Calculate the Von Mises equivalent stress.

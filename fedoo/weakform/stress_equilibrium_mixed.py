@@ -94,10 +94,16 @@ class StressEquilibriumMixed(StressEquilibrium):
         else:
             # Small strain:
             # p_mat is > 0 for compressive
-            p_mat = (-1 / 3.0) * (
-                initial_stress[0] + initial_stress[1] + initial_stress[2]
-            )
-            sigma_dev = [initial_stress[i] + (p_mat if i < 3 else 0) for i in range(6)]
+            if not (np.isscalar(initial_stress) and initial_stress == 0):
+                p_mat = (-1 / 3.0) * (
+                    initial_stress[0] + initial_stress[1] + initial_stress[2]
+                )
+                sigma_dev = [
+                    initial_stress[i] + (p_mat if i < 3 else 0) for i in range(6)
+                ]
+            else:
+                p_mat = 0
+                sigma_dev = [0 for i in range(6)]
 
             # Decompose Tangent Matrix H into Deviatoric and Volumetric parts
             # row_p[j] = d(p_mat)/d(eps_j) = 1/3 * sum_i=1..3 H[i][j]
@@ -226,11 +232,13 @@ class StressEquilibriumMixed(StressEquilibrium):
         assembly.sv["_Pressure_gp"] = 0
         assembly.sv["StressDev"] = assembly.sv["Stress"]
         assembly.sv["StrainIsochoric"] = assembly.sv["Strain"]
+        if assembly._nlgeom:
+            assembly.sv["lnJ"] = np.zeros(assembly.n_gauss_points)
 
     def set_start(self, assembly, pb):
         """Start a new time increment."""
-        super().update(assembly, pb)
-        if assembly._nlgeom and not np.array_equal(assembly.sv["Stress"], 0):
+        super().set_start(assembly, pb)
+        if assembly._nlgeom and not np.array_equal(pb.get_dof_solution(), 0):
             # Stress and Strain has been rotated. Update StressDev and StrainIsochoric.
             assembly.sv["StressDev"] = assembly.sv["Stress"].copy(asarray=True)
             assembly.sv["StressDev"].array[:3] += assembly.sv["_Pressure_gp"]
