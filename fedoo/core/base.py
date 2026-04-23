@@ -216,6 +216,11 @@ class ConstitutiveLaw:
         assert isinstance(name, str), "An name must be a string"
         self.__name = name
         self.local_frame = None
+        self.is_initialized = False
+        """Tag set to True once the law is intialized.
+        
+        Only used when relevant.
+        """
         self._dimension = None
         # str or None to specify a space and associated model
         # (for instance "2Dstress" for plane stress)
@@ -231,7 +236,7 @@ class ConstitutiveLaw:
 
         This function is called when a problem is reset.
         """
-        pass
+        self.is_initialized = False  # tag set to True once the law is intialized
 
     def set_start(self, assembly, pb):
         """Begin a new time iteration."""
@@ -243,7 +248,7 @@ class ConstitutiveLaw:
 
     def initialize(self, assembly, pb):
         """Initialize the constitutive law for the current problem."""
-        pass
+        self.is_initialized = True  # tag set to True once the law is intialized
 
     def update(self, assembly, pb):
         """Update the constitutive law for the current problem state."""

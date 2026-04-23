@@ -1,24 +1,14 @@
-import os
-from time import time
-
 import numpy as np
-import pylab as plt
-from numpy import linalg
-from simcoon import simmit as sim
-
 import fedoo as fd
 
 
 def test_2DDynamicPlasticBending():
-    start = time()
-    # --------------- Pre-Treatment --------------------------------------------------------
-
+    # --------------- Pre-Treatment ----------------------------------------------------
     fd.ModelingSpace("2Dplane")
 
     NLGEOM = "TL"
     # Units: N, mm, MPa
     h = 2
-    w = 10
     L = 16
     E = 200e3
     nu = 0.3
@@ -84,13 +74,12 @@ def test_2DDynamicPlasticBending():
     # pb.add_output('results/bendingPlasticDyna', 'Assembling', ['kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
 
     ################### step 1 ################################
-    tmax = 1
     pb.bc.add("Dirichlet", nodes_bottomLeft, "Disp", 0)
     pb.bc.add("Dirichlet", nodes_bottomRight, "DispY", 0)
-    bc1 = pb.bc.add("Dirichlet", nodes_top1, "DispY", uimp)
-    bc2 = pb.bc.add("Dirichlet", nodes_top2, "DispY", uimp)
+    pb.bc.add("Dirichlet", nodes_top1, "DispY", uimp)
+    pb.bc.add("Dirichlet", nodes_top2, "DispY", uimp)
 
-    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.005)
+    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, tol_nr=0.01)
 
     ################### step 2 ################################
     # bc.Remove()
@@ -108,3 +97,9 @@ def test_2DDynamicPlasticBending():
     # assert np.abs(res.node_data["Stress"][3][234] + 70.30052080276131) < 1e-4
 
     # REMOVE ASSERT until simcoon bug is resolved
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

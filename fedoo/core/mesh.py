@@ -300,7 +300,7 @@ class Mesh(MeshBase):
     ) -> np.ndarray[int]:  # coordinates = None, nb_added = None):
         """
         Add some nodes to the node list.
-        The new nodes are not liked to any element.
+        The new nodes are not linked to any element.
 
         The method can be used in several ways:
 

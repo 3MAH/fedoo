@@ -289,7 +289,11 @@ class _BlocSparse:
                         [
                             self.data[i][j]
                             if i <= j
-                            else self.data[j][i].transpose(0, 2, 1)
+                            else (
+                                self.data[j][i].transpose(0, 2, 1)
+                                if self.data[j][i] is not None
+                                else None
+                            )
                             for j in range(self.nbBlocCol)
                         ]
                         for i in range(self.nbBlocRow)

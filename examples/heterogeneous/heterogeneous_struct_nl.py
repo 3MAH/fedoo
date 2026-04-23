@@ -21,7 +21,7 @@ mesh = mesh + mesh_disk
 # glue the inclusion to the matrix
 mesh.merge_nodes(np.c_[mesh.node_sets["hole_edge"], mesh.node_sets["boundary"]])
 
-method = 1
+method = 3
 if method == 1:
     ### method 1: sum assembly
     # Define an elastic isotropic material with
@@ -29,7 +29,6 @@ if method == 1:
     material2 = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
     props = np.array([2e5, 0.3, 1e-5, 200, 1000, 0.3])  # E, nu, alpha, Re,k,m
     material1 = fd.constitutivelaw.Simcoon("EPICP", props)
-    material1.use_elastic_lt = False
 
     # Create the weak formulation of the mechanical equilibrium equation
     wf1 = fd.weakform.StressEquilibrium(material1, nlgeom=True)
@@ -43,11 +42,9 @@ if method == 1:
 
 elif method == 3:
     ### method 3: build an heterogeneous constitutive law
-    # material1 = fd.constitutivelaw.ElasticIsotrop(2e4, 0.3)
     material2 = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
     props = np.array([2e5, 0.3, 1e-5, 200, 1000, 0.3])  # E, nu, alpha, Re,k,m
     material1 = fd.constitutivelaw.Simcoon("EPICP", props)
-    material1.use_elastic_lt = False
 
     material = fd.constitutivelaw.Heterogeneous(
         (material1, material2), ("matrix", "inclusion")
@@ -59,7 +56,7 @@ elif method == 3:
 
 # Define a new static problem
 pb = fd.problem.NonLinear(assembly)
-
+pb.set_nr_criterion(max_subiter=10)
 # Definition of the set of nodes for boundary conditions
 left = mesh.find_nodes("X", mesh.bounding_box.xmin)
 right = mesh.find_nodes("X", mesh.bounding_box.xmax)
@@ -72,8 +69,6 @@ pb.bc.add("Dirichlet", left, "Disp", 0)
 # pb.bc.add('Dirichlet', bottom, 'DispY',    0 )
 # displacement on right (ux=0.1mm)
 pb.bc.add("Dirichlet", right, "Disp", [20, 0])
-
-pb.apply_boundary_conditions()
 
 # Solve problem
 pb.nlsolve(dt=0.1, print_info=1)

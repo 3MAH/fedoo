@@ -55,19 +55,28 @@ contact = fd.constraint.contact.SelfContact(surf)
 
 # contact parameters
 contact.contact_search_once = True
-contact.eps_n = 1e6  # contact penalty
-contact.max_dist = 1.5  # max distance for the contact search
+contact.eps_n = 1e4  # contact penalty
+contact.max_dist = 1.0  # max distance for the contact search
 
 ###############################################################################
-# We define a non linear problem including geometrical non linearities with the
-# updated lagrangian method (NLGEOM = 'UL') which is the default method in
-# fedoo (equivalent to NLGEOM = True).
-# Some parameters of the newton-raphson algorithm are changed and the output
-# files to save at each iteration are defined.
+# We define a non-linear problem including geometric nonlinearities using the
+# Updated Lagrangian method (NLGEOM = 'UL'), which is the default in fedoo
+# (equivalent to NLGEOM = True).
+#
+# The Line Search method is activated to improve the convergence of the
+# Newton-Raphson algorithm. This necessitates increasing the maximum
+# sub-iterations (max_subiter from 10 to 20) to allow for step-length
+# optimization. Additionally, 'adaptive_stiffness' is enabled to stabilize
+# convergence during sharp elastic-to-plastic transitions.
 
 NLGEOM = "UL"
 pb = fd.problem.NonLinear(assembly + contact, nlgeom=NLGEOM)
-pb.set_nr_criterion("Displacement", err0=None, tol=1e-2, max_subiter=5)
+pb.set_nr_criterion(
+    "Displacement",
+    tol=1e-2,
+    max_subiter=20,
+    adaptive_stiffness=True,
+)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
@@ -83,7 +92,8 @@ top = mesh.node_sets["top"]
 
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
 pb.bc.add("Dirichlet", top, "Disp", [0, -150])
-pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0)
+pb.add_line_search()
+pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0, dt_min=1e-8)
 
 
 ###############################################################################
@@ -154,7 +164,7 @@ data_3d.plot(
 pl.show()
 
 ###############################################################################
-# This example generate a relastic mp4 movie of the 3d deformation of the
+# This example generate a realistic mp4 movie of the 3d deformation of the
 # cylinder. It is commented because it is not possible to render the mp4 movie
 # with sphinx-gallery.
 

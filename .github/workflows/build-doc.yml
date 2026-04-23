@@ -80,21 +80,23 @@ jobs:
           path:
             docs/build/html/
 
-      - name: Deploy HTML documentation
-        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') 
+      - name: Deploy HTML documentation (Release Only)
+        # Only runs if a tag starting with 'v' is pushed
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: peaceiris/actions-gh-pages@v4
         with:
-          # deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
           external_repository: 3MAH/fedoo-docs
           publish_branch: main
           publish_dir: ./docs/build/html
-      
-      - name: Deploy HTML documentation for pull request
-        if: ${{ ! github.ref == 'refs/heads/master' && ! startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Deploy dev documentation
+        # Runs on master pushes or Pull Requests (NOT on tags)
+        # to preview dev documentation: "http://htmlpreview.github.io/?https://github.com/3MAH/fedoo-docs/blob/dev/index.html"
+        if: (!startsWith(github.ref, 'refs/tags/v'))
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
           external_repository: 3MAH/fedoo-docs
-          publish_branch: docs_for_pull_request
+          publish_branch: dev
           publish_dir: ./docs/build/html

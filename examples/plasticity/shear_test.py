@@ -2,10 +2,6 @@ import fedoo as fd
 import numpy as np
 from time import time
 import os
-import pylab as plt
-from numpy import linalg
-import pyvista as pv
-
 
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
@@ -76,33 +72,20 @@ fd.Assembly.create(
 )  # uses MeshChange=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling")
-# Problem.set_solver('cg', precond = True)
-pb.set_nr_criterion("Displacement", err0=None, tol=5e-4, max_subiter=5)
-
-# Problem.set_nr_criterion("Displacement")
-# Problem.set_nr_criterion("Work")
-# Problem.set_nr_criterion("Force")
+pb.set_nr_criterion("Force", err0=None, tol=5e-3, max_subiter=10)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Disp'], output_type='Node', file_format ='npz')
-# results = pb.add_output(res_dir+filename, 'Assembling', ['Cauchy', 'PKII', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='GaussPoint', file_format ='npz')
 
 results = pb.add_output(
-    res_dir + filename, "Assembling", ["Disp", "Stress", "Strain", "Statev", "Wm"]
+    res_dir + filename, "Assembling", ["Disp", "Stress", "Strain", "P", "EP", "Wm"]
 )
 
 ################### step 1 ################################
 # node sets for boundary conditions
 nodes_bottom = mesh.find_nodes("Y", 0)
 nodes_top = mesh.find_nodes("Y", 1)
-
-
-# pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
-# pb.bc.add('Dirichlet','DispY', 0,nodes_top)
-# pb.bc.add('Dirichlet','DispZ', 0,nodes_top)
-# pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, ["DispY", "DispZ"], 0)

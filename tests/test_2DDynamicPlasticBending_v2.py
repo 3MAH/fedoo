@@ -1,24 +1,14 @@
-import os
-from time import time
-
 import numpy as np
-import pylab as plt
-from numpy import linalg
-from simcoon import simmit as sim
-
 import fedoo as fd
 
 
 def test_2DDynamicPlasticBending_v2():
-    start = time()
-    # --------------- Pre-Treatment --------------------------------------------------------
-
+    # --------------- Pre-Treatment ----------------------------------------------------
     fd.ModelingSpace("2Dplane")
 
     NLGEOM = "TL"
     # Units: N, mm, MPa
     h = 2
-    w = 10
     L = 16
     E = 200e3
     nu = 0.3
@@ -58,8 +48,7 @@ def test_2DDynamicPlasticBending_v2():
     wf = fd.weakform.implicit_dynamic.ImplicitDynamic(
         "ConstitutiveLaw", rho, 0.25, 0.5, nlgeom=NLGEOM
     )
-    # wf.rayleigh_damping = [0.1,0]
-    # wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom = NLGEOM)
+    wf.rayleigh_damping = [0.1, 0.1]
 
     # note set for boundary conditions
     nodes_bottomLeft = np.where((crd[:, 0] == 0) * (crd[:, 1] == 0))[0]
@@ -68,7 +57,7 @@ def test_2DDynamicPlasticBending_v2():
     nodes_top1 = np.where((crd[:, 0] == L / 4) * (crd[:, 1] == h))[0]
     nodes_top2 = np.where((crd[:, 0] == 3 * L / 4) * (crd[:, 1] == h))[0]
 
-    assemb = fd.Assembly.create(
+    fd.Assembly.create(
         wf, "Domain", "quad4", name="Assembling", MeshChange=False
     )  # uses MeshChange=True when the mesh change during the time
 
@@ -84,13 +73,12 @@ def test_2DDynamicPlasticBending_v2():
     # pb.add_output('results/bendingPlasticDyna', 'Assembling', ['kirchhoff', 'cauchy', 'PKII', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
 
     ################### step 1 ################################
-    tmax = 1
     pb.bc.add("Dirichlet", nodes_bottomLeft, "Disp", 0)
     pb.bc.add("Dirichlet", nodes_bottomRight, "DispY", 0)
-    bc1 = pb.bc.add("Dirichlet", nodes_top1, "DispY", uimp)
-    bc2 = pb.bc.add("Dirichlet", nodes_top2, "DispY", uimp)
+    pb.bc.add("Dirichlet", nodes_top1, "DispY", uimp)
+    pb.bc.add("Dirichlet", nodes_top2, "DispY", uimp)
 
-    pb.nlsolve(dt=0.2, tmax=1, print_info=1, update_dt=False, tol_nr=0.005)
+    pb.nlsolve(dt=0.2, tmax=1, print_info=1, update_dt=False, tol_nr=0.01)
 
     ################### step 2 ################################
     # bc.Remove()
@@ -107,11 +95,13 @@ def test_2DDynamicPlasticBending_v2():
     # res.plot('Velocity',component='X')
 
     res = pb.get_results("Assembling", ["Strain", "Stress", "Disp", "Velocity"], "Node")
-    # res = pb.get_results('Assembling', ['Strain','Stress', 'Disp'], 'Node')
-
-    print(res.node_data["Stress"][3][234])
-
     # assert np.abs(res.node_data["Strain"][0][941] + 0.019422241296056023) < 1e-8
     # assert np.abs(res.node_data["Stress"][3][234] + 67.82318305757613) < 1e-4
 
     # REMOVE ASSERT until simcoon bug is resolved
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

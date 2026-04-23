@@ -3,15 +3,9 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-
-try:
-    from simcoon import simmit as sim
-
-    USE_SIMCOON = True
-except ModuleNotFoundError:
-    USE_SIMCOON = False
-
 import numpy as np
+import simcoon as sim
+from simcoon import Rotation as SimRotation
 
 
 class StressEquilibrium(WeakFormBase):
@@ -174,11 +168,6 @@ class StressEquilibrium(WeakFormBase):
             )
 
         if assembly._nlgeom:
-            if not (USE_SIMCOON):
-                raise ModuleNotFoundError(
-                    "Simcoon library need to be installed to deal with \
-                     geometric non linearities (nlgeom = True)"
-                )
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
                 if self.space._dimension == "2Daxi":
@@ -202,8 +191,9 @@ class StressEquilibrium(WeakFormBase):
         displacement = pb.get_dof_solution()
         if np.isscalar(displacement) and displacement == 0:
             assembly.sv["DispGradient"] = 0
-            assembly.sv["Stress"] = 0
-            assembly.sv["Strain"] = 0
+            if "Stress" not in assembly.sv:
+                assembly.sv["Stress"] = 0
+                assembly.sv["Strain"] = 0
         else:
             # Compute the strain required for the constitutive law.
             if assembly._nlgeom:
@@ -281,28 +271,24 @@ class StressEquilibrium(WeakFormBase):
     def set_start(self, assembly, pb):
         """Start a new time increment."""
         if assembly._nlgeom:
-            if "DStrain" in assembly.sv:
-                # rotate strain and stress -> need to be checked
-                assembly.sv["Strain"] = StrainTensorList(
-                    sim.rotate_strain_R(
-                        assembly.sv_start["Strain"].asarray(),
-                        assembly.sv["DR"],
-                    )
-                    + assembly.sv["DStrain"]
-                )
-                assembly.sv["DStrain"] = StrainTensorList(
-                    np.zeros((6, assembly.n_gauss_points), order="F")
-                )
-            # or assembly.sv['DStrain'] = 0 perhaps more efficient to avoid a
-            # nul sum
-
-            # update cauchy stress
             if not (np.array_equal(assembly.sv["DispGradient"], 0)):
                 # True when the problem have been updated once
+                rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
+                if "DStrain" in assembly.sv:
+                    # rotate strain
+                    assembly.sv["Strain"] = StrainTensorList(
+                        rot.apply_strain(
+                            assembly.sv_start["Strain"].asarray(),
+                        )
+                        + assembly.sv["DStrain"]
+                    )
+                    assembly.sv["DStrain"] = StrainTensorList(
+                        np.zeros((6, assembly.n_gauss_points), order="F")
+                    )
+
+                # update cauchy stress
                 stress = assembly.sv["Stress"].asarray()
-                assembly.sv["Stress"] = StressTensorList(
-                    sim.rotate_stress_R(stress, assembly.sv["DR"])
-                )
+                assembly.sv["Stress"] = StressTensorList(rot.apply_stress(stress))
                 if assembly._nlgeom == "TL":
                     assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                         assembly.sv["F"]

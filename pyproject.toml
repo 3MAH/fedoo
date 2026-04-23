@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fedoo"
-version = "0.7.0"
+version = "0.8.0"
 authors = [
     {name = "3MAH", email = 'set3mah@gmail.com'},
 ]
@@ -27,10 +27,12 @@ classifiers = [
 dependencies = [
     'numpy>=2.00',
     'scipy',
+    'simcoon>=1.11.0',
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,simcoon,dataio,test]']
+all = ['fedoo[solver,plot,test,ipc]']
+ipc = ['ipctk']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'scikit-umfpack ; platform_machine=="arm64" or platform_machine=="aarch64"'
@@ -38,29 +40,27 @@ solver = [
 plot = [
     'matplotlib',
     'pyvista[io]',
-    'pyvistaqt'
-]
-dataio = [
-    'pandas'
 ]
 simcoon = [
-    'simcoon'
+    'simcoon>=1.11.0'
 ]
 test = [
     'pytest',
     'pytest-cov'
 ]
+gui = [
+    'pyvistaqt',
+    'pyside6',
+]
 other = [
-    'microgen'
+    'pandas',
+    'microgen',
 ]
 
 [project.urls]
-Documentation = 'https://fedoo.readthedocs.io/en/latest/'
+Documentation = 'https://3mah.github.io/fedoo-docs/'
 "Bug Tracker" = 'https://github.com/3MAH/fedoo/issues'
 "Source Code" = 'https://github.com/3MAH/fedoo'
-
-[tool.setuptools.dynamic]
-version = {attr = 'fedoo._version.__version__'}
 
 [tool.setuptools.packages.find]
 include = [

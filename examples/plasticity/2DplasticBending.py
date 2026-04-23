@@ -3,9 +3,6 @@ import numpy as np
 from time import time
 import os
 
-# import pylab as plt
-from numpy import linalg
-
 start = time()
 # --------------- Pre-Treatment --------------------------------------------------------
 
@@ -37,7 +34,7 @@ crd = mesh.nodes
 
 mat = 1
 if mat == 0:  # linear
-    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
+    material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="Constitu1tiveLaw")
 elif mat == 1:
     # isotropic plasticity with power law hardening sigma = k*eps_p**m
     Re = 300
@@ -47,8 +44,9 @@ elif mat == 1:
     material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
 
 
+# wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM)
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
-wf.fbar = True
+# wf.fbar = True
 
 # alternative using element 'quad4' with reduced integration
 # ie n_elm_gp = 1 combined with hourglass control
@@ -76,7 +74,7 @@ pb = fd.problem.NonLinear("Assembling")
 
 # Problem.set_solver('cg', precond = True)
 
-pb.set_nr_criterion("Displacement")
+# pb.set_nr_criterion("Displacement")
 # Problem.set_nr_criterion("Work")
 # Problem.set_nr_criterion("Force")
 
@@ -112,6 +110,7 @@ pb.bc.add(
     0,
 )
 pb.bc.add("Dirichlet", bottom_right, "DispY", 0)
+# pb.bc.add("Neumann", top_center, "DispY", -380, name="disp")
 pb.bc.add("Dirichlet", top_center, "DispY", uimp, name="disp")
 
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, tol_nr=0.05, interval_output=0.05)
@@ -119,12 +118,18 @@ pb.nlsolve(dt=0.05, tmax=1, update_dt=True, tol_nr=0.05, interval_output=0.05)
 ################### step 2 ################################
 # compute residual stresses
 pb.bc.remove("disp")
+F = pb.get_ext_forces("DispY")[top_center]
 
-pb.bc.add("Neumann", top_center, "DispY", 0)  # no force applied = relaxation
+pb.bc.add(
+    "Neumann", top_center, "DispY", 0, start_value=F
+)  # no force applied = relaxation
 
-pb.nlsolve(dt=1.0, update_dt=True, tol_nr=0.05)
+pb.set_nr_criterion("Force", adaptive_stiffness=True)
+
+pb.add_line_search()
+pb.nlsolve(dt=0.25, t0=1, tmax=2, update_dt=True, tol_nr=0.05)
 
 print(time() - start)
 
 res.plot("Stress", "vm")
-res.write_movie("test", "Stress", "vm")
+# res.write_movie("test", "Stress", "vm")
