@@ -26,5 +26,4 @@ dependencies:
   - trame
   - ipywidgets
   - pip:
-    - --no-deps microgen
     - ipctk
