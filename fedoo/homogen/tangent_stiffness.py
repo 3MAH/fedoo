@@ -92,7 +92,11 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     else:
         pb_post_tt = Problem["_perturbation"]
 
-    pb_post_tt.set_A(pb.get_A())
+    A = pb.get_A()
+    if A is None and hasattr(pb, "assembly"):
+        A = pb.assembly.get_global_matrix()
+        pb.set_A(A)
+    pb_post_tt.set_A(A)
     pb.bc.remove("_Strain")
 
     # typeBC = 'Dirichlet' #doesn't work with meshperio = False
