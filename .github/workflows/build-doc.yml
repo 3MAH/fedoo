@@ -43,6 +43,9 @@ jobs:
       - name: Update environment
         run: |
           conda env update -n fedoo-doc -f environment_doc.yml
+          # microgen needs cadquery/gmsh which we don't want pulled in;
+          # the docs only use microgen.box_mesh.BoxMesh which has no such deps.
+          pip install --no-deps microgen
           # swap default vtk for vtk-osmesa (avoid PyVista openGL errors)
           # https://github.com/pyvista/pyvista/blob/main/.github/workflows/vtk-pre-test.yml#L53
           # - pip uninstall -y vtk
