@@ -27,7 +27,7 @@ classifiers = [
 dependencies = [
     'numpy>=2.00',
     'scipy',
-    'simcoon>=1.11.0',
+    'simcoon>=1.11.2',
 ]
 
 [project.optional-dependencies]
@@ -42,7 +42,7 @@ plot = [
     'pyvista[io]',
 ]
 simcoon = [
-    'simcoon>=1.11.0'
+    'simcoon>=1.11.2'
 ]
 test = [
     'pytest',

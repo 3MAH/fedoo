@@ -4,9 +4,11 @@ import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 
 try:
-    from simcoon import Rotation
+    from simcoon import Rotation, dR_drotvec as _simcoon_dR_drotvec
 except ImportError:
     from scipy.spatial.transform import Rotation
+
+    _simcoon_dR_drotvec = None
 
 
 class RigidTie(BCBase):
@@ -230,71 +232,20 @@ class RigidTie(BCBase):
     def _dR_drotvec(omega):
         """Exact derivatives of R(ω) w.r.t. rotation vector components.
 
-        Uses the Rodrigues formula differentiation:
-        ``R = I + (sin θ)/θ [ω]× + (1-cos θ)/θ² [ω]×²``
-
-        For small ``||ω|| < 1e-10``, returns ``dR/dωₖ ≈ [eₖ]×`` (skew of
-        unit vector), which is exact in the limit.
-
-        Parameters
-        ----------
-        omega : ndarray (3,)
-            Rotation vector.
+        Delegates to simcoon's ``dR_drotvec`` (Gallego & Yezzi, 2015).
 
         Returns
         -------
         dR : tuple of 3 ndarrays (3x3)
             (dR/dω₀, dR/dω₁, dR/dω₂).
-
-        References
-        ----------
-        Gallego & Yezzi, "A Compact Formula for the Derivative of a 3-D
-        Rotation in Exponential Coordinates", J. Math. Imaging Vis., 2015.
         """
-        theta = np.linalg.norm(omega)
-
-        # Skew-symmetric matrix of omega
-        W = np.array(
-            [
-                [0, -omega[2], omega[1]],
-                [omega[2], 0, -omega[0]],
-                [-omega[1], omega[0], 0],
-            ]
-        )
-
-        if theta < 1e-10:
-            # Small angle limit: dR/dωₖ = [eₖ]×
-            return (
-                np.array([[0, 0, 0], [0, 0, -1], [0, 1, 0]]),
-                np.array([[0, 0, 1], [0, 0, 0], [-1, 0, 0]]),
-                np.array([[0, -1, 0], [1, 0, 0], [0, 0, 0]]),
+        if _simcoon_dR_drotvec is None:
+            raise ImportError(
+                "RigidTie rotation derivatives require simcoon>=1.11.2 "
+                "(provides simcoon.dR_drotvec)."
             )
-
-        s, c = np.sin(theta), np.cos(theta)
-        t2 = theta * theta
-
-        # Rodrigues coefficients and their derivatives w.r.t. θ
-        a = s / theta  # sin(θ)/θ
-        b = (1 - c) / t2  # (1-cos(θ))/θ²
-        da = (c * theta - s) / t2  # d(sin(θ)/θ)/dθ
-        db = (s * theta - 2 * (1 - c)) / (t2 * theta)  # d((1-cos(θ))/θ²)/dθ
-
-        W2 = W @ W
-        e = np.eye(3)
-        dR = []
-        for k in range(3):
-            # dW/dωₖ = [eₖ]×
-            dW = np.array(
-                [[0, -e[k, 2], e[k, 1]], [e[k, 2], 0, -e[k, 0]], [-e[k, 1], e[k, 0], 0]]
-            )
-            # dW²/dωₖ = dW @ W + W @ dW
-            dW2 = dW @ W + W @ dW
-            # dθ/dωₖ = ωₖ / θ
-            dtk = omega[k] / theta
-
-            dR.append(da * dtk * W + a * dW + db * dtk * W2 + b * dW2)
-
-        return tuple(dR)
+        cube = _simcoon_dR_drotvec(np.asarray(omega, dtype=float))
+        return (cube[:, :, 0], cube[:, :, 1], cube[:, :, 2])
 
     def _compute_slave_disp(self, problem, disp_ref, R):
         """Compute and write slave node displacements from rigid body state."""
