@@ -3,12 +3,7 @@
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 
-try:
-    from simcoon import Rotation, dR_drotvec as _simcoon_dR_drotvec
-except ImportError:
-    from scipy.spatial.transform import Rotation
-
-    _simcoon_dR_drotvec = None
+from simcoon import Rotation, dR_drotvec as _simcoon_dR_drotvec
 
 
 class RigidTie(BCBase):
@@ -239,11 +234,6 @@ class RigidTie(BCBase):
         dR : tuple of 3 ndarrays (3x3)
             (dR/dω₀, dR/dω₁, dR/dω₂).
         """
-        if _simcoon_dR_drotvec is None:
-            raise ImportError(
-                "RigidTie rotation derivatives require simcoon>=1.11.2 "
-                "(provides simcoon.dR_drotvec)."
-            )
         cube = _simcoon_dR_drotvec(np.asarray(omega, dtype=float))
         return (cube[:, :, 0], cube[:, :, 1], cube[:, :, 2])
 
