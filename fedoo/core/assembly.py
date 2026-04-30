@@ -1076,8 +1076,6 @@ class Assembly(AssemblyBase):
         # because we force the good shape with RowBlockMatrix
         res = 0
         nvar = self.space.nvar
-        mesh = self.mesh
-        elm_type = self.elm_type
         if n_elm_gp is None:
             n_elm_gp = self.n_elm_gp
 
@@ -1095,7 +1093,6 @@ class Assembly(AssemblyBase):
             if var[0] in associatedVariables:
                 var.extend(associatedVariables[var[0]][0])
                 coef.extend(associatedVariables[var[0]][1])
-
             assert (
                 operator.op_vir[ii] == 1
             ), "Operator virtual are only required to build FE operators, but not to get element results"

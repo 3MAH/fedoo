@@ -80,3 +80,9 @@ def test_plate_element():
 
     # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],20)
     # plt.plot(StressDistribution[0], z)
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

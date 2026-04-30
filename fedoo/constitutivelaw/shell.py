@@ -10,8 +10,7 @@ import numpy as np
 class ShellBase(ConstitutiveLaw):
     # base model class that should derive any other shell constitutive laws
     def __init__(self, thickness, k=1, name=""):
-        # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
-
+        # k: shear shape factor
         ConstitutiveLaw.__init__(self, name)  # heritage
 
         self.__thickness = thickness
@@ -108,7 +107,7 @@ class ShellBase(ConstitutiveLaw):
 
 class ShellHomogeneous(ShellBase):
     def __init__(self, MatConstitutiveLaw, thickness, k=1, name=""):
-        # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
+        # k: shear shape factor
 
         if isinstance(MatConstitutiveLaw, str):
             MatConstitutiveLaw = ConstitutiveLaw.get_all()[MatConstitutiveLaw]

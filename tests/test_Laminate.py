@@ -87,3 +87,9 @@ def test_laminate():
     # plot the stress distribution
     # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],200)
     # plt.plot(StressDistribution[0], z)
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

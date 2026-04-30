@@ -75,7 +75,7 @@ class BeamEquilibrium(WeakFormBase):
         self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
-        """Method used to treat the geometric non linearities.
+        """Property used to treat the geometric non linearities.
             * Set to False if geometric non linarities are ignored (default).
             * Set to True or 'UL' to use the updated lagrangian method
               (update the mesh)
@@ -321,7 +321,7 @@ class BeamEquilibrium(WeakFormBase):
                                 .T.ravel()
                             )
 
-                            # Or equivalent bug sigularité if angle > pi
+                            # Or equivalent but sigularité if angle > pi
                             # pb._dU[
                             #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             #     * assembly.mesh.n_nodes
