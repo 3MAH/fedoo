@@ -98,6 +98,12 @@ class RigidTie(BCBase):
         return "\n".join(list_str)
 
     def initialize(self, problem):
+        if problem.space.is_axisymmetric:
+            raise NotImplementedError(
+                "RigidTie does not support the '2Daxi' ModelingSpace: "
+                "a 3D rigid body has rotational degrees of freedom that "
+                "are not expressible in a 2D axisymmetric space."
+            )
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box
             nodes_crd = problem.mesh.nodes[self.list_nodes]
@@ -340,6 +346,11 @@ class RigidTie2D(BCBase):
         return "\n".join(list_str)
 
     def initialize(self, problem):
+        if problem.space.is_axisymmetric:
+            raise NotImplementedError(
+                "RigidTie2D does not support the '2Daxi' ModelingSpace: "
+                "rigid-body rotations break axisymmetry."
+            )
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box
             nodes_crd = problem.mesh.nodes[self.list_nodes]

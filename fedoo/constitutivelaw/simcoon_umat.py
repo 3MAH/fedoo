@@ -21,6 +21,27 @@ class Simcoon(Mechanical3D):
         The constitive laws properties
     name : str
         The name of the constitutive law
+
+    Notes
+    -----
+    UMAT compatibility with the ``2Daxi`` ModelingSpace:
+
+    * **Isotropic UMATs** (e.g. ``ELI``, ``NEOH``, ``MOON``, ``EPICP`` J2
+      plasticity): supported. Hooke's response and J2 invariants are
+      invariant under the slot remapping fedoo applies in 2Daxi
+      (cf. :class:`fedoo.core.mechanical3d.Mechanical3D`).
+
+    * **Orthotropic / anisotropic UMATs** (e.g. ``ELIO``, composite
+      Mori-Tanaka, anisotropic damage / plasticity): user-supplied
+      material direction "3" is silently the **hoop** direction in
+      2Daxi (because slot 2 of the 6-vector carries ε_θθ). Define the
+      stiffness / hardening parameters with this convention or the
+      response will not match the intended material orientation.
+
+    * Hyperelastic laws are gated on plane stress (see
+      ``_Lt_from_F`` branch); they remain compatible with 2Daxi at
+      finite strain provided the F[θθ] = r/R fix is in effect (see
+      :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
     """
 
     def __init__(self, umat_name, props, name=""):

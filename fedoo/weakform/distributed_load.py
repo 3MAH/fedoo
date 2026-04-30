@@ -58,7 +58,7 @@ class ExternalPressure(WeakFormBase):
         vec_u = self.space.op_disp()
         normals = assembly.sv["Normals"]
 
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             mesh = assembly.current.mesh
             rr = mesh.convert_data(
                 mesh.nodes[:, 0],
@@ -137,7 +137,7 @@ class DistributedLoad(WeakFormBase):
         """Return the weak equation related to the current state."""
         vec_u = self.space.op_disp()
 
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             mesh = assembly.current.mesh
             rr = mesh.convert_data(
                 mesh.nodes[:, 0],

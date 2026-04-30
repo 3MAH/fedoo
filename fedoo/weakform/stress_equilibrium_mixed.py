@@ -59,6 +59,12 @@ class StressEquilibriumMixed(StressEquilibrium):
         # 1. Kinematics (Strain / Deformation Gradient)
         # -----------------------------------------------------------
         if assembly._nlgeom == "TL":  # add initial displacement effect
+            if self.space.is_axisymmetric:
+                raise NotImplementedError(
+                    "'2Daxi' ModelingSpace is not implemented with the total "
+                    "lagrangian formulation for the mixed (u, p) weak form. "
+                    "Use updated lagrangian instead."
+                )
             eps = self.space.op_strain(assembly.sv["DispGradient"])
             initial_stress = assembly.sv["PK2"]
         else:
@@ -66,7 +72,7 @@ class StressEquilibriumMixed(StressEquilibrium):
             # Stress = Cauchy for updated lagrangian method
             initial_stress = assembly.sv["Stress"]
 
-            if self.space._dimension == "2Daxi":
+            if self.space.is_axisymmetric:
                 rr = assembly.sv["_R_gausspoints"]
                 eps[2] = self.space.variable("DispX") * np.divide(
                     1, rr, out=np.zeros_like(rr), where=rr != 0
@@ -222,7 +228,7 @@ class StressEquilibriumMixed(StressEquilibrium):
             DiffOp += P_inc.virtual * (pressure_residual + pressure_stiffness_term)
 
         # Axisymmetric volume integration factor
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             DiffOp = DiffOp * ((2 * np.pi) * rr)
 
         return DiffOp

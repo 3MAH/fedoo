@@ -184,6 +184,13 @@ class IPCContact(AssemblyBase):
 
         if space is None:
             space = ModelingSpace.get_active()
+        if space.is_axisymmetric:
+            raise NotImplementedError(
+                "IPCContact does not support the '2Daxi' ModelingSpace: "
+                "the IPC barrier formulation lacks the 2*pi*r circumferential "
+                "weighting required for axisymmetric problems. "
+                "Use fedoo.constraint.Contact (penalty) instead."
+            )
         AssemblyBase.__init__(self, name, space)
 
         self.mesh = mesh

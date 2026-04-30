@@ -34,6 +34,14 @@ class CompositeUD(ElasticAnisotropic):
         Z direction (if defined, the local material coordinates are used).
     name: str, optional
         The name of the constitutive law
+
+    Notes
+    -----
+    In ``2Daxi``, slot 2 is the hoop direction (not Cartesian z). The
+    fibers default to the X (= radial) direction; rotating with ``angle``
+    around the implicit "Z" axis effectively rotates between r and the
+    hoop direction. See :class:`fedoo.core.mechanical3d.Mechanical3D` for
+    the slot-ordering convention.
     """
 
     def __init__(
