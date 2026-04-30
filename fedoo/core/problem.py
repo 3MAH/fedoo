@@ -252,6 +252,7 @@ class Problem(ProblemBase):
 
     def set_A(self, A):
         self.__A = A
+        self.invalidate_factorization()
 
     def get_A(self):
         return self.__A

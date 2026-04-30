@@ -28,8 +28,8 @@ In addition, the conda package also includes some recommended dependencies:
     * `PyVista <https://docs.pyvista.org/version/stable/>`_
       for results visualization and mesh utils.
 
-    * An efficient sparse matrix solver (pypardiso or petsc4py) depending
-      on the processor as described below.
+    * An efficient sparse matrix solver (pypardiso, python-mumps or
+      petsc4py) depending on the processor as described below.
 
 
 Full pip install
@@ -71,7 +71,7 @@ You can also install optional groups individually:
 
 .. code-block:: none
 
-    $ pip install fedoo[solver]      # fast sparse solver (pypardiso or umfpack)
+    $ pip install fedoo[solver]      # fast sparse solver (pypardiso, python-mumps, or umfpack)
     $ pip install fedoo[plot]        # matplotlib + pyvista
     $ pip install fedoo[simcoon]     # simcoon
     $ pip install fedoo[ipc]         # IPC contact (ipctk)
@@ -85,10 +85,17 @@ It is highly recommended to install a fast direct sparse matrix solver
 to improve performances:
 
     * `Pypardiso <https://pypi.org/project/pypardiso/>`_
-      for intel processors (binding to the pardiso solver)
+      for intel processors (binding to the pardiso solver).
+
+    * `python-mumps <https://pypi.org/project/python-mumps/>`_
+      standalone Python bindings for the MUMPS direct solver. Recommended
+      on arm64 (Apple Silicon, ARM Linux) where pypardiso is not available
+      and as a lighter alternative to PETSc when only direct solving is
+      needed.
 
     * `Petsc4Py <https://pypi.org/project/petsc4py/>`_
       mainly compatible with linux or macos including the MUMPS solver.
+      Use this if you need PETSc's iterative solvers or MPI parallelism.
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_
 
