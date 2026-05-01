@@ -592,7 +592,10 @@ class ProblemBase:
 
         Backend is selected automatically (pypardiso > python-mumps > petsc),
         regardless of the solver previously set with :meth:`set_solver`. The
-        reuse path is direct LU only; iterative solvers are not supported.
+        reuse path is direct LU only; if an iterative solver was set with
+        :meth:`set_solver`, it is silently bypassed while reuse is enabled.
+        Disable reuse with ``set_reuse_factorization(False)`` to restore the
+        normal solver dispatch.
 
         Examples
         --------

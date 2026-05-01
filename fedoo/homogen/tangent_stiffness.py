@@ -104,9 +104,9 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
 
     # Reuse factorization across perturbations: A and the constraint
     # reduction matrix _MatCB are constant in this loop (only Neumann BCs
-    # on global E_xx/yy/.. dofs change, affecting only B). Gives a ~4-6x
-    # speedup on tangent stiffness computation when a direct backend
-    # (pypardiso, python-mumps or petsc) is available.
+    # on global E_xx/yy/.. dofs change, affecting only B). Avoids re-
+    # factorizing on each perturbation when a direct backend (pypardiso,
+    # python-mumps or petsc) is available.
     reuse_factor = False
     try:
         pb_post_tt.set_reuse_factorization(True)
