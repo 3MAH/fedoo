@@ -71,7 +71,7 @@ You can also install optional groups individually:
 
 .. code-block:: none
 
-    $ pip install fedoo[solver]      # fast sparse solver (pypardiso, python-mumps, or umfpack)
+    $ pip install fedoo[solver]      # fast sparse solver (pypardiso or python-mumps)
     $ pip install fedoo[plot]        # matplotlib + pyvista
     $ pip install fedoo[simcoon]     # simcoon
     $ pip install fedoo[ipc]         # IPC contact (ipctk)
@@ -98,6 +98,11 @@ to improve performances:
       Use this if you need PETSc's iterative solvers or MPI parallelism.
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_
+      optional fallback to ``python-mumps``. Detected automatically if
+      installed, useful in very specific cases (e.g. very small problems,
+      or as a serial backup). Not included in ``[solver]`` extras because
+      its install can be tricky on some platforms; install it manually if
+      you need it.
 
 To be able to launch the fedoo viewer, the module 
 `pyvistaqt <https://qtdocs.pyvista.org/>`_ is also required.

@@ -56,7 +56,7 @@ if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC:
 if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC and not USE_UMFPACK:
     warnings.warn(
         "WARNING: no fast direct sparse solver has been found. "
-        "Consider installing pypardiso, python-mumps, petsc, or scikit-umfpack "
+        "Consider installing pypardiso (Intel) or python-mumps (any platform) "
         "to improve computation performance"
     )
 
