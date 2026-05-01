@@ -104,14 +104,15 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
 
     # Reuse factorization across perturbations: A and the constraint
     # reduction matrix _MatCB are constant in this loop (only Neumann BCs
-    # on global E_xx/yy/.. dofs change, affecting only B). With python-mumps,
-    # this gives a 4-6x speedup on tangent stiffness computation.
+    # on global E_xx/yy/.. dofs change, affecting only B). Gives a ~4-6x
+    # speedup on tangent stiffness computation when a direct backend
+    # (pypardiso, python-mumps or petsc) is available.
     reuse_factor = False
     try:
         pb_post_tt.set_reuse_factorization(True)
         reuse_factor = True
     except RuntimeError:
-        pass  # python-mumps not installed, fall back to per-iteration solves
+        pass  # no direct backend available, fall back to per-iteration solves
 
     for i in range(len(BC_perturb)):
         pb_post_tt.bc.add(

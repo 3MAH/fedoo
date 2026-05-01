@@ -573,7 +573,8 @@ class ProblemBase:
         stiffness computation by perturbation, multiple load cases on a
         linear problem).
 
-        Requires `python-mumps` to be installed.
+        Requires one of `pypardiso`, `python-mumps` or `petsc4py` to be
+        installed (same backend priority as ``solver="direct"``).
 
         Parameters
         ----------
@@ -589,6 +590,10 @@ class ProblemBase:
         reduced system matrix (e.g. Dirichlet boundary conditions affecting
         the constraint reduction matrix).
 
+        Backend is selected automatically (pypardiso > python-mumps > petsc),
+        regardless of the solver previously set with :meth:`set_solver`. The
+        reuse path is direct LU only; iterative solvers are not supported.
+
         Examples
         --------
         >>> pb.set_reuse_factorization(True)
@@ -600,14 +605,18 @@ class ProblemBase:
         >>> pb.set_reuse_factorization(False)
         """
         if reuse:
-            if not USE_MUMPS:
+            if USE_PYPARDISO:
+                self._factor_context = _PypardisoFactor()
+            elif USE_MUMPS:
+                self._factor_context = _MumpsFactor()
+            elif USE_PETSC:
+                self._factor_context = _PetscFactor()
+            else:
                 raise RuntimeError(
-                    "Factorization reuse requires python-mumps. "
-                    'Install it with "pip install python-mumps".'
+                    "Factorization reuse requires pypardiso, python-mumps, "
+                    "or petsc4py. Install one of them, e.g. "
+                    '"pip install python-mumps".'
                 )
-            import mumps
-
-            self._factor_context = mumps.Context()
             self._factor_valid = False
         else:
             self._factor_context = None
@@ -784,3 +793,61 @@ def _solver_mumps(A, B, **kargs):
     import mumps
 
     return mumps.spsolve(A, B)
+
+
+# =============================================================
+# Factor-reuse adapters used by ProblemBase.set_reuse_factorization
+# All expose a uniform .factor(A) / .solve(B) interface.
+# =============================================================
+class _MumpsFactor:
+    def __init__(self):
+        import mumps
+
+        self._ctx = mumps.Context()
+
+    def factor(self, A):
+        self._ctx.factor(A)
+
+    def solve(self, B):
+        return self._ctx.solve(B)
+
+
+class _PypardisoFactor:
+    def __init__(self):
+        from pypardiso import PyPardisoSolver
+
+        self._solver = PyPardisoSolver()
+        self._A = None
+
+    def factor(self, A):
+        self._A = A
+        self._solver.factorize(A)
+
+    def solve(self, B):
+        return self._solver.solve(self._A, B)
+
+
+class _PetscFactor:
+    def __init__(self):
+        global PETSc
+
+        self._A_petsc = None
+        self._ksp = PETSc.KSP()
+        self._ksp.create()
+        self._ksp.setType("preonly")
+        pc = self._ksp.getPC()
+        pc.setType("lu")
+        pc.setFactorSolverType("mumps")
+
+    def factor(self, A):
+        self._A_petsc = PETSc.Mat().createAIJWithArrays(
+            A.shape, (A.indptr, A.indices, A.data)
+        )
+        self._ksp.setOperators(self._A_petsc)
+        self._ksp.setUp()  # triggers factorization
+
+    def solve(self, B):
+        B_petsc = PETSc.Vec().createWithArray(B)
+        x = self._A_petsc.createVecLeft()
+        self._ksp.solve(B_petsc, x)
+        return x.getArray().copy()
