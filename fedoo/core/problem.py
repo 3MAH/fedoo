@@ -254,6 +254,20 @@ class Problem(ProblemBase):
         self.__A = A
         self.invalidate_factorization()
 
+    def _set_A_from_assembly(self, A):
+        """Internal: install the assembly's matrix without invalidating
+        the cached factorization when the matrix object is unchanged.
+
+        Used by Problem subclasses (Linear, NonLinear, …) to refresh A
+        from ``assembly.get_global_matrix()``. If the assembly returned
+        the same object (e.g. ``assemble_global_mat("none")`` was a
+        no-op), the cached factorization stays valid.
+        """
+        if A is self.__A:
+            return
+        self.__A = A
+        self.invalidate_factorization()
+
     def get_A(self):
         return self.__A
 

@@ -68,19 +68,15 @@ class _LinearBase:
         Update the problem with the new assembled global matrix and global vector
         """
         out_values = self.__assembly.update(self, compute)
-        # Skip set_A / set_D when nothing was reassembled — re-setting A
-        # would invalidate any cached factorization (set_reuse_factorization)
-        # for no reason, since assemble_global_mat("none") is a no-op.
-        if compute != "none":
-            self.set_A(self.__assembly.get_global_matrix())
-            self.set_D(self.__assembly.get_global_vector())
+        self._set_A_from_assembly(self.__assembly.get_global_matrix())
+        self.set_D(self.__assembly.get_global_vector())
         return out_values
 
     def solve(self, **kargs):
         # Solve and update weakform (compute stress for instance) without updating global matrix
         # to avoid update weakform, use updateWF = True
         updateWF = kargs.pop("updateWF", True)
-        self.set_A(self.__assembly.get_global_matrix())
+        self._set_A_from_assembly(self.__assembly.get_global_matrix())
         self.set_D(self.__assembly.get_global_vector())
         self.init_bc_start_value()
         self.apply_boundary_conditions()
