@@ -97,19 +97,12 @@ class Mesh(MeshBase):
         self.element_sets = element_sets
         """Dict containing element sets associated to the mesh."""
 
-        self.local_frame: np.ndarray | None = None
-        """Optional nodal local Frame."""
-
         if ndim is None:
             ndim = self.nodes.shape[1]
         elif ndim > self.nodes.shape[1]:
             dim_add = ndim - self.nodes.shape[1]
             self.nodes = np.c_[self.nodes, np.zeros((self.n_nodes, dim_add))]
-            # if ndim == 3 and local_frame is not None:
-            #     local_frame_temp = np.zeros((self.n_nodes,3,3))
-            #     local_frame_temp[:,:2,:2] = self.local_frame
-            #     local_frame_temp[:,2,2]   = 1
-            #     self.local_frame = local_frame_temp
+
         elif ndim < self.nodes.shape[1]:
             self.nodes = self.nodes[:, :ndim]
 
@@ -585,7 +578,6 @@ class Mesh(MeshBase):
             self.nodes,
             self.elements[element_set],
             self.elm_type,
-            self.local_frame,
             name=name,
         )
         return sub_mesh
@@ -1038,12 +1030,12 @@ class Mesh(MeshBase):
         elm_nodes_crd = self.nodes[self.elements]
 
         if n_elm_gp == 1:
-            return elm_ref.GetLocalFrame(
+            return elm_ref.get_local_frame(
                 elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp)
             )[:, 0, :]
         else:
             return np.transpose(
-                elm_ref.GetLocalFrame(
+                elm_ref.get_local_frame(
                     elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp)
                 ),
                 (1, 0, 2, 3),
@@ -1176,7 +1168,11 @@ class Mesh(MeshBase):
         self._sparse_structure[n_elm_gp] = (row.reshape(-1), col.reshape(-1))
         self._elements_geom = elm_geom  # dont depend on n_elm_gp
 
-    def _compute_gaussian_quadrature_mat(self, n_elm_gp: int | None = None) -> None:
+    def _compute_gaussian_quadrature_mat(
+        self,
+        n_elm_gp: int | None = None,
+        local_frame: np.array | None = None,
+    ) -> None:
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
         if n_elm_gp not in self._saved_gaussian_quadrature_mat:
@@ -1187,7 +1183,7 @@ class Mesh(MeshBase):
             elm_interpol.xi_pg
         )  # coordinate of points of gauss in element coordinate (xi)
         elm_interpol.compute_jacobian_with_inverse(
-            self.nodes[self._elements_geom], vec_xi, self.local_frame
+            self.nodes[self._elements_geom], vec_xi, local_frame
         )  # compute elm_interpol.jacobian_matrix, elm_interpol.detJ and elm_interpol.inv_jacobian_matrix
 
         # -------------------------------------------------------------------

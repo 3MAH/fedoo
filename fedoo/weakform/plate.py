@@ -82,6 +82,35 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
 
+        if self.nlgeom:
+            # =========================================================
+            # Reference state initialization
+            # =========================================================
+            if "_InitialRigidRotationMat" not in assembly.sv:
+                if assembly._element_local_frame is None:
+                    init_frame = assembly.mesh.get_element_local_frame()
+                else:
+                    init_frame = assembly._element_local_frame
+                assembly.sv["_InitialRigidRotationMat"] = init_frame
+
+                if self.strategy == "incremental":
+                    assembly.sv["RigidRotationMat"] = init_frame
+                    # assembly.current._element_local_frame = init_frame.reshape(
+                    #     mesh.n_elements, -1, 3, 3
+                    # )  # usefull?
+
+                    # dof rotation matrix at node (without elm initial rotation)
+                    assembly.sv["_NodesRotationMatrix"] = np.tile(
+                        np.eye(3), (assembly.mesh.n_nodes, 1, 1)
+                    )
+
+                nodes_pos_init = assembly.mesh.nodes[assembly.mesh.elements]
+                init_center = nodes_pos_init.mean(axis=1)
+                assembly.sv["_InitialNodeLocalPos"] = np.matmul(
+                    init_frame,
+                    (nodes_pos_init - init_center[:, np.newaxis, :]).transpose(0, 2, 1),
+                ).transpose(0, 2, 1)
+
     def update(self, assembly, pb):
         if self.nlgeom == "UL":
             assembly.set_disp(pb.get_disp())
@@ -98,31 +127,6 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         if self.nlgeom:
             nodes_pos = mesh.nodes[mesh.elements]
             current_center = nodes_pos.mean(axis=1)
-
-            # =========================================================
-            # 1. REFERENCE STATE INITIALIZATION
-            # =========================================================
-            if "_InitialRigidRotationMat" not in assembly.sv:
-                init_frame = assembly.mesh.get_element_local_frame()
-                assembly.sv["_InitialRigidRotationMat"] = init_frame
-
-                if self.strategy == "incremental":
-                    assembly.sv["RigidRotationMat"] = init_frame
-                    assembly.current._element_local_frame = init_frame.reshape(
-                        mesh.n_elements, -1, 3, 3
-                    )  # usefull?
-
-                    # dof rotation matrix at node (without elm initial rotation)
-                    assembly.sv["_NodesRotationMatrix"] = np.tile(
-                        np.eye(3), (mesh.n_nodes, 1, 1)
-                    )
-
-                nodes_pos_init = assembly.mesh.nodes[mesh.elements]
-                init_center = nodes_pos_init.mean(axis=1)
-                assembly.sv["_InitialNodeLocalPos"] = np.matmul(
-                    init_frame,
-                    (nodes_pos_init - init_center[:, np.newaxis, :]).transpose(0, 2, 1),
-                ).transpose(0, 2, 1)
 
             initial_frame = assembly.sv["_InitialRigidRotationMat"]
             initial_node_local_pos = assembly.sv["_InitialNodeLocalPos"]
@@ -198,10 +202,6 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                     ).as_matrix()  # transpose(0,2,1)
                     @ assembly.sv["_NodesRotationMatrix"]
                 )
-
-                #### to delete - debug purpose #####
-                assembly.sv["_TEST"] = nodes_rotmat
-                ####################################
 
                 R_global_nodes = nodes_rotmat[mesh.elements]
 
@@ -299,19 +299,6 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                     for op in op_plate_strain
                 ]
             )
-
-            # DEBUG ONLY
-            op = self.space.derivative(
-                "DispX", "Y"
-            )  # + self.space.derivative("DispY", "X")
-            # op =  self.space.derivative("DispY", "X")
-            print(assembly.current.get_gp_results(op, dof_local, use_local_dof=True))
-            print(assembly.get_gp_results(op, dof_local, use_local_dof=True))
-            # print(np.linalg.det(assembly.current._element_local_frame))
-            # print(assembly.current._element_local_frame[0][0])
-            #############
-
-            # print(assembly.sv["ShellStrain"])
         else:
             # Small displacement (Linear) update
             assembly.sv["ShellStrain"] = [

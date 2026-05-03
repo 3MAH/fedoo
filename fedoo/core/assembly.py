@@ -5,9 +5,6 @@ from scipy import sparse
 
 from fedoo.core._sparsematrix import RowBlocMatrix
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
-from fedoo.core._sparsematrix import (
-    _BlocSparseOld as BlocSparseOld,
-)  # required for 'old' _assembly_method
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
 from fedoo.core.mesh import Mesh
@@ -571,7 +568,6 @@ class Assembly(AssemblyBase):
         elm = mesh.elements
         n_elm_nodes = np.shape(elm)[1]
         dim = self.space.ndim
-        local_frame = mesh.local_frame
 
         if (
             "X" in mesh.crd_name and "Y" in mesh.crd_name
@@ -605,9 +601,16 @@ class Assembly(AssemblyBase):
                     # elmRefGeom = get_element(mesh.elm_type)(mesh=mesh)
 
                     xi_nd = get_node_elm_coordinates(mesh.elm_type, n_elm_nodes)
-                    local_frame_el = elmRefGeom.GetLocalFrame(
-                        mesh.nodes[mesh._elements_geom], xi_nd, local_frame
-                    )  # array of shape (n_el, nb_nd, nb of vectors in basis = dim, dim)
+                    local_frame_el = elmRefGeom.get_local_frame(
+                        mesh.nodes[mesh._elements_geom], xi_nd
+                    )
+                    #### warninge ! to improve
+                    # local_frame_el.shape is (n_el, nb_gp, dim, dim)
+                    # but array of shape (n_el, nb_nd, nb vectors in basis = dim, dim)
+                    # is expected since the local frame is applied at node dofs.
+                    # work for planar element but not for element with curvature.
+                    # Simple idea: use interpolation at nodes with n_elm_gp = 0
+                    ############################
                 else:
                     local_frame_el = self._element_local_frame
 
@@ -826,7 +829,7 @@ class Assembly(AssemblyBase):
         if n_elm_gp not in mesh._elm_interpolation:
             mesh.init_interpolation(n_elm_gp)
 
-        mesh._compute_gaussian_quadrature_mat(n_elm_gp)
+        mesh._compute_gaussian_quadrature_mat(n_elm_gp, self._element_local_frame)
         elmRefGeom = mesh._elm_interpolation[n_elm_gp]
 
         # -------------------------------------------------------------------
@@ -1404,68 +1407,6 @@ class Assembly(AssemblyBase):
         else:
             assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
 
-    #     def get_ext_forces(self, U, nvar=None):
-    #         """
-    #         Not a static method.
-    #         Return the nodal Forces and moments in global coordinates related to a specific assembly considering the DOF solution given in U
-    #         The resulting forces are the sum of :
-    #         - External forces (associated to Neumann boundary conditions)
-    #         - Node reaction (associated to Dirichelet boundary conditions)
-    #         - Inertia forces
-
-    #         Return an array whose columns are Fx, Fy, Fz, Mx, My and Mz.
-
-    #         example :
-    #         S = SpecificAssembly.get_ext_forces(Problem.Problem.get_dof_solution('all'))
-    #         """
-    #         if nvar is None: nvar = self.space.nvar
-    #         return np.reshape(self.get_global_matrix() * U - self.get_global_vector(), (nvar,-1))
-    # #        return np.reshape(self.get_global_matrix() * U, (Nvar,-1)).T
-
-    #    def get_int_forces(self, U, CoordinateSystem = 'global'):
-    #        """
-    #        Not a static method.
-    #        Only available for 2 nodes beam element
-    #        Return the element internal Forces and moments related to a specific assembly considering the DOF solution given in U.
-    #        Return array whose columns are Fx, Fy, Fz, Mx, My and Mz.
-    #
-    #        Parameter: if CoordinateSystem == 'local' the result is given in the local coordinate system
-    #                   if CoordinateSystem == 'global' the result is given in the global coordinate system (default)
-    #        """
-    #
-    ##        operator = self.weakform.get_weak_equation(self.mesh)
-    #        operator = self.weakform.get_generalized_stress()
-    #        res = [self.get_element_results(operator[i], U) for i in range(5)]
-    #        return res
-    #
-
-    #        res = np.reshape(res,(6,-1)).T
-    #        n_el = mesh.n_elements
-    #        res = (res[n_el:,:]-res[0:n_el:,:])/2
-    #        res = res[:, [self.space.variable_rank('DispX'), self.space.variable_rank('DispY'), self.space.variable_rank('DispZ'), \
-    #                              self.space.variable_rank('ThetaX'), self.space.variable_rank('ThetaY'), self.space.variable_rank('ThetaZ')]]
-    #
-    #        if CoordinateSystem == 'local': return res
-    #        elif CoordinateSystem == 'global':
-    #            #require a transformation between local and global coordinates on element
-    #            #classical mat_change_of_basis transform only toward nodal values
-    #            elmRef = get_element(self.mesh.elm_type)(1, mesh=mesh)#one pg  with the geometrical element
-    #            vec = [0,1,2] ; dim = 3
-    #
-    #            #Data to build mat_change_of_basis_el with coo sparse format
-    #            crd = mesh.nodes ; elm = mesh.elements
-    #            rowMCB = np.empty((n_el, 1, dim,dim))
-    #            colMCB = np.empty((n_el, 1, dim,dim))
-    #            rowMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,-1,1)*n_el # [[id_el + var*n_el] for var in vec]
-    #            colMCB[:] = np.arange(n_el).reshape(-1,1,1,1) + np.array(vec).reshape(1,1,1,-1)*n_el # [id_el+n_el*var for var in vec]
-    #            dataMCB = elmRef.GetLocalFrame(crd[elm], elmRef.xi_pg, mesh.local_frame) #array of shape (n_el, n_elm_gp=1, nb of vectors in basis = dim, dim)
-    #
-    #            mat_change_of_basisElement = sparse.coo_matrix((np.reshape(dataMCB,-1),(np.reshape(rowMCB,-1),np.reshape(colMCB,-1))), shape=(dim*n_el, dim*n_el)).tocsr()
-    #
-    #            F = np.reshape( mat_change_of_basis_el.T * np.reshape(res[:,0:3].T, -1)  ,  (3,-1) ).T
-    #            C = np.reshape( mat_change_of_basis_el.T * np.reshape(res[:,3:6].T, -1)  ,  (3,-1) ).T
-    #            return np.hstack((F,C))
-
     def get_int_forces(self, U, CoordinateSystem="global"):
         """
         Only available for 2 nodes beam element
@@ -1561,8 +1502,8 @@ class Assembly(AssemblyBase):
                 np.arange(n_el).reshape(-1, 1, 1, 1)
                 + np.array(vec).reshape(1, 1, 1, -1) * n_el
             )  # [id_el+n_el*var for var in vec]
-            dataMCB = elmRef.GetLocalFrame(
-                crd[elm], elmRef.xi_pg, mesh.local_frame
+            dataMCB = elmRef.get_local_frame(
+                crd[elm], elmRef.xi_pg
             )  # array of shape (n_el, n_elm_gp=1, nb of vectors in basis = dim, dim)
 
             mat_change_of_basis_el = sparse.coo_matrix(
