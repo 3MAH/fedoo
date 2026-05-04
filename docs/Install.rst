@@ -82,7 +82,8 @@ Sparse solvers
 --------------
 
 It is highly recommended to install a fast direct sparse matrix solver
-to improve performances:
+to improve performances. fedoo dispatches to the first one available in
+this priority order: pypardiso → python-mumps → petsc4py:
 
     * `Pypardiso <https://pypi.org/project/pypardiso/>`_
       for intel processors (binding to the pardiso solver).
@@ -104,8 +105,29 @@ to improve performances:
       its install can be tricky on some platforms; install it manually if
       you need it.
 
-To be able to launch the fedoo viewer, the module 
+To be able to launch the fedoo viewer, the module
 `pyvistaqt <https://qtdocs.pyvista.org/>`_ is also required.
+
+.. note::
+
+    On macOS (Apple Silicon especially), prefer ``conda install -c
+    conda-forge python-mumps`` over ``pip install python-mumps``: the
+    PyPI sdist requires a system MUMPS lib via pkg-config, while the
+    conda-forge package bundles ``mumps-seq`` directly. Pin the BLAS
+    variant to Accelerate at the same time to route the dense block
+    kernels through Apple's vecLib::
+
+        $ conda install -c conda-forge "libblas=*=*accelerate" python-mumps
+
+    On Linux / AMD, the OpenBLAS variant is the equivalent::
+
+        $ conda install -c conda-forge "libblas=*=*openblas" python-mumps
+
+    You can verify which BLAS got linked with::
+
+        $ python -c "import numpy; numpy.show_config()"
+        $ otool -L $(python -c 'import numpy.linalg._umath_linalg as m; print(m.__file__)')   # macOS
+        $ ldd  $(python -c 'import numpy.linalg._umath_linalg as m; print(m.__file__)')      # Linux
 
 
 Simcoon
