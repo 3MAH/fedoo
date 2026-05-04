@@ -44,7 +44,10 @@ class PeriodicBC(BCBase):
         If dim = 1: the periodicity is assumed along the x coordinate
         If dim = 2: the periodicity is assumed along x and y coordinates
     tol : float, optional
-        Tolerance for the periodic nodes detection. The default is 1e-8.
+        Maximum accepted distance between paired nodes on opposite
+        faces. Used both to gather boundary-plane nodes and to validate
+        the KDTree pairing. Must be smaller than the mesh element size.
+        The default is 1e-8.
     name : str, optional
         Name of the created boundary condition. The default is "Periodicity".
 
@@ -168,16 +171,21 @@ class PeriodicBC(BCBase):
         return "\n".join(list_str)
 
     def _prepare_periodic_lists(self, mesh, tol):
+        """Identify and pair boundary node sets (faces, edges, corners).
+
+        Faces are identified and pre-paired by KDTree on perpendicular
+        coordinates. Edges and corners are then derived by set
+        intersection. After subtracting overlaps, faces and edges are
+        re-paired (KDTree for faces, argsort along the free axis for
+        edges).
+
+        Raises ``ValueError`` with a clear message if the mesh is not
+        periodic at the requested ``tol``.
         """
-        This function prepares periodic lists, having the list of node coordinates
-
-        :param: self : the PeriodicBC object
-
-        :warning: TO possibly modifiy, the (xmin, xmax, ymin, ymax, zmin, zmax) values are computed from the crd here
-                  It might be better to add a parameter that computes it from a BoxMesh object
-
-        :return: A dictionnary containing all the mesh listes (faces, edges, corners)
-        """
+        from fedoo.util.test_periodicity import (
+            match_opposing_faces,
+            pair_node_sets,
+        )
 
         rve_size = []
         crd = mesh.nodes
@@ -193,44 +201,21 @@ class PeriodicBC(BCBase):
             zmin = np.min(crd[:, 2])
             rve_size.append(zmax - zmin)
 
-        face_Xm = np.where(np.abs(crd[:, 0] - xmin) < tol)[0]
-        face_Xp = np.where(np.abs(crd[:, 0] - xmax) < tol)[0]
-        if len(face_Xm) != len(face_Xp):
-            raise ValueError(
-                f"PeriodicBC: faces x- and x+ have different node counts "
-                f"({len(face_Xm)} vs {len(face_Xp)}) at tol={tol}. The mesh "
-                f"is not periodic at this tolerance — try a tighter tol, or "
-                f"check mesh.is_periodic() to find a working value."
-            )
+        # 1) Identify and pair raw face sets (still containing edges/corners).
+        face_Xm, face_Xp = match_opposing_faces(crd, 0, tol)
 
         if self.dim > 1:
-            face_Ym = np.where(np.abs(crd[:, 1] - ymin) < tol)[0]
-            face_Yp = np.where(np.abs(crd[:, 1] - ymax) < tol)[0]
-            if len(face_Ym) != len(face_Yp):
-                raise ValueError(
-                    f"PeriodicBC: faces y- and y+ have different node counts "
-                    f"({len(face_Ym)} vs {len(face_Yp)}) at tol={tol}. The "
-                    f"mesh is not periodic at this tolerance."
-                )
+            face_Ym, face_Yp = match_opposing_faces(crd, 1, tol)
 
-            # extract edges/corners from the intersection of faces
+            # 2) Derive edges from face intersections (still containing corners).
             edge_XmYm = np.intersect1d(face_Xm, face_Ym, assume_unique=True)
             edge_XmYp = np.intersect1d(face_Xm, face_Yp, assume_unique=True)
             edge_XpYm = np.intersect1d(face_Xp, face_Ym, assume_unique=True)
             edge_XpYp = np.intersect1d(face_Xp, face_Yp, assume_unique=True)
 
-            if self.dim > 2:  # or dim == 3
-                face_Zm = np.where(np.abs(crd[:, 2] - zmin) < tol)[0]
-                face_Zp = np.where(np.abs(crd[:, 2] - zmax) < tol)[0]
-                if len(face_Zm) != len(face_Zp):
-                    raise ValueError(
-                        f"PeriodicBC: faces z- and z+ have different node "
-                        f"counts ({len(face_Zm)} vs {len(face_Zp)}) at "
-                        f"tol={tol}. The mesh is not periodic at this "
-                        f"tolerance."
-                    )
+            if self.dim > 2:
+                face_Zm, face_Zp = match_opposing_faces(crd, 2, tol)
 
-                # extract edges/corners from the intersection of faces
                 edge_YmZm = np.intersect1d(face_Ym, face_Zm, assume_unique=True)
                 edge_YmZp = np.intersect1d(face_Ym, face_Zp, assume_unique=True)
                 edge_YpZm = np.intersect1d(face_Yp, face_Zm, assume_unique=True)
@@ -241,7 +226,7 @@ class PeriodicBC(BCBase):
                 edge_XpZm = np.intersect1d(face_Xp, face_Zm, assume_unique=True)
                 edge_XpZp = np.intersect1d(face_Xp, face_Zp, assume_unique=True)
 
-                # extract corners from the intersection of edges
+                # 3) Corners = intersections of edges.
                 corner_XmYmZm = np.intersect1d(edge_XmYm, edge_YmZm, assume_unique=True)
                 corner_XmYmZp = np.intersect1d(edge_XmYm, edge_YmZp, assume_unique=True)
                 corner_XmYpZm = np.intersect1d(edge_XmYp, edge_YpZm, assume_unique=True)
@@ -251,7 +236,6 @@ class PeriodicBC(BCBase):
                 corner_XpYpZm = np.intersect1d(edge_XpYp, edge_YpZm, assume_unique=True)
                 corner_XpYpZp = np.intersect1d(edge_XpYp, edge_YpZp, assume_unique=True)
 
-                # Remove nodes that beloing to several sets
                 all_corners = np.hstack(
                     (
                         corner_XmYmZm,
@@ -265,6 +249,7 @@ class PeriodicBC(BCBase):
                     )
                 )
 
+                # 4) Strip corners from edges.
                 edge_XmYm = np.setdiff1d(edge_XmYm, all_corners, assume_unique=True)
                 edge_XmYp = np.setdiff1d(edge_XmYp, all_corners, assume_unique=True)
                 edge_XpYm = np.setdiff1d(edge_XpYm, all_corners, assume_unique=True)
@@ -301,13 +286,24 @@ class PeriodicBC(BCBase):
             else:  # dim = 2
                 all_edges = np.hstack((edge_XmYm, edge_XmYp, edge_XpYm, edge_XpYp))
 
+            # 5) Strip edges from faces; the cleaned face arrays lose their
+            # pairing order (np.setdiff1d returns sorted unique values), so
+            # re-pair them via KDTree on the perpendicular axes.
             face_Xm = np.setdiff1d(face_Xm, all_edges, assume_unique=True)
             face_Xp = np.setdiff1d(face_Xp, all_edges, assume_unique=True)
             face_Ym = np.setdiff1d(face_Ym, all_edges, assume_unique=True)
             face_Yp = np.setdiff1d(face_Yp, all_edges, assume_unique=True)
 
-            if mesh.ndim > 2:  # if there is a z coordinate
-                # sort edges (required to assign the good pair of nodes)
+            face_Xm, face_Xp = pair_node_sets(
+                crd, face_Xm, face_Xp, [i for i in range(crd.shape[1]) if i != 0], tol
+            )
+            face_Ym, face_Yp = pair_node_sets(
+                crd, face_Ym, face_Yp, [i for i in range(crd.shape[1]) if i != 1], tol
+            )
+
+            # 6) Sort edges along their free axis. Stable in 1D so no
+            # KDTree needed; argsort suffices.
+            if mesh.ndim > 2:
                 edge_XmYm = edge_XmYm[np.argsort(crd[edge_XmYm, 2])]
                 edge_XmYp = edge_XmYp[np.argsort(crd[edge_XmYp, 2])]
                 edge_XpYm = edge_XpYm[np.argsort(crd[edge_XpYm, 2])]
@@ -316,6 +312,13 @@ class PeriodicBC(BCBase):
             if self.dim > 2:
                 face_Zm = np.setdiff1d(face_Zm, all_edges, assume_unique=True)
                 face_Zp = np.setdiff1d(face_Zp, all_edges, assume_unique=True)
+                face_Zm, face_Zp = pair_node_sets(
+                    crd,
+                    face_Zm,
+                    face_Zp,
+                    [i for i in range(crd.shape[1]) if i != 2],
+                    tol,
+                )
 
                 edge_YmZm = edge_YmZm[np.argsort(crd[edge_YmZm, 0])]
                 edge_YmZp = edge_YmZp[np.argsort(crd[edge_YmZp, 0])]
@@ -326,37 +329,6 @@ class PeriodicBC(BCBase):
                 edge_XmZp = edge_XmZp[np.argsort(crd[edge_XmZp, 1])]
                 edge_XpZm = edge_XpZm[np.argsort(crd[edge_XpZm, 1])]
                 edge_XpZp = edge_XpZp[np.argsort(crd[edge_XpZp, 1])]
-
-        # sort adjacent faces to ensure node correspondance
-        if mesh.ndim == 2:
-            face_Xm = face_Xm[np.argsort(crd[face_Xm, 1])]
-            face_Xp = face_Xp[np.argsort(crd[face_Xp, 1])]
-            if self.dim > 1:
-                face_Ym = face_Ym[np.argsort(crd[face_Ym, 0])]
-                face_Yp = face_Yp[np.argsort(crd[face_Yp, 0])]
-
-        elif mesh.ndim > 2:
-            decimal_round = int(-np.log10(tol) - 1)
-            face_Xm = face_Xm[
-                np.lexsort((crd[face_Xm, 1], crd[face_Xm, 2].round(decimal_round)))
-            ]
-            face_Xp = face_Xp[
-                np.lexsort((crd[face_Xp, 1], crd[face_Xp, 2].round(decimal_round)))
-            ]
-            if self.dim > 1:
-                face_Ym = face_Ym[
-                    np.lexsort((crd[face_Ym, 0], crd[face_Ym, 2].round(decimal_round)))
-                ]
-                face_Yp = face_Yp[
-                    np.lexsort((crd[face_Yp, 0], crd[face_Yp, 2].round(decimal_round)))
-                ]
-            if self.dim > 2:
-                face_Zm = face_Zm[
-                    np.lexsort((crd[face_Zm, 0], crd[face_Zm, 1].round(decimal_round)))
-                ]
-                face_Zp = face_Zp[
-                    np.lexsort((crd[face_Zp, 0], crd[face_Zp, 1].round(decimal_round)))
-                ]
 
         # save the computed sets of nodes using microgen-style keys
         bn = self.boundary_nodes

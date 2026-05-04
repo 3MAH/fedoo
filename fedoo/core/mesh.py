@@ -854,7 +854,8 @@ class Mesh(MeshBase):
         Parameters
         ----------
         tol : float (default = 1e-8)
-            Tolerance used to test the nodes positions.
+            Maximum accepted distance between paired nodes on opposite
+            faces. Must be smaller than the mesh element size.
         dim : 1,2 or 3 (default = 3)
             Dimension of the periodicity. If dim = 1, the periodicity is tested only over the 1st axis (x axis).
             if dim = 2, the periodicity is tested on the 2 first axis (x and y axis).
