@@ -195,10 +195,23 @@ class PeriodicBC(BCBase):
 
         face_Xm = np.where(np.abs(crd[:, 0] - xmin) < tol)[0]
         face_Xp = np.where(np.abs(crd[:, 0] - xmax) < tol)[0]
+        if len(face_Xm) != len(face_Xp):
+            raise ValueError(
+                f"PeriodicBC: faces x- and x+ have different node counts "
+                f"({len(face_Xm)} vs {len(face_Xp)}) at tol={tol}. The mesh "
+                f"is not periodic at this tolerance — try a tighter tol, or "
+                f"check mesh.is_periodic() to find a working value."
+            )
 
         if self.dim > 1:
             face_Ym = np.where(np.abs(crd[:, 1] - ymin) < tol)[0]
             face_Yp = np.where(np.abs(crd[:, 1] - ymax) < tol)[0]
+            if len(face_Ym) != len(face_Yp):
+                raise ValueError(
+                    f"PeriodicBC: faces y- and y+ have different node counts "
+                    f"({len(face_Ym)} vs {len(face_Yp)}) at tol={tol}. The "
+                    f"mesh is not periodic at this tolerance."
+                )
 
             # extract edges/corners from the intersection of faces
             edge_XmYm = np.intersect1d(face_Xm, face_Ym, assume_unique=True)
@@ -209,6 +222,13 @@ class PeriodicBC(BCBase):
             if self.dim > 2:  # or dim == 3
                 face_Zm = np.where(np.abs(crd[:, 2] - zmin) < tol)[0]
                 face_Zp = np.where(np.abs(crd[:, 2] - zmax) < tol)[0]
+                if len(face_Zm) != len(face_Zp):
+                    raise ValueError(
+                        f"PeriodicBC: faces z- and z+ have different node "
+                        f"counts ({len(face_Zm)} vs {len(face_Zp)}) at "
+                        f"tol={tol}. The mesh is not periodic at this "
+                        f"tolerance."
+                    )
 
                 # extract edges/corners from the intersection of faces
                 edge_YmZm = np.intersect1d(face_Ym, face_Zm, assume_unique=True)

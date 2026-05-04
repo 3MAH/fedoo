@@ -45,7 +45,7 @@ if not os.path.isdir("results"):
 res = pb.add_output("results/gyroid_ipc_periodic", solid_assembly, ["Disp", "Stress"])
 
 # --- BCs: periodic, compress 50% ---
-bc_periodic = fd.constraint.PeriodicBC("finite_strain", tol=1e-3)
+bc_periodic = fd.constraint.PeriodicBC("finite_strain")
 pb.bc.add(bc_periodic)
 
 # block a node near the center to avoid rigid body motion
