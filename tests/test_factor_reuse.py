@@ -99,3 +99,31 @@ def test_invalidate_factorization_via_set_A():
     # touching A must invalidate
     pb.set_A(pb.get_A())
     assert pb._factor_valid is False
+
+
+def test_solver_mumps_default_path():
+    """``_solver_mumps`` must use the python-mumps Context API.
+
+    Regression test for a latent bug where the function called
+    ``mumps.spsolve`` which does not exist in the python-mumps package.
+    The bug went unnoticed in CI because CI installs pypardiso (x86),
+    so the mumps default path was never exercised. Triggers on any
+    arm64 environment where python-mumps is the auto-selected backend.
+    """
+    try:
+        import mumps  # noqa: F401
+    except ImportError:
+        pytest.skip("python-mumps not installed")
+
+    import scipy.sparse as sp
+    from fedoo.core.base import _solver_mumps
+
+    # Small symmetric positive-definite tridiagonal system: A x = b
+    n = 8
+    main = 2.0 * np.ones(n)
+    off = -1.0 * np.ones(n - 1)
+    A = sp.diags([off, main, off], offsets=[-1, 0, 1], format="csr")
+    b = np.arange(1.0, n + 1.0)
+
+    x = _solver_mumps(A, b)
+    assert np.allclose(A @ x, b, atol=1e-10)
