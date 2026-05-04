@@ -793,9 +793,15 @@ def _solver_petsc(
 
 
 def _solver_mumps(A, B, **kargs):
+    # python-mumps exposes a Context-based API only; there is no
+    # top-level spsolve. For repeated solves on the same A, use
+    # `Problem.set_reuse_factorization(True)` to keep the Context alive
+    # across calls (see _MumpsFactor).
     import mumps
 
-    return mumps.spsolve(A, B)
+    ctx = mumps.Context()
+    ctx.factor(A)
+    return ctx.solve(B)
 
 
 # =============================================================
