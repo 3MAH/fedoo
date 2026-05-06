@@ -45,7 +45,7 @@ class ShellBase(ConstitutiveLaw):
             assembly.sv["GeneralizedStrain"] = 0
             assembly.sv["GeneralizedStress"] = 0
         else:
-            GeneralizedStrainOp = assembly.weakform.GetGeneralizedStrainOperator()
+            GeneralizedStrainOp = assembly.weakform.generalized_strain_operator()
             GeneralizedStrain = [
                 op if np.isscalar(op) else assembly.get_gp_results(op, U)
                 for op in GeneralizedStrainOp
