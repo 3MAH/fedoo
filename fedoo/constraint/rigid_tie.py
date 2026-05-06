@@ -1,5 +1,7 @@
 """Rigid Tie constraint."""
 
+import warnings
+
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 
@@ -99,10 +101,14 @@ class RigidTie(BCBase):
 
     def initialize(self, problem):
         if problem.space.is_axisymmetric:
-            raise NotImplementedError(
-                "RigidTie does not support the '2Daxi' ModelingSpace: "
-                "a 3D rigid body has rotational degrees of freedom that "
-                "are not expressible in a 2D axisymmetric space."
+            warnings.warn(
+                "RigidTie under the '2Daxi' ModelingSpace: the constraint "
+                "is applied as pure-kinematics MPCs and will function, but "
+                "only rigid motions consistent with axisymmetry (axial "
+                "translation along the symmetry axis) preserve the "
+                "axisymmetric assumption. Radial translation and any "
+                "rotation around the in-plane axes break it.",
+                stacklevel=2,
             )
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box
@@ -347,9 +353,12 @@ class RigidTie2D(BCBase):
 
     def initialize(self, problem):
         if problem.space.is_axisymmetric:
-            raise NotImplementedError(
-                "RigidTie2D does not support the '2Daxi' ModelingSpace: "
-                "rigid-body rotations break axisymmetry."
+            warnings.warn(
+                "RigidTie2D under the '2Daxi' ModelingSpace: the constraint "
+                "is applied as pure-kinematics MPCs and will function, but "
+                "only axial (z) translation preserves axisymmetry. Radial "
+                "translation and the in-plane RigidRotZ rotation break it.",
+                stacklevel=2,
             )
         if self.center is None:
             # initialize the rotation center at center of rigid nodes bounding box

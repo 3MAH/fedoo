@@ -301,6 +301,12 @@ class ModelingSpace:
         ``get_weak_equation`` (see e.g. ``StressEquilibrium``) using
         ``assembly.sv["_R_gausspoints"]``. In 2D plane strain / plane
         stress slot 2 stays 0.
+
+        Note for plane stress (``2Dstress``): the symbolic slot 2 is 0
+        (kinematic zero), but the constitutive law may compute a
+        nonzero out-of-plane ε_zz when enforcing the plane-stress
+        condition σ_zz = 0. Post-processed strain output from such a
+        law is therefore not guaranteed to have slot 2 = 0.
         """
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 

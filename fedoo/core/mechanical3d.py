@@ -14,16 +14,23 @@ class Mechanical3D(ConstitutiveLaw):
     Strains and stresses are stored as 6-vectors (Voigt-like) at every Gauss
     point. The slot interpretation depends on the active ``ModelingSpace``:
 
-    =========  ===================  ===================  ===================
-    slot       3D                   2D plane / plane-σ   2Daxi
-    =========  ===================  ===================  ===================
-    0          ε_xx                 ε_xx                 ε_rr
-    1          ε_yy                 ε_yy                 ε_zz   (z = Y axis)
-    2          ε_zz                 0  (unused)          ε_θθ   (= u_r / R)
-    3          γ_xy                 γ_xy                 γ_rz
-    4          γ_xz                 0                    0  (γ_rθ = 0 by sym.)
-    5          γ_yz                 0                    0  (γ_θz = 0 by sym.)
-    =========  ===================  ===================  ===================
+    =========  ===================  ===========================  ===================
+    slot       3D                   2Dplane (plane strain)       2Daxi
+    =========  ===================  ===========================  ===================
+    0          ε_xx                 ε_xx                         ε_rr
+    1          ε_yy                 ε_yy                         ε_zz   (z = Y axis)
+    2          ε_zz                 0  (unused)                  ε_θθ   (= u_r / R)
+    3          γ_xy                 γ_xy                         γ_rz
+    4          γ_xz                 0                            0  (γ_rθ = 0 by sym.)
+    5          γ_yz                 0                            0  (γ_θz = 0 by sym.)
+    =========  ===================  ===========================  ===================
+
+    For ``2Dstress`` (plane stress), the slot layout is the same as
+    ``2Dplane``, but the constitutive law internally computes a nonzero
+    out-of-plane strain ε_zz so that σ_zz = 0 — the symbolic strain
+    operator places 0 in slot 2, but post-processed strain output from
+    a constitutive law that relaxes σ_zz may have a nonzero ε_zz that
+    is not reflected in slot 2.
 
     Rationale for the 2Daxi mapping
     -------------------------------

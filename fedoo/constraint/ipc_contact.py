@@ -77,6 +77,20 @@ class IPCContact(AssemblyBase):
        nodes must use ``use_ccd=True`` instead.  An error is raised at
        initialization if ``use_ogc=True`` is used with a solid mesh.
 
+    **Axisymmetric (2Daxi)** — Under a ``"2Daxi"`` ModelingSpace the
+    barrier gradient and hessian returned by ipctk are scaled by the
+    circumferential integration weight ``2*pi*r`` per surface vertex
+    before being scattered into the global system.  This is the IPC
+    analogue of fedoo's per-Gauss-point ``axi_volume_weight`` for weak
+    forms.  The scaling is applied per vertex (using the reference
+    radius ``R₀``); it is exact when both endpoints of a contact pair
+    sit at similar radii, and slightly asymmetric otherwise.  Vertices
+    on the symmetry axis (r = 0) get weight 0, which is geometrically
+    correct (a "ring" of zero radius collapses to a point).  In 2Daxi
+    the planar (r, z) distance equals the true 3D minimum distance
+    between the corresponding circles (closest points share the
+    azimuth), so the barrier distance and PSD projection are unchanged.
+
     Parameters
     ----------
     mesh : fedoo.Mesh
@@ -184,13 +198,6 @@ class IPCContact(AssemblyBase):
 
         if space is None:
             space = ModelingSpace.get_active()
-        if space.is_axisymmetric:
-            raise NotImplementedError(
-                "IPCContact does not support the '2Daxi' ModelingSpace: "
-                "the IPC barrier formulation lacks the 2*pi*r circumferential "
-                "weighting required for axisymmetric problems. "
-                "Use fedoo.constraint.Contact (penalty) instead."
-            )
         AssemblyBase.__init__(self, name, space)
 
         self.mesh = mesh
@@ -240,6 +247,10 @@ class IPCContact(AssemblyBase):
         # OGC trust-region state
         self._ogc_trust_region = None
         self._ogc_vertices_at_start = None
+
+        # Axisymmetric (2Daxi) integration weights — built in initialize()
+        self._axi_weight = None  # 1D array (n_surf*ndim,) interleaved 2*pi*r
+        self._axi_diag = None  # sparse diag(_axi_weight) for hessian scaling
 
         self.sv = {}
         self.sv_start = {}
@@ -417,6 +428,12 @@ class IPCContact(AssemblyBase):
             global_vector = P @ ipctk_gradient
             global_matrix = P @ ipctk_hessian @ P.T
 
+        Under a 2Daxi ModelingSpace, the per-surface-DOF gradient/hessian
+        are first scaled by ``2*pi*r`` (per surface vertex, broadcast over
+        coordinates) so that the planar barrier energy is integrated
+        around the symmetry axis — the IPC analogue of fedoo's
+        ``axi_volume_weight`` for weak forms.
+
         Sets self.global_matrix and self.global_vector.
         """
         n_mesh_dof = self.space.nvar * self.mesh.n_nodes
@@ -428,12 +445,16 @@ class IPCContact(AssemblyBase):
 
         ipctk = _import_ipctk()
         P = self._scatter_matrix
+        axi_w = self._axi_weight  # None outside 2Daxi
+        axi_D = self._axi_diag  # None outside 2Daxi
 
         # Barrier contributions
         if compute != "matrix":
             grad_surf = self._barrier_potential.gradient(
                 self._collisions, self._collision_mesh, vertices
             )
+            if axi_w is not None:
+                grad_surf = axi_w * grad_surf
             # ipctk gradient points toward increasing barrier (toward contact).
             # The repulsive force is -gradient. In fedoo, global_vector is
             # added to RHS: K*dX = B + D, so D = -kappa * gradient.
@@ -456,6 +477,8 @@ class IPCContact(AssemblyBase):
                     vertices,
                     project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
                 )
+            if axi_D is not None:
+                hess_surf = axi_D @ hess_surf @ axi_D
             self.global_matrix = self._kappa * (P @ hess_surf @ P.T)
 
         # Friction contributions
@@ -470,6 +493,8 @@ class IPCContact(AssemblyBase):
                         self._collision_mesh,
                         vertices,
                     )
+                    if axi_w is not None:
+                        fric_grad_surf = axi_w * fric_grad_surf
                     self.global_vector += -(P @ fric_grad_surf)
 
                 if compute != "vector":
@@ -479,6 +504,8 @@ class IPCContact(AssemblyBase):
                         vertices,
                         project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
                     )
+                    if axi_D is not None:
+                        fric_hess_surf = axi_D @ fric_hess_surf @ axi_D
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
         # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC)
@@ -809,6 +836,15 @@ class IPCContact(AssemblyBase):
         self._bbox_diag = np.linalg.norm(
             self._rest_positions.max(axis=0) - self._rest_positions.min(axis=0)
         )
+
+        # Build axisymmetric (2π·r) integration weight on surface DOFs.
+        # Applied per surface vertex, broadcast over the ipctk interleaved
+        # layout [x0, y0, x1, y1, ...]. Reference radius R₀ is used,
+        # consistent with the rest of the 2Daxi pipeline.
+        if self.space.is_axisymmetric:
+            r_surf = self._rest_positions[:, 0]
+            self._axi_weight = np.repeat(2.0 * np.pi * r_surf, ndim)
+            self._axi_diag = sparse.diags(self._axi_weight)
 
         # Compute actual dhat
         if self._dhat_is_relative:
