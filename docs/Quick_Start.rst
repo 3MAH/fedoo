@@ -107,8 +107,11 @@ The solver can be modified as follow:
 
     pb.set_solver('cg') #for conjugate gradient solver
 
-For direct solver, it is strongly recommanded to install the pypardiso that allow to use the pardiso linear system solver 
-for drastically improved computation performance.  
+For direct solver, it is strongly recommended to install one of
+``pypardiso`` (Intel CPUs), ``python-mumps`` (cross-platform, also
+required for :meth:`Problem.set_reuse_factorization`) or ``petsc4py``
+for drastically improved computation performance. See
+:doc:`Install` for the recommended commands per platform.
 
 Boundary conditions
 _____________________

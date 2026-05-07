@@ -1,88 +1,137 @@
+"""Periodicity test and face matching utilities.
+
+The :func:`match_opposing_faces` helper pairs nodes on the two faces
+normal to a given axis using a KDTree on the perpendicular coordinates.
+``tol`` is the maximum accepted distance between paired nodes — it is
+used both to gather nodes considered "on the boundary plane" and to
+validate the pairing distance afterwards. Pairing failures raise
+``ValueError`` with a precise message.
+
+:func:`is_periodic` is a thin wrapper around the helper that returns
+``True``/``False`` for the full mesh.
+"""
+
 import numpy as np
+from scipy.spatial import cKDTree
 
 
-def is_periodic(crd, tol=1e-8, dim=3):
-    """
-    Test if a list of node coordinates is periodic (have nodes at the same positions on adjacent faces)
+def pair_node_sets(crd, idx_minus, idx_plus, free_axes, tol):
+    """Reorder ``idx_plus`` so that ``crd[idx_minus][i]`` and
+    ``crd[idx_plus][i]`` are paired by Euclidean distance on
+    ``free_axes``.
 
     Parameters
     ----------
-    crd: numpy array with shape = [n_nodes, ndim]
-        list of node coordinates associated to a mesh
-    tol : float (default = 1e-8)
-        Tolerance used to test the nodes positions.
-    dim : 1,2 or 3 (default = 3)
-        Dimension of the periodicity. If dim = 1, the periodicity is tested only over the 1st axis (x axis).
-        if dim = 2, the periodicity is tested on the 2 first axis (x and y axis).
-        if dim = 3, the periodicity is tested in 3 directions (x,y,z).
+    crd : np.ndarray, shape (n_nodes, ndim)
+        Node coordinates.
+    idx_minus, idx_plus : np.ndarray
+        Node-index arrays for the two opposing sets.
+    free_axes : sequence of int
+        Axes along which the two sets share coordinates (perpendicular
+        to the matching direction). Empty for 1D case (single-node
+        opposing sets).
+    tol : float
+        Maximum accepted distance between paired nodes.
 
     Returns
     -------
-    True if the mesh is periodic else return False.
+    idx_minus, idx_plus : np.ndarray
+        Same nodes; ``idx_plus`` reordered to match ``idx_minus``.
+
+    Raises
+    ------
+    ValueError
+        If the two sets have different sizes, or if any pairing
+        distance exceeds ``tol``.
     """
+    if len(idx_minus) != len(idx_plus):
+        raise ValueError(
+            f"opposing node sets have {len(idx_minus)} vs "
+            f"{len(idx_plus)} nodes; cannot pair."
+        )
+    if len(idx_minus) == 0 or not list(free_axes):
+        return idx_minus, idx_plus
 
-    # bounding box
-    xmax = np.max(crd[:, 0])
-    xmin = np.min(crd[:, 0])
-    ymax = np.max(crd[:, 1])
-    ymin = np.min(crd[:, 1])
-    if dim == 3:
-        zmax = np.max(crd[:, 2])
-        zmin = np.min(crd[:, 2])
+    free_axes = list(free_axes)
+    tree = cKDTree(crd[idx_plus][:, free_axes])
+    dist, order = tree.query(crd[idx_minus][:, free_axes])
+    if dist.max() > tol:
+        raise ValueError(
+            f"max pairing distance {dist.max():.3e} exceeds "
+            f"tol={tol:.3e}; nodes on opposite sets do not align."
+        )
+    return idx_minus, idx_plus[order]
 
-    # extract face nodes
-    left = np.where(np.abs(crd[:, 0] - xmin) < tol)[0]
-    right = np.where(np.abs(crd[:, 0] - xmax) < tol)[0]
 
-    if dim > 1:
-        bottom = np.where(np.abs(crd[:, 1] - ymin) < tol)[0]
-        top = np.where(np.abs(crd[:, 1] - ymax) < tol)[0]
+def match_opposing_faces(crd, axis, tol):
+    """Pair nodes on the two faces normal to ``axis``.
 
-    if dim > 2:  # or dim == 3
-        back = np.where(np.abs(crd[:, 2] - zmin) < tol)[0]
-        front = np.where(np.abs(crd[:, 2] - zmax) < tol)[0]
+    Parameters
+    ----------
+    crd : np.ndarray, shape (n_nodes, ndim)
+        Node coordinates.
+    axis : int
+        Axis (0, 1, 2) along which to match opposing faces.
+    tol : float
+        Maximum accepted distance between paired nodes (also used to
+        identify nodes lying on the boundary plane). Must be smaller
+        than the mesh element size.
 
-    # sort adjacent faces to ensure node correspondance
-    if crd.shape[1] == 2:  # 2D mesh
-        left = left[np.argsort(crd[left, 1])]
-        right = right[np.argsort(crd[right, 1])]
-        if dim > 1:
-            bottom = bottom[np.argsort(crd[bottom, 0])]
-            top = top[np.argsort(crd[top, 0])]
+    Returns
+    -------
+    idx_minus, idx_plus : np.ndarray
+        Node index arrays such that ``crd[idx_minus][i]`` and
+        ``crd[idx_plus][i]`` are paired with perpendicular distance
+        ``≤ tol`` for every ``i``.
 
-    elif crd.shape[1] > 2:
-        decimal_round = int(-np.log10(tol) - 1)
-        left = left[np.lexsort((crd[left, 1], crd[left, 2].round(decimal_round)))]
-        right = right[np.lexsort((crd[right, 1], crd[right, 2].round(decimal_round)))]
-        if dim > 1:
-            bottom = bottom[
-                np.lexsort((crd[bottom, 0], crd[bottom, 2].round(decimal_round)))
-            ]
-            top = top[np.lexsort((crd[top, 0], crd[top, 2].round(decimal_round)))]
-        if dim > 2:
-            back = back[np.lexsort((crd[back, 0], crd[back, 1].round(decimal_round)))]
-            front = front[
-                np.lexsort((crd[front, 0], crd[front, 1].round(decimal_round)))
-            ]
+    Raises
+    ------
+    ValueError
+        If the two faces have different node counts, or if any pairing
+        distance exceeds ``tol``.
+    """
+    bmin = crd[:, axis].min()
+    bmax = crd[:, axis].max()
 
-    # ==========================
-    # test if mesh is periodic:
-    # ==========================
+    minus = np.where(np.abs(crd[:, axis] - bmin) < tol)[0]
+    plus = np.where(np.abs(crd[:, axis] - bmax) < tol)[0]
 
-    # test if same number of nodes in adjacent faces
-    if len(left) != len(right):
-        return False
-    if dim > 1 and len(bottom) != len(top):
-        return False
-    if dim > 2 and (len(back) != len(front)):
-        return False
+    free_axes = [i for i in range(crd.shape[1]) if i != axis]
+    try:
+        return pair_node_sets(crd, minus, plus, free_axes, tol)
+    except ValueError as e:
+        raise ValueError(
+            f"axis {axis}: faces at {bmin:.4g} and {bmax:.4g}: {e}"
+        ) from None
 
-    # check nodes position
-    if (crd[right, 1:] - crd[left, 1:] > tol).any():
-        return False
-    if dim > 1 and (crd[top, ::2] - crd[bottom, ::2] > tol).any():
-        return False
-    if dim > 2 and (crd[front, :2] - crd[back, :2] > tol).any():
-        return False
 
+def is_periodic(crd, tol=1e-8, dim=3):
+    """Test if node coordinates form a periodic mesh.
+
+    Pairs nodes on opposite faces (axis 0; also 1 and 2 if ``dim``
+    allows) using :func:`match_opposing_faces`. Returns ``True`` if all
+    requested axes pair successfully within ``tol``.
+
+    Parameters
+    ----------
+    crd : np.ndarray, shape (n_nodes, ndim)
+        Node coordinates.
+    tol : float, default 1e-8
+        Maximum accepted distance between paired nodes. Must be smaller
+        than the mesh element size; otherwise interior nodes will be
+        captured into face sets and pairing will fail.
+    dim : int in {1, 2, 3}, default 3
+        Number of axes along which to test periodicity.
+
+    Returns
+    -------
+    bool
+        ``True`` if the mesh is periodic at this tolerance, ``False``
+        otherwise.
+    """
+    for axis in range(dim):
+        try:
+            match_opposing_faces(crd, axis, tol)
+        except ValueError:
+            return False
     return True
