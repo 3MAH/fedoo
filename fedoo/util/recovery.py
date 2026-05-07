@@ -43,30 +43,43 @@ def _physical_shape_derivatives(mesh: Mesh, n_elm_gp: int | None = None):
             f"{inv_J.shape} on element type '{mesh.elm_type}'."
         )
 
-    # shape_function_derivative returns a list of length n_gp, each (ndim_xi, n_nodes_per_elm)
-    dN_xi = np.stack(elm.shape_function_derivative(elm.xi_pg), axis=0)
+    # Reuse the per-element-class cache populated in __init__
+    # (e.g. ElementTriangle.__init__ at fedoo/lib_elements/triangle.py:15).
     # dN_xi[g, x, n] = dN_n/dxi_x at gp g
+    dN_xi = np.stack(elm.shape_function_derivative_gp, axis=0)
 
     # dNdx[e, g, n, i] = sum_x dN_xi[g, x, n] * inv_J[e, g, i, x]
-    dNdx = np.einsum("gxn, egix -> egni", dN_xi, inv_J, optimize=True)
+    dNdx = np.einsum("gxn, egix -> egni", dN_xi, inv_J)
 
-    proj = mesh._get_gausspoint2node_mat(n_elm_gp)  # sparse (n_nodes, n_el * n_gp)
+    proj = mesh._get_gausspoint2node_mat(n_elm_gp)
     return dNdx, proj, n_elm_gp
 
 
 def _project_gp_field(field_gp: np.ndarray, proj) -> np.ndarray:
-    """Project a GP field of shape (n_el, n_gp, ...) to nodes via proj.
-
-    Returns a node field with leading shape (n_nodes, ...).
-    """
+    """Project a GP field of shape (n_el, n_gp, ...) to nodes via proj."""
     n_el, n_gp = field_gp.shape[:2]
     tail = field_gp.shape[2:]
     # GP layout in proj: column index = el + gp*n_el (mesh.py:1138-1142),
     # i.e. elements vary fastest. Transposing axes 0 and 1 then ravelling
     # in C order produces exactly that layout.
     flat = field_gp.transpose(1, 0, *range(2, field_gp.ndim)).reshape(n_el * n_gp, -1)
-    out = proj @ flat  # (n_nodes, prod(tail))
+    out = proj @ flat
     return out.reshape(out.shape[0], *tail)
+
+
+def _validate_scalar_field(mesh: Mesh, field: np.ndarray) -> np.ndarray:
+    field = np.asarray(field, dtype=np.float64)
+    if field.shape != (mesh.n_nodes,):
+        raise ValueError(
+            f"field must have shape (n_nodes={mesh.n_nodes},), got {field.shape}"
+        )
+    return field
+
+
+def _recover_gradient(field: np.ndarray, mesh: Mesh, dNdx, proj) -> np.ndarray:
+    f_elem = field[mesh.elements]
+    g_gp = np.einsum("en, egni -> egi", f_elem, dNdx)
+    return _project_gp_field(g_gp, proj)
 
 
 def recover_gradient(
@@ -79,6 +92,11 @@ def recover_gradient(
     Computes the gradient at every Gauss point via the FE shape function
     derivatives, then averages back to nodes through fedoo's cached lumped
     GP-to-Node projection (``mesh._get_gausspoint2node_mat``).
+
+    Restricted to volumetric or planar elements (square Jacobian); raises
+    ``NotImplementedError`` for shell, beam, or surface-in-3D elements.
+    Boundary nodes use one-sided element averaging and are therefore less
+    accurate than interior nodes.
 
     Parameters
     ----------
@@ -94,16 +112,9 @@ def recover_gradient(
     (n_nodes, ndim) ndarray
         Recovered nodal gradient.
     """
-    field = np.asarray(field, dtype=np.float64)
-    if field.shape != (mesh.n_nodes,):
-        raise ValueError(
-            f"field must have shape (n_nodes={mesh.n_nodes},), got {field.shape}"
-        )
-
+    field = _validate_scalar_field(mesh, field)
     dNdx, proj, _ = _physical_shape_derivatives(mesh, n_elm_gp)
-    f_elem = field[mesh.elements]  # (n_el, n_elm_nd)
-    g_gp = np.einsum("en, egni -> egi", f_elem, dNdx, optimize=True)
-    return _project_gp_field(g_gp, proj)
+    return _recover_gradient(field, mesh, dNdx, proj)
 
 
 def recover_hessian(
@@ -117,6 +128,12 @@ def recover_hessian(
     Step 2 takes the gradient of each component and projects back to nodes,
     giving a full (possibly non-symmetric) tensor; the result is then
     symmetrized.
+
+    Restricted to volumetric or planar elements (square Jacobian); raises
+    ``NotImplementedError`` for shell, beam, or surface-in-3D elements.
+    Boundary nodes use one-sided element averaging and are therefore less
+    accurate than interior nodes - acceptable when feeding an mmg metric,
+    which clips eigenvalues by ``hmin``/``hmax``.
 
     Pack the result with :func:`to_voigt` for the fedoo convention
     (``[XX, YY, ZZ, XY, XZ, YZ]``) or :func:`to_upper_diagonal` for the
@@ -136,23 +153,14 @@ def recover_hessian(
     (n_nodes, ndim, ndim) ndarray
         Symmetric Hessian tensor at every node.
     """
-    field = np.asarray(field, dtype=np.float64)
-    if field.shape != (mesh.n_nodes,):
-        raise ValueError(
-            f"field must have shape (n_nodes={mesh.n_nodes},), got {field.shape}"
-        )
-
+    field = _validate_scalar_field(mesh, field)
     dNdx, proj, _ = _physical_shape_derivatives(mesh, n_elm_gp)
+    g_node = _recover_gradient(field, mesh, dNdx, proj)
 
-    f_elem = field[mesh.elements]
-    g_gp = np.einsum("en, egni -> egi", f_elem, dNdx, optimize=True)
-    g_node = _project_gp_field(g_gp, proj)  # (n_nodes, ndim)
-
-    # Step 2: gradient of g, component by component, all in one einsum.
-    g_elem = g_node[mesh.elements]  # (n_el, n_elm_nd, ndim)
+    g_elem = g_node[mesh.elements]
     # H_gp[e, g, j, i] = sum_n g_elem[e, n, j] * dNdx[e, g, n, i]
-    H_gp = np.einsum("enj, egni -> egji", g_elem, dNdx, optimize=True)
-    H = _project_gp_field(H_gp, proj)  # (n_nodes, ndim, ndim)
+    H_gp = np.einsum("enj, egni -> egji", g_elem, dNdx)
+    H = _project_gp_field(H_gp, proj)
 
     return 0.5 * (H + H.swapaxes(-1, -2))
 
