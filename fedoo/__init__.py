@@ -24,6 +24,12 @@ from .core import (
     WeakFormSum,
     read_data,
 )
+from .util.recovery import (
+    recover_gradient,
+    recover_hessian,
+    to_upper_diagonal,
+    to_voigt,
+)
 
 try:
     from .util.viewer import viewer
