@@ -16,8 +16,6 @@ import os
 import fedoo as fd
 import numpy as np
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
-
 fd.ModelingSpace("2Daxi")
 mesh = fd.mesh.rectangle_mesh(5, 240, 23, 25, 0, 180)
 
