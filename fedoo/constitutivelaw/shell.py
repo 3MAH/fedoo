@@ -10,31 +10,16 @@ import numpy as np
 class ShellBase(ConstitutiveLaw):
     # base model class that should derive any other shell constitutive laws
     def __init__(self, thickness, k=1, name=""):
-        # k: shear shape factor
         ConstitutiveLaw.__init__(self, name)  # heritage
 
-        self.__thickness = thickness
-        self.__k = k
-        self.__GeneralizedStrain = None
-        self.__GeneralizedStress = None
+        self.thickness = thickness
+        """Shell thickness."""
+        self.k = k
+        """Shear shape factor."""
 
-    def GetThickness(self):
-        return self.__thickness
-
-    def Get_k(self):
-        return self.__k
-
-    def GetShellRigidityMatrix(self):
-        raise NameError('"GetShellRigidityMatrix" not implemented, contact developer.')
-
-    def GetShellRigidityMatrix_RI(self):
+    def get_shell_stiffness_matrix(self):
         raise NameError(
-            '"GetShellRigidityMatrix_RI" not implemented, contact developer.'
-        )
-
-    def GetShellRigidityMatrix_FI(self):
-        raise NameError(
-            '"GetShellRigidityMatrix_FI" not implemented, contact developer.'
+            '"get_shell_stiffness_matrix" not implemented, contact developer.'
         )
 
     def update(self, assembly, pb):
@@ -51,7 +36,7 @@ class ShellBase(ConstitutiveLaw):
                 for op in GeneralizedStrainOp
             ]
 
-            H = self.GetShellRigidityMatrix()
+            H = self.get_shell_stiffness_matrix()
 
             # all terms are computed. Perhaps could be optimized by computed only the termes related to the associated weak form (eg shear for selective integration)
             assembly.sv["GeneralizedStress"] = [
@@ -66,11 +51,10 @@ class ShellBase(ConstitutiveLaw):
             assembly.sv["GeneralizedStrain"] = GeneralizedStrain
 
     def get_strain(self, assembly, **kargs):
-        """
-        Return the last computed strain associated to the given assembly
+        """Return the last computed strain associated to the given assembly.
 
         Parameters
-        ------------------------
+        ----------
         assembly: Assembly
 
         position : float (optional)
@@ -86,7 +70,7 @@ class ShellBase(ConstitutiveLaw):
         StrainTensorList object containing the strain at integration point
         """
         position = kargs.get("position", 1)
-        z = position * self.GetThickness() / 2
+        z = position * self.thickness / 2
 
         Strain = StrainTensorList([0 for i in range(6)])
         GeneralizedStrain = assembly.sv["GeneralizedStrain"]
@@ -106,69 +90,38 @@ class ShellBase(ConstitutiveLaw):
 
 
 class ShellHomogeneous(ShellBase):
-    def __init__(self, MatConstitutiveLaw, thickness, k=1, name=""):
+    def __init__(self, material, thickness, k=1, name=""):
         # k: shear shape factor
 
-        if isinstance(MatConstitutiveLaw, str):
-            MatConstitutiveLaw = ConstitutiveLaw.get_all()[MatConstitutiveLaw]
+        if isinstance(material, str):
+            material = ConstitutiveLaw.get_all()[material]
 
         ShellBase.__init__(self, thickness, k, name)  # heritage
 
-        self.__material = MatConstitutiveLaw
+        self.material = material
 
-    def GetMaterial(self):
-        return self.__material
-
-    def GetShellRigidityMatrix(self):
-        Hplane = self.__material.get_elastic_matrix(
+    def get_shell_stiffness_matrix(self):
+        Hplane = self.material.get_elastic_matrix(
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Hplane = np.array(
             [[Hplane[i][j] for j in [0, 1, 3]] for i in [0, 1, 3]], dtype="object"
         )
-        Hshear = self.__material.get_elastic_matrix()
+        Hshear = self.material.get_elastic_matrix()
         Hshear = np.array(
             [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
         )
 
         H = np.zeros((8, 8), dtype="object")
-        H[:3, :3] = self.GetThickness() * Hplane  # Membrane
-        H[3:6, 3:6] = (
-            self.GetThickness() ** 3 / 12
-        ) * Hplane  # Flexual rigidity matrix
-        H[6:8, 6:8] = (self.Get_k() * self.GetThickness()) * Hshear
-
-        return H
-
-    def GetShellRigidityMatrix_RI(self):
-        # only shear component are given for reduce integration part
-        Hshear = self.__material.get_elastic_matrix()
-        Hshear = np.array(
-            [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
-        )
-
-        return (self.Get_k() * self.GetThickness()) * Hshear
-
-    def GetShellRigidityMatrix_FI(self):
-        # membrane and flexural component are given for full integration part
-        Hplane = self.__material.get_elastic_matrix(
-            "2Dstress"
-        )  # membrane rigidity matrix with plane stress assumption
-        Hplane = np.array(
-            [[Hplane[i][j] for j in [0, 1, 3]] for i in [0, 1, 3]], dtype="object"
-        )
-
-        H = np.zeros((6, 6), dtype="object")
-        H[:3, :3] = self.GetThickness() * Hplane  # Membrane
-        H[3:6, 3:6] = (
-            self.GetThickness() ** 3 / 12
-        ) * Hplane  # Flexual rigidity matrix
+        H[:3, :3] = self.thickness * Hplane  # Membrane
+        H[3:6, 3:6] = (self.thickness**3 / 12) * Hplane  # Flexual rigidity matrix
+        H[6:8, 6:8] = (self.k * self.thickness) * Hshear
 
         return H
 
     def get_stress(self, assembly, **kargs):
         Strain = self.get_strain(assembly, **kargs)
-        Hplane = self.__material.get_elastic_matrix(
+        Hplane = self.material.get_elastic_matrix(
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
@@ -184,7 +137,7 @@ class ShellHomogeneous(ShellBase):
             )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
-        Hshear = self.__material.get_elastic_matrix()
+        Hshear = self.material.get_elastic_matrix()
         Stress += [
             sum(
                 [
@@ -202,7 +155,7 @@ class ShellHomogeneous(ShellBase):
         return StressTensorList(Stress)
 
     def GetStressDistribution(self, assembly, pg, resolution=100):
-        h = self.GetThickness()
+        h = self.thickness
         z = np.arange(-h / 2, h / 2, h / resolution)
 
         Strain = StrainTensorList([0 for i in range(6)])
@@ -217,7 +170,7 @@ class ShellHomogeneous(ShellBase):
         Strain[4] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsYZ -> shear
 
-        Hplane = self.__material.get_elastic_matrix(
+        Hplane = self.material.get_elastic_matrix(
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
@@ -233,7 +186,7 @@ class ShellHomogeneous(ShellBase):
             )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
-        Hshear = self.__material.get_elastic_matrix()
+        Hshear = self.material.get_elastic_matrix()
         Stress += [
             sum(
                 [
@@ -252,25 +205,25 @@ class ShellHomogeneous(ShellBase):
 
 
 class ShellLaminate(ShellBase):
-    def __init__(self, listMat, listThickness, k=1, name=""):
+    def __init__(self, listMat, list_thickness, k=1, name=""):
         # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         self.__listMat = [
             ConstitutiveLaw.get_all()[mat] if isinstance(mat, str) else mat
             for mat in listMat
         ]
-        thickness = sum(listThickness)  # total thickness
+        thickness = sum(list_thickness)  # total thickness
 
         self.__layer = (
-            np.hstack((0, np.cumsum(listThickness))) - np.sum(listThickness) / 2
+            np.hstack((0, np.cumsum(list_thickness))) - np.sum(list_thickness) / 2
         )  # z coord of layers interfaces
-        self.__listThickness = listThickness
+        self.list_thickness = list_thickness
 
         ShellBase.__init__(self, thickness, k, name)  # heritage
 
-    def GetShellRigidityMatrix(self):
+    def get_shell_stiffness_matrix(self):
         H = np.zeros((8, 8), dtype="object")
-        for i in range(len(self.__listThickness)):
+        for i in range(len(self.list_thickness)):
             Hplane = self.__listMat[i].get_elastic_matrix(
                 "2Dstress"
             )  # membrane rigidity matrix with plane stress assumption
@@ -282,7 +235,7 @@ class ShellLaminate(ShellBase):
                 [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
             )
 
-            H[0:3, 0:3] += self.__listThickness[i] * Hplane  # Membrane
+            H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
                 0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
@@ -292,26 +245,26 @@ class ShellLaminate(ShellBase):
             H[3:6, 3:6] += (
                 (1 / 3) * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3) * Hplane
             )  # Flexual rigidity matrix
-            H[6:8, 6:8] += (self.Get_k() * self.__listThickness[i]) * Hshear
+            H[6:8, 6:8] += (self.k * self.list_thickness[i]) * Hshear
 
         return H
 
-    def GetShellRigidityMatrix_RI(self):
+    def get_shell_stiffness_matrix_RI(self):
         # only shear component are given for reduce integration part
         H = np.zeros((2, 2), dtype="object")
-        for i in range(len(self.__listThickness)):
+        for i in range(len(self.list_thickness)):
             Hshear = self.__listMat[i].get_elastic_matrix()
             Hshear = np.array(
                 [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
             )
-            H += (self.Get_k() * self.__listThickness[i]) * Hshear
+            H += (self.k * self.list_thickness[i]) * Hshear
 
         return H
 
-    def GetShellRigidityMatrix_FI(self):
+    def get_shell_stiffness_matrix_FI(self):
         # membrane and flexural component are given for full integration part
         H = np.zeros((6, 6), dtype="object")
-        for i in range(len(self.__listThickness)):
+        for i in range(len(self.list_thickness)):
             Hplane = self.__listMat[i].get_elastic_matrix(
                 "2Dstress"
             )  # membrane rigidity matrix with plane stress assumption
@@ -319,7 +272,7 @@ class ShellLaminate(ShellBase):
                 [[Hplane[i][j] for j in [0, 1, 3]] for i in [0, 1, 3]], dtype="object"
             )
 
-            H[0:3, 0:3] += self.__listThickness[i] * Hplane  # Membrane
+            H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
                 0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
@@ -373,7 +326,7 @@ class ShellLaminate(ShellBase):
         return StressTensorList(Stress)
 
     def GetStressDistribution(self, assembly, pg, resolution=100):
-        h = self.GetThickness()
+        h = self.thickness
         z = np.linspace(-h / 2, h / 2, resolution)
 
         Strain = StrainTensorList([0 for i in range(6)])
@@ -448,8 +401,7 @@ class ShellLaminate(ShellBase):
         return z, Stress
 
     def find_layer(self, position=1):
-        """
-        Returns the num of layer at a given position in the thickness
+        """Return the id of layer at a given position in the thickness.
 
         Parameters
         ----------
@@ -470,5 +422,5 @@ class ShellLaminate(ShellBase):
         ), "position should be a float with value in [-1,1]"
         if position == -1:
             return 0  # 1st layer = bottom layer
-        z = position * self.GetThickness() / 2
+        z = position * self.thickness / 2
         return list((z - self.__layer) <= 0).index(True) - 1

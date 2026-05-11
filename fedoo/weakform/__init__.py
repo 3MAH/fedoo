@@ -62,7 +62,6 @@ from .interface_force import InterfaceForce
 from .plate import (
     PlateEquilibrium,
     PlateEquilibriumFI,
-    PlateEquilibriumSI,
     PlateKirchhoffLoveEquilibrium,
     PlateShearEquilibrium,
 )
