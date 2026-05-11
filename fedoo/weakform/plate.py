@@ -1,4 +1,4 @@
-from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from scipy.spatial.transform import Rotation
 import numpy as np
@@ -520,11 +520,6 @@ class PlateEquilibrium(
 
         self.assembly_options["elm_type", "tri3"] = "ptri3sri"
         self.assembly_options["elm_type", "quad4"] = "pquad4sri"
-        # alias vector required?
-        # self.space.new_vector("_Disp", ("_DispX", "_DispY", "_DispZ"))
-        # self.space.new_vector("_Rot", ("_RotX", "_RotY", "_RotZ"))
-        # self.assembly_options["elm_type", "quad4"] = "quad4sri"
-        # self.assembly_options["elm_type", "hex8"] = "hex8sri"
 
     def generalized_strain_operator(self):
         # membrane strain
@@ -633,7 +628,7 @@ class PlateShearEquilibrium(PlateEquilibriumFI):
             ]
         )
 
-        if self.true_drilling_rotation:
+        if self.true_drilling_rotation and self.drill_stiffness_coefficient != 0:
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
@@ -730,7 +725,7 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):
             ]
         )
 
-        if not (self.true_drilling_rotation):
+        if not (self.true_drilling_rotation) and self.drill_stiffness_coefficient != 0:
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
@@ -743,6 +738,37 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):
                 * penalty
             )
 
+        return diffop
+
+
+class PlateDrillingPenalty(PlateEquilibriumFI):
+    """Mechanical weak form for the drilling penalty in plate models.
+
+    This weak form is derived from PlateEquilibriumFI but isolates and returns only
+    the drilling penalty.
+
+    It is intended solely to be paired with other weak form to manually construct
+    a new selective reduced integration (SRI) element.
+    """
+
+    def get_weak_equation(self, assembly, pb):
+        if "_ShellStiffnessMatrix" not in assembly.sv:
+            assembly.sv["_ShellStiffnessMatrix"] = (
+                self.constitutivelaw.get_shell_stiffness_matrix()
+            )
+        H = assembly.sv["_ShellStiffnessMatrix"]
+
+        # penalty for RotZ
+        # use full integration if simple stiffness to avoid singularity
+        op_drill_constraint = self.drill_constraint_operator()
+        representative_stiffness = H[2][2]
+        penalty = representative_stiffness * self.drill_stiffness_coefficient
+
+        diffop = (
+            op_drill_constraint.virtual
+            * (op_drill_constraint + assembly.sv["_DrillConstraint"])
+            * penalty
+        )
         return diffop
 
 
