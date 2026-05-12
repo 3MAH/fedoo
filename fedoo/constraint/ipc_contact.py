@@ -608,19 +608,10 @@ class IPCContact(AssemblyBase):
                     )
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
-        # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC).
-        # When rigid bodies are present, P already maps to n_dof (including
-        # global DOFs), so no padding is needed.
-        if self._n_global_dof > 0 and not self._rigid_bodies:
-            if compute != "matrix":
-                self.global_vector = np.pad(self.global_vector, (0, self._n_global_dof))
-            if compute != "vector":
-                self.global_matrix = sparse.block_diag(
-                    [
-                        self.global_matrix,
-                        sparse.csr_array((self._n_global_dof, self._n_global_dof)),
-                    ],
-                )
+        # P already has n_dof rows (mesh DOFs + global DOFs) — see
+        # _build_scatter_matrix — so P @ hess @ P.T and P @ grad are already
+        # the right size. No padding is needed for PeriodicBC, RigidTie, or
+        # registered RigidBody global DOFs.
 
     def _ccd_line_search(self, pb, dX):
         """Compute step size using CCD + energy-based backtracking.
