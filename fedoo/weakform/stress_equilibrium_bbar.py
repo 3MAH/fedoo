@@ -103,10 +103,14 @@ class StressEquilibriumBbar(StressEquilibrium):
         if not np.array_equal(initial_stress, 0):
             # this term doesnt seem to improve convergence !
             if self.geometric_stiffness:
-                DiffOp = DiffOp + \
-                    sum([0 if self._nl_strain_op_vir[i] == 0 else
-                         self._nl_strain_op_vir[i] * initial_stress[i]
-                         for i in range(6)])
+                DiffOp = DiffOp + sum(
+                    [
+                        0
+                        if self._nl_strain_op_vir[i] == 0
+                        else self._nl_strain_op_vir[i] * initial_stress[i]
+                        for i in range(6)
+                    ]
+                )
 
             DiffOp = DiffOp + sum(
                 [

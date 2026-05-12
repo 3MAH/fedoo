@@ -210,7 +210,7 @@ class Tri6(ElementTriangle):
 #         return np.full((len(vec_xi), 6), 1 / 3)
 
 
-# 6 nodes triangle with 3 gauss points reduced interpolation 
+# 6 nodes triangle with 3 gauss points reduced interpolation
 class Tri6r(Tri6):
     name = "tri6r"
     default_n_gp = 3
@@ -218,39 +218,40 @@ class Tri6r(Tri6):
 
     def __init__(self, n_elm_gp=3, **kargs):
         # Define our "Master" 3 Gauss Points
-        self.xi_master = np.array([[1/6, 1/6], [2/3, 1/6], [1/6, 2/3]])
-        self.w_master = np.array([1/6, 1/6, 1/6])
-        
+        self.xi_master = np.array([[1 / 6, 1 / 6], [2 / 3, 1 / 6], [1 / 6, 2 / 3]])
+        self.w_master = np.array([1 / 6, 1 / 6, 1 / 6])
+
         # Pre-calculate Shape Functions at the 3 Master points
         self.N_master = Tri6.shape_function(self, self.xi_master)
         self.dN_master = Tri6.shape_function_derivative(self, self.xi_master)
         super().__init__(n_elm_gp, **kargs)
 
-
     def _get_projection_weights(self, xi):
         """
-        Each solver point is assigned to the nearest master point. 
+        Each solver point is assigned to the nearest master point.
         We then must correct the weight, by scaling the return value by
         (W_master / W_solver).
         """
         # Find which master point is closest for each input point
         dist = np.linalg.norm(xi[:, None, :] - self.xi_master[None, :, :], axis=2)
         closest_master_idx = np.argmin(dist, axis=1)
-        
+
         # We need the solver weights to do the correction
         # This assumes n_elm_gp was used to initialize the weights
         w_solver = self.get_gp_weight(len(xi))
-        
+
         # Correction factor: (Master Weight) / (Solver Weight)
         # This ensures: sum(w_solver * (Value * Factor)) == Master_Weight * Value
         factors = np.zeros(len(xi))
         for j in range(3):
-            mask = (closest_master_idx == j)
+            mask = closest_master_idx == j
             # Sum of solver weights in this Voronoi zone
             zone_weight_sum = np.sum(w_solver[mask])
             # Scale factor for points in this zone
-            factors[mask] = self.w_master[j] / w_solver[mask] * (w_solver[mask] / zone_weight_sum)
-            
+            factors[mask] = (
+                self.w_master[j] / w_solver[mask] * (w_solver[mask] / zone_weight_sum)
+            )
+
         return closest_master_idx, factors
 
     def shape_function(self, xi):
