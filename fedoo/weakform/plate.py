@@ -520,6 +520,9 @@ class PlateEquilibrium(
 
         self.assembly_options["elm_type", "tri3"] = "ptri3sri"
         self.assembly_options["elm_type", "quad4"] = "pquad4sri"
+        # self.assembly_options["elm_type", "tri6"] = "ptri6sri"
+        # self.assembly_options["elm_type", "quad8"] = "pquad8ri"
+        # self.assembly_options["elm_type", "quad9"] = "pquad9sri"
 
     def generalized_strain_operator(self):
         # membrane strain

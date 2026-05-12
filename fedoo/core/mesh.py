@@ -1022,11 +1022,11 @@ class Mesh(MeshBase):
             raise NameError("Pyvista not installed.")
 
     def get_element_local_frame(self, n_elm_gp: int = 1) -> np.ndarray:
-        elm_ref = get_element(
-            self.elm_type
-        )(
-            n_elm_gp
-        )  # 1 gauss point by default to compute the local frame at the center of the element
+        # 1 gauss point by default to compute the local frame at the center of the element
+        elm_ref = get_element(self.elm_type)
+        if hasattr(elm_ref, "geometry_elm"):
+            elm_ref = elm_ref.geometry_elm
+        elm_ref = elm_ref(n_elm_gp)
         elm_nodes_crd = self.nodes[self.elements]
 
         if n_elm_gp == 1:

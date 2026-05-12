@@ -10,12 +10,13 @@ from fedoo.lib_elements.quadrangle import (
     Quad8,
     Quad9,
     Quad4r,
+    Quad9r,
     Quad4Hourglass,
 )
 
 # from fedoo.lib_elements.plate import *
 from fedoo.lib_elements.tetrahedron import Tet4, Tet10
-from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
+from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6, Tri6r
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
 _dict_elements = {
@@ -27,9 +28,11 @@ _dict_elements = {
     "tri3": Tri3,
     "tri3r": Tri3r,
     "tri6": Tri6,
+    "tri6r": Tri6r,
     "tri3bubble": Tri3Bubble,
     "quad4": Quad4,
     "quad4r": Quad4r,
+    "quad9r": Quad9r,
     "quad4hourglass": Quad4Hourglass,
     "quad8": Quad8,
     "quad9": Quad9,

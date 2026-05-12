@@ -48,7 +48,8 @@ class Element:
         # gin: Gauss, RefDim, Nodes
         # enj: Element, Nodes, PhysDim
         # Result: (Nel, n_gp, dim_ref, dim_phys)
-        self.jacobian_matrix = np.einsum("gin,enj->egij", dnn_xi, vec_x)
+        n_nodes = dnn_xi[0].shape[-1]
+        self.jacobian_matrix = np.einsum("gin,enj->egij", dnn_xi, vec_x[:,:n_nodes])
 
         # Determinant calculation based on dimensions
         # Last two dims of jacobian_matrix are (dim_ref, dim_phys)
