@@ -70,13 +70,12 @@ body = fd.constraint.RigidBody(
 )
 body.set_force([0, 0, -mass * g])
 body.set_rayleigh_damping(1.0)
-body.enable_ipc_contact(plane_mesh, dhat=0.008, kappa=1e8)
+body.set_static_obstacle(plane_mesh, dhat=0.008, kappa=1e8)
 
 print(f"  Bunny: {bunny_mesh.n_nodes} nodes, mass={mass}kg")
 
 # Solve with manual loop for trajectory
 pb = fd.problem.NonLinear(body.assembly)
-body.add_to_problem(pb)
 pb.initialize()
 
 idx = body.assembly._dof_indices

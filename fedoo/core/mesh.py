@@ -441,6 +441,54 @@ class Mesh(MeshBase):
         )[0]  # indices of the first coincident nodes
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident + 1]]).T
 
+    def merge_coincident_nodes(self, tol: float) -> int:
+        """Find and merge node pairs whose Euclidean distance is below ``tol``.
+
+        Useful when stacking volumes from separate sources (e.g. several
+        STEP files meshed without a boolean fuse): the interface nodes are
+        geometrically close but distinct, and elements on either side
+        don't share connectivity.  After merging, an interface node from
+        one phase and its counterpart from another become a single node,
+        and any constraint or RigidTie applied via the surviving index
+        propagates kinematically across the interface.
+
+        The pairing is greedy by distance: closest pair first, each node
+        merged at most once.  This guarantees no element collapse (no two
+        corners of the same tet end up merged to the same survivor).
+
+        Parameters
+        ----------
+        tol : float
+            Geometric distance threshold (same units as ``self.nodes``).
+
+        Returns
+        -------
+        int
+            Number of node pairs merged.
+        """
+        from scipy.spatial import cKDTree
+
+        tree = cKDTree(self.nodes)
+        pairs = tree.query_pairs(r=tol, output_type="ndarray")
+        if len(pairs) == 0:
+            return 0
+        dists = np.linalg.norm(
+            self.nodes[pairs[:, 0]] - self.nodes[pairs[:, 1]], axis=1
+        )
+        order = np.argsort(dists)
+        used = np.zeros(self.n_nodes, dtype=bool)
+        accepted = []
+        for k in order:
+            i, j = int(pairs[k, 0]), int(pairs[k, 1])
+            if used[i] or used[j]:
+                continue
+            used[i] = used[j] = True
+            accepted.append((i, j))
+        if not accepted:
+            return 0
+        self.merge_nodes(np.asarray(accepted, dtype=int))
+        return len(accepted)
+
     def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
         """
         Merge some nodes
@@ -567,9 +615,14 @@ class Mesh(MeshBase):
 
         * The new mesh keep the former element_sets dict with only the extrated elements.
         * The element indices of the new mesh are not the same as the former one.
-        * The new mesh keep the initial nodes and node_sets. To also removed the
-          nodes, a simple solution is to use the method "remove_isolated_nodes"
-          with the new mesh.
+        * The new mesh keep the initial ``nodes`` array (shared with the parent), so
+          an assembly built on it stays in the parent DOF space and can be summed
+          with full-mesh assemblies. To also remove the nodes, a simple solution is
+          to use the method "remove_isolated_nodes" with the new mesh.
+        * The result carries a ``parent_node_indices`` attribute listing the rows of
+          ``self.nodes`` actually referenced by the extracted elements. Consumers
+          that need the active subset (e.g. ``RigidBody`` slaving the right DOFs)
+          read it directly without recomputing ``np.unique(elements.ravel())``.
         """
         if isinstance(element_set, str):
             element_set = self.element_sets[element_set]
@@ -588,6 +641,11 @@ class Mesh(MeshBase):
             self.local_frame,
             name=name,
         )
+        # ``parent_node_indices`` flags the nodes actually referenced by
+        # the extracted elements. Consumers that need the active subset
+        # (e.g. ``RigidBody`` slaving the right DOFs) can read it
+        # directly without recomputing ``np.unique(elements.ravel())``.
+        sub_mesh.parent_node_indices = np.unique(sub_mesh.elements.ravel())
         return sub_mesh
 
     def nearest_node(self, X: np.ndarray[float]) -> int:

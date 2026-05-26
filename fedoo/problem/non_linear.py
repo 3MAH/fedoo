@@ -61,6 +61,12 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
+
+        # Auto-register kinematic ties from any RigidBodyAssembly found in
+        # the assembly sum. Without this the user has to remember
+        # ``body.add_to_problem(pb)`` for each rigid body even though the
+        # body's assembly is already wired in through ``Assembly.sum``.
+        self._register_rigid_ties(assembly)
         self.t0 = 0
         self.tmax = 1
         self.time = 0
@@ -72,6 +78,27 @@ class _NonLinearBase:
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
+
+    def _register_rigid_ties(self, assembly):
+        """Walk the assembly tree and add any RigidBodyAssembly's tie to ``self.bc``.
+
+        FIFO traversal so the registration order matches the order in
+        which bodies appear inside ``Assembly.sum``. The slot a body
+        gets in ``RigidTie.node_cd`` is determined by this order, so
+        switching to LIFO would silently rewire the user's BCs.
+        """
+        # Local import — avoid a hard cycle with fedoo.constraint at module load.
+        from collections import deque
+        from fedoo.constraint.rigid_body import RigidBodyAssembly
+
+        queue = deque([assembly])
+        while queue:
+            a = queue.popleft()
+            if isinstance(a, RigidBodyAssembly) and a.rigid_tie not in self.bc:
+                self.bc.add(a.rigid_tie)
+            children = getattr(a, "_list_assembly", None)
+            if children:
+                queue.extend(children)
 
     @property
     def n_iter(self):
@@ -685,18 +712,23 @@ class _NonLinearBase:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
-                # Scale only free DOFs; preserve prescribed Dirichlet values
-                # self.set_X(dX * alpha + self._Xbc * (1 - alpha))
-                dX *= alpha
+                # Scale only the free-DOF part of dX; keep the prescribed
+                # Dirichlet values unscaled.  Otherwise the Dirichlet
+                # increment is only partially applied to _dU, and the
+                # leftover (Xbc * (1-alpha)) gets wiped at the next
+                # update_boundary_conditions (where t_fact - t_fact_old
+                # == 0), so the BC target is never reached.
+                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
                 self._alpha = alpha
         if self._alpha == 1:
             self._boundary_is_0 = True
 
-        if self._boundary_is_0:
-            # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
-            self._Xbc *= 0
-        else:
-            self._Xbc *= 1 - alpha
+        # Whether alpha < 1 or alpha == 1, the prescribed Dirichlet
+        # values have now been fully written into _dU (via the
+        # compensation term self._Xbc * (1 - alpha) above), so Xbc can
+        # be zeroed for all subsequent NR iterations of this increment.
+        self._Xbc *= 0
+        self._boundary_is_0 = True
 
         # update displacement increment
         self._dU += self.get_X()
@@ -1055,7 +1087,7 @@ class _NonLinearBase:
                 if self.print_info > 0:
                     print(
                         "Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}".format(
-                            self.__iter, self.time, dt, nb_nr_iter, error
+                            self.__iter, self.time, self.dtime, nb_nr_iter, error
                         )
                     )
 

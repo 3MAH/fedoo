@@ -11,6 +11,7 @@ class _LinearBase:
         super().__init__(mesh=assembly.mesh, name=name)
 
         self.nlgeom = False
+        self._register_rigid_ties(assembly)
         assembly.initialize(self)
         self.time = self.dtime = 0
         # self.set_A(assembly.get_global_matrix())
@@ -133,6 +134,25 @@ class _LinearBase:
     @property
     def assembly(self):
         return self.__assembly
+
+    def _register_rigid_ties(self, assembly):
+        """Add any RigidBodyAssembly's tie to ``self.bc`` before assembly init.
+
+        Mirrors ``NonLinear._register_rigid_ties``. Without this the rigid
+        tie's ``var_cd`` is never populated, and ``RigidBodyAssembly.initialize``
+        crashes reading it.
+        """
+        from collections import deque
+        from fedoo.constraint.rigid_body import RigidBodyAssembly
+
+        queue = deque([assembly])
+        while queue:
+            a = queue.popleft()
+            if isinstance(a, RigidBodyAssembly) and a.rigid_tie not in self.bc:
+                self.bc.add(a.rigid_tie)
+            children = getattr(a, "_list_assembly", None)
+            if children:
+                queue.extend(children)
 
 
 class Linear(_LinearBase, Problem):

@@ -69,6 +69,7 @@ class RigidBodyAssembly(AssemblyBase):
         space=None,
         beta=0.25,
         gamma=0.5,
+        dynamic=True,
         name="RigidBodyAssembly",
     ):
         if space is None:
@@ -84,6 +85,14 @@ class RigidBodyAssembly(AssemblyBase):
         self.beta = beta
         self.gamma = gamma
         self.rayleigh_alpha = 0.0
+        # Static vs dynamic. In static mode, no Newmark inertia, no
+        # damping, no v/a state; only external force + contact tangent
+        # contribute to the 6 rigid DOFs.  A tiny diagonal regularisation
+        # is added to K to keep the linear solve well-posed when the body
+        # is not yet in contact (otherwise the unconstrained free rigid
+        # DOFs would produce a singular K row).
+        self.dynamic = bool(dynamic)
+        self.static_regularisation = 1e-9
 
         self._dof_indices = None
         self._pb_ref = None
@@ -122,7 +131,7 @@ class RigidBodyAssembly(AssemblyBase):
         if self.mesh is None:
             self.mesh = pb.mesh
 
-        if not np.any(self.sv["Acceleration"]):
+        if self.dynamic and not np.any(self.sv["Acceleration"]):
             M = self._get_mass_matrix()
             self.sv["Acceleration"] = np.linalg.solve(M, self.force)
             self.sv_start["Acceleration"] = self.sv["Acceleration"].copy()
@@ -252,20 +261,51 @@ class RigidBodyAssembly(AssemblyBase):
         )
 
     def assemble_global_mat(self, compute="all"):
-        """Assemble effective dynamic stiffness and residual.
+        """Assemble the 6×6 stiffness and residual at the rigid global DOFs.
 
-        Implements Newmark time integration directly on the 6 rigid DOFs:
-        - Matrix: K_eff = K_contact + (a0 + α·c0)·M
-        - Vector: D = F_ext + F_contact + M·(inertia residual) + C·(damping residual)
-
+        Dynamic mode (Newmark):
+            K_eff = K_contact + (a0 + α·c0)·M
+            D     = F_ext + F_contact − M·a_pred − C·v_pred
         where a0 = 1/(β·dt²), c0 = γ/(β·dt).
+
+        Static mode:
+            K_eff = K_contact + ε·I_6        (ε tiny, only to break
+                                              singularity of fully-free
+                                              rigid DOFs without contact)
+            D     = F_ext + F_contact
         """
         if self._dof_indices is None:
             return
 
         n = self._get_n_dof()
         idx = self._dof_indices
-        dt = self._pb_ref.dtime if self._pb_ref is not None else 1.0
+
+        if not self.dynamic:
+            # Pure static — no Newmark, no v/a state.
+            if compute in ("all", "matrix"):
+                K_eff_6 = self._contact_stiffness + (
+                    self.static_regularisation * np.eye(6)
+                )
+                self.global_matrix = sparse.csr_matrix(
+                    (K_eff_6.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
+                    shape=(n, n),
+                )
+            if compute in ("all", "vector"):
+                vec = np.zeros(n)
+                vec[idx] = self.force + self._contact_force
+                self.global_vector = vec
+            return
+
+        # Dynamic mode: guard against dt=0 (init-time probes) by emitting
+        # zeros instead of dividing.  This replaces the previous class-name
+        # filter band-aid in IPCContact._get_elastic_gradient_on_surface.
+        dt = self._pb_ref.dtime if self._pb_ref is not None else 0.0
+        if dt == 0:
+            if compute in ("all", "matrix"):
+                self.global_matrix = sparse.csr_matrix((n, n))
+            if compute in ("all", "vector"):
+                self.global_vector = np.zeros(n)
+            return
 
         M = self._get_mass_matrix()
         a0 = 1.0 / (self.beta * dt**2)
@@ -316,14 +356,20 @@ class RigidBodyAssembly(AssemblyBase):
     def set_start(self, pb):
         """Accept converged increment: update velocity and acceleration."""
         self._pb_ref = pb
-        dt = pb.dtime
         delta_u = self.sv["_DeltaDisp"]
-        v_n = self.sv["Velocity"]
-        a_n = self.sv["Acceleration"]
 
         self.sv_start = {
             k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv.items()
         }
+
+        # Static mode: no v/a state to update; just reset the increment.
+        if not self.dynamic:
+            self.sv["_DeltaDisp"] = np.zeros(6)
+            return
+
+        dt = pb.dtime
+        v_n = self.sv["Velocity"]
+        a_n = self.sv["Acceleration"]
 
         if not np.any(delta_u):
             return
@@ -356,13 +402,19 @@ class RigidBody:
     approximation). IPC barrier contact is handled via direct Jacobian
     projection ``J^T @ F`` in the 6-DOF space.
 
-    Solve via ``body.solve(dt, tmax)`` (wraps ``NonLinear``) or integrate
-    into an existing problem with ``body.add_to_problem(pb)``.
+    Solve via ``body.solve(dt, tmax)`` (wraps ``NonLinear``) or include
+    ``body.assembly`` in an ``Assembly.sum`` — the kinematic tie is then
+    registered automatically when the problem is constructed.
 
     Parameters
     ----------
     mesh : fedoo.Mesh
-        Surface mesh of the rigid body (tri3 for IPC contact).
+        Mesh of the rigid body. For a standalone body, this is its own
+        mesh (tri3 surface for IPC contact, or volume for inertia
+        integration). For a body that is one part of a larger stacked
+        problem mesh (rigid-vs-deformable IPC), pass the output of
+        :meth:`Mesh.extract_elements` — the carried ``parent_node_indices``
+        attribute tells RigidTie which DOFs to slave in the parent.
     mass : float, optional
         Total mass. Required if ``density`` is not given.
     density : float, optional
@@ -390,7 +442,7 @@ class RigidBody:
                                         inertia_tensor=0.004*np.eye(3))
         body.set_force([0, 0, -9.81])
         body.set_rayleigh_damping(1.0)
-        body.enable_ipc_contact(plane_mesh, dhat=0.01, kappa=1e8)
+        body.set_static_obstacle(plane_mesh, dhat=0.01, kappa=1e8)
 
         q, v, a = body.solve(dt=5e-4, tmax=2.0)
     """
@@ -403,33 +455,59 @@ class RigidBody:
         inertia_tensor=None,
         center_of_mass=None,
         use_quaternion=True,
+        dynamic=True,
         name="RigidBody",
     ):
         self.mesh = mesh
         self.name = name
+        self.dynamic = bool(dynamic)
 
         if center_of_mass is None:
-            center_of_mass = mesh.nodes.mean(axis=0)
+            # Use only nodes actually referenced by elements — protects
+            # the default against ``extract_elements`` submeshes that
+            # carry the parent's full node array.
+            active = np.unique(mesh.elements.ravel())
+            center_of_mass = mesh.nodes[active].mean(axis=0)
         center_of_mass = np.asarray(center_of_mass, dtype=float)
 
-        if density is not None:
-            vol = mesh.get_volume()
-            if mass is None:
-                mass = density * vol
-            if inertia_tensor is None:
-                inertia_tensor = self._compute_inertia(mesh, density, center_of_mass)
+        if self.dynamic:
+            # Mass and inertia are only used by the Newmark integrator.
+            # Static mode allows callers to omit them entirely.
+            if density is not None:
+                vol = mesh.get_volume()
+                if mass is None:
+                    mass = density * vol
+                if inertia_tensor is None:
+                    inertia_tensor = self._compute_inertia(
+                        mesh, density, center_of_mass
+                    )
+            else:
+                if mass is None:
+                    raise ValueError("Either mass or density must be provided.")
+                if inertia_tensor is None:
+                    raise ValueError(
+                        "inertia_tensor required when density is not given."
+                    )
         else:
-            if mass is None:
-                raise ValueError("Either mass or density must be provided.")
-            if inertia_tensor is None:
-                raise ValueError("inertia_tensor required when density is not given.")
+            mass = 0.0 if mass is None else mass
+            inertia_tensor = (
+                np.zeros((3, 3)) if inertia_tensor is None else inertia_tensor
+            )
 
         self.mass = float(mass)
         self.center_of_mass = center_of_mass
         self.inertia_tensor = np.asarray(inertia_tensor, dtype=float)
 
+        # When ``mesh`` came from ``Mesh.extract_elements`` it carries
+        # the parent-mesh active-node list used to slave the right DOFs
+        # in a stacked rigid-plus-deformable problem. A standalone
+        # body's mesh has no such attribute — every node is tied.
+        tie_node_indices = getattr(mesh, "parent_node_indices", None)
+        if tie_node_indices is None:
+            tie_node_indices = np.arange(mesh.n_nodes)
+
         self.constraint = RigidTie(
-            np.arange(mesh.n_nodes),
+            tie_node_indices,
             center=center_of_mass,
             use_quaternion=use_quaternion,
             name=f"{name}_tie",
@@ -439,6 +517,7 @@ class RigidBody:
             self.inertia_tensor,
             self.constraint,
             mesh=mesh,
+            dynamic=self.dynamic,
             name=f"{name}_asm",
         )
 
@@ -458,13 +537,25 @@ class RigidBody:
         """Set mass-proportional damping: C = alpha * M."""
         self.assembly.rayleigh_alpha = float(alpha)
 
-    def enable_ipc_contact(self, obstacle_mesh, dhat=0.01, kappa=None):
-        """Enable IPC barrier contact with an obstacle surface.
+    def set_static_obstacle(self, obstacle_mesh, dhat=0.01, kappa=None):
+        """Enable IPC barrier contact with a STATIC obstacle surface.
+
+        Builds a private collision mesh and barrier on this rigid body's
+        :class:`RigidBodyAssembly`. The obstacle is snapshotted once at
+        setup and treated as frozen geometry — use this for rigid-vs-static
+        scenarios (e.g., a rigid body falling onto a fixed floor).
+
+        For rigid-vs-deformable contact (e.g., a punch crushing an elastic
+        disc), build a shared :class:`IPCContact` over the union of all
+        surfaces and call ``ipc.add_rigid_body(body)`` instead. In that
+        path the deformable obstacle's vertex positions are tracked at
+        every NR iteration and the IPC reaction is scattered onto the
+        obstacle's mesh DOFs (Newton's 3rd law honoured).
 
         Parameters
         ----------
         obstacle_mesh : fedoo.Mesh
-            Surface mesh of the obstacle (tri3).
+            Surface mesh of the obstacle (tri3), treated as static.
         dhat : float
             Barrier activation distance (meters).
         kappa : float or None
@@ -509,8 +600,16 @@ class RigidBody:
         asm._ipc_obstacle_nodes = obst_nodes.copy()
 
     def add_to_problem(self, pb):
-        """Register the rigid body constraint with a Fedoo problem."""
-        pb.bc.add(self.constraint)
+        """Register the rigid body's kinematic tie with a Fedoo problem.
+
+        Usually unnecessary — :class:`NonLinear` auto-registers ties from
+        any :class:`RigidBodyAssembly` it discovers in its assembly sum.
+        Kept as an explicit hook for advanced flows (custom problem
+        classes, late attachment) and made idempotent so calling it
+        after auto-registration is a no-op.
+        """
+        if self.constraint not in pb.bc:
+            pb.bc.add(self.constraint)
 
     @property
     def Q_total(self):
@@ -543,7 +642,6 @@ class RigidBody:
         from fedoo.problem.non_linear import NonLinear
 
         pb = NonLinear(self.assembly)
-        self.add_to_problem(pb)
         pb.nlsolve(dt=dt, tmax=tmax, t0=t0, print_info=print_info, update_dt=False)
         return pb
 
