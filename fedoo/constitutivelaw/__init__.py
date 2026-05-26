@@ -93,6 +93,8 @@ from .elasto_plasticity import ElastoPlasticity
 from .fe2 import FE2
 from .heterogeneous import Heterogeneous
 from .shell import ShellBase, ShellHomogeneous, ShellLaminate
+from .permeability import HolmesMowPermeability, KozenyCarmanPermeability
+from .poro_fluid import PoroFluidProperties
 from .simcoon_umat import Simcoon
 from .spring import Spring
 from .thermal_prop import ThermalProperties
@@ -115,6 +117,9 @@ __all__ = [
     "ShellBase",
     "ShellHomogeneous",
     "ShellLaminate",
+    "HolmesMowPermeability",
+    "KozenyCarmanPermeability",
+    "PoroFluidProperties",
     "Simcoon",
     "Spring",
     "ThermalProperties",
