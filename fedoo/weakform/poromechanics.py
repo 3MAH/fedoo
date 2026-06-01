@@ -23,6 +23,7 @@ small-strain case; only the underlying constitutive law and the
 import numpy as np
 
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.weakform.stress_equilibrium_mixed import StressEquilibriumMixed
 
 
@@ -80,6 +81,16 @@ class PoroMomentum(StressEquilibriumMixed):
         )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
+        # The Biot u-PorePressure coupling is genuinely one-sided (it only
+        # writes the upper [Disp][PorePressure] block). StressEquilibrium
+        # defaults assume_sym=True, which would mirror that block into a
+        # *phantom* [PorePressure][Disp] = K_up^T entry with no matching
+        # residual, AND split the WeakFormSum into two assemblies with
+        # disjoint state-variable dicts (so _tr_eps_gp never reaches
+        # PoroMassStorage). Both make the Newton tangent inconsistent. The
+        # assembled Biot tangent is intentionally non-symmetric
+        # (K_up = -alpha vs K_pu = +alpha/dt), so disable the assumption.
+        self.assembly_options["assume_sym"] = False
 
     def get_weak_equation(self, assembly, pb):
         """Build the momentum weak form augmented with the Biot coupling."""
@@ -98,8 +109,16 @@ class PoroMomentum(StressEquilibriumMixed):
         p_pore_curr = assembly.sv.get("_PorePressure_gp", 0)
         p_pore_total = p_pore_inc + p_pore_curr
 
-        # -alpha * p_pore_total * (delta_eps_xx + delta_eps_yy + delta_eps_zz)
-        diff_op += -alpha * sum(
+        # Biot/Terzaghi coupling: sigma_total = sigma_eff - alpha * p_pore * I.
+        # The momentum residual contribution is -alpha * int(p_pore * tr(delta_eps)).
+        # In fedoo's weak-form convention the assembled D vector carries
+        # -R(U_curr) while the matrix is +d R/dU. With assume_sym=False (the
+        # genuine, non-mirrored assembly), writing -alpha here gives the
+        # physically correct tangent K_up = -alpha and a pore pressure that is
+        # positive in compression (validated on Terzaghi consolidation and the
+        # Mandel benchmark). This sign is paired with +alpha/dt in
+        # PoroMassStorage to form the consistent (non-symmetric) Biot Jacobian.
+        diff_op -= alpha * sum(
             [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
         )
 
@@ -281,7 +300,10 @@ class PoroMassStorage(WeakFormBase):
     def initialize(self, assembly, pb):
         n_gp = assembly.n_gauss_points
         assembly.sv["_PorePressure_gp"] = 0
-        assembly.sv.setdefault("_tr_eps_gp", np.zeros(n_gp))
+        # Scalar placeholder (not a zeros array) so the update() guard below can
+        # tell "no live value yet" from "PoroMomentum wrote a live array", and
+        # recompute tr(eps) itself in the pure Darcy + storage composition.
+        assembly.sv.setdefault("_tr_eps_gp", 0)
         assembly.sv["_PorePressure_gp_start"] = np.zeros(n_gp)
         assembly.sv["_tr_eps_gp_start"] = np.zeros(n_gp)
 
@@ -307,19 +329,21 @@ class PoroMassStorage(WeakFormBase):
         disp = pb.get_dof_solution()
         if np.isscalar(disp) and disp == 0:
             assembly.sv["_PorePressure_gp"] = 0
-            assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+            assembly.sv["_tr_eps_gp"] = 0
             return
 
         # If PoroMomentum sits in the same assembly it has already populated
         # these arrays; otherwise we compute them locally so that PoroDarcy +
         # PoroMassStorage can be used without PoroMomentum (pure Darcy case).
+        # Both guards recompute whenever the value is still the scalar
+        # placeholder (i.e. no PoroMomentum wrote a live gauss-point array).
         if "_PorePressure_gp" not in assembly.sv or np.isscalar(
             assembly.sv["_PorePressure_gp"]
         ):
             assembly.sv["_PorePressure_gp"] = assembly.get_gp_results(
                 self.space.variable("PorePressure"), disp
             )
-        if "_tr_eps_gp" not in assembly.sv:
+        if "_tr_eps_gp" not in assembly.sv or np.isscalar(assembly.sv["_tr_eps_gp"]):
             eps_op = self.space.op_strain()
             tr_eps = 0
             for i in range(3):
@@ -358,7 +382,13 @@ class PoroMassStorage(WeakFormBase):
                 p_inc.virtual * p_inc + p_inc.virtual * (p_curr - p_start)
             )
 
-        # Volumetric coupling: alpha/dt * delta_p * (tr(eps_inc) + (tr_curr - tr_start))
+        # Volumetric coupling: +alpha/dt * delta_p * (tr(eps_inc) + (tr_curr - tr_start)).
+        # The mass-balance residual is +alpha/dt * (tr_curr - tr_start) (the
+        # backward-Euler rate of the Biot volumetric storage). With fedoo's
+        # D = -R convention this term assembles K_pu = +alpha/dt and a residual
+        # that matches it, forming the consistent Biot Jacobian together with
+        # K_up = -alpha from PoroMomentum. (Validated: Terzaghi p>0 then
+        # consolidates; Mandel p>0 with a non-monotonic Mandel-Cryer peak.)
         if alpha != 0.0 and eps_vol_inc != 0:
             diff_op = diff_op + inv_dt * alpha * (
                 p_inc.virtual * eps_vol_inc
@@ -366,6 +396,96 @@ class PoroMassStorage(WeakFormBase):
             )
 
         return diff_op
+
+
+# ----------------------------------------------------------------------
+# 1b. Momentum balance — non-mixed variant (no skeleton Lagrange multiplier)
+# ----------------------------------------------------------------------
+class PoroMomentumSimple(StressEquilibrium):
+    """Momentum balance for a saturated porous skeleton — non-mixed variant.
+
+    Inherits directly from :py:class:`StressEquilibrium` (no skeleton
+    volumetric Lagrange multiplier ``Pressure``). Use this variant when:
+
+      * the skeleton is compressible enough that quasi-incompressibility is
+        not a concern (Poisson ratio not too close to 0.5);
+      * OR the boundary conditions include a **free-traction face** (no
+        Dirichlet on ``u`` on every boundary), which causes the mixed
+        formulation to oscillate due to the under-constrained Lagrange
+        multiplier — typical Mandel, unconfined cartilage compression,
+        skin indentation.
+
+    The Biot/Terzaghi coupling ``sigma_total = sigma_eff - alpha * p * I``
+    is added at the weak-form level. The skeleton constitutive law sees
+    only the strain and returns the effective stress, unchanged.
+
+    Parameters
+    ----------
+    constitutivelaw : ConstitutiveLaw
+        Skeleton constitutive law. Any standard ``fedoo.constitutivelaw``
+        law works (``ElasticIsotrop``, ``Simcoon`` with ``NEOHC``, etc.).
+    fluid_props : PoroFluidProperties
+    name : str, default ""
+    nlgeom : bool or {'TL', 'UL'}, optional
+    space : ModelingSpace, optional
+    """
+
+    def __init__(self, constitutivelaw, fluid_props, name="", nlgeom=None, space=None):
+        super().__init__(constitutivelaw, name=name, nlgeom=nlgeom, space=space)
+        self.fluid_props = fluid_props
+        self.space.new_variable("PorePressure")
+        # See PoroMomentum.__init__: disable the symmetric-assembly assumption
+        # so the one-sided Biot coupling is not mirrored into a phantom block
+        # and the three sub-forms co-assemble in a single shared state dict.
+        self.assembly_options["assume_sym"] = False
+
+    def get_weak_equation(self, assembly, pb):
+        """Build the momentum weak form augmented with the Biot coupling."""
+        diff_op = super().get_weak_equation(assembly, pb)
+
+        alpha = self.fluid_props.biot_coefficient
+        if assembly._nlgeom == "TL":
+            eps = self.space.op_strain(assembly.sv["DispGradient"])
+        else:
+            eps = self.space.op_strain()
+
+        p_pore_inc = self.space.variable("PorePressure")
+        p_pore_curr = assembly.sv.get("_PorePressure_gp", 0)
+        p_pore_total = p_pore_inc + p_pore_curr
+
+        # Same sign convention as PoroMomentum (assume_sym=False): -alpha here
+        # gives the physically correct K_up = -alpha and PorePressure > 0 in
+        # compression, paired with +alpha/dt in PoroMassStorage.
+        diff_op -= alpha * sum(
+            [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
+        )
+        return diff_op
+
+    def initialize(self, assembly, pb):
+        super().initialize(assembly, pb)
+        assembly.sv["_PorePressure_gp"] = 0
+        assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+
+    def update(self, assembly, pb):
+        super().update(assembly, pb)
+        disp = pb.get_dof_solution()
+        if np.isscalar(disp) and disp == 0:
+            assembly.sv["_PorePressure_gp"] = 0
+            assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+            return
+
+        assembly.sv["_PorePressure_gp"] = assembly.get_gp_results(
+            self.space.variable("PorePressure"), disp
+        )
+        if assembly._nlgeom and "lnJ" in assembly.sv:
+            assembly.sv["_tr_eps_gp"] = assembly.sv["lnJ"]
+        else:
+            eps_op = self.space.op_strain()
+            tr_eps = 0
+            for i in range(3):
+                if eps_op[i] != 0:
+                    tr_eps = tr_eps + assembly.get_gp_results(eps_op[i], disp)
+            assembly.sv["_tr_eps_gp"] = tr_eps
 
 
 # ----------------------------------------------------------------------
@@ -418,5 +538,46 @@ def PoroMechanics(
 
     if name == "":
         name = getattr(skeleton_law, "name", "") or "poromechanics"
+
+    return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)
+
+
+def PoroMechanicsSimple(skeleton_law, fluid_props, name="", nlgeom=None, space=None):
+    """Build the non-mixed (u, PorePressure) poromechanics weak form.
+
+    Returns a :py:class:`WeakFormSum` of:
+
+      * :py:class:`PoroMomentumSimple` — momentum + Biot coupling (no
+        skeleton Lagrange multiplier)
+      * :py:class:`PoroDarcy` — Darcy diffusion
+      * :py:class:`PoroMassStorage` — storage + volumetric coupling
+
+    Use this variant for problems with **free-traction boundaries** (Mandel
+    consolidation, unconfined compression of cartilage, soft tissue
+    indentation) where the mixed :py:class:`PoroMechanics` oscillates.
+    No ``bulk_modulus`` parameter is required.
+
+    Parameters
+    ----------
+    skeleton_law : ConstitutiveLaw
+        Skeleton constitutive law (``ElasticIsotrop``, simcoon ``NEOHC``,
+        ``YEOHH``, ``PRONK``, ...).
+    fluid_props : PoroFluidProperties
+    name : str, default ""
+    nlgeom : bool or {'TL', 'UL'}, optional
+    space : ModelingSpace, optional
+
+    Returns
+    -------
+    WeakFormSum
+    """
+    wf_mom = PoroMomentumSimple(
+        skeleton_law, fluid_props, name="", nlgeom=nlgeom, space=space
+    )
+    wf_darcy = PoroDarcy(fluid_props, name="", space=space)
+    wf_storage = PoroMassStorage(fluid_props, name="", space=space)
+
+    if name == "":
+        name = getattr(skeleton_law, "name", "") or "poromechanics_simple"
 
     return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)

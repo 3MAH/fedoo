@@ -77,7 +77,9 @@ from .damping_stabilization import ArtificialDamping
 from .distributed_load import ExternalPressure, DistributedLoad
 from .poromechanics import (
     PoroMechanics,
+    PoroMechanicsSimple,
     PoroMomentum,
+    PoroMomentumSimple,
     PoroDarcy,
     PoroMassStorage,
 )
@@ -109,7 +111,9 @@ __all__ = [
     "ExternalPressure",
     "ArtificialDamping",
     "PoroMechanics",
+    "PoroMechanicsSimple",
     "PoroMomentum",
+    "PoroMomentumSimple",
     "PoroDarcy",
     "PoroMassStorage",
 ]

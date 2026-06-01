@@ -206,8 +206,15 @@ class StressEquilibriumMixed(StressEquilibrium):
         else:
             # Small strain: constraint on p = p_mat
             if self.bulk_modulus is None:
-                trH = H[0][0] + H[1][1] + H[2][2]
-                K_scale = trH / 9.0
+                # Bulk modulus read from the tangent: K = (1/9) sum_{i,j<3} H[i][j]
+                # (this equals vol_vol of the P:H:P split). Using this exact value
+                # is essential: the constraint is scaled by 1/K_scale while the
+                # momentum coupling is not, so K_uP and K_Pu are transposes (and
+                # the assembled tangent is consistent with the residual under the
+                # inherited assume_sym=True) ONLY when K_scale == K. The previous
+                # estimate trH/9 = (3K+4G)/9 differs from K by ~2-3x, which made
+                # the mirrored K_Pu inconsistent and Newton diverge.
+                K_scale = sum(H[i][j] for i in range(3) for j in range(3)) / 9.0
                 K_scale = np.where(K_scale == 0, 1.0, K_scale)
             else:
                 K_scale = self.bulk_modulus

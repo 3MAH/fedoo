@@ -78,7 +78,11 @@ side_y = np.unique(
 pb.bc.add("Dirichlet", side_x, "DispX", 0.0)
 pb.bc.add("Dirichlet", side_y, "DispY", 0.0)
 pb.bc.add("Dirichlet", bottom, "DispZ", 0.0)
-pb.bc.add("Dirichlet", top, "DispZ", delta)
+# Near-step load: ramp to full over the first time step, then hold, so the
+# consolidation transient (undrained pressure rise, then drainage decay) shows.
+pb.bc.add(
+    "Dirichlet", top, "DispZ", delta, time_func=lambda tf: min(1.0, tf * nb_steps)
+)
 pb.bc.add("Dirichlet", top, "PorePressure", 0.0)
 
 # ---------------------- Solve ---------------------------------------
