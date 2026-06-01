@@ -258,6 +258,12 @@ class Element1D(Element):
 
         x_vec: (Nel, n_gp, 3) - The normalized tangents.
         """
+        if x_vec.shape[-1] == 2:  # 2d space
+            # guide and guide_direction are ignored.
+            # the y direction is set so that the x,y,z local frame is direct
+            y_vec = np.stack([-x_vec[..., 1], x_vec[..., 0]], axis=-1)
+            return np.stack([x_vec, y_vec], axis=-2)
+
         # Guide Vector
         if guide is None:
             guide = (

@@ -93,12 +93,12 @@ class Assembly(AssemblyBase):
         self.current = self
 
         self.meshChange = kargs.pop("MeshChange", False)
-        self.mesh = mesh
-        if elm_type == "":
+        if elm_type == "" or elm_type is None:
             elm_type = weakform.assembly_options.get(
                 "elm_type", mesh.elm_type, mesh.elm_type
             )  # change elm_type if it was specified in assembly_options
         self.elm_type = elm_type.lower()
+        self.mesh = mesh
 
         self.n_elm_gp = kargs.pop("n_elm_gp", None)
         if self.n_elm_gp is None:
