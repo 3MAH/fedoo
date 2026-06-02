@@ -28,10 +28,10 @@ jobs:
 
       - name: Get Date
         id: get-date
-        run: echo "::set-output name=today::$(/bin/date -u '+%Y%m%d')"
+        run: echo "today=$(/bin/date -u '+%Y%m%d')" >> $GITHUB_OUTPUT"
 
       - name: Cache Conda env
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: ${{ env.CONDA }}/envs
           key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment_doc.yml') }}-${{ env.CACHE_NUMBER }}
@@ -56,25 +56,40 @@ jobs:
           conda list
 
       - name: Cache Sphinx-Gallery Examples
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         if: env.USE_CACHE == 'true'
         with:
           path: examples/
           key: doc-examples-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Cache Sphinx build directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         if: env.USE_CACHE == 'true'
         with:
           path: docs/build/
           key: doc-build-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Build Documentation
-        run: make -C docs html
+        run: |
+          # Start background RAM monitoring
+          while true; do 
+            echo "=== RAM Monitor ==="
+            free -h
+            sleep 5
+          done &
+          MONITOR_PID=$!
+
+          # Run Sphinx build with verbose logs
+          make -C docs html SPHINXOPTS="-vvv"
+
+          # Clean up monitor if successful
+          kill $MONITOR_PID
+
+        # run: make -C docs html
 
       - name: Upload HTML documentation
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-build
           path:
