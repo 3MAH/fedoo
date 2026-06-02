@@ -87,6 +87,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self.nlgeom = nlgeom
         self.true_drilling_rotation = true_drilling_rotation
         self.drill_stiffness_coefficient = drill_stiffness_coefficient
+        self._store_local_pos = False
 
     def initialize(self, assembly, pb):
         assembly.sv["ShellStrain"] = 0
@@ -96,33 +97,38 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
 
-        if self.nlgeom:
-            # =========================================================
-            # Reference state initialization
-            # =========================================================
-            if "_InitialRigidRotationMat" not in assembly.sv:
-                if assembly._element_local_frame is None:
-                    init_frame = assembly.mesh.get_element_local_frame()
-                else:
-                    init_frame = assembly._element_local_frame
-                assembly.sv["_InitialRigidRotationMat"] = init_frame
+        # =========================================================
+        # Reference state initialization
+        # =========================================================
+        if "_InitialNodeLocalPos" not in assembly.sv and (
+            self.nlgeom or self._store_local_pos
+        ):
+            if assembly._element_local_frame is None:
+                init_frame = assembly.mesh.get_element_local_frame()
+            else:
+                init_frame = assembly._element_local_frame
 
+            nodes_pos_init = assembly.mesh.nodes[assembly.mesh.elements]
+            init_center = nodes_pos_init.mean(axis=1)
+            node_local_pos = np.matmul(
+                init_frame,
+                (nodes_pos_init - init_center[:, np.newaxis, :]).transpose(0, 2, 1),
+            ).transpose(0, 2, 1)
+            if self._store_local_pos or self.nlgeom:
+                assembly.sv["_InitialNodeLocalPos"] = node_local_pos
+
+            if self.nlgeom:
+                # save initial state
+                assembly.sv["_InitialRigidRotationMat"] = init_frame
                 assembly.sv["RigidRotationMat"] = init_frame
                 assembly.current._element_local_frame = init_frame.reshape(
                     assembly.current.mesh.n_elements, -1, 3, 3
                 )
-
                 # dof rotation matrix at node (without elm initial rotation)
                 assembly.sv["_NodesRotationMatrix"] = np.tile(
                     np.eye(3), (assembly.mesh.n_nodes, 1, 1)
                 )
-
-                nodes_pos_init = assembly.mesh.nodes[assembly.mesh.elements]
-                init_center = nodes_pos_init.mean(axis=1)
-                assembly.sv["_InitialNodeLocalPos"] = np.matmul(
-                    init_frame,
-                    (nodes_pos_init - init_center[:, np.newaxis, :]).transpose(0, 2, 1),
-                ).transpose(0, 2, 1)
+                assembly.sv["_NodeLocalPos"] = node_local_pos
 
     def _compute_local_dof(self, assembly, pb):
         mesh = assembly.current.mesh
@@ -191,6 +197,12 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         rigid_rotmat[:, 0, :] = e1
         rigid_rotmat[:, 1, :] = e2
         rigid_rotmat[:, 2, :] = e3
+
+        if self._store_local_pos:
+            assembly.sv["_NodeLocalPos"] = np.matmul(
+                rigid_rotmat,
+                (nodes_pos - current_center[:, np.newaxis, :]).transpose(0, 2, 1),
+            ).transpose(0, 2, 1)
 
         nodes_rotmat = (
             Rotation.from_rotvec(delta_rotvec_nodes.T).as_matrix()  # transpose(0,2,1)
@@ -524,6 +536,14 @@ class PlateEquilibrium(
         # self.assembly_options["elm_type", "quad8"] = "pquad8ri"
         # self.assembly_options["elm_type", "quad9"] = "pquad9sri"
 
+    def initialize(self, assembly, pb):
+        if assembly.elm_type[-4:] == "mitc" or assembly.elm_type[-5:] == "mitc+":
+            self._mitc = True
+            self._store_local_pos = True
+        else:
+            self._mitc = False
+        super().initialize(assembly, pb)
+
     def generalized_strain_operator(self):
         # membrane strain
         EpsX = self.space.derivative("DispX", "X")
@@ -541,9 +561,31 @@ class PlateEquilibrium(
         )  # flexion autour de X -> courbure suivant y
         XsiXY = self.space.derivative("RotX", "X") - self.space.derivative("RotY", "Y")
 
-        # shear
-        GammaXZ = self.space.derivative("_DispZ", "X") + self.space.variable("_RotY")
-        GammaYZ = self.space.derivative("_DispZ", "Y") - self.space.variable("_RotX")
+        if self._mitc:
+            # MITC4 Shear Strains (Using the derivative hack)
+            # "_RotX" and "_RotY" returns the covarient matrix B associated to
+            # RotX and Roty respectively. To force the spacial mapping (multiply by
+            # that transform the local element coordinate to global space, we use
+            # a derivative operator (hack of the fedoo assembly architecture)
+            GammaXZ = (
+                self.space.derivative("_DispZ", "X")
+                + self.space.derivative("_RotY", "X")
+                + self.space.derivative("_RotX", "X")
+            )
+
+            GammaYZ = (
+                self.space.derivative("_DispZ", "Y")
+                + self.space.derivative("_RotY", "Y")
+                + self.space.derivative("_RotX", "Y")
+            )
+        else:
+            # shear
+            GammaXZ = self.space.derivative("_DispZ", "X") + self.space.variable(
+                "_RotY"
+            )
+            GammaYZ = self.space.derivative("_DispZ", "Y") - self.space.variable(
+                "_RotX"
+            )
 
         return [EpsX, EpsY, GammaXY, XsiX, XsiY, XsiXY, GammaXZ, GammaYZ]
 
