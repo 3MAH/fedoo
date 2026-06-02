@@ -13,8 +13,8 @@ Rotations are handled exactly (no small-angle approximation) via a
 multiplicative quaternion update (using ``simcoon.Rotation``):
 
 - The total rotation is stored as a quaternion ``Q_base`` in the RigidTie.
-- The rotation DOFs ``[rx, ry, rz]`` represent a small Euler increment
-  from the current base state.
+- The rotation DOFs ``[rx, ry, rz]`` are rotation-vector components
+  representing a small increment from the current base state.
 - At each converged time step, the increment is composed into the
   quaternion: ``Q_base = R_inc * Q_base`` (quaternion multiplication).
 - This avoids gimbal lock and supports arbitrarily large rotations.

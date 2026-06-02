@@ -40,37 +40,48 @@ class RigidTie(BCBase):
     use_quaternion: bool, optional
         If True (default), use a multiplicative quaternion update to avoid
         gimbal lock for large rotations. The rotation DOFs (RigidRotX/Y/Z)
-        are interpreted as incremental Euler angles relative to a quaternion
-        base state that is updated at each converged increment.
-        If False, use the original Euler angle formulation.
+        are interpreted as the **rotation-vector** components of a small
+        increment relative to a quaternion base state that is updated at each
+        converged increment.
+        If False, there is no base state and the DOFs are the components of
+        the total rotation vector (a single exponential map).
     name : str, optional
         Name of the created boundary condition. The default is "Rigid Tie".
 
 
     Definition of rotations
     -----------------------
-    A convention needs to be defined the orders of rotations.
-    The convention used in this class is: First rotation around X, then
-    rotation around Y' (Y' being the new Y after rotation around X)
-    and finally the rotation around Z" (Z" being the new Z after the 2 first
-    rotations).
+    The rotation DOFs ``RigidRotX/Y/Z`` are the components of a **rotation
+    vector** (exponential map): ``rotvec = theta * axis``, with ``theta`` the
+    rotation angle and ``axis`` the unit rotation axis, so that
+    ``R = expm(skew(rotvec))`` (Rodrigues' formula). This is convention-free
+    — there is no XYZ ordering — and is consistent with the rotation-vector
+    DOFs used by Fedoo's beam elements.
 
-    We can note that this convention can also be interpreted using global axis
-    not attached to the solid by applying first the rotation around Z, then the
-    rotation around Y and finally, the rotation around X.
+    .. note::
+        This differs from earlier versions of ``RigidTie``, which interpreted
+        ``RigidRotX/Y/Z`` as intrinsic Euler **XYZ** angles
+        (``Rotation.from_euler("XYZ", ...)``). For a single-axis rotation the
+        two parameterizations are identical; they differ only for finite,
+        simultaneous multi-axis prescribed rotations. Small-strain /
+        linearized results (rotations near zero) are unchanged.
 
     When ``use_quaternion=True`` (default), the total rotation is stored as a
     quaternion (via ``simcoon.Rotation``) using a multiplicative update:
 
-    - The Euler angle DOFs represent a **small incremental** rotation from
-      the current quaternion base state ``Q_base``.
+    - The rotation-vector DOFs represent a **small incremental** rotation
+      ``delta`` from the current quaternion base state ``Q_base``.
     - At each converged increment, the increment is composed:
       ``Q_base = Rotation.from_rotvec(delta) * Q_base``
     - The total rotation is exact for arbitrarily large angles — no gimbal
       lock, no small-angle approximation.
-    - The rotation derivatives ``dR/d(angle)`` used in the MPC linearization
+    - The rotation derivatives ``dR/d(rotvec)`` used in the MPC linearization
       are evaluated at the small increment (well-conditioned), then composed
       with ``R_base`` via the chain rule for exact consistency.
+
+    When ``use_quaternion=False``, there is no base state: the DOFs are the
+    components of the total rotation vector and ``Rotation.from_rotvec`` is
+    used directly.
 
 
     Notes
@@ -159,10 +170,12 @@ class RigidTie(BCBase):
             + self.list_nodes[:, None]
         )
 
-        # Quaternion base state for multiplicative rotation update
+        # Quaternion base state for multiplicative rotation update.
+        # ``_Q_base`` advances only on a converged increment (``set_start``)
+        # and is never reverted: a failed increment never advances it, so the
+        # rollback hook ``to_start_bc`` is a no-op. See ``to_start_bc``.
         if self.use_quaternion:
             self._Q_base = Rotation.identity()
-            self._Q_base_backup = Rotation.identity()
             self._angles_at_base = np.zeros(3)
 
     def _get_dof_ref(self, problem):
@@ -272,32 +285,35 @@ class RigidTie(BCBase):
         """Absorb the converged incremental rotation into the quaternion base.
 
         Called by the solver after a converged increment, before _dU is reset.
+        This is the only place ``_Q_base`` advances; it is never reverted
+        (see ``to_start_bc``).
         """
         if not self.use_quaternion or not hasattr(self, "_Q_base"):
             return
         dof_ref, _ = self._get_dof_ref(problem)
         angles = dof_ref[3:]
         if np.any(np.isnan(angles)) or np.any(np.isinf(angles)):
-            self._Q_base_backup = self._Q_base
             return
         delta = angles - self._angles_at_base
         if not np.allclose(delta, 0, atol=1e-15):
             R_inc = Rotation.from_rotvec(delta)
-            self._Q_base_backup = self._Q_base
             self._Q_base = R_inc * self._Q_base
             self._angles_at_base = angles.copy()
-        else:
-            self._Q_base_backup = self._Q_base
 
     def to_start_bc(self, problem):
-        """Revert the quaternion base after a failed increment.
+        """No-op rollback hook for a failed increment.
 
-        Called by the solver when an increment does not converge and
-        the state must be rolled back.
+        The solver advances ``_Q_base`` only via ``set_start``, and only for
+        *converged* increments (``set_start`` runs at the top of the following
+        increment). A failed increment therefore never touches ``_Q_base`` or
+        ``_angles_at_base`` — they already hold the last-converged state — so
+        rolling back requires no action here.
+
+        The previous implementation reverted to a ``_Q_base_backup`` captured
+        *before* the last converged advance, which silently discarded the last
+        converged rotation on any ``dt`` reduction during a rotating solve.
         """
-        if not self.use_quaternion:
-            return
-        self._Q_base = self._Q_base_backup
+        return
 
     @property
     def Q_total(self):
@@ -442,68 +458,88 @@ class RigidTie2D(BCBase):
             np.c_[rank * n_nodes, (rank + 1) * n_nodes] + self.list_nodes[:, None]
         )
 
-    def generate(self, problem, t_fact=1, t_fact_old=None):
-        mesh = problem.mesh
-        var_cd = self.var_cd
-        node_cd = self.node_cd
-        list_nodes = self.list_nodes
-
+    def _get_dof_ref(self, problem):
+        """Read current values of the 3 rigid DOFs [dx, dy, rotZ]."""
         dof_cd = [
             problem.n_node_dof
-            + problem._global_dof.indice_start(var_cd[i])
-            + node_cd[i]
-            for i in range(len(var_cd))
+            + problem._global_dof.indice_start(self.var_cd[i])
+            + self.node_cd[i]
+            for i in range(len(self.var_cd))
         ]
-
         if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
             dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
         else:
             dof_ref = np.array(
                 [problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd]
             )
+        return dof_ref, dof_cd
 
-        disp_ref = dof_ref[:2]  # reference displacement
-        angles = dof_ref[2]  # rotation Z angle
+    def _compute_rotation(self, angle):
+        """2D rotation matrix and its derivative w.r.t. the Z angle.
 
-        sin = np.sin(angles)
-        cos = np.cos(angles)
-
-        # Correct displacement of slave nodes to be consistent with the master nodes
+        A single in-plane angle has no gimbal lock, so the closed-form
+        ``[[cos, -sin], [sin, cos]]`` is exact for arbitrarily large rotation
+        — no quaternion base state is needed (unlike 3D ``RigidTie``).
+        """
+        sin = np.sin(angle)
+        cos = np.cos(angle)
         R = np.array([[cos, -sin], [sin, cos]])
+        dR_drz = np.array([[-sin, -cos], [cos, -sin]])
+        return R, dR_drz
 
+    def _compute_slave_disp(self, problem, disp_ref, R):
+        """Compute and write 2D slave node displacements into _dU."""
+        mesh = problem.mesh
+        list_nodes = self.list_nodes
         new_disp = (
             (mesh.nodes[list_nodes] - self.center) @ R.T
             + self.center
             + disp_ref
             - mesh.nodes[list_nodes]
         )
-
-        if not (np.array_equal(problem._dU, 0)):
+        if not np.array_equal(problem._dU, 0):
             if np.array_equal(problem._U, 0):
                 problem._dU[self._disp_indices] = new_disp
             else:
                 problem._dU[self._disp_indices] = (
                     new_disp - problem._U[self._disp_indices]
                 )
+        return new_disp
 
-        # approche incrémentale:
-        dR_drz = np.array([[-sin, -cos], [cos, -sin]])
+    def pre_update(self, problem):
+        """Refresh slave node positions in _dU before assembly update.
 
-        crd = mesh.nodes[list_nodes, :2] - self.center
+        Mirrors :meth:`RigidTie.pre_update` for the 2D case so other
+        assemblies (e.g. IPCContact) see the correct geometry of the rigid
+        surface. Without this hook a ``RigidTie2D`` combined with IPC contact
+        would expose stale slave positions for one iteration.
+        """
+        dof_ref, _ = self._get_dof_ref(problem)
+        disp_ref = dof_ref[:2]
+        R, _ = self._compute_rotation(dof_ref[2])
+        self._compute_slave_disp(problem, disp_ref, R)
 
-        du_drz = (
-            crd @ dR_drz.T
-        )  # shape = (nnodes, nvar) with nvar = 3 in 3d (ux, uy, uz)
+    def generate(self, problem, t_fact=1, t_fact_old=None):
+        var_cd = self.var_cd
+        node_cd = self.node_cd
+        list_nodes = self.list_nodes
+
+        dof_ref, dof_cd = self._get_dof_ref(problem)
+        disp_ref = dof_ref[:2]  # reference displacement
+        R, dR_drz = self._compute_rotation(dof_ref[2])  # rotation Z angle
+
+        # Correct displacement of slave nodes to be consistent with the masters
+        self._compute_slave_disp(problem, disp_ref, R)
+
+        # MPC linearization
+        crd = problem.mesh.nodes[list_nodes, :2] - self.center
+        du_drz = crd @ dR_drz.T  # shape = (nnodes, 2)
 
         #### MPC ####
 
-        # dU - dU_ref - du_drx*drx_ref - du_dry*dry_ref - du_drz*drz_ref = 0
-        # with shapes: dU, du_drx, ... -> (nnodes, nvar) - dU_ref -> (nvar), drx_ref, ... -> scalar
+        # dUx - dUx_ref - du_drz[:,0]*drz_ref = 0
+        # dUy - dUy_ref - du_drz[:,1]*drz_ref = 0
         # dU are associated to eliminated dof and should be different than ref dof
-        # or
-        # dUx - dUx_ref - du_drx[:,0]*drx_ref - du_dry[:,0]*dry_ref - du_drz[:,0]*drz_ref = 0
-        # dUy - dUy_ref - du_drx[1]*drx_ref - du_dry[1]*dry_ref - du_drz[1]*drz_ref = 0
-        # dUz - dUz_ref - du_drx[2]*drx_ref - du_dry[2]*dry_ref - du_drz[2]*drz_ref = 0
         res = ListBC()
         res.append(
             MPC(
