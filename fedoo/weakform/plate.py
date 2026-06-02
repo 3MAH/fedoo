@@ -10,6 +10,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
     This weakform implements the mechanical equilibrium for shell/plate elements.
     It uses full integration (FI) by default, which may lead to shear or
     membrane locking for linear elements (e.g., Tri3, Quad4).
+    This weak form is not compatible with MITC or reduced integration elements.
 
     *:mod:`fedoo.weakform.PlateEquilibrium` should be prefered unless you know
     what you are doing.*
@@ -470,39 +471,58 @@ class PlateEquilibrium(
 ):  # weak form of plate shear energy containing only the shear strain energy
     """Mechanical equilibrium equation for plate models.
 
-    The shear terms are treated with a full or reduced integration depending on
-    the order of the element interpolation (reduced integration for linear
-    element or full integration for quadratic element).
-    This weak form has to be used in combination with a Shell Constitutive Law
-    like :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
-    :mod:`fedoo.constitutivelaw.ShellLaminate`.
-    Geometrical non linearities are implemented with a corotational approach.
+    The shear terms may be treated with different interpolation strategies to
+    allow the use of advanced structural elements:
+
+    * MITC (mixed interpolation of tensorial components): 'ptri3mitc', 'pquad4mitc',
+      'ptri6mitc', 'pquad8mitc', 'pquad9mitc'.
+      These elements use a mixed interpolation of the transverse shear strain
+      (decoupled from the displacement and rotation degrees of freedom). This
+      avoids most shear locking and remains robust under mesh distortion,
+      especially for linear interpolations. Note that 'ptri6mitc' may become
+      unstable in geometrically nonlinear analyses.
+    * SRI (selective reduced interpolation): 'ptri3sri', 'pquad4sri'.
+      These elements use reduced integration to compute the transverse shear
+      energy, while maintaining full integration for membrane and bending energies.
+      Though better than its fully integrated counterpart, 'ptri3sri' is prone
+      to shear locking and should generally be avoided. 'pquad4sri', however,
+      presents an excellent performance compromise.
+    * Fully integrated elements: 'ptri3', 'pquad4', 'ptri6', 'pquad8', 'pquad9'.
+
+    By default, the weak form utilizes MITC formulations for 'tri3' and 'quad4'
+    geometrical interpolations, and fully integrated elements for all higher-order shapes.
+
+    This weak form must be used in combination with a shell constitutive law,
+    such as :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
+    :mod:`fedoo.constitutivelaw.ShellLaminate`. Geometric nonlinearities are
+    accounted for using a corotational approach.
 
     Parameters
     ----------
-    plate_properties : ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Shell Constitutive Law defining the membrane, bending, and shear
+    plate_properties : str or ConstitutiveLaw object
+        Shell constitutive law defining the membrane, bending, and shear
         stiffness (e.g., :mod:`fedoo.constitutivelaw.ShellHomogeneous` or
         :mod:`fedoo.constitutivelaw.ShellLaminate`).
     true_drilling_rotation : bool, default=True
-        Only active if nlgeom is enabled.
-        - If True: Enforces a kinematic link between the nodal RotZ and
-          the in-plane displacement gradients (0.5 * [dv/dx - du/dy]).
-          This allows for physically consistent in-plane material
-          rotations, essential for large-deformation anisotropic analysis.
-        - If False: Applies a simple numerical penalty on the nodal RotZ
-          to prevent matrix singularity without coupling it to the
-          membrane deformation.
+        Only active if `nlgeom` is enabled.
+
+        * True: Enforces a kinematic link between the nodal RotZ and the
+          in-plane displacement gradients (0.5 * [dv/dx - du/dy]). This allows
+          for physically consistent in-plane material rotations, which are
+          essential for large-deformation anisotropic analysis.
+        * False: Applies a simple numerical penalty on the nodal RotZ to
+          prevent matrix singularity without coupling it to the membrane
+          deformation.
     drill_stiffness_coefficient : float, default=1e-2
         The penalty coefficient used for the drilling rotation constraint.
-        Typically scaled by the membrane shear stiffness (e.g., 1e-2).
-        Increasing this value enforces the constraint more strictly but
-        may introduce drilling locking in fully integrated elements.
+        Typically scaled by the membrane shear stiffness. Increasing this value
+        enforces the constraint more strictly but may introduce drilling locking
+        in fully integrated elements.
     name : str, optional
-        Name of the WeakForm.
+        Name of the WeakForm instance.
     nlgeom : bool or str, optional
-        Property used to treat geometric nonlinearities.
-        If True, a step-by-step frame update is used.
+        Property used to treat geometric nonlinearities. If True, a step-by-step
+        corotational frame update is activated.
     """
 
     def __init__(
@@ -530,14 +550,14 @@ class PlateEquilibrium(
         self.space.variable_alias("_RotY", "RotY")
         self.space.variable_alias("_RotZ", "RotZ")
 
-        self.assembly_options["elm_type", "tri3"] = "ptri3sri"
-        self.assembly_options["elm_type", "quad4"] = "pquad4sri"
+        self.assembly_options["elm_type", "tri3"] = "ptri3mitc"
+        self.assembly_options["elm_type", "quad4"] = "pquad4mitc"
         # self.assembly_options["elm_type", "tri6"] = "ptri6sri"
         # self.assembly_options["elm_type", "quad8"] = "pquad8ri"
         # self.assembly_options["elm_type", "quad9"] = "pquad9sri"
 
     def initialize(self, assembly, pb):
-        if assembly.elm_type[-4:] == "mitc" or assembly.elm_type[-5:] == "mitc+":
+        if assembly.elm_type[-4:] == "mitc":
             self._mitc = True
             self._store_local_pos = True
         else:
