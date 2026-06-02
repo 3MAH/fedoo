@@ -439,6 +439,8 @@ class RigidTie2D(BCBase):
         elif np.isscalar(self.center):
             # initialize the center at a position of a node
             self.center = problem.mesh.nodes[self.center]
+        else:
+            self.center = np.asarray(self.center)
         dof_indice_disp = problem.add_global_dof(
             ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
         )
@@ -459,20 +461,28 @@ class RigidTie2D(BCBase):
         )
 
     def _get_dof_ref(self, problem):
-        """Read current values of the 3 rigid DOFs [dx, dy, rotZ]."""
+        """Read current values of the 3 rigid DOFs [dx, dy, rotZ].
+
+        Mirrors :meth:`RigidTie._get_dof_ref`, including the guards for an
+        uninitialized state (``get_dof_solution()`` or ``_Xbc`` still the
+        scalar ``0``) — needed because ``pre_update`` may read the DOFs
+        before boundary conditions populate ``_Xbc``.
+        """
         dof_cd = [
             problem.n_node_dof
             + problem._global_dof.indice_start(self.var_cd[i])
             + self.node_cd[i]
             for i in range(len(self.var_cd))
         ]
-        if np.isscalar(problem.get_dof_solution()) and problem.get_dof_solution() == 0:
-            dof_ref = np.array([problem._Xbc[dof] for dof in dof_cd])
-        else:
-            dof_ref = np.array(
-                [problem.get_dof_solution()[dof] + problem._Xbc[dof] for dof in dof_cd]
-            )
-        return dof_ref, dof_cd
+        dof_sol = problem.get_dof_solution()
+        xbc = problem._Xbc
+        if np.isscalar(dof_sol) and dof_sol == 0:
+            if np.isscalar(xbc) and xbc == 0:
+                return np.zeros(3), dof_cd
+            return np.array([xbc[dof] for dof in dof_cd]), dof_cd
+        if np.isscalar(xbc) and xbc == 0:
+            return np.array([dof_sol[dof] for dof in dof_cd]), dof_cd
+        return np.array([dof_sol[dof] + xbc[dof] for dof in dof_cd]), dof_cd
 
     def _compute_rotation(self, angle):
         """2D rotation matrix and its derivative w.r.t. the Z angle.
@@ -524,7 +534,7 @@ class RigidTie2D(BCBase):
         node_cd = self.node_cd
         list_nodes = self.list_nodes
 
-        dof_ref, dof_cd = self._get_dof_ref(problem)
+        dof_ref, _ = self._get_dof_ref(problem)
         disp_ref = dof_ref[:2]  # reference displacement
         R, dR_drz = self._compute_rotation(dof_ref[2])  # rotation Z angle
 

@@ -54,7 +54,9 @@ def test_to_start_bc_is_a_noop_on_the_base():
     """Rollback must leave the quaternion base untouched."""
     rt = _make_tie_with_fake_problem([[0.2, 0.1, -0.3]])
     rt.set_start(problem=None)  # accept a converged increment
-    q = rt._Q_base
+    # Copy by value (not a reference) so the assertion catches a regression
+    # that reassigns _Q_base, not just an in-place mutation.
+    q = Rotation.from_quat(rt._Q_base.as_quat())
     assert not _quat_equal(q, Rotation.identity())
 
     rt.to_start_bc(problem=None)
@@ -120,7 +122,7 @@ def test_converge_fail_retry_keeps_first_increment():
 
 def test_nan_angles_do_not_mutate_base():
     rt = _make_tie_with_fake_problem([[np.nan, 0.0, 0.0]])
-    q_before = rt._Q_base
+    q_before = Rotation.from_quat(rt._Q_base.as_quat())  # copy by value
     rt.set_start(problem=None)
     assert _quat_equal(rt._Q_base, q_before)
 
