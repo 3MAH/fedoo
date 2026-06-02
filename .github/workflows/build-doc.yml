@@ -28,7 +28,7 @@ jobs:
 
       - name: Get Date
         id: get-date
-        run: echo "today=$(/bin/date -u '+%Y%m%d')" >> $GITHUB_OUTPUT"
+        run: echo "today=$(/bin/date -u '+%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Cache Conda env
         uses: actions/cache@v5
