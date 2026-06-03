@@ -80,7 +80,8 @@ jobs:
           MONITOR_PID=$!
 
           # Run Sphinx build with verbose logs
-          make -C docs html SPHINXOPTS="-vvv"
+          # make -C docs html SPHINXOPTS="-vvv"
+          make -C docs html
 
           # Clean up monitor if successful
           kill $MONITOR_PID
