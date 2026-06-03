@@ -10,15 +10,6 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-def purge_memory_cache(app, env, docnames):
-    """Force Python to free memory accumulated from parsing code & 3D plots"""
-    import gc
-    gc.collect()
-
-def setup(app):
-    # Triggers cleanup right before Sphinx starts writing HTML files
-    app.connect('env-before-read-docs', purge_memory_cache)
-    app.connect('build-finished', purge_memory_cache)
 
 import os
 import sys
@@ -86,11 +77,11 @@ html_theme_options = {
     # 'vcs_pageview_mode': '',
     "style_nav_header_background": "#24445C",
     # Toc options
-    "collapse_navigation": False,
+    "collapse_navigation": True,
     # 'sticky_navigation': True,
     # 'navigation_depth': 4,
     # 'includehidden': True,
-    # 'titles_only': False
+    'titles_only': True
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
