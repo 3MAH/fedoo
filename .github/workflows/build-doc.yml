@@ -70,23 +70,7 @@ jobs:
           key: doc-build-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Build Documentation
-        run: |
-          # Start background RAM monitoring
-          while true; do 
-            echo "=== RAM Monitor ==="
-            free -h
-            sleep 5
-          done &
-          MONITOR_PID=$!
-
-          # Run Sphinx build with verbose logs
-          # make -C docs html SPHINXOPTS="-vvv"
-          make -C docs html
-
-          # Clean up monitor if successful
-          kill $MONITOR_PID
-
-        # run: make -C docs html
+        run: make -C docs html
 
       - name: Upload HTML documentation
         if: always()
