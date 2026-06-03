@@ -26,11 +26,6 @@ copyright = "2019, Etienne Prulière"
 author = "Etienne Prulière"
 master_doc = "index"
 
-# Dynamically load the version from your package source code
-import fedoo
-version = fedoo.__version__  # Short version (e.g., 1.2)
-release = fedoo.__version__  # Full version string (e.g., 1.2.3-dev)
-
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -75,8 +70,7 @@ html_logo = "_static/fedOOLogos_ss_fond.png"
 
 html_theme_options = {
     # 'canonical_url': 'https://3mah.github.io/fedoo-docs/',
-    'logo_only': True,
-    'display_version': True,
+    "logo_only": True,
     # 'prev_next_buttons_location': 'bottom',
     "style_external_links": True,
     # 'vcs_pageview_mode': '',
@@ -86,7 +80,7 @@ html_theme_options = {
     # 'sticky_navigation': True,
     # 'navigation_depth': 4,
     # 'includehidden': True,
-    'titles_only': True
+    "titles_only": True,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
