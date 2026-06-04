@@ -444,7 +444,10 @@ class RigidBody:
         body.set_rayleigh_damping(1.0)
         body.set_static_obstacle(plane_mesh, dhat=0.01, kappa=1e8)
 
-        q, v, a = body.solve(dt=5e-4, tmax=2.0)
+        # solve() returns the underlying NonLinear problem; read the rigid
+        # DOFs from it via the assembly's _dof_indices.
+        pb = body.solve(dt=5e-4, tmax=2.0)
+        q = pb.get_dof_solution()[body.assembly._dof_indices]
     """
 
     def __init__(

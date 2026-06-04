@@ -52,35 +52,28 @@ class _NonLinearNewmarkBase:
         self.__Velocity = 0
         self.__Acceleration = 0
 
-    def _get_damping_matrix(self):
-        """Compute the damping matrix C from Rayleigh model or explicit assembly.
-
-        Returns None if no damping is configured.
-        Rayleigh damping: C = alpha * M + beta * K
-        """
-        if self.__RayleighDamping is not None:
-            return (
-                self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
-                + self.__RayleighDamping[1]
-                * self.__StiffnessAssembly.get_global_matrix()
-            )
-        elif self.__DampingAssembly is not None:
-            return self.__DampingAssembly.get_global_matrix()
-        return None
-
     def updateA(self):  # internal function to be used when modifying M, K or C
         dt = self.dtime
-        K = self.__StiffnessAssembly.get_global_matrix()
-        M = self.__MassAssembly.get_global_matrix()
-        C = self._get_damping_matrix()
-
-        if C is None:
-            self.set_A(K + 1 / (self.__Beta * (dt**2)) * M)
-        else:
+        if self.__DampingAssembly is None:
             self.set_A(
-                K
-                + 1 / (self.__Beta * (dt**2)) * M
-                + self.__Gamma / (self.__Beta * dt) * C
+                self.__StiffnessAssembly.get_global_matrix()
+                + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
+            )
+        else:
+            if self.__RayleighDamping is not None:
+                # In this case, self.__RayleighDamping = [alpha, beta]
+                DampMatrix = (
+                    self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
+                    + self.__RayleighDamping[1]
+                    * self.__StiffnessAssembly.get_global_matrix()
+                )
+            else:
+                DampMatrix = self.__DampingAssembly.get_global_matrix()
+
+            self.set_A(
+                self.__StiffnessAssembly.get_global_matrix()
+                + 1 / (self.__Beta * (dt**2)) * self.__MassAssembly.get_global_matrix()
+                + self.__Gamma / (self.__Beta * dt) * DampMatrix
             )
 
     def updateD(self, start=False):
@@ -94,6 +87,7 @@ class _NonLinearNewmarkBase:
                 self.set_D(0)
                 return
         else:
+            # DeltaDisp = self._NonLinear__TotalDisplacementOld - self._NonLinear__TotalDisplacementStart
             DeltaDisp = self._dU
 
         D = (
@@ -105,17 +99,32 @@ class _NonLinearNewmarkBase:
             )
             + self.__StiffnessAssembly.get_global_vector()
         )
+        if self.__DampingAssembly is not None:
+            if self.__RayleighDamping is not None:
+                # In this case, self.__RayleighDamping = [alpha, beta]
+                DampMatrix = (
+                    self.__RayleighDamping[0] * self.__MassAssembly.get_global_matrix()
+                    + self.__RayleighDamping[1]
+                    * self.__StiffnessAssembly.get_global_matrix()
+                )
+            else:
+                DampMatrix = self.__DampingAssembly.get_global_matrix()
 
-        # Damping contribution: D += -C * v_new
-        # where v_new = (1 - γ/β)*V + (γ/(β*dt))*ΔU + dt*(1 - γ/(2β))*A
-        C = self._get_damping_matrix()
-        if C is not None:
-            new_velocity = (
-                (1 - self.__Gamma / self.__Beta) * self.__Velocity
-                + (self.__Gamma / (self.__Beta * dt)) * DeltaDisp
-                + dt * (1 - self.__Gamma / (2 * self.__Beta)) * self.__Acceleration
+            assert 0, "Non linear Dynamic problem with damping needs to be checked"
+            # need to be cheched
+
+            # new_velocity = dt * 0.5*(2 - self.gamma/self.beta)*acceleration +(ou -)
+            #                self.gamma/(self.beta*dt)) * delta_disp
+            #                (1 - self.gamma/(self.beta))*velocity
+
+            # D += DampMatrix * (-new_velocity)
+            # check if same as below
+
+            D += DampMatrix * (
+                (self.__Gamma / (self.__Beta * dt)) * DisplacementStart
+                + (self.__Gamma / self.__Beta - 1) * self.__Velocity
+                + (0.5 * dt * (self.__Gamma / self.__Beta - 2)) * self.__Acceleration
             )
-            D += C @ (-new_velocity)
 
         self.set_D(D)
 

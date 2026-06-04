@@ -284,9 +284,19 @@ class IPCContact(AssemblyBase):
         else:
             surface_node_indices = np.asarray(surface_node_indices, dtype=int)
         # Point the body's RigidBodyAssembly at the shared problem mesh so
-        # ``Assembly.sum`` accepts (mass / inertia / Newmark stay 6x6 and
+        # ``Assembly.sum`` accepts it (mass / inertia / Newmark stay 6x6 and
         # are scattered at the 6 global DOFs regardless of mesh size).
+        # This rebinds ``rigid_body.assembly.mesh`` as a side effect; guard
+        # against silently re-pointing a body already registered on a
+        # *different* IPCContact mesh (re-registering on the same mesh is OK).
+        prev_mesh = getattr(rigid_body, "_ipc_registered_mesh", None)
+        if prev_mesh is not None and prev_mesh is not self.mesh:
+            raise RuntimeError(
+                f"{rigid_body.name}: already registered on another IPCContact "
+                "mesh; create a fresh RigidBody per shared-IPC problem."
+            )
         rigid_body.assembly.mesh = self.mesh
+        rigid_body._ipc_registered_mesh = self.mesh
         self._rigid_bodies.append((surface_node_indices, rigid_body))
 
     def _create_broad_phase(self):

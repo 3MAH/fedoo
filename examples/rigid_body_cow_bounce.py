@@ -11,10 +11,7 @@ import pyvista as pv
 
 import fedoo as fd
 
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
+from simcoon import Rotation  # required dependency (fedoo imports it at load)
 
 g = 9.81
 dt = 5e-4

@@ -19,10 +19,7 @@ import pytest
 
 from fedoo.constraint.rigid_tie import RigidTie
 
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
+from simcoon import Rotation  # required dependency (fedoo imports it at load)
 
 
 def _make_tie_with_fake_problem(angles_seq):

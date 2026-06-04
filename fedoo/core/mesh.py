@@ -452,9 +452,15 @@ class Mesh(MeshBase):
         and any constraint or RigidTie applied via the surviving index
         propagates kinematically across the interface.
 
-        The pairing is greedy by distance: closest pair first, each node
-        merged at most once.  This guarantees no element collapse (no two
-        corners of the same tet end up merged to the same survivor).
+        The pairing is greedy by distance (closest pair first, each node
+        merged at most once per pass), and the whole pass is repeated until no
+        coincident pair remains.  A single greedy pass merges only one pair of
+        any cluster, so a point shared by three or more parts (e.g. an edge
+        where 3+ volumes meet) would be left partially merged; repeating the
+        pass collapses the whole cluster to a single survivor.  Within a pass
+        the each-node-once rule still prevents two corners of one element
+        collapsing to the same survivor (only degenerate sub-``tol`` elements
+        could).
 
         Parameters
         ----------
@@ -464,30 +470,33 @@ class Mesh(MeshBase):
         Returns
         -------
         int
-            Number of node pairs merged.
+            Total number of node pairs merged across all passes.
         """
         from scipy.spatial import cKDTree
 
-        tree = cKDTree(self.nodes)
-        pairs = tree.query_pairs(r=tol, output_type="ndarray")
-        if len(pairs) == 0:
-            return 0
-        dists = np.linalg.norm(
-            self.nodes[pairs[:, 0]] - self.nodes[pairs[:, 1]], axis=1
-        )
-        order = np.argsort(dists)
-        used = np.zeros(self.n_nodes, dtype=bool)
-        accepted = []
-        for k in order:
-            i, j = int(pairs[k, 0]), int(pairs[k, 1])
-            if used[i] or used[j]:
-                continue
-            used[i] = used[j] = True
-            accepted.append((i, j))
-        if not accepted:
-            return 0
-        self.merge_nodes(np.asarray(accepted, dtype=int))
-        return len(accepted)
+        total_merged = 0
+        while True:
+            tree = cKDTree(self.nodes)
+            pairs = tree.query_pairs(r=tol, output_type="ndarray")
+            if len(pairs) == 0:
+                break
+            dists = np.linalg.norm(
+                self.nodes[pairs[:, 0]] - self.nodes[pairs[:, 1]], axis=1
+            )
+            order = np.argsort(dists)
+            used = np.zeros(self.n_nodes, dtype=bool)
+            accepted = []
+            for k in order:
+                i, j = int(pairs[k, 0]), int(pairs[k, 1])
+                if used[i] or used[j]:
+                    continue
+                used[i] = used[j] = True
+                accepted.append((i, j))
+            if not accepted:
+                break
+            self.merge_nodes(np.asarray(accepted, dtype=int))
+            total_merged += len(accepted)
+        return total_merged
 
     def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
         """

@@ -10,10 +10,7 @@ import pytest
 import fedoo as fd
 from fedoo.constraint.rigid_body import RigidBodyAssembly
 
-try:
-    from simcoon import Rotation
-except ImportError:
-    from scipy.spatial.transform import Rotation
+from simcoon import Rotation  # required dependency (fedoo imports it at load)
 
 
 @pytest.fixture
