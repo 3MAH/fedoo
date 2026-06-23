@@ -289,11 +289,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
             assembly.set_disp(pb.get_disp())
 
         if np.array_equal(pb.get_dof_solution(), 0):
-            assembly.sv["MembraneStrain"] = assembly.sv["MembraneForce"] = 0
-            assembly.sv["BendingStrain"] = assembly["BendingMoment"] = 0
-            assembly.sv["TransverseShearStrain"] = assembly.sv["ShearForce"] = 0
-            assembly.sv["_DrillStrain"] = assembly.sv["_DrillMoment"] = 0
-            # assembly.sv["ShellStrain"] = assembly.sv["ShellStress"] = 0
+            assembly.sv["ShellStrain"] = 0
+            assembly.sv["ShellStress"] = 0
+            assembly.sv["_DrillConstraint"] = 0
             return
 
         op_plate_strain = self.generalized_strain_operator()

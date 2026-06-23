@@ -256,7 +256,6 @@ def grid_mesh_cylindric(
     theta = m.nodes[:, 1]
     crd = np.c_[r * np.cos(theta), r * np.sin(theta)]
     returned_mesh = Mesh(crd, m.elements, elm_type, ndim=ndim, name=name)
-    returned_mesh.local_frame = m.local_frame
 
     if theta_min < theta_max:
         returned_mesh.add_node_set(m.node_sets["left"], "bottom")
