@@ -86,8 +86,15 @@ class IPCContact(AssemblyBase):
     radius ``R₀``); it is exact when both endpoints of a contact pair
     sit at similar radii, and slightly asymmetric otherwise.  Vertices
     on the symmetry axis (r = 0) get weight 0, which is geometrically
-    correct (a "ring" of zero radius collapses to a point).  In 2Daxi
-    the planar (r, z) distance equals the true 3D minimum distance
+    correct (a "ring" of zero radius collapses to a point).  The weight
+    is applied **once** to both the gradient and the hessian, exactly
+    as in fedoo's weak forms (where the same ``2*pi*r`` factor multiplies
+    the residual and the tangent at each Gauss point).  Concretely, with
+    weight matrix ``W = diag(2*pi*r)`` the residual is ``W·g`` and the
+    tangent is the symmetric single-weighted form ``½(W·H + H·W)`` — *not*
+    the two-sided product ``W·H·W``, which would square the weight and
+    make the contact stiffness too large by a factor of ``2*pi*r``.  In
+    2Daxi the planar (r, z) distance equals the true 3D minimum distance
     between the corresponding circles (closest points share the
     azimuth), so the barrier distance and PSD projection are unchanged.
 
@@ -478,7 +485,8 @@ class IPCContact(AssemblyBase):
                     project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
                 )
             if axi_D is not None:
-                hess_surf = axi_D @ hess_surf @ axi_D
+                # single-weighted tangent of residual W·g (W·H·W would square 2*pi*r)
+                hess_surf = 0.5 * (axi_D @ hess_surf + hess_surf @ axi_D)
             self.global_matrix = self._kappa * (P @ hess_surf @ P.T)
 
         # Friction contributions
@@ -505,7 +513,9 @@ class IPCContact(AssemblyBase):
                         project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
                     )
                     if axi_D is not None:
-                        fric_hess_surf = axi_D @ fric_hess_surf @ axi_D
+                        fric_hess_surf = 0.5 * (
+                            axi_D @ fric_hess_surf + fric_hess_surf @ axi_D
+                        )
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
         # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC)
