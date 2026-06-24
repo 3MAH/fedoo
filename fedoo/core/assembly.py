@@ -1267,11 +1267,15 @@ class Assembly(AssemblyBase):
         res = self.get_gp_results(operator, U)
         return self.mesh._get_gausspoint2node_mat(self.n_elm_gp) @ res
 
-    def convert_data(self, data, convert_from=None, convert_to="GaussPoint"):
+    def convert_data(
+        self, data, convert_from=None, convert_to="GaussPoint", method=None
+    ):
         if isinstance(data, (StrainTensorList, StressTensorList)):
-            return data.convert(self, convert_from, convert_to)
+            return data.convert(self, convert_from, convert_to, method)
 
-        return self.mesh.convert_data(data, convert_from, convert_to, self.n_elm_gp)
+        return self.mesh.convert_data(
+            data, convert_from, convert_to, self.n_elm_gp, method
+        )
 
     def integrate_field(self, field, type_field=None):
         return self.mesh.integrate_field(field, type_field, self.n_elm_gp)
@@ -1286,12 +1290,14 @@ class Assembly(AssemblyBase):
                 new_mesh = copy(self.mesh)
                 new_mesh.nodes = new_crd
                 new_mesh._saved_gaussian_quadrature_mat = {}
+                new_mesh._saved_gausspoint2node_l2 = {}
                 new_assembly = copy(self)
                 new_assembly.mesh = new_mesh
                 self.current = new_assembly
             else:
                 self.current.mesh.nodes = new_crd
                 self.current.mesh._saved_gaussian_quadrature_mat = {}
+                self.current.mesh._saved_gausspoint2node_l2 = {}
 
                 if self.current.mesh in self._saved_change_of_basis_mat:
                     del self._saved_change_of_basis_mat[self.current.mesh]

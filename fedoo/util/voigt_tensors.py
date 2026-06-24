@@ -182,9 +182,9 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             if np.isscalar(self[i]) and self[i] == 0:
                 self[i] = np.zeros(n)
 
-    def convert(self, assemb, convert_from=None, convert_to="GaussPoint"):
+    def convert(self, assemb, convert_from=None, convert_to="GaussPoint", method=None):
         return self.__class__(
-            [assemb.convert_data(S, convert_from, convert_to) for S in self]
+            [assemb.convert_data(S, convert_from, convert_to, method) for S in self]
         )
 
     def copy(self, asarray=False):

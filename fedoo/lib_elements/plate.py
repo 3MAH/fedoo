@@ -16,7 +16,7 @@ pquad4 = CombinedElement("pquad4", "quad4", default_n_gp=4, local_csys=True)
 #           '__local_csys':True}
 
 # simple tri6 plate
-ptri6 = CombinedElement("ptri6", "tri6", default_n_gp=4, local_csys=True)
+ptri6 = CombinedElement("ptri6", "tri6", default_n_gp=7, local_csys=True)
 # ptri6 = {'__default':['tri6'],
 #          '__local_csys':True}
 

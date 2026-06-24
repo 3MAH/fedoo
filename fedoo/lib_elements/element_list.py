@@ -57,7 +57,7 @@ _dict_default_n_gp = {
     "lin2interface": 2,
     "quad4interface": 4,
     "tri3": 3,
-    "tri6": 4,
+    "tri6": 7,
     "tri3bubble": 3,
     "quad4": 4,
     "quad4hourglass": 1,
@@ -79,7 +79,7 @@ _dict_default_n_gp = {
     "pquad4": 4,
     "ptri3": 3,
     "pquad8": 9,
-    "ptri6": 4,
+    "ptri6": 7,
     "pquad9": 9,
 }
 
