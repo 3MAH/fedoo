@@ -1217,6 +1217,13 @@ class Mesh(MeshBase):
             quadrature = self._get_gaussian_quadrature_mat(n_elm_gp)
             mass = node2gp.T @ quadrature @ node2gp
             rhs = node2gp.T @ quadrature
+            if node2gp.shape[0] < node2gp.shape[1]:
+                raise ValueError(
+                    "L2 GaussPoint to Node conversion failed because the "
+                    "projection mass matrix is singular. Try a higher number "
+                    "of Gauss points per element or use method='mean' or "
+                    "method='spr'."
+                )
             try:
                 solve = linalg.factorized(mass.tocsc())
             except RuntimeError as exc:
@@ -1251,7 +1258,12 @@ class Mesh(MeshBase):
             return self._gausspoint_to_node_spr(data, n_elm_gp)
 
         solve, rhs = self._get_gausspoint2node_l2(n_elm_gp)
-        return solve(rhs @ data)
+        rhs_data = rhs @ data
+        if rhs_data.ndim == 1:
+            return solve(rhs_data)
+        return np.column_stack(
+            [solve(rhs_data[:, i]) for i in range(rhs_data.shape[1])]
+        )
 
     def _gausspoint_to_node_spr(
         self,
