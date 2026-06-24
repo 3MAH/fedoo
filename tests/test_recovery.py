@@ -142,6 +142,64 @@ def test_mean_gausspoint_to_node_projection_keeps_existing_default():
     np.testing.assert_array_equal(default, explicit)
 
 
+def test_spr_gausspoint_to_node_projection_recovers_linear_field():
+    mesh = fd.mesh.rectangle_mesh(nx=6, ny=5, elm_type="tri3")
+    gp_coordinates = mesh.gausspoint_coordinates()
+    field_gp = 1.0 + 2.0 * gp_coordinates[:, 0] - 0.5 * gp_coordinates[:, 1]
+
+    recovered = mesh.convert_data(
+        field_gp,
+        convert_from="GaussPoint",
+        convert_to="Node",
+        method="spr",
+    )
+    expected = 1.0 + 2.0 * mesh.nodes[:, 0] - 0.5 * mesh.nodes[:, 1]
+
+    np.testing.assert_allclose(recovered, expected, atol=1e-12)
+
+
+def test_spr_gausspoint_to_node_projection_handles_components():
+    mesh = fd.mesh.rectangle_mesh(nx=5, ny=4, elm_type="quad4")
+    gp_coordinates = mesh.gausspoint_coordinates()
+    field_gp = np.vstack(
+        (
+            1.0 + gp_coordinates[:, 0] + 2.0 * gp_coordinates[:, 1],
+            -2.0 + 0.5 * gp_coordinates[:, 0] - gp_coordinates[:, 1],
+        )
+    )
+
+    recovered = mesh.convert_data(
+        field_gp,
+        convert_from="GaussPoint",
+        convert_to="Node",
+        method="spr",
+    )
+    expected = np.vstack(
+        (
+            1.0 + mesh.nodes[:, 0] + 2.0 * mesh.nodes[:, 1],
+            -2.0 + 0.5 * mesh.nodes[:, 0] - mesh.nodes[:, 1],
+        )
+    )
+
+    np.testing.assert_allclose(recovered, expected, atol=1e-12)
+
+
+def test_spr_gausspoint_to_node_projection_handles_embedded_surface():
+    mesh = fd.mesh.rectangle_mesh(nx=5, ny=4, elm_type="quad4", ndim=3)
+    gp_coordinates = mesh.gausspoint_coordinates()
+    field_gp = 1.0 + gp_coordinates[:, 0] + 2.0 * gp_coordinates[:, 1]
+
+    recovered = mesh.convert_data(
+        field_gp,
+        convert_from="GaussPoint",
+        convert_to="Node",
+        method="spr",
+    )
+    expected = 1.0 + mesh.nodes[:, 0] + 2.0 * mesh.nodes[:, 1]
+
+    np.testing.assert_allclose(recovered, expected, atol=1e-12)
+
+
 def test_l2_projection_reports_singular_mass_matrix():
     mesh = fd.mesh.rectangle_mesh(nx=4, ny=4, elm_type="quad4")
     field_gp = np.arange(mesh.n_elements, dtype=float)

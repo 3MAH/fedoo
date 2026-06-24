@@ -1223,7 +1223,8 @@ class Mesh(MeshBase):
                 raise ValueError(
                     "L2 GaussPoint to Node conversion failed because the "
                     "projection mass matrix is singular. Try a higher number "
-                    "of Gauss points per element or use method='mean'."
+                    "of Gauss points per element or use method='mean' or "
+                    "method='spr'."
                 ) from exc
             self._saved_gausspoint2node_l2[n_elm_gp] = (solve, rhs)
         return self._saved_gausspoint2node_l2[n_elm_gp]
@@ -1238,17 +1239,92 @@ class Mesh(MeshBase):
             method = "mean"
         else:
             method = method.lower()
-            if method not in ["mean", "l2"]:
+            if method not in ["mean", "l2", "spr"]:
                 raise ValueError(
                     "unknown GaussPoint to Node conversion method "
-                    f"'{method}'. Use 'mean' or 'l2'."
+                    f"'{method}'. Use 'mean', 'l2' or 'spr'."
                 )
 
         if method == "mean":
             return self._get_gausspoint2node_mat(n_elm_gp) @ data
+        if method == "spr":
+            return self._gausspoint_to_node_spr(data, n_elm_gp)
 
         solve, rhs = self._get_gausspoint2node_l2(n_elm_gp)
         return solve(rhs @ data)
+
+    def _gausspoint_to_node_spr(
+        self,
+        data: np.ndarray,
+        n_elm_gp: int | None = None,
+    ) -> np.ndarray:
+        """Recover nodal values from Gauss-point values by linear SPR patches."""
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(self.elm_type)
+
+        data_is_1d = data.ndim == 1
+        if data_is_1d:
+            data = data.reshape(-1, 1)
+
+        gp_coordinates = self.gausspoint_coordinates(n_elm_gp)
+        element_ids = np.arange(self.n_elements).reshape(-1, 1, 1)
+        gp_ids = np.arange(n_elm_gp).reshape(1, 1, -1)
+        patch_node_ids = np.broadcast_to(
+            self.elements[:, :, None],
+            (self.n_elements, self.n_elm_nodes, n_elm_gp),
+        ).reshape(-1)
+        patch_gp_ids = np.broadcast_to(
+            element_ids + gp_ids * self.n_elements,
+            (self.n_elements, self.n_elm_nodes, n_elm_gp),
+        ).reshape(-1)
+
+        shifted_coordinates = (
+            gp_coordinates[patch_gp_ids] - self.nodes[patch_node_ids, : self.ndim]
+        )
+        patch_scale = np.zeros(self.n_nodes)
+        np.maximum.at(
+            patch_scale,
+            patch_node_ids,
+            np.linalg.norm(shifted_coordinates, axis=1),
+        )
+        nonzero_scale = patch_scale[patch_node_ids] > 0
+        shifted_coordinates[nonzero_scale] /= patch_scale[patch_node_ids][
+            nonzero_scale
+        ].reshape(-1, 1)
+
+        design_matrix = np.column_stack(
+            (np.ones(len(patch_node_ids)), shifted_coordinates)
+        )
+        n_terms = design_matrix.shape[1]
+        n_components = data.shape[1]
+        normal_matrix = np.zeros((self.n_nodes, n_terms, n_terms))
+        rhs = np.zeros((self.n_nodes, n_terms, n_components))
+        np.add.at(
+            normal_matrix,
+            patch_node_ids,
+            design_matrix[:, :, None] * design_matrix[:, None, :],
+        )
+        np.add.at(
+            rhs,
+            patch_node_ids,
+            design_matrix[:, :, None] * data[patch_gp_ids, None, :],
+        )
+
+        node_data = (np.linalg.pinv(normal_matrix, rcond=1e-12) @ rhs)[:, 0, :]
+        patch_counts = np.bincount(
+            patch_node_ids, minlength=self.n_nodes
+        ).reshape(-1, 1)
+        patch_sum = np.zeros((self.n_nodes, n_components), dtype=node_data.dtype)
+        np.add.at(patch_sum, patch_node_ids, data[patch_gp_ids])
+        low_rank = np.linalg.matrix_rank(normal_matrix) < 2
+        has_patch = patch_counts[:, 0] > 0
+        node_data[low_rank & has_patch] = (
+            patch_sum[low_rank & has_patch] / patch_counts[low_rank & has_patch]
+        )
+
+        if data_is_1d:
+            return node_data.reshape(-1)
+        return node_data
 
     def _get_node2gausspoint_mat(self, n_elm_gp=None):
         if n_elm_gp is None:
@@ -1329,11 +1405,12 @@ class Mesh(MeshBase):
             inferred from the last axis length.
         n_elm_gp : int, optional
             Number of Gauss points per element.
-        method : {'mean', 'l2'}, optional
+        method : {'mean', 'l2', 'spr'}, optional
             Method used when converting Gauss-point values to nodes. ``'mean'``
             keeps the historical element-wise extrapolation followed by nodal
             averaging. ``'l2'`` performs a global L2 projection using fedoo's
-            node-to-Gauss-point interpolation and quadrature matrices.
+            node-to-Gauss-point interpolation and quadrature matrices. ``'spr'``
+            performs a linear Superconvergent Patch Recovery around each node.
         """
         if np.isscalar(data):
             return data
