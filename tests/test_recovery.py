@@ -33,7 +33,7 @@ def test_recover_hessian_2d_quadratic(elm_type, nx, ny):
 
     # f(x,y) = x^2 + x*y + 2*y^2  =>  H = [[2, 1], [1, 4]]
     field = _eval_field(mesh, lambda x, y: x * x + x * y + 2 * y * y)
-    H = fd.recover_hessian(mesh, field)
+    H = fd.recover_hessian(mesh, field, method="mean")
 
     assert H.shape == (mesh.n_nodes, 2, 2)
     # Symmetric by construction (post-symmetrize step).
@@ -52,7 +52,7 @@ def test_recover_hessian_2d_linear_field_is_zero():
     """Linear field has zero Hessian everywhere (boundary too)."""
     mesh = fd.mesh.rectangle_mesh(nx=11, ny=11, elm_type="tri3")
     field = _eval_field(mesh, lambda x, y: 2.0 * x + 3.0 * y - 0.5)
-    H = fd.recover_hessian(mesh, field)
+    H = fd.recover_hessian(mesh, field, method="mean")
     np.testing.assert_allclose(H, 0.0, atol=1e-10)
 
 
@@ -62,7 +62,7 @@ def test_recover_hessian_3d_quadratic_hex8():
     # f(x,y,z) = x^2 + 2*y^2 + 3*z^2 + x*y
     # H = [[2, 1, 0], [1, 4, 0], [0, 0, 6]]
     field = _eval_field(mesh, lambda x, y, z: x * x + 2 * y * y + 3 * z * z + x * y)
-    H = fd.recover_hessian(mesh, field)
+    H = fd.recover_hessian(mesh, field, method="mean")
 
     assert H.shape == (mesh.n_nodes, 3, 3)
     np.testing.assert_allclose(H, H.swapaxes(-1, -2), atol=1e-12)
@@ -84,6 +84,76 @@ def test_recover_gradient_2d():
 
     assert g.shape == (mesh.n_nodes, 2)
     np.testing.assert_allclose(g, np.broadcast_to([3.0, 2.0], g.shape), atol=1e-10)
+
+
+def test_recover_hessian_default_l2_uses_tri6_default_quadrature():
+    assert fd.lib_elements.get_default_n_gp("tri6") == 7
+    assert fd.lib_elements.get_default_n_gp("ptri6") == 7
+
+    mesh = fd.mesh.rectangle_mesh(nx=21, ny=21, elm_type="tri6")
+    field = _eval_field(mesh, lambda x, y: x * x + x * y + 2 * y * y)
+
+    H = fd.recover_hessian(mesh, field)
+
+    H_expected = np.array([[2.0, 1.0], [1.0, 4.0]])
+    interior = _interior_mask(mesh)
+    np.testing.assert_allclose(
+        H[interior],
+        np.broadcast_to(H_expected, (interior.sum(), 2, 2)),
+        atol=1e-9,
+    )
+
+
+def test_l2_gausspoint_to_node_projection_recovers_fe_field():
+    """The L2 conversion in Mesh.convert_data recovers interpolated FE fields."""
+    mesh = fd.mesh.rectangle_mesh(nx=7, ny=6, elm_type="quad4")
+    field = _eval_field(mesh, lambda x, y: 1.0 + 2.0 * x - 3.0 * y + x * y)
+
+    field_gp = mesh.convert_data(
+        field,
+        convert_from="Node",
+        convert_to="GaussPoint",
+        n_elm_gp=4,
+    )
+    recovered = mesh.convert_data(
+        field_gp,
+        convert_from="GaussPoint",
+        convert_to="Node",
+        n_elm_gp=4,
+        method="l2",
+    )
+
+    np.testing.assert_allclose(recovered, field, atol=1e-12)
+
+
+def test_mean_gausspoint_to_node_projection_keeps_existing_default():
+    mesh = fd.mesh.rectangle_mesh(nx=4, ny=4, elm_type="quad4")
+    field_gp = np.arange(mesh.n_elements * 4, dtype=float)
+
+    default = mesh.convert_data(field_gp, "GaussPoint", "Node", n_elm_gp=4)
+    explicit = mesh.convert_data(
+        field_gp,
+        "GaussPoint",
+        "Node",
+        n_elm_gp=4,
+        method="mean",
+    )
+
+    np.testing.assert_array_equal(default, explicit)
+
+
+def test_l2_projection_reports_singular_mass_matrix():
+    mesh = fd.mesh.rectangle_mesh(nx=4, ny=4, elm_type="quad4")
+    field_gp = np.arange(mesh.n_elements, dtype=float)
+
+    with pytest.raises(ValueError, match="singular"):
+        mesh.convert_data(
+            field_gp,
+            convert_from="GaussPoint",
+            convert_to="Node",
+            n_elm_gp=1,
+            method="l2",
+        )
 
 
 def test_to_upper_diagonal_3d_round_trip():

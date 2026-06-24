@@ -123,6 +123,7 @@ class Mesh(MeshBase):
             self.crd_name = ("X", "Y", "Z")
 
         self._saved_gausspoint2node_mat = {}
+        self._saved_gausspoint2node_l2 = {}
         self._saved_node2gausspoint_mat = {}
         self._saved_gaussian_quadrature_mat = {}
         self._elm_interpolation = {}
@@ -1206,6 +1207,49 @@ class Mesh(MeshBase):
             self.init_interpolation(n_elm_gp)
         return self._saved_gausspoint2node_mat[n_elm_gp]
 
+    def _get_gausspoint2node_l2(self, n_elm_gp=None):
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(self.elm_type)
+        if n_elm_gp not in self._saved_gausspoint2node_l2:
+            from scipy.sparse import linalg
+
+            node2gp = self._get_node2gausspoint_mat(n_elm_gp)
+            quadrature = self._get_gaussian_quadrature_mat(n_elm_gp)
+            mass = node2gp.T @ quadrature @ node2gp
+            rhs = node2gp.T @ quadrature
+            try:
+                solve = linalg.factorized(mass.tocsc())
+            except RuntimeError as exc:
+                raise ValueError(
+                    "L2 GaussPoint to Node conversion failed because the "
+                    "projection mass matrix is singular. Try a higher number "
+                    "of Gauss points per element or use method='mean'."
+                ) from exc
+            self._saved_gausspoint2node_l2[n_elm_gp] = (solve, rhs)
+        return self._saved_gausspoint2node_l2[n_elm_gp]
+
+    def _gausspoint_to_node(
+        self,
+        data: np.ndarray,
+        n_elm_gp: int | None = None,
+        method: str | None = None,
+    ) -> np.ndarray:
+        if method is None:
+            method = "mean"
+        else:
+            method = method.lower()
+            if method not in ["mean", "l2"]:
+                raise ValueError(
+                    "unknown GaussPoint to Node conversion method "
+                    f"'{method}'. Use 'mean' or 'l2'."
+                )
+
+        if method == "mean":
+            return self._get_gausspoint2node_mat(n_elm_gp) @ data
+
+        solve, rhs = self._get_gausspoint2node_l2(n_elm_gp)
+        return solve(rhs @ data)
+
     def _get_node2gausspoint_mat(self, n_elm_gp=None):
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
@@ -1271,7 +1315,26 @@ class Mesh(MeshBase):
         convert_from: str | None = None,
         convert_to: str = "GaussPoint",
         n_elm_gp: int | None = None,
+        method: str | None = None,
     ) -> np.ndarray:
+        """
+        Convert a field between node, element and Gauss-point storage.
+
+        Parameters
+        ----------
+        data : ndarray
+            Field values. The last axis stores the points.
+        convert_from, convert_to : {'Node', 'Element', 'GaussPoint'}
+            Source and target storage. If ``convert_from`` is None, it is
+            inferred from the last axis length.
+        n_elm_gp : int, optional
+            Number of Gauss points per element.
+        method : {'mean', 'l2'}, optional
+            Method used when converting Gauss-point values to nodes. ``'mean'``
+            keeps the historical element-wise extrapolation followed by nodal
+            averaging. ``'l2'`` performs a global L2 projection using fedoo's
+            node-to-Gauss-point interpolation and quadrature matrices.
+        """
         if np.isscalar(data):
             return data
 
@@ -1302,7 +1365,7 @@ class Mesh(MeshBase):
 
         # from here data should be defined at 'PG'
         if convert_to == "Node":
-            return (self._get_gausspoint2node_mat(n_elm_gp) @ data).T
+            return self._gausspoint_to_node(data, n_elm_gp, method).T
         elif convert_to == "Element":
             return (np.sum(np.split(data, n_elm_gp), axis=0) / n_elm_gp).T
         else:
@@ -1367,6 +1430,7 @@ class Mesh(MeshBase):
         This method should be used when modifying the element table or when removing or adding nodes.
         """
         self._saved_gausspoint2node_mat = {}
+        self._saved_gausspoint2node_l2 = {}
         self._saved_node2gausspoint_mat = {}
         self._saved_gaussian_quadrature_mat = {}
         self._elm_interpolation = {}

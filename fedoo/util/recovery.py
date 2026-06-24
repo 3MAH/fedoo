@@ -2,10 +2,9 @@
 
 Useful as a fast input for metric-based adaptive remeshing (e.g.
 ``mmgpy.metrics.create_metric_from_hessian``). The recovery uses a double
-Galerkin L2-projection: per-element gradient at Gauss points -> lumped
-GP-to-Node averaging via fedoo's cached projection matrix -> repeat for the
-Hessian. All work is a few einsums plus a handful of sparse matvecs; no
-per-vertex Python loop.
+projection: per-element gradient at Gauss points -> nodal values via
+``Mesh.convert_data`` -> repeat for the Hessian. All work is a few einsums plus
+a handful of sparse matvecs; no per-vertex Python loop.
 """
 
 from __future__ import annotations
@@ -19,10 +18,9 @@ if TYPE_CHECKING:
 
 
 def _physical_shape_derivatives(mesh: Mesh, n_elm_gp: int | None = None):
-    """Return (dNdx, proj, n_gp) for the requested integration order.
+    """Return (dNdx, n_gp) for the requested integration order.
 
     dNdx[el, gp, n, i] is dN_n/dx_i at gauss point gp of element el.
-    proj is the cached sparse GP-to-Node lumped averaging matrix.
     """
     if n_elm_gp is None:
         from fedoo.lib_elements.element_list import get_default_n_gp
@@ -51,20 +49,7 @@ def _physical_shape_derivatives(mesh: Mesh, n_elm_gp: int | None = None):
     # dNdx[e, g, n, i] = sum_x dN_xi[g, x, n] * inv_J[e, g, i, x]
     dNdx = np.einsum("gxn, egix -> egni", dN_xi, inv_J)
 
-    proj = mesh._get_gausspoint2node_mat(n_elm_gp)
-    return dNdx, proj, n_elm_gp
-
-
-def _project_gp_field(field_gp: np.ndarray, proj) -> np.ndarray:
-    """Project a GP field of shape (n_el, n_gp, ...) to nodes via proj."""
-    n_el, n_gp = field_gp.shape[:2]
-    tail = field_gp.shape[2:]
-    # GP layout in proj: column index = el + gp*n_el (mesh.py:1138-1142),
-    # i.e. elements vary fastest. Transposing axes 0 and 1 then ravelling
-    # in C order produces exactly that layout.
-    flat = field_gp.transpose(1, 0, *range(2, field_gp.ndim)).reshape(n_el * n_gp, -1)
-    out = proj @ flat
-    return out.reshape(out.shape[0], *tail)
+    return dNdx, n_elm_gp
 
 
 def _validate_scalar_field(mesh: Mesh, field: np.ndarray) -> np.ndarray:
@@ -76,22 +61,16 @@ def _validate_scalar_field(mesh: Mesh, field: np.ndarray) -> np.ndarray:
     return field
 
 
-def _recover_gradient(field: np.ndarray, mesh: Mesh, dNdx, proj) -> np.ndarray:
-    f_elem = field[mesh.elements]
-    g_gp = np.einsum("en, egni -> egi", f_elem, dNdx)
-    return _project_gp_field(g_gp, proj)
-
-
 def recover_gradient(
     mesh: Mesh,
     field: np.ndarray,
     n_elm_gp: int | None = None,
+    method: str | None = "l2",
 ) -> np.ndarray:
     """Recover the nodal gradient of a scalar field on a fedoo mesh.
 
     Computes the gradient at every Gauss point via the FE shape function
-    derivatives, then averages back to nodes through fedoo's cached lumped
-    GP-to-Node projection (``mesh._get_gausspoint2node_mat``).
+    derivatives, then converts back to nodes with ``mesh.convert_data``.
 
     Restricted to volumetric or planar elements (square Jacobian); raises
     ``NotImplementedError`` for shell, beam, or surface-in-3D elements.
@@ -106,6 +85,8 @@ def recover_gradient(
         Scalar nodal values.
     n_elm_gp : int, optional
         Number of Gauss points per element. Defaults to the element default.
+    method : {'mean', 'l2'}, default = 'l2'
+        GaussPoint-to-Node conversion method passed to ``mesh.convert_data``.
 
     Returns
     -------
@@ -113,16 +94,26 @@ def recover_gradient(
         Recovered nodal gradient.
     """
     field = _validate_scalar_field(mesh, field)
-    dNdx, proj, _ = _physical_shape_derivatives(mesh, n_elm_gp)
-    return _recover_gradient(field, mesh, dNdx, proj)
+    dNdx, n_elm_gp = _physical_shape_derivatives(mesh, n_elm_gp)
+
+    grad_gp = np.einsum("en, egni -> egi", field[mesh.elements], dNdx)
+    grad_node = mesh.convert_data(
+        grad_gp.transpose(2, 1, 0).reshape(mesh.ndim, -1),
+        convert_from="GaussPoint",
+        convert_to="Node",
+        n_elm_gp=n_elm_gp,
+        method=method,
+    )
+    return grad_node.T
 
 
 def recover_hessian(
     mesh: Mesh,
     field: np.ndarray,
     n_elm_gp: int | None = None,
+    method: str | None = "l2",
 ) -> np.ndarray:
-    """Recover the nodal Hessian of a scalar field via double L2-projection.
+    """Recover the nodal Hessian of a scalar field via double projection.
 
     Step 1 recovers the gradient as a continuous P1 nodal vector field.
     Step 2 takes the gradient of each component and projects back to nodes,
@@ -147,6 +138,8 @@ def recover_hessian(
         Scalar nodal values.
     n_elm_gp : int, optional
         Number of Gauss points per element. Defaults to the element default.
+    method : {'mean', 'l2'}, default='l2'
+        GaussPoint-to-Node conversion method passed to ``mesh.convert_data``.
 
     Returns
     -------
@@ -154,15 +147,32 @@ def recover_hessian(
         Symmetric Hessian tensor at every node.
     """
     field = _validate_scalar_field(mesh, field)
-    dNdx, proj, _ = _physical_shape_derivatives(mesh, n_elm_gp)
-    g_node = _recover_gradient(field, mesh, dNdx, proj)
+    dNdx, n_elm_gp = _physical_shape_derivatives(mesh, n_elm_gp)
 
-    g_elem = g_node[mesh.elements]
-    # H_gp[e, g, j, i] = sum_n g_elem[e, n, j] * dNdx[e, g, n, i]
-    H_gp = np.einsum("enj, egni -> egji", g_elem, dNdx)
-    H = _project_gp_field(H_gp, proj)
+    grad_gp = np.einsum("en, egni -> egi", field[mesh.elements], dNdx)
+    grad_node = mesh.convert_data(
+        grad_gp.transpose(2, 1, 0).reshape(mesh.ndim, -1),
+        convert_from="GaussPoint",
+        convert_to="Node",
+        n_elm_gp=n_elm_gp,
+        method=method,
+    ).T
 
-    return 0.5 * (H + H.swapaxes(-1, -2))
+    # hessian_gp[e, g, j, i] = sum_n grad_node[e, n, j] * dNdx[e, g, n, i]
+    hessian_gp = np.einsum("enj, egni -> egji", grad_node[mesh.elements], dNdx)
+    hessian = (
+        mesh.convert_data(
+            hessian_gp.transpose(2, 3, 1, 0).reshape(mesh.ndim * mesh.ndim, -1),
+            convert_from="GaussPoint",
+            convert_to="Node",
+            n_elm_gp=n_elm_gp,
+            method=method,
+        )
+        .reshape(mesh.ndim, mesh.ndim, mesh.n_nodes)
+        .transpose(2, 0, 1)
+    )
+
+    return 0.5 * (hessian + hessian.swapaxes(-1, -2))
 
 
 def to_voigt(T: np.ndarray) -> np.ndarray:

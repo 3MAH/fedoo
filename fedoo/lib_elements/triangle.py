@@ -140,10 +140,10 @@ class Tri3Bubble(Tri3):
 
 class Tri6(ElementTriangle):
     name = "tri6"
-    default_n_gp = 4
+    default_n_gp = 7
     n_nodes = 6
 
-    def __init__(self, n_elm_gp=4, **kargs):
+    def __init__(self, n_elm_gp=7, **kargs):
         self.xi_nd = np.c_[
             [0.0, 1.0, 0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0, 0.5, 0.5]
         ]
