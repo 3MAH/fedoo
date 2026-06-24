@@ -1311,9 +1311,9 @@ class Mesh(MeshBase):
         )
 
         node_data = (np.linalg.pinv(normal_matrix, rcond=1e-12) @ rhs)[:, 0, :]
-        patch_counts = np.bincount(
-            patch_node_ids, minlength=self.n_nodes
-        ).reshape(-1, 1)
+        patch_counts = np.bincount(patch_node_ids, minlength=self.n_nodes).reshape(
+            -1, 1
+        )
         patch_sum = np.zeros((self.n_nodes, n_components), dtype=node_data.dtype)
         np.add.at(patch_sum, patch_node_ids, data[patch_gp_ids])
         low_rank = np.linalg.matrix_rank(normal_matrix) < 2
