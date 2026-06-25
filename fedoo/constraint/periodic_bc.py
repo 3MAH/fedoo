@@ -1275,6 +1275,12 @@ class PeriodicBC(BCBase):
                 )
 
     def initialize(self, problem, dic_closest_points_on_boundaries=None):
+        if problem.space.is_axisymmetric:
+            raise NotImplementedError(
+                "PeriodicBC does not support the '2Daxi' ModelingSpace: "
+                "translational periodicity in the (r, z) plane is not "
+                "well-defined for an axisymmetric body of revolution."
+            )
         # Use stored dictionary if none provided explicitly
         if dic_closest_points_on_boundaries is None:
             dic_closest_points_on_boundaries = self._dic_closest_points_on_boundaries

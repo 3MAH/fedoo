@@ -84,6 +84,11 @@ class ModelingSpace:
         """
         return self._dimension
 
+    @property
+    def is_axisymmetric(self):
+        """True if this ModelingSpace uses the 2Daxi axisymmetric assumption."""
+        return self._dimension == "2Daxi"
+
     def make_active(self):
         """Define the modeling space as the active ModelingSpace."""
         ModelingSpace._active = self
@@ -287,6 +292,22 @@ class ModelingSpace:
             return self.derivative("DispX", "X") + self.derivative("DispY", "Y")
 
     def op_strain(self, InitialGradDisp=None):
+        """Symbolic strain operator as a list of six DiffOps.
+
+        The returned 6-vector follows the slot ordering documented on
+        :class:`fedoo.core.mechanical3d.Mechanical3D`. In 2D regimes
+        slot 2 is set to 0 here; for ``2Daxi`` problems the hoop term
+        ``eps[2] = u_r / r`` is patched in by each mechanical weakform's
+        ``get_weak_equation`` (see e.g. ``StressEquilibrium``) using
+        ``assembly.sv["_R_gausspoints"]``. In 2D plane strain / plane
+        stress slot 2 stays 0.
+
+        Note for plane stress (``2Dstress``): the symbolic slot 2 is 0
+        (kinematic zero), but the constitutive law may compute a
+        nonzero out-of-plane ε_zz when enforcing the plane-stress
+        condition σ_zz = 0. Post-processed strain output from such a
+        law is therefore not guaranteed to have slot 2 = 0.
+        """
         # InitialGradDisp = StrainOperator.__InitialGradDisp
 
         if (InitialGradDisp is None) or (
