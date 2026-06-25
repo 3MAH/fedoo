@@ -81,11 +81,9 @@ class _NewmarkInertia(WeakFormBase):
         # Apply the operator to the nodal v_curr to get the damping force residual
         if not np.array_equal(residual_val, 0):
             diff_op += assembly.operator_apply(wf, residual_val.ravel())
-        if self.space.is_axisymmetric:
-            rr = assembly.sv["_R_gausspoints"]
-            return diff_op * ((2 * np.pi) * rr)
-        else:
-            return diff_op
+        # Axisymmetric weighting is handled by the wrapped mass weakform
+        # itself; the standard Inertia weakform already applies 2*pi*r.
+        return diff_op
 
 
 class _NewmarkStiffness(WeakFormBase):
@@ -136,9 +134,6 @@ class _NewmarkStiffness(WeakFormBase):
             damping_force_wf = self.damping_coef * assembly.operator_apply(
                 mat, v_curr.ravel()
             )
-            if self.space.is_axisymmetric:
-                rr = assembly.sv["_R_gausspoints"]
-                damping_force_wf = damping_force_wf * ((2 * np.pi) * rr)
             return scaled_mat + vec + damping_force_wf
 
         return scaled_mat + vec

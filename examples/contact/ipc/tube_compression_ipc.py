@@ -16,6 +16,8 @@ import os
 import fedoo as fd
 import numpy as np
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
+
 fd.ModelingSpace("2Daxi")
 mesh = fd.mesh.rectangle_mesh(5, 240, 23, 25, 0, 180)
 
@@ -86,12 +88,15 @@ print()
 _summarise(res_ipc, "IPC (this run)")
 
 # Compare against the penalty reference if it has been run.
-penalty_path = "results/tube_compressoin.fdz"  # original spelling kept as in ref script
+penalty_path = os.path.normpath(
+    os.path.join("..", "..", "03-advanced", "results", "tube_compressoin.fdz")
+)  # original spelling kept as in ref script
 if os.path.isfile(penalty_path):
     res_penalty = fd.DataSet.read(penalty_path)
     _summarise(res_penalty, "Penalty (reference)")
 else:
     print(
         f"\n(Penalty reference not found at '{penalty_path}'. Run "
-        "tube_compression.py first to populate it for comparison.)"
+        "examples/03-advanced/tube_compression.py first to populate it for "
+        "comparison.)"
     )

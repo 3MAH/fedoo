@@ -14,14 +14,6 @@ state vector and asserts that the hoop component matches the textbook
 relation :math:`F_{\\theta\\theta} = r/R` (Bonet & Wood, Box 8.3;
 Holzapfel Sec. 2.5).
 
-The assertion is what protects against regressions in
-``_comp_grad_disp``: an earlier fedoo implementation divided ``u_r``
-by ``r_current`` instead of the reference radius ``R``, giving the
-small-strain limit ``1 + u_r/r`` rather than the correct ``r/R``. At
-the inflation level used here (10-30% hoop stretch) the two formulas
-disagree by several percent, so this example fails loudly if the bug
-returns.
-
 This example also demonstrates how to extract the per-Gauss-point
 deformation gradient from ``assembly.sv``.
 """
@@ -106,18 +98,4 @@ print(f"Reference radius range: [{R0.min():.4f}, {R0.max():.4f}]")
 assert err_max < 1e-10, (
     f"F_theta-theta drifted from r/R by {err_max:.3e}; "
     "this is a regression in fedoo/weakform/stress_equilibrium._comp_grad_disp."
-)
-
-# ---------------------------------------------------------------------------
-# 5. Negative control: the *buggy* formula 1 + u_r / r_current would give a
-#    different (incorrect) F_theta-theta. Show how badly it would have
-#    differed at the stretches reached here.
-# ---------------------------------------------------------------------------
-u_r_gp = r_current - R0
-F_tt_buggy = 1.0 + u_r_gp / r_current  # the pre-fix formula
-disagreement = np.max(np.abs(F_tt_buggy - F_tt_expected))
-print(
-    "Disagreement between the (correct) r/R and the (buggy) 1 + u_r/r "
-    f"formulas at this stretch: {disagreement:.3e} "
-    f"({100 * disagreement / F_tt_expected.max():.2f}% of peak hoop stretch)."
 )
