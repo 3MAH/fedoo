@@ -1,6 +1,4 @@
 import numpy as np
-from numpy import linalg
-
 from fedoo.lib_elements.finite_difference_1d import Node, Parameter
 
 # from fedoo.lib_elements.beam import *
@@ -17,7 +15,7 @@ from fedoo.lib_elements.quadrangle import (
 
 # from fedoo.lib_elements.plate import *
 from fedoo.lib_elements.tetrahedron import Tet4, Tet10
-from fedoo.lib_elements.triangle import Tri3, Tri3Bubble, Tri6
+from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
 _dict_elements = {
@@ -27,6 +25,7 @@ _dict_elements = {
     "lin3bubble": Lin3Bubble,
     # 'cohesive1d':Cohesive1D, 'lin2interface':Lin2Interface, 'quad4interface':Quad4Interface,
     "tri3": Tri3,
+    "tri3r": Tri3r,
     "tri6": Tri6,
     "tri3bubble": Tri3Bubble,
     "quad4": Quad4,
@@ -102,6 +101,8 @@ def get_node_elm_coordinates(element, nNd_elm=None):
     elif element in ["tri3", "tri6", "tri3bubble"]:
         if nNd_elm == 3:
             return np.c_[[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        elif nNd_elm == 4:
+            return np.c_[[0.0, 1.0, 0.0, 1 / 3], [0.0, 0.0, 1.0, 1 / 3]]
         elif nNd_elm == 6:
             return np.c_[[0.0, 1.0, 0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0, 0.5, 0.5]]
     elif element in ["quad4", "quad8", "quad9"]:

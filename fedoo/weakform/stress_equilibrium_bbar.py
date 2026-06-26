@@ -46,6 +46,11 @@ class StressEquilibriumBbar(StressEquilibrium):
         the active ModelingSpace is considered.
     """
 
+    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
+        super().__init__(constitutivelaw, name, nlgeom, space)
+        self.assembly_options["elm_type", "quad4"] = "quad4sri"
+        self.assembly_options["elm_type", "hex8"] = "hex8sri"
+
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
         if assembly._nlgeom == "TL":  # add initial displacement effect
@@ -103,11 +108,15 @@ class StressEquilibriumBbar(StressEquilibrium):
 
         if not np.array_equal(initial_stress, 0):
             # this term doesnt seem to improve convergence !
-            # if assembly._nlgeom:
-            #     DiffOp = DiffOp + \
-            #         sum([0 if self._nl_strain_op_vir[i] == 0 else
-            #              self._nl_strain_op_vir[i] * initial_stress[i]
-            #              for i in range(6)])
+            if self.geometric_stiffness:
+                DiffOp = DiffOp + sum(
+                    [
+                        0
+                        if self._nl_strain_op_vir[i] == 0
+                        else self._nl_strain_op_vir[i] * initial_stress[i]
+                        for i in range(6)
+                    ]
+                )
 
             DiffOp = DiffOp + sum(
                 [
@@ -135,9 +144,6 @@ class StressEquilibriumBbar(StressEquilibrium):
             self.space.variable_alias("_DispY", "DispY")
             if self.space.ndim == 3:
                 self.space.variable_alias("_DispZ", "DispZ")
-                self.space.new_vector("_Disp", ("_DispX", "_DispY", "_DispZ"))
-            else:
-                self.space.new_vector("_Disp", ("_DispX", "_DispY"))
 
 
 class StressEquilibriumFbar(StressEquilibrium):

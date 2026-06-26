@@ -16,7 +16,7 @@ thickness = 1
 F = -100
 
 geom_elm_type = "quad4"  # choose among 'tri3', 'tri6', 'quad4', 'quad8', 'quad9'
-reduced_integration = "auto"  # choose among True, False and 'auto'. if True, use reduce integration for shear. if 'auto', depend on the order of the element
+reduced_integration = "auto"  # choose among True, False and 'auto'. if True, use SRI for linear elements. if 'auto', use PlateEquilibrium defaults
 save_results = True
 
 mat1 = fd.constitutivelaw.ElasticIsotrop(E, nu, name="Mat1")
@@ -37,16 +37,21 @@ nodes_right = mesh.node_sets["right"]
 node_right_center = nodes_right[(mesh.nodes[nodes_right, 1] ** 2).argmin()]
 
 
-if reduced_integration == "auto":
-    fd.weakform.PlateEquilibrium("PlateSection", name="WFplate")
-elif reduced_integration:
-    # selective integration: reduced integration for shear terms and full integration for flexural terms
-    fd.weakform.PlateEquilibriumSI("PlateSection", name="WFplate")
-else:
-    # full integration
-    fd.weakform.PlateEquilibriumFI("PlateSection", name="WFplate")
+fd.weakform.PlateEquilibrium("PlateSection", name="WFplate")
 
-fd.Assembly.create("WFplate", "plate", name="plate")
+if reduced_integration == "auto":
+    plate_elm_type = None
+elif reduced_integration:
+    if geom_elm_type not in ["tri3", "quad4"]:
+        raise ValueError("SRI plate elements are only available for tri3 and quad4")
+    plate_elm_type = f"p{geom_elm_type}sri"
+else:
+    plate_elm_type = f"p{geom_elm_type}"
+
+if plate_elm_type is None:
+    fd.Assembly.create("WFplate", "plate", name="plate")
+else:
+    fd.Assembly.create("WFplate", "plate", plate_elm_type, name="plate")
 
 pb = fd.problem.Linear("plate")
 

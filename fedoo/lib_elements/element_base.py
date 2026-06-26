@@ -1,14 +1,15 @@
 import numpy as np
-from numpy import linalg
 
 
 class Element:
     # Lines of xi should contains the coordinates of each point to consider
     def shape_function(self, xi):
-        pass  # à définir dans les classes héritées
+        pass  # to be defined in inherited classes
 
-    # return an array whose lines are the values of the form functions (one line per point defined in xi)
-    # def shape_function_derivative(self,xi): pass #à définir dans les classes héritées si nécessaire
+    # def shape_function_derivative(self,xi): pass # defined in inherited classes
+
+    # return an array whose lines are the values of the form functions
+    # (one line per point defined in xi)
 
     def compute_det_jacobian(self, vec_x, vec_xi):
         """
@@ -40,34 +41,55 @@ class Element:
         The determinant of the Jacobian matrix for the k-th Gauss point of element el
         is also computed and stored in self.detJ[el,k].
         """
+        # Shape function derivatives - shape = (n_gp, dim_ref, n_nodes)
         dnn_xi = self.shape_function_derivative(vec_xi)
-        self.jacobian_matrix = np.moveaxis(
-            [np.dot(dnn, vec_x) for dnn in dnn_xi], 2, 0
-        )  # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 
-        if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
-            #            self.detJ = [abs(linalg.det(J)) for J in self.jacobian_matrix]
-            self.detJ = abs(linalg.det(self.jacobian_matrix))
-        else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
-            if np.shape(self.jacobian_matrix)[-2] == 1:
-                self.detJ = linalg.norm(self.jacobian_matrix, axis=3)
-            else:  # On doit avoir JacobianMatrix.shape[-2]=2 (l'elm de ref est défini en 2D) et JacobianMatrix.shape[-1]=3  (l'espace réel est 3D)
-                J = self.jacobian_matrix
-                self.detJ = np.sqrt(
-                    abs(J[..., 0, 1] * J[..., 1, 2] - J[..., 0, 2] * J[..., 1, 1]) ** 2
-                    + abs(J[..., 0, 2] * J[..., 1, 0] - J[..., 1, 2] * J[..., 0, 0])
-                    ** 2
-                    + abs(J[..., 0, 0] * J[..., 1, 1] - J[..., 1, 0] * J[..., 0, 1])
-                    ** 2
-                )
+        # Jacobian matrix
+        # gin: Gauss, RefDim, Nodes
+        # enj: Element, Nodes, PhysDim
+        # Result: (Nel, n_gp, dim_ref, dim_phys)
+        n_nodes = dnn_xi[0].shape[-1]
+        self.jacobian_matrix = np.einsum("gin,enj->egij", dnn_xi, vec_x[:, :n_nodes])
 
-    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
+        # Determinant calculation based on dimensions
+        # Last two dims of jacobian_matrix are (dim_ref, dim_phys)
+        d_ref = self.jacobian_matrix.shape[-2]
+        d_phys = self.jacobian_matrix.shape[-1]
+
+        if d_ref == d_phys:
+            # Standard square Jacobian (e.g., 2D element in 2D space)
+            self.detJ = np.abs(np.linalg.det(self.jacobian_matrix))
+
+        elif d_ref == 1:
+            # 1D Element in 2D or 3D space (Line/Bar)
+            # detJ is simply the Euclidean norm of the tangent vector
+            self.detJ = np.linalg.norm(self.jacobian_matrix, axis=-1).squeeze(axis=-1)
+
+        elif d_ref == 2 and d_phys == 3:
+            # 2D Element in 3D space (Shell/Surface)
+            # detJ is the magnitude of the cross product of the two tangent vectors
+            # J[..., 0, :] is dX/dxi, J[..., 1, :] is dX/deta
+            cross_prod = np.cross(
+                self.jacobian_matrix[..., 0, :], self.jacobian_matrix[..., 1, :]
+            )
+            self.detJ = np.linalg.norm(cross_prod, axis=-1)
+
+        else:
+            # General case (e.g., higher dimensions or mixed manifolds)
+            # Uses the property: det(J) = sqrt(det(J * J_transpose))
+            # This is the most general way to find the "area/volume" scaling factor
+            jtj = np.einsum(
+                "egij,egik->egjk", self.jacobian_matrix, self.jacobian_matrix
+            )
+            self.detJ = np.sqrt(np.abs(np.linalg.det(jtj)))
+
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, local_frame=None):
         """
         Compute the Jacobian matrix and its inverse at Gauss points.
 
         This method assume an isoparametric element, i.e., the same shape functions are
-        used for both field and geometry interpolation.
-        The Jacobian matrix and its inverse may be computed relatively to a local frame.
+        used for both field and geometry interpolation. The Jacobian matrix and its
+        inverse may be computed relatively to a local frame.
 
         Parameters
         ----------
@@ -78,10 +100,9 @@ class Element:
             A 2D array where each row represents the local coordinates of a point
             (typically Gauss points) in the reference element. These coordinates are
             generally denoted ξ, η, and ζ.
-        rep_loc: numpy.ndarray, optional
-            nodal local frames. If given, the local frames are interpolated at Gauss
-            points and the derivative are computed with respect to the
-            local frame.
+        local_frame: numpy.ndarray, optional
+            local frames defined at elements or Gauss points. If given, the derivative
+            are computed with respect to the local frame.
 
         Notes
         -----
@@ -102,54 +123,60 @@ class Element:
         """
         if vec_xi is None:
             vec_xi = self.xi_pg
+
         self.compute_det_jacobian(vec_x, vec_xi)
 
-        if rep_loc != None:
-            rep_pg = self.interpolate_local_frame(
-                rep_loc, vec_xi
-            )  # interpolation du repère local aux points de gauss
-            self.jacobian_matrix = np.matmul(
-                self.jacobian_matrix, np.swapaxes(rep_pg, 2, 3)
-            )  # to verify - np.swapaxes(rep_pg,2,3) is equivalent to a transpose over the axis 2 and 3
-        #            for k,J in enumerate(self.jacobian_matrix): self.jacobian_matrix[k] = np.dot(J, rep_pg[k].T)
+        if local_frame is not None:
+            # local_frame = self.interpolate_local_frame(
+            #     local_frame, vec_xi
+            # )  # interpolation from node to gauss points
+            self.jacobian_matrix = self.jacobian_matrix @ local_frame.transpose(
+                0, 1, 3, 2
+            )
 
-        if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
-            self.inv_jacobian_matrix = linalg.inv(self.jacobian_matrix)
-        #            self.inv_jacobian_matrix = [linalg.inv(J) for J in self.jacobian_matrix]
-        else:  # l'espace réel est dans une dimension plus grande que l'espace de l'élément de référence
-            J = self.jacobian_matrix
-            JT = np.swapaxes(self.jacobian_matrix, 2, 3)
-            self.inv_jacobian_matrix = np.matmul(
-                JT, linalg.inv(np.matmul(J, JT))
-            )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
+        # 3. Inverse Calculation
+        J = self.jacobian_matrix
 
-    #            self.inv_jacobian_matrix = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.jacobian_matrix]
+        if J.shape[-2] == J.shape[-1]:
+            # Square matrix: (e.g., 2D element in 2D space)
+            self.inv_jacobian_matrix = np.linalg.inv(J)
+        else:
+            # Manifold case: (e.g., 2D shell in 3D space)
+            JT = J.transpose(0, 1, 3, 2)
+            # Gramian-based pseudo-inverse
+            self.inv_jacobian_matrix = JT @ np.linalg.inv(J @ JT)
+            # inverseJacobian.shape = (Nel,n_elm_gp, ndim_phy, ndim_ref_elm)
 
-    def interpolate_local_frame(
-        self, rep_loc, vec_xi=None
-    ):  # to do: vectorization #on interpole le repère local aux points de gauss
-        # renvoie la moyenne des repères locaux nodaux (mauvais à améliorer)
-        dim = len(rep_loc[0])  # dimension du repère local
-        rep_el = [
-            np.mean(np.array([rep[axe] for rep in rep_loc]), 0) for axe in range(dim)
-        ]
-        rep_el = np.array(
-            [rep_el[axe] / linalg.norm(rep_el[axe]) for axe in range(dim)]
-        )
-        return [rep_el for xi in vec_xi]
+    def interpolate_local_frame(self, local_frame_node, vec_xi=None):
+        if vec_xi is None:
+            vec_xi = self.xi_pg
 
-    def repLocFromJac(self, rep_loc=None, vec_xi=None):
-        return [np.eye(3) for xi in vec_xi]
+        # N shape: (n_gp, n_nodes)
+        N = self.shape_function(vec_xi)
 
-    def GetLocalFrame(self, vec_x, vec_xi, rep_loc=None):
+        # R_gp shape: (Nel, n_gp, 3, 3)
+        R_gp = np.einsum("gn,enij->egij", N, local_frame_node)
+
+        # To keep it a valid rotation matrix (orthonormal):
+        # We use a simplified Gram-Schmidt or SVD to "clean" the rotation
+        u, s, vh = np.linalg.svd(R_gp)
+        R_gp_ortho = u @ vh
+
+        return R_gp_ortho
+
+    def get_local_frame_from_jacobian(self, guide=None):
+        n_elements, n_elm_gp = self.inv_jacobian_matrix.shape[:2]
+        local_frames = np.zeros((n_elements, n_elm_gp, 3, 3))
+        local_frames[..., [0, 1, 2], [0, 1, 2]] = 1.0
+        return local_frames
+
+    def get_local_frame(self, vec_x, vec_xi, guide=None):
         self.compute_det_jacobian(vec_x, vec_xi)
-        return self.repLocFromJac(rep_loc, vec_xi)
+        return self.get_local_frame_from_jacobian(guide)
 
 
 class Element1D(Element):
-    def __init__(
-        self, n_elm_gp
-    ):  # Points de gauss pour les éléments de référence 1D entre 0 et 1
+    def __init__(self, n_elm_gp):
         if n_elm_gp == 0:  # if n_elm_gp == 0, we take the position of the nodes
             self.xi_pg = self.xi_nd
         else:
@@ -166,9 +193,9 @@ class Element1D(Element):
     def get_gp_elm_coordinates(self, n_elm_gp):
         if n_elm_gp == 1:
             return np.array([[0.5]])
-        elif n_elm_gp == 2:  # ordre exacte 2
+        elif n_elm_gp == 2:  # exact order 2
             return np.c_[[0.5 - np.sqrt(3) / 6, 0.5 + np.sqrt(3) / 6]]
-        elif n_elm_gp == 3:  # ordre exacte 3
+        elif n_elm_gp == 3:  # exact order 3
             return np.c_[[0.5 - np.sqrt(0.15), 0.5, 0.5 + np.sqrt(0.15)]]
         elif n_elm_gp == 4:
             a_1 = 0.5 * (1 + np.sqrt((3.0 - 2.0 * np.sqrt(6.0 / 5.0)) / 7.0))
@@ -186,9 +213,9 @@ class Element1D(Element):
     def get_gp_weight(self, n_elm_gp):
         if n_elm_gp == 1:
             return np.array([1.0])
-        elif n_elm_gp == 2:  # ordre exacte 2
+        elif n_elm_gp == 2:  # exact order 2
             return np.array([1.0 / 2, 1.0 / 2])
-        elif n_elm_gp == 3:  # ordre exacte 3
+        elif n_elm_gp == 3:  # exact order 3
             return np.array([5.0 / 18, 8.0 / 18, 5.0 / 18])
         elif n_elm_gp == 4:
             w_1 = 0.5 + 1.0 / (6.0 * np.sqrt(6.0 / 5.0))
@@ -203,18 +230,22 @@ class Element1D(Element):
 
     def compute_det_jacobian(self, vec_x, vec_xi):
         dnn_xi = self.shape_function_derivative(vec_xi)
-        # self.jacobian_matrix = np.moveaxis([np.dot(dnn,vec_x) for dnn in dnn_xi], 2,0) # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
-        self.jacobian_matrix = np.linalg.norm(
-            np.moveaxis([np.dot(dnn, vec_x) for dnn in dnn_xi], 2, 0), axis=3
-        )[..., np.newaxis]
-        #        self.jacobian_matrix = [linalg.norm(np.dot(dnn,vec_x)) for dnn in dnn_xi] #dx_dxi avec x tangeant à l'élément (repère local élémentaire)
-        self.detJ = self.jacobian_matrix.reshape(
-            len(vec_x), -1
-        )  # In 1D, the jacobian matrix is a scalar
 
-    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, localFrame=None):
-        """
-        The localFrame isn't used
+        # Compute the tangent vector (Jacobian in 1D)
+        # Result shape: (Nel, n_gp, 1, dim_phys)
+        tangent_vector = np.einsum("gin,enj->egij", dnn_xi, vec_x)
+
+        # Compute the determinant (the length of the tangent vector)
+        # self.detJ shape: (Nel, n_gp)
+        self.detJ = np.linalg.norm(tangent_vector, axis=-1).squeeze(axis=-1)
+
+        # Store the "Matrix" form if needed by other methods
+        self.jacobian_matrix = self.detJ[..., np.newaxis, np.newaxis]
+
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, local_frame=None):
+        """Compute the Jacobian matrix and its inverse at Gauss points for 1d element.
+
+        The local frame isn't used
         The jacobian is computed along the axis of the 1D element
         """
         if vec_xi is None:
@@ -222,137 +253,106 @@ class Element1D(Element):
         self.compute_det_jacobian(vec_x, vec_xi)
         self.inv_jacobian_matrix = 1.0 / self.jacobian_matrix  # dxi_dx
 
-    #        self.inv_jacobian_matrix = [np.array([1./J]) for J in self.jacobian_matrix] #dxi_dx
+    def _complete_beam_frame(self, x_vec, guide=None, guide_direction="y"):
+        """Complete the frame using vectorized cross products.
 
-    def __GetLocalFrameFromX(self, listX, elementLocalFrame):
-        lastAxis = len(listX[0].shape) - 1
-        if listX[0].shape[lastAxis] == 3:  # espace 3D
-            listY = []
-            listZ = []
-            if elementLocalFrame is None:
-                for X in listX:
-                    Z = np.c_[
-                        -X[..., 2], 0 * X[..., 0], X[..., 0]
-                    ]  #  équivalent à : Z = np.cross(X,np.array([0,1,0]))
-                    Y = np.zeros((len(X), 3))
+        x_vec: (Nel, n_gp, 3) - The normalized tangents.
+        """
+        if x_vec.shape[-1] == 2:  # 2d space
+            # guide and guide_direction are ignored.
+            # the y direction is set so that the x,y,z local frame is direct
+            y_vec = np.stack([-x_vec[..., 1], x_vec[..., 0]], axis=-1)
+            return np.stack([x_vec, y_vec], axis=-2)
 
-                    list_nnz_normZ = np.nonzero(linalg.norm(Z, axis=lastAxis))[
-                        0
-                    ]  # list of line of Z where norm Z is not zero
+        # Guide Vector
+        if guide is None:
+            guide = (
+                np.array([0.0, 1.0, 0.0])
+                if guide_direction == "y"
+                else np.array([0.0, 0.0, 1.0])
+            )
+        guide = np.array(guide)
 
-                    # filling the Z and Y values if normZ is not 0
-                    if len(list_nnz_normZ) > 0:
-                        Z[list_nnz_normZ] /= linalg.norm(
-                            Z[list_nnz_normZ], axis=lastAxis
-                        ).reshape(-1, 1)
-                        Y[list_nnz_normZ] = np.cross(
-                            Z[list_nnz_normZ], X[list_nnz_normZ]
-                        )  # équivalent à : Y = y-X[1]*X ; Y/=norm(Y)
+        # Compute Orthogonal Vector with Guide
+        # We'll compute the cross product for everything first
+        v_ortho = (
+            np.cross(x_vec, guide) if guide_direction == "y" else np.cross(guide, x_vec)
+        )
+        norm_v = np.linalg.norm(v_ortho, axis=-1, keepdims=True)
 
-                    list_zero_normZ = np.nonzero(linalg.norm(Y, axis=lastAxis) == 0)[
-                        0
-                    ]  # list of line of Z where norm Z is zero
+        # Handle Singularity (Parallel cases)
+        singular = norm_v[..., 0] < 1e-6
+        if np.any(singular):
+            # For singular elements, find the global axis least parallel to x_vec
+            # We compare absolute components of the tangent
+            # If |x| is smallest, Global X is the best fallback, etc.
+            x_abs = np.abs(x_vec[singular])
+            min_axis = np.argmin(x_abs, axis=-1)  # 0 for X, 1 for Y, 2 for Z
 
-                    # filling the Z and Y values if normZ is 0
-                    if len(list_zero_normZ) > 0:
-                        Y[list_zero_normZ] = np.c_[
-                            -X[list_zero_normZ, 1],
-                            X[list_zero_normZ, 0],
-                            0 * X[list_zero_normZ, 0],
-                        ]  # équivalent à : Y = np.cross(np.array([0,0,1]),X)
-                        Y[list_zero_normZ] /= linalg.norm(
-                            Y[list_zero_normZ], axis=lastAxis
-                        ).reshape(-1, 1)
-                        Z[list_zero_normZ] = np.cross(
-                            X[list_zero_normZ], Y[list_zero_normZ]
-                        )
+            # Pick the best fallback guide for each singular element
+            best_fallbacks = np.eye(3)[min_axis]
 
-                    listY.append(Y)
-                    listZ.append(Z)
-
+            # Recalculate for singular cases
+            if guide_direction == "y":
+                v_singular = np.cross(x_vec[singular], best_fallbacks)
             else:
-                for k, X in enumerate(listX):
-                    y = elementLocalFrame[..., k][1]
-                    z = elementLocalFrame[..., k][2]
-                    Z = np.cross(X, y)
-                    Y = np.zeros((len(X), 3))
-                    normZ = linalg.norm(Z, axis=lastAxis)
-                    list_nnz_normZ = np.nonzero(normZ)[
-                        0
-                    ]  # list of line of Z where norm Z is not zero
+                v_singular = np.cross(best_fallbacks, x_vec[singular])
 
-                    if len(list_nnz_normZ) > 0:
-                        Z[list_nnz_normZ] /= linalg.norm(
-                            Z[list_nnz_normZ], axis=lastAxis
-                        ).reshape(-1, 1)
-                        Y[list_nnz_normZ] = np.cross(
-                            Z[list_nnz_normZ], X[list_nnz_normZ]
-                        )
+            v_ortho[singular] = v_singular
+            norm_v[singular] = np.linalg.norm(v_singular, axis=-1, keepdims=True)
 
-                    list_zero_normZ = np.nonzero(Y == 0)[
-                        0
-                    ]  # list of line of Z where norm Z is zero
+        # Finalize the Orthonormal Set
+        v_ortho /= norm_v
 
-                    if len(list_zero_normZ) > 0:
-                        Y[list_zero_normZ] = np.cross(
-                            z[list_zero_normZ], X[list_zero_normZ]
-                        )
-                        Y[list_zero_normZ] /= linalg.norm(
-                            Y[list_zero_normZ], axis=lastAxis
-                        ).reshape(-1, 1)
-                        Z[list_zero_normZ] = np.cross(
-                            X[list_zero_normZ], Y[list_zero_normZ]
-                        )
-
-                    listY.append(Y)
-                    listZ.append(Z)
-
-            return np.array([[listX[k], listY[k], listZ[k]] for k in range(len(listX))])
-        else:  # espace 2D
-            # listY = [np.array([-X[:,1],X[:,0]]) for X in listX]
-            listY = [np.c_[-X[:, 1], X[:, 0]] for X in listX]
-            return np.array(
-                [[listX[k], listY[k]] for k in range(len(listX))]
-            )  # shape = (len(listX), dim:listvec, Nel, dim:coordinates)
-
-    def GetLocalFrame(self, vec_x, vec_xi, localFrame=None):  # linear local frame
-        if len(vec_x.shape) == 2:
-            vec_x = np.array([vec_x])
-        dnn_xi = self.shape_function_derivative(vec_xi)
-        listX = [np.dot(dnn, vec_x)[0] for dnn in dnn_xi]
-        if self.n_elm_gp == 2:
-            pass
-        lastAxis = len(listX[0].shape) - 1
-        listX = [X / linalg.norm(X, axis=lastAxis).reshape(-1, 1) for X in listX]
-        if localFrame is None:
-            return np.moveaxis(self.__GetLocalFrameFromX(listX, None), 2, 0)
+        if guide_direction == "y":
+            # Primary was y_guide -> v_ortho is z_vec
+            z_vec = v_ortho
+            y_vec = np.cross(z_vec, x_vec)
         else:
-            rep_pg = self.interpolate_local_frame(
-                localFrame, vec_xi
-            )  # interpolation du repère local aux points de gauss
-            return np.moveaxis(
-                self.__GetLocalFrameFromX(listX, rep_pg), 2, 0
-            )  # shape = (Nel, len(listX) = n_elm_gp, dim:listvec, dim:coordinates)
+            # Primary was z_guide -> v_ortho is y_vec
+            y_vec = v_ortho
+            z_vec = np.cross(x_vec, y_vec)
+
+        return np.stack([x_vec, y_vec, z_vec], axis=-2)
+
+    def get_local_frame(self, vec_x, vec_xi, guide=None, guide_direction="y"):
+        """Compute the orthonormal local frame for beam elements.
+
+        x_axis is Tangent to the beam (from Jacobian).
+        y/z_axis: Derived from the guide vector that approximate y or z direction.
+        """
+        # Compute Tangent (Local X-axis)
+        dnn_xi = self.shape_function_derivative(vec_xi)
+        tangent = np.einsum("gin,enj->egj", dnn_xi, vec_x)
+        x_vec = tangent / np.linalg.norm(tangent, axis=-1, keepdims=True)
+        # returned shape = (Nel, len(listX) = n_elm_gp, dim:listvec, dim:coordinates)
+        return self._complete_beam_frame(x_vec, guide, guide_direction)
 
 
-class Element1DGeom2(
-    Element1D
-):  # élément 1D à géométrie affine (interpolée par 2 noeuds)
+class Element1DGeom2(Element1D):
     def compute_det_jacobian(self, vec_x, vec_xi):
         """
-        Calcul le Jacobien aux points de gauss
-        vec_x est un tabeau dont les lignes vec_x[el] donnent les coordonnées de chaqun des noeuds de l'éléments el
-        vec_xi est un tableau dont les lignes donnent les coordonnées dans le repère de référence où on souhaite avoir le jacobien (en général pg)
+        Compute the Jacobian matrix and its determinent for 1D linear element.
+
+        Parameters
+        ----------
+        vec_x : 3D numpy.ndarray
+            3D array where vec_x[el, i] contains the coordinates of the i-th node
+            of the element `el`.
+        vec_xi : 2D numpy.ndarray
+            A 2D array where each row represents the local coordinate of a point
+            (typically Gauss points) in the reference element. As the element is 1d,
+            these local coordinate is a scalar generally denoted ξ.
         """
         x1 = vec_x[:, 0]
         x2 = vec_x[:, 1]
-        self.jacobian_matrix = linalg.norm(
+        self.jacobian_matrix = np.linalg.norm(
             x2 - x1, axis=1
-        )  # longueur de l'élément réel car la longueur de élément de référence = 1      #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
+        )  # True element length because the ref element length is 1.
+        # shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
         self.detJ = self.jacobian_matrix.reshape(-1, 1) * np.ones(
             len(vec_xi)
-        )  # detJ est constant sur l'élément
-        #        self.detJ = self.jacobian_matrix.reshape(len(vec_x),-1) #In 1D, the jacobian matrix is a scalar
+        )  # detJ is constant over the element.
 
     def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
         # rep_loc inutile ici : le repère local élémentaire est utilisé (x : tangeante à l'élément)
@@ -363,136 +363,95 @@ class Element1DGeom2(
             -1, 1, 1, 1
         )  # dxi/dx -> scalar #shape = (vec_x.shape[0] = Nel, len(vec_xi)=n_elm_gp, nb_dir_derivative, vec_x.shape[2] = dim)
 
-    #        self.derivativePG = self.inv_jacobian_matrix.reshape(-1,1,1,1) * np.array(self.shape_function_derivative_gp).reshape(1,len(vec_xi),1,-1)
-    #        self.inv_jacobian_matrix = [np.array([qq]) for xi in vec_xi] #qq est constant sur l'élément
-    #        self.derivativePG = np.array([self.inv_jacobian_matrix[k] * self.shape_function_derivative_gp[k] for k in range(len(vec_xi))])
+    def get_local_frame(self, vec_x, vec_xi, guide=None, guide_direction="y"):
+        """Compute the orthonormal local frame for beam elements.
 
-    def GetLocalFrame(self, vec_x, vec_xi, localFrame=None):  # linear local frame
-        # return Element1D.GetLocalFrame(self,vec_x, vec_xi, localFrame)
+        x_axis is Tangent to the beam (from Jacobian).
+        y/z_axis: Derived from the guide vector that approximate y or z direction.
+        """
+        # Compute Tangent (Local X-axis)
         if len(vec_x.shape) == 2:
             vec_x = np.array([vec_x])
-        listX = [
-            vec_x[..., 1, 0:3] - vec_x[..., 0, 0:3]
-        ]  # only 1 element in the list because frame doesn't change over the element (in general nbpg elements in list)
-        lastAxis = len(listX[0].shape) - 1
-        listX = [X / linalg.norm(X, axis=lastAxis).reshape(-1, 1) for X in listX]
+        tangent = vec_x[:, 1, :] - vec_x[:, 0, :]
+        x_vec = tangent / np.linalg.norm(tangent, axis=-1, keepdims=True)
 
-        if localFrame is None:
-            return np.moveaxis(self._Element1D__GetLocalFrameFromX(listX, None), 2, 0)
-        else:
-            rep_pg = self.interpolate_local_frame(
-                localFrame, vec_xi
-            )  # interpolation du repère local aux points de gauss
-            return np.moveaxis(
-                [
-                    self._Element1D__GetLocalFrameFromX(listX, rep_pg)[0]
-                    for xi in vec_xi
-                ],
-                2,
-                0,
-            )  # shape = (Nel, len(listX), dim:listvec, dim:coordinates)
+        # Expand to (Nel, 1, 3) to keep consistent with Gauss points
+        x_vec = x_vec[:, np.newaxis, :]
+
+        return self._complete_beam_frame(x_vec, guide, guide_direction)
 
 
 class Element2D(Element):
-    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, rep_loc=None):
+    def compute_jacobian_with_inverse(self, vec_x, vec_xi=None, local_frame=None):
         if vec_xi is None:
-            vec_xi == self.xi_pg
+            vec_xi = self.xi_pg
+
         self.compute_det_jacobian(vec_x, vec_xi)
 
         if self.jacobian_matrix.shape[-2] == self.jacobian_matrix.shape[-1]:
-            if rep_loc is not None:
-                rep_pg = self.interpolate_local_frame(
-                    rep_loc, vec_xi
-                )  # interpolation du repère local aux points de gauss  -> shape = (len(vec_x),len(vec_xi),dim,dim)
-                self.jacobian_matrix = np.matmul(
-                    self.jacobian_matrix, np.swapaxes(rep_pg, 2, 3)
-                )  # to verify - np.swapaxes(rep_pg,2,3) is equivalent to a transpose over the axis 2 and 3
-        #                rep_pg = self.interpolate_local_frame(rep_loc, vec_xi) #interpolation du repère local aux points de gauss
-        #                for k,J in enumerate(self.jacobian_matrix): self.jacobian_matrix[k] = np.dot(J, rep_pg[k].T)
+            # CASE: 2D Elements in 2D Space
+            if local_frame is not None:
+                # J_local = J_global @ R.T
+                self.jacobian_matrix = self.jacobian_matrix @ local_frame.transpose(
+                    0, 1, 3, 2
+                )
         else:
-            # Dimension of True space (=3) > dimension of ref element (=2)
-            # This case is for shell like models. The derivative are computed
-            # in local frame. The out of plane direction  (last dimention)
-            # is removed from local because no derivative is expected outside
-            # the plane
-            rep_pg = self.repLocFromJac(rep_loc, vec_xi)[..., :2, :]
+            # CASE: 2D Elements in 3D Space (Shells)
+            # We MUST have a local frame to project into a 2x2 matrix
+            if local_frame is None:
+                # Fallback if no frame provided: generate one from Jacobian
+                local_frame = self.get_local_frame_from_jacobian()
 
-            self.jacobian_matrix = self.jacobian_matrix @ rep_pg.swapaxes(
-                2, 3
-            )  # Jacobian matrix change of basis
+            # Slicing: [..., :2, :] picks the two in-plane basis vectors
+            # Resulting local_frame: (Nel, n_gp, 2, 3)
+            R_plane = local_frame[..., :2, :]
 
-            ### alternatively, it is possible to keep global derivative:
-            ### is there any interest?
-            # if rep_loc is None:
-            #     J = self.jacobian_matrix
-            #     JT = np.swapaxes(self.jacobian_matrix, 2, 3)
-            #     self.inv_jacobian_matrix = np.matmul(
-            #         JT, linalg.inv(np.matmul(J, JT))
-            #     )  # inverseJacobian.shape = (Nel,len(vec_xi)=n_elm_gp, dim:vec_x.shape[-1], dim:vec_xi.shape[-1])
-            #     #                self.inv_jacobian_matrix = [np.dot(J.T , linalg.inv(np.dot(J,J.T))) for J in self.jacobian_matrix]   #this line may have a high computational cost
-            #     return
+            # Project: (Nel, n_gp, 2, 3) @ (Nel, n_gp, 3, 2) -> (Nel, n_gp, 2, 2)
+            # This makes the Jacobian square and invertible!
+            self.jacobian_matrix = self.jacobian_matrix @ R_plane.transpose(0, 1, 3, 2)
 
-        self.inv_jacobian_matrix = linalg.inv(self.jacobian_matrix)
+        self.inv_jacobian_matrix = np.linalg.inv(self.jacobian_matrix)
 
-    def repLocFromJac(self, rep_loc=None, vec_xi=None):
-        # listZ=[[np.cross(J[0],J[1]) for J in Jel] for Jel in self.jacobian_matrix]
-        listZ = np.cross(self.jacobian_matrix[:, :, 0], self.jacobian_matrix[:, :, 1])
-        listZ = (
-            listZ / linalg.norm(listZ, axis=2)[..., np.newaxis]
-        )  # direction perpendiculaire au plan tangeant
-        listY = np.empty_like(listZ)  # initialize listY
+    def get_local_frame_from_jacobian(self, guide_x=None):
+        """Compute a local orthonormal frame (x, y, z) for shells.
 
-        if rep_loc is None:
-            x = np.array([1, 0, 0])
-            y = np.array([0, 1, 0])
-            listX = x - listZ[..., 0, np.newaxis] * listZ
+        listZ is the normal. listX is the projection of 'guide_x' onto the plane.
+        """
+        # Compute Normal (Z-axis)
+        # J is (Nel, n_gp, 2, 3). J[..., 0] is dX/dxi, J[..., 1] is dX/deta
+        listZ = np.cross(
+            self.jacobian_matrix[..., 0, :], self.jacobian_matrix[..., 1, :]
+        )
+        listZ /= np.linalg.norm(listZ, axis=-1, keepdims=True)
+
+        # Define the Guide Vector (Approximate X)
+        if guide_x is None:
+            # Default guide is global X
+            x_guide = np.array([1.0, 0.0, 0.0])
         else:
-            rep_pg = self.interpolate_local_frame(
-                rep_loc, vec_xi
-            )  # interpolation du repère local aux points de gauss
-            x = rep_pg[..., 0]
-            y = rep_pg[..., 1]  # to check
-            listX = x - np.dot(listZ, x)[..., np.newaxis] * listZ
+            x_guide = np.array(guide_x)
 
-        normX = linalg.norm(listX, axis=-1)
-        mask = (
-            normX > 1e-6
-        )  # mask = True if normX != 0. In this case the X vector are valid and need to be normalized
-        listX[mask] = listX[mask] / normX[mask, np.newaxis]
-        listY[mask] = np.cross(listZ[mask], listX[mask])
+        # Project Guide X onto the tangent plane: X_local = X_guide - (X_guide . Z) * Z
+        dot_z_x = np.einsum("...i,i->...", listZ, x_guide)
+        listX = x_guide - dot_z_x[..., np.newaxis] * listZ
 
-        # treat the particular X vector is perpendicular to the plane
-        mask = np.logical_not(mask)  # mask = True if normX == 0
+        # Handle Singularity (if guide_x is parallel to the normal listZ)
+        normX = np.linalg.norm(listX, axis=-1)
+        mask_singular = normX < 1e-6
 
-        if rep_loc is None:
-            listY[mask] = (
-                y - listZ[mask, 1, np.newaxis] * listZ[mask]
-            )  # projection to the plane
-        else:
-            listY[mask] = y - np.dot(listZ[mask], y)[..., np.newaxis] * listZ[mask]
+        if np.any(mask_singular):
+            # Use Global Y as a fallback guide for singular points
+            y_fallback = np.array([0.0, 1.0, 0.0])
+            dot_z_y = np.einsum("...i,i->...", listZ[mask_singular], y_fallback)
+            listX[mask_singular] = (
+                y_fallback - dot_z_y[..., np.newaxis] * listZ[mask_singular]
+            )
+            normX[mask_singular] = np.linalg.norm(listX[mask_singular], axis=-1)
 
-        listY[mask] = listY[mask] / linalg.norm(listY[mask], axis=-1)[..., np.newaxis]
-        listX[mask] = np.cross(listY[mask], listZ[mask])
+        # Finalize Orthonormal Frame
+        listX /= normX[..., np.newaxis]  # Normalize X
+        listY = np.cross(listZ, listX)  # Y = Z cross X
 
-        return np.array([listX, listY, listZ]).transpose([1, 2, 0, 3])
-
-        # for Z in listZ:
-        #     X=x-Z[0]*Z ; normX = linalg.norm(X)
-        #     if normX != 0:
-        #         listX.append(X/normX)
-        #         listY.append(np.cross(Z,listX[-1]))
-        #     else:
-        #         listY.append(y-Z[1]*Z) ; listY[-1] /= linalg.norm(listY[-1])
-        #         listX.append(np.cross(listY[-1],Z))
-
-        # for k,Z in enumerate(listZ):
-        #     x = rep_pg[k][0] ; y = rep_pg[k][1]
-        #     X=x-np.dot(x,Z)*Z ; normX = linalg.norm(X)
-        #     if normX != 0:
-        #         listX.append(X/normX)
-        #         listY.append(np.cross(Z,listX[-1]))
-        #     else:
-        #         listY.append(y-np.dot(y,Z)*Z) ; listY[-1] /= linalg.norm(listY[-1])
-        #         listX.append(np.cross(listY[k],Z))
-
-        # return np.array([[listX[k],listY[k],listZ[k]] for k in range(len(listZ))])
+        # Return shape (Nel, n_gp, 3, 3)
+        # where [..., 0, :] is X, [..., 1, :] is Y, [..., 2, :] is Z
+        return np.stack([listX, listY, listZ], axis=-2)
