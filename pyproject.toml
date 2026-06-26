@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fedoo"
-version = "0.8.0"
+version = "0.8.3"
 authors = [
     {name = "3MAH", email = 'set3mah@gmail.com'},
 ]
@@ -35,7 +35,7 @@ all = ['fedoo[solver,plot,test,ipc]']
 ipc = ['ipctk']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
-    'scikit-umfpack ; platform_machine=="arm64" or platform_machine=="aarch64"'
+    'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
     'matplotlib',

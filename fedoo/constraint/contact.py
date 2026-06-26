@@ -297,7 +297,7 @@ class Contact(AssemblyBase):
         contact_elements = []
         contact_g = []
 
-        is_axi = self.space._dimension == "2Daxi"
+        is_axi = self.space.is_axisymmetric
         if is_axi:
             contact_r = []  # radial coordinate for 2πr weighting
 

@@ -1,4 +1,5 @@
 from fedoo.core.weakform import WeakFormBase
+from fedoo.weakform._axi_utils import axi_volume_weight
 
 
 class Inertia(WeakFormBase):
@@ -36,7 +37,12 @@ class Inertia(WeakFormBase):
         op_dU = self.space.op_disp()  # displacement increment (incremental formulation)
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
 
-        return sum([a * b * self.density for (a, b) in zip(op_dU_vir, op_dU)])
+        diff_op = sum([a * b * self.density for (a, b) in zip(op_dU_vir, op_dU)])
+
+        if self.space.is_axisymmetric:
+            diff_op = diff_op * axi_volume_weight(assembly)
+
+        return diff_op
 
 
 class RotaryInertia(WeakFormBase):
@@ -61,6 +67,12 @@ class RotaryInertia(WeakFormBase):
 
     def __init__(self, rotary_inertia, name="", space=None):
         WeakFormBase.__init__(self, name, space)
+
+        if self.space.is_axisymmetric:
+            raise NotImplementedError(
+                "RotaryInertia is not defined in '2Daxi' (no rotational "
+                "degree of freedom in axisymmetric kinematics)."
+            )
 
         if self.space.ndim == 3:
             self.space.new_variable("RotX")  # torsion rotation

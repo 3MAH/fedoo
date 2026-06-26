@@ -79,6 +79,14 @@ from .stress_equilibrium_bbar import (
 )
 from .damping_stabilization import ArtificialDamping
 from .distributed_load import ExternalPressure, DistributedLoad
+from .poromechanics import (
+    PoroMechanics,
+    PoroMechanicsSimple,
+    PoroMomentum,
+    PoroMomentumSimple,
+    PoroDarcy,
+    PoroMassStorage,
+)
 
 __all__ = [
     "BeamEquilibrium",
@@ -107,4 +115,10 @@ __all__ = [
     "DistributedLoad",
     "ExternalPressure",
     "ArtificialDamping",
+    "PoroMechanics",
+    "PoroMechanicsSimple",
+    "PoroMomentum",
+    "PoroMomentumSimple",
+    "PoroDarcy",
+    "PoroMassStorage",
 ]

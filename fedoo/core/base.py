@@ -15,6 +15,7 @@ try:
     from pypardiso import spsolve
 
     USE_PYPARDISO = True
+    USE_MUMPS = False
     USE_UMFPACK = False
     USE_PETSC = False  # only for the direct mumps solver
 except ModuleNotFoundError:
@@ -22,40 +23,49 @@ except ModuleNotFoundError:
 
 if not USE_PYPARDISO:
     try:
+        import mumps
+
+        USE_MUMPS = True
+        USE_UMFPACK = False
+        USE_PETSC = False
+    except ModuleNotFoundError:
+        USE_MUMPS = False
+
+if not USE_PYPARDISO and not USE_MUMPS:
+    try:
         import petsc4py
         import sys
 
         petsc4py.init(sys.argv)
         from petsc4py import PETSc
 
-        USE_PYPARDISO = False
         USE_UMFPACK = False
         USE_PETSC = True
     except ModuleNotFoundError:
         USE_PETSC = False
 
-if not USE_PYPARDISO and not USE_PETSC:
+if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC:
     try:
         from scikits.umfpack import spsolve
 
         scipy.sparse.linalg.use_solver(assumeSortedIndicesbool=True)
-        USE_PYPARDISO = False
         USE_UMFPACK = True
-        USE_PETSC = False
     except ModuleNotFoundError:
         USE_UMFPACK = False
 
-if not USE_PYPARDISO and not USE_PETSC and not USE_UMFPACK:
+if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC and not USE_UMFPACK:
     warnings.warn(
         "WARNING: no fast direct sparse solver has been found. "
-        "Consider installing pypardiso, petsc, or scikit-umfpack to improve "
-        "computation performance"
+        "Consider installing pypardiso (Intel) or python-mumps (any platform) "
+        "to improve computation performance"
     )
 
 
 def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
         from pypardiso import spsolve
+    if config_dict["USE_MUMPS"]:
+        import mumps  # noqa: F401
     if config_dict["USE_PETSC"]:
         global PETSc
 
@@ -285,6 +295,8 @@ class ProblemBase:
         assert isinstance(name, str), "A name must be a string"
         self.__name = name
         self.__solver = ["direct"]
+        self._factor_context = None
+        self._factor_valid = False
         self.bc = ListBC(
             name=self.name + "_bc"
         )  # list containing boundary contidions associated to the problem
@@ -389,16 +401,20 @@ class ProblemBase:
             Type of solver.
             The possible choice are :
             * 'direct': direct solver. If pypardiso is installed, the
-              pypardiso solver is used. Else, if petsc is installed, the mumps
-              solver is used. If not, the function scipy.sparse.linalg.spsolve
-              is used. If sckikit-umfpack is installed, scipy will use the
-              umfpack solver which is significantly more efficient than the
-              base scipy solver.
+              pypardiso solver is used. Else, if python-mumps is installed,
+              the standalone MUMPS solver is used. Else, if petsc is installed,
+              the mumps solver from petsc is used. If not, the function
+              scipy.sparse.linalg.spsolve is used. If scikit-umfpack is
+              installed, scipy will use the umfpack solver which is
+              significantly more efficient than the base scipy solver.
             * 'cg', 'bicg', 'bicgstab','minres','gmres', 'lgmres' or 'gcrotmk'
               using the corresponding iterative method from
               scipy.sparse.linalg. For instance, 'cg' is the conjugate
               gradient based on the function scipy.sparse.linalg.cg.
             * 'pardiso': force the use of the pypardiso solver
+            * 'mumps': force the use of the standalone MUMPS solver
+              (python-mumps must be installed). This is the recommended direct
+              solver on arm64 platforms where pypardiso is not available.
             * 'direct_scipy': force the use of the direct scipy solver
               (umfpack if installed)
             * 'petsc': use the petsc methods (iterative or direct). petsc4py
@@ -461,23 +477,16 @@ class ProblemBase:
             if solver == "direct":
                 if USE_PYPARDISO:
                     solver_func = spsolve
-                    # print(
-                    #     f"Problem {self.name} : direct solver : PYPARDISO solver has been utilized"
-                    # )
+                elif USE_MUMPS:
+                    solver_func = _solver_mumps
                 elif USE_PETSC:
                     global PETSc
                     solver_func = _solver_petsc
                     kargs["solver_type"] = "preonly"
                     kargs["pc_type"] = "lu"
                     kargs["pc_factor_mat_solver_type"] = "mumps"
-                    # print(
-                    #     f"Problem {self.name} : direct solver : MUMPS solver from the PETSC lib "
-                    # )
                 else:
                     solver_func = sparse.linalg.spsolve
-                    # print(
-                    #     f"Problem {self.name} : direct solver : Scipy direct solver has been utilized : if SCIPY-UMFPACK is installed, it will be used"
-                    # )
             elif solver in [
                 "cg",
                 "bicg",
@@ -514,6 +523,13 @@ class ProblemBase:
                     raise NameError(
                         'pypardiso not installed. Use "pip install pypardiso".'
                     )
+            elif solver == "mumps":
+                if USE_MUMPS:
+                    solver_func = _solver_mumps
+                else:
+                    raise NameError(
+                        'python-mumps not installed. Use "pip install python-mumps".'
+                    )
             elif solver == "direct_scipy":
                 solver_func = sparse.linalg.spsolve
             else:
@@ -524,6 +540,12 @@ class ProblemBase:
         self.__solver = [solver, solver_func, kargs, return_info, precond]
 
     def _solve(self, A, B):
+        if self._factor_context is not None:
+            if not self._factor_valid:
+                self._factor_context.factor(A)
+                self._factor_valid = True
+            return self._factor_context.solve(B)
+
         kargs = self.__solver[2]
         if self.__solver[3]:  # return_info = True
             precond = self.__solver[4]
@@ -540,6 +562,76 @@ class ProblemBase:
             return res
         else:
             return self.__solver[1](A, B, **kargs)
+
+    def set_reuse_factorization(self, reuse: bool = True):
+        """Enable or disable factorization reuse for repeated solves.
+
+        When enabled, the system matrix is factorized on the first call to
+        :meth:`solve`, then subsequent calls reuse the factorization and only
+        perform back-substitution. This is useful when the matrix does not
+        change between solves but the right-hand side does (e.g. tangent
+        stiffness computation by perturbation, multiple load cases on a
+        linear problem).
+
+        Requires one of `pypardiso`, `python-mumps` or `petsc4py` to be
+        installed (same backend priority as ``solver="direct"``).
+
+        Parameters
+        ----------
+        reuse: bool, default=True
+            If True, enable factorization reuse. If False, disable it and
+            release the cached factorization.
+
+        Notes
+        -----
+        The factorization is automatically invalidated when :meth:`set_A` is
+        called. The user is responsible for calling
+        :meth:`invalidate_factorization` if anything else modifies the
+        reduced system matrix (e.g. Dirichlet boundary conditions affecting
+        the constraint reduction matrix).
+
+        Backend is selected automatically (pypardiso > python-mumps > petsc),
+        regardless of the solver previously set with :meth:`set_solver`. The
+        reuse path is direct LU only; if an iterative solver was set with
+        :meth:`set_solver`, it is silently bypassed while reuse is enabled.
+        Disable reuse with ``set_reuse_factorization(False)`` to restore the
+        normal solver dispatch.
+
+        Examples
+        --------
+        >>> pb.set_reuse_factorization(True)
+        >>> for B in load_cases:
+        ...     pb.set_B(B)
+        ...     pb.apply_boundary_conditions()
+        ...     pb.solve()
+        ...     # ... read result
+        >>> pb.set_reuse_factorization(False)
+        """
+        if reuse:
+            if USE_PYPARDISO:
+                self._factor_context = _PypardisoFactor()
+            elif USE_MUMPS:
+                self._factor_context = _MumpsFactor()
+            elif USE_PETSC:
+                self._factor_context = _PetscFactor()
+            else:
+                raise RuntimeError(
+                    "Factorization reuse requires pypardiso, python-mumps, "
+                    "or petsc4py. Install one of them, e.g. "
+                    '"pip install python-mumps".'
+                )
+            self._factor_valid = False
+        else:
+            self._factor_context = None
+            self._factor_valid = False
+
+    def invalidate_factorization(self):
+        """Invalidate any cached factorization.
+
+        Call this after modifying the system matrix when factorization reuse
+        is enabled. :meth:`set_A` calls it automatically.
+        """
+        self._factor_valid = False
 
     @staticmethod
     def get_all():
@@ -698,3 +790,73 @@ def _solver_petsc(
     elif isinstance(A, (sparse.csc_array, sparse.csc_matrix)):
         ksp.solveTranspose(B_petsc, res)
     return res
+
+
+def _solver_mumps(A, B, **kargs):
+    # python-mumps exposes a Context-based API only; there is no
+    # top-level spsolve. For repeated solves on the same A, use
+    # `Problem.set_reuse_factorization(True)` to keep the Context alive
+    # across calls (see _MumpsFactor).
+    import mumps
+
+    ctx = mumps.Context()
+    ctx.factor(A)
+    return ctx.solve(B)
+
+
+# =============================================================
+# Factor-reuse adapters used by ProblemBase.set_reuse_factorization
+# All expose a uniform .factor(A) / .solve(B) interface.
+# =============================================================
+class _MumpsFactor:
+    def __init__(self):
+        import mumps
+
+        self._ctx = mumps.Context()
+
+    def factor(self, A):
+        self._ctx.factor(A)
+
+    def solve(self, B):
+        return self._ctx.solve(B)
+
+
+class _PypardisoFactor:
+    def __init__(self):
+        from pypardiso import PyPardisoSolver
+
+        self._solver = PyPardisoSolver()
+        self._A = None
+
+    def factor(self, A):
+        self._A = A
+        self._solver.factorize(A)
+
+    def solve(self, B):
+        return self._solver.solve(self._A, B)
+
+
+class _PetscFactor:
+    def __init__(self):
+        global PETSc
+
+        self._A_petsc = None
+        self._ksp = PETSc.KSP()
+        self._ksp.create()
+        self._ksp.setType("preonly")
+        pc = self._ksp.getPC()
+        pc.setType("lu")
+        pc.setFactorSolverType("mumps")
+
+    def factor(self, A):
+        self._A_petsc = PETSc.Mat().createAIJWithArrays(
+            A.shape, (A.indptr, A.indices, A.data)
+        )
+        self._ksp.setOperators(self._A_petsc)
+        self._ksp.setUp()  # triggers factorization
+
+    def solve(self, B):
+        B_petsc = PETSc.Vec().createWithArray(B)
+        x = self._A_petsc.createVecLeft()
+        self._ksp.solve(B_petsc, x)
+        return x.getArray().copy()

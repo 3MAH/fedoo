@@ -92,11 +92,27 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     else:
         pb_post_tt = Problem["_perturbation"]
 
-    pb_post_tt.set_A(pb.get_A())
+    A = pb.get_A()
+    if A is None and hasattr(pb, "assembly"):
+        A = pb.assembly.get_global_matrix()
+        pb.set_A(A)
+    pb_post_tt.set_A(A)
     pb.bc.remove("_Strain")
 
     # typeBC = 'Dirichlet' #doesn't work with meshperio = False
     typeBC = "Neumann"
+
+    # Reuse factorization across perturbations: A and the constraint
+    # reduction matrix _MatCB are constant in this loop (only Neumann BCs
+    # on global E_xx/yy/.. dofs change, affecting only B). Avoids re-
+    # factorizing on each perturbation when a direct backend (pypardiso,
+    # python-mumps or petsc) is available.
+    reuse_factor = False
+    try:
+        pb_post_tt.set_reuse_factorization(True)
+        reuse_factor = True
+    except RuntimeError:
+        pass  # no direct backend available, fall back to per-iteration solves
 
     for i in range(len(BC_perturb)):
         pb_post_tt.bc.add(
@@ -184,6 +200,9 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
                     ]
                 )
             )
+
+    if reuse_factor:
+        pb_post_tt.set_reuse_factorization(False)
 
     volume = mesh.bounding_box.volume
     if typeBC == "Neumann":

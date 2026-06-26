@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation
 fd.ModelingSpace("3D")
 mesh = fd.Mesh.read("../../util/meshes/gyroid_per.vtk")
 # mesh = fd.mesh.box_mesh(2,2,2)
-assert mesh.is_periodic(tol=1e-3)
+assert mesh.is_periodic()
 
 # Material definition
 material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
@@ -35,9 +35,7 @@ pb = fd.problem.Linear(assembly)
 
 # periodic constraint in local frame
 local_frame = Rotation.from_rotvec([0, 0, np.pi / 4])
-bc_periodic = fd.constraint.PeriodicBC(
-    "small_strain", off_axis_rotation=local_frame, tol=1e-3
-)
+bc_periodic = fd.constraint.PeriodicBC("small_strain", off_axis_rotation=local_frame)
 pb.bc.add(bc_periodic)
 
 # block a node near the center to avoid rigid body motion

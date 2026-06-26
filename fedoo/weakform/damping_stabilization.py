@@ -2,6 +2,7 @@
 
 import numpy as np
 from fedoo.core.weakform import WeakFormBase
+from fedoo.weakform._axi_utils import axi_volume_weight
 
 
 class ArtificialDamping(WeakFormBase):
@@ -181,15 +182,15 @@ class ArtificialDamping(WeakFormBase):
             [a * b * (self._c_stab / dt) for (a, b) in zip(op_var_vir, op_var)]
         )
 
+        # 2*pi*r weight applied on the tangent so both the tangent
+        # contribution and the residual derived from it via operator_apply
+        # inherit it consistently.
+        if self.space.is_axisymmetric:
+            tangent_matrix = tangent_matrix * axi_volume_weight(assembly)
+
         # 4. Residual Contribution: c_stab * M* * v_pseudo
         if not np.array_equal(delta_u, 0):
             damping_force = assembly.operator_apply(tangent_matrix, delta_u)
-
-            # Axisymmetric correction
-            # if self.space is not None and getattr(self.space, "_dimension", "") == "2Daxi":
-            #     rr = assembly.sv["_R_gausspoints"]
-            #     damping_force = damping_force * ((2 * np.pi) * rr)
-
             return tangent_matrix + damping_force
 
         return tangent_matrix

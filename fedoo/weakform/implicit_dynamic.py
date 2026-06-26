@@ -81,11 +81,9 @@ class _NewmarkInertia(WeakFormBase):
         # Apply the operator to the nodal v_curr to get the damping force residual
         if not np.array_equal(residual_val, 0):
             diff_op += assembly.operator_apply(wf, residual_val.ravel())
-        if self.space._dimension == "2Daxi":
-            rr = assembly.sv["_R_gausspoints"]
-            return diff_op * ((2 * np.pi) * rr)
-        else:
-            return diff_op
+        # Axisymmetric weighting is handled by the wrapped mass weakform
+        # itself; the standard Inertia weakform already applies 2*pi*r.
+        return diff_op
 
 
 class _NewmarkStiffness(WeakFormBase):
@@ -136,9 +134,6 @@ class _NewmarkStiffness(WeakFormBase):
             damping_force_wf = self.damping_coef * assembly.operator_apply(
                 mat, v_curr.ravel()
             )
-            if self.space._dimension == "2Daxi":
-                rr = assembly.sv["_R_gausspoints"]
-                damping_force_wf = damping_force_wf * ((2 * np.pi) * rr)
             return scaled_mat + vec + damping_force_wf
 
         return scaled_mat + vec
@@ -267,6 +262,14 @@ class ImplicitDynamic2(WeakFormBase):
         space=None,
     ):
         super().__init__(name, space)
+
+        if self.space.is_axisymmetric:
+            raise NotImplementedError(
+                "ImplicitDynamic2 is not implemented in '2Daxi'. "
+                "Use the ImplicitDynamic factory (which builds an "
+                "ImplicitDynamicSum from _NewmarkStiffness + _NewmarkInertia) "
+                "instead — that path correctly applies the 2*pi*r weight."
+            )
 
         if name != "":
             stiffness_name = name + "_stiffness"
@@ -400,7 +403,7 @@ class ImplicitDynamic2(WeakFormBase):
                 initial_stress = assembly.sv["PK2"]
             else:
                 eps = self.space.op_strain()
-                if self.space._dimension == "2Daxi":
+                if self.space.is_axisymmetric:
                     raise NotImplementedError("2Daxi not implemented.")
                 #     rr = assembly.sv["_R_gausspoints"]
                 #     eps[2] = self.space.variable("DispX") * np.divide(
@@ -502,7 +505,7 @@ class ImplicitDynamic2(WeakFormBase):
                     for i in range(6)
                 ]
             )
-            # if self.space._dimension == "2Daxi":
+            # if self.space.is_axisymmetric:
             #     diff_op = diff_op * ((2 * np.pi) * rr)
 
         return diff_op

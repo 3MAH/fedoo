@@ -44,7 +44,10 @@ class PeriodicBC(BCBase):
         If dim = 1: the periodicity is assumed along the x coordinate
         If dim = 2: the periodicity is assumed along x and y coordinates
     tol : float, optional
-        Tolerance for the periodic nodes detection. The default is 1e-8.
+        Maximum accepted distance between paired nodes on opposite
+        faces. Used both to gather boundary-plane nodes and to validate
+        the KDTree pairing. Must be smaller than the mesh element size.
+        The default is 1e-8.
     name : str, optional
         Name of the created boundary condition. The default is "Periodicity".
 
@@ -75,6 +78,60 @@ class PeriodicBC(BCBase):
         bc_periodic.shear_coef = 1  # use strain tensor shear terms instead of angles
     """
 
+    # Canonical boundary-node key sets (microgen convention).
+    _KEYS_1D = ["x-", "x+"]
+    _KEYS_2D = _KEYS_1D + ["y-", "y+", "x-y-", "x+y-", "x+y+", "x-y+"]
+    _KEYS_3D = _KEYS_2D + [
+        "z-",
+        "z+",
+        "x-z-",
+        "y-z-",
+        "x+z-",
+        "x+z+",
+        "x-z+",
+        "y+z-",
+        "y+z+",
+        "y-z+",
+        "x-y-z-",
+        "x-y-z+",
+        "x-y+z-",
+        "x-y+z+",
+        "x+y-z-",
+        "x+y-z+",
+        "x+y+z-",
+        "x+y+z+",
+    ]
+    # "-" side keys that need 1D→2D reshape for non-periodic concatenation
+    _MINUS_KEYS = ["x-", "y-", "z-", "x-y-", "x-z-", "y-z-"]
+
+    # MPC constraint specifications: (plus_key, minus_key, direction_indices).
+    # Each entry generates ndim MPCs (one per displacement DOF).
+    _MPC_SPEC_1D = [
+        ("x+", "x-", (0,)),
+    ]
+    _MPC_SPEC_2D = _MPC_SPEC_1D + [
+        ("y+", "y-", (1,)),
+        ("x-y+", "x-y-", (1,)),
+        ("x+y-", "x-y-", (0,)),
+        ("x+y+", "x-y-", (0, 1)),
+    ]
+    _MPC_SPEC_3D = _MPC_SPEC_2D + [
+        ("z+", "z-", (2,)),
+        ("y+z-", "y-z-", (1,)),
+        ("y-z+", "y-z-", (2,)),
+        ("y+z+", "y-z-", (1, 2)),
+        ("x+z-", "x-z-", (0,)),
+        ("x-z+", "x-z-", (2,)),
+        ("x+z+", "x-z-", (0, 2)),
+        ("x+y-z-", "x-y-z-", (0,)),
+        ("x-y+z-", "x-y-z-", (1,)),
+        ("x-y-z+", "x-y-z-", (2,)),
+        ("x+y+z-", "x-y-z-", (0, 1)),
+        ("x-y+z+", "x-y-z-", (1, 2)),
+        ("x+y-z+", "x-y-z-", (0, 2)),
+        ("x+y+z+", "x-y-z-", (0, 1, 2)),
+    ]
+
     def __init__(
         self,
         periodicity_type: str = "small_strain",
@@ -102,6 +159,7 @@ class PeriodicBC(BCBase):
         self.tol = tol
         self.bc_type = "PeriodicBC"
         self._dic_closest_points_on_boundaries = dic_closest_points_on_boundaries
+        self.boundary_nodes = {}
         BCBase.__init__(self, name)
         self.periodicity_type = periodicity_type
 
@@ -113,49 +171,51 @@ class PeriodicBC(BCBase):
         return "\n".join(list_str)
 
     def _prepare_periodic_lists(self, mesh, tol):
+        """Identify and pair boundary node sets (faces, edges, corners).
+
+        Faces are identified and pre-paired by KDTree on perpendicular
+        coordinates. Edges and corners are then derived by set
+        intersection. After subtracting overlaps, faces and edges are
+        re-paired (KDTree for faces, argsort along the free axis for
+        edges).
+
+        Raises ``ValueError`` with a clear message if the mesh is not
+        periodic at the requested ``tol``.
         """
-        This function prepares periodic lists, having the list of node coordinates
+        from fedoo.util.test_periodicity import (
+            match_opposing_faces,
+            pair_node_sets,
+        )
 
-        :param: self : the PeriodicBC object
-
-        :warning: TO possibly modifiy, the (xmin, xmax, ymin, ymax, zmin, zmax) values are computed from the crd here
-                  It might be better to add a parameter that computes it from a BoxMesh object
-
-        :return: A dictionnary containing all the mesh listes (faces, edges, corners)
-        """
-
-        d_rve = []
+        rve_size = []
         crd = mesh.nodes
 
         xmax = np.max(crd[:, 0])
         xmin = np.min(crd[:, 0])
         ymax = np.max(crd[:, 1])
         ymin = np.min(crd[:, 1])
-        d_rve.append(xmax - xmin)
-        d_rve.append(ymax - ymin)
+        rve_size.append(xmax - xmin)
+        rve_size.append(ymax - ymin)
         if self.dim == 3:
             zmax = np.max(crd[:, 2])
             zmin = np.min(crd[:, 2])
-            d_rve.append(zmax - zmin)
+            rve_size.append(zmax - zmin)
 
-        face_Xm = np.where(np.abs(crd[:, 0] - xmin) < tol)[0]
-        face_Xp = np.where(np.abs(crd[:, 0] - xmax) < tol)[0]
+        # 1) Identify and pair raw face sets (still containing edges/corners).
+        face_Xm, face_Xp = match_opposing_faces(crd, 0, tol)
 
         if self.dim > 1:
-            face_Ym = np.where(np.abs(crd[:, 1] - ymin) < tol)[0]
-            face_Yp = np.where(np.abs(crd[:, 1] - ymax) < tol)[0]
+            face_Ym, face_Yp = match_opposing_faces(crd, 1, tol)
 
-            # extract edges/corners from the intersection of faces
+            # 2) Derive edges from face intersections (still containing corners).
             edge_XmYm = np.intersect1d(face_Xm, face_Ym, assume_unique=True)
             edge_XmYp = np.intersect1d(face_Xm, face_Yp, assume_unique=True)
             edge_XpYm = np.intersect1d(face_Xp, face_Ym, assume_unique=True)
             edge_XpYp = np.intersect1d(face_Xp, face_Yp, assume_unique=True)
 
-            if self.dim > 2:  # or dim == 3
-                face_Zm = np.where(np.abs(crd[:, 2] - zmin) < tol)[0]
-                face_Zp = np.where(np.abs(crd[:, 2] - zmax) < tol)[0]
+            if self.dim > 2:
+                face_Zm, face_Zp = match_opposing_faces(crd, 2, tol)
 
-                # extract edges/corners from the intersection of faces
                 edge_YmZm = np.intersect1d(face_Ym, face_Zm, assume_unique=True)
                 edge_YmZp = np.intersect1d(face_Ym, face_Zp, assume_unique=True)
                 edge_YpZm = np.intersect1d(face_Yp, face_Zm, assume_unique=True)
@@ -166,7 +226,7 @@ class PeriodicBC(BCBase):
                 edge_XpZm = np.intersect1d(face_Xp, face_Zm, assume_unique=True)
                 edge_XpZp = np.intersect1d(face_Xp, face_Zp, assume_unique=True)
 
-                # extract corners from the intersection of edges
+                # 3) Corners = intersections of edges.
                 corner_XmYmZm = np.intersect1d(edge_XmYm, edge_YmZm, assume_unique=True)
                 corner_XmYmZp = np.intersect1d(edge_XmYm, edge_YmZp, assume_unique=True)
                 corner_XmYpZm = np.intersect1d(edge_XmYp, edge_YpZm, assume_unique=True)
@@ -176,7 +236,6 @@ class PeriodicBC(BCBase):
                 corner_XpYpZm = np.intersect1d(edge_XpYp, edge_YpZm, assume_unique=True)
                 corner_XpYpZp = np.intersect1d(edge_XpYp, edge_YpZp, assume_unique=True)
 
-                # Remove nodes that beloing to several sets
                 all_corners = np.hstack(
                     (
                         corner_XmYmZm,
@@ -190,6 +249,7 @@ class PeriodicBC(BCBase):
                     )
                 )
 
+                # 4) Strip corners from edges.
                 edge_XmYm = np.setdiff1d(edge_XmYm, all_corners, assume_unique=True)
                 edge_XmYp = np.setdiff1d(edge_XmYp, all_corners, assume_unique=True)
                 edge_XpYm = np.setdiff1d(edge_XpYm, all_corners, assume_unique=True)
@@ -226,13 +286,24 @@ class PeriodicBC(BCBase):
             else:  # dim = 2
                 all_edges = np.hstack((edge_XmYm, edge_XmYp, edge_XpYm, edge_XpYp))
 
+            # 5) Strip edges from faces; the cleaned face arrays lose their
+            # pairing order (np.setdiff1d returns sorted unique values), so
+            # re-pair them via KDTree on the perpendicular axes.
             face_Xm = np.setdiff1d(face_Xm, all_edges, assume_unique=True)
             face_Xp = np.setdiff1d(face_Xp, all_edges, assume_unique=True)
             face_Ym = np.setdiff1d(face_Ym, all_edges, assume_unique=True)
             face_Yp = np.setdiff1d(face_Yp, all_edges, assume_unique=True)
 
-            if mesh.ndim > 2:  # if there is a z coordinate
-                # sort edges (required to assign the good pair of nodes)
+            face_Xm, face_Xp = pair_node_sets(
+                crd, face_Xm, face_Xp, [i for i in range(crd.shape[1]) if i != 0], tol
+            )
+            face_Ym, face_Yp = pair_node_sets(
+                crd, face_Ym, face_Yp, [i for i in range(crd.shape[1]) if i != 1], tol
+            )
+
+            # 6) Sort edges along their free axis. Stable in 1D so no
+            # KDTree needed; argsort suffices.
+            if mesh.ndim > 2:
                 edge_XmYm = edge_XmYm[np.argsort(crd[edge_XmYm, 2])]
                 edge_XmYp = edge_XmYp[np.argsort(crd[edge_XmYp, 2])]
                 edge_XpYm = edge_XpYm[np.argsort(crd[edge_XpYm, 2])]
@@ -241,6 +312,13 @@ class PeriodicBC(BCBase):
             if self.dim > 2:
                 face_Zm = np.setdiff1d(face_Zm, all_edges, assume_unique=True)
                 face_Zp = np.setdiff1d(face_Zp, all_edges, assume_unique=True)
+                face_Zm, face_Zp = pair_node_sets(
+                    crd,
+                    face_Zm,
+                    face_Zp,
+                    [i for i in range(crd.shape[1]) if i != 2],
+                    tol,
+                )
 
                 edge_YmZm = edge_YmZm[np.argsort(crd[edge_YmZm, 0])]
                 edge_YmZp = edge_YmZp[np.argsort(crd[edge_YmZp, 0])]
@@ -252,75 +330,45 @@ class PeriodicBC(BCBase):
                 edge_XpZm = edge_XpZm[np.argsort(crd[edge_XpZm, 1])]
                 edge_XpZp = edge_XpZp[np.argsort(crd[edge_XpZp, 1])]
 
-        # sort adjacent faces to ensure node correspondance
-        if mesh.ndim == 2:
-            face_Xm = face_Xm[np.argsort(crd[face_Xm, 1])]
-            face_Xp = face_Xp[np.argsort(crd[face_Xp, 1])]
-            if self.dim > 1:
-                face_Ym = face_Ym[np.argsort(crd[face_Ym, 0])]
-                face_Yp = face_Yp[np.argsort(crd[face_Yp, 0])]
-
-        elif mesh.ndim > 2:
-            decimal_round = int(-np.log10(tol) - 1)
-            face_Xm = face_Xm[
-                np.lexsort((crd[face_Xm, 1], crd[face_Xm, 2].round(decimal_round)))
-            ]
-            face_Xp = face_Xp[
-                np.lexsort((crd[face_Xp, 1], crd[face_Xp, 2].round(decimal_round)))
-            ]
-            if self.dim > 1:
-                face_Ym = face_Ym[
-                    np.lexsort((crd[face_Ym, 0], crd[face_Ym, 2].round(decimal_round)))
-                ]
-                face_Yp = face_Yp[
-                    np.lexsort((crd[face_Yp, 0], crd[face_Yp, 2].round(decimal_round)))
-                ]
-            if self.dim > 2:
-                face_Zm = face_Zm[
-                    np.lexsort((crd[face_Zm, 0], crd[face_Zm, 1].round(decimal_round)))
-                ]
-                face_Zp = face_Zp[
-                    np.lexsort((crd[face_Zp, 0], crd[face_Zp, 1].round(decimal_round)))
-                ]
-
-        # save the computated set of nodes as class attributes
-        self.face_Xm = face_Xm
-        self.face_Xp = face_Xp
+        # save the computed sets of nodes using microgen-style keys
+        bn = self.boundary_nodes
+        bn["x-"] = face_Xm
+        bn["x+"] = face_Xp
 
         if self.dim > 1:
-            self.face_Ym = face_Ym
-            self.face_Yp = face_Yp
+            bn["y-"] = face_Ym
+            bn["y+"] = face_Yp
 
-            self.edge_XmYm = edge_XmYm
-            self.edge_XpYm = edge_XpYm
-            self.edge_XpYp = edge_XpYp
-            self.edge_XmYp = edge_XmYp
+            bn["x-y-"] = edge_XmYm
+            bn["x+y-"] = edge_XpYm
+            bn["x+y+"] = edge_XpYp
+            bn["x-y+"] = edge_XmYp
 
         if self.dim > 2:
-            self.face_Zm = face_Zm
-            self.face_Zp = face_Zp
+            bn["z-"] = face_Zm
+            bn["z+"] = face_Zp
 
-            self.edge_XmZm = edge_XmZm
-            self.edge_YmZm = edge_YmZm
-            self.edge_XpZm = edge_XpZm
-            self.edge_XpZp = edge_XpZp
+            bn["x-z-"] = edge_XmZm
+            bn["y-z-"] = edge_YmZm
+            bn["x+z-"] = edge_XpZm
+            bn["x+z+"] = edge_XpZp
 
-            self.edge_XmZp = edge_XmZp
-            self.edge_YpZm = edge_YpZm
-            self.edge_YpZp = edge_YpZp
-            self.edge_YmZp = edge_YmZp
+            bn["x-z+"] = edge_XmZp
+            bn["y+z-"] = edge_YpZm
+            bn["y+z+"] = edge_YpZp
+            bn["y-z+"] = edge_YmZp
 
-            self.corner_XmYmZm = corner_XmYmZm
-            self.corner_XmYmZp = corner_XmYmZp
-            self.corner_XmYpZm = corner_XmYpZm
-            self.corner_XmYpZp = corner_XmYpZp
+            bn["x-y-z-"] = corner_XmYmZm
+            bn["x-y-z+"] = corner_XmYmZp
+            bn["x-y+z-"] = corner_XmYpZm
+            bn["x-y+z+"] = corner_XmYpZp
 
-            self.corner_XpYmZm = corner_XpYmZm
-            self.corner_XpYmZp = corner_XpYmZp
-            self.corner_XpYpZm = corner_XpYpZm
-            self.corner_XpYpZp = corner_XpYpZp
+            bn["x+y-z-"] = corner_XpYmZm
+            bn["x+y-z+"] = corner_XpYmZp
+            bn["x+y+z-"] = corner_XpYpZm
+            bn["x+y+z+"] = corner_XpYpZp
 
-        self.d_rve = d_rve
+        self.rve_size = rve_size
 
     def _list_MPC_rotation(self):
         """
@@ -909,931 +957,91 @@ class PeriodicBC(BCBase):
             )
             return res
 
-    def _list_MPC_periodic(self):
-        """
-        This function defines the list of MPC constraints for periodic homogenization,
-        assuming a periodic mesh
-
-        :param: self : the PeriodicBC object
-
-        :warning: TO possibly modifiy, the (xmin, xmax, ymin, ymax, zmin, zmax) values are computed from the crd here
-                  It might be better to add a parameter that computes it from a BoxMesh object
-
-        :return: A dictionnary containing all the mesh liste (faces, edges, corners)
-        """
-
-        node_cd = self.node_cd
-        var_cd = self.var_cd
-
+    def _build_D_matrix(self):
+        """Build the displacement-gradient factor matrix D[dof, direction]."""
+        ndim = self.dim
+        d = np.array(self.rve_size[:ndim])
         sc = self.shear_coef
+        D = -sc * np.tile(d, (ndim, 1))
+        np.fill_diagonal(D, -d)
+        return D
 
-        dx = self.d_rve[0]
-        face_Xm = self.face_Xm
-        face_Xp = self.face_Xp
+    def _emit_mpc_group(self, res, plus_key, minus_key, dirs):
+        """Emit ndim MPCs for one boundary group.
 
-        if self.dim > 1:
-            dy = self.d_rve[1]
+        Auto-detects the data format: plain 1D arrays (periodic mesh or
+        corners) use direct MPC calls; ``(indices_2d, distances_2d)`` tuples
+        (non-periodic faces/edges) use distance-weighted interpolation.
+        """
+        bn = self._mpc_bn
+        D, node_cd, var_cd = self._mpc_D, self.node_cd, self.var_cd
+        list_disp, ndim = self._mpc_list_disp, self._mpc_ndim
 
-            face_Ym = self.face_Ym
-            face_Yp = self.face_Yp
+        plus_data = bn[plus_key]
+        m = bn[minus_key]
 
-            edge_XmYm = self.edge_XmYm
-            edge_XpYm = self.edge_XpYm
-            edge_XpYp = self.edge_XpYp
-            edge_XmYp = self.edge_XmYp
+        if isinstance(plus_data, tuple):
+            # Non-periodic face/edge: distance-weighted interpolation
+            plus_idx, plus_dist = plus_data
+            weights = self._distance_weights(np.asarray(plus_dist))
+            k = weights.shape[1]
+            for i in range(ndim):
+                ns = np.concatenate(
+                    [plus_idx, m]
+                    + [np.full_like(m, node_cd[i][d], dtype=object) for d in dirs],
+                    axis=1,
+                )
+                vs = [list_disp[i]] * k + [list_disp[i]] + [var_cd[i][d] for d in dirs]
+                fs = np.concatenate(
+                    [weights, np.full_like(m, -1)]
+                    + [np.full_like(m, D[i, d], dtype=float) for d in dirs],
+                    axis=1,
+                )
+                res.append(self._mpc_from_2d(ns, vs, fs))
+        else:
+            # Periodic mesh or corner: direct MPC
+            p = plus_data
+            for i in range(ndim):
+                ns = [p, m] + [np.full_like(p, node_cd[i][d]) for d in dirs]
+                vs = [list_disp[i], list_disp[i]] + [var_cd[i][d] for d in dirs]
+                fs = [np.full_like(p, 1), np.full_like(m, -1)] + [
+                    np.full_like(p, D[i, d], dtype=float) for d in dirs
+                ]
+                res.append(MPC(ns, vs, fs))
 
-        if self.dim > 2:
-            dz = self.d_rve[2]
-
-            face_Zm = self.face_Zm
-            face_Zp = self.face_Zp
-
-            edge_XmZm = self.edge_XmZm
-            edge_YmZm = self.edge_YmZm
-            edge_XpZm = self.edge_XpZm
-            edge_XpZp = self.edge_XpZp
-            edge_XmZp = self.edge_XmZp
-            edge_YpZm = self.edge_YpZm
-            edge_YpZp = self.edge_YpZp
-            edge_YmZp = self.edge_YmZp
-
-            corner_XmYmZm = self.corner_XmYmZm
-            corner_XmYmZp = self.corner_XmYmZp
-            corner_XmYpZm = self.corner_XmYpZm
-            corner_XmYpZp = self.corner_XmYpZp
-            corner_XpYmZm = self.corner_XpYmZm
-            corner_XpYmZp = self.corner_XpYmZp
-            corner_XpYpZm = self.corner_XpYpZm
-            corner_XpYpZp = self.corner_XpYpZp
+    def _list_MPC_from_spec(self, bn, spec):
+        """Build MPC constraints from a spec table and boundary node dict."""
+        ndim = self.dim
+        self._mpc_bn = bn
+        self._mpc_D = self._build_D_matrix()
+        self._mpc_list_disp = ["DispX", "DispY", "DispZ"][:ndim]
+        self._mpc_ndim = ndim
 
         res = ListBC()
-        # face_Xm/Xp faces (DispX)
-        res.append(
-            MPC(
-                [face_Xp, face_Xm, np.full_like(face_Xp, node_cd[0][0])],
-                ["DispX", "DispX", var_cd[0][0]],
-                [
-                    np.full_like(face_Xp, 1),
-                    np.full_like(face_Xm, -1),
-                    np.full_like(face_Xp, -dx, dtype=float),
-                ],
-            )
-        )
-
-        if self.dim > 1:
-            # face_Xm/face_Xp faces (DispY)
-            res.append(
-                MPC(
-                    [face_Xp, face_Xm, np.full_like(face_Xp, node_cd[1][0])],
-                    ["DispY", "DispY", var_cd[1][0]],
-                    [
-                        np.full_like(face_Xp, 1),
-                        np.full_like(face_Xm, -1),
-                        np.full_like(face_Xp, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-
-            # face_Yp/face_Ym faces (DispX and DispY)
-            res.append(
-                MPC(
-                    [face_Yp, face_Ym, np.full_like(face_Yp, node_cd[0][1])],
-                    ["DispX", "DispX", var_cd[0][1]],
-                    [
-                        np.full_like(face_Yp, 1),
-                        np.full_like(face_Ym, -1),
-                        np.full_like(face_Yp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [face_Yp, face_Ym, np.full_like(face_Yp, node_cd[1][1])],
-                    ["DispY", "DispY", var_cd[1][1]],
-                    [
-                        np.full_like(face_Yp, 1),
-                        np.full_like(face_Ym, -1),
-                        np.full_like(face_Yp, -dy, dtype=float),
-                    ],
-                )
-            )
-
-            # elimination of DOF from edge Xm/Yp -> edge Xm/Ym (DispX, DispY)
-            res.append(
-                MPC(
-                    [edge_XmYp, edge_XmYm, np.full_like(edge_XmYp, node_cd[0][1])],
-                    ["DispX", "DispX", var_cd[0][1]],
-                    [
-                        np.full_like(edge_XmYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XmYp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XmYp, edge_XmYm, np.full_like(edge_XmYp, node_cd[1][1])],
-                    ["DispY", "DispY", var_cd[1][1]],
-                    [
-                        np.full_like(edge_XmYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XmYp, -dy, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge face_Xp/Ym -> edge Xm/Ym (DispX, DispY)
-            res.append(
-                MPC(
-                    [edge_XpYm, edge_XmYm, np.full_like(edge_XmYp, node_cd[0][0])],
-                    ["DispX", "DispX", var_cd[0][0]],
-                    [
-                        np.full_like(edge_XpYm, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYm, -dx, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XpYm, edge_XmYm, np.full_like(edge_XmYp, node_cd[1][0])],
-                    ["DispY", "DispY", var_cd[1][0]],
-                    [
-                        np.full_like(edge_XpYm, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Xp/Yp -> edge Xm/Ym (DispX, DispY)
-            res.append(
-                MPC(
-                    [
-                        edge_XpYp,
-                        edge_XmYm,
-                        np.full_like(edge_XpYp, node_cd[0][0]),
-                        np.full_like(edge_XpYp, node_cd[0][1]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0], var_cd[0][1]],
-                    [
-                        np.full_like(edge_XpYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYp, -dx, dtype=float),
-                        np.full_like(edge_XpYp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        edge_XpYp,
-                        edge_XmYm,
-                        np.full_like(edge_XpYp, node_cd[1][0]),
-                        np.full_like(edge_XpYp, node_cd[1][1]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0], var_cd[1][1]],
-                    [
-                        np.full_like(edge_XpYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYp, -sc * dx, dtype=float),
-                        np.full_like(edge_XpYp, -dy, dtype=float),
-                    ],
-                )
-            )
-
-        if self.dim > 2:
-            # DispZ for Xm/Xp faces
-            res.append(
-                MPC(
-                    [face_Xp, face_Xm, np.full_like(face_Xp, node_cd[2][0])],
-                    ["DispZ", "DispZ", var_cd[2][0]],
-                    [
-                        np.full_like(face_Xp, 1),
-                        np.full_like(face_Xm, -1),
-                        np.full_like(face_Xp, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            # DispZ for Yp/Ym faces
-            res.append(
-                MPC(
-                    [face_Yp, face_Ym, np.full_like(face_Yp, node_cd[2][1])],
-                    ["DispZ", "DispZ", var_cd[2][1]],
-                    [
-                        np.full_like(face_Yp, 1),
-                        np.full_like(face_Ym, -1),
-                        np.full_like(face_Yp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-
-            # elimination of DOF from edge Xm/Yp -> edge Xm/Ym (DispZ)
-            res.append(
-                MPC(
-                    [edge_XmYp, edge_XmYm, np.full_like(edge_XmYp, node_cd[2][1])],
-                    ["DispZ", "DispZ", var_cd[2][1]],
-                    [
-                        np.full_like(edge_XmYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XmYp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Xp/Ym -> edge Xm/Ym (DispZ)
-            res.append(
-                MPC(
-                    [edge_XpYm, edge_XmYm, np.full_like(edge_XmYp, node_cd[2][0])],
-                    ["DispZ", "DispZ", var_cd[2][0]],
-                    [
-                        np.full_like(edge_XpYm, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Xp/Yp -> edge Xm/Ym (DispZ)
-            res.append(
-                MPC(
-                    [
-                        edge_XpYp,
-                        edge_XmYm,
-                        np.full_like(edge_XpYp, node_cd[2][0]),
-                        np.full_like(edge_XpYp, node_cd[2][1]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0], var_cd[2][1]],
-                    [
-                        np.full_like(edge_XpYp, 1),
-                        np.full_like(edge_XmYm, -1),
-                        np.full_like(edge_XpYp, -sc * dx, dtype=float),
-                        np.full_like(edge_XpYp, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-
-            # Zp/Zm faces
-            res.append(
-                MPC(
-                    [face_Zp, face_Zm, np.full_like(face_Zp, node_cd[0][2])],
-                    ["DispX", "DispX", var_cd[0][2]],
-                    [
-                        np.full_like(face_Zp, 1),
-                        np.full_like(face_Zm, -1),
-                        np.full_like(face_Zp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [face_Zp, face_Zm, np.full_like(face_Zp, node_cd[1][2])],
-                    ["DispY", "DispY", var_cd[1][2]],
-                    [
-                        np.full_like(face_Zp, 1),
-                        np.full_like(face_Zm, -1),
-                        np.full_like(face_Zp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [face_Zp, face_Zm, np.full_like(face_Zp, node_cd[2][2])],
-                    ["DispZ", "DispZ", var_cd[2][2]],
-                    [
-                        np.full_like(face_Zp, 1),
-                        np.full_like(face_Zm, -1),
-                        np.full_like(face_Zp, -dz, dtype=float),
-                    ],
-                )
-            )
-
-            # elimination of DOF from edge Yp/Zm -> edge Ym/Zm
-            res.append(
-                MPC(
-                    [edge_YpZm, edge_YmZm, np.full_like(edge_YpZm, node_cd[0][1])],
-                    ["DispX", "DispX", var_cd[0][1]],
-                    [
-                        np.full_like(edge_YpZm, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_YpZm, edge_YmZm, np.full_like(edge_YpZm, node_cd[1][1])],
-                    ["DispY", "DispY", var_cd[1][1]],
-                    [
-                        np.full_like(edge_YpZm, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZm, -dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_YpZm, edge_YmZm, np.full_like(edge_YpZm, node_cd[2][1])],
-                    ["DispZ", "DispZ", var_cd[2][1]],
-                    [
-                        np.full_like(edge_YpZm, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Ym/Zp -> edge Ym/Zm
-            res.append(
-                MPC(
-                    [edge_YmZp, edge_YmZm, np.full_like(edge_YmZp, node_cd[0][2])],
-                    ["DispX", "DispX", var_cd[0][2]],
-                    [
-                        np.full_like(edge_YmZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_YmZp, edge_YmZm, np.full_like(edge_YmZp, node_cd[1][2])],
-                    ["DispY", "DispY", var_cd[1][2]],
-                    [
-                        np.full_like(edge_YmZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_YmZp, edge_YmZm, np.full_like(edge_YmZp, node_cd[2][2])],
-                    ["DispZ", "DispZ", var_cd[2][2]],
-                    [
-                        np.full_like(edge_YmZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YmZp, -dz, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Yp/Zp -> edge Ym/Zm
-            res.append(
-                MPC(
-                    [
-                        edge_YpZp,
-                        edge_YmZm,
-                        np.full_like(edge_YpZp, node_cd[0][1]),
-                        np.full_like(edge_YpZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][1], var_cd[0][2]],
-                    [
-                        np.full_like(edge_YpZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZp, -sc * dy, dtype=float),
-                        np.full_like(edge_YpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        edge_YpZp,
-                        edge_YmZm,
-                        np.full_like(edge_YpZp, node_cd[1][1]),
-                        np.full_like(edge_YpZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][1], var_cd[1][2]],
-                    [
-                        np.full_like(edge_YpZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZp, -dy, dtype=float),
-                        np.full_like(edge_YpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        edge_YpZp,
-                        edge_YmZm,
-                        np.full_like(edge_YpZp, node_cd[2][1]),
-                        np.full_like(edge_YpZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][1], var_cd[2][2]],
-                    [
-                        np.full_like(edge_YpZp, 1),
-                        np.full_like(edge_YmZm, -1),
-                        np.full_like(edge_YpZp, -sc * dy, dtype=float),
-                        np.full_like(edge_YpZp, -dz, dtype=float),
-                    ],
-                )
-            )
-
-            # elimination of DOF from edge Xp/Zm -> edge Xm/Zm
-            res.append(
-                MPC(
-                    [edge_XpZm, edge_XmZm, np.full_like(edge_XmZm, node_cd[0][0])],
-                    ["DispX", "DispX", var_cd[0][0]],
-                    [
-                        np.full_like(edge_XpZm, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -dx, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XpZm, edge_XmZm, np.full_like(edge_XmZm, node_cd[1][0])],
-                    ["DispY", "DispY", var_cd[1][0]],
-                    [
-                        np.full_like(edge_XpZm, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XpZm, edge_XmZm, np.full_like(edge_XmZm, node_cd[2][0])],
-                    ["DispZ", "DispZ", var_cd[2][0]],
-                    [
-                        np.full_like(edge_XpZm, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Xm/Zp -> edge Xm/Zm
-            res.append(
-                MPC(
-                    [edge_XmZp, edge_XmZm, np.full_like(edge_XmZm, node_cd[0][2])],
-                    ["DispX", "DispX", var_cd[0][2]],
-                    [
-                        np.full_like(edge_XmZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XmZp, edge_XmZm, np.full_like(edge_XmZm, node_cd[1][2])],
-                    ["DispY", "DispY", var_cd[1][2]],
-                    [
-                        np.full_like(edge_XmZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [edge_XmZp, edge_XmZm, np.full_like(edge_XmZm, node_cd[2][2])],
-                    ["DispZ", "DispZ", var_cd[2][2]],
-                    [
-                        np.full_like(edge_XmZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZm, -dz, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from edge Xp/Zp -> edge Xm/Zm
-            res.append(
-                MPC(
-                    [
-                        edge_XpZp,
-                        edge_XmZm,
-                        np.full_like(edge_XpZp, node_cd[0][0]),
-                        np.full_like(edge_XpZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0], var_cd[0][2]],
-                    [
-                        np.full_like(edge_XpZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZp, -dx, dtype=float),
-                        np.full_like(edge_XpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        edge_XpZp,
-                        edge_XmZm,
-                        np.full_like(edge_XpZp, node_cd[1][0]),
-                        np.full_like(edge_XpZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0], var_cd[1][2]],
-                    [
-                        np.full_like(edge_XpZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZp, -sc * dx, dtype=float),
-                        np.full_like(edge_XpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        edge_XpZp,
-                        edge_XmZm,
-                        np.full_like(edge_XpZp, node_cd[2][0]),
-                        np.full_like(edge_XpZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0], var_cd[2][2]],
-                    [
-                        np.full_like(edge_XpZp, 1),
-                        np.full_like(edge_XmZm, -1),
-                        np.full_like(edge_XpZp, -sc * dx, dtype=float),
-                        np.full_like(edge_XpZp, -dz, dtype=float),
-                    ],
-                )
-            )
-
-            # #### CORNER ####
-            # elimination of DOF from corner Xp/Ym/Zm (XpYmZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZm, node_cd[0][0]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0]],
-                    [
-                        np.full_like(corner_XpYmZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZm, -dx, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZm, node_cd[1][0]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0]],
-                    [
-                        np.full_like(corner_XpYmZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZm, node_cd[2][0]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0]],
-                    [
-                        np.full_like(corner_XpYmZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZm, -sc * dx, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Yp/Zm (XmYpZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZm, node_cd[0][1]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][1]],
-                    [
-                        np.full_like(corner_XmYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZm, node_cd[1][1]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][1]],
-                    [
-                        np.full_like(corner_XmYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZm, -dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZm, node_cd[2][1]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][1]],
-                    [
-                        np.full_like(corner_XmYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Ym/Zp (XmYmZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYmZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][2]],
-                    [
-                        np.full_like(corner_XmYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYmZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][2]],
-                    [
-                        np.full_like(corner_XmYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYmZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][2]],
-                    [
-                        np.full_like(corner_XmYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYmZp, -dz, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xp/Yp/Zm (XpYpZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZm, node_cd[0][0]),
-                        np.full_like(corner_XpYpZm, node_cd[0][1]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0], var_cd[0][1]],
-                    [
-                        np.full_like(corner_XpYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZm, -dx, dtype=float),
-                        np.full_like(corner_XpYpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZm, node_cd[1][0]),
-                        np.full_like(corner_XpYpZm, node_cd[1][1]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0], var_cd[1][1]],
-                    [
-                        np.full_like(corner_XpYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZm, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYpZm, -dy, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZm, node_cd[2][0]),
-                        np.full_like(corner_XpYpZm, node_cd[2][1]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0], var_cd[2][1]],
-                    [
-                        np.full_like(corner_XpYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZm, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYpZm, -sc * dy, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Yp/Zp (XmYpZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZp, node_cd[0][1]),
-                        np.full_like(corner_XmYpZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][1], var_cd[0][2]],
-                    [
-                        np.full_like(corner_XmYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZp, -sc * dy, dtype=float),
-                        np.full_like(corner_XmYpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZp, node_cd[1][1]),
-                        np.full_like(corner_XmYpZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][1], var_cd[1][2]],
-                    [
-                        np.full_like(corner_XmYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZp, -dy, dtype=float),
-                        np.full_like(corner_XmYpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZp, node_cd[2][1]),
-                        np.full_like(corner_XmYpZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][1], var_cd[2][2]],
-                    [
-                        np.full_like(corner_XmYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZp, -sc * dy, dtype=float),
-                        np.full_like(corner_XmYpZp, -dz, dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xp/Ym/Zp (XpYmZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZp, node_cd[0][0]),
-                        np.full_like(corner_XpYmZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0], var_cd[0][2]],
-                    [
-                        np.full_like(corner_XpYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZp, -dx, dtype=float),
-                        np.full_like(corner_XpYmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZp, node_cd[1][0]),
-                        np.full_like(corner_XpYmZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0], var_cd[1][2]],
-                    [
-                        np.full_like(corner_XpYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZp, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYmZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZp, node_cd[2][0]),
-                        np.full_like(corner_XpYmZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0], var_cd[2][2]],
-                    [
-                        np.full_like(corner_XpYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZp, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYmZp, -dz, dtype=float),
-                    ],
-                )
-            )
-
-            # elimination of DOF from corner Xp/Yp/Zp (XpYpZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZp, node_cd[0][0]),
-                        np.full_like(corner_XpYpZp, node_cd[0][1]),
-                        np.full_like(corner_XpYpZp, node_cd[0][2]),
-                    ],
-                    ["DispX", "DispX", var_cd[0][0], var_cd[0][1], var_cd[0][2]],
-                    [
-                        np.full_like(corner_XpYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZp, -dx, dtype=float),
-                        np.full_like(corner_XpYpZp, -sc * dy, dtype=float),
-                        np.full_like(corner_XpYpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZp, node_cd[1][0]),
-                        np.full_like(corner_XpYpZp, node_cd[1][1]),
-                        np.full_like(corner_XpYpZp, node_cd[1][2]),
-                    ],
-                    ["DispY", "DispY", var_cd[1][0], var_cd[1][1], var_cd[1][2]],
-                    [
-                        np.full_like(corner_XpYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZp, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYpZp, -dy, dtype=float),
-                        np.full_like(corner_XpYpZp, -sc * dz, dtype=float),
-                    ],
-                )
-            )
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZp, node_cd[2][0]),
-                        np.full_like(corner_XpYpZp, node_cd[2][1]),
-                        np.full_like(corner_XpYpZp, node_cd[2][2]),
-                    ],
-                    ["DispZ", "DispZ", var_cd[2][0], var_cd[2][1], var_cd[2][2]],
-                    [
-                        np.full_like(corner_XpYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZp, -sc * dx, dtype=float),
-                        np.full_like(corner_XpYpZp, -sc * dy, dtype=float),
-                        np.full_like(corner_XpYpZp, -dz, dtype=float),
-                    ],
-                )
-            )
-
+        for plus_key, minus_key, dirs in spec:
+            self._emit_mpc_group(res, plus_key, minus_key, dirs)
         return res
 
-    def _construct_faces_edges_corners_from_dic_non_periodic_node_distance(
-        self, dic_closest_points_on_boundaries, d_rve
-    ):
-        self.face_Xm = dic_closest_points_on_boundaries["face_Xm"]
-        self.face_Ym = dic_closest_points_on_boundaries["face_Ym"]
-        self.face_Zm = dic_closest_points_on_boundaries["face_Zm"]
-        self.face_Xp = dic_closest_points_on_boundaries["face_Xp"]
-        self.face_Yp = dic_closest_points_on_boundaries["face_Yp"]
-        self.face_Zp = dic_closest_points_on_boundaries["face_Zp"]
-        self.edge_XmYm = dic_closest_points_on_boundaries["edge_XmYm"]
-        self.edge_XmZm = dic_closest_points_on_boundaries["edge_XmZm"]
-        self.edge_YmZm = dic_closest_points_on_boundaries["edge_YmZm"]
-        self.edge_XpYm = dic_closest_points_on_boundaries["edge_XpYm"]
-        self.edge_XpYp = dic_closest_points_on_boundaries["edge_XpYp"]
-        self.edge_XmYp = dic_closest_points_on_boundaries["edge_XmYp"]
-        self.edge_XpZm = dic_closest_points_on_boundaries["edge_XpZm"]
-        self.edge_XpZp = dic_closest_points_on_boundaries["edge_XpZp"]
-        self.edge_XmZp = dic_closest_points_on_boundaries["edge_XmZp"]
-        self.edge_YpZm = dic_closest_points_on_boundaries["edge_YpZm"]
-        self.edge_YpZp = dic_closest_points_on_boundaries["edge_YpZp"]
-        self.edge_YmZp = dic_closest_points_on_boundaries["edge_YmZp"]
-        self.corner_XmYmZm = dic_closest_points_on_boundaries["corner_XmYmZm"]
-        self.corner_XmYmZp = dic_closest_points_on_boundaries["corner_XmYmZp"]
-        self.corner_XmYpZm = dic_closest_points_on_boundaries["corner_XmYpZm"]
-        self.corner_XmYpZp = dic_closest_points_on_boundaries["corner_XmYpZp"]
-        self.corner_XpYmZm = dic_closest_points_on_boundaries["corner_XpYmZm"]
-        self.corner_XpYmZp = dic_closest_points_on_boundaries["corner_XpYmZp"]
-        self.corner_XpYpZm = dic_closest_points_on_boundaries["corner_XpYpZm"]
-        self.corner_XpYpZp = dic_closest_points_on_boundaries["corner_XpYpZp"]
+    def _list_MPC_periodic(self):
+        """Build MPC constraints for periodic homogenization (periodic mesh)."""
+        spec = [self._MPC_SPEC_1D, self._MPC_SPEC_2D, self._MPC_SPEC_3D][self.dim - 1]
+        return self._list_MPC_from_spec(self.boundary_nodes, spec)
 
-        self.d_rve = d_rve
+    def _construct_faces_edges_corners_from_dic_non_periodic_node_distance(
+        self, dic_closest_points_on_boundaries, rve_size
+    ):
+        """Populate boundary_nodes from a microgen-style dictionary.
+
+        Expected keys use the microgen convention: ``"x-"``, ``"x+"``,
+        ``"x+y-"``, ``"x-y-z+"``, etc.
+        """
+        bn = self.boundary_nodes
+        for key in self._KEYS_3D:
+            bn[key] = dic_closest_points_on_boundaries[key]
+
+        if rve_size is None:
+            rve_size = dic_closest_points_on_boundaries.get("rve_size")
+        self.rve_size = rve_size
 
     @staticmethod
     def _mpc_from_2d(node_sets_2d, variables, factors_2d):
@@ -1865,566 +1073,20 @@ class PeriodicBC(BCBase):
         return weights
 
     def _list_MPC_non_periodic_node_distance(self):
-        node_cd = self.node_cd
-        var_cd = self.var_cd
+        """Build MPC constraints for non-periodic homogenization (distance-weighted)."""
+        # Local copy: reshape 1D "-" side arrays to 2D columns for axis=1
+        # concatenation with the 2D "+" side arrays from closest_points.
+        bn = dict(self.boundary_nodes)
+        for key in self._MINUS_KEYS:
+            arr = np.asarray(bn[key])
+            if arr.ndim == 1:
+                bn[key] = arr.reshape(-1, 1)
 
-        dx = self.d_rve[0]
-        dy = self.d_rve[1]
-        dz = self.d_rve[2]
+        return self._list_MPC_from_spec(bn, self._MPC_SPEC_3D)
 
-        sc = self.shear_coef
-
-        face_Xm = self.face_Xm
-        face_Ym = self.face_Ym
-        face_Zm = self.face_Zm
-        face_Xp = self.face_Xp
-        face_Yp = self.face_Yp
-        face_Zp = self.face_Zp
-        edge_XmYm = self.edge_XmYm
-        edge_XmZm = self.edge_XmZm
-        edge_YmZm = self.edge_YmZm
-        edge_XpYm = self.edge_XpYm
-        edge_XpYp = self.edge_XpYp
-        edge_XmYp = self.edge_XmYp
-        edge_XpZm = self.edge_XpZm
-        edge_XpZp = self.edge_XpZp
-        edge_XmZp = self.edge_XmZp
-        edge_YpZm = self.edge_YpZm
-        edge_YpZp = self.edge_YpZp
-        edge_YmZp = self.edge_YmZp
-        corner_XmYmZm = self.corner_XmYmZm
-        corner_XmYmZp = self.corner_XmYmZp
-        corner_XmYpZm = self.corner_XmYpZm
-        corner_XmYpZp = self.corner_XmYpZp
-        corner_XpYmZm = self.corner_XpYmZm
-        corner_XpYmZp = self.corner_XpYmZp
-        corner_XpYpZm = self.corner_XpYpZm
-        corner_XpYpZp = self.corner_XpYpZp
-
-        D_xyz = np.array(
-            [
-                [-dx, -sc * dx, -sc * dx],
-                [-sc * dy, -dy, -sc * dy],
-                [-sc * dz, -sc * dz, -dz],
-            ]
-        )
-
-        list_disp = ["DispX", "DispY", "DispZ"]
-
-        nbDOF = 3
-
-        res = ListBC()
-
-        # face Xm/Xp
-        face_Xp_asarray = np.asarray(face_Xp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(face_Xp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 0
-            list_node_sets = np.concatenate(
-                (
-                    face_Xp[0],
-                    face_Xm,
-                    np.full_like(face_Xm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, face_Xp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(face_Xm, -1),
-                    np.full_like(face_Xm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # face Ym/Yp
-        face_Yp_asarray = np.asarray(face_Yp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(face_Yp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 1
-            list_node_sets = np.concatenate(
-                (
-                    face_Yp[0],
-                    face_Ym,
-                    np.full_like(face_Ym, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, face_Yp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(face_Ym, -1),
-                    np.full_like(face_Ym, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # face Zm/Zp
-        face_Zp_asarray = np.asarray(face_Zp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(face_Zp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 2
-            list_node_sets = np.concatenate(
-                (
-                    face_Zp[0],
-                    face_Zm,
-                    np.full_like(face_Zm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, face_Zp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(face_Zm, -1),
-                    np.full_like(face_Zm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XpYm
-        edge_XpYm_asarray = np.asarray(edge_XpYm[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XpYm_asarray)
-        for i in range(0, nbDOF):
-            p1 = 0
-            list_node_sets = np.concatenate(
-                (
-                    edge_XpYm[0],
-                    edge_XmYm,
-                    np.full_like(edge_XmYm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XpYm_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmYm, -1),
-                    np.full_like(edge_XmYm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XpYp
-        edge_XpYp_asarray = np.asarray(edge_XpYp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XpYp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 0
-            p2 = 1
-            list_node_sets = np.concatenate(
-                (
-                    edge_XpYp[0],
-                    edge_XmYm,
-                    np.full_like(edge_XmYm, node_cd[p1][i], dtype=object),
-                    np.full_like(edge_XmYm, node_cd[p2][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XpYp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-                + [var_cd[p2][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmYm, -1),
-                    np.full_like(edge_XmYm, D_xyz[p1, i], dtype=float),
-                    np.full_like(edge_XmYm, D_xyz[p2, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XmYp
-        edge_XmYp_asarray = np.asarray(edge_XmYp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XmYp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 1
-            list_node_sets = np.concatenate(
-                (
-                    edge_XmYp[0],
-                    edge_XmYm,
-                    np.full_like(edge_XmYm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XmYp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmYm, -1),
-                    np.full_like(edge_XmYm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XpZm
-        edge_XpZm_asarray = np.asarray(edge_XpZm[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XpZm_asarray)
-        for i in range(0, nbDOF):
-            p1 = 0
-            list_node_sets = np.concatenate(
-                (
-                    edge_XpZm[0],
-                    edge_XmZm,
-                    np.full_like(edge_XmZm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XpZm_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmZm, -1),
-                    np.full_like(edge_XmZm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XpZp
-        edge_XpZp_asarray = np.asarray(edge_XpZp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XpZp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 0
-            p2 = 2
-            list_node_sets = np.concatenate(
-                (
-                    edge_XpZp[0],
-                    edge_XmZm,
-                    np.full_like(edge_XmZm, node_cd[p1][i], dtype=object),
-                    np.full_like(edge_XmZm, node_cd[p2][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XpZp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-                + [var_cd[p2][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmZm, -1),
-                    np.full_like(edge_XmZm, D_xyz[p1, i], dtype=float),
-                    np.full_like(edge_XmZm, D_xyz[p2, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_XmZp
-        edge_XmZp_asarray = np.asarray(edge_XmZp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_XmZp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 2
-            list_node_sets = np.concatenate(
-                (
-                    edge_XmZp[0],
-                    edge_XmZm,
-                    np.full_like(edge_XmZm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_XmZp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_XmZm, -1),
-                    np.full_like(edge_XmZm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_YpZm
-        edge_YpZm_asarray = np.asarray(edge_YpZm[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_YpZm_asarray)
-        for i in range(0, nbDOF):
-            p1 = 1
-            list_node_sets = np.concatenate(
-                (
-                    edge_YpZm[0],
-                    edge_YmZm,
-                    np.full_like(edge_YmZm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_YpZm_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_YmZm, -1),
-                    np.full_like(edge_YmZm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_YpZp
-        edge_YpZp_asarray = np.asarray(edge_YpZp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_YpZp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 1
-            p2 = 2
-            list_node_sets = np.concatenate(
-                (
-                    edge_YpZp[0],
-                    edge_YmZm,
-                    np.full_like(edge_YmZm, node_cd[p1][i], dtype=object),
-                    np.full_like(edge_YmZm, node_cd[p2][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_YpZp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-                + [var_cd[p2][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_YmZm, -1),
-                    np.full_like(edge_YmZm, D_xyz[p1, i], dtype=float),
-                    np.full_like(edge_YmZm, D_xyz[p2, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # edge_YmZp
-        edge_YmZp_asarray = np.asarray(edge_YmZp[1])
-        dimensions_to_factors_rescaled = self._distance_weights(edge_YmZp_asarray)
-        for i in range(0, nbDOF):
-            p1 = 2
-            list_node_sets = np.concatenate(
-                (
-                    edge_YmZp[0],
-                    edge_YmZm,
-                    np.full_like(edge_YmZm, node_cd[p1][i], dtype=object),
-                ),
-                axis=1,
-            )
-            list_variables = (
-                [list_disp[i] for _ in range(0, edge_YmZp_asarray.shape[1])]
-                + [list_disp[i]]
-                + [var_cd[p1][i]]
-            )
-            list_factors = np.concatenate(
-                (
-                    dimensions_to_factors_rescaled,
-                    np.full_like(edge_YmZm, -1),
-                    np.full_like(edge_YmZm, D_xyz[p1, i], dtype=float),
-                ),
-                axis=1,
-            )
-            res.append(self._mpc_from_2d(list_node_sets, list_variables, list_factors))
-
-        # Corners
-        for i in range(0, nbDOF):
-            # elimination of DOF from corner Xp/Ym/Zm (XpYmZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZm, node_cd[0][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[0][i]],
-                    [
-                        np.full_like(corner_XpYmZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZm, D_xyz[0, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Yp/Zm (XmYpZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZm, node_cd[1][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[0][1]],
-                    [
-                        np.full_like(corner_XmYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZm, D_xyz[1, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Ym/Zp (XmYmZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYmZp, node_cd[2][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[0][2]],
-                    [
-                        np.full_like(corner_XmYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYmZp, D_xyz[2, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xp/Yp/Zm (XpYpZm) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZm,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZm, node_cd[0][i]),
-                        np.full_like(corner_XpYpZm, node_cd[1][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[0][i], var_cd[1][i]],
-                    [
-                        np.full_like(corner_XpYpZm, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZm, D_xyz[0, i], dtype=float),
-                        np.full_like(corner_XpYpZm, D_xyz[1, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xm/Yp/Zp (XmYpZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XmYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XmYpZp, node_cd[1][i]),
-                        np.full_like(corner_XmYpZp, node_cd[2][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[1][i], var_cd[2][i]],
-                    [
-                        np.full_like(corner_XmYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XmYpZp, D_xyz[1, i], dtype=float),
-                        np.full_like(corner_XmYpZp, D_xyz[2, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xp/Ym/Zp (XpYmZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYmZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYmZp, node_cd[0][i]),
-                        np.full_like(corner_XpYmZp, node_cd[2][i]),
-                    ],
-                    [list_disp[i], list_disp[i], var_cd[0][i], var_cd[2][i]],
-                    [
-                        np.full_like(corner_XpYmZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYmZp, D_xyz[0, i], dtype=float),
-                        np.full_like(corner_XpYmZp, D_xyz[2, i], dtype=float),
-                    ],
-                )
-            )
-            # elimination of DOF from corner Xp/Yp/Zp (XpYpZp) -> corner Xm/Ym/Zm (XmYmZm)
-            res.append(
-                MPC(
-                    [
-                        corner_XpYpZp,
-                        corner_XmYmZm,
-                        np.full_like(corner_XpYpZp, node_cd[0][i]),
-                        np.full_like(corner_XpYpZp, node_cd[1][i]),
-                        np.full_like(corner_XpYpZp, node_cd[2][i]),
-                    ],
-                    [
-                        list_disp[i],
-                        list_disp[i],
-                        var_cd[0][i],
-                        var_cd[1][i],
-                        var_cd[2][i],
-                    ],
-                    [
-                        np.full_like(corner_XpYpZp, 1),
-                        np.full_like(corner_XmYmZm, -1),
-                        np.full_like(corner_XpYpZp, D_xyz[0, i], dtype=float),
-                        np.full_like(corner_XpYpZp, D_xyz[1, i], dtype=float),
-                        np.full_like(corner_XpYpZp, D_xyz[2, i], dtype=float),
-                    ],
-                )
-            )
-
-        return res
-
-    def _add_additional_rot_dof(self, problem, res, dic_faces_edges_periodic):
-        face_Xm = dic_faces_edges_periodic("face_Xm")
-        face_Xp = dic_faces_edges_periodic("face_Xp")
-        if self.dim > 1:
-            face_Ym = dic_faces_edges_periodic("face_Ym")
-            face_Yp = dic_faces_edges_periodic("face_Yp")
-            edge_XmYm = dic_faces_edges_periodic("edge_XmYm")
-            edge_XpYm = dic_faces_edges_periodic("edge_XpYm")
-            edge_XpYp = dic_faces_edges_periodic("edge_XpYp")
-            edge_XmYp = dic_faces_edges_periodic("edge_XmYp")
-        if self.dim > 2:
-            face_Zm = dic_faces_edges_periodic("face_Zm")
-            face_Zp = dic_faces_edges_periodic("face_Zp")
-            edge_XmZm = dic_faces_edges_periodic("edge_XmZm")
-            edge_YmZm = dic_faces_edges_periodic("edge_YmZm")
-            edge_XpZm = dic_faces_edges_periodic("edge_XpZm")
-            edge_XpZp = dic_faces_edges_periodic("edge_XpZp")
-            edge_XmZp = dic_faces_edges_periodic("edge_XmZp")
-            edge_YpZm = dic_faces_edges_periodic("edge_YpZm")
-            edge_YpZp = dic_faces_edges_periodic("edge_YpZp")
-            edge_YmZp = dic_faces_edges_periodic("edge_YmZp")
-            corner_XmYmZm = dic_faces_edges_periodic("corner_XmYmZm")
-            corner_XmYmZp = dic_faces_edges_periodic("corner_XmYmZp")
-            corner_XmYpZm = dic_faces_edges_periodic("corner_XmYpZm")
-            corner_XmYpZp = dic_faces_edges_periodic("corner_XmYpZp")
-            corner_XpYmZm = dic_faces_edges_periodic("corner_XpYmZm")
-            corner_XpYmZp = dic_faces_edges_periodic("corner_XpYmZp")
-            corner_XpYpZm = dic_faces_edges_periodic("corner_XpYpZm")
-            corner_XpYpZp = dic_faces_edges_periodic("corner_XpYpZp")
+    def _add_additional_rot_dof(self, problem, res, get_boundary):
+        keys = [self._KEYS_1D, self._KEYS_2D, self._KEYS_3D][self.dim - 1]
+        bn = {k: get_boundary(k) for k in keys}
 
         list_var = (
             problem.space.list_variables()
@@ -2449,25 +1111,25 @@ class PeriodicBC(BCBase):
             #### FACES ####
             res.append(
                 MPC(
-                    [face_Xp, face_Xm],
+                    [bn["x+"], bn["x-"]],
                     [var, var],
-                    [np.full_like(face_Xp, 1), np.full_like(face_Xm, -1)],
+                    [np.full_like(bn["x+"], 1), np.full_like(bn["x-"], -1)],
                 )
             )
             if self.dim > 1:
                 res.append(
                     MPC(
-                        [face_Yp, face_Ym],
+                        [bn["y+"], bn["y-"]],
                         [var, var],
-                        [np.full_like(face_Yp, 1), np.full_like(face_Ym, -1)],
+                        [np.full_like(bn["y+"], 1), np.full_like(bn["y-"], -1)],
                     )
                 )
             if self.dim > 2:
                 res.append(
                     MPC(
-                        [face_Zp, face_Zm],
+                        [bn["z+"], bn["z-"]],
                         [var, var],
-                        [np.full_like(face_Zp, 1), np.full_like(face_Zm, -1)],
+                        [np.full_like(bn["z+"], 1), np.full_like(bn["z-"], -1)],
                     )
                 )
 
@@ -2475,144 +1137,150 @@ class PeriodicBC(BCBase):
             if self.dim > 1:
                 res.append(
                     MPC(
-                        [edge_XmYp, edge_XmYm],
+                        [bn["x-y+"], bn["x-y-"]],
                         [var, var],
-                        [np.full_like(edge_XmYp, 1), np.full_like(edge_XmYm, -1)],
+                        [np.full_like(bn["x-y+"], 1), np.full_like(bn["x-y-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_XpYm, edge_XmYm],
+                        [bn["x+y-"], bn["x-y-"]],
                         [var, var],
-                        [np.full_like(edge_XpYm, 1), np.full_like(edge_XmYm, -1)],
+                        [np.full_like(bn["x+y-"], 1), np.full_like(bn["x-y-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_XpYp, edge_XmYm],
+                        [bn["x+y+"], bn["x-y-"]],
                         [var, var],
-                        [np.full_like(edge_XpYp, 1), np.full_like(edge_XmYm, -1)],
+                        [np.full_like(bn["x+y+"], 1), np.full_like(bn["x-y-"], -1)],
                     )
                 )
 
             if self.dim > 2:
                 res.append(
                     MPC(
-                        [edge_YpZm, edge_YmZm],
+                        [bn["y+z-"], bn["y-z-"]],
                         [var, var],
-                        [np.full_like(edge_YpZm, 1), np.full_like(edge_YmZm, -1)],
+                        [np.full_like(bn["y+z-"], 1), np.full_like(bn["y-z-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_YmZp, edge_YmZm],
+                        [bn["y-z+"], bn["y-z-"]],
                         [var, var],
-                        [np.full_like(edge_YmZp, 1), np.full_like(edge_YmZm, -1)],
+                        [np.full_like(bn["y-z+"], 1), np.full_like(bn["y-z-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_YpZp, edge_YmZm],
+                        [bn["y+z+"], bn["y-z-"]],
                         [var, var],
-                        [np.full_like(edge_YpZp, 1), np.full_like(edge_YmZm, -1)],
+                        [np.full_like(bn["y+z+"], 1), np.full_like(bn["y-z-"], -1)],
                     )
                 )
 
                 res.append(
                     MPC(
-                        [edge_XpZm, edge_XmZm],
+                        [bn["x+z-"], bn["x-z-"]],
                         [var, var],
-                        [np.full_like(edge_XpZm, 1), np.full_like(edge_XmZm, -1)],
+                        [np.full_like(bn["x+z-"], 1), np.full_like(bn["x-z-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_XmZp, edge_XmZm],
+                        [bn["x-z+"], bn["x-z-"]],
                         [var, var],
-                        [np.full_like(edge_XmZp, 1), np.full_like(edge_XmZm, -1)],
+                        [np.full_like(bn["x-z+"], 1), np.full_like(bn["x-z-"], -1)],
                     )
                 )
                 res.append(
                     MPC(
-                        [edge_XpZp, edge_XmZm],
+                        [bn["x+z+"], bn["x-z-"]],
                         [var, var],
-                        [np.full_like(edge_XpZp, 1), np.full_like(edge_XmZm, -1)],
+                        [np.full_like(bn["x+z+"], 1), np.full_like(bn["x-z-"], -1)],
                     )
                 )
 
                 #### CORNERS ####
                 res.append(
                     MPC(
-                        [corner_XpYmZm, corner_XmYmZm],
+                        [bn["x+y-z-"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XpYmZm, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x+y-z-"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XmYpZm, corner_XmYmZm],
+                        [bn["x-y+z-"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XmYpZm, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x-y+z-"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XmYmZp, corner_XmYmZm],
+                        [bn["x-y-z+"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XmYmZp, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x-y-z+"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XpYpZm, corner_XmYmZm],
+                        [bn["x+y+z-"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XpYpZm, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x+y+z-"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XmYpZp, corner_XmYmZm],
+                        [bn["x-y+z+"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XmYpZp, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x-y+z+"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XpYmZp, corner_XmYmZm],
+                        [bn["x+y-z+"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XpYmZp, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x+y-z+"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
                 res.append(
                     MPC(
-                        [corner_XpYpZp, corner_XmYmZm],
+                        [bn["x+y+z+"], bn["x-y-z-"]],
                         [var, var],
                         [
-                            np.full_like(corner_XpYpZp, 1),
-                            np.full_like(corner_XmYmZm, -1),
+                            np.full_like(bn["x+y+z+"], 1),
+                            np.full_like(bn["x-y-z-"], -1),
                         ],
                     )
                 )
 
     def initialize(self, problem, dic_closest_points_on_boundaries=None):
+        if problem.space.is_axisymmetric:
+            raise NotImplementedError(
+                "PeriodicBC does not support the '2Daxi' ModelingSpace: "
+                "translational periodicity in the (r, z) plane is not "
+                "well-defined for an axisymmetric body of revolution."
+            )
         # Use stored dictionary if none provided explicitly
         if dic_closest_points_on_boundaries is None:
             dic_closest_points_on_boundaries = self._dic_closest_points_on_boundaries
@@ -2786,12 +1454,12 @@ class PeriodicBC(BCBase):
             else:
                 self._construct_faces_edges_corners_from_dic_non_periodic_node_distance(
                     dic_closest_points_on_boundaries,
-                    dic_closest_points_on_boundaries.get("d_rve", None),
+                    dic_closest_points_on_boundaries.get("rve_size", None),
                 )
                 res = self._list_MPC_non_periodic_node_distance()
 
         # Enforce continuity of rotation DOFs (RotX, RotY, RotZ) if present
-        self._add_additional_rot_dof(problem, res, lambda key: getattr(self, key))
+        self._add_additional_rot_dof(problem, res, lambda key: self.boundary_nodes[key])
 
         res.initialize(problem)
         self.list_mpc = res
