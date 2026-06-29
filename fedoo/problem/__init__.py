@@ -282,8 +282,7 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
 from .explicit_dynamic import ExplicitDynamic
 from .linear import Linear
 from .newmark import Newmark
-from .nl_newmark import NonLinearNewmark
-from .non_linear import NonLinear
+from .non_linear import NonLinear, NonLinearNewmark
 
 __all__ = [
     "Linear",

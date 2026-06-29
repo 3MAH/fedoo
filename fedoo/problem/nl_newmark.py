@@ -419,9 +419,17 @@ class _NonLinearNewmarkBase:
 #     self.__UpdateA()
 
 
-class NonLinearNewmark(_NonLinearNewmarkBase, NonLinear):
+class _LegacyNonLinearNewmark(_NonLinearNewmarkBase, NonLinear):
     """
-    Define a Newmark problem
+    Legacy Newmark problem implementation.
+
+    .. deprecated::
+        Prefer :class:`fedoo.problem.NonLinear` with a problem-level time
+        integrator, e.g. ``problem.set_time_integrator(fedoo.time.SECOND_ORDER,
+        fedoo.time.Newmark(...))``. This internal legacy implementation is kept
+        temporarily for reference while the new time integration strategy is
+        validated.
+
     The algorithm come from:  Bathe KJ and Edward W, "Numerical methods in finite element analysis", Prentice Hall, 1976, pp 323-324
     """
 

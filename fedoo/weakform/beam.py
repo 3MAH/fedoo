@@ -1,5 +1,7 @@
 from fedoo.constitutivelaw.beam import BeamProperties
-from fedoo.core.weakform import WeakFormBase
+from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.weakform.inertia import Inertia, RotaryInertia
 from scipy.spatial.transform import Rotation
 import numpy as np
 
@@ -72,6 +74,27 @@ class BeamEquilibrium(WeakFormBase):
             self.properties = BeamProperties(
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
+        self.time_evolution = SECOND_ORDER
+        density = getattr(self.properties.material, "density", None)
+        if density is not None:
+            translational_inertia = Inertia(
+                density * self.properties.A, space=self.space
+            )
+            if self.space.ndim == 3:
+                rotary_inertia = RotaryInertia(
+                    [
+                        density * self.properties.Jx,
+                        density * self.properties.Iyy,
+                        density * self.properties.Izz,
+                    ],
+                    space=self.space,
+                )
+            else:
+                rotary_inertia = RotaryInertia(
+                    density * self.properties.Izz,
+                    space=self.space,
+                )
+            self.storage = WeakFormSum([translational_inertia, rotary_inertia])
         self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)

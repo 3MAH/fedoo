@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
 from scipy.sparse.linalg import eigs, eigsh, ArpackNoConvergence
 import warnings
@@ -61,6 +62,8 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
+        self.time_integrators = {}
+        self._time_integrators_compiled = False
         self.t0 = 0
         self.tmax = 1
         self.time = 0
@@ -134,7 +137,37 @@ class _NonLinearBase:
         # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
+    def set_time_integrator(self, evolution, integrator):
+        """Attach a problem-level time integrator to an evolution category.
+
+        The integrator compiles compatible static weakforms before assembly
+        initialization. For example::
+
+            pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+        """
+        evolution = normalize_time_evolution(evolution)
+        integrator_evolution = normalize_time_evolution(
+            getattr(integrator, "evolution", evolution)
+        )
+        if integrator_evolution != evolution:
+            raise ValueError(
+                f"Time integrator {integrator!r} is not compatible with evolution "
+                f"{evolution!r}."
+            )
+
+        self.time_integrators[evolution] = integrator
+        self._time_integrators_compiled = False
+        return integrator
+
+    def _compile_time_integrators(self):
+        if self._time_integrators_compiled:
+            return
+        for evolution, integrator in self.time_integrators.items():
+            self.__assembly = integrator.compile_assembly(self.__assembly, evolution)
+        self._time_integrators_compiled = True
+
     def initialize(self):
+        self._compile_time_integrators()
         self.__assembly.initialize(self)
         self.set_A(0)
 
@@ -207,6 +240,7 @@ class _NonLinearBase:
             assembling = Assembly[assembling]
 
         self.__assembly = assembling
+        self._time_integrators_compiled = False
         if update:
             self.update()
 
@@ -1117,3 +1151,27 @@ class _NonLinearBase:
 
 class NonLinear(_NonLinearBase, Problem):
     pass
+
+
+def NonLinearNewmark(
+    assembly,
+    beta=0.25,
+    gamma=0.5,
+    nlgeom=False,
+    name="MainProblem",
+    first_order_integrator=None,
+):
+    """Create a nonlinear Newmark problem with default time integrators.
+
+    This is a convenience factory around :class:`NonLinear`. It attaches a
+    Newmark integrator for second-order evolutions and a Backward-Euler
+    integrator for first-order evolutions.
+    """
+    from fedoo import time
+
+    pb = NonLinear(assembly, nlgeom=nlgeom, name=name)
+    pb.set_time_integrator(time.SECOND_ORDER, time.Newmark(beta, gamma))
+    if first_order_integrator is None:
+        first_order_integrator = time.BackwardEuler()
+    pb.set_time_integrator(time.FIRST_ORDER, first_order_integrator)
+    return pb

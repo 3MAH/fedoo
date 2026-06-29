@@ -35,6 +35,7 @@ left = mesh.find_nodes("X", 0)
 right = mesh.find_nodes("X", L)
 
 pb = fd.problem.NonLinear("Assembling")
+pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
 
 # Problem.set_solver('cg', precond = True)
 pb.set_nr_criterion("Displacement", tol=1e-2, max_subiter=5, err0=100)

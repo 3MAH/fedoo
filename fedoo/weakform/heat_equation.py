@@ -1,11 +1,16 @@
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.core.time_evolution import FIRST_ORDER
+from fedoo.core.weakform import WeakFormBase
 import numpy as np
 
 
-class SteadyHeatEquation(WeakFormBase):
+class HeatEquation(WeakFormBase):
     """
-    Weak formulation of the steady heat equation (without time evolution).
+    Weak formulation of the heat equation.
+
+    This weakform defines the spatial conduction operator and declares
+    :class:`HeatCapacity` as its storage term. The problem-level time
+    integrator determines whether the analysis is steady or transient.
 
     Parameters
     ----------
@@ -47,6 +52,10 @@ class SteadyHeatEquation(WeakFormBase):
         ]
 
         self.constitutivelaw = thermal_constitutivelaw
+        self.time_evolution = FIRST_ORDER
+        self.__nlgeom = nlgeom
+        self.storage = HeatCapacity(thermal_constitutivelaw, "", nlgeom, self.space)
+        self.storage.assembly_options["mat_lumping"] = True
 
         # self.__nlgeom = nlgeom #geometric non linearities
 
@@ -123,7 +132,13 @@ class SteadyHeatEquation(WeakFormBase):
         return self.__nlgeom
 
 
-class TemperatureTimeDerivative(WeakFormBase):
+class HeatCapacity(WeakFormBase):
+    """Heat capacity storage weakform.
+
+    This weakform only defines the capacity operator ``rho*c``. Time
+    discretization is handled by problem-level time integrators.
+    """
+
     def __init__(self, thermal_constitutivelaw, name=None, nlgeom=False, space=None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
@@ -136,6 +151,8 @@ class TemperatureTimeDerivative(WeakFormBase):
         self.space.new_variable("Temp")  # temperature
 
         self.constitutivelaw = thermal_constitutivelaw
+        self.time_evolution = FIRST_ORDER
+        self.__nlgeom = nlgeom
 
     def initialize(self, assembly, pb):
         if not (np.isscalar(pb.get_dof_solution())):
@@ -171,57 +188,15 @@ class TemperatureTimeDerivative(WeakFormBase):
         op_temp = self.space.variable(
             "Temp"
         )  # temperature increment (incremental weakform)
-        # steady state should not include the following term
-        if pb.dtime != 0:
-            return (
-                1
-                / pb.dtime
-                * rho_c
-                * (
-                    op_temp.virtual * op_temp
-                    + op_temp.virtual * (assembly.sv["Temp"] - self.__temp_start)
-                )
-            )
-            # return 1/self.__dtime * rho_c * (op_temp.virtual * op_temp + op_temp.virtual *(assembly.sv['Temp']))
-        else:
-            return 0
+        return rho_c * op_temp.virtual * op_temp
+
+    def get_storage_value(self, assembly, pb):
+        return assembly.sv["Temp"]
+
+    def get_weak_equation_for_value(self, assembly, pb, value):
+        rho_c = self.constitutivelaw.density * self.constitutivelaw.specific_heat
+        return rho_c * self.space.variable("Temp").virtual * value
 
     @property
     def nlgeom(self):
         return self.__nlgeom
-
-
-def HeatEquation(thermal_constitutivelaw, name=None, nlgeom=False, space=None):
-    """
-    Weak formulation of the heat equation.
-
-    Parameters
-    ----------
-    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
-        Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
-        name of the WeakForm
-    nlgeom: bool (default = False)
-
-    This weakform use mat_lumping for the time derivative assembly.
-    Without mat_lumping, the solution is generally wrong with notable
-    temperature oscillations.
-
-    However, it is possible to change this parameter using:
-
-        .. code-block:: python
-
-            wf = fedoo.weakform.HeatEquation(thermal_constitutivelaw)
-            wf.list_weakform[1].assembly_options['mat_lumping'] = False
-    """
-    heat_eq_diffusion = SteadyHeatEquation(thermal_constitutivelaw, "", nlgeom, space)
-    heat_eq_time = TemperatureTimeDerivative(thermal_constitutivelaw, "", nlgeom, space)
-    heat_eq_time.assembly_options["mat_lumping"] = (
-        True  # use mat_lumping for the temperature time derivative
-    )
-    if name is None:
-        if isinstance(thermal_constitutivelaw, str):
-            name = ConstitutiveLaw().get_all()[thermal_constitutivelaw].name
-        else:
-            name = thermal_constitutivelaw.name
-    return WeakFormSum([heat_eq_diffusion, heat_eq_time], name)

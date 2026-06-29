@@ -2,6 +2,7 @@
 
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import normalize_time_evolution
 
 
 # =======================================================================
@@ -83,6 +84,9 @@ class WeakFormBase:
         self.assembly_options = _AssemblyOptions()
 
         self.constitutivelaw = None  # no constitutivelaw by default
+        self.storage = None
+        self.dissipation = None
+        self.time_evolution = None
 
         if name != "":
             WeakFormBase.__dic[self.__name] = self
@@ -125,6 +129,58 @@ class WeakFormBase:
 
     def get_weak_equation(self, assembly):
         return NotImplemented
+
+    def set_storage(self, storage, evolution=None):
+        """Attach a time-storage weakform to this static weakform.
+
+        Examples are mechanical inertia, heat capacity, or any matrix-like
+        term that stores the state advanced by a problem-level time integrator.
+        """
+        self.storage = storage
+        if evolution is not None:
+            self.time_evolution = normalize_time_evolution(evolution)
+        return self
+
+    def set_dissipation(self, dissipation=None, **kargs):
+        """Attach a dissipative contribution.
+
+        For mechanical weakforms, ``set_dissipation(alpha=..., beta=...)`` is
+        the shorthand Rayleigh form ``C = alpha*M + beta*K``. A weakform or
+        assembly can also be stored here for custom dissipation providers.
+        """
+        if kargs:
+            if dissipation is not None:
+                raise ValueError(
+                    "Pass either a dissipation object or keyword parameters, not both."
+                )
+            from fedoo.time import RayleighDamping
+
+            allowed = {"alpha", "beta"}
+            unknown = set(kargs) - allowed
+            if unknown:
+                raise TypeError(
+                    "Unknown dissipation keyword(s): " + ", ".join(sorted(unknown))
+                )
+            dissipation = RayleighDamping(
+                alpha=kargs.get("alpha", 0.0),
+                beta=kargs.get("beta", 0.0),
+            )
+        self.dissipation = dissipation
+        return self
+
+    def set_inertia(self, density_or_storage):
+        """Mechanical alias for ``set_storage``."""
+        from fedoo.weakform.inertia import Inertia
+
+        if isinstance(density_or_storage, WeakFormBase):
+            storage = density_or_storage
+        else:
+            storage = Inertia(density_or_storage, space=self.space)
+        return self.set_storage(storage)
+
+    def set_damping(self, damping=None, **kargs):
+        """Mechanical alias for ``set_dissipation``."""
+        return self.set_dissipation(damping, **kargs)
 
     def initialize(self, assembly, pb):
         # function called at the very begining of the resolution

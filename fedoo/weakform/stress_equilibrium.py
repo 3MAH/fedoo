@@ -2,6 +2,8 @@
 
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.weakform.inertia import Inertia
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -61,6 +63,10 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector("Disp", ("DispX", "DispY"))
 
         self.constitutivelaw = constitutivelaw
+        self.time_evolution = SECOND_ORDER
+        density = getattr(constitutivelaw, "density", None)
+        if density is not None:
+            self.storage = Inertia(density, space=self.space)
 
         self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.
