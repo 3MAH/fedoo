@@ -24,6 +24,31 @@ Thermal diffusion is a first-order evolution and can be advanced independently:
 
    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
 
+Static analysis
+===============
+
+A problem remains static as long as no time integrator is attached. Weak forms
+may still expose storage metadata, such as a density or heat capacity, but this
+metadata is ignored until a compatible integrator is selected:
+
+.. code-block:: python
+
+   pb = fd.problem.NonLinear(assembly)
+   pb.nlsolve()
+
+An integrator can also be removed before the problem is initialized by passing
+``None``:
+
+.. code-block:: python
+
+   pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+   pb.set_time_integrator(fd.time.SECOND_ORDER, None)
+
+Once the problem has been initialized, compatible weak forms may already have
+been compiled into transient weak forms. At that point the integrator cannot be
+removed safely from the same problem object; create a new static problem, or
+change the assembly before removing the integrator.
+
 Evolution categories
 ====================
 

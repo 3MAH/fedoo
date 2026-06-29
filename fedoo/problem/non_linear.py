@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
@@ -138,14 +139,31 @@ class _NonLinearBase:
         self.set_D(self.__assembly.current.get_global_vector())
 
     def set_time_integrator(self, evolution, integrator):
-        """Attach a problem-level time integrator to an evolution category.
+        """Attach or remove a problem-level time integrator.
 
         The integrator compiles compatible static weakforms before assembly
         initialization. For example::
 
             pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+
+        Passing ``None`` removes the integrator associated with the evolution
+        category. This can only be used before a compatible weakform has been
+        compiled into its transient form.
         """
         evolution = normalize_time_evolution(evolution)
+        if integrator is None:
+            if self._time_integrators_compiled and self._has_time_integrated_weakform(
+                self.__assembly
+            ):
+                raise RuntimeError(
+                    "Cannot remove a time integrator after the assembly has been "
+                    "compiled for transient analysis. Create a new static problem "
+                    "or change the assembly before removing the integrator."
+                )
+            self.time_integrators.pop(evolution, None)
+            self._time_integrators_compiled = False
+            return None
+
         integrator_evolution = normalize_time_evolution(
             getattr(integrator, "evolution", evolution)
         )
@@ -158,6 +176,20 @@ class _NonLinearBase:
         self.time_integrators[evolution] = integrator
         self._time_integrators_compiled = False
         return integrator
+
+    def _has_time_integrated_weakform(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            return any(
+                self._has_time_integrated_weakform(child)
+                for child in assembly.list_assembly
+            )
+        weakform = getattr(assembly, "weakform", None)
+        if getattr(weakform, "_fedoo_time_integrated", False):
+            return True
+        return any(
+            getattr(wf, "_fedoo_time_integrated", False)
+            for wf in getattr(weakform, "list_weakform", [])
+        )
 
     def _compile_time_integrators(self):
         if self._time_integrators_compiled:
