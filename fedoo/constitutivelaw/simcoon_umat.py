@@ -41,6 +41,8 @@ class Simcoon(Mechanical3D):
 
         self.use_elastic_lt = True
         # option to use the elastic tangeant matrix
+        self.tangent_mode = 0
+        # 0 = continuum tangent (default); 1 = Simo-Hughes algorithmic (consistent) tangent
         # (in principle = initial tangent matrix)
         # at the begining of each time step
 
@@ -900,6 +902,7 @@ class Simcoon(Mechanical3D):
                 assembly.sv["Wm"],
                 temp,
                 ndi=ndi,
+                tangent_mode=self.tangent_mode,
             )
 
             if ndi == 2:  # plane stress assumption
@@ -951,6 +954,7 @@ class Simcoon(Mechanical3D):
             assembly.sv_start["Wm"],
             temp,
             ndi=ndi,
+            tangent_mode=self.tangent_mode,
         )
         if ndi == 2:  # plane stress assumption
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
