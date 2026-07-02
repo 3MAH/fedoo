@@ -2,7 +2,7 @@
 
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.core.time_evolution import normalize_time_evolution
+from fedoo.core.time_evolution import SECOND_ORDER, normalize_time_evolution
 
 
 # =======================================================================
@@ -141,12 +141,16 @@ class WeakFormBase:
             self.time_evolution = normalize_time_evolution(evolution)
         return self
 
-    def set_dissipation(self, dissipation=None, **kargs):
+    def set_dissipation(self, dissipation=None, evolution=None, **kargs):
         """Attach a dissipative contribution.
 
         For mechanical weakforms, ``set_dissipation(alpha=..., beta=...)`` is
         the shorthand Rayleigh form ``C = alpha*M + beta*K``. A weakform or
         assembly can also be stored here for custom dissipation providers.
+
+        ``evolution`` tags the weakform with a time-evolution category so a
+        matching problem-level integrator picks it up; pass it when the
+        weakform does not already declare ``time_evolution``.
         """
         if kargs:
             if dissipation is not None:
@@ -166,21 +170,23 @@ class WeakFormBase:
                 beta=kargs.get("beta", 0.0),
             )
         self.dissipation = dissipation
+        if evolution is not None:
+            self.time_evolution = normalize_time_evolution(evolution)
         return self
 
     def set_inertia(self, density_or_storage):
-        """Mechanical alias for ``set_storage``."""
+        """Mechanical alias for ``set_storage`` (tags a second-order evolution)."""
         from fedoo.weakform.inertia import Inertia
 
         if isinstance(density_or_storage, WeakFormBase):
             storage = density_or_storage
         else:
             storage = Inertia(density_or_storage, space=self.space)
-        return self.set_storage(storage)
+        return self.set_storage(storage, evolution=SECOND_ORDER)
 
     def set_damping(self, damping=None, **kargs):
-        """Mechanical alias for ``set_dissipation``."""
-        return self.set_dissipation(damping, **kargs)
+        """Mechanical alias for ``set_dissipation`` (tags a second-order evolution)."""
+        return self.set_dissipation(damping, evolution=SECOND_ORDER, **kargs)
 
     def initialize(self, assembly, pb):
         # function called at the very begining of the resolution

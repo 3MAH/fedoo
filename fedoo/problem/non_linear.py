@@ -1198,8 +1198,27 @@ def NonLinearNewmark(
     This is a convenience factory around :class:`NonLinear`. It attaches a
     Newmark integrator for second-order evolutions and a Backward-Euler
     integrator for first-order evolutions.
+
+    .. note::
+        The signature changed: the mass is now derived from the material
+        density (``material.set_density(rho)``) or ``weakform.set_inertia(...)``,
+        so a separate mass assembly is no longer passed. The legacy
+        ``NonLinearNewmark(stiffness, mass, beta, gamma)`` form is rejected with
+        an explicit error.
     """
+    import numbers
+
     from fedoo import time
+
+    if not isinstance(beta, numbers.Number) or not isinstance(gamma, numbers.Number):
+        raise TypeError(
+            "NonLinearNewmark(assembly, beta, gamma) no longer takes a separate "
+            "mass assembly: the mass is derived from the material density "
+            "(material.set_density(rho)) or from weakform.set_inertia(...). "
+            "Replace NonLinearNewmark(stiffness, mass, beta, gamma) with "
+            "NonLinearNewmark(stiffness, beta, gamma). See fedoo.time for the "
+            "new time-integration API."
+        )
 
     pb = NonLinear(assembly, nlgeom=nlgeom, name=name)
     pb.set_time_integrator(time.SECOND_ORDER, time.Newmark(beta, gamma))

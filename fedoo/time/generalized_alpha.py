@@ -1,16 +1,31 @@
+import copy
+
 import numpy as np
 
-from fedoo.core.assembly import Assembly
-from fedoo.core.assembly_sum import AssemblySum
-from fedoo.core.base import AssemblyBase
-from fedoo.core.time_evolution import SECOND_ORDER, normalize_time_evolution
+from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
-from fedoo.time.common import RayleighDamping
+from fedoo.time.base import TimeIntegratorBase
+from fedoo.time.common import RayleighDamping, newmark_acceleration_velocity
 from fedoo.weakform.inertia import Inertia
 
 
-class GeneralizedAlpha:
-    """Generalized-alpha time integrator for second-order evolutions."""
+class GeneralizedAlpha(TimeIntegratorBase):
+    """Generalized-alpha time integrator for second-order evolutions.
+
+    The internal force, stiffness, and damping are evaluated at the generalized
+    mid-points ``t_{n+1-alpha_f}`` and the inertia at ``t_{n+1-alpha_m}``. The
+    classical endpoint Newmark scheme is the ``alpha_m = alpha_f = 0``
+    specialization (see :class:`fedoo.time.Newmark`).
+
+    .. warning::
+        External loads (Neumann/Dirichlet) are applied by the problem at the
+        step endpoint ``t_{n+1}``, not at ``t_{n+1-alpha_f}``. For
+        ``alpha_f != 0`` combined with **time-varying** loads this leaves an
+        ``O(alpha_f*dt)`` inconsistency in the forced response and degrades the
+        designed spectral damping. With ``alpha_f = 0`` (Newmark) or with loads
+        that are constant over the step the scheme is consistent. Sampling the
+        load factor at the alpha point is a known follow-up.
+    """
 
     evolution = SECOND_ORDER
 
@@ -33,40 +48,17 @@ class GeneralizedAlpha:
         if self.gamma <= 0.0:
             raise ValueError("gamma must be strictly positive.")
 
-    def compile_assembly(self, assembly, evolution=None):
-        """Compile compatible weakforms in an assembly tree in place."""
-        evolution = normalize_time_evolution(evolution or self.evolution)
-        if isinstance(assembly, AssemblySum):
-            for child in assembly.list_assembly:
-                self.compile_assembly(child, evolution)
-            return assembly
-
-        if isinstance(assembly, Assembly) and assembly.weakform is not None:
-            assembly.weakform = self.compile_weakform(assembly.weakform, evolution)
-        elif isinstance(assembly, AssemblyBase):
-            self._compile_assembly_level_provider(assembly)
-        return assembly
-
-    def compile_weakform(self, weakform, evolution=None):
-        """Return a time-integrated version of ``weakform`` when applicable."""
-        evolution = normalize_time_evolution(evolution or self.evolution)
-        if getattr(weakform, "_fedoo_time_integrated", False):
-            return weakform
-
-        if isinstance(weakform, WeakFormSum):
-            compiled = [
-                self.compile_weakform(wf, evolution) for wf in weakform.list_weakform
-            ]
-            if all(old is new for old, new in zip(weakform.list_weakform, compiled)):
-                return weakform
-            return WeakFormSum(compiled, weakform.name)
-
-        if getattr(weakform, "time_evolution", None) != evolution:
-            return weakform
-
+    def _integrate_leaf(self, weakform):
         storage = self._resolve_storage(weakform)
         if storage is None:
-            return weakform
+            raise ValueError(
+                "A second-order (dynamic) time integrator is attached, but no "
+                f"mass/inertia could be resolved for weakform "
+                f"{getattr(weakform, 'name', weakform)!r}. Give the material a "
+                "density (material.set_density(rho)) before building the weakform, "
+                "or attach inertia explicitly with "
+                "weakform.set_inertia(density_or_weakform)."
+            )
 
         dissipation = getattr(weakform, "dissipation", None)
         if dissipation is not None and not isinstance(
@@ -78,9 +70,7 @@ class GeneralizedAlpha:
                 "can be stored with set_dissipation(), but need an assembly adapter."
             )
 
-        integrated = self._wrap_static_weakform(weakform, storage, dissipation)
-        integrated._fedoo_time_integrated = True
-        return integrated
+        return self._wrap_static_weakform(weakform, storage, dissipation)
 
     def _resolve_storage(self, weakform):
         storage = getattr(weakform, "storage", None)
@@ -89,6 +79,8 @@ class GeneralizedAlpha:
                 return storage
             return Inertia(storage, space=weakform.space)
 
+        # Fall back to the material density, read at compile time so that a
+        # set_density() call made after the weakform was built is still honored.
         constitutivelaw = getattr(weakform, "constitutivelaw", None)
         density = getattr(constitutivelaw, "density", None)
         if density is not None:
@@ -96,14 +88,20 @@ class GeneralizedAlpha:
         return None
 
     def _wrap_static_weakform(self, weakform, storage, dissipation):
+        # Decorate a *copy* of the user's weakform with the generalized-alpha
+        # stiffness behavior so the original object is never mutated (it stays
+        # usable in other, e.g. static, problems) and its WeakForm registry
+        # entry keeps pointing at the static form. The transient sums are built
+        # unnamed for the same reason (an empty name is not registered).
+        stiffness = copy.copy(weakform)
         parent = type(weakform)
 
         class GeneralizedAlphaStiffness(GeneralizedAlphaStiffnessTerm, parent):
             pass
 
-        weakform.__class__ = GeneralizedAlphaStiffness
+        stiffness.__class__ = GeneralizedAlphaStiffness
         GeneralizedAlphaStiffnessTerm.__init__(
-            weakform, self.beta, self.gamma, self.alpha_f
+            stiffness, self.beta, self.gamma, self.alpha_f
         )
 
         inertia = GeneralizedAlphaStorageTerm(
@@ -122,27 +120,16 @@ class GeneralizedAlpha:
             if isinstance(dissipation, WeakFormBase):
                 return GeneralizedAlphaWeakFormSum(
                     [
-                        GeneralizedAlphaWeakFormSum([weakform, inertia], weakform.name),
+                        GeneralizedAlphaWeakFormSum([stiffness, inertia]),
                         GeneralizedAlphaDissipationTerm(
                             dissipation, self.beta, self.gamma, self.alpha_f
                         ),
-                    ],
-                    weakform.name,
+                    ]
                 )
-            weakform.damping_coef = dissipation.beta
+            stiffness.damping_coef = dissipation.beta
             inertia.damping_coef = dissipation.alpha
 
-        return GeneralizedAlphaWeakFormSum([weakform, inertia], weakform.name)
-
-    def _compile_assembly_level_provider(self, assembly):
-        has_provider = any(
-            hasattr(assembly, attr) for attr in ("storage", "dissipation")
-        )
-        if has_provider:
-            raise NotImplementedError(
-                "Assembly-level time providers are part of the architecture but "
-                "do not have a concrete GeneralizedAlpha adapter yet."
-            )
+        return GeneralizedAlphaWeakFormSum([stiffness, inertia])
 
 
 class GeneralizedAlphaStorageTerm(WeakFormBase):
@@ -189,17 +176,17 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
             )
 
     def set_start(self, assembly, pb):
-        dt = pb.dtime
         if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
-            new_acceleration = (1 / (self.beta * dt**2)) * (
-                assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
-            ) - 1 / self.beta * (0.5 - self.beta) * assembly.sv["Acceleration"]
-
-            assembly.sv["Velocity"] += dt * (
-                (1 - self.gamma) * assembly.sv["Acceleration"]
-                + self.gamma * new_acceleration
+            acc, vel = newmark_acceleration_velocity(
+                self.beta,
+                self.gamma,
+                pb.dtime,
+                assembly.sv["_DeltaDisp"],
+                assembly.sv["Velocity"],
+                assembly.sv["Acceleration"],
             )
-            assembly.sv["Acceleration"] = new_acceleration
+            assembly.sv["Velocity"] = vel
+            assembly.sv["Acceleration"] = acc
             assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
 
     def get_weak_equation(self, assembly, pb):
@@ -207,7 +194,14 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         if dt == 0:
             return 0
 
-        a_np1, v_np1 = self._current_acceleration_velocity(assembly, pb)
+        a_np1, v_np1 = newmark_acceleration_velocity(
+            self.beta,
+            self.gamma,
+            dt,
+            assembly.sv["_DeltaDisp"],
+            assembly.sv["Velocity"],
+            assembly.sv["Acceleration"],
+        )
         a_alpha = (1.0 - self.alpha_m) * a_np1 + self.alpha_m * assembly.sv[
             "Acceleration"
         ]
@@ -223,20 +217,9 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
 
         wf = self.mass_wf.get_weak_equation(assembly, pb)
         diff_op = tangent_coeff * wf
-        if not np.array_equal(residual_val, 0):
+        if np.any(residual_val):
             diff_op += assembly.operator_apply(wf, residual_val.ravel())
         return diff_op
-
-    def _current_acceleration_velocity(self, assembly, pb):
-        dt = pb.dtime
-        a0 = 1.0 / (self.beta * dt**2)
-        a_n = assembly.sv["Acceleration"]
-        v_n = assembly.sv["Velocity"]
-        delta_disp = assembly.sv["_DeltaDisp"]
-
-        acc = a0 * (delta_disp - dt * v_n) + (1.0 - 0.5 / self.beta) * a_n
-        vel = v_n + dt * ((1.0 - self.gamma) * a_n + self.gamma * acc)
-        return acc, vel
 
 
 class GeneralizedAlphaStiffnessTerm(WeakFormBase):
@@ -256,86 +239,80 @@ class GeneralizedAlphaStiffnessTerm(WeakFormBase):
         dt = pb.dtime
         if dt == 0:
             return wf
-        if self.alpha_f == 0.0 and (
-            self.damping_coef is None or self.damping_coef == 0.0
-        ):
+
+        damped = self.damping_coef is not None and self.damping_coef != 0.0
+        # Newmark (alpha_f = 0) with no damping is just the plain static term.
+        if self.alpha_f == 0.0 and not damped:
             return wf
-        if self.alpha_f == 0.0:
-            return self._newmark_damped_weak_equation(wf, assembly, pb)
 
         mat, vec = wf.split_mat_vec()
         delta_u = assembly.sv["_DeltaDisp"]
 
+        # Internal force/stiffness evaluated at the generalized mid-point
+        # t_{n+1-alpha_f}. For alpha_f = 0 this collapses to the endpoint scheme.
         static_wf = (1.0 - self.alpha_f) * mat + vec
-        if self.alpha_f != 0.0 and not np.array_equal(delta_u, 0):
-            static_wf -= self.alpha_f * assembly.operator_apply(mat, delta_u.ravel())
+        if self.alpha_f != 0.0 and np.any(delta_u):
+            static_wf = static_wf - self.alpha_f * assembly.operator_apply(
+                mat, delta_u.ravel()
+            )
 
-        if self.damping_coef is None or self.damping_coef == 0.0:
+        if not damped:
             return static_wf
 
-        a_np1, v_np1 = self._current_acceleration_velocity(assembly, pb)
+        # Stiffness-proportional Rayleigh damping (beta*K) contribution.
+        _, v_np1 = newmark_acceleration_velocity(
+            self.beta,
+            self.gamma,
+            dt,
+            delta_u,
+            assembly.sv["Velocity"],
+            assembly.sv["Acceleration"],
+        )
         v_alpha = (1.0 - self.alpha_f) * v_np1 + self.alpha_f * assembly.sv["Velocity"]
         c0 = self.gamma / (self.beta * dt)
 
-        damping_mat = self.damping_coef * (1.0 - self.alpha_f) * c0 * mat
-        if not np.array_equal(v_alpha, 0):
-            return (
-                static_wf
-                + damping_mat
-                + self.damping_coef * assembly.operator_apply(mat, v_alpha.ravel())
+        damping_op = self.damping_coef * (1.0 - self.alpha_f) * c0 * mat
+        if np.any(v_alpha):
+            damping_op = damping_op + self.damping_coef * assembly.operator_apply(
+                mat, v_alpha.ravel()
             )
-        return static_wf + damping_mat
-
-    def _newmark_damped_weak_equation(self, wf, assembly, pb):
-        dt = pb.dtime
-        a_n_node = assembly.sv["Acceleration"]
-        v_n_node = assembly.sv["Velocity"]
-        delta_u = assembly.sv["_DeltaDisp"]
-
-        c0 = self.gamma / (self.beta * dt)
-        a0 = 1.0 / (self.beta * dt**2)
-        mat, vec = wf.split_mat_vec()
-        scaled_mat = mat * (1.0 + self.damping_coef * c0)
-
-        a_curr = a0 * (delta_u - dt * v_n_node) - (0.5 / self.beta - 1.0) * a_n_node
-        v_curr = v_n_node + dt * ((1.0 - self.gamma) * a_n_node + self.gamma * a_curr)
-
-        if not np.array_equal(v_curr, 0):
-            damping_force_wf = self.damping_coef * assembly.operator_apply(
-                mat, v_curr.ravel()
-            )
-            return scaled_mat + vec + damping_force_wf
-
-        return scaled_mat + vec
-
-    def _current_acceleration_velocity(self, assembly, pb):
-        dt = pb.dtime
-        a0 = 1.0 / (self.beta * dt**2)
-        a_n = assembly.sv["Acceleration"]
-        v_n = assembly.sv["Velocity"]
-        delta_u = assembly.sv["_DeltaDisp"]
-        acc = a0 * (delta_u - dt * v_n) + (1.0 - 0.5 / self.beta) * a_n
-        vel = v_n + dt * ((1.0 - self.gamma) * a_n + self.gamma * acc)
-        return acc, vel
+        return static_wf + damping_op
 
 
 class GeneralizedAlphaWeakFormSum(WeakFormSum):
     """WeakFormSum with Rayleigh damping accessors for second-order terms."""
 
+    def _rayleigh_terms(self):
+        """Return the [stiffness, inertia] terms if they carry damping_coef."""
+        terms = self.list_weakform
+        if len(terms) >= 2 and all(hasattr(t, "damping_coef") for t in terms[:2]):
+            return terms
+        return None
+
     @property
     def rayleigh_damping(self):
         """list: Coefficients [alpha, beta] for Rayleigh damping."""
-        if self.list_weakform[0].damping_coef is None:
+        terms = self._rayleigh_terms()
+        # Not available when a custom dissipative weakform is attached (the
+        # first term is then a nested sum without a damping coefficient).
+        if terms is None or terms[0].damping_coef is None:
             return None
-        return [self.list_weakform[i].damping_coef for i in [1, 0]]
+        return [terms[i].damping_coef for i in [1, 0]]
 
     @rayleigh_damping.setter
     def rayleigh_damping(self, value):
+        terms = self._rayleigh_terms()
+        if terms is None:
+            raise TypeError(
+                "rayleigh_damping is only available on a stiffness+inertia "
+                "generalized-alpha sum, not when a custom dissipative weakform "
+                "is attached."
+            )
         if value is None:
             value = [None, None]
 
-        self.list_weakform[0].damping_coef = value[1]
-        self.list_weakform[1].damping_coef = value[0]
+        terms[0].damping_coef = value[1]
+        terms[1].damping_coef = value[0]
 
 
 class GeneralizedAlphaDissipationTerm(WeakFormBase):
@@ -372,17 +349,20 @@ class GeneralizedAlphaDissipationTerm(WeakFormBase):
         if damping_wf == 0:
             return 0
 
-        a0 = 1.0 / (self.beta * dt**2)
         c0 = self.gamma / (self.beta * dt)
-        delta_disp = assembly.sv["_DeltaDisp"]
-        v_n = assembly.sv["Velocity"]
-        a_n = assembly.sv["Acceleration"]
-
-        acc_np1 = a0 * (delta_disp - dt * v_n) + (1.0 - 0.5 / self.beta) * a_n
-        vel_np1 = v_n + dt * ((1.0 - self.gamma) * a_n + self.gamma * acc_np1)
-        vel_alpha = (1.0 - self.alpha_f) * vel_np1 + self.alpha_f * v_n
+        _, vel_np1 = newmark_acceleration_velocity(
+            self.beta,
+            self.gamma,
+            dt,
+            assembly.sv["_DeltaDisp"],
+            assembly.sv["Velocity"],
+            assembly.sv["Acceleration"],
+        )
+        vel_alpha = (1.0 - self.alpha_f) * vel_np1 + self.alpha_f * assembly.sv[
+            "Velocity"
+        ]
 
         diff_op = (1.0 - self.alpha_f) * c0 * damping_wf
-        if not np.array_equal(vel_alpha, 0):
+        if np.any(vel_alpha):
             diff_op += assembly.operator_apply(damping_wf, vel_alpha.ravel())
         return diff_op

@@ -19,16 +19,9 @@ def normalize_time_evolution(evolution):
 
     if isinstance(evolution, str):
         key = evolution.lower()
-        if key in {"first_order", "firstorder", "rate", "temp", "thermal"}:
+        if key == "first_order":
             return FIRST_ORDER
-        if key in {
-            "second_order",
-            "secondorder",
-            "dynamic",
-            "dynamics",
-            "disp",
-            "mechanical",
-        }:
+        if key == "second_order":
             return SECOND_ORDER
 
     raise TypeError(

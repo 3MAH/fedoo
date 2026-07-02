@@ -1,50 +1,28 @@
 import numpy as np
 
-from fedoo.core.assembly import Assembly
-from fedoo.core.assembly_sum import AssemblySum
-from fedoo.core.base import AssemblyBase
-from fedoo.core.time_evolution import FIRST_ORDER, normalize_time_evolution
+from fedoo.core.time_evolution import FIRST_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.time.base import TimeIntegratorBase
 
 
-class BackwardEuler:
+class BackwardEuler(TimeIntegratorBase):
     """Backward-Euler integrator for first-order storage weakforms."""
 
     evolution = FIRST_ORDER
 
-    def compile_assembly(self, assembly, evolution=None):
-        """Compile compatible weakforms in an assembly tree in place."""
-        evolution = normalize_time_evolution(evolution or self.evolution)
-        if isinstance(assembly, AssemblySum):
-            for child in assembly.list_assembly:
-                self.compile_assembly(child, evolution)
-            return assembly
-
-        if isinstance(assembly, Assembly) and assembly.weakform is not None:
-            assembly.weakform = self.compile_weakform(assembly.weakform, evolution)
-        elif isinstance(assembly, AssemblyBase):
-            self._compile_assembly_level_provider(assembly)
-        return assembly
-
-    def compile_weakform(self, weakform, evolution=None):
+    def _integrate_leaf(self, weakform):
         """Return a backward-Euler weakform sum when storage is declared."""
-        evolution = normalize_time_evolution(evolution or self.evolution)
-        if getattr(weakform, "_fedoo_time_integrated", False):
-            return weakform
-
-        if isinstance(weakform, WeakFormSum):
-            compiled = [
-                self.compile_weakform(wf, evolution) for wf in weakform.list_weakform
-            ]
-            if all(old is new for old, new in zip(weakform.list_weakform, compiled)):
-                return weakform
-            return WeakFormSum(compiled, weakform.name)
-
-        if getattr(weakform, "time_evolution", None) != evolution:
-            return weakform
+        if getattr(weakform, "dissipation", None) is not None:
+            raise NotImplementedError(
+                "BackwardEuler does not integrate dissipative terms yet. "
+                "Remove set_dissipation() from this first-order weakform, or "
+                "fold the dissipation into the storage term."
+            )
 
         storage = getattr(weakform, "storage", None)
         if storage is None:
+            # A first-order weakform without a storage term has no transient
+            # contribution: keep it as a plain static term.
             return weakform
         if not isinstance(storage, WeakFormBase):
             raise TypeError(
@@ -52,16 +30,7 @@ class BackwardEuler:
                 "with a first-order storage weakform."
             )
 
-        integrated = WeakFormSum([weakform, BackwardEulerStorageTerm(storage)])
-        integrated._fedoo_time_integrated = True
-        return integrated
-
-    def _compile_assembly_level_provider(self, assembly):
-        if hasattr(assembly, "storage"):
-            raise NotImplementedError(
-                "Assembly-level storage providers are part of the architecture but "
-                "do not have a concrete BackwardEuler adapter yet."
-            )
+        return WeakFormSum([weakform, BackwardEulerStorageTerm(storage)])
 
 
 class BackwardEulerStorageTerm(WeakFormBase):
@@ -101,7 +70,7 @@ class BackwardEulerStorageTerm(WeakFormBase):
 
         diff_op = (1.0 / dt) * storage_wf
         delta_value = current_value - start_value
-        if not np.array_equal(delta_value, 0):
+        if np.any(delta_value):
             if hasattr(self.storage, "get_weak_equation_for_value"):
                 diff_op += (1.0 / dt) * self.storage.get_weak_equation_for_value(
                     assembly, pb, delta_value
