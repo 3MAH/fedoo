@@ -46,7 +46,9 @@ class TimeIntegratorBase:
             ]
             if all(old is new for old, new in zip(weakform.list_weakform, compiled)):
                 return weakform
-            return WeakFormSum(compiled, weakform.name)
+            # Build the compiled sum unnamed: a non-empty name would re-register
+            # it in the WeakForm registry, clobbering the user's static sum.
+            return WeakFormSum(compiled)
 
         if getattr(weakform, "time_evolution", None) != evolution:
             return weakform

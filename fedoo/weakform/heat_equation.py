@@ -78,12 +78,6 @@ class HeatEquation(WeakFormBase):
             for operator in self.__op_grad_temp
         ]
 
-    def reset(self):  # to update
-        pass
-
-    def to_start(self):  # to update
-        pass
-
     def get_weak_equation(self, assembly, pb):
         K = self.constitutivelaw.thermal_conductivity
 
@@ -156,31 +150,16 @@ class HeatCapacity(WeakFormBase):
 
     def initialize(self, assembly, pb):
         if not (np.isscalar(pb.get_dof_solution())):
-            self.__temp_start = assembly.convert_data(
+            assembly.sv["Temp"] = assembly.convert_data(
                 pb.get_temp(), convert_from="Node", convert_to="GaussPoint"
             )
-            assembly.sv["Temp"] = self.__temp_start
         else:
-            self.__temp_start = assembly.sv["Temp"] = 0
+            assembly.sv["Temp"] = 0
 
     def update(self, assembly, pb):
         assembly.sv["Temp"] = assembly.convert_data(
             pb.get_temp(), convert_from="Node", convert_to="GaussPoint"
         )
-
-    def reset(self):
-        pass
-
-    #     self.__ConstitutiveLaw.reset()
-    #     self.__InitialStressTensor = 0
-    #     self.__InitialGradDispTensor = None
-
-    def to_start(self):
-        pass
-
-    def set_start(self, assembly, pb):
-        self.__temp_start = assembly.sv["Temp"]
-        # no need to update Initial Stress because the last computed stress remained unchanged
 
     def get_weak_equation(self, assembly, pb):
         rho_c = self.constitutivelaw.density * self.constitutivelaw.specific_heat

@@ -175,18 +175,32 @@ class WeakFormBase:
         return self
 
     def set_inertia(self, density_or_storage):
-        """Mechanical alias for ``set_storage`` (tags a second-order evolution)."""
+        """Mechanical alias for ``set_storage``.
+
+        Tags the weakform as a second-order evolution unless it already
+        declares one (an existing first-order tag is preserved).
+        """
         from fedoo.weakform.inertia import Inertia
 
         if isinstance(density_or_storage, WeakFormBase):
             storage = density_or_storage
         else:
             storage = Inertia(density_or_storage, space=self.space)
-        return self.set_storage(storage, evolution=SECOND_ORDER)
+        self.set_storage(storage)
+        if self.time_evolution is None:
+            self.time_evolution = SECOND_ORDER
+        return self
 
     def set_damping(self, damping=None, **kargs):
-        """Mechanical alias for ``set_dissipation`` (tags a second-order evolution)."""
-        return self.set_dissipation(damping, evolution=SECOND_ORDER, **kargs)
+        """Mechanical alias for ``set_dissipation``.
+
+        Tags the weakform as a second-order evolution unless it already
+        declares one (an existing first-order tag is preserved).
+        """
+        self.set_dissipation(damping, **kargs)
+        if self.time_evolution is None:
+            self.time_evolution = SECOND_ORDER
+        return self
 
     def initialize(self, assembly, pb):
         # function called at the very begining of the resolution

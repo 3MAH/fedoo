@@ -67,6 +67,7 @@ Integrators
    BackwardEuler
    GeneralizedAlpha
    Newmark
+   RayleighDamping
    TimeEvolution
 
 Second-order schemes

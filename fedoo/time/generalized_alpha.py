@@ -9,6 +9,22 @@ from fedoo.time.common import RayleighDamping, newmark_acceleration_velocity
 from fedoo.weakform.inertia import Inertia
 
 
+def _newmark_state(term, assembly, dt):
+    """Newmark end-of-step (acceleration, velocity) from the assembly state.
+
+    Every generalized-alpha term carries ``beta``/``gamma`` and reads the same
+    three state variables, so the recurrence call lives in one place.
+    """
+    return newmark_acceleration_velocity(
+        term.beta,
+        term.gamma,
+        dt,
+        assembly.sv["_DeltaDisp"],
+        assembly.sv["Velocity"],
+        assembly.sv["Acceleration"],
+    )
+
+
 class GeneralizedAlpha(TimeIntegratorBase):
     """Generalized-alpha time integrator for second-order evolutions.
 
@@ -108,28 +124,32 @@ class GeneralizedAlpha(TimeIntegratorBase):
             storage,
             self.beta,
             self.gamma,
-            "",
-            getattr(weakform, "nlgeom", None),
-            weakform.space,
-            self.alpha_m,
-            self.alpha_f,
+            space=weakform.space,
+            alpha_m=self.alpha_m,
+            alpha_f=self.alpha_f,
         )
         inertia.assembly_options["assume_sym"] = True
 
+        # Flag the individual terms, not only the returned sum: WeakFormSum
+        # flattens nested sums, so a flag carried by the sum alone would be
+        # lost when this transient sum is absorbed into an outer sum, and a
+        # later compile pass would wrap the terms a second time (double mass).
+        stiffness._fedoo_time_integrated = True
+        inertia._fedoo_time_integrated = True
+
+        terms = [stiffness, inertia]
         if dissipation is not None:
             if isinstance(dissipation, WeakFormBase):
-                return GeneralizedAlphaWeakFormSum(
-                    [
-                        GeneralizedAlphaWeakFormSum([stiffness, inertia]),
-                        GeneralizedAlphaDissipationTerm(
-                            dissipation, self.beta, self.gamma, self.alpha_f
-                        ),
-                    ]
+                dissipation_term = GeneralizedAlphaDissipationTerm(
+                    dissipation, self.beta, self.gamma, self.alpha_f
                 )
-            stiffness.damping_coef = dissipation.beta
-            inertia.damping_coef = dissipation.alpha
+                dissipation_term._fedoo_time_integrated = True
+                terms.append(dissipation_term)
+            else:
+                stiffness.damping_coef = dissipation.beta
+                inertia.damping_coef = dissipation.alpha
 
-        return GeneralizedAlphaWeakFormSum([stiffness, inertia])
+        return GeneralizedAlphaWeakFormSum(terms)
 
 
 class GeneralizedAlphaStorageTerm(WeakFormBase):
@@ -141,7 +161,6 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         beta,
         gamma,
         name="",
-        nlgeom=None,
         space=None,
         alpha_m=0.0,
         alpha_f=0.0,
@@ -154,7 +173,6 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         if not isinstance(wf, WeakFormBase):
             wf = Inertia(wf)
         self.mass_wf = wf
-        self.nlgeom = nlgeom
         self.damping_coef = None
 
     def initialize(self, assembly, pb):
@@ -177,14 +195,11 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
 
     def set_start(self, assembly, pb):
         if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
-            acc, vel = newmark_acceleration_velocity(
-                self.beta,
-                self.gamma,
-                pb.dtime,
-                assembly.sv["_DeltaDisp"],
-                assembly.sv["Velocity"],
-                assembly.sv["Acceleration"],
-            )
+            # _DeltaDisp was integrated over the increment that just completed,
+            # so the recurrence must use that dt — pb.dtime already holds the
+            # NEXT increment's step when set_start is called from nlsolve.
+            dt = getattr(pb, "_dtime_prev", None) or pb.dtime
+            acc, vel = _newmark_state(self, assembly, dt)
             assembly.sv["Velocity"] = vel
             assembly.sv["Acceleration"] = acc
             assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
@@ -194,14 +209,7 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         if dt == 0:
             return 0
 
-        a_np1, v_np1 = newmark_acceleration_velocity(
-            self.beta,
-            self.gamma,
-            dt,
-            assembly.sv["_DeltaDisp"],
-            assembly.sv["Velocity"],
-            assembly.sv["Acceleration"],
-        )
+        a_np1, v_np1 = _newmark_state(self, assembly, dt)
         a_alpha = (1.0 - self.alpha_m) * a_np1 + self.alpha_m * assembly.sv[
             "Acceleration"
         ]
@@ -260,14 +268,7 @@ class GeneralizedAlphaStiffnessTerm(WeakFormBase):
             return static_wf
 
         # Stiffness-proportional Rayleigh damping (beta*K) contribution.
-        _, v_np1 = newmark_acceleration_velocity(
-            self.beta,
-            self.gamma,
-            dt,
-            delta_u,
-            assembly.sv["Velocity"],
-            assembly.sv["Acceleration"],
-        )
+        _, v_np1 = _newmark_state(self, assembly, dt)
         v_alpha = (1.0 - self.alpha_f) * v_np1 + self.alpha_f * assembly.sv["Velocity"]
         c0 = self.gamma / (self.beta * dt)
 
@@ -283,8 +284,15 @@ class GeneralizedAlphaWeakFormSum(WeakFormSum):
     """WeakFormSum with Rayleigh damping accessors for second-order terms."""
 
     def _rayleigh_terms(self):
-        """Return the [stiffness, inertia] terms if they carry damping_coef."""
+        """Return the [stiffness, inertia] terms if they carry damping_coef.
+
+        The compiled sum is flat (WeakFormSum flattens nested sums), so a
+        custom dissipative weakform shows up as a GeneralizedAlphaDissipationTerm
+        member; Rayleigh accessors are not available in that case.
+        """
         terms = self.list_weakform
+        if any(isinstance(t, GeneralizedAlphaDissipationTerm) for t in terms):
+            return None
         if len(terms) >= 2 and all(hasattr(t, "damping_coef") for t in terms[:2]):
             return terms
         return None
@@ -293,8 +301,6 @@ class GeneralizedAlphaWeakFormSum(WeakFormSum):
     def rayleigh_damping(self):
         """list: Coefficients [alpha, beta] for Rayleigh damping."""
         terms = self._rayleigh_terms()
-        # Not available when a custom dissipative weakform is attached (the
-        # first term is then a nested sum without a damping coefficient).
         if terms is None or terms[0].damping_coef is None:
             return None
         return [terms[i].damping_coef for i in [1, 0]]
@@ -350,14 +356,7 @@ class GeneralizedAlphaDissipationTerm(WeakFormBase):
             return 0
 
         c0 = self.gamma / (self.beta * dt)
-        _, vel_np1 = newmark_acceleration_velocity(
-            self.beta,
-            self.gamma,
-            dt,
-            assembly.sv["_DeltaDisp"],
-            assembly.sv["Velocity"],
-            assembly.sv["Acceleration"],
-        )
+        _, vel_np1 = _newmark_state(self, assembly, dt)
         vel_alpha = (1.0 - self.alpha_f) * vel_np1 + self.alpha_f * assembly.sv[
             "Velocity"
         ]

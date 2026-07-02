@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 
 from fedoo.core.time_evolution import FIRST_ORDER
@@ -30,7 +32,15 @@ class BackwardEuler(TimeIntegratorBase):
                 "with a first-order storage weakform."
             )
 
-        return WeakFormSum([weakform, BackwardEulerStorageTerm(storage)])
+        # Work on a copy so the user's registered weakform stays static, and
+        # flag the terms themselves: WeakFormSum flattens nested sums, so a
+        # flag on the returned sum alone would be lost inside an outer sum
+        # and a later compile pass would add a second storage term.
+        static = copy.copy(weakform)
+        static._fedoo_time_integrated = True
+        storage_term = BackwardEulerStorageTerm(storage)
+        storage_term._fedoo_time_integrated = True
+        return WeakFormSum([static, storage_term])
 
 
 class BackwardEulerStorageTerm(WeakFormBase):
@@ -82,13 +92,11 @@ class BackwardEulerStorageTerm(WeakFormBase):
         return diff_op
 
     def _current_storage_value(self, assembly, pb):
-        if hasattr(self.storage, "get_storage_value"):
-            value = self.storage.get_storage_value(assembly, pb)
-        elif "Temp" in assembly.sv:
-            value = assembly.sv["Temp"]
-        else:
+        if not hasattr(self.storage, "get_storage_value"):
             raise NotImplementedError(
                 "BackwardEulerStorageTerm needs the storage weakform to expose "
-                "its current value."
+                "its current value through a get_storage_value(assembly, pb) "
+                "method (see fedoo.weakform.HeatCapacity for an example)."
             )
+        value = self.storage.get_storage_value(assembly, pb)
         return np.array(value, copy=True) if not np.isscalar(value) else value
