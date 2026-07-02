@@ -14,17 +14,171 @@ and a transient storage / volumetric coupling term, in the spirit of
 :py:class:`HeatEquation`.
 
 Backward-Euler time integration is used for the mass balance. The
-formulation is written in log_R corotational strain (the simcoon convention),
-which means the weak form expressions remain identical in form to the
-small-strain case; only the underlying constitutive law and the
-``StressEquilibriumMixed`` parent take care of the kinematic mapping.
+finite-strain formulation follows the simcoon conventions: log_R
+corotational strain in updated Lagrangian (UL), where the Cauchy coupling
+``-alpha * p * tr(delta_eps)`` on the deformed mesh is exact, and the Miehe
+logarithmic-strain formalism in total Lagrangian (TL), where the coupling is
+expressed against the volumetric log-strain variation
+``delta(tr ln U) = delta(ln J) = C^{-1} : delta(E)`` — i.e. the momentum
+contribution is ``-alpha * p * J * (C^{-1} : delta E)``, the exact pull-back
+of the Cauchy Terzaghi split to the PK2/Green-Lagrange pair.
 """
+
+import warnings
 
 import numpy as np
 
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.weakform.stress_equilibrium_mixed import StressEquilibriumMixed
+
+
+def _comp_lnJ(assembly):
+    """Store lnJ = ln(det F) at gauss points from the deformation gradient.
+
+    Only needed for weakforms built on the plain :py:class:`StressEquilibrium`
+    (the mixed parent computes lnJ itself in ``_comp_F``).
+    """
+    F = assembly.sv["F"]
+    J = np.linalg.det(np.ascontiguousarray(F.transpose((2, 0, 1))))
+    assembly.sv["lnJ"] = np.log(J)
+
+
+def _comp_dlnJ_weights(assembly, f_is_isochoric):
+    """Compute and cache the Voigt weights of ``delta(lnJ) = C^{-1}:delta E``.
+
+    Total Lagrangian only. In TL the weak form is assembled against the
+    Green-Lagrange variation ``delta E``, while the natural volumetric
+    coupling of the Miehe log-strain formalism is written against
+    ``delta(tr ln U) = delta(ln J) = C^{-1} : delta E``. This stores in
+    ``assembly.sv["_dlnJ_weights_gp"]`` the six coefficient arrays ``m_k``
+    such that ``delta(lnJ) = sum_k m_k deltaE_k`` in fedoo's Voigt order
+    ``[xx, yy, zz, xy, xz, yz]`` (engineering shear: each off-diagonal
+    ``C^{-1}`` entry appears once against ``gamma = 2E``).
+
+    Called once per iteration from the momentum ``update`` and shared by the
+    two consumers: :py:class:`PoroMassStorage` uses ``m_k`` directly (exact
+    tangent of the ``lnJ`` storage residual, ``K_pu`` block) and the momentum
+    coupling rescales by ``J`` (exact pull-back of the Cauchy coupling
+    ``-alpha p I`` to PK2).
+
+    ``f_is_isochoric`` states whether ``sv["F"]`` holds the isochoric
+    ``F_bar`` of the mixed parent — then the full inverse metric is
+    ``C^{-1} = J^{-2/3} C_bar^{-1}`` with ``J`` from the total ``lnJ`` — or
+    the full ``F``. The cache is set to None (consumers fall back to the
+    plain trace, identity ``C``) when the kinematic state is unavailable or
+    ``C`` is numerically singular on a distorted trial Newton iterate, so
+    the assembly stays usable and the NR failure path (dt reduction) can
+    handle the iterate.
+    """
+    F = assembly.sv.get("F")
+    if not isinstance(F, np.ndarray) or F.ndim != 3:
+        assembly.sv["_dlnJ_weights_gp"] = None
+        return
+    Ft = np.ascontiguousarray(F.transpose((2, 0, 1)))
+    C = np.matmul(Ft.transpose((0, 2, 1)), Ft)
+    try:
+        Cinv = np.linalg.inv(C)
+    except np.linalg.LinAlgError:
+        assembly.sv["_dlnJ_weights_gp"] = None
+        return
+    if f_is_isochoric:
+        scale = np.exp(assembly.sv["lnJ"]) ** (-2.0 / 3.0)
+    else:
+        scale = 1.0
+    assembly.sv["_dlnJ_weights_gp"] = [
+        scale * Cinv[:, 0, 0],
+        scale * Cinv[:, 1, 1],
+        scale * Cinv[:, 2, 2],
+        scale * Cinv[:, 0, 1],
+        scale * Cinv[:, 0, 2],
+        scale * Cinv[:, 1, 2],
+    ]
+
+
+def _ul_pore_geometric_tangent(space, p_tilde):
+    """Geometric (initial-stress-like) tangent of the pore stress in UL.
+
+    In updated Lagrangian the coupling residual is assembled on the
+    deformed mesh: ``G_p(u) = -alpha int(p tr(delta_eps) dv)``. Both the
+    spatial gradient of the test functions and the volume element depend on
+    the displacement, so the exact linearization at fixed ``p`` carries a
+    geometric term::
+
+        DG_p . du = alpha p int( tr(grad(delta_u) grad(du))
+                                 - tr(delta_eps) tr(eps(du)) ) dv
+
+    (from ``d(dN/dx) = -dN/dx grad(du)`` and ``d(dv) = tr(grad du) dv``).
+    fedoo's UL machinery embeds the analogous terms of the *constitutive*
+    stress in the converted (logarithmic-rate) tangent; the pore stress is
+    added at the weak-form level and bypasses that path, so the term must
+    be added explicitly. It needs the full displacement-gradient operators
+    (the spin part does not cancel), hence ``op_grad_u`` and not
+    ``op_strain``. This is a tangent-only (matrix) contribution: it cannot
+    change the converged solution, only restore Newton convergence — without
+    it the tangent error grows with p and Newton stalls at finite strain.
+    """
+    gu = space.op_grad_u()
+    diff_op = 0
+    for k in range(3):
+        for l in range(3):
+            if gu[k][l] != 0 and gu[l][k] != 0:
+                diff_op += gu[k][l].virtual * (gu[l][k] * p_tilde)
+    tr_op = space.op_div_u()
+    diff_op -= tr_op.virtual * (tr_op * p_tilde)
+    return diff_op
+
+
+def _biot_coupling_diff_op(space, assembly, alpha):
+    """Biot/Terzaghi coupling contribution to the momentum weak form.
+
+    ``sigma_total = sigma_eff - alpha * p_pore * I``. In fedoo's weak-form
+    convention the assembled D vector carries ``-R(U_curr)`` while the matrix
+    is ``+dR/dU``. With ``assume_sym=False`` (the genuine, non-mirrored
+    assembly) the ``-alpha`` sign gives the physically correct tangent
+    ``K_up = -alpha`` and a pore pressure positive in compression (validated
+    on Terzaghi consolidation and the Mandel benchmark); it pairs with
+    ``+alpha/dt`` in :py:class:`PoroMassStorage` to form the consistent
+    (non-symmetric) Biot Jacobian.
+
+    Small strain and UL use the Cauchy form ``-alpha p tr(delta_eps)``
+    (exact on the deformed mesh in UL), complemented in UL by the geometric
+    tangent of the pore stress. TL uses the lnU-consistent form
+    ``-alpha p J (C^{-1}:delta E)`` with ``J C^{-1}`` evaluated at the
+    current state (frozen-kinematics tangent: the geometric derivative
+    ``d(J C^{-1})/du * p`` is neglected in the matrix; the residual is
+    exact, so Newton converges to the right solution).
+    """
+    p_pore_inc = space.variable("PorePressure")
+    p_pore_curr = assembly.sv.get("_PorePressure_gp", 0)
+    p_pore_total = p_pore_inc + p_pore_curr
+
+    m_vol = None
+    if assembly._nlgeom == "TL":
+        eps = space.op_strain(assembly.sv["DispGradient"])
+        m_vol = assembly.sv.get("_dlnJ_weights_gp")
+        if m_vol is not None:
+            J = np.exp(assembly.sv["lnJ"])
+            m_vol = [J * m for m in m_vol]
+    else:
+        eps = space.op_strain()
+
+    if m_vol is None:
+        diff_op = -alpha * sum(
+            [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
+        )
+        if assembly._nlgeom == "UL" and not (
+            np.isscalar(p_pore_curr) and p_pore_curr == 0
+        ):
+            diff_op += _ul_pore_geometric_tangent(space, alpha * p_pore_curr)
+    else:
+        diff_op = -alpha * sum(
+            [
+                0 if eps[i] == 0 else eps[i].virtual * (p_pore_total * m_vol[i])
+                for i in range(6)
+            ]
+        )
+    return diff_op
 
 
 # ----------------------------------------------------------------------
@@ -81,6 +235,13 @@ class PoroMomentum(StressEquilibriumMixed):
         )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
+        if self.space._dimension == "2Daxi":
+            # The parent supports 2Daxi, but the Biot coupling terms added
+            # here carry neither the 2*pi*r integration weight nor the hoop
+            # strain contribution: refuse rather than assemble silently wrong.
+            raise NotImplementedError(
+                "PoroMomentum is not implemented for the '2Daxi' modeling space."
+            )
         # The Biot u-PorePressure coupling is genuinely one-sided (it only
         # writes the upper [Disp][PorePressure] block). StressEquilibrium
         # defaults assume_sym=True, which would mirror that block into a
@@ -95,38 +256,9 @@ class PoroMomentum(StressEquilibriumMixed):
     def get_weak_equation(self, assembly, pb):
         """Build the momentum weak form augmented with the Biot coupling."""
         diff_op = super().get_weak_equation(assembly, pb)
-
-        alpha = self.fluid_props.biot_coefficient
-
-        # Linearized strain operator (same in small / UL / TL within this
-        # context: we use the volumetric part of op_strain for the coupling).
-        if assembly._nlgeom == "TL":
-            eps = self.space.op_strain(assembly.sv["DispGradient"])
-        else:
-            eps = self.space.op_strain()
-
-        p_pore_inc = self.space.variable("PorePressure")
-        p_pore_curr = assembly.sv.get("_PorePressure_gp", 0)
-        p_pore_total = p_pore_inc + p_pore_curr
-
-        # Biot/Terzaghi coupling: sigma_total = sigma_eff - alpha * p_pore * I.
-        # The momentum residual contribution is -alpha * int(p_pore * tr(delta_eps)).
-        # In fedoo's weak-form convention the assembled D vector carries
-        # -R(U_curr) while the matrix is +d R/dU. With assume_sym=False (the
-        # genuine, non-mirrored assembly), writing -alpha here gives the
-        # physically correct tangent K_up = -alpha and a pore pressure that is
-        # positive in compression (validated on Terzaghi consolidation and the
-        # Mandel benchmark). This sign is paired with +alpha/dt in
-        # PoroMassStorage to form the consistent (non-symmetric) Biot Jacobian.
-        diff_op -= alpha * sum(
-            [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
+        return diff_op + _biot_coupling_diff_op(
+            self.space, assembly, self.fluid_props.biot_coefficient
         )
-
-        if self.space._dimension == "2Daxi":
-            rr = assembly.sv["_R_gausspoints"]
-            diff_op = diff_op  # 2Daxi factor already applied by parent
-
-        return diff_op
 
     def initialize(self, assembly, pb):
         super().initialize(assembly, pb)
@@ -139,13 +271,19 @@ class PoroMomentum(StressEquilibriumMixed):
         if np.isscalar(disp) and disp == 0:
             assembly.sv["_PorePressure_gp"] = 0
             assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+            if assembly._nlgeom == "TL":
+                assembly.sv["_dlnJ_weights_gp"] = None
             return
 
         assembly.sv["_PorePressure_gp"] = assembly.get_gp_results(
             self.space.variable("PorePressure"), disp
         )
-        if assembly._nlgeom and "lnJ" in assembly.sv:
+        if assembly._nlgeom:
+            # lnJ is stored by the mixed parent's _comp_F.
             assembly.sv["_tr_eps_gp"] = assembly.sv["lnJ"]
+            if assembly._nlgeom == "TL":
+                # sv["F"] holds the isochoric F_bar in the mixed formulation.
+                _comp_dlnJ_weights(assembly, f_is_isochoric=True)
         else:
             eps_op = self.space.op_strain()
             tr_eps = 0
@@ -197,6 +335,7 @@ class PoroDarcy(WeakFormBase):
                 0,
             ]
         self._op_grad_p_vir = [0 if op == 0 else op.virtual for op in self._op_grad_p]
+        self._warned_no_J = False
 
     def initialize(self, assembly, pb):
         assembly.sv["_PorePressureGradient_gp"] = [0, 0, 0]
@@ -212,11 +351,27 @@ class PoroDarcy(WeakFormBase):
         ]
 
     def get_weak_equation(self, assembly, pb):
-        # Mobility tensor k(J) / mu_f at gauss points
-        if "lnJ" in assembly.sv:
-            J = np.exp(assembly.sv["lnJ"])
+        # Mobility tensor k(J) / mu_f at gauss points. A scalar lnJ (e.g. a
+        # uniform value provided by the user) is honored like an array.
+        lnJ = assembly.sv.get("lnJ")
+        if lnJ is not None:
+            J = np.exp(lnJ)
         else:
             J = None
+            if (
+                getattr(assembly, "_nlgeom", False)
+                and callable(self.fluid_props.permeability)
+                and not self._warned_no_J
+            ):
+                self._warned_no_J = True
+                warnings.warn(
+                    "PoroDarcy: the assembly runs in finite strain (nlgeom) "
+                    "but no 'lnJ' state variable is available, so the "
+                    "deformation-dependent permeability falls back to its "
+                    "reference value k(J=1). Use PoroMechanics or "
+                    "PoroMechanicsSimple (which compute lnJ), or provide lnJ "
+                    "in assembly.sv."
+                )
         K_mob = self.fluid_props.get_mobility(J=J, sv=assembly.sv)
 
         # Tangent: grad(delta p) . K . grad(p_inc)
@@ -364,8 +519,24 @@ class PoroMassStorage(WeakFormBase):
             "_PorePressure_gp_start", np.zeros(assembly.n_gauss_points)
         )
 
-        eps_op = self.space.op_strain()
-        eps_vol_inc = sum([eps_op[i] for i in range(3) if eps_op[i] != 0])
+        # Volumetric strain-increment operator of the K_pu block. In small
+        # strain and UL this is tr(delta_eps) (exact on the deformed mesh in
+        # UL). In TL the residual is written in lnJ, whose exact variation is
+        # delta(lnJ) = C^{-1}:delta(E) — no J factor here, unlike the J C^{-1}
+        # of K_up: the Biot Jacobian is inherently non-symmetric.
+        if getattr(assembly, "_nlgeom", None) == "TL":
+            eps_op = self.space.op_strain(assembly.sv.get("DispGradient", 0))
+            m_vol = assembly.sv.get("_dlnJ_weights_gp")
+        else:
+            eps_op = self.space.op_strain()
+            m_vol = None
+
+        if m_vol is None:
+            eps_vol_inc = sum([eps_op[i] for i in range(3) if eps_op[i] != 0])
+        else:
+            eps_vol_inc = sum(
+                [eps_op[i] * m_vol[i] for i in range(6) if eps_op[i] != 0]
+            )
 
         tr_eps_curr = assembly.sv.get("_tr_eps_gp", np.zeros(assembly.n_gauss_points))
         tr_eps_start = assembly.sv.get(
@@ -434,6 +605,13 @@ class PoroMomentumSimple(StressEquilibrium):
         super().__init__(constitutivelaw, name=name, nlgeom=nlgeom, space=space)
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
+        if self.space._dimension == "2Daxi":
+            # See PoroMomentum.__init__: the Biot coupling terms lack the
+            # 2*pi*r measure and the hoop strain contribution.
+            raise NotImplementedError(
+                "PoroMomentumSimple is not implemented for the '2Daxi' "
+                "modeling space."
+            )
         # See PoroMomentum.__init__: disable the symmetric-assembly assumption
         # so the one-sided Biot coupling is not mirrored into a phantom block
         # and the three sub-forms co-assemble in a single shared state dict.
@@ -442,29 +620,16 @@ class PoroMomentumSimple(StressEquilibrium):
     def get_weak_equation(self, assembly, pb):
         """Build the momentum weak form augmented with the Biot coupling."""
         diff_op = super().get_weak_equation(assembly, pb)
-
-        alpha = self.fluid_props.biot_coefficient
-        if assembly._nlgeom == "TL":
-            eps = self.space.op_strain(assembly.sv["DispGradient"])
-        else:
-            eps = self.space.op_strain()
-
-        p_pore_inc = self.space.variable("PorePressure")
-        p_pore_curr = assembly.sv.get("_PorePressure_gp", 0)
-        p_pore_total = p_pore_inc + p_pore_curr
-
-        # Same sign convention as PoroMomentum (assume_sym=False): -alpha here
-        # gives the physically correct K_up = -alpha and PorePressure > 0 in
-        # compression, paired with +alpha/dt in PoroMassStorage.
-        diff_op -= alpha * sum(
-            [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
+        return diff_op + _biot_coupling_diff_op(
+            self.space, assembly, self.fluid_props.biot_coefficient
         )
-        return diff_op
 
     def initialize(self, assembly, pb):
         super().initialize(assembly, pb)
         assembly.sv["_PorePressure_gp"] = 0
         assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+        if assembly._nlgeom:
+            assembly.sv["lnJ"] = np.zeros(assembly.n_gauss_points)
 
     def update(self, assembly, pb):
         super().update(assembly, pb)
@@ -472,13 +637,25 @@ class PoroMomentumSimple(StressEquilibrium):
         if np.isscalar(disp) and disp == 0:
             assembly.sv["_PorePressure_gp"] = 0
             assembly.sv["_tr_eps_gp"] = np.zeros(assembly.n_gauss_points)
+            if assembly._nlgeom:
+                assembly.sv["lnJ"] = np.zeros(assembly.n_gauss_points)
+                if assembly._nlgeom == "TL":
+                    assembly.sv["_dlnJ_weights_gp"] = None
             return
 
         assembly.sv["_PorePressure_gp"] = assembly.get_gp_results(
             self.space.variable("PorePressure"), disp
         )
-        if assembly._nlgeom and "lnJ" in assembly.sv:
+        if assembly._nlgeom:
+            # Plain StressEquilibrium stores the full deformation gradient in
+            # sv["F"] but never lnJ (only the mixed parent computes it).
+            # Compute it here so the storage coupling uses the true log-volume
+            # change and PoroDarcy can feed J to deformation-dependent
+            # permeability models (Holmes-Mow, Kozeny-Carman).
+            _comp_lnJ(assembly)
             assembly.sv["_tr_eps_gp"] = assembly.sv["lnJ"]
+            if assembly._nlgeom == "TL":
+                _comp_dlnJ_weights(assembly, f_is_isochoric=False)
         else:
             eps_op = self.space.op_strain()
             tr_eps = 0
@@ -506,6 +683,12 @@ def PoroMechanics(
       * :py:class:`PoroMomentum` — momentum balance with Terzaghi coupling
       * :py:class:`PoroDarcy` — steady Darcy diffusion of pore pressure
       * :py:class:`PoroMassStorage` — storage and volumetric coupling
+
+    Reserve this three-field variant for a genuinely quasi-incompressible
+    **skeleton** (drained Poisson ratio close to 0.5) with well-constrained
+    (confined) boundaries: with a free-traction face the skeleton Lagrange
+    multiplier is under-constrained and the solution oscillates — use
+    :py:func:`PoroMechanicsSimple` instead (the recommended default).
 
     Parameters
     ----------
@@ -552,10 +735,21 @@ def PoroMechanicsSimple(skeleton_law, fluid_props, name="", nlgeom=None, space=N
       * :py:class:`PoroDarcy` — Darcy diffusion
       * :py:class:`PoroMassStorage` — storage + volumetric coupling
 
-    Use this variant for problems with **free-traction boundaries** (Mandel
-    consolidation, unconfined compression of cartilage, soft tissue
-    indentation) where the mixed :py:class:`PoroMechanics` oscillates.
-    No ``bulk_modulus`` parameter is required.
+    **This is the recommended default variant.** Use it in particular for
+    problems with free-traction boundaries (Mandel consolidation, unconfined
+    compression of cartilage, soft tissue indentation) where the mixed
+    :py:class:`PoroMechanics` oscillates. No ``bulk_modulus`` parameter is
+    required. For soft tissues, remember that the near-incompressibility of
+    the tissue is the *undrained* response already carried by the
+    ``PorePressure`` field: a compressible skeleton law (drained
+    ``nu ~ 0.1..0.3``) with this variant is usually the right model. For
+    stability in the undrained limit prefer a Taylor-Hood interpolation
+    (quadratic ``u``, linear ``PorePressure`` via a ``CombinedElement`` —
+    see the poromechanics documentation).
+
+    With simcoon hyperelastic laws use ``nlgeom="UL"`` (log_R corotational,
+    the simcoon-native mode) and keep the compression below roughly 12% —
+    see the Limitations section of the poromechanics documentation.
 
     Parameters
     ----------

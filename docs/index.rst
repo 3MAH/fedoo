@@ -16,6 +16,7 @@ Welcome to FEDOO's documentation!
    Time
    Problem
    boundary_conditions
+   poromechanics
    post_processing
    examples/index
    heterogeneous

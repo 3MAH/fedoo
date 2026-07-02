@@ -31,13 +31,24 @@ def _build_column_problem(
     biot_M=1.0e8,
     permeability=1.0e-7,
     fluid_viscosity=1.0,
+    skeleton=None,
+    use_simple=False,
+    nlgeom=False,
+    initial_porosity=0.5,
+    name_suffix="",
 ):
     """Build a thin saturated column problem ready to solve.
+
+    Shared fixture: the small-strain Terzaghi smoke test uses the defaults
+    (mixed ``PoroMechanics`` + ``ElasticIsotrop``); the finite-strain test
+    (``test_poromech_finite_strain``) passes a simcoon skeleton,
+    ``use_simple=True`` and ``nlgeom="UL"``.
 
     Returns
     -------
     pb : fedoo.problem.NonLinear
     mesh : fedoo.Mesh
+    assembly : fedoo.Assembly
     top_nodes, bottom_nodes, side_x_nodes, side_y_nodes : ndarray
     """
     fd.ModelingSpace("3D")
@@ -53,25 +64,37 @@ def _build_column_problem(
         z_min=0,
         z_max=L,
         elm_type="hex8",
-        name="Column",
+        name="Column" + name_suffix,
     )
 
-    skel = fd.constitutivelaw.ElasticIsotrop(E, nu, name="Skeleton")
+    if skeleton is None:
+        skeleton = fd.constitutivelaw.ElasticIsotrop(
+            E, nu, name="Skeleton" + name_suffix
+        )
     fluid = fd.constitutivelaw.PoroFluidProperties(
         permeability=permeability,
         fluid_viscosity=fluid_viscosity,
         biot_coefficient=1.0,
         biot_modulus=biot_M,
-        initial_porosity=0.5,
-        name="Fluid",
+        initial_porosity=initial_porosity,
+        name="Fluid" + name_suffix,
     )
 
-    K_bulk = E / (3.0 * (1.0 - 2.0 * nu))
-    wf = fd.weakform.PoroMechanics(
-        skel, fluid, bulk_modulus=K_bulk, nlgeom=False, name="Poro"
-    )
-    fd.Assembly.create(wf, mesh, name="PoroAssembly")
-    pb = fd.problem.NonLinear("PoroAssembly")
+    if use_simple:
+        wf = fd.weakform.PoroMechanicsSimple(
+            skeleton, fluid, nlgeom=nlgeom, name="Poro" + name_suffix
+        )
+    else:
+        K_bulk = E / (3.0 * (1.0 - 2.0 * nu))
+        wf = fd.weakform.PoroMechanics(
+            skeleton,
+            fluid,
+            bulk_modulus=K_bulk,
+            nlgeom=nlgeom,
+            name="Poro" + name_suffix,
+        )
+    assembly = fd.Assembly.create(wf, mesh, name="PoroAssembly" + name_suffix)
+    pb = fd.problem.NonLinear("PoroAssembly" + name_suffix)
     pb.set_nr_criterion("Displacement", tol=1e-3, max_subiter=25)
 
     bottom = mesh.find_nodes("Z", 0.0)
@@ -82,7 +105,7 @@ def _build_column_problem(
     side_y = np.unique(
         np.concatenate([mesh.find_nodes("Y", 0.0), mesh.find_nodes("Y", 0.1)])
     )
-    return pb, mesh, top, bottom, side_x, side_y
+    return pb, mesh, assembly, top, bottom, side_x, side_y
 
 
 def test_terzaghi_consolidation_smoke():
@@ -90,7 +113,7 @@ def test_terzaghi_consolidation_smoke():
     L = 1.0
     delta = -1.0e-4  # compressive top displacement (1e-4 m)
 
-    pb, mesh, top, bottom, side_x, side_y = _build_column_problem(L=L)
+    pb, mesh, _, top, bottom, side_x, side_y = _build_column_problem(L=L)
 
     # Lateral confinement (no x, no y displacement on side faces)
     pb.bc.add("Dirichlet", side_x, "DispX", 0.0)
