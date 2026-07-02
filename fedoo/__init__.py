@@ -5,6 +5,7 @@ from . import (
     homogen,
     mesh,
     problem,
+    time,
     weakform,
     post_processing,
 )

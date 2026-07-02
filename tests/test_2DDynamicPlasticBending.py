@@ -44,6 +44,7 @@ def test_2DDynamicPlasticBending():
         material.corate = 0
     else:
         material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
+    material.set_density(rho)
 
     fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM, name="weakform")
 
@@ -58,11 +59,7 @@ def test_2DDynamicPlasticBending():
         "weakform", "Domain", "quad4", name="Assembling", MeshChange=False
     )  # uses MeshChange=True when the mesh change during the time
 
-    # Mass matrix
-    fd.weakform.Inertia(rho, "Inertia")
-    fd.Assembly.create("Inertia", "Domain", "quad4", name="MassAssembling")
-
-    pb = fd.problem.NonLinearNewmark("Assembling", "MassAssembling", 0.25, 0.5)
+    pb = fd.problem.NonLinearNewmark("Assembling", 0.25, 0.5)
 
     pb.set_nr_criterion("Displacement")
     # pb.set_nr_criterion("Work")

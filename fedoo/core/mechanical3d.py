@@ -105,11 +105,17 @@ class Mechanical3D(ConstitutiveLaw):
 
     # model of constitutive law for InternalForce Weakform
 
-    def __init__(self, name=""):
+    def __init__(self, name="", density=None):
         ConstitutiveLaw.__init__(self, name)
+        self.density = density
         self._Lt_from_F = False
         # _Lt_from_F attribute is True if the tangent matrix is related
         # to F instead of log epsilonn, ie for hyper elastic materials
+
+    def set_density(self, density):
+        """Set the mass density associated with this mechanical material."""
+        self.density = density
+        return self
 
     # def initialize(self, assembly, pb):
     #     pass

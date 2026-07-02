@@ -71,8 +71,7 @@ These laws should be associated with :py:class:`fedoo.weakform.PlateEquilibrium`
 Thermal constitutive law
 ======================================
 
-These laws should be associated with :py:class:`fedoo.weakform.HeatEquation` \
-   or  :py:class:`fedoo.weakform.SteadyHeatEquation`
+These laws should be associated with :py:class:`fedoo.weakform.HeatEquation`
 
 .. autosummary::
    :toctree: generated/

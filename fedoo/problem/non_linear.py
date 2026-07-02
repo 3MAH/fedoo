@@ -1,7 +1,9 @@
 from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
+from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
 from scipy.sparse.linalg import eigs, eigsh, ArpackNoConvergence
 import warnings
@@ -61,10 +63,13 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
+        self.time_integrators = {}
+        self._time_integrators_compiled = False
         self.t0 = 0
         self.tmax = 1
         self.time = 0
         self.dtime = 0
+        self._dtime_prev = 0  # dt of the last completed increment
         self.__iter = 0
         self.__compteurOutput = 0
 
@@ -134,7 +139,117 @@ class _NonLinearBase:
         # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
+    def set_time_integrator(self, evolution, integrator):
+        """Attach or remove a problem-level time integrator.
+
+        The integrator compiles compatible static weakforms before assembly
+        initialization. For example::
+
+            pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+
+        Passing ``None`` removes the integrator associated with the evolution
+        category. This can only be used before a compatible weakform has been
+        compiled into its transient form.
+        """
+        evolution = normalize_time_evolution(evolution)
+        if self._time_integrators_compiled and self._has_time_integrated_weakform(
+            self.__assembly
+        ):
+            # Once compiled, the transient weakforms carry the previous
+            # integrator's coefficients: replacing or removing an integrator
+            # would silently be a no-op, so fail loudly instead.
+            raise RuntimeError(
+                "Cannot change time integrators after the assembly has been "
+                "compiled for transient analysis. Create a new problem or "
+                "change the assembly before modifying the integrators."
+            )
+        if integrator is None:
+            self.time_integrators.pop(evolution, None)
+            self._time_integrators_compiled = False
+            return None
+
+        integrator_evolution = normalize_time_evolution(
+            getattr(integrator, "evolution", evolution)
+        )
+        if integrator_evolution != evolution:
+            raise ValueError(
+                f"Time integrator {integrator!r} is not compatible with evolution "
+                f"{evolution!r}."
+            )
+
+        self.time_integrators[evolution] = integrator
+        self._time_integrators_compiled = False
+        return integrator
+
+    def _has_time_integrated_weakform(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            return any(
+                self._has_time_integrated_weakform(child)
+                for child in assembly.list_assembly
+            )
+        weakform = getattr(assembly, "weakform", None)
+        if getattr(weakform, "_fedoo_time_integrated", False):
+            return True
+        return any(
+            getattr(wf, "_fedoo_time_integrated", False)
+            for wf in getattr(weakform, "list_weakform", [])
+        )
+
+    def _compile_time_integrators(self):
+        if self._time_integrators_compiled:
+            return
+        for evolution, integrator in self.time_integrators.items():
+            self.__assembly = integrator.compile_assembly(self.__assembly, evolution)
+        self._time_integrators_compiled = True
+        self._warn_ignored_storage()
+
+    def _iter_leaf_weakforms(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            for child in assembly.list_assembly:
+                yield from self._iter_leaf_weakforms(child)
+            return
+        weakform = getattr(assembly, "weakform", None)
+        if weakform is None:
+            return
+        for wf in getattr(weakform, "list_weakform", [weakform]):
+            yield wf
+
+    def _warn_ignored_storage(self):
+        """Warn when declared storage/dissipation terms are silently ignored.
+
+        Weakforms may declare transient metadata (e.g. HeatEquation always
+        declares its heat capacity storage); without a matching problem-level
+        integrator the analysis is steady/static and these terms are dropped.
+        This is legitimate for a deliberately steady analysis, but silent for
+        a user migrating from the former transient-by-default weakforms, so a
+        warning is emitted once at compile time.
+        """
+        for wf in self._iter_leaf_weakforms(self.__assembly):
+            if getattr(wf, "_fedoo_time_integrated", False):
+                continue
+            evolution = getattr(wf, "time_evolution", None)
+            if evolution is None or evolution in self.time_integrators:
+                continue
+            if (
+                getattr(wf, "storage", None) is not None
+                or getattr(wf, "dissipation", None) is not None
+            ):
+                warnings.warn(
+                    f"Weakform '{wf.name}' declares storage or dissipation "
+                    f"terms for the '{evolution.kind}' time evolution, but no "
+                    "matching time integrator is attached to the problem: "
+                    "these terms are ignored and the analysis is treated as "
+                    "steady/static. For a transient analysis, attach an "
+                    "integrator, e.g. pb.set_time_integrator("
+                    "fd.time.FIRST_ORDER, fd.time.BackwardEuler()) or "
+                    "pb.set_time_integrator(fd.time.SECOND_ORDER, "
+                    "fd.time.Newmark()).",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
     def initialize(self):
+        self._compile_time_integrators()
         self.__assembly.initialize(self)
         self.set_A(0)
 
@@ -207,6 +322,7 @@ class _NonLinearBase:
             assembling = Assembly[assembling]
 
         self.__assembly = assembling
+        self._time_integrators_compiled = False
         if update:
             self.update()
 
@@ -996,6 +1112,17 @@ class _NonLinearBase:
 
         if np.isscalar(self._U) and self._U == 0:  # Initialize only if 1st step
             self.initialize()
+        elif not self._time_integrators_compiled and self.time_integrators:
+            # Integrators attached (or the assembly changed) after the first
+            # solved stage: initialize() will not run again, so the transient
+            # weakforms would never be compiled and the stage would silently
+            # run static. Fail loudly instead.
+            raise RuntimeError(
+                "Time integrators were attached or modified after the first "
+                "solve, but they are only compiled when the problem "
+                "initializes. Create a new problem for the transient stage "
+                "(the assembly can be reused)."
+            )
 
         restart = False  # bool to know if the iteration is another attempt
 
@@ -1010,6 +1137,11 @@ class _NonLinearBase:
                 next_time = next_time + interval_output
                 if next_time > self.tmax - self.err_num:
                     next_time = self.tmax
+
+            # keep the time step of the increment that has just been completed:
+            # set_start finalizes state (e.g. Newmark velocity/acceleration)
+            # over that increment, while self.dtime below is the NEXT step.
+            self._dtime_prev = self.dtime
 
             if (
                 self.time + dt > next_time - self.err_num
@@ -1117,3 +1249,46 @@ class _NonLinearBase:
 
 class NonLinear(_NonLinearBase, Problem):
     pass
+
+
+def NonLinearNewmark(
+    assembly,
+    beta=0.25,
+    gamma=0.5,
+    nlgeom=False,
+    name="MainProblem",
+    first_order_integrator=None,
+):
+    """Create a nonlinear Newmark problem with default time integrators.
+
+    This is a convenience factory around :class:`NonLinear`. It attaches a
+    Newmark integrator for second-order evolutions and a Backward-Euler
+    integrator for first-order evolutions.
+
+    .. note::
+        The signature changed: the mass is now derived from the material
+        density (``material.set_density(rho)``) or ``weakform.set_inertia(...)``,
+        so a separate mass assembly is no longer passed. The legacy
+        ``NonLinearNewmark(stiffness, mass, beta, gamma)`` form is rejected with
+        an explicit error.
+    """
+    import numbers
+
+    from fedoo import time
+
+    if not isinstance(beta, numbers.Number) or not isinstance(gamma, numbers.Number):
+        raise TypeError(
+            "NonLinearNewmark(assembly, beta, gamma) no longer takes a separate "
+            "mass assembly: the mass is derived from the material density "
+            "(material.set_density(rho)) or from weakform.set_inertia(...). "
+            "Replace NonLinearNewmark(stiffness, mass, beta, gamma) with "
+            "NonLinearNewmark(stiffness, beta, gamma). See fedoo.time for the "
+            "new time-integration API."
+        )
+
+    pb = NonLinear(assembly, nlgeom=nlgeom, name=name)
+    pb.set_time_integrator(time.SECOND_ORDER, time.Newmark(beta, gamma))
+    if first_order_integrator is None:
+        first_order_integrator = time.BackwardEuler()
+    pb.set_time_integrator(time.FIRST_ORDER, first_order_integrator)
+    return pb

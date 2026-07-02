@@ -471,8 +471,12 @@ class HourglassStiffness(WeakFormBase):
                     assembly.stress_equilibrium_assembly
                 )
             else:
-                raise (TypeError)
-                # pwave_modulus = 1
+                raise TypeError(
+                    "HourglassStiffness could not find the StressEquilibrium "
+                    "assembly required to compute the p-wave modulus. Set the "
+                    "stress_equilibrium_assembly attribute of the "
+                    "HourglassStiffness weakform explicitly."
+                )
 
             hourglass_stiffness = 1 / ndim * self.stiffness_coef * pwave_modulus * coef
             # Formulation from Flanagan, D.P. and Belytschko, T. (1981)
@@ -513,12 +517,16 @@ class HourglassStiffness(WeakFormBase):
         if self.stress_equilibrium_assembly is None:
             # extract the assembly associated to StressEquilibrium.
             # required to compute the tangent bulk modulus
+            # The StressEquilibrium weakform may be wrapped inside a
+            # WeakFormSum (e.g. compiled by a problem-level time integrator),
+            # so the members of a sum are probed as well.
             list_assembly = assembly.associated_assembly_sum.list_assembly
             for a in list_assembly:
-                if isinstance(a.weakform, StressEquilibrium) and a.elm_type in [
-                    "quad4",
-                    "hex8",
-                ]:
+                if a.elm_type not in ["quad4", "hex8"]:
+                    continue
+                wf = a.weakform
+                list_wf = getattr(wf, "list_weakform", [wf])
+                if any(isinstance(w, StressEquilibrium) for w in list_wf):
                     assembly.stress_equilibrium_assembly = a
                     break
 

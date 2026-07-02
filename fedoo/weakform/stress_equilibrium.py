@@ -2,6 +2,7 @@
 
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -61,6 +62,11 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector("Disp", ("DispX", "DispY"))
 
         self.constitutivelaw = constitutivelaw
+        # Tag a second-order (dynamic) evolution. The mass term is resolved from
+        # the material density (or an explicit set_inertia) at integrator
+        # compile time, so a set_density() call made after the weakform is built
+        # is still honored, and the inertia stays absent for static analyses.
+        self.time_evolution = SECOND_ORDER
 
         self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.

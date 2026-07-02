@@ -281,7 +281,7 @@ class PoroMassStorage(WeakFormBase):
 
     Notes
     -----
-    Unlike :py:class:`TemperatureTimeDerivative`, the storage term is
+    Unlike :py:class:`HeatCapacity`, the storage term is
     **not** lumped: mass lumping on ``K_pp`` destroys the inf-sup
     stabilization brought by the storage coefficient and amplifies
     checkerboard pressure oscillations.
