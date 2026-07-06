@@ -121,6 +121,30 @@ class ElementHexahedron(Element):
                 ]
             ]
             return np.c_[xi, eta, zeta]
+        elif n_elm_gp == 14:
+            # 14-point reduced integration rule for the 20-node hexahedron
+            # (Ansys SOLID186 uniform reduced integration, Irons rule).
+            # 6 points on the axes at +/- b and 8 corner points at +/- c.
+            b = 0.7958224257542215  # np.sqrt(19.0 / 30.0)
+            c = 0.7587869106393281  # np.sqrt(19.0 / 33.0)
+            return np.array(
+                [
+                    [-b, 0.0, 0.0],
+                    [b, 0.0, 0.0],
+                    [0.0, -b, 0.0],
+                    [0.0, b, 0.0],
+                    [0.0, 0.0, -b],
+                    [0.0, 0.0, b],
+                    [-c, -c, -c],
+                    [-c, -c, c],
+                    [-c, c, -c],
+                    [-c, c, c],
+                    [c, -c, -c],
+                    [c, -c, c],
+                    [c, c, -c],
+                    [c, c, c],
+                ]
+            )
         else:
             assert 0, (
                 "Number of gauss points "
@@ -167,6 +191,12 @@ class ElementHexahedron(Element):
                     b**3,
                 ]
             )
+        elif n_elm_gp == 14:
+            # weights for the 14-point reduced integration rule (Irons rule).
+            # 320/361 for the 6 axis points, 121/361 for the 8 corner points.
+            wb = 0.8864265927977839  # 320.0 / 361.0
+            wc = 0.3351800554016620  # 121.0 / 361.0
+            return np.array([wb, wb, wb, wb, wb, wb, wc, wc, wc, wc, wc, wc, wc, wc])
         else:
             assert 0, (
                 "Number of gauss points "
@@ -486,6 +516,17 @@ class Hex20(ElementHexahedron):
             )
             for xi in vec_xi
         ]
+
+
+class Hex20r(Hex20):
+    name = "hex20r"
+    default_n_gp = 14
+    n_nodes = 20
+
+    # Same 20-node quadratic interpolation as Hex20, but integrated with the
+    # 14-point reduced rule (Ansys SOLID186 uniform reduced integration).
+    def __init__(self, n_elm_gp=14, **kargs):
+        Hex20.__init__(self, n_elm_gp, **kargs)
 
 
 #### Hourglass control shape function ####
