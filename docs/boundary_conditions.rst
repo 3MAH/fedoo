@@ -120,6 +120,33 @@ to the assembly defining the stiffness matrix.
     fedoo.constraint.Pressure
     fedoo.constraint.SurfaceForce
 
+The mean value of a field over a set of nodes can be constrained with the
+:py:class:`fedoo.constraint.MeanValueConstraint` class. This constraint is
+also an assembly object that should be summed with the assembly defining
+the stiffness matrix. The main application is the removal of the rigid body
+translation in periodic homogenization problems, by enforcing a zero mean
+displacement instead of blocking an arbitrary node:
+
+>>> pb = fd.problem.Linear(assembly + fd.constraint.MeanValueConstraint(mesh))
+
+The constraint is enforced with Lagrange multipliers (one additional global
+dof per variable) leading to a saddle-point system: a direct solver is
+required (this is the default solver). The imposed value is not affected by
+the time evolution of the problem (no ramp is applied).
+
+Unlike blocking an arbitrary node, this gauge is independent of the choice
+of node and, being the zero-mean condition, gives the canonical fluctuation
+field of periodic homogenization (the volume average of the displacement is
+zero). The single-node pin remains a valid and cheaper alternative when only
+the stresses (e.g. the homogenized stiffness) are of interest, since both
+constraints give the same stress field.
+
+.. autosummary::
+    :toctree: generated/
+    :template: custom-class-template.rst
+
+    fedoo.constraint.MeanValueConstraint
+
 Some advanced constraints base on multiple linearized MPC are available in
 fedoo. They can be created and add to the problem with the pb.bc.add method.
 
