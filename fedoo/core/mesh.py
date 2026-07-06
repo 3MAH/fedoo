@@ -26,6 +26,39 @@ try:
 except ImportError:
     USE_PYVISTA_QT = False
 
+try:
+    import meshlane
+
+    USE_MESHLANE = True
+except ImportError:
+    USE_MESHLANE = False
+
+
+# Mapping from meshlane (meshio-style) cell type names to fedoo element types.
+# A value of None means the cell is recognized but intentionally ignored
+# (e.g. isolated vertices). Missing keys are reported as unavailable.
+_MESHLANE_TO_FEDOO = {
+    "vertex": None,
+    "line": "lin2",
+    "line3": "lin3",
+    "triangle": "tri3",
+    "triangle6": "tri6",
+    "quad": "quad4",
+    "quad8": "quad8",
+    "quad9": "quad9",
+    "tetra": "tet4",
+    "tetra10": "tet10",
+    "hexahedron": "hex8",
+    "hexahedron20": "hex20",
+    "wedge": "wed6",
+    "wedge15": "wed15",
+    "wedge18": "wed18",
+}
+
+# File extensions read through meshlane rather than pyvista. These are FEA
+# solver decks that the VTK readers behind pyvista cannot load reliably.
+_MESHLANE_READ_EXTENSIONS = {".inp", ".cdb"}
+
 
 class Mesh(MeshBase):
     """Fedoo Mesh object.
@@ -231,13 +264,108 @@ class Mesh(MeshBase):
             raise NameError("Pyvista not installed.")
 
     @staticmethod
+    def from_meshlane(ml_mesh, name: str = "") -> "Mesh":
+        """Build a Mesh from a meshlane (meshio-style) mesh object.
+
+        Node coordinates, element connectivity, node sets (``point_sets``,
+        e.g. Abaqus ``*NSET``) and element sets (``cell_sets``, e.g. Abaqus
+        ``*ELSET``) are imported. Meshes holding several element types are
+        returned as a :py:class:`MultiMesh`; element sets are then split per
+        element type.
+
+        Parameters
+        ----------
+        ml_mesh: meshlane.Mesh
+            Mesh object returned by ``meshlane.read``.
+        name : str
+            name of the new created Mesh. If specified, this Mesh is added to
+            the dict containing all the loaded Mesh (Mesh.get_all()).
+        """
+        points = np.asarray(ml_mesh.points, dtype=float)
+
+        elements_dict = {}
+        # per cell block: (fedoo_elm_type or None, offset within that type)
+        block_meta = []
+        type_count = {}
+        for block in ml_mesh.cells:
+            elm_type = _MESHLANE_TO_FEDOO.get(block.type, "__unknown__")
+            if elm_type == "__unknown__":
+                warnings.warn(
+                    f"Element type '{block.type}' is not available in fedoo "
+                    "and was ignored during import."
+                )
+                block_meta.append((None, 0))
+                continue
+            if elm_type is None:
+                block_meta.append((None, 0))
+                continue
+            data = np.asarray(block.data)
+            offset = type_count.get(elm_type, 0)
+            block_meta.append((elm_type, offset))
+            type_count[elm_type] = offset + len(data)
+            if elm_type in elements_dict:
+                elements_dict[elm_type] = np.vstack([elements_dict[elm_type], data])
+            else:
+                elements_dict[elm_type] = data
+
+        if len(elements_dict) == 0:
+            raise NotImplementedError("This mesh contains no compatible element.")
+
+        # node sets: point_sets -> node_sets (global node indices)
+        node_sets = {
+            set_name: np.asarray(indices)
+            for set_name, indices in getattr(ml_mesh, "point_sets", {}).items()
+        }
+
+        # element sets: cell_sets are given per cell block with block-local
+        # indices. Distribute them per fedoo element type, shifting by the
+        # offset each block occupies inside its (stacked) element type.
+        element_sets_by_type = {elm_type: {} for elm_type in elements_dict}
+        for set_name, per_block in getattr(ml_mesh, "cell_sets", {}).items():
+            for block_idx, local_indices in enumerate(per_block):
+                if block_idx >= len(block_meta):
+                    continue
+                elm_type, offset = block_meta[block_idx]
+                if elm_type is None or len(local_indices) == 0:
+                    continue
+                indices = np.asarray(local_indices) + offset
+                type_sets = element_sets_by_type[elm_type]
+                if set_name in type_sets:
+                    type_sets[set_name] = np.concatenate(
+                        [type_sets[set_name], indices]
+                    )
+                else:
+                    type_sets[set_name] = indices
+
+        if len(elements_dict) == 1:
+            ((elm_type, elements),) = elements_dict.items()
+            return Mesh(
+                points,
+                elements,
+                elm_type,
+                node_sets=node_sets,
+                element_sets=element_sets_by_type[elm_type],
+                name=name,
+            )
+        return MultiMesh(
+            points,
+            elements_dict,
+            node_sets=node_sets,
+            element_sets=element_sets_by_type,
+            name=name,
+        )
+
+    @staticmethod
     def read(filename: str, name: str = "") -> "Mesh":
         """Build a Mesh from a file.
 
-        The file type is inferred from the file name.
-        This function use the pyvista read method which
-        is itself based on the vtk native readers and the meshio readers
-        (available only if the meshio lib is installed.)
+        The file type is inferred from the file name. FEA solver decks such
+        as Abaqus (``.inp``) and Ansys/APDL (``.cdb``) are read with the
+        meshlane library (a descendant of meshio); these support second-order
+        (quadratic) elements, multiple element types (returned as a
+        :py:class:`MultiMesh`) and node/element sets (``*NSET``/``*ELSET``).
+        Other formats are read with pyvista, which relies on the native VTK
+        readers.
 
         Parameters
         ----------
@@ -247,17 +375,22 @@ class Mesh(MeshBase):
             name of the new created Mesh. If specitified, this Mesh will be
             added in the dict containing all the loaded Mesh (Mesh.get_all()).
             By default, the  Mesh is not added to the list.
-
-        Notes
-        -----
-        For now, only mesh with single element type may be imported.
-        Multi-element meshes will be integrated later.
         """
+        ext = splitext(filename)[1].lower()
+
+        if ext in _MESHLANE_READ_EXTENSIONS:
+            if not USE_MESHLANE:
+                raise ModuleNotFoundError(
+                    f"Reading '{ext}' files requires the 'meshlane' library. "
+                    "Install it with `pip install meshlane`."
+                )
+            return Mesh.from_meshlane(meshlane.read(filename), name=name)
+
         if USE_PYVISTA:
-            mesh = Mesh.from_pyvista(pv.read(filename), name=name)
-            return mesh
-        else:
-            raise NameError("Pyvista not installed.")
+            return Mesh.from_pyvista(pv.read(filename), name=name)
+        if USE_MESHLANE:
+            return Mesh.from_meshlane(meshlane.read(filename), name=name)
+        raise NameError("Neither pyvista nor meshlane is installed.")
 
     def add_node_set(
         self, node_indices: list[int] | np.ndarray[int], name: str
@@ -1647,12 +1780,18 @@ class MultiMesh(Mesh):
         nodes: np.ndarray[float],
         elements_dict: dict = None,
         node_sets: dict | None = None,
+        element_sets: dict | None = None,
         ndim: int | None = None,
         name: str = "",
     ) -> None:
         MeshBase.__init__(self, name)
         self.nodes = nodes  # node coordinates
         """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
+
+        if node_sets is None:
+            node_sets = {}
+        if element_sets is None:
+            element_sets = {}
 
         if ndim is None:
             ndim = self.nodes.shape[1]
@@ -1672,12 +1811,23 @@ class MultiMesh(Mesh):
         self.mesh_dict = {}
         if elements_dict is not None:
             for elm_type, elements in elements_dict.items():
+                # sub-meshes share the same nodes, hence the same node sets.
+                # element sets are given per element type.
                 self.mesh_dict[elm_type] = Mesh(
-                    self.nodes, elements, elm_type, ndim=ndim
+                    self.nodes,
+                    elements,
+                    elm_type,
+                    node_sets=node_sets,
+                    element_sets=element_sets.get(elm_type, {}),
+                    ndim=ndim,
                 )
 
-        self.node_sets = {}
+        self.node_sets = node_sets
         """Dict containing node sets associated to the mesh"""
+
+        self.element_sets = element_sets
+        """Dict of element sets per element type: element_sets[elm_type] is a
+        dict {set_name: element indices local to the elm_type sub-mesh}."""
 
     def __getitem__(self, item: str) -> Mesh:
         return self.mesh_dict[item]
@@ -1687,7 +1837,8 @@ class MultiMesh(Mesh):
             f"{object.__repr__(self)}\n\n"
             f"elm_types: {tuple(self.mesh_dict.keys())}\n"
             f"n_nodes: {self.n_nodes}\n"
-            f"n node_sets: {len(self.node_sets)}"
+            f"n node_sets: {len(self.node_sets)}\n"
+            f"n element_sets: {sum(len(s) for s in self.element_sets.values())}"
         )
 
     @staticmethod
