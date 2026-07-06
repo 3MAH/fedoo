@@ -28,7 +28,7 @@ dependencies = [
     'numpy>=2.00',
     'scipy',
     'simcoon>=1.11.0',
-    'meshlane',
+    'meshio',
 ]
 
 [project.optional-dependencies]

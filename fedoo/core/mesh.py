@@ -27,17 +27,17 @@ except ImportError:
     USE_PYVISTA_QT = False
 
 try:
-    import meshlane
+    import meshio
 
-    USE_MESHLANE = True
+    USE_MESHIO = True
 except ImportError:
-    USE_MESHLANE = False
+    USE_MESHIO = False
 
 
-# Mapping from meshlane (meshio-style) cell type names to fedoo element types.
+# Mapping from meshio cell type names to fedoo element types.
 # A value of None means the cell is recognized but intentionally ignored
 # (e.g. isolated vertices). Missing keys are reported as unavailable.
-_MESHLANE_TO_FEDOO = {
+_MESHIO_TO_FEDOO = {
     "vertex": None,
     "line": "lin2",
     "line3": "lin3",
@@ -55,9 +55,9 @@ _MESHLANE_TO_FEDOO = {
     "wedge18": "wed18",
 }
 
-# File extensions read through meshlane rather than pyvista. These are FEA
+# File extensions read through meshio rather than pyvista. These are FEA
 # solver decks that the VTK readers behind pyvista cannot load reliably.
-_MESHLANE_READ_EXTENSIONS = {".inp", ".cdb"}
+_MESHIO_READ_EXTENSIONS = {".inp"}
 
 
 class Mesh(MeshBase):
@@ -264,8 +264,8 @@ class Mesh(MeshBase):
             raise NameError("Pyvista not installed.")
 
     @staticmethod
-    def from_meshlane(ml_mesh, name: str = "") -> "Mesh":
-        """Build a Mesh from a meshlane (meshio-style) mesh object.
+    def from_meshio(io_mesh, name: str = "") -> "Mesh":
+        """Build a Mesh from a meshio mesh object.
 
         Node coordinates, element connectivity, node sets (``point_sets``,
         e.g. Abaqus ``*NSET``) and element sets (``cell_sets``, e.g. Abaqus
@@ -275,20 +275,20 @@ class Mesh(MeshBase):
 
         Parameters
         ----------
-        ml_mesh: meshlane.Mesh
-            Mesh object returned by ``meshlane.read``.
+        io_mesh: meshio.Mesh
+            Mesh object returned by ``meshio.read``.
         name : str
             name of the new created Mesh. If specified, this Mesh is added to
             the dict containing all the loaded Mesh (Mesh.get_all()).
         """
-        points = np.asarray(ml_mesh.points, dtype=float)
+        points = np.asarray(io_mesh.points, dtype=float)
 
         elements_dict = {}
         # per cell block: (fedoo_elm_type or None, offset within that type)
         block_meta = []
         type_count = {}
-        for block in ml_mesh.cells:
-            elm_type = _MESHLANE_TO_FEDOO.get(block.type, "__unknown__")
+        for block in io_mesh.cells:
+            elm_type = _MESHIO_TO_FEDOO.get(block.type, "__unknown__")
             if elm_type == "__unknown__":
                 warnings.warn(
                     f"Element type '{block.type}' is not available in fedoo "
@@ -314,14 +314,14 @@ class Mesh(MeshBase):
         # node sets: point_sets -> node_sets (global node indices)
         node_sets = {
             set_name: np.asarray(indices)
-            for set_name, indices in getattr(ml_mesh, "point_sets", {}).items()
+            for set_name, indices in getattr(io_mesh, "point_sets", {}).items()
         }
 
         # element sets: cell_sets are given per cell block with block-local
         # indices. Distribute them per fedoo element type, shifting by the
         # offset each block occupies inside its (stacked) element type.
         element_sets_by_type = {elm_type: {} for elm_type in elements_dict}
-        for set_name, per_block in getattr(ml_mesh, "cell_sets", {}).items():
+        for set_name, per_block in getattr(io_mesh, "cell_sets", {}).items():
             for block_idx, local_indices in enumerate(per_block):
                 if block_idx >= len(block_meta):
                     continue
@@ -331,9 +331,7 @@ class Mesh(MeshBase):
                 indices = np.asarray(local_indices) + offset
                 type_sets = element_sets_by_type[elm_type]
                 if set_name in type_sets:
-                    type_sets[set_name] = np.concatenate(
-                        [type_sets[set_name], indices]
-                    )
+                    type_sets[set_name] = np.concatenate([type_sets[set_name], indices])
                 else:
                     type_sets[set_name] = indices
 
@@ -359,9 +357,8 @@ class Mesh(MeshBase):
     def read(filename: str, name: str = "") -> "Mesh":
         """Build a Mesh from a file.
 
-        The file type is inferred from the file name. FEA solver decks such
-        as Abaqus (``.inp``) and Ansys/APDL (``.cdb``) are read with the
-        meshlane library (a descendant of meshio); these support second-order
+        The file type is inferred from the file name. Abaqus decks (``.inp``)
+        are read with the meshio library; this supports second-order
         (quadratic) elements, multiple element types (returned as a
         :py:class:`MultiMesh`) and node/element sets (``*NSET``/``*ELSET``).
         Other formats are read with pyvista, which relies on the native VTK
@@ -378,19 +375,19 @@ class Mesh(MeshBase):
         """
         ext = splitext(filename)[1].lower()
 
-        if ext in _MESHLANE_READ_EXTENSIONS:
-            if not USE_MESHLANE:
+        if ext in _MESHIO_READ_EXTENSIONS:
+            if not USE_MESHIO:
                 raise ModuleNotFoundError(
-                    f"Reading '{ext}' files requires the 'meshlane' library. "
-                    "Install it with `pip install meshlane`."
+                    f"Reading '{ext}' files requires the 'meshio' library. "
+                    "Install it with `pip install meshio`."
                 )
-            return Mesh.from_meshlane(meshlane.read(filename), name=name)
+            return Mesh.from_meshio(meshio.read(filename), name=name)
 
         if USE_PYVISTA:
             return Mesh.from_pyvista(pv.read(filename), name=name)
-        if USE_MESHLANE:
-            return Mesh.from_meshlane(meshlane.read(filename), name=name)
-        raise NameError("Neither pyvista nor meshlane is installed.")
+        if USE_MESHIO:
+            return Mesh.from_meshio(meshio.read(filename), name=name)
+        raise NameError("Neither pyvista nor meshio is installed.")
 
     def add_node_set(
         self, node_indices: list[int] | np.ndarray[int], name: str
