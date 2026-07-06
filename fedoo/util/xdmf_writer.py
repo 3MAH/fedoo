@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -78,9 +77,7 @@ class XDMFExporter:
         if grp is None:
             return []
         return sorted(
-            int(name.split("_")[1])
-            for name in grp
-            if name.startswith("iter_")
+            int(name.split("_")[1]) for name in grp if name.startswith("iter_")
         )
 
     def _build_iteration_grid(self, f: h5py.File, iteration: int) -> etree.Element:

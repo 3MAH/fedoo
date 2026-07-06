@@ -43,7 +43,6 @@ results/
 └── ...
 """
 
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -67,6 +66,7 @@ def submesh_id(index: int) -> str:
 def iteration_name(iteration: int) -> str:
     """Return the canonical FDH5 group name for a result iteration."""
     return f"iter_{iteration}"
+
 
 @dataclass(frozen=True)
 class CompressionConfig:
@@ -317,9 +317,6 @@ class FDH5Writer:
             return it.name
 
 
-
-
-
 class FDH5Reader:
     """
     Reader for FDH5 (Finite Element HDF5) files.
@@ -456,7 +453,9 @@ class FDH5Reader:
         return {
             "id": submesh_id,
             "element_type": self._decode(meta.attrs.get("element_type")),
-            "name": self._decode(meta.attrs.get("name")) if "name" in meta.attrs else None,
+            "name": self._decode(meta.attrs.get("name"))
+            if "name" in meta.attrs
+            else None,
             "elements": sm["elements"],
             "element_sets": (
                 {name: ds for name, ds in sm["element_sets"].items()}
@@ -497,9 +496,7 @@ class FDH5Reader:
         if grp is None:
             return []
         return sorted(
-            int(name.split("_")[1])
-            for name in grp
-            if name.startswith("iter_")
+            int(name.split("_")[1]) for name in grp if name.startswith("iter_")
         )
 
     def read_iteration_metadata(self, iteration: int) -> Dict[str, Any]:
@@ -591,7 +588,10 @@ class FDH5Reader:
         grp = f.get(f"results/{iteration_name(iteration)}/element_data")
         if grp is None:
             return {}
-        return {sid: {name: ds for name, ds in sm_grp.items()} for sid, sm_grp in grp.items()}
+        return {
+            sid: {name: ds for name, ds in sm_grp.items()}
+            for sid, sm_grp in grp.items()
+        }
 
     def read_gausspoint_data(
         self,
@@ -614,7 +614,10 @@ class FDH5Reader:
         grp = f.get(f"results/{iteration_name(iteration)}/gausspoint_data")
         if grp is None:
             return {}
-        return {sid: {name: ds for name, ds in sm_grp.items()} for sid, sm_grp in grp.items()}
+        return {
+            sid: {name: ds for name, ds in sm_grp.items()}
+            for sid, sm_grp in grp.items()
+        }
 
 
 def mesh_to_fedoo(mesh_data: dict):
@@ -725,8 +728,7 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
         iter_data["gausspoint_data"],
     )
     dataset.scalar_data = {
-        key: scalar_value(value)
-        for key, value in iter_data["scalars"].items()
+        key: scalar_value(value) for key, value in iter_data["scalars"].items()
     }
 
 
@@ -839,29 +841,32 @@ if __name__ == "__main__":
     # example of use
     import numpy as np
     from pathlib import Path
-    
+
     # Import your classes
     # from fdh5 import FDH5Writer, FDH5Reader
-    
+
     # --------------------------------------------------
     # File path
     # --------------------------------------------------
     path = Path("example.fdh5")
-    
+
     writer = FDH5Writer(path, validate=True)
-    
+
     # --------------------------------------------------
     # Mesh definition
     # --------------------------------------------------
-    
+
     # 4 nodes, 2D
-    nodes = np.array([
-        [0.0, 0.0],
-        [1.0, 0.0],
-        [1.0, 1.0],
-        [0.0, 1.0],
-    ], dtype=float)
-    
+    nodes = np.array(
+        [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+        ],
+        dtype=float,
+    )
+
     # Write mesh + node sets
     writer.write_mesh(
         nodes,
@@ -870,40 +875,46 @@ if __name__ == "__main__":
         },
         overwrite=True,
     )
-    
+
     # Two TRI3 elements
-    elements = np.array([
-        [0, 1, 2],
-        [0, 2, 3],
-    ], dtype=int)
-    
+    elements = np.array(
+        [
+            [0, 1, 2],
+            [0, 2, 3],
+        ],
+        dtype=int,
+    )
+
     submesh_id = writer.add_submesh(
         element_type="tri3",
         elements=elements,
         name="square_triangles",
     )
-    
+
     # --------------------------------------------------
     # Iteration 0
     # --------------------------------------------------
-    
+
     # Node field: displacement (n_nodes, 2)
     node_data = {
-        "displacement": np.array([
-            [0.0, 0.0],
-            [0.1, 0.0],
-            [0.1, 0.1],
-            [0.0, 0.1],
-        ], dtype=float)
+        "displacement": np.array(
+            [
+                [0.0, 0.0],
+                [0.1, 0.0],
+                [0.1, 0.1],
+                [0.0, 0.1],
+            ],
+            dtype=float,
+        )
     }
-    
+
     # Element field: von Mises stress (n_elements,)
     element_data = {
         submesh_id: {
             "stress_vm": np.array([100.0, 120.0], dtype=float),
         }
     }
-    
+
     # Gauss‑point field (GP‑major, flattened)
     # Here: 2 elements, 2 Gauss points each
     # Order:
@@ -911,19 +922,24 @@ if __name__ == "__main__":
     #   GP1: elem0, elem1
     gausspoint_data = {
         submesh_id: {
-            "strain_eq": np.array([
-                0.01, 0.02,   # GP0
-                0.015, 0.025  # GP1
-            ], dtype=float).reshape(-1, 1)  # (n_elem * n_gp, n_comp)
+            "strain_eq": np.array(
+                [
+                    0.01,
+                    0.02,  # GP0
+                    0.015,
+                    0.025,  # GP1
+                ],
+                dtype=float,
+            ).reshape(-1, 1)  # (n_elem * n_gp, n_comp)
         }
     }
-    
+
     # Scalars
     scalars = {
         "time": 0.0,
         "total_energy": 42.0,
     }
-    
+
     # Write iteration
     writer.write_iteration(
         iteration=0,
@@ -934,11 +950,8 @@ if __name__ == "__main__":
         time=0.0,
         dt=0.1,
     )
-    
+
     print("✅ File written:", path)
-
-
-
 
     # -------------------------------------------------------------------------
     # Read written file
@@ -949,19 +962,18 @@ if __name__ == "__main__":
     mesh = reader.read_mesh()
     print("Nodes:\n", mesh["nodes"])
     print("Submeshes:", list(mesh["submeshes"].keys()))
-    
+
     # Read iteration 0
     it0 = reader.read_iteration(0)
-    
+
     u = it0["node_data"]["displacement"]
     stress = it0["element_data"]["submesh_0"]["stress_vm"]
     strain_gp = it0["gausspoint_data"]["submesh_0"]["strain_eq"]
-    
+
     print("\nDisplacement:\n", u)
     print("\nElement stress:\n", stress)
     print("\nGauss-point strain (flattened):\n", strain_gp)
-    
-    
+
     # -------------------------------------------------------------------------
     # Read written file lazily
     # -------------------------------------------------------------------------
@@ -970,24 +982,24 @@ if __name__ == "__main__":
     with reader.open() as f:
         # Lazy node data
         node_data = reader.read_node_data(0, lazy=True, file=f)
-        u_ds = node_data["displacement"]   # h5py.Dataset
-    
+        u_ds = node_data["displacement"]  # h5py.Dataset
+
         # Only read first 2 nodes
         print("First two displacements:\n", u_ds[:2])
-    
+
         # Lazy element data
         elem_data = reader.read_element_data(0, lazy=True, file=f)
         stress_ds = elem_data["submesh_0"]["stress_vm"]
-    
+
         print("First element stress:", stress_ds[0])
-    
+
         # Lazy Gauss-point data
         gp_data = reader.read_gausspoint_data(0, lazy=True, file=f)
         eps_ds = gp_data["submesh_0"]["strain_eq"]
-    
+
         # Infer GP layout manually
         n_elems = f["mesh/submesh_0/elements"].shape[0]
-    
+
         # GP0 for all elements
         gp0 = eps_ds[0:n_elems]
         print("GP0 strain:\n", gp0)
@@ -997,11 +1009,11 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     from xdmf_writer import XDMFExporter  # your exporter class
-    
+
     exporter = XDMFExporter(Path("example.fdh5"))
     exporter.export()
-    
+
     import pyvista as pv
+
     mesh = pv.read("example.xdmf")
     mesh.plot(show_edges=True)
-

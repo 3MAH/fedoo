@@ -1885,9 +1885,7 @@ class MultiMesh(Mesh):
         """
         mesh_dict = {}
         for elm_type in dict.fromkeys(self.elm_types):
-            mesh_list = [
-                mesh for mesh in self._mesh_list if mesh.elm_type == elm_type
-            ]
+            mesh_list = [mesh for mesh in self._mesh_list if mesh.elm_type == elm_type]
             if len(mesh_list) == 1:
                 mesh_dict[elm_type] = mesh_list[0]
             else:
@@ -2036,10 +2034,7 @@ class MultiMesh(Mesh):
                 )
             offset += mesh.n_elements
 
-        return {
-            name: np.concatenate(values)
-            for name, values in element_sets.items()
-        }
+        return {name: np.concatenate(values) for name, values in element_sets.items()}
 
     def to_pyvista(self, include_sets=False):
         """Wrap the current multimesh to a pyvista UnstructuredGrid.

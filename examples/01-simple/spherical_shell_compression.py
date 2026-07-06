@@ -68,7 +68,7 @@ assembly = solid_assembly + pressure_assembly
 #    Without them, the unconstrained problem is singular; some solvers may still
 #    return a usable strain/stress field, but the displacement field can contain
 #    arbitrary rigid-body motion.
-# 
+#
 
 pb = fd.problem.Linear(assembly)
 

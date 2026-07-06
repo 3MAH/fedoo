@@ -2056,9 +2056,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         pid = self.data.mesh.nearest_node(point)
                 else:
                     pid = mesh.find_closest_point(point)
-                    if (
-                        self.current_data_type == "GaussPoint"
-                        and not _is_multimesh(self.data.mesh)
+                    if self.current_data_type == "GaussPoint" and not _is_multimesh(
+                        self.data.mesh
                     ):
                         pid = self.data.mesh.elements.ravel()[pid]
             except Exception:
@@ -3762,9 +3761,8 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                     pid = mainwin.data.mesh.nearest_node(point)
             else:
                 pid = mesh.find_closest_point(point)
-                if (
-                    mainwin.current_data_type == "GaussPoint"
-                    and not _is_multimesh(mainwin.data.mesh)
+                if mainwin.current_data_type == "GaussPoint" and not _is_multimesh(
+                    mainwin.data.mesh
                 ):
                     pid = mainwin.data.mesh.elements.ravel()[pid]
 
@@ -3791,9 +3789,7 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             if cell_id < 0:
                 return
             display_cell_id = cell_id
-            actor_name, mesh = mainwin.active_dock.picked_actor_mesh(
-                picker.GetActor()
-            )
+            actor_name, mesh = mainwin.active_dock.picked_actor_mesh(picker.GetActor())
             if mesh is None:
                 mesh = mainwin.active_dock.pv_mesh
             cell = mesh.extract_cells(cell_id)

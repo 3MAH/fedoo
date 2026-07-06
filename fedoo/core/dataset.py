@@ -940,9 +940,12 @@ class DataSet:
             return element_ids, True
 
         offset = offsets[submesh_id]
-        local_ids = element_ids[
-            (element_ids >= offset) & (element_ids < offset + submesh.n_elements)
-        ] - offset
+        local_ids = (
+            element_ids[
+                (element_ids >= offset) & (element_ids < offset + submesh.n_elements)
+            ]
+            - offset
+        )
         if len(local_ids) == 0 and not element_set_invert:
             return None, False
         if len(local_ids) == 0 and element_set_invert:
@@ -1871,7 +1874,11 @@ class MultiFrameDataSet(DataSet):
             if iteration > len(self.list_data) or iteration < 0:
                 raise NameError("Number of iteration out of bounds")
             data_ref = self.list_data[iteration]
-            if isinstance(data_ref, tuple) and len(data_ref) == 3 and data_ref[0] == "fdh5":
+            if (
+                isinstance(data_ref, tuple)
+                and len(data_ref) == 3
+                and data_ref[0] == "fdh5"
+            ):
                 DataSet.load(self, data_ref[1], load_mesh, iteration=data_ref[2])
             else:
                 DataSet.load(self, data_ref)
