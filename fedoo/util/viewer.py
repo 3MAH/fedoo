@@ -26,7 +26,89 @@ from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToo
 import os
 import re
 
+from fedoo.core.multimeshdata import MultiMeshData
+from fedoo.core.mesh import MultiMesh
+
 USE_PYVISTA_QT = True
+
+
+def _is_multimesh(mesh):
+    return isinstance(mesh, MultiMesh)
+
+
+def _global_data_array(data):
+    if isinstance(data, MultiMeshData):
+        return data.to_global()
+    return data
+
+
+def _global_element_nodes(mesh, element_id):
+    """Return node ids for a global element id."""
+    if not _is_multimesh(mesh):
+        return mesh.elements[element_id]
+
+    submesh_id, local_id = _global_element_location(mesh, element_id)
+    return mesh[submesh_id].elements[local_id]
+
+
+def _global_element_location(mesh, element_id):
+    """Return ``(submesh_id, local_element_id)`` for a global element id."""
+    if not _is_multimesh(mesh):
+        return 0, element_id
+
+    offset = 0
+    for submesh_id, submesh in enumerate(mesh.submeshes):
+        stop = offset + submesh.n_elements
+        if offset <= element_id < stop:
+            return submesh_id, element_id - offset
+        offset = stop
+    raise IndexError(element_id)
+
+
+def _element_data_value(data, field, component, data_type, element_id):
+    values = data.get_data(field, component, data_type)
+    values = _global_data_array(values)
+    return values[..., element_id]
+
+
+def _gausspoint_values_for_element(data, field, component, element_id):
+    values = data.get_data(field, component, "GaussPoint")
+    if isinstance(values, MultiMeshData):
+        submesh_id, local_id = _global_element_location(data.mesh, element_id)
+        block = values.submesh(submesh_id)
+        if block is None:
+            return np.array([])
+        block = np.asarray(block)
+        n_elements = data.mesh[submesh_id].n_elements
+        return block.reshape(-1, n_elements)[:, local_id]
+
+    values = np.asarray(values)
+    return values.reshape(-1, data.mesh.n_elements)[:, element_id]
+
+
+def _gausspoint_global_indices_for_element(data, field, component, element_id):
+    values = data.get_data(field, component, "GaussPoint")
+    if isinstance(values, MultiMeshData):
+        submesh_id, local_id = _global_element_location(data.mesh, element_id)
+        offset = 0
+        for i in range(submesh_id):
+            block = values.submesh(i)
+            if block is None:
+                offset += data.mesh[i].n_elements
+            else:
+                offset += np.asarray(block).shape[-1]
+
+        block = values.submesh(submesh_id)
+        if block is None:
+            return []
+        block = np.asarray(block)
+        n_elements = data.mesh[submesh_id].n_elements
+        n_gp = block.shape[-1] // n_elements
+        return [offset + local_id + i * n_elements for i in range(n_gp)]
+
+    values = np.asarray(values)
+    n_gp = values.shape[-1] // data.mesh.n_elements
+    return [element_id + i * data.mesh.n_elements for i in range(n_gp)]
 
 
 class DockTitleBar(QtWidgets.QWidget):
@@ -212,9 +294,41 @@ class PlotDock(QDockWidget):
     @property
     def pv_mesh(self, id_mesh=1):
         mesh_name = "data" + str(id_mesh)
-        if mesh_name not in self.plotter.actors:
+        if mesh_name in self.plotter.actors:
+            return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
+
+        def actor_sort_key(name):
+            try:
+                return (0, int(name.rsplit("_", 1)[1]))
+            except (IndexError, ValueError):
+                return (1, name)
+
+        multimesh_actor_names = sorted(
+            (name for name in self.plotter.actors if name.startswith("data_")),
+            key=actor_sort_key,
+        )
+        if not multimesh_actor_names:
             return None
-        return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
+
+        meshes = [
+            pv.wrap(self.plotter.actors[name].GetMapper().GetInput())
+            for name in multimesh_actor_names
+        ]
+        if len(meshes) == 1:
+            return meshes[0]
+        return pv.MultiBlock(meshes).combine()
+
+    def picked_actor_mesh(self, actor):
+        """Return the actor name and PyVista mesh for a picked VTK actor."""
+        for name, candidate in self.plotter.actors.items():
+            if candidate is actor:
+                return name, pv.wrap(candidate.GetMapper().GetInput())
+            try:
+                if candidate.GetAddressAsString("") == actor.GetAddressAsString(""):
+                    return name, pv.wrap(candidate.GetMapper().GetInput())
+            except AttributeError:
+                pass
+        return None, None
 
     def get_components(self, field):
         if field == "":
@@ -274,6 +388,10 @@ class PlotDock(QDockWidget):
         }
         # plotter.clear()  # not compatible with pbr ???
         plotter.renderer.clear_actors()
+        multimesh_kargs = {}
+        if _is_multimesh(self.data.mesh):
+            multimesh_kargs["global_element_set"] = True
+            multimesh_kargs["name"] = "data"
 
         self.data.plot(
             field=self.current_field,
@@ -299,6 +417,7 @@ class PlotDock(QDockWidget):
             element_set=self.opts["element_set"],
             # element_set_invert = self.opts["element_set_invert"],
             cmap=self.opts["cmap"],
+            **multimesh_kargs,
         )
 
         if self.parent()._plane_widget_enabled:
@@ -1261,7 +1380,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self,
             "Open file",
             "",
-            "Fedoo files (*.fdz) ;;VTK Files (*.vtk);;CSV Files (*.csv) ;; All Files (*)",
+            "Fedoo files (*.fdz *.fdh5) ;;VTK Files (*.vtk);;CSV Files (*.csv) ;; All Files (*)",
         )
         if fname:
             data = fd.read_data(fname)
@@ -1937,7 +2056,10 @@ class MainWindow(QtWidgets.QMainWindow):
                         pid = self.data.mesh.nearest_node(point)
                 else:
                     pid = mesh.find_closest_point(point)
-                    if self.current_data_type == "GaussPoint":
+                    if (
+                        self.current_data_type == "GaussPoint"
+                        and not _is_multimesh(self.data.mesh)
+                    ):
                         pid = self.data.mesh.elements.ravel()[pid]
             except Exception:
                 pid = None
@@ -1948,7 +2070,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 msg = ""
             msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
             name = self.current_field
-            if name:
+            if name and pid is not None:
                 msg += (
                     f" | {name}={self.data[name, self.current_component, 'Node'][pid]}"
                 )
@@ -1974,7 +2096,10 @@ class MainWindow(QtWidgets.QMainWindow):
             cell_id = picker.GetCellId()
             if cell_id < 0:
                 return
-            mesh = self.active_dock.pv_mesh
+            display_cell_id = cell_id
+            actor_name, mesh = self.active_dock.picked_actor_mesh(picker.GetActor())
+            if mesh is None:
+                mesh = self.active_dock.pv_mesh
             if "vtkOriginalCellIds" in mesh.cell_data:
                 save_original_cell_ids = mesh.cell_data["vtkOriginalCellIds"]
                 cell = mesh.extract_cells(cell_id)
@@ -1992,17 +2117,35 @@ class MainWindow(QtWidgets.QMainWindow):
             elif "vtkOriginalCellIds" in mesh.cell_data:
                 # don't work !!!!
                 cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
+            if "_fedoo_global_cell_ids" in mesh.cell_data:
+                cell_id = mesh.cell_data["_fedoo_global_cell_ids"][display_cell_id]
+            cell_id = int(cell_id)
 
+            msg = ""
             if mesh is not None and cell_id is not None:
                 msg = f"Element id={cell_id} | "
             # msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
             name = self.current_field
-            data_gp = self.data[name, self.current_component, "GaussPoint"].reshape(
-                -1, self.data.mesh.n_elements
-            )[:, cell_id]
             if name:
-                msg += f"{name}_{self.current_component}={self.data[name, self.current_component, 'Element'][cell_id]}"
-                msg += f" | gp vals: {data_gp}"
+                try:
+                    elem_value = _element_data_value(
+                        self.data,
+                        name,
+                        self.current_component,
+                        "Element",
+                        cell_id,
+                    )
+                    msg += f"{name}_{self.current_component}={elem_value}"
+                except Exception:
+                    pass
+
+                try:
+                    data_gp = _gausspoint_values_for_element(
+                        self.data, name, self.current_component, cell_id
+                    )
+                    msg += f" | gp vals: {data_gp}"
+                except Exception:
+                    pass
 
             self.statusBar().showMessage(msg)
 
@@ -2379,7 +2522,8 @@ class ClimOptionsDialog(QtWidgets.QDialog):
         parent = self.parent()
         if self.rb_current.isChecked():
             data = parent.get_current_data()
-            clim = [data.min(), data.max()]
+            data = _global_data_array(data)
+            clim = [np.nanmin(data), np.nanmax(data)]
         elif self.rb_all.isChecked():
             if hasattr(parent.active_dock.data, "get_all_frame_lim"):
                 clim = parent.active_dock.data.get_all_frame_lim(
@@ -2389,7 +2533,8 @@ class ClimOptionsDialog(QtWidgets.QDialog):
                 )[2]
             else:
                 data = parent.get_current_data()
-                clim = [data.min(), data.max()]
+                data = _global_data_array(data)
+                clim = [np.nanmin(data), np.nanmax(data)]
         self.vmin_spin.setValue(float(clim[0]))
         self.vmax_spin.setValue(float(clim[1]))
 
@@ -3128,7 +3273,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 dtype=bool,
             )
             picked_ids = np.nonzero(inside_mask)[0].astype(int)
-            if "vtkOriginalCellIds" in pvmesh.cell_data:
+            if "_fedoo_global_cell_ids" in pvmesh.cell_data:
+                picked_ids = pvmesh.cell_data["_fedoo_global_cell_ids"][picked_ids]
+            elif "vtkOriginalCellIds" in pvmesh.cell_data:
                 picked_ids = pvmesh.cell_data["vtkOriginalCellIds"][picked_ids]
 
             picked_ids = set(picked_ids)
@@ -3186,6 +3333,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         if "Disp" in data.node_data and self.use_def_mesh.isChecked():
             mesh = data.mesh.copy()
             mesh.nodes = mesh.nodes + data.node_data["Disp"].T
+            if _is_multimesh(mesh):
+                for submesh in mesh.submeshes:
+                    submesh.nodes = mesh.nodes
         else:
             mesh = data.mesh
         ids = set(mesh.find_elements(expr))
@@ -3612,7 +3762,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                     pid = mainwin.data.mesh.nearest_node(point)
             else:
                 pid = mesh.find_closest_point(point)
-                if mainwin.current_data_type == "GaussPoint":
+                if (
+                    mainwin.current_data_type == "GaussPoint"
+                    and not _is_multimesh(mainwin.data.mesh)
+                ):
                     pid = mainwin.data.mesh.elements.ravel()[pid]
 
             if mesh is not None and pid is not None and pid >= 0:
@@ -3637,7 +3790,12 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             cell_id = picker.GetCellId()
             if cell_id < 0:
                 return
-            mesh = mainwin.active_dock.pv_mesh
+            display_cell_id = cell_id
+            actor_name, mesh = mainwin.active_dock.picked_actor_mesh(
+                picker.GetActor()
+            )
+            if mesh is None:
+                mesh = mainwin.active_dock.pv_mesh
             cell = mesh.extract_cells(cell_id)
             mainwin.plotter.remove_actor("_picked_cell")
             mainwin.plotter.add_mesh(
@@ -3645,8 +3803,12 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             )
             if mainwin.opts["clip_args"]:
                 cell_id = mesh.cell_data["cell_ids"][cell_id]
+            elif "vtkOriginalCellIds" in mesh.cell_data:
+                cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
+            if "_fedoo_global_cell_ids" in mesh.cell_data:
+                cell_id = mesh.cell_data["_fedoo_global_cell_ids"][display_cell_id]
             if mesh is not None and cell_id is not None:
-                self.id_spin.setValue(cell_id)
+                self.id_spin.setValue(int(cell_id))
             # Remove observer after pick
             if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
                 mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
@@ -3790,7 +3952,9 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                 if indice >= data.mesh.n_elements:
                     return False
             else:  # GaussPoint
-                if indice >= data[field, comp, "GaussPoint"].shape[-1]:
+                gp_data = data.get_data(field, comp, "GaussPoint")
+                gp_data = _global_data_array(gp_data)
+                if indice >= gp_data.shape[-1]:
                     return False
         return True
 
@@ -3815,7 +3979,7 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         field = self.field_combo.currentText()
         comp = self.comp_combo.currentText()
         dtype = self.data_type_combo.currentText()
-        if not indice:
+        if indice is None:
             idx = self.id_spin.value()
         else:
             idx = indice
@@ -3827,10 +3991,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         else:
             if indice is None and dtype == "GaussPoint":
                 # add all gauss points values
-                n_elements = data.mesh.n_elements
-                n_gp = data[field, comp, "GaussPoint"].shape[-1] // n_elements
-                for i in range(n_gp):
-                    self.add_y_data(indice=idx + i * n_elements)
+                for gp_id in _gausspoint_global_indices_for_element(
+                    data, field, comp, idx
+                ):
+                    self.add_y_data(indice=gp_id)
                 return
             label = f"{field}_{comp} ({dtype}, ID={idx})"
         # Add to list and table

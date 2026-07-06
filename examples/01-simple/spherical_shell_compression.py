@@ -62,12 +62,25 @@ assembly = solid_assembly + pressure_assembly
 # Define a linear analysis and solve the problem.
 #
 # .. note::
-#    Here we don't need to add other boundary conditions. The rigid body
-#    displacements and rotations of the sphere aren't constrained but the solver
-#    find a solution that is unique in terms of strain and stress (but not
-#    for displacements or rotations)
+#    To improve numerical stability, a few displacement boundary conditions are
+#    added to remove rigid-body motions. These constraints do not affect the
+#    strain/stress solution because they only suppress the nullspace modes.
+#    Without them, the unconstrained problem is singular; some solvers may still
+#    return a usable strain/stress field, but the displacement field can contain
+#    arbitrary rigid-body motion.
+# 
 
 pb = fd.problem.Linear(assembly)
+
+nodes = mesh.nodes
+node_a = int(np.argmin(nodes[:, 0]))
+node_b = int(np.argmax(nodes[:, 0]))
+node_c = int(np.argmax(nodes[:, 1]))
+
+pb.bc.add("Dirichlet", node_a, "Disp", 0)
+pb.bc.add("Dirichlet", node_b, ["DispY", "DispZ"], 0)
+pb.bc.add("Dirichlet", node_c, "DispZ", 0)
+
 pb.solve()
 
 ###############################################################################

@@ -20,6 +20,7 @@ from .core import (
     Mesh,
     ModelingSpace,
     MultiFrameDataSet,
+    MultiMeshData,
     Problem,
     WeakForm,
     WeakFormSum,

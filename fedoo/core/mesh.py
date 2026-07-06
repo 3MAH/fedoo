@@ -11,6 +11,7 @@ import warnings
 import re
 
 from os.path import splitext
+from pathlib import Path
 
 try:
     import pyvista as pv
@@ -25,6 +26,36 @@ try:
     USE_PYVISTA_QT = True
 except ImportError:
     USE_PYVISTA_QT = False
+
+
+_PYVISTA_CELL_TYPES = {
+    "spring": (3, 2),
+    "lin2": (3, 2),
+    "tri3": (5, 3),
+    "quad4": (9, 4),
+    "tet4": (10, 4),
+    "hex8": (12, 8),
+    "wed6": (13, 6),
+    "pyr5": (14, 5),
+    "lin3": (21, 3),
+    "tri6": (22, 6),
+    "quad8": (23, 8),
+    "tet10": (24, 10),
+    "hex20": (25, 20),
+    "wed15": (26, 15),
+    "pyr13": (27, 13),
+    "quad9": (28, 9),
+    "hex27": (29, 27),
+    "wed18": (32, 18),
+}
+
+
+def _get_pyvista_cell_info(elm_type: str) -> tuple[int, int]:
+    """Return the VTK cell type and number of element nodes for pyvista."""
+    cell_info = _PYVISTA_CELL_TYPES.get(elm_type, None)
+    if cell_info is None:
+        raise NameError("Element Type " + str(elm_type) + " not available in pyvista")
+    return cell_info
 
 
 class Mesh(MeshBase):
@@ -76,8 +107,9 @@ class Mesh(MeshBase):
         element_sets: dict | None = None,
         ndim: int | None = None,
         name: str = "",
+        register_name: bool = True,
     ) -> None:
-        MeshBase.__init__(self, name)
+        MeshBase.__init__(self, name, register=register_name)
         self.nodes = nodes  # node coordinates
         """List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
         self.elements = elements  # element table
@@ -922,30 +954,7 @@ class Mesh(MeshBase):
             pvmesh.field_data["ndim"] = self.ndim
             return pvmesh
         if USE_PYVISTA:
-            cell_type, n_elm_nodes = {
-                "spring": (3, 2),
-                "lin2": (3, 2),
-                "tri3": (5, 3),
-                "quad4": (9, 4),
-                "tet4": (10, 4),
-                "hex8": (12, 8),
-                "wed6": (13, 6),
-                "pyr5": (14, 5),
-                "lin3": (21, 3),
-                "tri6": (22, 6),
-                "quad8": (23, 8),
-                "tet10": (24, 10),
-                "hex20": (25, 20),
-                "wed15": (26, 15),
-                "pyr13": (27, 13),
-                "quad9": (28, 9),
-                "hex27": (29, 27),
-                "wed18": (32, 18),
-            }.get(self.elm_type, None)
-            if cell_type is None:
-                raise NameError(
-                    "Element Type " + str(self.elm_type) + " not available in pyvista"
-                )
+            cell_type, n_elm_nodes = _get_pyvista_cell_info(self.elm_type)
 
             # elm = np.empty((self.elements.shape[0], self.elements.shape[1]+1), dtype=int)
             elm = np.empty((self.elements.shape[0], n_elm_nodes + 1), dtype=int)
@@ -973,9 +982,10 @@ class Mesh(MeshBase):
     ) -> None:
         """Save the mesh object to file.
 
-        This function use the save function of the pyvista UnstructuredGrid
-        object. If using a 'vtk' format, The node and element sets are saved
-        as field data with a prefix "_nset_" or "_eset_".
+        This function uses the save function of the pyvista UnstructuredGrid
+        object, except for FDH5 files which are written directly as raw mesh
+        data. If using a 'vtk' format, The node and element sets are saved as
+        field data with a prefix "_nset_" or "_eset_".
 
         Parameters
         ----------
@@ -989,8 +999,31 @@ class Mesh(MeshBase):
         extension = splitext(filename)[1]
         if extension == "":
             filename = filename + ".vtk"
+            extension = ".vtk"
+
+        if extension.lower() == ".fdh5":
+            self._save_fdh5(filename)
+            return
 
         self.to_pyvista(include_sets=True).save(filename, binary=binary)
+
+    def _save_fdh5(self, filename: str) -> None:
+        """Save the mesh definition to a raw FDH5 file."""
+        from fedoo.util.fdh5 import FDH5Writer
+
+        path = Path(filename)
+        if path.exists():
+            path.unlink()
+
+        writer = FDH5Writer(path)
+        writer.write_mesh(self.nodes, node_sets=self.node_sets, overwrite=True)
+        writer.add_submesh(
+            self.elm_type,
+            self.elements,
+            element_sets=self.element_sets,
+            name=self.name or None,
+            submesh_id="submesh_0",
+        )
 
     def plot(self, show_edges: bool = True, **kargs) -> None:
         """Simple plot function using pyvista.
@@ -1642,15 +1675,75 @@ class Mesh(MeshBase):
 
 
 class MultiMesh(Mesh):
+    """Fedoo mesh made of several ordered submeshes sharing one node table.
+
+    A ``MultiMesh`` is useful when a mesh contains several element blocks,
+    possibly with different element types or with several blocks using the
+    same element type. All submeshes share ``nodes``. Internally, submeshes
+    are stored in order; this order defines integer indexing and FDH5
+    ``submesh_X`` ids.
+
+    A ``MultiMesh`` can be created in three ways:
+
+      * With a simple element-type dictionary, when each element type appears
+        once:
+
+        >>> mesh = MultiMesh(nodes, {"tri3": tri_elements, "quad4": quad_elements})
+
+      * With an explicit submesh-name dictionary, when several submeshes may
+        share the same element type:
+
+        >>> mesh = MultiMesh(
+        ...     nodes,
+        ...     {
+        ...         "part_a": ("tri3", tri_elements_a),
+        ...         "part_b": ("tri3", tri_elements_b),
+        ...     },
+        ... )
+
+        The dictionary key is stored as the submesh name, but internal
+        submeshes are not registered in ``MeshBase.get_all()``.
+
+      * From an existing list of ``Mesh`` objects:
+
+        >>> mesh = MultiMesh.from_mesh_list([tri_mesh, quad_mesh])
+
+    Submeshes can be retrieved by integer id, submesh name, or element type.
+    Integer indexing always returns a concrete ``Mesh``. String indexing first
+    tries exact submesh names, then element types. Element-type indexing
+    returns a ``Mesh`` if only one submesh matches, or a view-like
+    ``MultiMesh`` if several submeshes share that element type.
+
+    Parameters
+    ----------
+    nodes : numpy.ndarray
+        Shared node coordinates.
+    elements_dict : dict, optional
+        Submesh definitions. Values may be connectivity arrays, ``Mesh``
+        objects, ``(elm_type, elements)`` tuples, or
+        ``(elm_type, elements, element_sets)`` tuples.
+    node_sets : dict, optional
+        Node sets associated with the shared node table.
+    ndim : int, optional
+        Dimension of the mesh. By default, deduced from ``nodes.shape[1]``.
+    name : str, optional
+        Name of the ``MultiMesh``. If non-empty and ``register_name`` is True,
+        the ``MultiMesh`` is registered in ``MeshBase.get_all()``.
+    register_name : bool, default=True
+        If False, the ``MultiMesh`` name is kept locally but not registered in
+        ``MeshBase.get_all()``. This is used for internal filtered views.
+    """
+
     def __init__(
         self,
         nodes: np.ndarray[float],
-        elements_dict: dict = None,
+        elements_dict: dict | None = None,
         node_sets: dict | None = None,
         ndim: int | None = None,
         name: str = "",
+        register_name: bool = True,
     ) -> None:
-        MeshBase.__init__(self, name)
+        MeshBase.__init__(self, name, register=register_name)
         self.nodes = nodes  # node coordinates
         """ List of nodes coordinates: nodes[i] gives the coordinates of the ith node."""
 
@@ -1669,34 +1762,366 @@ class MultiMesh(Mesh):
         else:
             self.crd_name = ("X", "Y", "Z")
 
-        self.mesh_dict = {}
+        self._mesh_list = []
+        """Ordered list of submeshes. The list order defines submesh ids."""
+
         if elements_dict is not None:
-            for elm_type, elements in elements_dict.items():
-                self.mesh_dict[elm_type] = Mesh(
-                    self.nodes, elements, elm_type, ndim=ndim
+            for key, value in elements_dict.items():
+                submesh_name = ""
+                element_sets = None
+                if isinstance(value, Mesh):
+                    elm_type = value.elm_type
+                    elements = value.elements
+                    element_sets = value.element_sets
+                    submesh_name = value.name
+                elif isinstance(value, tuple):
+                    if len(value) == 2:
+                        elm_type, elements = value
+                    elif len(value) == 3:
+                        elm_type, elements, element_sets = value
+                    else:
+                        raise ValueError(
+                            "MultiMesh element entries should be arrays, "
+                            "(elm_type, elements), or "
+                            "(elm_type, elements, element_sets)."
+                        )
+                    submesh_name = str(key)
+                else:
+                    elm_type = str(key)
+                    elements = value
+
+                self._mesh_list.append(
+                    Mesh(
+                        self.nodes,
+                        elements,
+                        elm_type,
+                        element_sets=element_sets,
+                        ndim=ndim,
+                        name=submesh_name,
+                        register_name=False,
+                    )
                 )
 
-        self.node_sets = {}
+        if node_sets is None:
+            node_sets = {}
+        self.node_sets = node_sets
         """Dict containing node sets associated to the mesh"""
 
-    def __getitem__(self, item: str) -> Mesh:
-        return self.mesh_dict[item]
+    def __getitem__(self, item: int | str) -> Mesh | "MultiMesh":
+        if isinstance(item, int):
+            return self._mesh_list[item]
+        elif isinstance(item, str):
+            mesh_list = [mesh for mesh in self._mesh_list if mesh.name == item]
+            if len(mesh_list) == 0:
+                mesh_list = [mesh for mesh in self._mesh_list if mesh.elm_type == item]
+            if len(mesh_list) == 0:
+                raise KeyError(item)
+            elif len(mesh_list) == 1:
+                return mesh_list[0]
+            else:
+                return MultiMesh.from_mesh_list(
+                    mesh_list,
+                    name=self.name,
+                    node_sets=self.node_sets,
+                    register_name=False,
+                )
+        else:
+            raise TypeError(
+                "MultiMesh indices should be int, submesh name str, "
+                "or element type str."
+            )
 
     def __repr__(self):
         return (
             f"{object.__repr__(self)}\n\n"
-            f"elm_types: {tuple(self.mesh_dict.keys())}\n"
+            f"elm_types: {self.elm_types}\n"
             f"n_nodes: {self.n_nodes}\n"
+            f"n_submeshes: {len(self._mesh_list)}\n"
             f"n node_sets: {len(self.node_sets)}"
         )
 
     @staticmethod
-    def from_mesh_list(mesh_list: list[Mesh], name: str = "") -> "MultiMesh":
-        multi_mesh = MultiMesh(mesh_list[0].nodes, name=name)
-        for mesh in mesh_list:
-            multi_mesh.mesh_dict[mesh.elm_type] = mesh
+    def from_mesh_list(
+        mesh_list: list[Mesh],
+        name: str = "",
+        node_sets: dict | None = None,
+        register_name: bool = True,
+    ) -> "MultiMesh":
+        """Build a MultiMesh from an ordered list of Mesh objects.
 
-        return multi_mesh
+        The returned MultiMesh shares the node coordinates and element arrays
+        of the input meshes. Submesh names are copied from the input meshes but
+        are not registered globally.
+        """
+        if len(mesh_list) == 0:
+            raise ValueError("Can't build a MultiMesh from an empty mesh list.")
+        if node_sets is None:
+            node_sets = mesh_list[0].node_sets
+
+        return MultiMesh(
+            mesh_list[0].nodes,
+            {i: mesh for i, mesh in enumerate(mesh_list)},
+            node_sets=node_sets,
+            name=name,
+            register_name=register_name,
+        )
+
+    @property
+    def submeshes(self) -> tuple[Mesh, ...]:
+        """Ordered view of the submeshes.
+
+        The tuple order is the submesh id order used by integer indexing and
+        FDH5 export.
+        """
+        return tuple(self._mesh_list)
+
+    @property
+    def mesh_dict(self) -> dict[str, Mesh | "MultiMesh"]:
+        """Element-type indexed view kept for backward compatibility.
+
+        If an element type appears once, the value is the matching ``Mesh``.
+        If an element type appears several times, the value is a filtered
+        ``MultiMesh`` containing all matching submeshes.
+        """
+        mesh_dict = {}
+        for elm_type in dict.fromkeys(self.elm_types):
+            mesh_list = [
+                mesh for mesh in self._mesh_list if mesh.elm_type == elm_type
+            ]
+            if len(mesh_list) == 1:
+                mesh_dict[elm_type] = mesh_list[0]
+            else:
+                mesh_dict[elm_type] = MultiMesh.from_mesh_list(
+                    mesh_list,
+                    name=self.name,
+                    node_sets=self.node_sets,
+                    register_name=False,
+                )
+        return mesh_dict
+
+    @property
+    def elm_types(self) -> tuple[str, ...]:
+        """Element type of each submesh, in submesh id order."""
+        return tuple(mesh.elm_type for mesh in self._mesh_list)
+
+    @property
+    def n_elements(self) -> int:
+        """Total number of elements in all submeshes."""
+        return sum(mesh.n_elements for mesh in self._mesh_list)
+
+    def copy(self, name: str = "") -> "MultiMesh":
+        """Make a shallow copy of the MultiMesh.
+
+        The nodes, element tables, node sets and element sets are shared with
+        the original object. Submeshes are rebuilt as unregistered mesh views
+        that share the same node table.
+        """
+        return MultiMesh.from_mesh_list(
+            self._mesh_list,
+            name=name,
+            node_sets=self.node_sets,
+        )
+
+    def deepcopy(self, name: str = "") -> "MultiMesh":
+        """Make a deep copy of the node and element arrays."""
+        nodes = self.nodes.copy()
+        mesh_list = [
+            Mesh(
+                nodes,
+                mesh.elements.copy(),
+                mesh.elm_type,
+                element_sets=mesh.element_sets,
+                ndim=self.ndim,
+                name=mesh.name,
+                register_name=False,
+            )
+            for mesh in self._mesh_list
+        ]
+        return MultiMesh.from_mesh_list(
+            mesh_list,
+            name=name,
+            node_sets=self.node_sets,
+        )
+
+    def as_ndim(self, ndim, inplace: bool = False) -> "MultiMesh":
+        """Return a MultiMesh view with node coordinates in ``ndim`` dimensions."""
+        if self.ndim == ndim:
+            return self
+        if self.ndim < ndim:
+            nodes = np.column_stack(
+                (self.nodes, np.zeros((self.n_nodes, ndim - self.ndim)))
+            )
+        else:
+            nodes = self.nodes[:, :ndim]
+
+        if inplace:
+            self.nodes = nodes
+            for mesh in self._mesh_list:
+                mesh.nodes = self.nodes
+            return self
+
+        mesh_list = [
+            Mesh(
+                nodes,
+                mesh.elements,
+                mesh.elm_type,
+                element_sets=mesh.element_sets,
+                ndim=ndim,
+                name=mesh.name,
+                register_name=False,
+            )
+            for mesh in self._mesh_list
+        ]
+        return MultiMesh.from_mesh_list(
+            mesh_list,
+            name=self.name,
+            node_sets=self.node_sets,
+            register_name=False,
+        )
+
+    def as_2d(self, inplace: bool = False) -> "MultiMesh":
+        """Return a view of the current MultiMesh in 2D."""
+        return self.as_ndim(2, inplace)
+
+    def as_3d(self, inplace: bool = False) -> "MultiMesh":
+        """Return a view of the current MultiMesh in 3D."""
+        return self.as_ndim(3, inplace)
+
+    def find_elements(
+        self,
+        selection_criterion: str,
+        value: float = 0,
+        tol: float = 1e-6,
+        select_by: str = "centers",
+        all_nodes: bool = True,
+        name: str | None = None,
+    ):
+        """Return global element ids matching a selection criterion."""
+        element_ids = []
+        offset = 0
+        for mesh in self._mesh_list:
+            local_ids = mesh.find_elements(
+                selection_criterion,
+                value,
+                tol,
+                select_by,
+                all_nodes,
+            )
+            element_ids.extend(np.asarray(local_ids, dtype=int) + offset)
+            offset += mesh.n_elements
+
+        element_ids = np.asarray(element_ids, dtype=int)
+        if name:
+            raise NotImplementedError(
+                "Saving a new element set from MultiMesh.find_elements is not "
+                "implemented. Add the set to the relevant submesh instead."
+            )
+        return element_ids
+
+    @property
+    def element_sets(self) -> dict[str, np.ndarray]:
+        """Element sets using the global MultiMesh cell numbering.
+
+        The returned indices follow the same cell order as
+        :meth:`to_pyvista`: all elements of submesh 0, then all elements of
+        submesh 1, and so on. If several submeshes define an element set with
+        the same name, the shifted indices are concatenated.
+        """
+        element_sets = {}
+        offset = 0
+        for mesh in self._mesh_list:
+            for name, values in mesh.element_sets.items():
+                element_sets.setdefault(name, []).append(
+                    np.asarray(values, dtype=int) + offset
+                )
+            offset += mesh.n_elements
+
+        return {
+            name: np.concatenate(values)
+            for name, values in element_sets.items()
+        }
+
+    def to_pyvista(self, include_sets=False):
+        """Wrap the current multimesh to a pyvista UnstructuredGrid.
+
+        If include_sets is True (default = False), the node and element sets
+        are included in the pyvista object as field data. Element set indices
+        are shifted to match the cell numbering of the generated mixed-element
+        grid.
+        """
+        if not USE_PYVISTA:
+            raise NameError("Pyvista not installed.")
+
+        if self.ndim < 3:
+            nodes = np.column_stack(
+                (self.nodes, np.zeros((self.n_nodes, 3 - self.ndim)))
+            )
+        else:
+            nodes = self.nodes[:, :3]
+
+        cells = []
+        cell_types = []
+        element_sets = {}
+        element_offset = 0
+
+        for mesh in self._mesh_list:
+            elm_type = mesh.elm_type
+            cell_type, n_elm_nodes = _get_pyvista_cell_info(elm_type)
+
+            elm = np.empty((mesh.elements.shape[0], n_elm_nodes + 1), dtype=int)
+            elm[:, 0] = n_elm_nodes
+            elm[:, 1:] = mesh.elements[:, :n_elm_nodes]
+            cells.append(elm.ravel())
+            cell_types.append(np.full(mesh.elements.shape[0], cell_type, dtype=int))
+
+            if include_sets:
+                for set_name, set_elements in mesh.element_sets.items():
+                    set_key = "_eset_" + set_name
+                    element_sets.setdefault(set_key, []).append(
+                        np.asarray(set_elements, dtype=int) + element_offset
+                    )
+
+            element_offset += mesh.elements.shape[0]
+
+        if not cells:
+            raise NotImplementedError("This mesh contains no compatible element.")
+
+        pvmesh = pv.UnstructuredGrid(
+            np.concatenate(cells),
+            np.concatenate(cell_types),
+            nodes,
+        )
+
+        if self.ndim != 3:
+            pvmesh.field_data["ndim"] = self.ndim
+
+        if include_sets:
+            for nset in self.node_sets:
+                pvmesh.field_data["_nset_" + nset] = self.node_sets[nset]
+            for set_key, set_elements in element_sets.items():
+                pvmesh.field_data[set_key] = np.concatenate(set_elements)
+
+        return pvmesh
+
+    def _save_fdh5(self, filename: str) -> None:
+        """Save the multimesh definition to a raw FDH5 file."""
+        from fedoo.util.fdh5 import FDH5Writer
+
+        path = Path(filename)
+        if path.exists():
+            path.unlink()
+
+        writer = FDH5Writer(path)
+        writer.write_mesh(self.nodes, node_sets=self.node_sets, overwrite=True)
+
+        for i, mesh in enumerate(self._mesh_list):
+            writer.add_submesh(
+                mesh.elm_type,
+                mesh.elements,
+                element_sets=mesh.element_sets,
+                name=mesh.name or mesh.elm_type,
+                submesh_id=f"submesh_{i}",
+            )
 
 
 class BoundingBox(list):

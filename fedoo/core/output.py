@@ -2,6 +2,7 @@ import numpy as np
 
 # from fedoo.core.mesh import *
 from fedoo.core.base import AssemblyBase
+from fedoo.core.mesh import MultiMesh
 
 # from fedoo.util.ExportData import ExportData
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
@@ -66,7 +67,196 @@ _available_format = [
     "npz",
     "csv",
     "xlsx",
+    "fdh5",
 ]
+
+
+def _unique_assembly_mesh_entries(assemb, element_set=None):
+    """Return unique mesh entries for an AssemblySum.
+
+    The returned list keeps the first occurrence order of meshes in
+    ``assemb.list_assembly``. If several elementary assemblies are attached to
+    the same mesh, they are grouped in the same entry and keep their original
+    assembly order. This order is later used to select the first assembly that
+    can provide a requested output field.
+    """
+    entries = []
+    mesh_id_to_entry = {}
+
+    for sub_assemb in assemb.list_assembly:
+        mesh = sub_assemb.mesh
+
+        if element_set is not None and isinstance(element_set, str):
+            if element_set not in mesh.element_sets:
+                continue
+
+        mesh_id = id(mesh)
+        if mesh_id not in mesh_id_to_entry:
+            if element_set is None:
+                output_mesh = mesh
+            else:
+                output_mesh = mesh.extract_elements(element_set)
+
+            mesh_id_to_entry[mesh_id] = len(entries)
+            entries.append(
+                {
+                    "mesh": output_mesh,
+                    "assemblies": [],
+                }
+            )
+
+        entries[mesh_id_to_entry[mesh_id]]["assemblies"].append(sub_assemb)
+
+    return entries
+
+
+def _output_mesh_for_assembly(assemb, element_set=None):
+    """Return the mesh associated with an output request.
+
+    For a regular assembly, this is its mesh, optionally restricted to
+    ``element_set``. For an ``AssemblySum`` without ``assembly_output``, this
+    builds a ``MultiMesh`` from the unique elementary assembly meshes, in
+    ``list_assembly`` order. If all elementary assemblies share one mesh, the
+    mesh itself is returned.
+    """
+    if hasattr(assemb, "list_assembly") and assemb.assembly_output is None:
+        entries = _unique_assembly_mesh_entries(assemb, element_set)
+        meshes = [entry["mesh"] for entry in entries]
+        if not meshes:
+            raise NameError("No mesh available for the requested element set.")
+        if len(meshes) == 1:
+            return meshes[0]
+        return MultiMesh.from_mesh_list(
+            meshes,
+            name=getattr(assemb, "name", ""),
+            register_name=False,
+        )
+
+    if hasattr(assemb, "list_assembly"):
+        assemb = assemb.assembly_output
+
+    if element_set is None:
+        return assemb.mesh
+    return assemb.mesh.extract_elements(element_set)
+
+
+def _dataset_field(data_set, field):
+    """Return a field and its data type from a DataSet, or (None, None)."""
+    if field in data_set.node_data:
+        return data_set.node_data[field], "Node"
+    if field in data_set.element_data:
+        return data_set.element_data[field], "Element"
+    if field in data_set.gausspoint_data:
+        return data_set.gausspoint_data[field], "GaussPoint"
+    if field in data_set.scalar_data:
+        return data_set.scalar_data[field], "Scalar"
+    return None, None
+
+
+def _store_assemblysum_field(result, field, data, data_type, submesh_id, multimesh):
+    """Store one field block extracted from an AssemblySum.
+
+    Element and Gauss point fields are stored per submesh when the AssemblySum
+    output mesh is a ``MultiMesh``. Node and scalar fields are shared by the
+    node list or by the problem and therefore keep the first available value.
+    """
+    if data_type == "Node":
+        if field not in result.node_data:
+            result.node_data[field] = data
+    elif data_type == "Element":
+        if multimesh:
+            result.element_data.setdefault(field, {})[submesh_id] = data
+        else:
+            result.element_data[field] = data
+    elif data_type == "GaussPoint":
+        if multimesh:
+            result.gausspoint_data.setdefault(field, {})[submesh_id] = data
+        else:
+            result.gausspoint_data[field] = data
+    elif data_type == "Scalar":
+        if field not in result.scalar_data:
+            result.scalar_data[field] = data
+
+
+def _get_assemblysum_results(
+    pb,
+    assemb,
+    output_list,
+    output_type=None,
+    position=1,
+    element_set=None,
+    include_mesh=True,
+):
+    """Collect output data from an AssemblySum.
+
+    Each requested field is searched independently on the elementary
+    assemblies. For each unique mesh, assemblies attached to that mesh are
+    tried in their ``list_assembly`` order and the first assembly providing
+    the field is used. If no assembly provides a field for a mesh, that mesh is
+    simply left without data for the field. If no assembly provides the field
+    at all, the field is omitted from the returned dataset.
+
+    When several unique meshes are present, the returned ``DataSet`` is
+    associated with a ``MultiMesh`` and element/Gauss point fields are stored
+    as per-submesh dictionaries consumable by ``MultiMeshData``.
+    """
+    entries = _unique_assembly_mesh_entries(assemb, element_set)
+    multimesh = len(entries) > 1
+
+    if include_mesh:
+        mesh = _output_mesh_for_assembly(assemb, element_set)
+        result = DataSet(mesh)
+    else:
+        result = DataSet()
+
+    for res in output_list:
+        field_type = None
+        found = False
+
+        for submesh_id, entry in enumerate(entries):
+            for sub_assemb in entry["assemblies"]:
+                try:
+                    sub_result = _get_results(
+                        pb,
+                        sub_assemb,
+                        [res],
+                        output_type,
+                        position,
+                        element_set,
+                        False,
+                    )
+                except NameError:
+                    continue
+
+                data, data_type = _dataset_field(sub_result, res)
+                if data_type is None:
+                    continue
+                if field_type is None:
+                    field_type = data_type
+                elif data_type != field_type:
+                    raise NameError(
+                        f'Field "{res}" has inconsistent output types in '
+                        "the AssemblySum."
+                    )
+
+                _store_assemblysum_field(
+                    result,
+                    res,
+                    data,
+                    data_type,
+                    submesh_id,
+                    multimesh,
+                )
+                found = True
+                break
+
+        if not found:
+            continue
+
+    if hasattr(pb, "time"):
+        result.scalar_data["Time"] = pb.time
+
+    return result
 
 
 def _get_results(
@@ -96,6 +286,17 @@ def _get_results(
     if isinstance(assemb, str):
         assemb = AssemblyBase.get_all()[assemb]
 
+    if hasattr(assemb, "list_assembly") and assemb.assembly_output is None:
+        return _get_assemblysum_results(
+            pb,
+            assemb,
+            output_list,
+            output_type,
+            position,
+            element_set,
+            include_mesh,
+        )
+
     # for i, res in enumerate(output_list):
     # if (
     #     res not in _available_output
@@ -112,20 +313,14 @@ def _get_results(
     data_sav = {}  # dict to keep data in memory that may be used more that one time
 
     if hasattr(assemb, "list_assembly"):  # AssemblySum object
-        if assemb.assembly_output is None:
-            raise NameError("AssemblySum objects can't be used to extract outputs")
-        else:
-            assemb = assemb.assembly_output
+        assemb = assemb.assembly_output
 
     sv = assemb.sv  # state variables associated to the assembly
 
     if include_mesh:
-        if element_set is None:
-            result = DataSet(assemb.mesh)
-        else:
-            result = DataSet(assemb.mesh.extract_elements(element_set))
-            if isinstance(element_set, str):
-                element_set = assemb.mesh.element_sets[element_set]
+        result = DataSet(_output_mesh_for_assembly(assemb, element_set))
+        if element_set is not None and isinstance(element_set, str):
+            element_set = assemb.mesh.element_sets[element_set]
     else:
         result = DataSet()
 
@@ -340,7 +535,7 @@ class _ProblemOutput:
         assemb,
         output_list,
         output_type=None,
-        file_format="fdz",
+        file_format="fdh5",
         compressed=False,
         position=1,
         element_set=None,
@@ -351,7 +546,7 @@ class _ProblemOutput:
         extension = os.path.splitext(filename)[1]
         if extension == "":
             file_format = file_format.lower()
-            if file_format != "fdz":
+            if file_format not in ["fdz", "fdh5"]:
                 # if no extention -> create a new dir using filename as dirname
                 dirname = filename + "/"
                 filename = dirname + os.path.basename(filename)
@@ -386,10 +581,7 @@ class _ProblemOutput:
         if isinstance(assemb, str):
             assemb = AssemblyBase.get_all()[assemb]
 
-        if element_set is None:
-            mesh = assemb.mesh
-        else:
-            mesh = assemb.mesh.extract_elements(element_set)
+        mesh = _output_mesh_for_assembly(assemb, element_set)
 
         if not (os.path.isdir(dirname)) and dirname != "":
             os.mkdir(dirname)
@@ -415,7 +607,7 @@ class _ProblemOutput:
                 file.write("_mesh_.vtk")  # add '_mesh_.vtk' to the zip archive
                 os.remove("_mesh_.vtk")
                 file.close()
-            elif save_mesh and (file_format not in ["vtk", "msh"]):
+            elif save_mesh and (file_format not in ["vtk", "msh", "fdh5"]):
                 mesh.save(filename)
 
             res = MultiFrameDataSet(mesh, [])
@@ -462,7 +654,7 @@ class _ProblemOutput:
                     list_file_format.append(file_format)
                     list_compressed.append(compressed)
 
-                    out = DataSet(assemb.mesh)
+                    out = DataSet(_output_mesh_for_assembly(assemb, element_set))
                     list_data.append(out)
                 else:
                     # else, the same file is used

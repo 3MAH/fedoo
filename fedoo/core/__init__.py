@@ -9,6 +9,7 @@ from .dataset import (
     MultiFrameDataSet,
     read_data,
 )
+from .multimeshdata import MultiMeshData
 from .boundary_conditions import BoundaryCondition, MPC, ListBC
 from .problem import Problem
 
@@ -23,6 +24,7 @@ __all__ = [
     "ModelingSpace",
     "DataSet",
     "MultiFrameDataSet",
+    "MultiMeshData",
     "read_data",
     "BoundaryCondition",
     "MPC",
