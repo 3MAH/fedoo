@@ -206,3 +206,16 @@ class Tet10(ElementTetrahedron):
             )
             for m, xi in zip(vec_m, vec_xi)
         ]
+
+
+class Tet10r(Tet10):
+    name = "tet10r"
+    default_n_gp = 4
+    n_nodes = 10
+
+    # Same 10-node quadratic interpolation as Tet10, but integrated with the
+    # 4-point rule instead of the default accurate 15-point rule. This matches
+    # the integration scheme of the Ansys SOLID187 tetrahedron and is cheaper
+    # while remaining stable (a 1-point rule would be rank deficient).
+    def __init__(self, n_elm_gp=4, **kargs):
+        Tet10.__init__(self, n_elm_gp, **kargs)
