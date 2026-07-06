@@ -3,7 +3,7 @@ from fedoo.lib_elements.finite_difference_1d import Node, Parameter
 
 # from fedoo.lib_elements.beam import *
 # from fedoo.lib_elements.cohesive import Cohesive1D
-from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex8r, Hex8Hourglass
+from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex20r, Hex8r, Hex8Hourglass
 from fedoo.lib_elements.line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
 from fedoo.lib_elements.quadrangle import (
     Quad4,
@@ -14,7 +14,7 @@ from fedoo.lib_elements.quadrangle import (
 )
 
 # from fedoo.lib_elements.plate import *
-from fedoo.lib_elements.tetrahedron import Tet4, Tet10
+from fedoo.lib_elements.tetrahedron import Tet4, Tet10, Tet10r
 from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
@@ -35,10 +35,12 @@ _dict_elements = {
     "quad9": Quad9,
     "tet4": Tet4,
     "tet10": Tet10,
+    "tet10r": Tet10r,
     "hex8": Hex8,
     "hex8r": Hex8r,
     "hex8hourglass": Hex8Hourglass,
     "hex20": Hex20,
+    "hex20r": Hex20r,
     "wed6": Wed6,
     "wed15": Wed15,
     "wed18": Wed18,
@@ -64,9 +66,11 @@ _dict_default_n_gp = {
     "quad9": 9,
     "tet4": 4,
     "tet10": 15,
+    "tet10r": 4,
     "hex8": 8,
     "hex8r": 1,
     "hex20": 27,
+    "hex20r": 14,
     "wed6": 6,
     "wed15": 21,
     "wed18": 21,
@@ -124,7 +128,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],
                 [-1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0],
             ]
-    elif element in ["tet4", "tet10"]:
+    elif element in ["tet4", "tet10", "tet10r"]:
         if nNd_elm == 4:
             return np.c_[
                 [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]
@@ -135,7 +139,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0],
                 [0.0, 1.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.5, 0.0],
             ]
-    elif element in ["hex8", "hex20", "hex8r"]:
+    elif element in ["hex8", "hex20", "hex8r", "hex20r"]:
         if nNd_elm == 8:
             return np.c_[
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],
