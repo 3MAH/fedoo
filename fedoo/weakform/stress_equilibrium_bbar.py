@@ -506,10 +506,10 @@ class HourglassStiffness(WeakFormBase):
         super().initialize(assembly, pb)
         self._initialize_nlgeom(assembly, pb)
         if self.compute_stiffness_only_once is None:
-            if assembly._nlgeom:
-                self.compute_stiffness_only_once = False
-            else:
-                self.compute_stiffness_only_once = True
+            is_nonlinear_problem = pb.__class__.__name__.lower().startswith("nonlinear")
+            self.compute_stiffness_only_once = not (
+                assembly._nlgeom or is_nonlinear_problem
+            )
 
         assembly.stress_equilibrium_assembly = (
             self.stress_equilibrium_assembly
@@ -539,6 +539,13 @@ class HourglassStiffness(WeakFormBase):
         if assembly._nlgeom == "UL":
             # if updated lagragian method
             # -> update the mesh and recompute elementary op
+            assembly.set_disp(pb.get_disp())
+
+    def to_start(self, assembly, pb):
+        """Reset the current time increment."""
+        if assembly._nlgeom == "UL":
+            # if updated lagrangian method -> reset the mesh to the begining
+            # of the increment
             assembly.set_disp(pb.get_disp())
 
     def get_p_wave_modulus(self, assembly):

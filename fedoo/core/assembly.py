@@ -1636,9 +1636,11 @@ class Assembly(AssemblyBase):
                 for i, wf in enumerate(list_weakform)
             ]
             list_prop = list(zip(list_n_elm_gp, list_assume_sym, list_elm_type))
-            list_diff_prop = list(
-                set(list_prop)
-            )  # list of different non compatible properties that required separated assembly
+            list_diff_prop = []
+            for prop in list_prop:
+                if prop not in list_diff_prop:
+                    list_diff_prop.append(prop)
+            # list of different non compatible properties that require separated assembly
 
             if len(list_diff_prop) == 1:  # only 1 assembly is required
                 # update assembly_options

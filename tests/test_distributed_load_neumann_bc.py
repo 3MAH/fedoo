@@ -17,9 +17,7 @@ def _build_problem(load_nlgeom=None, problem_nlgeom=True, load_kind="pressure"):
 
     if load_kind == "pressure":
         top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
-        load = fd.constraint.Pressure.from_nodes(
-            mesh, top, 7.0, nlgeom=load_nlgeom
-        )
+        load = fd.constraint.Pressure.from_nodes(mesh, top, 7.0, nlgeom=load_nlgeom)
     elif load_kind == "distributed":
         load = fd.constraint.DistributedForce(
             mesh, [0.0, 0.0, -7.0], nlgeom=load_nlgeom
@@ -28,9 +26,9 @@ def _build_problem(load_nlgeom=None, problem_nlgeom=True, load_kind="pressure"):
         raise ValueError(load_kind)
 
     bc = pb.bc.add(load)
-    assert isinstance(bc, fd.constraint.AssemblyNeumannBC)
+    assert bc.bc_type == "Neumann"
+    assert bc.assembly is load
     return pb, bc
-
 
 
 def test_assembly_neumann_load_can_still_be_added_explicitly():
@@ -40,6 +38,42 @@ def test_assembly_neumann_load_can_still_be_added_explicitly():
     explicit_bc = bc.assembly.as_neumann()
 
     assert pb.bc.add(explicit_bc) is explicit_bc
+
+
+@pytest.mark.parametrize("load_kind", ["pressure", "distributed", "surface"])
+def test_assembly_neumann_load_uses_stored_time_function(load_kind):
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+
+    mesh = fd.mesh.box_mesh(2, 2, 2, name="stored_time_func_box")
+    material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3, name="TimeFuncMat")
+    wf = fd.weakform.StressEquilibrium(material)
+    solid = fd.Assembly.create(wf, mesh, name="time_func_solid")
+    pb = fd.problem.NonLinear(solid, nlgeom=False)
+    top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
+
+    if load_kind == "pressure":
+        load = fd.constraint.Pressure.from_nodes(
+            mesh, top, 7.0, nlgeom=False, time_func=lambda t: t**2
+        )
+    elif load_kind == "distributed":
+        load = fd.constraint.DistributedForce(
+            mesh, [0.0, 0.0, -7.0], nlgeom=False, time_func=lambda t: t**2
+        )
+    else:
+        load = fd.constraint.SurfaceForce.from_nodes(
+            mesh, top, [0.0, 0.0, -7.0], nlgeom=False, time_func=lambda t: t**2
+        )
+
+    pb.bc.add(load)
+    pb.apply_boundary_conditions(t_fact=0.5, t_fact_old=0.0)
+    quarter_load = pb.get_B().copy()
+
+    pb.apply_boundary_conditions(t_fact=1.0, t_fact_old=0.5)
+    full_load = pb.get_B().copy()
+
+    assert np.linalg.norm(full_load) > 0.0
+    np.testing.assert_allclose(quarter_load, 0.25 * full_load)
 
 
 def test_assembly_neumann_load_accepts_time_function_and_caches_fixed_vector():
@@ -88,9 +122,7 @@ def test_raw_assembly_without_neumann_conversion_is_rejected():
 
 @pytest.mark.parametrize("load_kind", ["pressure", "distributed"])
 def test_assembly_neumann_load_is_ramped_in_external_force_vector(load_kind):
-    pb, _ = _build_problem(
-        load_nlgeom=False, problem_nlgeom=True, load_kind=load_kind
-    )
+    pb, _ = _build_problem(load_nlgeom=False, problem_nlgeom=True, load_kind=load_kind)
 
     pb.apply_boundary_conditions(t_fact=0.5, t_fact_old=0.0)
     half_load = pb.get_B().copy()
