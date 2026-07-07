@@ -20,8 +20,9 @@ requirements:
     - python>=3.10
     - numpy>=1.26
     - scipy
+    - h5py
     - pyvista>=0.42
-    - simcoon>=1.11.0
+    - simcoon>=1.13.1
     - {{ solver_backend }}
 
 test:
