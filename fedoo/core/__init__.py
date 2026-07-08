@@ -1,6 +1,6 @@
 from .modelingspace import ModelingSpace
 from .base import ConstitutiveLaw
-from .mesh import Mesh
+from .mesh import Mesh, MultiMesh
 from .weakform import WeakForm, WeakFormSum
 from .assembly import Assembly
 from .assembly_sum import AssemblySum

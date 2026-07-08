@@ -395,56 +395,83 @@ class Mesh(MeshBase):
 
     # warning , this method must be static
     @staticmethod
-    def stack(mesh1: "Mesh", mesh2: "Mesh", name: str = "") -> "Mesh":
+    def stack(mesh1: "Mesh", mesh2: "Mesh", name: str = "") -> "Mesh | MultiMesh":
         """Add two mesh together to make a new mesh.
 
         *Static method* - Make the spatial stack of two mesh objects which have the
-        same element shape. This function doesn't merge coindicent Nodes.
+        same element shape. If the two meshes use different element shapes, a
+        MultiMesh is returned. This function doesn't merge coincident nodes.
         For that purpose, use the Mesh methods 'find_coincident_nodes' and 'merge_nodes'
         on the resulting Mesh.
 
         Return
         ---------
-        Mesh object with is the spacial stack of mesh1 and mesh2
+        Mesh or MultiMesh object which is the spatial stack of mesh1 and mesh2
         """
         if isinstance(mesh1, str):
             mesh1 = Mesh.get_all()[mesh1]
         if isinstance(mesh2, str):
             mesh2 = Mesh.get_all()[mesh2]
 
-        if mesh1.elm_type != mesh2.elm_type:
-            raise NameError("Can only stack meshes with the same element shape")
-
         n_nodes = mesh1.n_nodes
         n_elements = mesh1.n_elements
 
-        new_crd = np.r_[mesh1.nodes, mesh2.nodes]
-        new_elm = np.r_[mesh1.elements, mesh2.elements + n_nodes]
+        ndim = max(mesh1.ndim, mesh2.ndim)
+        mesh1 = mesh1.as_ndim(ndim)
+        mesh2 = mesh2.as_ndim(ndim)
 
-        new_ndSets = dict(mesh1.node_sets)
+        nodes = np.r_[mesh1.nodes, mesh2.nodes]
+        node_sets = dict(mesh1.node_sets)
         for key in mesh2.node_sets:
-            if key in mesh1.node_sets:
-                new_ndSets[key] = np.r_[
+            if key in node_sets:
+                node_sets[key] = np.r_[
                     mesh1.node_sets[key],
                     np.array(mesh2.node_sets[key]) + n_nodes,
                 ]
             else:
-                new_ndSets[key] = np.array(mesh2.node_sets[key]) + n_nodes
+                node_sets[key] = np.array(mesh2.node_sets[key]) + n_nodes
 
-        new_elSets = dict(mesh1.element_sets)
+        if mesh1.elm_type != mesh2.elm_type:
+            return MultiMesh(
+                nodes,
+                {
+                    mesh1.elm_type: (
+                        mesh1.elm_type,
+                        mesh1.elements,
+                        mesh1.element_sets,
+                    ),
+                    mesh2.elm_type: (
+                        mesh2.elm_type,
+                        mesh2.elements + n_nodes,
+                        mesh2.element_sets,
+                    ),
+                },
+                node_sets=node_sets,
+                ndim=ndim,
+                name=name,
+            )
+
+        elements = np.r_[mesh1.elements, mesh2.elements + n_nodes]
+
+        element_sets = dict(mesh1.element_sets)
         for key in mesh2.element_sets:
-            if key in mesh1.element_sets:
-                new_elSets[key] = np.r_[
+            if key in element_sets:
+                element_sets[key] = np.r_[
                     mesh1.element_sets[key],
                     np.array(mesh2.element_sets[key]) + n_elements,
                 ]
             else:
-                new_elSets[key] = np.array(mesh2.element_sets[key]) + n_elements
+                element_sets[key] = np.array(mesh2.element_sets[key]) + n_elements
 
-        mesh3 = Mesh(new_crd, new_elm, mesh1.elm_type, name=name)
-        mesh3.node_sets = new_ndSets
-        mesh3.element_sets = new_elSets
-        return mesh3
+        return Mesh(
+            nodes,
+            elements,
+            mesh1.elm_type,
+            node_sets=node_sets,
+            element_sets=element_sets,
+            ndim=ndim,
+            name=name,
+        )
 
     def find_coincident_nodes(self, tol: float = 1e-8) -> np.ndarray[int]:
         """Find some nodes with the same position considering a tolerance given by the argument tol.

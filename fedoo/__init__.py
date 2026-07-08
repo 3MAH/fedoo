@@ -18,6 +18,7 @@ from .core import (
     DataSet,
     ListBC,
     Mesh,
+    MultiMesh,
     ModelingSpace,
     MultiFrameDataSet,
     MultiMeshData,
