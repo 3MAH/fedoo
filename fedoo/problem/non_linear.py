@@ -887,6 +887,7 @@ class _NonLinearBase:
                 error < tol_nr
                 and subiter >= self._nr_min_subiter
                 and self._boundary_is_0
+                and getattr(self, "_bc_residual_norm", 0.0) < 10 * tol_nr
             ):
                 self._t_fact_inc = None
                 return 1, subiter, error
@@ -1186,6 +1187,7 @@ class _NonLinearBase:
                     )
                 if update_dt:
                     dt *= 0.25
+                    self.to_start()
                     # if self.print_info > 0:
                     # print(
                     #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
@@ -1198,9 +1200,10 @@ class _NonLinearBase:
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
-                    restart = True
+                    restart = False
                     continue
                 else:
+                    self.to_start()
                     raise RuntimeError(
                         "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )

@@ -150,10 +150,70 @@ boundary-condition force.
 Some advanced constraints based on multiple linearized MPC are available in
 fedoo. They can be created and added to the problem with the pb.bc.add method.
 
+Mean motion control
+___________________
+
+The :py:class:`fedoo.constraint.MeanMotion` constraint is a less
+restrictive alternative to :py:class:`fedoo.constraint.RigidTie`. It extracts
+selected components of the best-fit motion of a node set or surface mesh in a
+mean sense, without forcing every selected node to follow a rigid motion. The
+selected surface can therefore deform locally while selected mean translation
+and rotation components are controlled.
+
+The ``components`` argument is required and defines which global DOFs are
+created. Accepted component names include ``"RotX"``, ``"MeanRotX"``,
+``"DispZ"`` and ``"MeanDispZ"``. The vector aliases ``"Rot"``/``"MeanRot"``
+and ``"Disp"``/``"MeanDisp"`` select all rotation or displacement components
+available in the current modeling dimension. In 2D, the rotation vector
+contains only ``MeanRotZ``.
+
+When a surface mesh is passed, nodal weights are computed from the element
+area, or from the element length in 2D. These weights define an area-weighted
+least-squares projection of the displacement field onto rigid-body modes.
+
+For displacement-only mean control, select only displacement components:
+
+.. code-block:: python
+
+    mean_disp = fd.constraint.MeanMotion(surface_mesh, components="DispZ")
+    pb.bc.add(mean_disp)
+    pb.bc.add("Dirichlet", "MeanDispZ", -delta)
+
+When ``finite_rotation`` is left to ``None`` (the default), rotational
+components use finite rotations automatically if geometrical nonlinearity is
+enabled on the problem. Otherwise, the rotation components are small-rotation
+vector components. The finite-rotation mode uses a rotation-vector convention
+and linearizes the constraint at each Newton iteration using the derivative of
+the rotation matrix with respect to the rotation vector.
+
+.. code-block:: python
+
+    face_motion = fd.constraint.MeanMotion(
+        surface_mesh,
+        components="RotZ",
+    )
+    pb.bc.add(face_motion)
+    pb.bc.add("Dirichlet", face_motion.node_by_variable["MeanRotZ"], "MeanRotZ", angle)
+
+.. code-block:: python
+
+    face_motion = fd.constraint.MeanMotion(
+        surface_mesh,
+        components=["RotZ", "DispZ"],
+    )
+    pb.bc.add(face_motion)
+    pb.bc.add("Dirichlet", "MeanRotZ", angle)
+    pb.bc.add("Dirichlet", "MeanDispZ", -delta)
+
+The reactions on the created global DOFs are generalized forces. For instance,
+the reaction associated with ``MeanRotZ`` is the conjugate moment around the
+mean-motion center.
+
 .. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
+   fedoo.constraint.MeanMotion
    fedoo.constraint.PeriodicBC
    fedoo.constraint.RigidTie
    fedoo.constraint.RigidTie2D

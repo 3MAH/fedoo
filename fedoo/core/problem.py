@@ -344,6 +344,7 @@ class Problem(ProblemBase):
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
         n_dof = self.n_dof
         self._Xbc = np.zeros(n_dof)
+        self._bc_residual_norm = 0.0
         F = np.zeros(n_dof)
 
         build_mpc = False

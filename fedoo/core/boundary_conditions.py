@@ -199,10 +199,7 @@ class ListBC(BCBase):
             return bc
         else:  # define a boundary condition
             type_bc = args[0]
-            if len(args) == 3 and (
-                args[1] in self._problem._global_dof._variable
-                or args[1] in self._problem._global_dof._vector
-            ):
+            if len(args) == 3 and self._is_global_dof_variable_or_vector(args[1]):
                 node_set = [0]
                 variable = args[1]
                 value = args[2]
@@ -226,6 +223,18 @@ class ListBC(BCBase):
             bc = BoundaryCondition.create(type_bc, node_set, variable, value, **kargs)
             self.append(bc)
             return bc
+
+    def _is_global_dof_variable_or_vector(self, variable):
+        if isinstance(variable, str):
+            return (
+                variable in self._problem._global_dof._variable
+                or variable in self._problem._global_dof._vector
+            )
+
+        if isinstance(variable, (list, tuple)):
+            return all(self._is_global_dof_variable_or_vector(var) for var in variable)
+
+        return False
 
     def _extract_vartiables_from_vector(self, variable):
         # return a list in any cases
@@ -643,8 +652,10 @@ class MPC(BCBase):
 
         self.time_func = time_func
 
-        # can be a float or an array or None ! if DefaultInitialvalue is None, start_value can be modified by the Problem
-        # self._start_constant_default = self.start_constant = start_constant
+        # can be a float or an array or None ! if DefaultInitialvalue is None,
+        # start_value can be modified by the Problem
+        self._start_constant_default = self.start_constant = start_constant
+        self.start_value = start_constant
 
         self.list_variables = list_variables
         self.list_factors = list_factors
