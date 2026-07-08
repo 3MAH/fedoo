@@ -210,6 +210,89 @@ class DataSet:
     def _active_submesh_index(self) -> int:
         return self._resolve_submesh_indices(self.active_submesh)[0]
 
+    def global_element_location(self, element_id: int) -> tuple[int, int]:
+        """Return ``(submesh_id, local_element_id)`` for a global element id.
+
+        For regular ``Mesh`` datasets, the returned submesh id is always 0.
+        For ``MultiMesh`` datasets, global element ids follow the same
+        concatenated order used by ``to_pyvista`` and multimesh plotting: all
+        elements of submesh 0, then all elements of submesh 1, and so on.
+        """
+        element_id = int(element_id)
+        if not self._is_multimesh():
+            if element_id < 0 or element_id >= self.mesh.n_elements:
+                raise IndexError(element_id)
+            return 0, element_id
+
+        offset = 0
+        for submesh_id, submesh in enumerate(self.mesh.submeshes):
+            stop = offset + submesh.n_elements
+            if offset <= element_id < stop:
+                return submesh_id, element_id - offset
+            offset = stop
+        raise IndexError(element_id)
+
+    def global_element_id(self, submesh_id: int, local_element_id: int) -> int:
+        """Return the global element id for a submesh-local element id."""
+        submesh_id = int(submesh_id)
+        local_element_id = int(local_element_id)
+
+        if not self._is_multimesh():
+            if submesh_id != 0:
+                raise IndexError(submesh_id)
+            if local_element_id < 0 or local_element_id >= self.mesh.n_elements:
+                raise IndexError(local_element_id)
+            return local_element_id
+
+        if submesh_id < 0 or submesh_id >= len(self.mesh.submeshes):
+            raise IndexError(submesh_id)
+        submesh = self.mesh[submesh_id]
+        if local_element_id < 0 or local_element_id >= submesh.n_elements:
+            raise IndexError(local_element_id)
+        return (
+            sum(mesh.n_elements for mesh in self.mesh.submeshes[:submesh_id])
+            + local_element_id
+        )
+
+    def split_global_element_indices(self, element_ids) -> dict[int, np.ndarray]:
+        """Split global element ids into submesh-local element ids.
+
+        Parameters
+        ----------
+        element_ids : array-like of int
+            Element ids in the concatenated global numbering used by
+            multimesh plotting and viewer selections.
+
+        Returns
+        -------
+        dict[int, numpy.ndarray]
+            Mapping ``submesh_id -> local_element_ids``. Empty submeshes are
+            omitted.
+        """
+        element_ids = np.asarray(element_ids, dtype=int)
+        if element_ids.ndim == 0:
+            element_ids = element_ids.reshape(1)
+
+        if not self._is_multimesh():
+            if np.any((element_ids < 0) | (element_ids >= self.mesh.n_elements)):
+                raise IndexError(element_ids)
+            return {0: element_ids}
+
+        split_indices = {}
+        offset = 0
+        for submesh_id, submesh in enumerate(self.mesh.submeshes):
+            stop = offset + submesh.n_elements
+            local_ids = (
+                element_ids[(element_ids >= offset) & (element_ids < stop)] - offset
+            )
+            if len(local_ids):
+                split_indices[submesh_id] = local_ids
+            offset = stop
+
+        if len(split_indices) == 0 and len(element_ids) > 0:
+            raise IndexError(element_ids)
+        return split_indices
+
     def _selected_multimesh(self, selected_submeshes=None):
         if not self._is_multimesh():
             return self.mesh, [0]
@@ -992,16 +1075,6 @@ class DataSet:
         ):
             submesh_indices = [self._active_submesh_index()]
 
-        resolved_data_type = None
-        if field is not None:
-            _, resolved_data_type = self.get_data(
-                field,
-                component,
-                data_type,
-                True,
-                fill_unused_nodes=None,
-            )
-
         offsets = {}
         offset = 0
         for i, submesh in enumerate(self.mesh.submeshes):
@@ -1033,12 +1106,11 @@ class DataSet:
                 continue
 
             subdataset = self._submesh_dataset(submesh_id)
-            if (
-                field is not None
-                and resolved_data_type == "GaussPoint"
-                and field not in subdataset.gausspoint_data
-            ):
-                continue
+            if field is not None:
+                try:
+                    subdataset.get_data(field, component, data_type)
+                except NameError:
+                    continue
             sub_kargs = dict(kargs)
             if base_name is not None:
                 sub_kargs["name"] = f"{base_name}_{submesh_id}"
@@ -1094,6 +1166,9 @@ class DataSet:
         if pl is None:
             pl = pv.Plotter(window_size=window_size)
             backgroundplotter = False
+
+        if field is not None and not plotted:
+            raise NameError(f"Field data {field!r} not found on any selected submesh.")
 
         if title is None:
             title = "" if field is None else f"{field}_{component}"

@@ -152,6 +152,80 @@ class MultiMeshData:
     def items(self):
         return [(i, data) for i, data in enumerate(self._data) if data is not None]
 
+    def global_element_location(self, element_id: int) -> tuple[int, int]:
+        """Return ``(submesh_id, local_element_id)`` for a global element id.
+
+        Global element ids follow the same concatenated order as
+        :meth:`to_global`: all elements of submesh 0, then all elements of
+        submesh 1, and so on.
+        """
+        element_id = int(element_id)
+        offset = 0
+        for submesh_id, submesh in enumerate(self.mesh.submeshes):
+            stop = offset + submesh.n_elements
+            if offset <= element_id < stop:
+                return submesh_id, element_id - offset
+            offset = stop
+        raise IndexError(element_id)
+
+    def global_element_id(self, submesh_id: int, local_element_id: int) -> int:
+        """Return the global element id for a submesh-local element id."""
+        submesh_id = int(submesh_id)
+        local_element_id = int(local_element_id)
+        if submesh_id < 0 or submesh_id >= len(self.mesh.submeshes):
+            raise IndexError(submesh_id)
+        submesh = self.mesh[submesh_id]
+        if local_element_id < 0 or local_element_id >= submesh.n_elements:
+            raise IndexError(local_element_id)
+        return (
+            sum(mesh.n_elements for mesh in self.mesh.submeshes[:submesh_id])
+            + local_element_id
+        )
+
+    def global_element_value(self, element_id: int):
+        """Return the value attached to one global element id.
+
+        The value is read from the corresponding submesh block. For vector or
+        tensor element fields stored with elements on the last axis, the
+        returned value is ``block[..., local_element_id]``.
+        """
+        submesh_id, local_id = self.global_element_location(element_id)
+        block = self._data[submesh_id]
+        if block is None:
+            return None
+        return np.asarray(block)[..., local_id]
+
+    def global_element_values(self, element_ids, fill_value=np.nan):
+        """Return values attached to several global element ids.
+
+        Missing submesh blocks are filled with ``fill_value``. The returned
+        array preserves the order of ``element_ids``.
+        """
+        element_ids = np.asarray(element_ids, dtype=int)
+        scalar_input = element_ids.ndim == 0
+        if scalar_input:
+            return self.global_element_value(int(element_ids))
+
+        values = []
+        template = next((data for data in self._data if data is not None), None)
+        for element_id in element_ids:
+            submesh_id, local_id = self.global_element_location(int(element_id))
+            block = self._data[submesh_id]
+            if block is None:
+                if template is None or np.asarray(template).ndim == 1:
+                    values.append(fill_value)
+                else:
+                    values.append(
+                        np.full(np.asarray(template).shape[:-1], fill_value)
+                    )
+            else:
+                values.append(np.asarray(block)[..., local_id])
+        if not values:
+            return np.array([])
+        if np.asarray(values[0]).ndim == 0:
+            return np.asarray(values)
+        return np.stack(values, axis=-1)
+
     def to_global(self, indices=None, fill_value=np.nan):
         """Concatenate per-submesh data in the selected submesh order."""
         if indices is None:
@@ -204,10 +278,7 @@ def copy_data_value(value, deep: bool = False):
         value = value._data
 
     if isinstance(value, dict):
-        return {
-            key: copy_data_value(item, deep=deep)
-            for key, item in value.items()
-        }
+        return {key: copy_data_value(item, deep=deep) for key, item in value.items()}
 
     if isinstance(value, (list, tuple)):
         copied = [copy_data_value(item, deep=deep) for item in value]
