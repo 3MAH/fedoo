@@ -169,6 +169,7 @@ class ListBC(BCBase):
         * ListBC.add(bc), where bc is any BC object.
 
           Add the object bc at the end of the list. (equivalent to ListBC.append(bc))
+          If bc provides an as_neumann() method, it is converted first.
 
         * ListBC.add(bc_type, node_set, variable, value, time_func=None, start_value=None, name=""):
 
@@ -182,8 +183,20 @@ class ListBC(BCBase):
           If a variable contains only one dof, the node_set parameter can be skiped.
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
-            self.append(args[0])
-            return args[0]
+            bc = args[0]
+            if hasattr(bc, "assemble_global_mat") and hasattr(bc, "current"):
+                # Assembly object
+                if hasattr(bc, "as_neumann"):
+                    bc = bc.as_neumann()
+                else:
+                    raise TypeError(
+                        "Assembly objects added to a boundary-condition list must "
+                        "provide an as_neumann() method. Add the assembly to the "
+                        "problem assembly directly, or use an assembly type that can "
+                        "be converted to a Neumann boundary condition."
+                    )
+            self.append(bc)
+            return bc
         else:  # define a boundary condition
             type_bc = args[0]
             if len(args) == 3 and (
@@ -462,21 +475,13 @@ class BoundaryCondition(BCBase):
             # must be a string defining a set of nodes
             self.node_set = problem.mesh.node_sets[self.node_set_name]
 
-        if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
-            self.pgd = True
-        else:
-            self.pgd = False
-            # must be a np.array  #Not for PGD
-            self.node_set = np.asarray(self.node_set, dtype=int)
+        self.node_set = np.asarray(self.node_set, dtype=int)
 
     def generate(self, problem, t_fact, t_fact_old=None):
         self._current_value = self.get_value(t_fact, t_fact_old)
-
-        if not (self.pgd):
-            self._dof_index = (
-                self.variable * problem.mesh.n_nodes + self.node_set
-            ).astype(int)
-
+        self._dof_index = (self.variable * problem.mesh.n_nodes + self.node_set).astype(
+            int
+        )
         return [self]
 
     def _get_factor(self, t_fact=1, t_fact_old=None):
@@ -666,12 +671,8 @@ class MPC(BCBase):
                     ] + problem.global_dof.indice_start(var)
                     self.list_variables[i] = problem.space.nvar
 
-        if hasattr(problem.mesh, "GetListMesh"):  # associated to pgd problem
-            self.pgd = True
-        else:
-            self.pgd = False
-            self.list_node_sets = np.asarray(self.list_node_sets, dtype=int)
-            self.list_variables = np.asarray(self.list_variables, dtype=int)
+        self.list_node_sets = np.asarray(self.list_node_sets, dtype=int)
+        self.list_variables = np.asarray(self.list_variables, dtype=int)
 
     def generate(self, problem, t_fact, t_fact_old=None):
         # # Node index for master DOF (not eliminated DOF in MPC)

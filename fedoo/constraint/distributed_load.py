@@ -5,12 +5,80 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.boundary_conditions import BCBase
 from fedoo.weakform.distributed_load import ExternalPressure, DistributedLoad
 from fedoo.core.mesh import Mesh
 from fedoo.mesh.functions import extract_surface
 
 if TYPE_CHECKING:
     from fedoo.core.base import ProblemBase
+
+
+class _AssemblyNeumannBC(BCBase):
+    """Neumann boundary condition generated from a load assembly.
+
+    The wrapped assembly computes the equivalent nodal load vector, but the
+    vector is injected through ``Problem.B`` like a standard Neumann boundary
+    condition. This keeps distributed loads out of the problem's internal
+    residual assembly during nonlinear solves.
+    """
+
+    def __init__(self, assembly: Assembly, name: str = "", time_func=None):
+        BCBase.__init__(self, name)
+        self.bc_type = "Neumann"
+        self.assembly = assembly
+        self._start_value_default = 0
+        if time_func is None:
+
+            def time_func(t_fact):
+                return t_fact
+
+        self.time_func = time_func
+        self._assembly_t_fact = None
+        self._assembly_vector = None
+
+    def initialize(self, problem: ProblemBase):
+        if self.assembly.mesh.n_nodes != problem.mesh.n_nodes:
+            raise ValueError(
+                "Assembly-based Neumann loads must share the problem mesh nodes."
+            )
+
+        self.assembly.initialize(problem)
+        self._update_during_inc = bool(self.assembly._nlgeom)
+        self._assembly_t_fact = None
+        self._assembly_vector = None
+
+    def _format_current_value(self, problem: ProblemBase, value):
+        if np.isscalar(value) and value == 0:
+            self._dof_index = np.array([], dtype=int)
+            self._current_value = np.array([])
+            return
+
+        if problem.n_global_dof and len(value) < problem.n_dof:
+            value = np.pad(value, (0, problem.n_dof - len(value)))
+        self._dof_index = np.arange(problem.n_dof, dtype=int)
+        self._current_value = value
+
+    def generate(self, problem: ProblemBase, t_fact=1, t_fact_old=None):
+        assembly_t_fact = self.time_func(t_fact)
+        factor_changed = not np.array_equal(self._assembly_t_fact, assembly_t_fact)
+
+        if factor_changed:
+            self.assembly.set_start(problem, t_fact=assembly_t_fact)
+            self._assembly_t_fact = assembly_t_fact
+
+        if self._update_during_inc:
+            self.assembly.update(problem, compute="vector")
+            value = self.assembly.current.get_global_vector()
+        elif factor_changed or self._assembly_vector is None:
+            self.assembly.assemble_global_mat(compute="vector")
+            value = self.assembly.current.get_global_vector()
+            self._assembly_vector = value.copy() if hasattr(value, "copy") else value
+        else:
+            value = self._assembly_vector
+
+        self._format_current_value(problem, value)
+        return [self]
 
 
 class Pressure(Assembly):
@@ -50,6 +118,21 @@ class Pressure(Assembly):
         If not defined, the problem.nlgeom attribute is used instead.
     name: str, optional
         Name of the created assembly.
+    time_func: callable, optional
+        Function that gives the temporal evolution of the pressure when the
+        assembly is converted to a Neumann boundary condition. By default, a
+        linear evolution is considered.
+
+    Notes
+    -----
+    Pressure is an assembly and can still be combined directly with another
+    assembly, for instance ``fd.problem.Linear(solid_assembly + pressure)``.
+    It can also be used as an external Neumann boundary condition with
+    ``pb.bc.add(pressure)`` or ``pb.bc.add(pressure.as_neumann())``. This form
+    is useful for nonlinear problems because the equivalent nodal pressure is
+    included in the external load vector and in residual normalization. When
+    geometrical nonlinearities are active, the follower load is updated during
+    Newton iterations.
 
     Example
     -------
@@ -74,6 +157,10 @@ class Pressure(Assembly):
         pb = fd.problem.Linear(solid_assembly+pressure)
         pb.solve()
 
+        # or add the same pressure as an external Neumann BC
+        pb = fd.problem.NonLinear(solid_assembly, nlgeom=True)
+        pb.bc.add(pressure)
+
         pb.get_results(solid_assembly,'Stress').plot('Stress', 'XX')
     """
 
@@ -84,24 +171,38 @@ class Pressure(Assembly):
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         self.pressure = pressure
         self.initial_pressure = initial_pressure
         self.nlgeom = nlgeom
+        self.time_func = time_func
         wf = ExternalPressure(self.pressure, nlgeom=self.nlgeom)
         Assembly.__init__(self, wf, surface_mesh, name=name)
         if nlgeom == "TL":
             raise NotImplementedError("TL not implemented for distributed loads")
 
-    def set_start(self, pb: ProblemBase):
+    def set_start(self, pb: ProblemBase, t_fact: float | None = None):
         """Start a new time increment."""
+        if t_fact is None:
+            t_fact = pb.t_fact
+
         if self.initial_pressure is None:
-            self.weakform.pressure = pb.t_fact * self.pressure
+            self.weakform.pressure = t_fact * self.pressure
         else:
             self.weakform.pressure = (
-                pb.t_fact * (self.pressure - self.initial_pressure)
-                + self.initial_pressure
+                t_fact * (self.pressure - self.initial_pressure) + self.initial_pressure
             )
+
+    def to_start(self, pb: ProblemBase):
+        """Reset the assembly to the beginning of the time iteration."""
+        self.set_start(pb)
+
+    def as_neumann(self, name: str = "", time_func=None):
+        """Return this pressure load as a Neumann boundary condition."""
+        if time_func is None:
+            time_func = self.time_func
+        return _AssemblyNeumannBC(self, name, time_func=time_func)
 
     @staticmethod
     def from_nodes(
@@ -111,6 +212,7 @@ class Pressure(Assembly):
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         """Create a pressure assembly from a node set.
 
@@ -120,7 +222,9 @@ class Pressure(Assembly):
         See :py:class:`Pressure` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, node_set=node_set)
-        return Pressure(surface_mesh, pressure, initial_pressure, nlgeom, name)
+        return Pressure(
+            surface_mesh, pressure, initial_pressure, nlgeom, name, time_func
+        )
 
     @staticmethod
     def from_elements(
@@ -130,6 +234,7 @@ class Pressure(Assembly):
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         """Create a pressure assembly from an element set.
 
@@ -139,7 +244,9 @@ class Pressure(Assembly):
         See :py:class:`Pressure` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, element_set=element_set)
-        return Pressure(surface_mesh, pressure, initial_pressure, nlgeom, name)
+        return Pressure(
+            surface_mesh, pressure, initial_pressure, nlgeom, name, time_func
+        )
 
 
 class DistributedForce(Assembly):
@@ -178,6 +285,21 @@ class DistributedForce(Assembly):
         If nlgeom == 'TL' the total lagrangian method is used
     name: str, optional
         Name of the created assembly.
+    time_func: callable, optional
+        Function that gives the temporal evolution of the distributed load when
+        the assembly is converted to a Neumann boundary condition. By default,
+        a linear evolution is considered.
+
+    Notes
+    -----
+    DistributedForce is an assembly and can still be combined directly with
+    another assembly, for instance
+    ``fd.problem.Linear(solid_assembly + volume_force)``. It can also be used
+    as an external Neumann boundary condition with ``pb.bc.add(volume_force)``
+    or ``pb.bc.add(volume_force.as_neumann())``. This form is useful for
+    nonlinear problems because the equivalent nodal force is included in the
+    external load vector and in residual normalization. When geometrical
+    nonlinearities are active, the load is updated during Newton iterations.
 
     Example
     -------
@@ -198,10 +320,14 @@ class DistributedForce(Assembly):
         volume_force = fd.constraint.DistributedForce(
             mesh, [0,0,-1000], nlgeom=False)
 
-        # define a problem from the solid and pressure assemblies
+        # define a problem from the solid and volume-force assemblies
         pb = fd.problem.Linear(solid_assembly+volume_force)
         pb.bc.add('Dirichlet', 'bottom', 'Disp', 0)
         pb.solve()
+
+        # or add the same force as an external Neumann BC
+        pb = fd.problem.NonLinear(solid_assembly, nlgeom=True)
+        pb.bc.add(volume_force)
 
         pb.get_results(solid_assembly,'Stress').plot('Stress', 'XX', 'Node')
     """
@@ -213,6 +339,7 @@ class DistributedForce(Assembly):
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         self.force = force
         if initial_force is not None:
@@ -220,32 +347,42 @@ class DistributedForce(Assembly):
         else:
             self.initial_force = None
         self.nlgeom = nlgeom
+        self.time_func = time_func
         wf = DistributedLoad(self.force, nlgeom=self.nlgeom)
         Assembly.__init__(self, wf, mesh, name=name)
 
-    def set_start(self, pb: ProblemBase):
+    def set_start(self, pb: ProblemBase, t_fact: float | None = None):
         """Start a new time increment."""
+        if t_fact is None:
+            t_fact = pb.t_fact
+
         if self.initial_force is None:
             if isinstance(self.force, np.ndarray):
-                self.weakform.distributed_force = pb.t_fact * self.force
+                self.weakform.distributed_force = t_fact * self.force
             else:
-                self.weakform.distributed_force = [pb.t_fact * f for f in self.force]
+                self.weakform.distributed_force = [t_fact * f for f in self.force]
         else:
             if isinstance(self.force, np.ndarray) and isinstance(
                 self.initial_force, np.ndarray
             ):
                 self.weakform.distributed_force = (
-                    pb.t_fact * (self.force - self.initial_force) + self.initial_force
+                    t_fact * (self.force - self.initial_force) + self.initial_force
                 )
             else:
                 self.weakform.distributed_force = [
-                    pb.t_fact * (f - self.initial_force[i]) + self.initial_force[i]
+                    t_fact * (f - self.initial_force[i]) + self.initial_force[i]
                     for i, f in enumerate(self.force)
                 ]
 
     def to_start(self, pb: ProblemBase):
-        """Reset the assembly to the begining of the time iteration."""
+        """Reset the assembly to the beginning of the time iteration."""
         self.set_start(pb)
+
+    def as_neumann(self, name: str = "", time_func=None):
+        """Return this distributed load as a Neumann boundary condition."""
+        if time_func is None:
+            time_func = self.time_func
+        return _AssemblyNeumannBC(self, name, time_func=time_func)
 
 
 class SurfaceForce(DistributedForce):
@@ -265,6 +402,7 @@ class SurfaceForce(DistributedForce):
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         """Create a SurfaceForce assembly from an node set.
 
@@ -274,7 +412,9 @@ class SurfaceForce(DistributedForce):
         See :py:class:`SurfaceForce` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, node_set=node_set)
-        return DistributedForce(surface_mesh, force, initial_force, nlgeom, name)
+        return DistributedForce(
+            surface_mesh, force, initial_force, nlgeom, name, time_func
+        )
 
     @staticmethod
     def from_elements(
@@ -284,6 +424,7 @@ class SurfaceForce(DistributedForce):
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
         name: str = "",
+        time_func=None,
     ):
         """Create a SurfaceForce assembly from an element set.
 
@@ -293,4 +434,6 @@ class SurfaceForce(DistributedForce):
         See :py:class:`SurfaceForce` for more details on the parameters.
         """
         surface_mesh = extract_surface(mesh, element_set=element_set)
-        return DistributedForce(surface_mesh, force, initial_force, nlgeom, name)
+        return DistributedForce(
+            surface_mesh, force, initial_force, nlgeom, name, time_func
+        )
