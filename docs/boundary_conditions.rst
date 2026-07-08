@@ -108,9 +108,36 @@ ____________________________________________
 Avdanced BC and constraints
 ==============================
 
-Distributed loads are applied to a Problem by building dedicated assembly
-objects. To add them to a problem, one should add the constraint assembly
-to the assembly defining the stiffness matrix.
+Distributed loads are defined by dedicated assembly objects. The recommended
+way to apply them is to add the load assembly to the problem boundary
+conditions. If the assembly provides an ``as_neumann()`` method,
+:py:meth:`fedoo.ListBC.add` automatically converts it to an equivalent
+Neumann boundary condition. This is especially useful for nonlinear problems:
+the load is included in the external force vector, follows the usual load
+coefficient, and is taken into account by the residual normalization.
+
+.. code-block:: python
+
+    solid_assembly = fd.Assembly.create(wf, mesh)
+    pressure = fd.constraint.Pressure(surface_mesh, value, nlgeom=True)
+
+    pb = fd.problem.NonLinear(solid_assembly, nlgeom=True)
+    pb.bc.add(pressure)
+
+The explicit form is also available:
+
+.. code-block:: python
+
+    pb.bc.add(pressure.as_neumann())
+
+The load assembly can still be combined directly with the mechanical assembly.
+This form is kept as an alternative, but is not recommended for nonlinear
+analyses because the load is part of the residual assembly rather than a
+boundary-condition force.
+
+.. code-block:: python
+
+    pb = fd.problem.Linear(solid_assembly + pressure)
 
 .. autosummary::
     :toctree: generated/
@@ -120,8 +147,8 @@ to the assembly defining the stiffness matrix.
     fedoo.constraint.Pressure
     fedoo.constraint.SurfaceForce
 
-Some advanced constraints base on multiple linearized MPC are available in
-fedoo. They can be created and add to the problem with the pb.bc.add method.
+Some advanced constraints based on multiple linearized MPC are available in
+fedoo. They can be created and added to the problem with the pb.bc.add method.
 
 .. autosummary::
    :toctree: generated/
