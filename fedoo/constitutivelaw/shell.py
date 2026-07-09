@@ -22,6 +22,43 @@ class ShellBase(ConstitutiveLaw):
             '"get_shell_stiffness_matrix" not implemented, contact developer.'
         )
 
+    @property
+    def area_density(self):
+        """Mass per unit midsurface area."""
+        if not hasattr(self, "_area_density"):
+            self._area_density = self.compute_area_density()
+        return self._area_density
+
+    @property
+    def rotary_density(self):
+        """Mass moment of inertia per unit midsurface area."""
+        if not hasattr(self, "_rotary_density"):
+            self._rotary_density = self.compute_rotary_density()
+        return self._rotary_density
+
+    def compute_area_density(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define shell area density."
+        )
+
+    def compute_rotary_density(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define shell rotary density."
+        )
+
+    @staticmethod
+    def _material_density(material, owner_name):
+        density = getattr(material, "density", None)
+        if density is None:
+            material_name = getattr(material, "name", type(material).__name__)
+            raise ValueError(
+                f"Shell law {owner_name!r} needs density on material "
+                f"{material_name!r} for dynamic analysis. Set it with "
+                "material.set_density(rho), or attach storage explicitly "
+                "with weakform.set_inertia(...)."
+            )
+        return density
+
     def update(self, assembly, pb):
         # disp = pb.get_disp()
         # rot = pb.get_rot()
@@ -99,6 +136,14 @@ class ShellHomogeneous(ShellBase):
         ShellBase.__init__(self, thickness, k, name)  # heritage
 
         self.material = material
+
+    def compute_area_density(self):
+        density = self._material_density(self.material, self.name)
+        return density * self.thickness
+
+    def compute_rotary_density(self):
+        density = self._material_density(self.material, self.name)
+        return density * self.thickness**3 / 12.0
 
     def get_shell_stiffness_matrix(self):
         Hplane = self.material.get_elastic_matrix(
@@ -220,6 +265,20 @@ class ShellLaminate(ShellBase):
         self.list_thickness = list_thickness
 
         ShellBase.__init__(self, thickness, k, name)  # heritage
+
+    def compute_area_density(self):
+        return sum(
+            self._material_density(material, self.name) * thickness
+            for material, thickness in zip(self.__listMat, self.list_thickness)
+        )
+
+    def compute_rotary_density(self):
+        return sum(
+            self._material_density(material, self.name)
+            * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3)
+            / 3.0
+            for i, material in enumerate(self.__listMat)
+        )
 
     def get_shell_stiffness_matrix(self):
         H = np.zeros((8, 8), dtype="object")

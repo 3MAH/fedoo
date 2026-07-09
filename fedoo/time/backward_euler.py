@@ -14,14 +14,14 @@ class BackwardEuler(TimeIntegratorBase):
 
     def _integrate_leaf(self, weakform):
         """Return a backward-Euler weakform sum when storage is declared."""
-        if getattr(weakform, "dissipation", None) is not None:
+        if weakform.get_dissipation() is not None:
             raise NotImplementedError(
                 "BackwardEuler does not integrate dissipative terms yet. "
                 "Remove set_dissipation() from this first-order weakform, or "
                 "fold the dissipation into the storage term."
             )
 
-        storage = getattr(weakform, "storage", None)
+        storage = weakform.get_storage()
         if storage is None:
             # A first-order weakform without a storage term has no transient
             # contribution: keep it as a plain static term.

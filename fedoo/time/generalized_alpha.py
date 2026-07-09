@@ -76,7 +76,7 @@ class GeneralizedAlpha(TimeIntegratorBase):
                 "weakform.set_inertia(density_or_weakform)."
             )
 
-        dissipation = getattr(weakform, "dissipation", None)
+        dissipation = self._resolve_dissipation(weakform)
         if dissipation is not None and not isinstance(
             dissipation, (RayleighDamping, WeakFormBase)
         ):
@@ -89,19 +89,15 @@ class GeneralizedAlpha(TimeIntegratorBase):
         return self._wrap_static_weakform(weakform, storage, dissipation)
 
     def _resolve_storage(self, weakform):
-        storage = getattr(weakform, "storage", None)
-        if storage is not None:
-            if isinstance(storage, WeakFormBase):
-                return storage
-            return Inertia(storage, space=weakform.space)
+        storage = weakform.get_storage()
+        if isinstance(storage, WeakFormBase):
+            return storage
+        return Inertia(storage, space=weakform.space)
 
-        # Fall back to the material density, read at compile time so that a
-        # set_density() call made after the weakform was built is still honored.
-        constitutivelaw = getattr(weakform, "constitutivelaw", None)
-        density = getattr(constitutivelaw, "density", None)
-        if density is not None:
-            return Inertia(density, space=weakform.space)
-        return None
+    def _resolve_dissipation(self, weakform):
+        if getattr(weakform, "dissipation", None) is not None:
+            return weakform.dissipation
+        return weakform.get_dissipation()
 
     def _wrap_static_weakform(self, weakform, storage, dissipation):
         # Decorate a *copy* of the user's weakform with the generalized-alpha
@@ -282,6 +278,15 @@ class GeneralizedAlphaStiffnessTerm(WeakFormBase):
 
 class GeneralizedAlphaWeakFormSum(WeakFormSum):
     """WeakFormSum with Rayleigh damping accessors for second-order terms."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        try:
+            stiffness = self.list_weakform[0]
+        except (AttributeError, IndexError):
+            raise AttributeError(name) from None
+        return getattr(stiffness, name)
 
     def _rayleigh_terms(self):
         """Return the [stiffness, inertia] terms if they carry damping_coef.
