@@ -35,8 +35,6 @@ Loading by force is done through implicit dynamics
 inertia/damping regularise that soft mode.
 """
 
-import os
-
 import numpy as np
 
 import fedoo as fd
@@ -55,10 +53,11 @@ U_CAP = 0.03  # prescribed transverse cap displacement [m] (~0.6 L)
 # "quadratic" -> hex20, full integration    (StressEquilibrium)
 MESH = "linear"
 
-MESH_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "../../util/meshes",
-    "cyl08_hexa_lin.inp" if MESH == "linear" else "cyl08_hexa_quad.inp",
+# path relative to this example's directory (as run by sphinx-gallery)
+MESH_FILE = (
+    "../../util/meshes/cyl08_hexa_lin.inp"
+    if MESH == "linear"
+    else "../../util/meshes/cyl08_hexa_quad.inp"
 )
 
 fd.ModelingSpace("3D")
