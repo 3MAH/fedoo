@@ -216,9 +216,7 @@ class MultiMeshData:
                 if template is None or np.asarray(template).ndim == 1:
                     values.append(fill_value)
                 else:
-                    values.append(
-                        np.full(np.asarray(template).shape[:-1], fill_value)
-                    )
+                    values.append(np.full(np.asarray(template).shape[:-1], fill_value))
             else:
                 values.append(np.asarray(block)[..., local_id])
         if not values:
@@ -242,7 +240,10 @@ class MultiMeshData:
             data = self._data[i]
             n_elements = self.mesh[i].n_elements
             if data is None:
-                if template_entry is not None and np.asarray(template_entry[1]).ndim > 1:
+                if (
+                    template_entry is not None
+                    and np.asarray(template_entry[1]).ndim > 1
+                ):
                     template_id, template = template_entry
                     template = np.asarray(template)
                     n_template_elements = self.mesh[template_id].n_elements

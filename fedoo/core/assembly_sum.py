@@ -50,7 +50,6 @@ class AssemblySum(AssemblyBase):
 
         self.current = _AssemblySumCurrent(list_assembly)
 
-
     def __add__(self, another_assembly):
         if isinstance(another_assembly, AssemblySum):
             return AssemblySum(self.list_assembly + another_assembly.list_assembly)

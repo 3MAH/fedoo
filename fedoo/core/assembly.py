@@ -1245,14 +1245,20 @@ class Assembly(AssemblyBase):
 
                 elementary_operator = self._get_elementary_operator(wf.op[ii])
                 n_operator_cols = elementary_operator[0].shape[1]
-                gp_values = elementary_operator[0] @ local_nodal_vector[
-                    var[0] * n_operator_cols : (var[0] + 1) * n_operator_cols
-                ]
+                gp_values = (
+                    elementary_operator[0]
+                    @ local_nodal_vector[
+                        var[0] * n_operator_cols : (var[0] + 1) * n_operator_cols
+                    ]
+                )
                 if len(var) > 1:
                     for jj, v in enumerate(var[1:]):
-                        gp_values += elementary_operator[jj + 1] @ local_nodal_vector[
-                            v * n_operator_cols : (v + 1) * n_operator_cols
-                        ]
+                        gp_values += (
+                            elementary_operator[jj + 1]
+                            @ local_nodal_vector[
+                                v * n_operator_cols : (v + 1) * n_operator_cols
+                            ]
+                        )
                 # or:
                 # gp_values = self.get_gp_results(type(wf)([wf.op[ii]], [1], [1]), nodal_vector)
 

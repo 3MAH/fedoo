@@ -369,15 +369,15 @@ def _get_results(
                 else:
                     # attent to compute
                     method_name = "get_strain" if res == "Strain" else "get_stress"
-                    law = _find_constitutivelaw_with_method(assemb.weakform, method_name)
+                    law = _find_constitutivelaw_with_method(
+                        assemb.weakform, method_name
+                    )
                     if law is None:
                         raise NameError('Field "{}" not available'.format(res))
                     try:
                         data = getattr(law, method_name)(assemb, position=position)
                     except Exception as exc:
-                        raise NameError(
-                            'Field "{}" not available'.format(res)
-                        ) from exc
+                        raise NameError('Field "{}" not available'.format(res)) from exc
 
                 # keep data in memory in case it may be used later for vm, pc or pdir stress computation
                 data_sav[res] = data

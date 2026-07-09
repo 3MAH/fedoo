@@ -77,12 +77,7 @@ class ShellBase(ConstitutiveLaw):
 
             # all terms are computed. Perhaps could be optimized by computed only the termes related to the associated weak form (eg shear for selective integration)
             assembly.sv["ShellStress"] = [
-                sum(
-                    [
-                        ShellStrain[j] * assembly.convert_data(H[i][j])
-                        for j in range(8)
-                    ]
-                )
+                sum([ShellStrain[j] * assembly.convert_data(H[i][j]) for j in range(8)])
                 for i in range(8)
             ]  # H[i][j] are converted to gauss point excepted if scalar
             assembly.sv["ShellStrain"] = ShellStrain
@@ -114,12 +109,8 @@ class ShellBase(ConstitutiveLaw):
         if np.isscalar(ShellStrain) and ShellStrain == 0:
             zeros = np.zeros(assembly.n_gauss_points)
             return StrainTensorList([zeros.copy() for _ in range(6)])
-        Strain[0] = (
-            ShellStrain[0] + z * ShellStrain[4]
-        )  # epsXX -> membrane and bending
-        Strain[1] = (
-            ShellStrain[1] - z * ShellStrain[3]
-        )  # epsYY -> membrane and bending
+        Strain[0] = ShellStrain[0] + z * ShellStrain[4]  # epsXX -> membrane and bending
+        Strain[1] = ShellStrain[1] - z * ShellStrain[3]  # epsYY -> membrane and bending
         Strain[3] = ShellStrain[2]  # 2epsXY
         Strain[4:6] = ShellStrain[6:8]  # 2epsXZ and 2epsYZ -> shear
 

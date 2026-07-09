@@ -969,7 +969,6 @@ class DataSet:
             shape = (n_items,)
         return np.zeros(shape, dtype=template.dtype)
 
-
     def _submesh_dataset(self, submesh_id: int) -> "DataSet":
         """Build a lightweight DataSet view attached to one submesh."""
         submesh = self.mesh[submesh_id]

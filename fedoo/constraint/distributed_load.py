@@ -120,6 +120,7 @@ class _AssemblyNeumannBC(BCBase):
         self._format_current_value(problem, self.get_value(t_fact, t_fact_old))
         return [self]
 
+
 class Pressure(Assembly):
     """Pressure load.
 

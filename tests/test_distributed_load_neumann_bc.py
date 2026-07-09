@@ -144,9 +144,7 @@ def test_assembly_neumann_load_caches_initial_and_final_vectors():
     np.testing.assert_allclose(
         quarter_load, start_load + 0.25 * (final_load - start_load)
     )
-    np.testing.assert_allclose(
-        half_load, start_load + 0.50 * (final_load - start_load)
-    )
+    np.testing.assert_allclose(half_load, start_load + 0.50 * (final_load - start_load))
 
 
 def test_follower_assembly_neumann_load_without_initial_value_skips_start_vector():
