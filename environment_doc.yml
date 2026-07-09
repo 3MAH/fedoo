@@ -13,7 +13,7 @@ dependencies:
   - vtk>=9.2
   - pypandoc
   - pyvista>=0.39
-  - simcoon>=1.11.0
+  - simcoon>=1.14
   - pytest
   - sphinx
   - sphinx_rtd_theme
