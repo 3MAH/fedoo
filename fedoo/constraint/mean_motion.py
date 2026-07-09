@@ -3,6 +3,7 @@
 from numbers import Number
 
 import numpy as np
+from scipy.spatial import cKDTree
 from simcoon import Rotation as SimRotation
 from simcoon import dR_drotvec
 
@@ -97,6 +98,7 @@ class MeanMotion(BCBase):
         self._projection = None
         self._mode_matrix = None
         self._node_coords = None
+        self._phys_dof_index = None
         self.node_disp = None
         self.node_rot = None
 
@@ -145,21 +147,27 @@ class MeanMotion(BCBase):
         self._full_mean_variables = (
             self._full_mean_disp_variables + self._full_mean_rot_variables
         )
-        self._mean_variables = self._normalize_components(n_dim)
-        self._mode_indices = [
-            self._full_mean_variables.index(var) for var in self._mean_variables
-        ]
+        normalized = self._normalize_components(n_dim)
         self._mean_disp_variables = [
-            var for var in self._mean_variables if var in self._full_mean_disp_variables
+            var for var in normalized if var in self._full_mean_disp_variables
         ]
         self._mean_rot_variables = [
-            var for var in self._mean_variables if var in self._full_mean_rot_variables
+            var for var in normalized if var in self._full_mean_rot_variables
         ]
-
         self._mean_variables = self._mean_disp_variables + self._mean_rot_variables
         self._mode_indices = [
             self._full_mean_variables.index(var) for var in self._mean_variables
         ]
+
+        n_nodes = problem.mesh.n_nodes
+        self._phys_dof_index = np.array(
+            [
+                problem.space.variable_rank(var) * n_nodes + node
+                for node in self.nodes
+                for var in self._disp_variables
+            ],
+            dtype=int,
+        )
 
         has_rotation = bool(self._mean_rot_variables)
         if self.finite_rotation is None:
@@ -195,6 +203,8 @@ class MeanMotion(BCBase):
             coeff_u, coeff_q, residual = self._build_finite_incremental_linearization(
                 problem, q0, u0
             )
+            # Track the constraint out-of-balance so the NR loop does not report
+            # convergence while the mean-motion fit is still unsatisfied.
             problem._bc_residual_norm = max(
                 getattr(problem, "_bc_residual_norm", 0.0),
                 float(np.linalg.norm(residual)),
@@ -211,8 +221,13 @@ class MeanMotion(BCBase):
                     )
                 )
         else:
+            used_slave_cols = set()
             for mode_index, mean_var in enumerate(self._mean_variables):
-                res.append(self._make_mpc(mode_index, mean_var))
+                res.append(
+                    self._make_mpc(
+                        self._mode_indices[mode_index], mean_var, used_slave_cols
+                    )
+                )
 
         res.initialize(problem)
         return res.generate(problem, t_fact, t_fact_old)
@@ -318,14 +333,15 @@ class MeanMotion(BCBase):
 
         surface_nodes = self._map_surface_nodes_to_problem(problem)
         elements = surface_nodes[np.asarray(self.surface_mesh.elements, dtype=int)]
-        measures = _element_measures(
-            problem.mesh.nodes, elements, self.surface_mesh.elm_type
-        )
+        measures = self.surface_mesh.get_element_volumes()
 
+        nodes_per_elm = elements.shape[1]
         weights = np.zeros(problem.mesh.n_nodes)
-        for element, measure in zip(elements, measures):
-            element_nodes = np.unique(element)
-            weights[element_nodes] += measure / len(element_nodes)
+        np.add.at(
+            weights,
+            elements.ravel(),
+            np.repeat(measures / nodes_per_elm, nodes_per_elm),
+        )
 
         nodes = np.flatnonzero(weights)
         return nodes.astype(int), weights[nodes]
@@ -337,17 +353,14 @@ class MeanMotion(BCBase):
         ):
             return np.arange(problem.mesh.n_nodes)
 
-        mapped_nodes = np.empty(len(surface_nodes), dtype=int)
-        for i, coords in enumerate(surface_nodes):
-            mapped_node = problem.mesh.nearest_node(coords)
-            if not np.allclose(problem.mesh.nodes[mapped_node], coords):
-                raise ValueError(
-                    "surface_mesh nodes could not be mapped to the problem mesh. "
-                    "Use a surface mesh extracted from the problem mesh or pass "
-                    "node_set and weights explicitly."
-                )
-            mapped_nodes[i] = mapped_node
-        return mapped_nodes
+        distances, mapped_nodes = cKDTree(problem.mesh.nodes).query(surface_nodes)
+        if not np.allclose(distances, 0.0):
+            raise ValueError(
+                "surface_mesh nodes could not be mapped to the problem mesh. "
+                "Use a surface mesh extracted from the problem mesh or pass "
+                "node_set and weights explicitly."
+            )
+        return mapped_nodes.astype(int)
 
     def _get_center(self, problem):
         if self.center is None:
@@ -405,14 +418,6 @@ class MeanMotion(BCBase):
 
         return values
 
-    def _get_total_mean_values(self, problem):
-        sol = problem.get_dof_solution()
-        if np.isscalar(sol) and sol == 0:
-            return np.zeros(len(self._mean_variables))
-        return np.array(
-            [sol[self._global_dof_index(problem, var)] for var in self._mean_variables]
-        )
-
     def _get_full_total_mean_values(self, problem, u0, controlled=None):
         q = self._fit_finite_mean_motion(problem, u0)
         if not self._mean_variables:
@@ -447,38 +452,11 @@ class MeanMotion(BCBase):
                 q[self._mode_indices[selected_index]] = selected[selected_index]
         return q
 
-    def _get_current_physical_values(self, problem):
-        sol = problem.get_dof_solution()
-        if np.isscalar(sol) and sol == 0:
-            values = np.zeros(problem.n_dof)
-        else:
-            values = np.array(sol, copy=True)
-
-        if not (np.isscalar(problem._Xbc) and problem._Xbc == 0):
-            values += problem._Xbc
-
-        return np.array(
-            [
-                values[problem.space.variable_rank(var) * problem.mesh.n_nodes + node]
-                for node in self.nodes
-                for var in self._disp_variables
-            ]
-        )
-
     def _get_total_physical_values(self, problem):
         sol = problem.get_dof_solution()
         if np.isscalar(sol) and sol == 0:
-            values = np.zeros(problem.n_dof)
-        else:
-            values = np.asarray(sol)
-
-        return np.array(
-            [
-                values[problem.space.variable_rank(var) * problem.mesh.n_nodes + node]
-                for node in self.nodes
-                for var in self._disp_variables
-            ]
-        )
+            return np.zeros(len(self._phys_dof_index))
+        return np.asarray(sol)[self._phys_dof_index]
 
     def _global_dof_index(self, problem, variable):
         return (
@@ -525,16 +503,7 @@ class MeanMotion(BCBase):
 
         correction = self._finite_rigid_displacement(problem, q_target)
         correction -= self._finite_rigid_displacement(problem, q_fit)
-        correction = correction.reshape(len(self.nodes), len(self._disp_variables))
-
-        n_nodes = problem.mesh.n_nodes
-        for node_index, node in enumerate(self.nodes):
-            for var_index, var in enumerate(self._disp_variables):
-                value = correction[node_index, var_index]
-                if value == 0:
-                    continue
-                dof = problem.space.variable_rank(var) * n_nodes + node
-                problem._dU[dof] += value
+        problem._dU[self._phys_dof_index] += correction
 
     def _finite_dirichlet_mask(self, problem):
         controlled = np.zeros(len(self._mean_variables), dtype=bool)
@@ -605,11 +574,13 @@ class MeanMotion(BCBase):
         return coeff_u, coeff_q, constants
 
     def _finite_tangent_and_prediction(self, problem, q):
+        # The rotation matrix and its derivative are node-independent, so the
+        # prediction and Jacobian are built with broadcasted ops rather than a
+        # per-node loop (this runs on every Newton iteration in the finite path).
         n_dim = len(self._disp_variables)
         n_modes = len(self._full_mean_variables)
         n_phys = len(self.nodes) * n_dim
         j_mat = np.zeros((n_phys, n_modes))
-        pred = np.zeros(n_phys)
 
         if n_dim == 2:
             trans = q[:2]
@@ -617,11 +588,9 @@ class MeanMotion(BCBase):
             rotation = SimRotation.from_rotvec(rotvec).as_matrix()[:2, :2]
             drot = dR_drotvec(rotvec)[:2, :2, 2]
             coords = problem.mesh.nodes[self.nodes, :2] - self.center[:2]
-            for i, coord in enumerate(coords):
-                row = slice(2 * i, 2 * (i + 1))
-                pred[row] = trans + rotation @ coord - coord
-                j_mat[row, :2] = np.eye(2)
-                j_mat[row, 2] = drot @ coord
+            pred = (trans + coords @ rotation.T - coords).ravel()
+            j_mat[:, :2] = np.tile(np.eye(2), (len(coords), 1))
+            j_mat[:, 2] = (coords @ drot.T).ravel()
             return j_mat, pred
 
         trans = q[:3]
@@ -629,12 +598,9 @@ class MeanMotion(BCBase):
         rotation = SimRotation.from_rotvec(rotvec).as_matrix()
         drot = dR_drotvec(rotvec)
         coords = problem.mesh.nodes[self.nodes, :3] - self.center[:3]
-        for i, coord in enumerate(coords):
-            row = slice(3 * i, 3 * (i + 1))
-            pred[row] = trans + rotation @ coord - coord
-            j_mat[row, :3] = np.eye(3)
-            for irot in range(3):
-                j_mat[row, 3 + irot] = drot[:, :, irot] @ coord
+        pred = (trans + coords @ rotation.T - coords).ravel()
+        j_mat[:, :3] = np.tile(np.eye(3), (len(coords), 1))
+        j_mat[:, 3:] = np.einsum("klr,ml->mkr", drot, coords).reshape(n_phys, 3)
         return j_mat, pred
 
     def _get_disp_variables(self, problem):
@@ -649,9 +615,14 @@ class MeanMotion(BCBase):
 
         raise ValueError(f"Variable or vector '{_DISP_VECTOR}' doesn't exist.")
 
-    def _make_mpc(self, mode_index, mean_var):
-        coeffs = self._projection[mode_index]
-        slave_col = self._select_physical_slave(coeffs, set(), mean_var)
+    def _make_mpc(self, row_index, mean_var, used_slave_cols=None):
+        # ``row_index`` indexes ``_projection`` in the full rigid-body-mode
+        # order; callers map a selected-subset index through ``_mode_indices``.
+        if used_slave_cols is None:
+            used_slave_cols = set()
+        coeffs = self._projection[row_index]
+        slave_col = self._select_physical_slave(coeffs, used_slave_cols, mean_var)
+        used_slave_cols.add(slave_col)
         if coeffs[slave_col] == 0:
             raise ValueError(f"Mean-motion mode '{mean_var}' has no physical support.")
 
@@ -746,33 +717,4 @@ def _rigid_motion_block(coord, n_dim):
             [0.0, 1.0, 0.0, -z, 0.0, x],
             [0.0, 0.0, 1.0, y, -x, 0.0],
         ]
-    )
-
-
-def _element_measures(nodes, elements, elm_type):
-    elm_type = elm_type.lower()
-    coords = nodes[elements]
-
-    if elm_type in ["lin2", "lin3"]:
-        return np.linalg.norm(coords[:, 1] - coords[:, 0], axis=1)
-
-    if elm_type in ["tri3", "tri6"]:
-        return 0.5 * np.linalg.norm(
-            np.cross(coords[:, 1] - coords[:, 0], coords[:, 2] - coords[:, 0]),
-            axis=1,
-        )
-
-    if elm_type in ["quad4", "quad8", "quad9"]:
-        area_1 = 0.5 * np.linalg.norm(
-            np.cross(coords[:, 1] - coords[:, 0], coords[:, 2] - coords[:, 0]),
-            axis=1,
-        )
-        area_2 = 0.5 * np.linalg.norm(
-            np.cross(coords[:, 2] - coords[:, 0], coords[:, 3] - coords[:, 0]),
-            axis=1,
-        )
-        return area_1 + area_2
-
-    raise NotImplementedError(
-        f"Area/length weights are not implemented for element type '{elm_type}'."
     )

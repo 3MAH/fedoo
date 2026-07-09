@@ -887,6 +887,9 @@ class _NonLinearBase:
                 error < tol_nr
                 and subiter >= self._nr_min_subiter
                 and self._boundary_is_0
+                # constraints such as MeanMotion publish the out-of-balance on
+                # their own nonlinear equations here; gate convergence on it so
+                # an unsatisfied constraint cannot report a converged increment.
                 and getattr(self, "_bc_residual_norm", 0.0) < 10 * tol_nr
             ):
                 self._t_fact_inc = None
@@ -1187,7 +1190,6 @@ class _NonLinearBase:
                     )
                 if update_dt:
                     dt *= 0.25
-                    self.to_start()
                     # if self.print_info > 0:
                     # print(
                     #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
@@ -1196,11 +1198,18 @@ class _NonLinearBase:
                     # )
 
                     if dt < dt_min:
+                        # roll back to the last converged increment so accessors
+                        # return a clean state after the abort
+                        self.to_start()
                         raise RuntimeError(
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
-                    restart = False
+                    # must stay True: roll back the failed increment (to_start
+                    # at the top of the loop) rather than finalize it (set_start),
+                    # which would advance time-integrator recurrences (e.g.
+                    # Newmark velocity/acceleration) on a non-converged step.
+                    restart = True
                     continue
                 else:
                     self.to_start()
