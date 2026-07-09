@@ -1,5 +1,7 @@
-from fedoo.core.weakform import WeakFormBase
+from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.weakform.inertia import Inertia, RotaryInertia
 from scipy.spatial.transform import Rotation
 import numpy as np
 
@@ -89,6 +91,16 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self.true_drilling_rotation = true_drilling_rotation
         self.drill_stiffness_coefficient = drill_stiffness_coefficient
         self._store_local_pos = False
+        if type(self).__name__ in ("PlateEquilibriumFI", "PlateEquilibrium"):
+            self.time_evolution = SECOND_ORDER
+
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        shell = self.constitutivelaw
+        translational_inertia = Inertia(shell.area_density, space=self.space)
+        rotary_inertia = RotaryInertia(shell.rotary_density, space=self.space)
+        return WeakFormSum([translational_inertia, rotary_inertia])
 
     def initialize(self, assembly, pb):
         assembly.sv["ShellStrain"] = 0

@@ -61,6 +61,40 @@ class BeamProperties(ConstitutiveLaw):
 
         ConstitutiveLaw.__init__(self, name)  # heritage
 
+    @property
+    def linear_density(self):
+        """Mass per unit beam length."""
+        if not hasattr(self, "_linear_density"):
+            self._linear_density = self.compute_linear_density()
+        return self._linear_density
+
+    @property
+    def rotary_density(self):
+        """Mass moments of inertia per unit beam length."""
+        if not hasattr(self, "_rotary_density"):
+            self._rotary_density = self.compute_rotary_density()
+        return self._rotary_density
+
+    def compute_linear_density(self):
+        density = self._material_density()
+        return density * self.A
+
+    def compute_rotary_density(self):
+        density = self._material_density()
+        return [density * self.Jx, density * self.Iyy, density * self.Izz]
+
+    def _material_density(self):
+        density = getattr(self.material, "density", None)
+        if density is None:
+            material_name = getattr(self.material, "name", type(self.material).__name__)
+            raise ValueError(
+                f"Beam properties {self.name!r} need density on material "
+                f"{material_name!r} for dynamic analysis. Set it with "
+                "material.set_density(rho), or attach storage explicitly "
+                "with weakform.set_inertia(...)."
+            )
+        return density
+
     def get_beam_rigidity(self):
         E = self.material.E
         G = self.material.G

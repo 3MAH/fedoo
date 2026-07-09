@@ -3,6 +3,7 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.weakform.inertia import Inertia
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -88,6 +89,20 @@ class StressEquilibrium(WeakFormBase):
         # internalForce weak form should be symmetric
         # (if TangentMatrix is symmetric)
         # -> need to be checked for general case
+
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        density = getattr(self.constitutivelaw, "density", None)
+        if density is None:
+            material_name = getattr(self.constitutivelaw, "name", type(self.constitutivelaw).__name__)
+            raise ValueError(
+                "StressEquilibrium requires a material density for dynamic "
+                f"analysis, but material {material_name!r} has no density. "
+                "Set it with material.set_density(rho), or attach inertia "
+                "explicitly with weakform.set_inertia(density_or_weakform)."
+            )
+        return Inertia(density, space=self.space)
 
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
@@ -666,52 +681,3 @@ def _comp_gn_strain(wf, assembly, pb):
     )
     assembly.sv["DR"] = DR
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
-
-
-# def _comp_linear_strain_pgd(wf, assembly, pb):
-#     # may be compatible with other methods like PGD
-#     # but not compatible with simcoon
-#     assert not (
-#         wf.nlgeom
-#     ), "the current strain measure isn't adapted for finite strain"
-#     grad_values = assembly.sv["DispGradient"]
-
-#     strain = [grad_values[i][i] for i in range(3)]
-#     strain += [
-#         grad_values[0][1] + grad_values[1][0],
-#         grad_values[0][2] + grad_values[2][0],
-#         grad_values[1][2] + grad_values[2][1],
-#     ]
-#     assembly.sv["Strain"] = StrainTensorList(strain)
-
-
-# def _comp_gl_strain(wf, assembly, pb):
-#     # not compatible with simcoon
-#     if not (wf.nlgeom):
-#         return _comp_linear_strain_pgd(wf, assembly, pb)
-#     else:
-#         grad_values = assembly.sv["DispGradient"]
-#         # GL strain tensor
-#         # possibility to be improve from simcoon functions
-#         # to get the logarithmic strain tensor...
-#         strain = [
-#             grad_values[i][i]
-#             + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
-#             for i in range(3)
-#         ]
-#         strain += [
-#             grad_values[0][1]
-#             + grad_values[1][0]
-#             + sum([grad_values[k][0] * grad_values[k][1] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[0][2]
-#             + grad_values[2][0]
-#             + sum([grad_values[k][0] * grad_values[k][2] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[1][2]
-#             + grad_values[2][1]
-#             + sum([grad_values[k][1] * grad_values[k][2] for k in range(3)])
-#         ]
-#         return StrainTensorList(strain)
