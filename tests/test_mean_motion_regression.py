@@ -1,4 +1,4 @@
-"""Regression guards for MeanMotion bugs fixed during review of PR #46.
+"""Regression guards for MeanMotion bugs.
 
 These complement the main ``test_mean_motion.py`` suite. They lock in the
 linear (small-rotation) path's projection-row bug: a component selection that

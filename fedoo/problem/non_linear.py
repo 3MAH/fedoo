@@ -1190,12 +1190,6 @@ class _NonLinearBase:
                     )
                 if update_dt:
                     dt *= 0.25
-                    # if self.print_info > 0:
-                    # print(
-                    #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                    #         error, dt
-                    #     )
-                    # )
 
                     if dt < dt_min:
                         # roll back to the last converged increment so accessors
@@ -1205,10 +1199,7 @@ class _NonLinearBase:
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
-                    # must stay True: roll back the failed increment (to_start
-                    # at the top of the loop) rather than finalize it (set_start),
-                    # which would advance time-integrator recurrences (e.g.
-                    # Newmark velocity/acceleration) on a non-converged step.
+                    # Roll back the failed increment (to_start at the top of the loop)
                     restart = True
                     continue
                 else:

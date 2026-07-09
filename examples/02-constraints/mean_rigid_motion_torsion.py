@@ -9,14 +9,8 @@ Compare two ways of imposing a torsion on the right face of a cube:
   so local warping of the right face remains possible.
 """
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pyvista as pv
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import fedoo as fd
 
 
@@ -114,7 +108,6 @@ disp_x_lim = [
     max(np.max(disp_x_rigid), np.max(disp_x_mean)),
 ]
 
-pv.set_plot_theme("document")
 plotter = pv.Plotter(shape=(1, 2), window_size=(1400, 650))
 
 plotter.subplot(0, 0)
@@ -171,4 +164,4 @@ plotter.add_scalar_bar(
 
 plotter.link_views()
 plotter.view_isometric()
-plotter.show(interactive=False)
+plotter.show()
