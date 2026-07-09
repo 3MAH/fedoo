@@ -1300,11 +1300,16 @@ class DataSet:
             if field in self.dict_data[data_type]:
                 data = self.dict_data[data_type][field]
             else:  # if field is not present whith the given data_type search if it exist elsewhere and convert it
+                # Fetch the source field with all nodes intact: the fill applies
+                # only to a Node request restricted to the active submesh. When
+                # converting to Element/GaussPoint data every submesh is used,
+                # so masking the source nodes here would zero the other
+                # submeshes' converted values.
                 data, current_data_type = self.get_data(
                     field,
                     component,
                     return_data_type=True,
-                    fill_unused_nodes=fill_unused_nodes,
+                    fill_unused_nodes=None,
                 )
                 if current_data_type != "Scalar":
                     if self._is_multimesh():

@@ -14,6 +14,7 @@ dependencies:
   - vtk>=9.2
   - pypandoc
   - pyvista>=0.39
+  - meshio
   - simcoon>=1.13.1
   - pytest
   - sphinx

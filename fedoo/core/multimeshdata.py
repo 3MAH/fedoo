@@ -112,6 +112,7 @@ class MultiMeshData:
 
     @property
     def active(self):
+        """Data block of the currently active submesh (see ``active_submesh``)."""
         return self.submesh(self.active_submesh)
 
     def submesh(self, selector):
@@ -141,6 +142,8 @@ class MultiMeshData:
         )
 
     def map(self, func) -> "MultiMeshData":
+        """Return a new ``MultiMeshData`` with ``func`` applied to each non-empty
+        submesh block."""
         return MultiMeshData(
             self.mesh,
             {i: func(data) for i, data in enumerate(self._data) if data is not None},
@@ -148,9 +151,11 @@ class MultiMeshData:
         )
 
     def keys(self):
+        """Submesh ids that hold a (non-empty) data block."""
         return [i for i, data in enumerate(self._data) if data is not None]
 
     def items(self):
+        """``(submesh_id, data_block)`` pairs for submeshes that hold data."""
         return [(i, data) for i, data in enumerate(self._data) if data is not None]
 
     def global_element_location(self, element_id: int) -> tuple[int, int]:
@@ -277,10 +282,12 @@ class MultiMeshData:
 
     @property
     def shape(self):
+        """Shape of the active submesh block only (not the whole MultiMesh)."""
         return np.asarray(self.active).shape
 
     @property
     def ndim(self):
+        """Number of dimensions of the active submesh block only."""
         return np.asarray(self.active).ndim
 
 

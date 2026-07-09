@@ -36,6 +36,7 @@ class _AssemblyNeumannBC(BCBase):
 
         self.time_func = time_func
         self._assembly_vector = None
+        self._cached_magnitude = None
 
     def str_condensed(self):
         """Return a condensed one line str describing the object."""
@@ -52,6 +53,7 @@ class _AssemblyNeumannBC(BCBase):
         self.assembly.initialize(problem)
         self._update_during_inc = bool(self.assembly._nlgeom)
         self._assembly_vector = None
+        self._cached_magnitude = None
         self.value = 0
         self.start_value = self._start_value_default
 
@@ -94,6 +96,23 @@ class _AssemblyNeumannBC(BCBase):
             for attr in ("initial_pressure", "initial_force")
         )
 
+    def _load_magnitude(self):
+        # Cached fixed-geometry vectors are only valid while the load magnitude
+        # is unchanged; generate() compares this snapshot to detect a change.
+        return tuple(
+            getattr(self.assembly, attr, None)
+            for attr in ("pressure", "force", "initial_pressure", "initial_force")
+        )
+
+    @staticmethod
+    def _magnitude_changed(current, cached):
+        if cached is None:
+            return True
+        try:
+            return not all(np.array_equal(a, b) for a, b in zip(current, cached))
+        except (ValueError, TypeError):
+            return True
+
     def _refresh_reference_values(self, problem: ProblemBase):
         if self._has_initial_load():
             self.start_value = self._assemble_load_vector(problem, 0)
@@ -114,8 +133,14 @@ class _AssemblyNeumannBC(BCBase):
         self._current_value = value
 
     def generate(self, problem: ProblemBase, t_fact=1, t_fact_old=None):
-        if self._update_during_inc or self._assembly_vector is None:
+        magnitude = self._load_magnitude()
+        if (
+            self._update_during_inc
+            or self._assembly_vector is None
+            or self._magnitude_changed(magnitude, self._cached_magnitude)
+        ):
             self._refresh_reference_values(problem)
+            self._cached_magnitude = magnitude
 
         self._format_current_value(problem, self.get_value(t_fact, t_fact_old))
         return [self]

@@ -86,6 +86,10 @@ class Mesh(MeshBase):
         using ndim = nodes.shape[1]
     name: str, optional
         The name of the mesh
+    register_name: bool, default=True
+        If True and ``name`` is non-empty, the mesh is registered in the global
+        mesh dictionary under ``name``. Set to False for transient meshes (e.g.
+        submeshes) that should not be globally reachable.
 
     Example
     --------
@@ -2030,7 +2034,12 @@ class MultiMesh(Mesh):
         all_nodes: bool = True,
         name: str | None = None,
     ):
-        """Return global element ids matching a selection criterion."""
+        """Return global element ids matching a selection criterion.
+
+        Unlike :meth:`Mesh.find_elements`, passing ``name`` to save the result
+        as an element set is not supported and raises ``NotImplementedError``;
+        add the set to the relevant submesh instead.
+        """
         element_ids = []
         offset = 0
         for mesh in self._mesh_list:

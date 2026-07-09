@@ -70,32 +70,31 @@ def iteration_name(iteration: int) -> str:
 
 @dataclass(frozen=True)
 class CompressionConfig:
+    """HDF5 dataset storage options used by :class:`FDH5Writer`.
+
+    Parameters
+    ----------
+    compression : {"gzip", "lzf"} or None, optional
+        Compression filter applied to non-scalar datasets; ``None`` disables
+        compression. Default is ``"gzip"``.
+    compression_opts : int or None, optional
+        Compression level for the gzip filter (0-9). Default is 4.
+    chunks : bool or tuple of int or None, optional
+        Chunk shape passed to h5py; ``True`` enables auto-chunking and ``None``
+        disables chunking. Default is ``True``.
+    """
+
     compression: Optional[Literal["gzip", "lzf"]] = "gzip"
     compression_opts: Optional[int] = 4
     chunks: Optional[Union[bool, tuple[int, ...]]] = True
 
 
 class FDH5Writer:
-    """
-    Writer for Finite Element HDF5 files (FDH5).
+    """Writer for the Fedoo HDF5 (FDH5) result format.
 
-    This writer implements the following structure:
-
-    mesh/
-      nodes
-      node_sets/
-      submesh_X/
-        elements
-        element_sets/
-        metadata/
-
-    results/
-      iter_0/
-        node_data/
-        element_data/submesh_X/
-        gausspoint_data/submesh_X/
-        scalars/
-        metadata/
+    Creates or appends to an FDH5 file following the layout described in the
+    module docstring: a ``mesh/`` group holding the nodes and submeshes, and a
+    ``results/`` group holding one subgroup per result iteration.
     """
 
     FILE_VERSION = "1.0"
@@ -108,6 +107,20 @@ class FDH5Writer:
         validate: bool = True,
         create_parents: bool = True,
     ) -> None:
+        """Open (or create) an FDH5 file for writing.
+
+        Parameters
+        ----------
+        file_path : str or Path
+            Path of the FDH5 file to create or append to.
+        compression : CompressionConfig, optional
+            HDF5 storage options applied to the written datasets.
+        validate : bool, optional
+            If True (default), check array shapes and dtypes before writing.
+        create_parents : bool, optional
+            If True (default), create the parent directories of ``file_path``
+            when they do not already exist.
+        """
         self.path = Path(file_path)
         if create_parents:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -121,9 +134,6 @@ class FDH5Writer:
                 f.attrs["version"] = self.FILE_VERSION
                 f.attrs["created_utc"] = datetime.now(timezone.utc).isoformat()
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
     def _create_dataset(
         self,
         parent: h5py.Group,
@@ -156,9 +166,6 @@ class FDH5Writer:
         nums = [int(k.split("_")[1]) for k in existing]
         return f"submesh_{max(nums) + 1}"
 
-    # ------------------------------------------------------------------
-    # Mesh writing
-    # ------------------------------------------------------------------
     def write_mesh(
         self,
         nodes: NDArray,
@@ -166,6 +173,18 @@ class FDH5Writer:
         node_sets: Optional[Mapping[str, NDArray]] = None,
         overwrite: bool = False,
     ) -> None:
+        """Write the global node coordinates and optional node sets.
+
+        Parameters
+        ----------
+        nodes : numpy.ndarray
+            Node coordinates with shape ``(n_nodes, dim)``.
+        node_sets : mapping of str to numpy.ndarray, optional
+            Named sets of node indices stored under ``mesh/node_sets``.
+        overwrite : bool, optional
+            If True, replace existing node data and node sets. If False
+            (default), writing over existing data raises ``ValueError``.
+        """
         nodes = np.asarray(nodes)
 
         if self.validate:
@@ -202,6 +221,31 @@ class FDH5Writer:
         submesh_id: Optional[str] = None,
         overwrite: bool = False,
     ) -> str:
+        """Add a submesh (a single element type) to the mesh group.
+
+        Parameters
+        ----------
+        element_type : str
+            Fedoo element type stored in the submesh metadata (e.g. ``"tri3"``).
+        elements : numpy.ndarray
+            Connectivity table ``(n_elements, nodes_per_element)`` of 0-based
+            node indices.
+        element_sets : mapping of str to numpy.ndarray, optional
+            Named sets of element indices stored under the submesh.
+        name : str, optional
+            Human-readable submesh name stored in the metadata.
+        submesh_id : str, optional
+            Target submesh group id. If None (default), the next free
+            ``submesh_<n>`` id is used.
+        overwrite : bool, optional
+            If True, replace an existing submesh with the same id. If False
+            (default), a collision raises ``ValueError``.
+
+        Returns
+        -------
+        str
+            The submesh id under which the data was written.
+        """
         elements = np.asarray(elements)
 
         if self.validate:
@@ -223,7 +267,6 @@ class FDH5Writer:
             sm = mesh.create_group(sid)
             self._create_dataset(sm, "elements", elements)
 
-            # Metadata
             meta = sm.create_group("metadata")
             meta.attrs["element_type"] = element_type
             meta.attrs["n_elements"] = elements.shape[0]
@@ -231,7 +274,6 @@ class FDH5Writer:
             if name:
                 meta.attrs["name"] = name
 
-            # Element sets
             if element_sets:
                 es = sm.create_group("element_sets")
                 for set_name, idx in element_sets.items():
@@ -239,9 +281,6 @@ class FDH5Writer:
 
             return sid
 
-    # ------------------------------------------------------------------
-    # Iteration writing
-    # ------------------------------------------------------------------
     def write_iteration(
         self,
         iteration: int,
@@ -254,6 +293,35 @@ class FDH5Writer:
         dt: Optional[float] = None,
         overwrite: bool = False,
     ) -> str:
+        """Write all result data for a single iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index; stored as the ``iter_<n>`` results subgroup.
+        node_data : mapping of str to numpy.ndarray, optional
+            Nodal fields, each with shape ``(n_nodes, ...)``.
+        element_data : mapping, optional
+            Element fields keyed by submesh id, then by field name.
+        gausspoint_data : mapping, optional
+            Gauss-point fields keyed by submesh id, then by field name. Each
+            field uses a GP-major flattened layout of shape
+            ``(n_elements * n_gauss_points, n_components)``.
+        scalars : mapping of str to (int, float or numpy.ndarray), optional
+            Scalar quantities stored under the iteration ``scalars`` group.
+        time : float, optional
+            Physical time of the iteration, stored in the metadata.
+        dt : float, optional
+            Time increment of the iteration, stored in the metadata.
+        overwrite : bool, optional
+            If True, replace an existing iteration. If False (default), a
+            collision raises ``ValueError``.
+
+        Returns
+        -------
+        str
+            The HDF5 path of the written iteration group.
+        """
         iter_name = iteration_name(iteration)
 
         with h5py.File(self.path, "a") as f:
@@ -267,7 +335,6 @@ class FDH5Writer:
 
             it = results.create_group(iter_name)
 
-            # Metadata
             md = it.create_group("metadata")
             md.attrs["iteration"] = iteration
             if time is not None:
@@ -276,13 +343,11 @@ class FDH5Writer:
                 md.attrs["dt"] = float(dt)
             md.attrs["created_utc"] = datetime.now(timezone.utc).isoformat()
 
-            # Node data
             if node_data:
                 nd = it.create_group("node_data")
                 for name, arr in node_data.items():
                     self._create_dataset(nd, name, np.asarray(arr))
 
-            # Element data
             if element_data:
                 ed = it.create_group("element_data")
                 for sid, fields in element_data.items():
@@ -290,7 +355,6 @@ class FDH5Writer:
                     for fname, arr in fields.items():
                         self._create_dataset(smg, fname, np.asarray(arr))
 
-            # Gauss-point data (GP-major flattened)
             if gausspoint_data:
                 gd = it.create_group("gausspoint_data")
                 for sid, fields in gausspoint_data.items():
@@ -308,7 +372,6 @@ class FDH5Writer:
                         else:
                             ds.attrs["n_components"] = arr.shape[1]
 
-            # Scalars
             if scalars:
                 sc = it.create_group("scalars")
                 for name, val in scalars.items():
@@ -333,9 +396,6 @@ class FDH5Reader:
         if not self.path.exists():
             raise FileNotFoundError(self.path)
 
-    # ------------------------------------------------------------------
-    # File handling
-    # ------------------------------------------------------------------
     @contextlib.contextmanager
     def open(self) -> Iterator[h5py.File]:
         """
@@ -368,15 +428,28 @@ class FDH5Reader:
             )
         return file
 
-    # ------------------------------------------------------------------
-    # Mesh
-    # ------------------------------------------------------------------
     def read_nodes(
         self,
         *,
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Union[NDArray, h5py.Dataset]:
+        """Read the global node coordinates.
+
+        Parameters
+        ----------
+        lazy : bool, optional
+            If True, return the open ``h5py.Dataset`` instead of a NumPy array;
+            this requires ``file`` and that the file remains open while it is
+            used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        numpy.ndarray or h5py.Dataset
+            Node coordinates ``(n_nodes, dim)``, eager or lazy.
+        """
         if not lazy:
             with self._open() as f:
                 return f["mesh/nodes"][...]
@@ -390,6 +463,21 @@ class FDH5Reader:
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Dict[str, Union[NDArray, h5py.Dataset]]:
+        """Read the named node sets.
+
+        Parameters
+        ----------
+        lazy : bool, optional
+            If True, return open ``h5py.Dataset`` objects; the file must stay
+            open while they are used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        dict of str to (numpy.ndarray or h5py.Dataset)
+            Node index arrays keyed by set name; empty if no node sets exist.
+        """
         if not lazy:
             out: Dict[str, NDArray] = {}
             with self._open() as f:
@@ -405,6 +493,18 @@ class FDH5Reader:
         return {} if grp is None else {name: ds for name, ds in grp.items()}
 
     def list_submeshes(self, *, file: h5py.File | None = None) -> List[str]:
+        """Return the sorted submesh ids stored in the mesh group.
+
+        Parameters
+        ----------
+        file : h5py.File, optional
+            Open file handle to reuse; a temporary one is opened if omitted.
+
+        Returns
+        -------
+        list of str
+            Submesh ids (``submesh_<n>``) in ascending order.
+        """
         if file is None:
             with self._open() as f:
                 return self.list_submeshes(file=f)
@@ -484,10 +584,19 @@ class FDH5Reader:
         mesh["submeshes"] = subs
         return mesh
 
-    # ------------------------------------------------------------------
-    # Iterations
-    # ------------------------------------------------------------------
     def list_iterations(self, *, file: h5py.File | None = None) -> List[int]:
+        """Return the sorted result iteration indices stored in the file.
+
+        Parameters
+        ----------
+        file : h5py.File, optional
+            Open file handle to reuse; a temporary one is opened if omitted.
+
+        Returns
+        -------
+        list of int
+            Iteration indices in ascending order.
+        """
         if file is None:
             with self._open() as f:
                 return self.list_iterations(file=f)
@@ -500,6 +609,18 @@ class FDH5Reader:
         )
 
     def read_iteration_metadata(self, iteration: int) -> Dict[str, Any]:
+        """Read the metadata attributes of one result iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index to read.
+
+        Returns
+        -------
+        dict of str to Any
+            Metadata attributes (e.g. ``iteration``, ``time``, ``dt``).
+        """
         with self._open() as f:
             md = f[f"results/{iteration_name(iteration)}/metadata"]
             return {k: self._decode(v) for k, v in md.attrs.items()}
@@ -532,6 +653,23 @@ class FDH5Reader:
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Dict[str, Union[NDArray, h5py.Dataset]]:
+        """Read the scalar quantities stored for one iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index to read.
+        lazy : bool, optional
+            If True, return open ``h5py.Dataset`` objects; the file must stay
+            open while they are used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        dict of str to (numpy.ndarray or h5py.Dataset)
+            Scalar values keyed by name; empty if none are stored.
+        """
         if not lazy:
             out: Dict[str, NDArray] = {}
             with self._open() as f:
@@ -553,6 +691,23 @@ class FDH5Reader:
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Dict[str, Union[NDArray, h5py.Dataset]]:
+        """Read the nodal fields stored for one iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index to read.
+        lazy : bool, optional
+            If True, return open ``h5py.Dataset`` objects; the file must stay
+            open while they are used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        dict of str to (numpy.ndarray or h5py.Dataset)
+            Nodal field arrays keyed by field name; empty if none are stored.
+        """
         if not lazy:
             out: Dict[str, NDArray] = {}
             with self._open() as f:
@@ -574,6 +729,24 @@ class FDH5Reader:
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Dict[str, Dict[str, Union[NDArray, h5py.Dataset]]]:
+        """Read the element fields stored for one iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index to read.
+        lazy : bool, optional
+            If True, return open ``h5py.Dataset`` objects; the file must stay
+            open while they are used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        dict of str to (dict of str to (numpy.ndarray or h5py.Dataset))
+            Element fields keyed by submesh id, then by field name; empty if
+            none are stored.
+        """
         if not lazy:
             out: Dict[str, Dict[str, NDArray]] = {}
             with self._open() as f:
@@ -600,6 +773,27 @@ class FDH5Reader:
         lazy: bool = False,
         file: h5py.File | None = None,
     ) -> Dict[str, Dict[str, Union[NDArray, h5py.Dataset]]]:
+        """Read the Gauss-point fields stored for one iteration.
+
+        Each field uses a GP-major flattened layout of shape
+        ``(n_elements * n_gauss_points, n_components)``.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration index to read.
+        lazy : bool, optional
+            If True, return open ``h5py.Dataset`` objects; the file must stay
+            open while they are used.
+        file : h5py.File, optional
+            Open file handle, required when ``lazy`` is True.
+
+        Returns
+        -------
+        dict of str to (dict of str to (numpy.ndarray or h5py.Dataset))
+            Gauss-point fields keyed by submesh id, then by field name; empty
+            if none are stored.
+        """
         if not lazy:
             out: Dict[str, Dict[str, NDArray]] = {}
             with self._open() as f:
@@ -648,18 +842,24 @@ def mesh_to_fedoo(mesh_data: dict):
             register_name=False,
         )
 
-    elements_dict = {}
-    for i, submesh in enumerate(ordered_submeshes):
-        name = submesh.get("name") or submesh_id(i)
-        elements_dict[name] = (
-            submesh["element_type"],
+    # Reconstruct submeshes by order, not by name: two submeshes may share the
+    # same name (e.g. duplicate element types with empty names, stored with
+    # ``name = elm_type``). Keying a dict by name would silently drop the
+    # collision, so build ordered Mesh objects and preserve their stored names.
+    submesh_list = [
+        Mesh(
+            nodes,
             submesh["elements"],
-            submesh.get("element_sets", {}),
+            submesh["element_type"],
+            element_sets=submesh.get("element_sets", {}),
+            name=submesh.get("name", ""),
+            register_name=False,
         )
+        for submesh in ordered_submeshes
+    ]
 
-    return MultiMesh(
-        nodes,
-        elements_dict,
+    return MultiMesh.from_mesh_list(
+        submesh_list,
         node_sets=node_sets,
         register_name=False,
     )
@@ -808,212 +1008,3 @@ def read_fdh5(filename: str):
     dataset = MultiFrameDataSet(mesh)
     dataset.list_data = [("fdh5", str(path), iteration) for iteration in iterations]
     return dataset
-
-
-# class FDH5File:
-#     # Class that allow both to write and read data
-#     # Don't know if this may be usefull
-#     def __init__(self, path, mode="r"):
-#         self.path = path
-#         self.mode = mode
-
-#         if mode == "r":
-#             self.reader = FDH5Reader(path)
-#             self.writer = None
-#         elif mode in ("a", "w"):
-#             self.writer = FDH5Writer(path)
-#             self.reader = FDH5Reader(path)
-#         else:
-#             raise ValueError("mode must be 'r', 'a', or 'w'")
-
-#     def write_iteration(self, *args, **kwargs):
-#         if self.writer is None:
-#             raise RuntimeError("File opened read-only")
-#         return self.writer.write_iteration(*args, **kwargs)
-
-#     def read_node_data(self, *args, **kwargs):
-#         return self.reader.read_node_data(*args, **kwargs)
-
-#     def open(self):
-#         return self.reader.open()
-
-if __name__ == "__main__":
-    # example of use
-    import numpy as np
-    from pathlib import Path
-
-    # Import your classes
-    # from fdh5 import FDH5Writer, FDH5Reader
-
-    # --------------------------------------------------
-    # File path
-    # --------------------------------------------------
-    path = Path("example.fdh5")
-
-    writer = FDH5Writer(path, validate=True)
-
-    # --------------------------------------------------
-    # Mesh definition
-    # --------------------------------------------------
-
-    # 4 nodes, 2D
-    nodes = np.array(
-        [
-            [0.0, 0.0],
-            [1.0, 0.0],
-            [1.0, 1.0],
-            [0.0, 1.0],
-        ],
-        dtype=float,
-    )
-
-    # Write mesh + node sets
-    writer.write_mesh(
-        nodes,
-        node_sets={
-            "boundary": np.array([0, 1, 2, 3], dtype=int),
-        },
-        overwrite=True,
-    )
-
-    # Two TRI3 elements
-    elements = np.array(
-        [
-            [0, 1, 2],
-            [0, 2, 3],
-        ],
-        dtype=int,
-    )
-
-    submesh_id = writer.add_submesh(
-        element_type="tri3",
-        elements=elements,
-        name="square_triangles",
-    )
-
-    # --------------------------------------------------
-    # Iteration 0
-    # --------------------------------------------------
-
-    # Node field: displacement (n_nodes, 2)
-    node_data = {
-        "displacement": np.array(
-            [
-                [0.0, 0.0],
-                [0.1, 0.0],
-                [0.1, 0.1],
-                [0.0, 0.1],
-            ],
-            dtype=float,
-        )
-    }
-
-    # Element field: von Mises stress (n_elements,)
-    element_data = {
-        submesh_id: {
-            "stress_vm": np.array([100.0, 120.0], dtype=float),
-        }
-    }
-
-    # Gauss‑point field (GP‑major, flattened)
-    # Here: 2 elements, 2 Gauss points each
-    # Order:
-    #   GP0: elem0, elem1
-    #   GP1: elem0, elem1
-    gausspoint_data = {
-        submesh_id: {
-            "strain_eq": np.array(
-                [
-                    0.01,
-                    0.02,  # GP0
-                    0.015,
-                    0.025,  # GP1
-                ],
-                dtype=float,
-            ).reshape(-1, 1)  # (n_elem * n_gp, n_comp)
-        }
-    }
-
-    # Scalars
-    scalars = {
-        "time": 0.0,
-        "total_energy": 42.0,
-    }
-
-    # Write iteration
-    writer.write_iteration(
-        iteration=0,
-        node_data=node_data,
-        element_data=element_data,
-        gausspoint_data=gausspoint_data,
-        scalars=scalars,
-        time=0.0,
-        dt=0.1,
-    )
-
-    print("✅ File written:", path)
-
-    # -------------------------------------------------------------------------
-    # Read written file
-    # -------------------------------------------------------------------------
-    reader = FDH5Reader(path)
-
-    # Read mesh
-    mesh = reader.read_mesh()
-    print("Nodes:\n", mesh["nodes"])
-    print("Submeshes:", list(mesh["submeshes"].keys()))
-
-    # Read iteration 0
-    it0 = reader.read_iteration(0)
-
-    u = it0["node_data"]["displacement"]
-    stress = it0["element_data"]["submesh_0"]["stress_vm"]
-    strain_gp = it0["gausspoint_data"]["submesh_0"]["strain_eq"]
-
-    print("\nDisplacement:\n", u)
-    print("\nElement stress:\n", stress)
-    print("\nGauss-point strain (flattened):\n", strain_gp)
-
-    # -------------------------------------------------------------------------
-    # Read written file lazily
-    # -------------------------------------------------------------------------
-    reader = FDH5Reader(path)
-
-    with reader.open() as f:
-        # Lazy node data
-        node_data = reader.read_node_data(0, lazy=True, file=f)
-        u_ds = node_data["displacement"]  # h5py.Dataset
-
-        # Only read first 2 nodes
-        print("First two displacements:\n", u_ds[:2])
-
-        # Lazy element data
-        elem_data = reader.read_element_data(0, lazy=True, file=f)
-        stress_ds = elem_data["submesh_0"]["stress_vm"]
-
-        print("First element stress:", stress_ds[0])
-
-        # Lazy Gauss-point data
-        gp_data = reader.read_gausspoint_data(0, lazy=True, file=f)
-        eps_ds = gp_data["submesh_0"]["strain_eq"]
-
-        # Infer GP layout manually
-        n_elems = f["mesh/submesh_0/elements"].shape[0]
-
-        # GP0 for all elements
-        gp0 = eps_ds[0:n_elems]
-        print("GP0 strain:\n", gp0)
-
-    # -------------------------------------------------------------------------
-    # Read written file lazily
-    # -------------------------------------------------------------------------
-
-    from xdmf_writer import XDMFExporter  # your exporter class
-
-    exporter = XDMFExporter(Path("example.fdh5"))
-    exporter.export()
-
-    import pyvista as pv
-
-    mesh = pv.read("example.xdmf")
-    mesh.plot(show_edges=True)

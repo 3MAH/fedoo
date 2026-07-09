@@ -34,12 +34,18 @@ class XDMFExporter:
         h5_path: Path,
         xdmf_path: Optional[Path] = None,
     ) -> None:
+        """
+        Parameters
+        ----------
+        h5_path : Path
+            Path to the source FDH5 file to describe.
+        xdmf_path : Path, optional
+            Output path for the ``.xdmf`` file. Defaults to ``h5_path`` with a
+            ``.xdmf`` suffix.
+        """
         self.h5_path = Path(h5_path)
         self.xdmf_path = xdmf_path or self.h5_path.with_suffix(".xdmf")
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
     def export(self) -> Path:
         """
         Generate the XDMF file for all iterations (time series).
@@ -69,9 +75,6 @@ class XDMFExporter:
 
         return self.xdmf_path
 
-    # ------------------------------------------------------------------
-    # Iterations
-    # ------------------------------------------------------------------
     def _list_iterations(self, f: h5py.File) -> Iterable[int]:
         grp = f.get("results")
         if grp is None:
@@ -99,9 +102,6 @@ class XDMFExporter:
 
         return it_grid
 
-    # ------------------------------------------------------------------
-    # Submeshes
-    # ------------------------------------------------------------------
     def _list_submeshes(self, f: h5py.File) -> Iterable[str]:
         mesh = f.get("mesh")
         if mesh is None:
@@ -131,9 +131,7 @@ class XDMFExporter:
 
         grid = etree.Element("Grid", Name=submesh_id, GridType="Uniform")
 
-        # ------------------------------
         # Topology
-        # ------------------------------
         topo = etree.SubElement(
             grid,
             "Topology",
@@ -149,9 +147,7 @@ class XDMFExporter:
             Format="HDF",
         ).text = f"{self.h5_path.name}:/mesh/{submesh_id}/elements"
 
-        # ------------------------------
         # Geometry (global nodes)
-        # ------------------------------
         nodes = f["mesh/nodes"]
         n_nodes, dim = nodes.shape
         geom_type = "XYZ" if dim == 3 else "XY"
@@ -171,9 +167,7 @@ class XDMFExporter:
             Format="HDF",
         ).text = f"{self.h5_path.name}:/mesh/nodes"
 
-        # ------------------------------
         # Node data (global)
-        # ------------------------------
         node_grp = it_grp.get("node_data")
         if node_grp is not None:
             for name, ds in node_grp.items():
@@ -185,9 +179,7 @@ class XDMFExporter:
                     shape=ds.shape,
                 )
 
-        # ------------------------------
         # Element data (per submesh)
-        # ------------------------------
         elem_grp = it_grp.get(f"element_data/{submesh_id}")
         if elem_grp is not None:
             for name, ds in elem_grp.items():
@@ -202,13 +194,12 @@ class XDMFExporter:
                     shape=ds.shape,
                 )
 
-        # ------------------------------
-        # Gauss-point data (flattened GP-major)
-        # Exported as Cell-centered attributes
-        # ------------------------------
         gp_grp = it_grp.get(f"gausspoint_data/{submesh_id}")
         if gp_grp is not None:
             for name, ds in gp_grp.items():
+                # Only single-Gauss-point fields map onto a cell-centered
+                # attribute; multi-GP fields have no per-cell value and are
+                # skipped (XDMF has no native multi-value-per-cell attribute).
                 n_gauss_points = int(ds.attrs.get("n_gauss_points", 1))
                 if n_gauss_points != 1:
                     continue
@@ -225,9 +216,6 @@ class XDMFExporter:
 
         return grid
 
-    # ------------------------------------------------------------------
-    # Attributes
-    # ------------------------------------------------------------------
     def _add_attribute(
         self,
         grid: etree.Element,

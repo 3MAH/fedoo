@@ -779,7 +779,7 @@ class Assembly(AssemblyBase):
         but it is not done by default. In this case, deleting the memory should
         resolve the problem.
 
-        Note: it the mesh_change argument is set to True when creating the Assembly object, the
+        Note: if the mesh_change argument is set to True when creating the Assembly object, the
         memory will be recomputed by default, which may cause a decrease in assembling performances
         """
         Assembly._saved_elementary_operators = {}
@@ -834,7 +834,7 @@ class Assembly(AssemblyBase):
                     self._use_local_csys,
                     mesh._local_frame_cache_key(self._element_local_frame),
                 )
-            ] = OP  # elmRef.computeOperator(nodes,elements)
+            ] = OP
             return
 
         # -------------------------------------------------------------------
