@@ -1177,7 +1177,7 @@ class Assembly(AssemblyBase):
 
         return matrix
 
-    def operator_apply(self, wf, nodal_vector):
+    def operator_apply(self, wf, nodal_vector, use_local_dof=False):
         """Apply a discrete nodal vector to the trial space of a bilinear operator.
 
         This function performs a contraction of a bilinear form a(v, u*) with
@@ -1194,14 +1194,39 @@ class Assembly(AssemblyBase):
 
         nodal_vector : array_like
             The discrete values (Degrees of Freedom) used to instantiate
-            the trial field.
+            the trial field. By default, the vector is interpreted in the
+            global nodal basis.
+        use_local_dof : bool, default: False
+            If True, nodal_vector is interpreted as local element dofs, ordered
+            by variable blocks with ``n_elements * n_elm_nodes`` values each.
 
         Return:
             DiffOp : An operator containing only the virtual (test) operator,
                 ready for vector assembly.
         """
-        n_nodes = self.mesh.n_nodes
         new_wf = type(wf)([], [], [])
+        mat_change_of_basis = self.get_change_of_basis_mat()
+        if use_local_dof:
+            local_nodal_vector = nodal_vector
+        elif np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
+            local_nodal_vector = nodal_vector
+        else:
+            n_nodal_dof = self.space.nvar * self.mesh.n_nodes
+            n_global_dof = mat_change_of_basis.shape[1]
+            if len(nodal_vector) == n_global_dof:
+                local_nodal_vector = mat_change_of_basis @ nodal_vector
+            elif len(nodal_vector) == n_nodal_dof and n_nodal_dof <= n_global_dof:
+                padded_vector = np.zeros(n_global_dof)
+                padded_vector[:n_nodal_dof] = nodal_vector
+                local_nodal_vector = mat_change_of_basis @ padded_vector
+            else:
+                raise ValueError(
+                    "nodal_vector length is inconsistent with this assembly: "
+                    f"got {len(nodal_vector)}, expected {n_nodal_dof} or "
+                    f"{n_global_dof}. Pass use_local_dof=True for local "
+                    "element dofs."
+                )
+
         associatedVariables = (
             self._get_associated_variables()
         )  # for element requiring many variable such as beam with disp and rot dof
@@ -1218,16 +1243,16 @@ class Assembly(AssemblyBase):
                     var.extend(associatedVariables[var[0]][0])
                     coef.extend(associatedVariables[var[0]][1])
 
-                gp_values = (
-                    self._get_elementary_operator(wf.op[ii])[0]
-                    @ nodal_vector[var[0] * n_nodes : (var[0] + 1) * n_nodes]
-                )
+                elementary_operator = self._get_elementary_operator(wf.op[ii])
+                n_operator_cols = elementary_operator[0].shape[1]
+                gp_values = elementary_operator[0] @ local_nodal_vector[
+                    var[0] * n_operator_cols : (var[0] + 1) * n_operator_cols
+                ]
                 if len(var) > 1:
                     for jj, v in enumerate(var[1:]):
-                        gp_values += (
-                            self._get_elementary_operator(wf.op[ii])[jj + 1]
-                            @ nodal_vector[v * n_nodes : (v + 1) * n_nodes]
-                        )
+                        gp_values += elementary_operator[jj + 1] @ local_nodal_vector[
+                            v * n_operator_cols : (v + 1) * n_operator_cols
+                        ]
                 # or:
                 # gp_values = self.get_gp_results(type(wf)([wf.op[ii]], [1], [1]), nodal_vector)
 
@@ -1677,13 +1702,7 @@ class Assembly(AssemblyBase):
                         ]
 
                     list_assembly.append(Assembly(wf, mesh, elm_type, "", **kargs))
-                    if list_weakform[0] in l_wf:
-                        assembly_output = list_assembly[
-                            -1
-                        ]  # by default, the assembly used for output is the one associated to the 1st weakform
-
             # list_assembly = [Assembly(wf, mesh, elm_type, "", **kargs) for wf in weakform.list_weakform]
-            kargs["assembly_output"] = kargs.get("assembly_output", assembly_output)
             return AssemblySum(list_assembly, name, **kargs)
 
         else:

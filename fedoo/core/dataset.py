@@ -7,6 +7,7 @@ import os
 from zipfile import ZipFile, Path as ZipPath
 from fedoo.core.mesh import Mesh, MultiMesh
 from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
+from fedoo.lib_elements.element_list import get_default_n_gp
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 try:
@@ -953,19 +954,21 @@ class DataSet:
         if block is not None or not fill_missing:
             return block
 
-        template = next(
-            (value for _, value in multimesh_data.items() if value is not None),
+        template_entry = next(
+            (item for item in multimesh_data.items() if item[1] is not None),
             None,
         )
-        if template is None:
+        if template_entry is None:
             return None
 
+        template_id, template = template_entry
         template = np.asarray(template)
         if template.ndim > 1:
             shape = template.shape[:-1] + (n_items,)
         else:
             shape = (n_items,)
-        return np.full(shape, np.nan)
+        return np.zeros(shape, dtype=template.dtype)
+
 
     def _submesh_dataset(self, submesh_id: int) -> "DataSet":
         """Build a lightweight DataSet view attached to one submesh."""
@@ -992,8 +995,7 @@ class DataSet:
                 block := self._multimesh_block_for_submesh(
                     value,
                     submesh_id,
-                    submesh.n_elements,
-                    fill_missing=False,
+                    submesh.n_elements * get_default_n_gp(submesh.elm_type, submesh),
                 )
             )
             is not None

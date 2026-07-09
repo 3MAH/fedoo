@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from fedoo.core.mesh import MultiMesh
+from fedoo.lib_elements.element_list import get_default_n_gp
 
 
 class MultiMeshData:
@@ -195,7 +196,7 @@ class MultiMeshData:
             return None
         return np.asarray(block)[..., local_id]
 
-    def global_element_values(self, element_ids, fill_value=np.nan):
+    def global_element_values(self, element_ids, fill_value=0.0):
         """Return values attached to several global element ids.
 
         Missing submesh blocks are filled with ``fill_value``. The returned
@@ -226,14 +227,14 @@ class MultiMeshData:
             return np.asarray(values)
         return np.stack(values, axis=-1)
 
-    def to_global(self, indices=None, fill_value=np.nan):
+    def to_global(self, indices=None, fill_value=0.0):
         """Concatenate per-submesh data in the selected submesh order."""
         if indices is None:
             indices = list(range(len(self.mesh.submeshes)))
         else:
             indices = self._resolve_indices(indices)
-        template = next(
-            (self._data[i] for i in indices if self._data[i] is not None),
+        template_entry = next(
+            ((i, self._data[i]) for i in indices if self._data[i] is not None),
             None,
         )
         arrays = []
@@ -241,8 +242,18 @@ class MultiMeshData:
             data = self._data[i]
             n_elements = self.mesh[i].n_elements
             if data is None:
-                if template is not None and np.asarray(template).ndim > 1:
-                    shape = np.asarray(template).shape[:-1] + (n_elements,)
+                if template_entry is not None and np.asarray(template_entry[1]).ndim > 1:
+                    template_id, template = template_entry
+                    template = np.asarray(template)
+                    n_template_elements = self.mesh[template_id].n_elements
+                    factor = template.shape[-1] // n_template_elements
+                    if factor > 1:
+                        n_missing = n_elements * get_default_n_gp(
+                            self.mesh[i].elm_type, self.mesh[i]
+                        )
+                    else:
+                        n_missing = n_elements
+                    shape = template.shape[:-1] + (n_missing,)
                 else:
                     shape = (n_elements,)
                 arrays.append(np.full(shape, fill_value))

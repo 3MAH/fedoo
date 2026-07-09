@@ -114,12 +114,12 @@ def _output_mesh_for_assembly(assemb, element_set=None):
     """Return the mesh associated with an output request.
 
     For a regular assembly, this is its mesh, optionally restricted to
-    ``element_set``. For an ``AssemblySum`` without ``assembly_output``, this
-    builds a ``MultiMesh`` from the unique elementary assembly meshes, in
+    ``element_set``. For an ``AssemblySum``, this builds a ``MultiMesh`` from
+    the unique elementary assembly meshes, in
     ``list_assembly`` order. If all elementary assemblies share one mesh, the
     mesh itself is returned.
     """
-    if hasattr(assemb, "list_assembly") and assemb.assembly_output is None:
+    if hasattr(assemb, "list_assembly"):
         entries = _unique_assembly_mesh_entries(assemb, element_set)
         meshes = [entry["mesh"] for entry in entries]
         if not meshes:
@@ -132,12 +132,27 @@ def _output_mesh_for_assembly(assemb, element_set=None):
             register_name=False,
         )
 
-    if hasattr(assemb, "list_assembly"):
-        assemb = assemb.assembly_output
-
     if element_set is None:
         return assemb.mesh
     return assemb.mesh.extract_elements(element_set)
+
+
+def _find_constitutivelaw_with_method(weakform, method_name):
+    """Return a constitutive law from a possibly nested weakform."""
+    law = getattr(weakform, "constitutivelaw", None)
+    if law is not None and hasattr(law, method_name):
+        return law
+
+    for child in getattr(weakform, "list_weakform", []):
+        law = _find_constitutivelaw_with_method(child, method_name)
+        if law is not None:
+            return law
+
+    wrapped = getattr(weakform, "weakform", None)
+    if wrapped is not None:
+        return _find_constitutivelaw_with_method(wrapped, method_name)
+
+    return None
 
 
 def _dataset_field(data_set, field):
@@ -286,7 +301,7 @@ def _get_results(
     if isinstance(assemb, str):
         assemb = AssemblyBase.get_all()[assemb]
 
-    if hasattr(assemb, "list_assembly") and assemb.assembly_output is None:
+    if hasattr(assemb, "list_assembly"):
         return _get_assemblysum_results(
             pb,
             assemb,
@@ -311,9 +326,6 @@ def _get_results(
     #     raise NameError(res, "' doens't match to any available output")
 
     data_sav = {}  # dict to keep data in memory that may be used more that one time
-
-    if hasattr(assemb, "list_assembly"):  # AssemblySum object
-        assemb = assemb.assembly_output
 
     sv = assemb.sv  # state variables associated to the assembly
 
@@ -356,19 +368,16 @@ def _get_results(
                     data = sv[res]
                 else:
                     # attent to compute
-                    try:
-                        if res == "Strain":
-                            data = assemb.weakform.constitutivelaw.get_strain(
-                                assemb, position=position
-                            )
-                        elif res == "Stress":
-                            data = assemb.weakform.constitutivelaw.get_stress(
-                                assemb, position=position
-                            )
-                        else:
-                            assert 0
-                    except:
+                    method_name = "get_strain" if res == "Strain" else "get_stress"
+                    law = _find_constitutivelaw_with_method(assemb.weakform, method_name)
+                    if law is None:
                         raise NameError('Field "{}" not available'.format(res))
+                    try:
+                        data = getattr(law, method_name)(assemb, position=position)
+                    except Exception as exc:
+                        raise NameError(
+                            'Field "{}" not available'.format(res)
+                        ) from exc
 
                 # keep data in memory in case it may be used later for vm, pc or pdir stress computation
                 data_sav[res] = data

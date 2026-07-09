@@ -64,28 +64,28 @@ class ShellBase(ConstitutiveLaw):
         # rot = pb.get_rot()
         U = pb.get_dof_solution()
         if np.isscalar(U) and U == 0:
-            assembly.sv["GeneralizedStrain"] = 0
-            assembly.sv["GeneralizedStress"] = 0
+            assembly.sv["ShellStrain"] = 0
+            assembly.sv["ShellStress"] = 0
         else:
-            GeneralizedStrainOp = assembly.weakform.generalized_strain_operator()
-            GeneralizedStrain = [
+            ShellStrainOp = assembly.weakform.generalized_strain_operator()
+            ShellStrain = [
                 op if np.isscalar(op) else assembly.get_gp_results(op, U)
-                for op in GeneralizedStrainOp
+                for op in ShellStrainOp
             ]
 
             H = self.get_shell_stiffness_matrix()
 
             # all terms are computed. Perhaps could be optimized by computed only the termes related to the associated weak form (eg shear for selective integration)
-            assembly.sv["GeneralizedStress"] = [
+            assembly.sv["ShellStress"] = [
                 sum(
                     [
-                        GeneralizedStrain[j] * assembly.convert_data(H[i][j])
+                        ShellStrain[j] * assembly.convert_data(H[i][j])
                         for j in range(8)
                     ]
                 )
                 for i in range(8)
             ]  # H[i][j] are converted to gauss point excepted if scalar
-            assembly.sv["GeneralizedStrain"] = GeneralizedStrain
+            assembly.sv["ShellStrain"] = ShellStrain
 
     def get_strain(self, assembly, **kargs):
         """Return the last computed strain associated to the given assembly.
@@ -110,15 +110,18 @@ class ShellBase(ConstitutiveLaw):
         z = position * self.thickness / 2
 
         Strain = StrainTensorList([0 for i in range(6)])
-        GeneralizedStrain = assembly.sv["GeneralizedStrain"]
+        ShellStrain = assembly.sv["ShellStrain"]
+        if np.isscalar(ShellStrain) and ShellStrain == 0:
+            zeros = np.zeros(assembly.n_gauss_points)
+            return StrainTensorList([zeros.copy() for _ in range(6)])
         Strain[0] = (
-            GeneralizedStrain[0] + z * GeneralizedStrain[4]
+            ShellStrain[0] + z * ShellStrain[4]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            GeneralizedStrain[1] - z * GeneralizedStrain[3]
+            ShellStrain[1] - z * ShellStrain[3]
         )  # epsYY -> membrane and bending
-        Strain[3] = GeneralizedStrain[2]  # 2epsXY
-        Strain[4:6] = GeneralizedStrain[6:8]  # 2epsXZ and 2epsYZ -> shear
+        Strain[3] = ShellStrain[2]  # 2epsXY
+        Strain[4:6] = ShellStrain[6:8]  # 2epsXZ and 2epsYZ -> shear
 
         return Strain
 
@@ -204,16 +207,16 @@ class ShellHomogeneous(ShellBase):
         z = np.arange(-h / 2, h / 2, h / resolution)
 
         Strain = StrainTensorList([0 for i in range(6)])
-        GeneralizedStrain = assembly.sv["GeneralizedStrain"]
+        ShellStrain = assembly.sv["ShellStrain"]
         Strain[0] = (
-            GeneralizedStrain[0][pg] + z * GeneralizedStrain[4][pg]
+            ShellStrain[0][pg] + z * ShellStrain[4][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            GeneralizedStrain[1][pg] - z * GeneralizedStrain[3][pg]
+            ShellStrain[1][pg] - z * ShellStrain[3][pg]
         )  # epsYY -> membrane and bending
-        Strain[3] = GeneralizedStrain[2][pg] * np.ones_like(z)  # 2epsXY
-        Strain[4] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
-        Strain[5] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsYZ -> shear
+        Strain[3] = ShellStrain[2][pg] * np.ones_like(z)  # 2epsXY
+        Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
+        Strain[5] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsYZ -> shear
 
         Hplane = self.material.get_elastic_matrix(
             "2Dstress"
@@ -389,17 +392,17 @@ class ShellLaminate(ShellBase):
         z = np.linspace(-h / 2, h / 2, resolution)
 
         Strain = StrainTensorList([0 for i in range(6)])
-        GeneralizedStrain = assembly.sv["GeneralizedStrain"]
+        ShellStrain = assembly.sv["ShellStrain"]
 
         Strain[0] = (
-            GeneralizedStrain[0][pg] + z * GeneralizedStrain[4][pg]
+            ShellStrain[0][pg] + z * ShellStrain[4][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            GeneralizedStrain[1][pg] - z * GeneralizedStrain[3][pg]
+            ShellStrain[1][pg] - z * ShellStrain[3][pg]
         )  # epsYY -> membrane and bending
-        Strain[3] = GeneralizedStrain[2][pg] * np.ones_like(z)  # 2epsXY
-        Strain[4] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
-        Strain[5] = GeneralizedStrain[6][pg] * np.ones_like(z)  # 2epsYZ -> shear
+        Strain[3] = ShellStrain[2][pg] * np.ones_like(z)  # 2epsXY
+        Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
+        Strain[5] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsYZ -> shear
 
         layer_z = [
             list((pos - self.__layer) <= 0).index(True) - 1 for pos in z

@@ -17,10 +17,9 @@ if TYPE_CHECKING:
 class _AssemblyNeumannBC(BCBase):
     """Neumann boundary condition generated from a load assembly.
 
-    The wrapped assembly computes the equivalent nodal load vector, but the
-    vector is injected through ``Problem.B`` like a standard Neumann boundary
-    condition. This keeps distributed loads out of the problem's internal
-    residual assembly during nonlinear solves.
+    The wrapped assembly computes equivalent nodal load reference vectors.
+    Fixed-geometry loads cache those vectors, then apply the time factor without
+    reassembling. Follower loads refresh the reference vectors when generated.
     """
 
     def __init__(self, assembly: Assembly, name: str = "", time_func=None):
@@ -28,14 +27,21 @@ class _AssemblyNeumannBC(BCBase):
         self.bc_type = "Neumann"
         self.assembly = assembly
         self._start_value_default = 0
+        self.start_value = self._start_value_default
+        self.value = 0
         if time_func is None:
 
             def time_func(t_fact):
                 return t_fact
 
         self.time_func = time_func
-        self._assembly_t_fact = None
         self._assembly_vector = None
+
+    def str_condensed(self):
+        """Return a condensed one line str describing the object."""
+        if self.name == "":
+            return "Neumann -> assembly load"
+        return "Neumann (name = '{}') -> assembly load".format(self.name)
 
     def initialize(self, problem: ProblemBase):
         if self.assembly.mesh.n_nodes != problem.mesh.n_nodes:
@@ -45,8 +51,58 @@ class _AssemblyNeumannBC(BCBase):
 
         self.assembly.initialize(problem)
         self._update_during_inc = bool(self.assembly._nlgeom)
-        self._assembly_t_fact = None
         self._assembly_vector = None
+        self.value = 0
+        self.start_value = self._start_value_default
+
+    def _get_factor(self, t_fact=1, t_fact_old=None):
+        return self.time_func(t_fact)
+
+    def get_value(self, t_fact=1, t_fact_old=None):
+        factor = self._get_factor(t_fact, t_fact_old)
+        if factor == 0:
+            return self.start_value
+        elif self.start_value is None:
+            return factor * self.value
+        else:
+            return factor * (self.value - self.start_value) + self.start_value
+
+    def get_true_value(self, t_fact=1, t_fact_old=None):
+        return self.get_value(t_fact, t_fact_old)
+
+    def _format_load_vector(self, problem: ProblemBase, value):
+        if np.isscalar(value) and value == 0:
+            return 0
+        if problem.n_global_dof and len(value) < problem.n_dof:
+            value = np.pad(value, (0, problem.n_dof - len(value)))
+        return value.copy() if hasattr(value, "copy") else value
+
+    def _assemble_load_vector(self, problem: ProblemBase, load_factor):
+        self.assembly.set_start(problem, t_fact=load_factor)
+        if self._update_during_inc:
+            self.assembly.update(problem, compute="vector")
+        else:
+            self.assembly.assemble_global_mat(compute="vector")
+        return self._format_load_vector(
+            problem,
+            self.assembly.current.get_global_vector(),
+        )
+
+    def _has_initial_load(self):
+        return any(
+            getattr(self.assembly, attr, None) is not None
+            for attr in ("initial_pressure", "initial_force")
+        )
+
+    def _refresh_reference_values(self, problem: ProblemBase):
+        if self._has_initial_load():
+            self.start_value = self._assemble_load_vector(problem, 0)
+        else:
+            self.start_value = 0
+        self.value = self._assemble_load_vector(problem, 1)
+        self._assembly_vector = (
+            self.value.copy() if hasattr(self.value, "copy") else self.value
+        )
 
     def _format_current_value(self, problem: ProblemBase, value):
         if np.isscalar(value) and value == 0:
@@ -54,32 +110,15 @@ class _AssemblyNeumannBC(BCBase):
             self._current_value = np.array([])
             return
 
-        if problem.n_global_dof and len(value) < problem.n_dof:
-            value = np.pad(value, (0, problem.n_dof - len(value)))
         self._dof_index = np.arange(problem.n_dof, dtype=int)
         self._current_value = value
 
     def generate(self, problem: ProblemBase, t_fact=1, t_fact_old=None):
-        assembly_t_fact = self.time_func(t_fact)
-        factor_changed = not np.array_equal(self._assembly_t_fact, assembly_t_fact)
+        if self._update_during_inc or self._assembly_vector is None:
+            self._refresh_reference_values(problem)
 
-        if factor_changed:
-            self.assembly.set_start(problem, t_fact=assembly_t_fact)
-            self._assembly_t_fact = assembly_t_fact
-
-        if self._update_during_inc:
-            self.assembly.update(problem, compute="vector")
-            value = self.assembly.current.get_global_vector()
-        elif factor_changed or self._assembly_vector is None:
-            self.assembly.assemble_global_mat(compute="vector")
-            value = self.assembly.current.get_global_vector()
-            self._assembly_vector = value.copy() if hasattr(value, "copy") else value
-        else:
-            value = self._assembly_vector
-
-        self._format_current_value(problem, value)
+        self._format_current_value(problem, self.get_value(t_fact, t_fact_old))
         return [self]
-
 
 class Pressure(Assembly):
     """Pressure load.
