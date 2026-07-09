@@ -174,7 +174,10 @@ class MeanMotion(BCBase):
             self.finite_rotation = bool(problem.nlgeom and has_rotation)
         if self.finite_rotation:
             self._keep_at_end = True
-            self._update_during_inc = bool(problem.nlgeom)
+            # finite rotation is nonlinear: the MPCs must be relinearized every
+            # Newton iteration, independently of problem.nlgeom (a user may force
+            # finite_rotation=True on a geometrically linear problem).
+            self._update_during_inc = True
 
         self._node_by_variable = {}
         if self._mean_disp_variables:
@@ -574,9 +577,8 @@ class MeanMotion(BCBase):
         return coeff_u, coeff_q, constants
 
     def _finite_tangent_and_prediction(self, problem, q):
-        # The rotation matrix and its derivative are node-independent, so the
-        # prediction and Jacobian are built with broadcasted ops rather than a
-        # per-node loop (this runs on every Newton iteration in the finite path).
+        # rotation and its derivative are node-independent, so the prediction
+        # and Jacobian use broadcasted ops (called every Newton iteration).
         n_dim = len(self._disp_variables)
         n_modes = len(self._full_mean_variables)
         n_phys = len(self.nodes) * n_dim
