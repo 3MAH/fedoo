@@ -19,7 +19,7 @@ def test_plate_with_hole():
     fd.weakform.StressEquilibrium("ElasticLaw", name="WeakForm")
 
     # Create a global assembly
-    fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange=True)
+    fd.Assembly.create("WeakForm", "Domain", name="Assembly", mesh_change=True)
 
     # Define a new static problem
     pb = fd.problem.Linear("Assembly")

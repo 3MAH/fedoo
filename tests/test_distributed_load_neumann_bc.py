@@ -147,6 +147,37 @@ def test_assembly_neumann_load_caches_initial_and_final_vectors():
     np.testing.assert_allclose(half_load, start_load + 0.50 * (final_load - start_load))
 
 
+def test_distributed_load_after_shell_operator_cache_is_not_dropped():
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+
+    nodes = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]
+    )
+    elements = np.array([[0, 1, 2], [0, 2, 3]])
+    mesh = fd.Mesh(nodes, elements, "tri3", ndim=3)
+    material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+    shell = fd.constitutivelaw.ShellHomogeneous(material, 0.1)
+    shell_wf = fd.weakform.PlateEquilibrium(shell, nlgeom=True)
+    shell_assembly = fd.Assembly.create(shell_wf, mesh, name="shell_cache_test")
+    pb = fd.problem.NonLinear(shell_assembly, nlgeom=True)
+    load = fd.constraint.DistributedForce(mesh, [0.0, 0.0, -1.0], nlgeom=False)
+    bc = pb.bc.add(load)
+
+    pb.initialize()
+    shell_assembly.assemble_global_mat(compute="matrix")
+    pb.apply_boundary_conditions(t_fact=1.0, t_fact_old=0.0)
+
+    z_dofs = slice(2 * mesh.n_nodes, 3 * mesh.n_nodes)
+    assert np.linalg.norm(bc.value[z_dofs]) > 0.0
+    np.testing.assert_allclose(pb.get_B()[z_dofs], bc.value[z_dofs])
+
+
 def test_follower_assembly_neumann_load_without_initial_value_skips_start_vector():
     pb, bc = _build_problem(
         load_nlgeom=True, problem_nlgeom=True, load_kind="distributed"

@@ -43,13 +43,13 @@ def test_beam_element():
                 "ElasticLaw", Section, Jx, Iyy, Izz, name="WFbeam"
             )  # by default k=0 i.e. no shear effect
             fd.Assembly.create(
-                "WFbeam", "beam", "bernoullibeam", name="beam", MeshChange=True
+                "WFbeam", "beam", "bernoullibeam", name="beam", mesh_change=True
             )
         elif computeShear == 1:
             fd.weakform.BeamEquilibrium(
                 "ElasticLaw", Section, Jx, Iyy, Izz, k=k, name="WFbeam"
             )
-            fd.Assembly.create("WFbeam", "beam", "beam", name="beam", MeshChange=True)
+            fd.Assembly.create("WFbeam", "beam", "beam", name="beam", mesh_change=True)
         else:  # computeShear = 2
             fd.Mesh["beam"].add_internal_nodes(
                 1
@@ -58,7 +58,7 @@ def test_beam_element():
                 "ElasticLaw", Section, Jx, Iyy, Izz, k=k, name="WFbeam"
             )
             fd.Assembly.create(
-                "WFbeam", "beam", "beamfcq", name="beam", MeshChange=True
+                "WFbeam", "beam", "beamfcq", name="beam", mesh_change=True
             )
 
         pb = fd.problem.Linear("beam")

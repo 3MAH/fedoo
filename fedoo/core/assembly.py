@@ -92,7 +92,7 @@ class Assembly(AssemblyBase):
         # used for update lagrangian method.
         self.current = self
 
-        self.meshChange = kargs.pop("MeshChange", False)
+        self.mesh_change = kargs.pop("mesh_change", False)
         if elm_type == "" or elm_type is None:
             elm_type = weakform.assembly_options.get(
                 "elm_type", mesh.elm_type, mesh.elm_type
@@ -155,10 +155,11 @@ class Assembly(AssemblyBase):
         n_elm_gp = self.n_elm_gp
 
         if (
-            self.meshChange == True
+            self.mesh_change == True
         ):  # only node position change is considered here. For change of sparsity, use also, self.mesh.init_interpolation
-            if self.mesh in Assembly._saved_change_of_basis_mat:
-                del Assembly._saved_change_of_basis_mat[self.mesh]
+            for k in tuple(Assembly._saved_change_of_basis_mat):
+                if k[0] == self.mesh:
+                    Assembly._saved_change_of_basis_mat.pop(k)
             self.compute_elementary_operators()
 
         nvar = self.space.nvar
@@ -557,8 +558,13 @@ class Assembly(AssemblyBase):
 
         mesh = self.mesh
 
-        if mesh in Assembly._saved_change_of_basis_mat:
-            return Assembly._saved_change_of_basis_mat[mesh]
+        change_of_basis_key = (
+            mesh,
+            self._use_local_csys,
+            mesh._local_frame_cache_key(self._element_local_frame),
+        )
+        if change_of_basis_key in Assembly._saved_change_of_basis_mat:
+            return Assembly._saved_change_of_basis_mat[change_of_basis_key]
 
         mat_change_of_basis = 1
         compute_mat_change_of_basis = False
@@ -675,7 +681,7 @@ class Assembly(AssemblyBase):
 
                 mat_change_of_basis = mat_change_of_basis.tocsr()
 
-        Assembly._saved_change_of_basis_mat[mesh] = mat_change_of_basis
+        Assembly._saved_change_of_basis_mat[change_of_basis_key] = mat_change_of_basis
         return mat_change_of_basis
 
     def initialize(self, pb):
@@ -773,7 +779,7 @@ class Assembly(AssemblyBase):
         but it is not done by default. In this case, deleting the memory should
         resolve the problem.
 
-        Note: it the MeshChange argument is set to True when creating the Assembly object, the
+        Note: it the mesh_change argument is set to True when creating the Assembly object, the
         memory will be recomputed by default, which may cause a decrease in assembling performances
         """
         Assembly._saved_elementary_operators = {}
@@ -808,19 +814,27 @@ class Assembly(AssemblyBase):
             # we compute the operators directly from the element library
             elmRef = get_element(elm_type)(n_elm_gp)
             OP = elmRef.computeOperator(nodes, elements)
-            mesh._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.identity(
+            mesh._saved_gaussian_quadrature_mat[
+                mesh._gaussian_quadrature_cache_key(n_elm_gp)
+            ] = sparse.identity(
                 OP[0, 0][0].shape[0], "d", format="csr"
             )  # No gaussian quadrature in this case : nodal identity matrix
             mesh._saved_gausspoint2node_mat[n_elm_gp] = (
                 1  # no need to translate between pg and nodes because no pg
             )
             mesh._saved_node2gausspoint_mat[n_elm_gp] = 1
-            Assembly._saved_change_of_basis_mat[mesh] = (
-                1  # No change of basis:  mat_change_of_basis = 1 #this line could be deleted because the coordinate should in principle defined as 'global'
-            )
-            Assembly._saved_elementary_operators[(mesh, elm_type, n_elm_gp)] = (
-                OP  # elmRef.computeOperator(nodes,elements)
-            )
+            Assembly._saved_change_of_basis_mat[
+                (mesh, self._use_local_csys, mesh._local_frame_cache_key(None))
+            ] = 1  # No change of basis: mat_change_of_basis = 1
+            Assembly._saved_elementary_operators[
+                (
+                    mesh,
+                    elm_type,
+                    n_elm_gp,
+                    self._use_local_csys,
+                    mesh._local_frame_cache_key(self._element_local_frame),
+                )
+            ] = OP  # elmRef.computeOperator(nodes,elements)
             return
 
         # -------------------------------------------------------------------
@@ -935,7 +949,15 @@ class Assembly(AssemblyBase):
                     i + n_diff_interpolations
                 ]  # as index and indptr should be the same, perhaps it will be more memory efficient to only store the data field
 
-            Assembly._saved_elementary_operators[(mesh, elm_type.name, n_elm_gp)] = data
+            Assembly._saved_elementary_operators[
+                (
+                    mesh,
+                    elm_type.name,
+                    n_elm_gp,
+                    self._use_local_csys,
+                    mesh._local_frame_cache_key(self._element_local_frame),
+                )
+            ] = data
 
     def _get_elementary_operator(self, deriv, n_elm_gp=None):
         # Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
@@ -950,10 +972,17 @@ class Assembly(AssemblyBase):
         if hasattr(get_element(elm_type), "get_elm_type"):
             elm_type = get_element(elm_type).get_elm_type(deriv.u_name).name
 
-        if not ((mesh, elm_type, n_elm_gp) in Assembly._saved_elementary_operators):
+        key = (
+            mesh,
+            elm_type,
+            n_elm_gp,
+            self._use_local_csys,
+            mesh._local_frame_cache_key(self._element_local_frame),
+        )
+        if key not in Assembly._saved_elementary_operators:
             self.compute_elementary_operators(n_elm_gp)
 
-        data = Assembly._saved_elementary_operators[(mesh, elm_type, n_elm_gp)]
+        data = Assembly._saved_elementary_operators[key]
 
         if deriv.ordre == 0:
             # in this case deriv.x should be 0 execpt if several interpolations
@@ -982,9 +1011,12 @@ class Assembly(AssemblyBase):
     def _get_gaussian_quadrature_mat(
         self,
     ):  # calcul la discrétision relative à un seul opérateur dérivé
-        if not (self.n_elm_gp in self.mesh._saved_gaussian_quadrature_mat):
+        cache_key = self.mesh._gaussian_quadrature_cache_key(
+            self.n_elm_gp, self._element_local_frame
+        )
+        if cache_key not in self.mesh._saved_gaussian_quadrature_mat:
             self.compute_elementary_operators()
-        return self.mesh._saved_gaussian_quadrature_mat[self.n_elm_gp]
+        return self.mesh._saved_gaussian_quadrature_mat[cache_key]
 
     def _get_associated_variables(
         self,
@@ -1330,8 +1362,9 @@ class Assembly(AssemblyBase):
                 self.current.mesh._saved_gaussian_quadrature_mat = {}
                 self.current.mesh._saved_gausspoint2node_l2 = {}
 
-                if self.current.mesh in self._saved_change_of_basis_mat:
-                    del self._saved_change_of_basis_mat[self.current.mesh]
+                for k in tuple(self._saved_change_of_basis_mat):
+                    if k[0] == self.current.mesh:
+                        self._saved_change_of_basis_mat.pop(k)
 
                 for k in tuple(self._saved_elementary_operators):
                     if k[0] == self.current.mesh:

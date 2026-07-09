@@ -58,8 +58,8 @@ def test_2DDynamicPlasticBending_v2():
     nodes_top2 = np.where((crd[:, 0] == 3 * L / 4) * (crd[:, 1] == h))[0]
 
     fd.Assembly.create(
-        wf, "Domain", "quad4", name="Assembling", MeshChange=False
-    )  # uses MeshChange=True when the mesh change during the time
+        wf, "Domain", "quad4", name="Assembling", mesh_change=False
+    )  # uses mesh_change=True when the mesh change during the time
 
     pb = fd.problem.NonLinear("Assembling")
 

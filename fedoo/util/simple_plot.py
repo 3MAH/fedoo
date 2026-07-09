@@ -203,7 +203,7 @@ def field_plot_2d(
         U = ((disp.reshape(2, -1).T[elm.ravel()]).T).ravel()
 
         # reload the assembly with the new mesh
-        assemb_visu = Assembly(wf, "visu", type_el, name="visu", MeshChange=True)
+        assemb_visu = Assembly(wf, "visu", type_el, name="visu", mesh_change=True)
         assemb_visu.compute_elementary_operators()
     else:
         raise NameError("type_plot should be either 'real' or 'smooth'")

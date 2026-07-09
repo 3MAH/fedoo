@@ -23,7 +23,7 @@ def _build_plate_problem():
     )
     fd.constitutivelaw.ElasticIsotrop(2e5, 0.3, name="ElasticLaw")
     fd.weakform.StressEquilibrium("ElasticLaw", name="WeakForm")
-    fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange=True)
+    fd.Assembly.create("WeakForm", "Domain", name="Assembly", mesh_change=True)
     pb = fd.problem.Linear("Assembly")
 
     mesh = fd.Mesh["Domain"]

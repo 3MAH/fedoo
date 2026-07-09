@@ -1230,6 +1230,13 @@ class Mesh(MeshBase):
         self._sparse_structure[n_elm_gp] = (row.reshape(-1), col.reshape(-1))
         self._elements_geom = elm_geom  # dont depend on n_elm_gp
 
+    @staticmethod
+    def _local_frame_cache_key(local_frame):
+        return None if local_frame is None else id(local_frame)
+
+    def _gaussian_quadrature_cache_key(self, n_elm_gp, local_frame=None):
+        return (n_elm_gp, self._local_frame_cache_key(local_frame))
+
     def _compute_gaussian_quadrature_mat(
         self,
         n_elm_gp: int | None = None,
@@ -1237,7 +1244,8 @@ class Mesh(MeshBase):
     ) -> None:
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
-        if n_elm_gp not in self._saved_gaussian_quadrature_mat:
+        cache_key = self._gaussian_quadrature_cache_key(n_elm_gp, local_frame)
+        if cache_key not in self._saved_gaussian_quadrature_mat:
             self.init_interpolation(n_elm_gp)
 
         elm_interpol = self._elm_interpolation[n_elm_gp]
@@ -1252,7 +1260,7 @@ class Mesh(MeshBase):
         # Compute the diag matrix used for the gaussian quadrature
         # -------------------------------------------------------------------
         gaussianQuadrature = (elm_interpol.detJ * elm_interpol.w_pg).T.reshape(-1)
-        self._saved_gaussian_quadrature_mat[n_elm_gp] = sparse.diags(
+        self._saved_gaussian_quadrature_mat[cache_key] = sparse.diags(
             gaussianQuadrature, 0, format="csr"
         )  # matrix to get the gaussian quadrature (integration over each element)
 
@@ -1404,9 +1412,10 @@ class Mesh(MeshBase):
     def _get_gaussian_quadrature_mat(self, n_elm_gp=None):
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
-        if not (n_elm_gp in self._saved_gaussian_quadrature_mat):
+        cache_key = self._gaussian_quadrature_cache_key(n_elm_gp)
+        if cache_key not in self._saved_gaussian_quadrature_mat:
             self._compute_gaussian_quadrature_mat(n_elm_gp)
-        return self._saved_gaussian_quadrature_mat[n_elm_gp]
+        return self._saved_gaussian_quadrature_mat[cache_key]
 
     def determine_data_type(self, data: np.ndarray, n_elm_gp: int | None = None) -> str:
         if n_elm_gp is None:
