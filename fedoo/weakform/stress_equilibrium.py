@@ -95,7 +95,9 @@ class StressEquilibrium(WeakFormBase):
             return self.storage
         density = getattr(self.constitutivelaw, "density", None)
         if density is None:
-            material_name = getattr(self.constitutivelaw, "name", type(self.constitutivelaw).__name__)
+            material_name = getattr(
+                self.constitutivelaw, "name", type(self.constitutivelaw).__name__
+            )
             raise ValueError(
                 "StressEquilibrium requires a material density for dynamic "
                 f"analysis, but material {material_name!r} has no density. "

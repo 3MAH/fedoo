@@ -89,7 +89,9 @@ class BeamEquilibrium(WeakFormBase):
     def get_storage(self):
         if self.storage is not None:
             return self.storage
-        translational_inertia = Inertia(self.properties.linear_density, space=self.space)
+        translational_inertia = Inertia(
+            self.properties.linear_density, space=self.space
+        )
         rotary_density = self.properties.rotary_density
         if self.space.ndim == 2:
             rotary_density = rotary_density[2]
