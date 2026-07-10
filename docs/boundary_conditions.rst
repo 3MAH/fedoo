@@ -105,8 +105,17 @@ ____________________________________________
    fedoo.MPC
 
 
-Avdanced BC and constraints
+Advanced BC and constraints
 ==============================
+
+Fedoo also provides higher-level boundary-condition objects for common
+distributed loads and constraint patterns. Distributed loads are converted to
+external Neumann forces, while the kinematic constraints below are based on
+MPC equations and can be added directly to ``pb.bc``.
+
+
+Distributed loads
+_________________
 
 Distributed loads are defined by dedicated assembly objects. The recommended
 way to apply them is to add the load assembly to the problem boundary
@@ -147,11 +156,35 @@ boundary-condition force.
     fedoo.constraint.Pressure
     fedoo.constraint.SurfaceForce
 
-Some advanced constraints based on multiple linearized MPC are available in
-fedoo. They can be created and added to the problem with the pb.bc.add method.
+
+Kinematic MPC constraints
+_________________________
+
+Rigid tie
+~~~~~~~~~
+
+The :py:class:`fedoo.constraint.RigidTie` constraint couples a set of nodes to
+a rigid-body motion. It creates global degrees of freedom for rigid
+translation and rotation, then eliminates the selected nodal displacement DOFs
+through MPC equations. Prescribing ``RigidDisp`` or ``RigidRot`` therefore
+drives the whole selected node set as a rigid object.
+
+This constraint is useful to impose a strict rigid connection, for instance to
+drive a face from a reference rigid point. It is more restrictive than
+:py:class:`fedoo.constraint.MeanMotion`, because all selected nodes follow the
+same rigid-body kinematics and local warping of the selected surface is
+suppressed.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.constraint.RigidTie
+   fedoo.constraint.RigidTie2D
+
 
 Mean motion control
-___________________
+~~~~~~~~~~~~~~~~~~~
 
 The :py:class:`fedoo.constraint.MeanMotion` constraint is a less
 restrictive alternative to :py:class:`fedoo.constraint.RigidTie`. It extracts
@@ -214,9 +247,25 @@ mean-motion center.
    :template: custom-class-template.rst
 
    fedoo.constraint.MeanMotion
+
+
+Periodic boundary conditions
+____________________________
+
+The :py:class:`fedoo.constraint.PeriodicBC` constraint creates MPC equations
+between opposite boundaries so that their displacement fluctuations are
+periodic. It is mainly used for representative volume elements and
+homogenization problems, where the boundary kinematics must be compatible with
+a prescribed macroscopic strain or displacement gradient.
+
+The constraint can build the required node pairings from opposite node sets
+and then be added to ``pb.bc`` like the other MPC-based constraints.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
    fedoo.constraint.PeriodicBC
-   fedoo.constraint.RigidTie
-   fedoo.constraint.RigidTie2D
 
 
 Contact
