@@ -42,7 +42,18 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
             'to the center) or "mean" (constrain the mean displacement '
             "with lagrange multipliers)."
         )
-    if rigid_body_constraint == "mean" and solver != "direct":
+    is_direct_solver = (
+        not isinstance(solver, str)
+        or solver.lower() in {"direct", "direct_scipy", "pardiso", "mumps"}
+        or (
+            solver.lower() == "petsc"
+            and solver_type is not None
+            and solver_type.lower() == "preonly"
+            and pc_type is not None
+            and pc_type.lower() in {"lu", "cholesky"}
+        )
+    )
+    if rigid_body_constraint == "mean" and not is_direct_solver:
         # the mean constraint borders the system with zero-diagonal lagrange
         # rows (saddle point): iterative solvers diverge / return NaN.
         raise ValueError(
