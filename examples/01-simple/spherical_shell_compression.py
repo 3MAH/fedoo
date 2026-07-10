@@ -70,7 +70,7 @@ pressure_assembly = fd.constraint.Pressure(
 #
 assembly = solid_assembly
 
-pb = fd.problem.NonLinear(assembly, nlgeom=False)
+pb = fd.problem.Linear(assembly)
 pb.bc.add(pressure_assembly)
 
 nodes = mesh.nodes
@@ -82,7 +82,7 @@ pb.bc.add("Dirichlet", node_a, "Disp", 0)
 pb.bc.add("Dirichlet", node_b, ["DispY", "DispZ"], 0)
 pb.bc.add("Dirichlet", node_c, "DispZ", 0)
 
-pb.nlsolve()
+pb.solve()
 
 ###############################################################################
 # Extract the results:
