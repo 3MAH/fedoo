@@ -652,10 +652,7 @@ class MPC(BCBase):
 
         self.time_func = time_func
 
-        # can be a float or an array or None ! if DefaultInitialvalue is None,
-        # start_value can be modified by the Problem
-        self._start_constant_default = self.start_constant = start_constant
-        self.start_value = start_constant
+        self.start_constant = start_constant
 
         self.list_variables = list_variables
         self.list_factors = list_factors
@@ -707,7 +704,7 @@ class MPC(BCBase):
             factor = BoundaryCondition._get_factor(self, t_fact, t_fact_old)
             if factor == 0:
                 self._current_value = 0
-            elif self.start_value is None:
+            elif self.start_constant is None:
                 self._current_value = factor * value
             else:  # in case there is an initial value
                 start_value = -self.start_constant / self.list_factors[0]
