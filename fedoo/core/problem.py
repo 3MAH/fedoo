@@ -58,6 +58,7 @@ class Problem(ProblemBase):
 
         self._dof_slave = np.array([])  # dof from dirichlet bc or mpc
         self._dof_free = np.array([])
+        self._MFext = None
 
         # prepering output demand to export results
         self._problem_output = _ProblemOutput()
