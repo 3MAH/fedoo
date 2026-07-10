@@ -62,3 +62,9 @@ def test_scalar_zero_temp_is_none():
     space, mesh, law, assembly, pb = _build(register_temp=False, tag="zero")
     assembly.sv["Temp"] = 0
     assert law.get_temp_gp(assembly, pb) is None
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

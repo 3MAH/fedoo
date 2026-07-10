@@ -165,5 +165,6 @@ def test_mandel_vs_abousleiman():
 
 
 if __name__ == "__main__":
-    test_mandel_vs_abousleiman()
-    print("test_poromech_mandel_analytical: OK")
+    import pytest
+
+    pytest.main([__file__])

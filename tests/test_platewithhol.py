@@ -55,3 +55,9 @@ def test_plate_with_hole():
     # res.plot('Stress_vm')
     # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
     # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

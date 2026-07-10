@@ -60,27 +60,28 @@ class ShellBase(ConstitutiveLaw):
         return density
 
     def update(self, assembly, pb):
-        # disp = pb.get_disp()
-        # rot = pb.get_rot()
-        U = pb.get_dof_solution()
-        if np.isscalar(U) and U == 0:
-            assembly.sv["ShellStrain"] = 0
+        """Update shell stress from the strain computed by the weak form."""
+        shell_strain = assembly.sv["ShellStrain"]
+        if np.isscalar(shell_strain) and shell_strain == 0:
             assembly.sv["ShellStress"] = 0
-        else:
-            ShellStrainOp = assembly.weakform.generalized_strain_operator()
-            ShellStrain = [
-                op if np.isscalar(op) else assembly.get_gp_results(op, U)
-                for op in ShellStrainOp
-            ]
+            return
 
-            H = self.get_shell_stiffness_matrix()
-
-            # all terms are computed. Perhaps could be optimized by computed only the termes related to the associated weak form (eg shear for selective integration)
-            assembly.sv["ShellStress"] = [
-                sum([ShellStrain[j] * assembly.convert_data(H[i][j]) for j in range(8)])
-                for i in range(8)
-            ]  # H[i][j] are converted to gauss point excepted if scalar
-            assembly.sv["ShellStrain"] = ShellStrain
+        H = self.get_shell_stiffness_matrix()
+        assembly.sv["_ShellStiffnessMatrix"] = H
+        stress = [
+            sum(
+                [
+                    (
+                        shell_strain[j] * assembly.convert_data(H[i][j])
+                        if not np.array_equal(shell_strain[j], 0)
+                        else 0
+                    )
+                    for j in range(8)
+                ]
+            )
+            for i in range(8)
+        ]
+        assembly.sv["ShellStress"] = type(shell_strain)(stress)
 
     def get_strain(self, assembly, **kargs):
         """Return the last computed strain associated to the given assembly.

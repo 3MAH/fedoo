@@ -3,9 +3,7 @@
 #
 
 import numpy as np
-
 import fedoo as fd
-import pytest
 
 
 def test_beam_element():
@@ -109,4 +107,6 @@ def test_beam_element():
 
 
 if __name__ == "__main__":
+    import pytest
+
     pytest.main([__file__])

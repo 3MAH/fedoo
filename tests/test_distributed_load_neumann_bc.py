@@ -247,3 +247,7 @@ def test_assembly_neumann_load_is_ignored_by_standard_start_value_update():
     pb.set_D(0)
 
     pb.init_bc_start_value()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

@@ -302,15 +302,11 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         if np.array_equal(pb.get_dof_solution(), 0):
             assembly.sv["ShellStrain"] = 0
-            assembly.sv["ShellStress"] = 0
             assembly.sv["_DrillConstraint"] = 0
             return
 
         op_plate_strain = self.generalized_strain_operator()
         op_drill_constraint = self.drill_constraint_operator()
-
-        H = self.constitutivelaw.get_shell_stiffness_matrix()
-        assembly.sv["_ShellStiffnessMatrix"] = H
 
         if self.nlgeom:
             use_local_dof = True
@@ -338,23 +334,6 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         assembly.sv["_DrillConstraint"] = assembly.current.get_gp_results(
             op_drill_constraint, dof, use_local_dof=use_local_dof
-        )
-
-        # Evaluate Stresses (Shared linear/nonlinear)
-        assembly.sv["ShellStress"] = _ShellComponentList(
-            [
-                sum(
-                    [
-                        (
-                            assembly.sv["ShellStrain"][j] * H[i][j]
-                            if not np.array_equal(assembly.sv["ShellStrain"][j], 0)
-                            else 0
-                        )
-                        for j in range(8)
-                    ]
-                )
-                for i in range(8)
-            ]
         )
 
     def to_start(self, assembly, pb):

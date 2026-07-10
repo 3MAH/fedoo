@@ -205,3 +205,7 @@ def test_invalid_kind_raises():
     theta = np.array([0.0])
     with pytest.raises(ValueError, match="kind"):
         _revolve_axi_field(field, theta, n_nodes, kind="bogus")
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

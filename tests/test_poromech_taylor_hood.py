@@ -99,5 +99,6 @@ def test_taylor_hood_poro_undrained_magnitude():
 
 
 if __name__ == "__main__":
-    test_taylor_hood_poro_undrained_magnitude()
-    print("test_poromech_taylor_hood: OK")
+    import pytest
+
+    pytest.main([__file__])
