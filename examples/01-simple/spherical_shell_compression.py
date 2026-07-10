@@ -21,7 +21,7 @@ pressure = 10  # MPa
 ###############################################################################
 # Create a simple sphere mesh using pyvista.
 
-mesh = fd.Mesh.from_pyvista(pv.Sphere(radius))
+mesh = fd.Mesh.from_pyvista(pv.Sphere(radius=radius))
 
 ###############################################################################
 # Define a linear isotropic material and an homogeneous shell section

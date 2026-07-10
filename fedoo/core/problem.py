@@ -58,6 +58,7 @@ class Problem(ProblemBase):
 
         self._dof_slave = np.array([])  # dof from dirichlet bc or mpc
         self._dof_free = np.array([])
+        self._MFext = None
 
         # prepering output demand to export results
         self._problem_output = _ProblemOutput()
@@ -129,7 +130,7 @@ class Problem(ProblemBase):
         assembly,
         output_list=None,
         output_type=None,
-        file_format="fdz",
+        file_format="fdh5",
         compressed=False,
         position=1,
         element_set=None,
@@ -159,9 +160,9 @@ class Problem(ProblemBase):
             Type of results. If None, the type of output is not converted.
             Scalar results are not concerned by this parameter.
 
-        file_format : "fdz", "vtk", "msh", "npz", "csv", "xlsx"
+        file_format : "fdh5", "fdz", "vtk", "msh", "npz", "csv", "xlsx"
             file format used to save the results. The default file format
-            and recommanding one is "fdz".
+            and recommanding one is "fdh5".
 
         compressed : bool, default = False
             if True, the fdz data are compressed.

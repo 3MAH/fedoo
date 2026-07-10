@@ -8,13 +8,14 @@ dependencies:
   - python>=3.10
   - numpy>=1.26
   - scipy
+  - h5py
   - pypardiso # [x86 or x86_64]
   - scikit-umfpack # [(not x86) and (not x86_64)]
   - python-mumps  # exercises _solver_mumps default path and the
                   # _MumpsFactor reuse adapter, regardless of platform
   - vtk>=9.2
   - pyvista>=0.39
-  - simcoon>=1.11.0
+  - simcoon>=1.13.1
   - pytest
   - pytest-xdist
   - sphinx_rtd_theme
