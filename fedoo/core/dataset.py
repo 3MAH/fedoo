@@ -1282,6 +1282,18 @@ class DataSet:
         With a ``MultiMesh``, element and Gauss point fields may be stored as a
         dictionary keyed by submesh id, submesh name, or unique element type.
         The active submesh is controlled by ``dataset.active_submesh``.
+
+        Element ids in a ``MultiMesh`` use a global, concatenated numbering:
+        all elements of submesh 0, then all elements of submesh 1, and so on.
+        Retrieve values using those ids from the returned ``MultiMeshData``::
+
+            stress = dataset.get_data("Stress", "vm", "Element")
+            value = stress.global_element_value(global_element_id)
+            values = stress.global_element_values(global_element_ids)
+
+        Use ``stress.to_global()`` when a single NumPy array in this global
+        order is needed. ``np.asarray(stress)`` instead returns the data of
+        the active submesh.
         """
 
         if data_type is None:  # search if field exist somewhere

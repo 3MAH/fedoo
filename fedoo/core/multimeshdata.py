@@ -24,6 +24,8 @@ class MultiMeshData:
     >>> data.active          # data for dataset.active_submesh
     >>> data.submesh(1)      # data for submesh id 1
     >>> data.submesh("tri3") # data for all tri3 submeshes
+    >>> data.global_element_value(42)  # value for global element 42
+    >>> data.global_element_values([3, 18, 42])
 
     Parameters
     ----------
@@ -41,7 +43,11 @@ class MultiMeshData:
     -----
     Missing submesh data are stored as ``None``. ``to_global`` concatenates
     selected submesh blocks in mesh order and fills missing blocks with
-    ``fill_value``.
+    ``fill_value``. Global element ids use that same concatenated order.
+
+    NumPy-style access, including ``np.asarray(data)`` and ``data[...]``,
+    intentionally applies to the active submesh only. Use ``to_global()`` or
+    ``global_element_value(s)`` when working with global element ids.
     """
 
     def __init__(self, mesh: MultiMesh, data, active_submesh=0) -> None:

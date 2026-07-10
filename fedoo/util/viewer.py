@@ -1,6 +1,7 @@
 import fedoo as fd
 import numpy as np
 import sys
+from contextlib import contextmanager
 from qtpy import QtWidgets, QtGui
 from qtpy.QtWidgets import (
     QDockWidget,
@@ -44,6 +45,23 @@ def _global_data_array(data):
 
 def _data_n_iter(data):
     return getattr(data, "n_iter", 1)
+
+
+@contextmanager
+def _defer_rendering(plotter, enabled):
+    """Render a rebuilt scene only after all its actors are ready."""
+    if not enabled or not hasattr(plotter, "suppress_rendering"):
+        yield
+        return
+
+    was_suppressed = plotter.suppress_rendering
+    plotter.suppress_rendering = True
+    try:
+        yield
+    finally:
+        plotter.suppress_rendering = was_suppressed
+        if not was_suppressed:
+            plotter.render()
 
 
 def _as_3d_tuple(values, fill=0.0):
@@ -379,45 +397,47 @@ class PlotDock(QDockWidget):
             # "n_colors": self.opts['n_colors'],
             "n_labels": self.opts["n_labels"],
         }
-        # plotter.clear()  # not compatible with pbr ???
-        plotter.renderer.clear_actors()
+        is_multimesh = _is_multimesh(self.data.mesh)
         multimesh_kargs = {}
-        if _is_multimesh(self.data.mesh):
+        if is_multimesh:
             multimesh_kargs["global_element_set"] = True
             multimesh_kargs["name"] = "data"
 
-        self.data.plot(
-            field=self.current_field,
-            component=self.current_comp,
-            data_type=self.current_data_type,
-            clim=clim,
-            plotter=plotter,
-            show=False,
-            show_edges=self.opts["show_edges"],
-            show_scalar_bar=self.opts["show_scalar_bar"],
-            scalar_bar_args=sargs,
-            node_labels=self.opts["node_labels"],
-            element_labels=self.opts["element_labels"],
-            scale=self.opts["scale"],
-            opacity=self.opts["opacity"],
-            pbr=self.opts["pbr"],
-            metallic=self.opts["metallic"],
-            roughness=self.opts["roughness"],
-            diffuse=self.opts["diffuse"],
-            clip_args=self.opts["clip_args"],
-            lock_view=lock_view,
-            title=self.opts["title_plot"],
-            element_set=self.opts["element_set"],
-            # element_set_invert = self.opts["element_set_invert"],
-            cmap=self.opts["cmap"],
-            **multimesh_kargs,
-        )
+        with _defer_rendering(plotter, is_multimesh):
+            # plotter.clear()  # not compatible with pbr ???
+            plotter.renderer.clear_actors()
+            self.data.plot(
+                field=self.current_field,
+                component=self.current_comp,
+                data_type=self.current_data_type,
+                clim=clim,
+                plotter=plotter,
+                show=False,
+                show_edges=self.opts["show_edges"],
+                show_scalar_bar=self.opts["show_scalar_bar"],
+                scalar_bar_args=sargs,
+                node_labels=self.opts["node_labels"],
+                element_labels=self.opts["element_labels"],
+                scale=self.opts["scale"],
+                opacity=self.opts["opacity"],
+                pbr=self.opts["pbr"],
+                metallic=self.opts["metallic"],
+                roughness=self.opts["roughness"],
+                diffuse=self.opts["diffuse"],
+                clip_args=self.opts["clip_args"],
+                lock_view=lock_view,
+                title=self.opts["title_plot"],
+                element_set=self.opts["element_set"],
+                # element_set_invert = self.opts["element_set_invert"],
+                cmap=self.opts["cmap"],
+                **multimesh_kargs,
+            )
 
-        if self.parent()._plane_widget_enabled:
-            self.parent().enable_plane_widget()
+            if self.parent()._plane_widget_enabled:
+                self.parent().enable_plane_widget()
 
-        if self.parent()._line_widget_enabled:
-            self.parent()._rebuild_line_widget()
+            if self.parent()._line_widget_enabled:
+                self.parent()._rebuild_line_widget()
 
     def closeEvent(self, event):
         self.plotter.close()
