@@ -141,6 +141,15 @@ class WeakFormBase:
             self.time_evolution = normalize_time_evolution(evolution)
         return self
 
+    def get_storage(self):
+        """Return the optional storage weakform for a time integrator.
+
+        Subclasses may derive storage from their constitutive data (for
+        example inertia from material density). Return ``None`` when the
+        weakform has no transient storage contribution.
+        """
+        return self.storage
+
     def set_dissipation(self, dissipation=None, evolution=None, **kargs):
         """Attach a dissipative contribution.
 
@@ -173,6 +182,10 @@ class WeakFormBase:
         if evolution is not None:
             self.time_evolution = normalize_time_evolution(evolution)
         return self
+
+    def get_dissipation(self):
+        """Return the optional dissipative provider for a time integrator."""
+        return self.dissipation
 
     def set_inertia(self, density_or_storage):
         """Mechanical alias for ``set_storage``.

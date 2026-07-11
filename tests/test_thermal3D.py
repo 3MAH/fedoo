@@ -90,3 +90,9 @@ def test_thermal3D():
 
     assert np.abs(legacy_temp[8712] - 2.610859332847924) < 1e-8
     np.testing.assert_allclose(new_temp, legacy_temp, rtol=1e-10, atol=1e-12)
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

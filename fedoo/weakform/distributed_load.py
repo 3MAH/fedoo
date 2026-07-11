@@ -20,8 +20,10 @@ class ExternalPressure(WeakFormBase):
     This weak formulation permit to define pressure load and
     should be associated to another weak formulation (e.g. StressEquilibrium).
 
-    The easiest way to define a pressure load is to directly
-    build the corresponding assembly with :py:meth:`fd.constraint.Pressure`.
+    The recommended way to apply a pressure load is to build the corresponding
+    assembly with :py:meth:`fd.constraint.Pressure` and add it to the problem
+    boundary conditions with ``pb.bc.add(pressure_assembly)``. The assembly is
+    then converted to an equivalent Neumann boundary condition.
     """
 
     def __init__(
@@ -113,10 +115,11 @@ class DistributedLoad(WeakFormBase):
     This weak formulation permit to define distributed loads and
     should be associated to another weak formulation (e.g. StressEquilibrium).
 
-    The easiest way to define a distributed load is to directly
-    build the corresponding assembly with
-    :py:meth:`fd.constraint.DistributedForce` or
-    :py:meth:`fd.constraint.SurfaceForce`.
+    The recommended way to apply a distributed load is to build the
+    corresponding assembly with :py:meth:`fd.constraint.DistributedForce` or
+    :py:meth:`fd.constraint.SurfaceForce` and add it to the problem boundary
+    conditions with ``pb.bc.add(load_assembly)``. The assembly is then
+    converted to an equivalent Neumann boundary condition.
     """
 
     def __init__(self, distributed_force: list, name="", nlgeom=False, space=None):

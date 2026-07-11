@@ -82,7 +82,7 @@ wf_mech = fd.weakform.StressEquilibrium("MechanicalLaw", nlgeom=NLGEOM)
 
 fd.Assembly.create(
     wf_mech, meshname, name="Assembling_M"
-)  # uses MeshChange=True when the mesh change during the time
+)  # uses mesh_change=True when the mesh change during the time
 
 pb_m = fd.problem.NonLinear("Assembling_M")
 # pb_m.set_solver('cg', precond = True)

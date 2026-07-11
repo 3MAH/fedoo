@@ -16,7 +16,6 @@ choices. Quantitative Terzaghi comparison lives in a separate example.
 """
 
 import numpy as np
-import pytest
 
 import fedoo as fd
 
@@ -179,5 +178,6 @@ def test_terzaghi_consolidation_smoke():
 
 
 if __name__ == "__main__":
-    test_terzaghi_consolidation_smoke()
-    print("test_poromech_terzaghi: OK")
+    import pytest
+
+    pytest.main([__file__])

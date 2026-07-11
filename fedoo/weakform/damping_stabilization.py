@@ -111,6 +111,8 @@ class ArtificialDamping(WeakFormBase):
             # Start with a very small global fraction
             self._c_stab = 1e-3 * self.target_ratio
             self._c_stab_initialized = False
+        else:
+            self._c_stab = self.c_stab
 
     def set_start(self, assembly, pb):
         """Update historical variables and adapt c_stab based on energy ratio."""
@@ -118,7 +120,13 @@ class ArtificialDamping(WeakFormBase):
             dt = pb.dtime
 
             # 1. Skip if it's the very first initialization or a zero-time step
-            if dt == 0:
+            if (
+                dt == 0
+                or not self._c_stab_initialized
+                or (np.isscalar(pb.get_A()) and pb.get_A() == 0)
+            ):
+                self._c_stab_initialized = True
+                assembly.sv["_DeltaDisp"] = 0
                 return
 
             # 2. Get the converged displacement increment from the PREVIOUS step
@@ -137,7 +145,11 @@ class ArtificialDamping(WeakFormBase):
             # F_damp = c_stab * M* * (delta_u / dt)
             # M  = assembly.get_global_matrix()
             # delta_E_damp = self._c_stab/dt * (delta_u @ M @ delta_u)
-            delta_E_damp = delta_u @ assembly.get_global_vector()
+            damping_force = assembly.get_global_vector()
+            if np.isscalar(damping_force):
+                assembly.sv["_DeltaDisp"] = 0
+                return
+            delta_E_damp = delta_u @ damping_force
 
             # 5. Adaptive Adjustment
             # We only adjust if there is significant external work being done

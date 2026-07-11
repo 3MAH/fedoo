@@ -75,26 +75,6 @@ class BeamEquilibrium(WeakFormBase):
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
         self.time_evolution = SECOND_ORDER
-        density = getattr(self.properties.material, "density", None)
-        if density is not None:
-            translational_inertia = Inertia(
-                density * self.properties.A, space=self.space
-            )
-            if self.space.ndim == 3:
-                rotary_inertia = RotaryInertia(
-                    [
-                        density * self.properties.Jx,
-                        density * self.properties.Iyy,
-                        density * self.properties.Izz,
-                    ],
-                    space=self.space,
-                )
-            else:
-                rotary_inertia = RotaryInertia(
-                    density * self.properties.Izz,
-                    space=self.space,
-                )
-            self.storage = WeakFormSum([translational_inertia, rotary_inertia])
         self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
@@ -105,6 +85,18 @@ class BeamEquilibrium(WeakFormBase):
             * Set to 'TL' to use the total lagrangian method (base on the
               initial mesh with initial displacement effet)
         """
+
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        translational_inertia = Inertia(
+            self.properties.linear_density, space=self.space
+        )
+        rotary_density = self.properties.rotary_density
+        if self.space.ndim == 2:
+            rotary_density = rotary_density[2]
+        rotary_inertia = RotaryInertia(rotary_density, space=self.space)
+        return WeakFormSum([translational_inertia, rotary_inertia])
 
     def initialize(self, assembly, pb):
         assembly.sv["BeamStrain"] = 0

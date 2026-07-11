@@ -42,11 +42,11 @@ from .finite_difference_1d import (
     Node,
     Parameter,
 )
-from .hexahedron import ElementHexahedron, Hex8, Hex20, Hex8r
+from .hexahedron import ElementHexahedron, Hex8, Hex20, Hex20r, Hex8r
 from .line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
 from .plate import pquad4, pquad8, pquad9, ptri3, ptri6
 from .quadrangle import ElementQuadrangle, Quad4, Quad8, Quad9
-from .tetrahedron import ElementTetrahedron, Tet4, Tet10
+from .tetrahedron import ElementTetrahedron, Tet4, Tet10, Tet10r
 from .triangle import ElementTriangle, Tri3, Tri3Bubble, Tri6
 from .wedge import ElementWedge, Wed6, Wed15, Wed18
 from .incompressible import hex8sri
@@ -90,7 +90,9 @@ __all__ = [
     "Parameter",
     "ElementHexahedron",
     "Hex8",
+    "Hex8r",
     "Hex20",
+    "Hex20r",
     "Lin2",
     "Lin2Bubble",
     "Lin3",
@@ -107,6 +109,7 @@ __all__ = [
     "ElementTetrahedron",
     "Tet4",
     "Tet10",
+    "Tet10r",
     "ElementTriangle",
     "Tri3",
     "Tri3Bubble",

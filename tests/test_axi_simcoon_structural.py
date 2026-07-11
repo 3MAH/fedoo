@@ -245,3 +245,7 @@ def test_set_start_rotation_preserves_axi_zeros_for_pure_meridional_F():
     assert DR0[0, 2] == 0.0 and DR0[1, 2] == 0.0
     assert DR0[2, 0] == 0.0 and DR0[2, 1] == 0.0
     assert DR0[2, 2] == pytest.approx(1.0, abs=1e-14)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
