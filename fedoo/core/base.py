@@ -88,11 +88,11 @@ class MeshBase:
 
     __dic: dict[str, "MeshBase"] = {}
 
-    def __init__(self, name=""):
+    def __init__(self, name="", register=True):
         assert isinstance(name, str), "name must be a string"
         self.__name = name
 
-        if name != "":
+        if register and name != "":
             MeshBase.__dic[self.__name] = self
 
     def __class_getitem__(cls, item):

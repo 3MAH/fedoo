@@ -80,8 +80,8 @@ else:
     nodes_top2 = mesh.find_nodes("XY", (3 * L / 4, h))
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-# Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
-# assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 8)     #uses MeshChange=True when the mesh change during the time
+# Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 27)     #uses mesh_change=True when the mesh change during the time
+# assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 8)     #uses mesh_change=True when the mesh change during the time
 assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 
 

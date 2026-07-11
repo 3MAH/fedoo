@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     'numpy>=2.00',
     'scipy',
+    'h5py',
     'simcoon>=1.14',
 ]
 
@@ -38,11 +39,8 @@ solver = [
     'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
-    'matplotlib',
+    'matplotlib>=3.5',
     'pyvista[io]',
-]
-simcoon = [
-    'simcoon>=1.14'
 ]
 test = [
     'pytest',

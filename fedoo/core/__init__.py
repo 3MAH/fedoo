@@ -1,6 +1,6 @@
 from .modelingspace import ModelingSpace
 from .base import ConstitutiveLaw
-from .mesh import Mesh
+from .mesh import Mesh, MultiMesh
 from .weakform import WeakForm, WeakFormSum
 from .assembly import Assembly
 from .assembly_sum import AssemblySum
@@ -9,6 +9,7 @@ from .dataset import (
     MultiFrameDataSet,
     read_data,
 )
+from .multimeshdata import MultiMeshData
 from .boundary_conditions import BoundaryCondition, MPC, ListBC
 from .problem import Problem
 
@@ -23,6 +24,7 @@ __all__ = [
     "ModelingSpace",
     "DataSet",
     "MultiFrameDataSet",
+    "MultiMeshData",
     "read_data",
     "BoundaryCondition",
     "MPC",

@@ -66,10 +66,10 @@ wf = fd.weakform.StressEquilibriumFbar("ConstitutiveLaw", nlgeom=NLGEOM)
 wf.fbar = True
 wf.corate = "log"
 
-# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", MeshChange = False, n_elm_gp = 27)     #uses MeshChange=True when the mesh change during the time
+# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 27)     #uses mesh_change=True when the mesh change during the time
 fd.Assembly.create(
     wf, meshname, name="Assembling"
-)  # uses MeshChange=True when the mesh change during the time
+)  # uses mesh_change=True when the mesh change during the time
 
 pb = fd.problem.NonLinear("Assembling")
 pb.set_nr_criterion("Force", err0=None, tol=5e-3, max_subiter=10)

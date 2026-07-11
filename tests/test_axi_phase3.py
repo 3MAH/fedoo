@@ -76,3 +76,7 @@ def test_rotary_inertia_axi_raises():
     fd.ModelingSpace("2Daxi")
     with pytest.raises(NotImplementedError, match="2Daxi"):
         fd.weakform.RotaryInertia(1.0)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

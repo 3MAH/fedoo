@@ -266,3 +266,7 @@ def test_recover_hessian_validates_shape():
     mesh = fd.mesh.rectangle_mesh(nx=5, ny=5, elm_type="quad4")
     with pytest.raises(ValueError, match="shape"):
         fd.recover_hessian(mesh, np.zeros(mesh.n_nodes - 1))
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

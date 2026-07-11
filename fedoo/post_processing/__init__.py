@@ -12,7 +12,9 @@ In fedoo, most of the standard results are easily exportable using the
 :py:meth:`fedoo.Problem.get_results` method of the problem class.
 
 The get_results method returns a :py:class:`fedoo.DataSet` object which comes
-with several methods for plotting, saving and loading mesh dependent results.
+with several methods for plotting, saving and loading mesh-dependent results.
+A dataset can be associated with either a :py:class:`fedoo.Mesh` or a
+:py:class:`fedoo.MultiMesh`.
 
 
 To avoid a redundent call of the get_results function, especially for time
@@ -26,8 +28,8 @@ an iteration of the :py:class:`MultiFrameDataSet`. For non linear problems
 solved using :py:meth:`fedoo.Problem.nlsolve`, results are automatically saved at
 some iterations dependending on the choosen parameters.
 
-The :py:class:`MultiFrameDataSet` store the path of the saved files for each
-iteration in the MultiFrameDataSet.list_data attribute. The method
+The :py:class:`MultiFrameDataSet` stores references to the saved iterations in
+the MultiFrameDataSet.list_data attribute. The method
 :py:meth:`MultiFrameDataSet.load` is called to read the data
 of a given iteration.
 
@@ -50,6 +52,51 @@ Class MultiFrameDataSet
 
    MultiFrameDataSet
 
+MultiMesh results
+-----------------
+
+A :py:class:`DataSet` or :py:class:`MultiFrameDataSet` associated with a
+:py:class:`MultiMesh` can contain submeshes with different element types.
+Node fields use the common global node numbering. Element and Gauss-point
+fields returned by :py:meth:`DataSet.get_data` are stored in a
+:py:class:`MultiMeshData` object, with one data block per submesh.
+
+Global element ids use the concatenated submesh order: all elements of
+submesh 0, then all elements of submesh 1, and so on. For example:
+
+.. code-block:: python
+
+    stress = results.get_data("Stress", "vm", "Element")
+
+    # Access data by submesh or by global element id
+    shell_stress = stress.submesh("tri3")
+    value = stress.global_element_value(42)
+    values = stress.global_element_values([3, 18, 42])
+
+    # Build one NumPy array using the global element order
+    global_stress = stress.to_global()
+
+Normal NumPy-style access to a :py:class:`MultiMeshData` object refers to its
+active submesh. Use :py:meth:`MultiMeshData.to_global` when a globally ordered
+array is required. A global selection spanning several submeshes can be
+plotted directly:
+
+.. code-block:: python
+
+    results.plot(
+        "Stress",
+        component="vm",
+        data_type="Element",
+        element_set=[3, 18, 42],
+        global_element_set=True,
+    )
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   MultiMeshData
+
 Save data to disk
 -----------------
 
@@ -57,8 +104,16 @@ Once a DataSet is created using for instance the
 :py:meth:`fedoo.Problem.get_results` method, the data can easily be saved on
 disk using for instance the :py:meth:`fedoo.DataSet.save` method.
 
+FDH5 is the default and recommended format. If ``DataSet.save``,
+``MultiFrameDataSet.save_all``, or ``read_data`` is called with a filename
+without an extension, the ``.fdh5`` extension is assumed.
+
 The available file types are:
-    * 'fdz': A zipped archive containing the mesh using the 'vtk' format
+    * 'fdh5': The native HDF5-based Fedoo format. It stores the mesh, node and
+      element sets, node/element/Gauss-point fields, and multiple iterations
+      in one file. It also preserves the complete MultiMesh structure and its
+      per-submesh fields. This is the default format.
+    * 'fdz': A legacy zipped archive containing the mesh using the 'vtk' format
       named '_mesh_.vtk', and data from several iterations named 'iter_x.npz'
       where x is the iteration number (x=0 for the 1st iteration).
     * 'vtk': The vtk format contains the mesh and the data in a single files.
@@ -86,6 +141,7 @@ Read data from disk
 To read data saved on disk, use the function :py:func:`read_data`.
 The data are imported as :py:class:`DataSet` or
 :py:class:`MultiFrameDataSet` objects depending on the imported file(s).
+FDH5 is used by default when the filename has no extension.
 
 
 .. _very_simple_problem:
@@ -169,11 +225,11 @@ inside a python code:
 .. code-block:: python
 
     import fedoo as fd
-    result = fd.read_data('myfile.fdz')  # load a DataSet from file
+    result = fd.read_data('myfile.fdh5')  # load a DataSet from file
 
     fd.viewer()  # start the viewer with no file opened
     fd.viewer(result)  # start the viewer and open the result DataSet
-    fd.viewer('myfile.fdz')  # start the viewer with the data from a file
+    fd.viewer('myfile.fdh5')  # start the viewer with the data from a file
 
 The viewer includes the following tools and features:
 
@@ -233,6 +289,7 @@ Save results
    DataSet.to_excel
    DataSet.to_vtk
    DataSet.to_msh
+   DataSet.to_fdh5
    MultiFrameDataSet.save_all
 
 

@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 import fedoo as fd
-import pytest
 
 
 def test_octet():
@@ -82,4 +81,6 @@ def test_octet():
 
 
 if __name__ == "__main__":
+    import pytest
+
     pytest.main([__file__])

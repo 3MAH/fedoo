@@ -4,6 +4,7 @@
 
 import numpy as np
 import pytest
+
 import fedoo as fd
 
 # Define the combinations to test: (geom_type, element_formulation, test_nlgeom, ref_sol)

@@ -19,7 +19,7 @@ def test_plate_with_hole():
     fd.weakform.StressEquilibrium("ElasticLaw", name="WeakForm")
 
     # Create a global assembly
-    fd.Assembly.create("WeakForm", "Domain", name="Assembly", MeshChange=True)
+    fd.Assembly.create("WeakForm", "Domain", name="Assembly", mesh_change=True)
 
     # Define a new static problem
     pb = fd.problem.Linear("Assembly")
@@ -55,3 +55,9 @@ def test_plate_with_hole():
     # res.plot('Stress_vm')
     # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'stress', component='vm', data_min=None, data_max = None, scale_factor = 6, plot_edge = True, nb_level = 10, type_plot = "smooth")
     # fd.util.field_plot_2d("Assembly", disp = pb.get_disp(), dataname = 'disp', component=0, scale_factor = 6, plot_edge = True, nb_level = 6, type_plot = "smooth")
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

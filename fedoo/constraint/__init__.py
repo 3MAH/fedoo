@@ -7,3 +7,4 @@ from .distributed_load import (
     SurfaceForce,
 )
 from .ipc_contact import IPCContact, IPCSelfContact
+from .mean_motion import MeanMotion
