@@ -11,6 +11,7 @@ class _LinearBase:
         super().__init__(mesh=assembly.mesh, name=name)
 
         self.nlgeom = False
+        assembly.register_global_dofs(self)
         assembly.initialize(self)
         self.time = self.dtime = 0
         # self.set_A(assembly.get_global_matrix())

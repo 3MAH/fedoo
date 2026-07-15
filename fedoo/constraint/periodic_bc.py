@@ -1274,6 +1274,118 @@ class PeriodicBC(BCBase):
                     )
                 )
 
+    def _register_global_dofs(self, problem):
+        if problem.space.is_axisymmetric:
+            raise NotImplementedError(
+                "PeriodicBC does not support the '2Daxi' ModelingSpace: "
+                "translational periodicity in the (r, z) plane is not "
+                "well-defined for an axisymmetric body of revolution."
+            )
+        if self.dim is None:
+            self.dim = problem.space.ndim
+
+        if self.periodicity_type == "small_strain":
+            if self.dim == 1:
+                dof_indice = problem.add_global_dof(
+                    ["E_xx"], 1, vector_name="MeanStrain"
+                )
+                self.var_cd = ["E_xx"]
+                self.node_cd = [dof_indice]
+            elif self.dim == 2:
+                dof_indice = problem.add_global_dof(
+                    ["E_xx", "E_yy", "E_xy"], 1, vector_name="MeanStrain"
+                )
+                self.var_cd = [["E_xx", "E_xy"], ["E_xy", "E_yy"]]
+                self.node_cd = np.full((2, 2, 1), dof_indice)
+            elif self.dim == 3:
+                dof_indice = problem.add_global_dof(
+                    ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"],
+                    1,
+                    "MeanStrain",
+                )
+                self.var_cd = [
+                    ["E_xx", "E_xy", "E_xz"],
+                    ["E_xy", "E_yy", "E_yz"],
+                    ["E_xz", "E_yz", "E_zz"],
+                ]
+                self.node_cd = np.full((3, 3, 1), dof_indice)
+        elif self.periodicity_type == "finite_strain":
+            if self.dim == 1:
+                dof_indice = problem.add_global_dof(["DU_xx"], 1, "MeanGradDisp")
+                self.var_cd = ["DU_xx"]
+                self.node_cd = [dof_indice]
+            elif self.dim == 2:
+                dof_indice = problem.add_global_dof(
+                    ["DU_xx", "DU_xy", "DU_yx", "DU_yy"],
+                    1,
+                    "MeanGradDisp",
+                )
+                self.var_cd = [["DU_xx", "DU_xy"], ["DU_yx", "DU_yy"]]
+                self.node_cd = np.full((2, 2, 1), dof_indice)
+            elif self.dim == 3:
+                dof_indice = problem.add_global_dof(
+                    [
+                        "DU_xx",
+                        "DU_xy",
+                        "DU_xz",
+                        "DU_yx",
+                        "DU_yy",
+                        "DU_yz",
+                        "DU_zx",
+                        "DU_zy",
+                        "DU_zz",
+                    ],
+                    1,
+                    "MeanGradDisp",
+                )
+                self.var_cd = [
+                    ["DU_xx", "DU_xy", "DU_xz"],
+                    ["DU_yx", "DU_yy", "DU_yz"],
+                    ["DU_zx", "DU_zy", "DU_zz"],
+                ]
+                self.node_cd = np.full((3, 3, 1), dof_indice)
+
+        if self.off_axis_rotation is not None:
+            problem.enable_mpc_coupling = True
+            if self.dim != 3:
+                raise ValueError("off_axis_rotation is valid in 3D only")
+            self.off_axis_rot_matrix = self.off_axis_rotation.as_matrix()
+
+            if self.periodicity_type == "small_strain":
+                dof_indice = problem.add_global_dof(
+                    ["E_11", "E_22", "E_33", "E_12", "E_13", "E_23"],
+                    1,
+                    "LocalMeanStrain",
+                )
+                self.var_cd_loading = [
+                    ["E_11", "E_12", "E_13"],
+                    ["E_12", "E_22", "E_23"],
+                    ["E_13", "E_23", "E_33"],
+                ]
+                self.node_cd_loading = np.full((3, 3, 1), dof_indice)
+            elif self.periodicity_type == "finite_strain":
+                dof_indice = problem.add_global_dof(
+                    [
+                        "DU_11",
+                        "DU_12",
+                        "DU_13",
+                        "DU_21",
+                        "DU_22",
+                        "DU_23",
+                        "DU_31",
+                        "DU_32",
+                        "DU_33",
+                    ],
+                    1,
+                    "LocalMeanGradDisp",
+                )
+                self.var_cd_loading = [
+                    ["DU_11", "DU_12", "DU_13"],
+                    ["DU_21", "DU_22", "DU_23"],
+                    ["DU_31", "DU_32", "DU_33"],
+                ]
+                self.node_cd_loading = np.full((3, 3, 1), dof_indice)
+
     def initialize(self, problem, dic_closest_points_on_boundaries=None):
         if problem.space.is_axisymmetric:
             raise NotImplementedError(
@@ -1316,125 +1428,7 @@ class PeriodicBC(BCBase):
 
         """
         mesh = problem.mesh
-        if self.dim is None:
-            self.dim = problem.space.ndim
-
         res = None
-
-        if self.periodicity_type == "small_strain":
-            if self.dim == 1:
-                dof_indice = problem.add_global_dof(
-                    ["E_xx"], 1, vector_name="MeanStrain"
-                )
-                var_cd = ["E_xx"]
-                node_cd = [dof_indice]
-            elif self.dim == 2:
-                dof_indice = problem.add_global_dof(
-                    ["E_xx", "E_yy", "E_xy"], 1, vector_name="MeanStrain"
-                )
-                var_cd = [
-                    ["E_xx", "E_xy"],
-                    ["E_xy", "E_yy"],
-                ]
-                node_cd = np.full((2, 2, 1), dof_indice)
-            elif self.dim == 3:
-                dof_indice = problem.add_global_dof(
-                    ["E_xx", "E_yy", "E_zz", "E_xy", "E_xz", "E_yz"],
-                    1,
-                    "MeanStrain",
-                )
-                var_cd = [
-                    ["E_xx", "E_xy", "E_xz"],
-                    ["E_xy", "E_yy", "E_yz"],
-                    ["E_xz", "E_yz", "E_zz"],
-                ]
-                node_cd = np.full((3, 3, 1), dof_indice)
-
-        if self.periodicity_type == "finite_strain":
-            if self.dim == 1:
-                dof_indice = problem.add_global_dof(["DU_xx"], 1, "MeanGradDisp")
-                var_cd = ["DU_xx"]
-                node_cd = [dof_indice]
-            elif self.dim == 2:
-                dof_indice = problem.add_global_dof(
-                    ["DU_xx", "DU_xy", "DU_yx", "DU_yy"], 1, "MeanGradDisp"
-                )
-                var_cd = [
-                    ["DU_xx", "DU_xy"],
-                    ["DU_yx", "DU_yy"],
-                ]
-                node_cd = np.full((2, 2, 1), dof_indice)
-            elif self.dim == 3:
-                dof_indice = problem.add_global_dof(
-                    [
-                        "DU_xx",
-                        "DU_xy",
-                        "DU_xz",
-                        "DU_yx",
-                        "DU_yy",
-                        "DU_yz",
-                        "DU_zx",
-                        "DU_zy",
-                        "DU_zz",
-                    ],
-                    1,
-                    "MeanGradDisp",
-                )
-                var_cd = [
-                    ["DU_xx", "DU_xy", "DU_xz"],
-                    ["DU_yx", "DU_yy", "DU_yz"],
-                    ["DU_zx", "DU_zy", "DU_zz"],
-                ]
-                node_cd = np.full((3, 3, 1), dof_indice)
-
-        self.node_cd = node_cd
-        self.var_cd = var_cd
-
-        if self.off_axis_rotation is not None:
-            problem.enable_mpc_coupling = True
-            if self.dim == 3:
-                self.off_axis_rot_matrix = self.off_axis_rotation.as_matrix()
-            else:
-                raise ValueError("off_axis_rotation is valid in 3D only")
-
-            if self.periodicity_type == "small_strain":
-                dof_indice = virtual_dof_loading = problem.add_global_dof(
-                    ["E_11", "E_22", "E_33", "E_12", "E_13", "E_23"],
-                    1,
-                    "LocalMeanStrain",
-                )
-                var_cd_loading = [
-                    ["E_11", "E_12", "E_13"],
-                    ["E_12", "E_22", "E_23"],
-                    ["E_13", "E_23", "E_33"],
-                ]
-                node_cd_loading = np.full((3, 3, 1), dof_indice)
-
-            if self.periodicity_type == "fintie_strain":
-                dof_indice = problem.add_global_dof(
-                    [
-                        "DU_11",
-                        "DU_12",
-                        "DU_13",
-                        "DU_21",
-                        "DU_22",
-                        "DU_23",
-                        "DU_31",
-                        "DU_32",
-                        "DU_33",
-                    ],
-                    1,
-                    "LocalMeanGradDisp",
-                )
-                var_cd_loading = [
-                    ["DU_11", "DU_12", "DU_13"],
-                    ["DU_21", "DU_22", "DU_23"],
-                    ["DU_31", "DU_32", "DU_33"],
-                ]
-                node_cd_loading = np.full((3, 3, 1), dof_indice)
-
-            self.node_cd_loading = node_cd_loading
-            self.var_cd_loading = var_cd_loading
 
         periodicity = self.meshperio
 

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy import sparse
 
-from fedoo.core.base import AssemblyBase
+from fedoo.core.lagrange_multiplier import LagrangeMultiplierAssembly
+from fedoo.core.boundary_conditions import ListBC, MPC
 from fedoo.core.modelingspace import ModelingSpace
 
 
-class MeanValueConstraint(AssemblyBase):
+class MeanValueConstraint(LagrangeMultiplierAssembly):
     """Enforce the weighted mean of a field over a set of nodes.
 
     For each variable, the constraint reads:
@@ -27,57 +27,61 @@ class MeanValueConstraint(AssemblyBase):
     the RVE to zero avoids pinning an arbitrary node and makes the solution
     independent of the choice of that node.
 
+    One MPC equation is created per variable and enforced by
+    :class:`fedoo.LagrangeMultiplierAssembly`.
+
     Parameters
     ----------
     mesh: fedoo.Mesh
-        Mesh associated to the constraint. Should be the mesh of the
-        assembly the constraint is summed with (same list of nodes).
+        Mesh associated with the constraint. It should have the same nodes as
+        the assembly with which the constraint is summed.
     variable: str or list of str, default = "Disp"
-        Vector name (e.g. "Disp"), variable name (e.g. "DispX") or list of
-        variable names. One scalar constraint (and one Lagrange multiplier)
-        is created per variable.
-    value: float, default = 0.
-        Imposed mean value. The value is not affected by the time factor of
-        the problem (no ramp).
-    node_set: str, array of int or None (default)
-        Nodes over which the mean is computed. If None, all the mesh nodes
-        are used.
+        Vector name (for example, ``"Disp"``), variable name (for example,
+        ``"DispX"``), or list of variable names. One scalar constraint and
+        one Lagrange multiplier are created per variable.
+    value: float or array, default = 0.
+        Imposed mean value. A scalar is applied to every constrained variable;
+        an array specifies one value per variable. Values are not affected by
+        the problem time factor (no ramp).
+    node_set: str, array of int or None, default = None
+        Nodes over which the mean is computed. If None, all mesh nodes are
+        used.
     weights: None, "volume" or array, default = None
-        Weights used to compute the mean value:
+        Weights used to compute the mean:
 
-        * None: uniform weights 1/n_nodes (simple node average).
-        * "volume": nodal integration weights so that the constraint is the
-          true volume average of the interpolated field.
-        * array of float with same len as the node set: custom weights.
-          The weights are normalized so that their sum is 1.
+        * None: uniform weights ``1 / n_nodes`` (simple nodal average).
+        * ``"volume"``: nodal integration weights, giving the true volume
+          average of the interpolated field.
+        * Array with the same length as ``node_set``: custom weights,
+          normalized so that their sum is 1.
+
     space: ModelingSpace, optional
-        Modeling space. If None, the active ModelingSpace is used.
+        Modeling space. If None, the active modeling space is used.
     name: str, default = "MeanValue"
-        Name of the constraint. The Lagrange multiplier dofs are named
-        "{name}_{variable}" and gathered in a global vector "{name}". Use
-        distinct names to define several MeanValueConstraint on the same
-        problem, or across several problems if they are looked up by name
-        (like every named assembly, a default-named instance is registered
-        in the global assembly registry and a later one overwrites it).
+        Constraint name. The Lagrange multiplier DOFs are named
+        ``{name}_{variable}`` and gathered in the global vector ``{name}``.
+        Use distinct names for multiple mean-value constraints on the same
+        problem.
 
     Notes
     -----
     * The constraint is a linear relation enforced exactly at each Newton
-      iteration: it can be used with both Linear and NonLinear problems.
-    * The Lagrange multiplier adds a zero diagonal term to the system matrix
-      (saddle-point structure): a direct solver is required (default solver).
-      Iterative solvers like "cg" will fail.
-    * The value of the Lagrange multipliers can be extracted with
-      pb.get_dof_solution("{name}_{variable}").
+      iteration, so it can be used with both linear and nonlinear problems.
+    * Lagrange multipliers give the system a zero diagonal block and an
+      indefinite saddle-point structure. A direct solver is required;
+      iterative solvers such as conjugate gradient are not suitable.
+    * A multiplier can be extracted with
+      ``pb.get_dof_solution("{name}_{variable}")``.
 
     Example
     -------
-    Remove the rigid body translation of a periodic problem:
+    Remove rigid-body translation from a periodic problem:
 
     >>> import fedoo as fd
-    >>> # ... mesh, material and wf definition ...
+    >>> # ... mesh, material and weak-form definitions ...
     >>> solid = fd.Assembly.create(wf, mesh)
-    >>> pb = fd.problem.Linear(solid + fd.constraint.MeanValueConstraint(mesh))
+    >>> mean_value = fd.constraint.MeanValueConstraint(mesh)
+    >>> pb = fd.problem.Linear(solid + mean_value)
     >>> pb.bc.add(fd.constraint.PeriodicBC())
     >>> pb.bc.add("Dirichlet", "MeanStrain", [0.01, 0, 0, 0, 0, 0])
     >>> pb.solve()
@@ -95,16 +99,15 @@ class MeanValueConstraint(AssemblyBase):
     ):
         if space is None:
             space = ModelingSpace.get_active()
-        self.mesh = mesh
-        AssemblyBase.__init__(self, name, space)
 
         self.variable = variable
         self.value = value
         self.node_set = node_set
         self.weights = weights
 
-        self._pb = None
-        self._registered_pbs = []  # problems whose lagrange dofs are defined
+        # MPCs depend on problem-resolved node sets and variables, so they are
+        # built in initialize().
+        super().__init__(mesh, ListBC(), name=name, space=space)
 
     def __repr__(self):
         return (
@@ -112,168 +115,99 @@ class MeanValueConstraint(AssemblyBase):
             f"value={self.value!r}, name={self.name!r})"
         )
 
-    def initialize(self, pb):
-        self._pb = pb
-
-        # resolve node set
+    def _resolve_nodes(self):
         if self.node_set is None:
             nodes = np.arange(self.mesh.n_nodes)
         elif isinstance(self.node_set, str):
             nodes = np.asarray(self.mesh.node_sets[self.node_set], dtype=int)
         else:
             nodes = np.asarray(self.node_set, dtype=int)
+
+        if nodes.ndim != 1:
+            nodes = nodes.reshape(-1)
         if len(nodes) == 0:
             raise ValueError("The node set of a MeanValueConstraint is empty.")
-        self._nodes = nodes
+        return nodes
 
-        # resolve variables
-        space = self.space
+    def _resolve_variables(self):
         if isinstance(self.variable, str):
-            if self.variable in space.list_vectors():
-                var_names = list(space.get_vector(self.variable))
-            else:
-                var_names = [self.variable]
-        else:
-            var_names = list(self.variable)
-        self._var_names = var_names
-        self._ranks = [space.variable_rank(var) for var in var_names]
+            if self.variable in self.space.list_vectors():
+                return list(self.space.get_vector(self.variable))
+            return [self.variable]
+        return list(self.variable)
 
-        # the imposed value is broadcast over the constrained variables
-        if not np.isscalar(self.value):
-            value_arr = np.asarray(self.value, dtype=float).ravel()
-            if len(value_arr) != len(var_names):
-                raise ValueError(
-                    f"value has {len(value_arr)} components but the constraint "
-                    f"involves {len(var_names)} variable(s)."
-                )
+    def _resolve_values(self, n_variables):
+        if np.isscalar(self.value):
+            return np.full(n_variables, self.value, dtype=float)
 
-        # compute weights (normalized so that their sum is 1)
+        values = np.asarray(self.value, dtype=float).reshape(-1)
+        if len(values) != n_variables:
+            raise ValueError(
+                f"value has {len(values)} components but the constraint "
+                f"involves {n_variables} variable(s)."
+            )
+        return values
+
+    def _resolve_weights(self, nodes):
         if self.weights is None:
-            w = np.full(len(nodes), 1.0 / len(nodes))
-        elif isinstance(self.weights, str):
+            return np.full(len(nodes), 1.0 / len(nodes))
+
+        if isinstance(self.weights, str):
             if self.weights.lower() != "volume":
                 raise ValueError(
                     f"weights={self.weights!r} unknown. "
                     'Use None, "volume" or an array of weights.'
                 )
-            # nodal integration weights: w_i = int_V N_i dV
             nodal_weights = np.asarray(
                 (
                     self.mesh._get_gaussian_quadrature_mat()
                     @ self.mesh._get_node2gausspoint_mat()
                 ).sum(axis=0)
             ).ravel()
-            w = nodal_weights[nodes]
-            sum_w = w.sum()
-            if abs(sum_w) < 1e-15:
-                raise ValueError(
-                    "The nodal integration weights sum to 0 over the node "
-                    "set; cannot build a volume-averaged constraint."
-                )
-            w = w / sum_w
+            weights = nodal_weights[nodes]
         else:
-            w = np.asarray(self.weights, dtype=float)
-            if w.ndim != 1 or len(w) != len(nodes):
+            weights = np.asarray(self.weights, dtype=float)
+            if weights.ndim != 1 or len(weights) != len(nodes):
                 raise ValueError(
                     "weights should be a 1D array with the same length as the "
-                    f"node set (got shape {w.shape}, expected ({len(nodes)},))."
+                    f"node set (got shape {weights.shape}, expected "
+                    f"({len(nodes)},))."
                 )
-            sum_w = w.sum()
-            if abs(sum_w) < 1e-15:
-                raise ValueError("The sum of the weights should not be 0.")
-            w = w / sum_w
-        self._weights = w
 
-        # add the lagrange multiplier dofs (one global dof per variable)
-        self._lm_names = [f"{self.name}_{var}" for var in var_names]
-        if not any(pb is p for p in self._registered_pbs):
-            if self.name in pb._global_dof._vector or any(
-                lm_name in pb._global_dof for lm_name in self._lm_names
-            ):
-                raise NameError(
-                    f"A global dof named '{self.name}' already exists in the "
-                    "problem. Use a different name to define several "
-                    "MeanValueConstraint on the same problem."
-                )
-            pb.add_global_dof(self._lm_names, 1, vector_name=self.name)
-            self._registered_pbs.append(pb)
+        weight_sum = weights.sum()
+        if abs(weight_sum) < 1e-15:
+            raise ValueError("The sum of the weights should not be 0.")
+        return weights / weight_sum
 
-        self.delete_global_mat()
+    def _collect_equations(self, pb):
+        dofs, coefficients, _ = super()._collect_equations(pb)
+        return dofs, coefficients, self._mean_values.copy()
 
-    def _lagrange_dofs(self, pb):
-        return np.array(
+    def initialize(self, pb):
+        nodes = self._resolve_nodes()
+        variables = self._resolve_variables()
+        values = self._resolve_values(len(variables))
+        self._mean_values = values
+        weights = self._resolve_weights(nodes)
+
+        self._nodes = nodes
+        self._var_names = variables
+        self._ranks = [self.space.variable_rank(var) for var in variables]
+        self._weights = weights
+        self._lm_names = [f"{self.name}_{variable}" for variable in variables]
+
+        node_terms = [[int(node)] for node in nodes]
+        factor_terms = [float(weight) for weight in weights]
+        self.constraints = ListBC(
             [
-                pb.n_node_dof + pb._global_dof.indice_start(lm_name)
-                for lm_name in self._lm_names
+                MPC(
+                    node_terms,
+                    [variable] * len(nodes),
+                    factor_terms,
+                    constant=value,
+                )
+                for variable, value in zip(variables, values)
             ]
         )
-
-    def assemble_global_mat(self, compute="all"):
-        if compute == "none":
-            return
-        pb = self._pb
-        if pb is None:
-            raise RuntimeError(
-                "MeanValueConstraint can't be assembled before being "
-                "initialized by a problem."
-            )
-        n_dof = pb.n_dof
-
-        # The bordered matrix is constant after initialization: (re)build it
-        # only when a matrix is requested, missing, or resized. In the NR loop
-        # only the vector (which depends on U) needs to be recomputed.
-        if (
-            compute != "vector"
-            or self.global_matrix is None
-            or self.global_matrix.shape[0] != n_dof
-        ):
-            self.global_matrix = self._assemble_matrix(pb, n_dof)
-
-        if compute != "matrix":
-            self.global_vector = self._assemble_vector(pb, n_dof)
-
-    def _assemble_matrix(self, pb, n_dof):
-        # bordered matrix: K_c[lm, u] = K_c[u, lm] = w
-        n_nodes = pb.mesh.n_nodes
-        lm_dofs = self._lagrange_dofs(pb)
-        n_terms = len(self._nodes)
-        row = np.empty(2 * n_terms * len(self._ranks), dtype=int)
-        col = np.empty_like(row)
-        data = np.empty(len(row), dtype=float)
-        for k, rank in enumerate(self._ranks):
-            dof_u = rank * n_nodes + self._nodes
-            start = 2 * n_terms * k
-            row[start : start + n_terms] = lm_dofs[k]
-            col[start : start + n_terms] = dof_u
-            row[start + n_terms : start + 2 * n_terms] = dof_u
-            col[start + n_terms : start + 2 * n_terms] = lm_dofs[k]
-            data[start : start + 2 * n_terms] = np.tile(self._weights, 2)
-        return sparse.csr_matrix((data, (row, col)), shape=(n_dof, n_dof))
-
-    def _assemble_vector(self, pb, n_dof):
-        # global vector D = b - K_c @ U (fedoo convention: A@X = B + D)
-        b = np.zeros(n_dof)
-        b[self._lagrange_dofs(pb)] = self.value
-        U = pb.get_dof_solution()
-        if np.isscalar(U) and U == 0:
-            return b
-        if len(U) < n_dof:
-            U = np.hstack((U, np.zeros(n_dof - len(U))))
-        return b - self.global_matrix @ U
-
-    def update(self, pb, compute="all"):
-        self._pb = pb
-        self.assemble_global_mat(compute)
-
-    def set_start(self, pb):
-        self._pb = pb
-        if self.global_matrix is not None:
-            self.assemble_global_mat("vector")
-
-    def to_start(self, pb):
-        self._pb = pb
-        if self.global_matrix is not None:
-            self.assemble_global_mat("vector")
-
-    def reset(self):
-        self.delete_global_mat()
+        self.multiplier_names = self._lm_names
+        super().initialize(pb)

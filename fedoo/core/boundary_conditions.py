@@ -2,6 +2,7 @@ import numpy as np
 from scipy import sparse
 from itertools import chain
 from numbers import Number
+from weakref import WeakSet
 
 # from fedoo.core.base import BCBase
 # from fedoo.pgd.SeparatedArray import *
@@ -19,6 +20,7 @@ class BCBase:
     def __init__(self, name=""):
         assert isinstance(name, str), "name must be a string"
         self.__name = name
+        self._global_dof_registered_problems = None
 
         if name != "":
             BCBase.__dic[self.__name] = self
@@ -45,6 +47,25 @@ class BCBase:
     @staticmethod
     def get_all():
         return BCBase.__dic
+
+    def register_global_dofs(self, problem):
+        """Register global DOFs required by this boundary condition.
+
+        Subclasses should implement :meth:`_register_global_dofs` instead of
+        overriding this method. Registration is performed once per problem.
+        """
+        if type(self)._register_global_dofs is BCBase._register_global_dofs:
+            return
+        if self._global_dof_registered_problems is None:
+            self._global_dof_registered_problems = WeakSet()
+        elif problem in self._global_dof_registered_problems:
+            return
+        self._register_global_dofs(problem)
+        self._global_dof_registered_problems.add(problem)
+
+    def _register_global_dofs(self, problem):
+        """Implement boundary-condition-specific registration if required."""
+        pass
 
 
 class ListBC(BCBase):
@@ -115,6 +136,7 @@ class ListBC(BCBase):
 
     def append(self, bc):
         if self._problem is not None:
+            bc.register_global_dofs(self._problem)
             bc.initialize(self._problem)
         if bc._keep_at_end:
             self.data_end.append(bc)
@@ -127,6 +149,7 @@ class ListBC(BCBase):
     def extend(self, iterable):
         if self._problem is not None:
             for bc in iterable:
+                bc.register_global_dofs(self._problem)
                 bc.initialize(self._problem)
         if hasattr(iterable, "_keep_at_end") and iterable._keep_at_end:
             self.data_end.extend(iterable)
@@ -263,7 +286,12 @@ class ListBC(BCBase):
 
     def initialize(self, problem):
         for bc in self:
+            bc.register_global_dofs(problem)
             bc.initialize(problem)
+
+    def _register_global_dofs(self, problem):
+        for bc in self:
+            bc.register_global_dofs(problem)
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
         # return a generator function (the generate method will be called only when required)
@@ -717,6 +745,29 @@ class MPC(BCBase):
         self._factors = -np.asarray(self.list_factors[1:]) / self.list_factors[0]
 
         return [self]
+
+    def get_generated_equations(self):
+        """Return generated MPC equations with their original scaling."""
+        if not hasattr(self, "_dof_index"):
+            raise RuntimeError("MPC.generate() should be called first.")
+
+        dofs = np.asarray(self._dof_index, dtype=int)
+        if dofs.ndim == 1:
+            dofs = dofs[:, None]
+        coefficients = np.asarray(self.list_factors, dtype=float)
+        if coefficients.ndim == 1:
+            coefficients = coefficients[:, None]
+        coefficients = np.broadcast_to(coefficients, dofs.shape)
+
+        values = np.broadcast_to(
+            np.asarray(self._current_value, dtype=float), dofs.shape[1]
+        )
+
+        return (
+            dofs.T,
+            coefficients.T,
+            values * coefficients[0],
+        )
 
 
 if __name__ == "__main__":
