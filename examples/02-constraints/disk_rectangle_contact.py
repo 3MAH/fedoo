@@ -80,9 +80,7 @@ assembly = fd.Assembly.sum(solid_assembly, contact)
 pb = fd.problem.NonLinear(assembly)
 
 # add some output that are automatically saved
-results = pb.add_output(
-    "contact_example", ["Disp", "Stress", "Strain", "P", "Fext"]
-)
+results = pb.add_output("contact_example", ["Disp", "Stress", "Strain", "P", "Fext"])
 
 # boundary conditions
 pb.bc.add("Dirichlet", nodes_left, "Disp", 0)
