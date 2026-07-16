@@ -194,7 +194,6 @@ class MeanValueConstraint(LagrangeMultiplierAssembly):
         self._var_names = variables
         self._ranks = [self.space.variable_rank(var) for var in variables]
         self._weights = weights
-        self._lm_names = [f"{self.name}_{variable}" for variable in variables]
 
         node_terms = [[int(node)] for node in nodes]
         factor_terms = [float(weight) for weight in weights]
@@ -209,5 +208,5 @@ class MeanValueConstraint(LagrangeMultiplierAssembly):
                 for variable, value in zip(variables, values)
             ]
         )
-        self.multiplier_names = self._lm_names
+        self.multiplier_names = [f"{self.name}_{variable}" for variable in variables]
         super().initialize(pb)

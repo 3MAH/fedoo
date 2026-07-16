@@ -15,7 +15,7 @@ dependencies:
   - pypandoc
   - pyvista>=0.39
   - meshio
-  - simcoon>=1.13.1
+  - simcoon>=1.14
   - pytest
   - sphinx
   - sphinx_rtd_theme
