@@ -136,9 +136,7 @@ def test_rigid_body_rayleigh_damping_accepts_mass_and_stiffness_terms(space):
 
     body.set_rayleigh_damping(alpha=0.7, beta=0.2)
 
-    assert body.assembly.dissipation == fd.time.RayleighDamping(
-        alpha=0.7, beta=0.2
-    )
+    assert body.assembly.dissipation == fd.time.RayleighDamping(alpha=0.7, beta=0.2)
 
 
 def test_static_body_is_not_compiled_by_second_order_integrator(space):

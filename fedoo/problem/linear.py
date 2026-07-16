@@ -135,6 +135,7 @@ class _LinearBase:
     def assembly(self):
         return self.__assembly
 
+
 class Linear(_LinearBase, Problem):
     """Class that defines linear problems.
 
