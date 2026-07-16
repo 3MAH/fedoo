@@ -21,6 +21,13 @@ To create a new Problem, use one of the following function:
 Each of these functions creates an object that is derived from the \
    base classes "ProblemBase" or "Problem".
 
+Transient analyses are controlled by problem-level integrators from
+:mod:`fedoo.time`. They are attached to a nonlinear problem with
+:meth:`NonLinear.set_time_integrator`, which keeps weak forms focused on their
+static, storage, and dissipation contributions. Without a time integrator, or
+after removing a pending one with ``set_time_integrator(..., None)`` before
+initialization, the problem remains static.
+
 .. currentmodule:: fedoo
 
 .. autosummary::
@@ -272,18 +279,22 @@ expensive with limited results, and should only be used as a last resort.
 If a static simulation fails despite the above techniques, the problem may be 
 inherently dynamic (e.g., rapid snap-through or post-buckling).
 
-* **Strategy**: Switch to a **Dynamic Solver**, using the
-  :class:`fedoo.weakform.ImplicitDynamic` weak form. 
+* **Strategy**: Switch to a **Dynamic Solver** by adding a second-order time
+  integrator from :mod:`fedoo.time` to a :class:`NonLinear` problem, for
+  instance :class:`fedoo.time.Newmark` or
+  :class:`fedoo.time.GeneralizedAlpha`.
 * **Stabilization**: Add **Rayleigh Damping**
   (:math:`\mathbf{C} = a\mathbf{M} + b\mathbf{K}`) to dissipate high-frequency 
   numerical noise and stabilize the inertial response during sudden transitions.
+  The legacy :class:`fedoo.weakform.ImplicitDynamic` weak form is kept for
+  pedagogical purposes, but new transient models should prefer
+  problem-level time integrators.
 """
 
 from .explicit_dynamic import ExplicitDynamic
 from .linear import Linear
 from .newmark import Newmark
-from .nl_newmark import NonLinearNewmark
-from .non_linear import NonLinear
+from .non_linear import NonLinear, NonLinearNewmark
 
 __all__ = [
     "Linear",

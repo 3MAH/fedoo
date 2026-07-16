@@ -313,8 +313,6 @@ class Quad9(ElementQuadrangle):
 
 
 #### Hourglass control shape function ####
-
-
 class Quad4Hourglass(Quad4):
     name = "quad4hourglass"
     default_n_gp = 1

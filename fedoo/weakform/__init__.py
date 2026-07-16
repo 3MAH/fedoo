@@ -33,13 +33,15 @@ The WeakForm library contains the following classes:
    StressEquilibriumRI
    StressEquilibriumMixed
    StressEquilibriumFbar
-   SteadyHeatEquation
+   StressEquilibriumBbar
    HeatEquation
    BeamEquilibrium
    SpringEquilibrium
    PlateEquilibrium
    PlateEquilibriumFI
-   PlateEquilibriumSI
+   PlateKirchhoffLoveEquilibrium
+   PlateShearEquilibrium
+   PlateDrillingPenalty
    Inertia
    RotaryInertia
    InterfaceForce
@@ -52,9 +54,8 @@ The WeakForm library contains the following classes:
 from .beam import BeamEquilibrium
 from .spring import SpringEquilibrium
 from .heat_equation import (
+    HeatCapacity,
     HeatEquation,
-    SteadyHeatEquation,
-    TemperatureTimeDerivative,
 )
 from .implicit_dynamic import ImplicitDynamic, ImplicitDynamic2
 from .inertia import Inertia, RotaryInertia
@@ -62,19 +63,28 @@ from .interface_force import InterfaceForce
 from .plate import (
     PlateEquilibrium,
     PlateEquilibriumFI,
-    PlateEquilibriumSI,
     PlateKirchhoffLoveEquilibrium,
     PlateShearEquilibrium,
+    PlateDrillingPenalty,
 )
 from .stress_equilibrium import StressEquilibrium
 from .stress_equilibrium_mixed import StressEquilibriumMixed
 from .stress_equilibrium_bbar import (
     StressEquilibriumFbar,
+    StressEquilibriumBbar,
     StressEquilibriumRI,
     HourglassStiffness,
 )
 from .damping_stabilization import ArtificialDamping
 from .distributed_load import ExternalPressure, DistributedLoad
+from .poromechanics import (
+    PoroMechanics,
+    PoroMechanicsSimple,
+    PoroMomentum,
+    PoroMomentumSimple,
+    PoroDarcy,
+    PoroMassStorage,
+)
 
 __all__ = [
     "BeamEquilibrium",
@@ -84,17 +94,17 @@ __all__ = [
     "InterfaceForce",
     "PlateEquilibrium",
     "PlateEquilibriumFI",
-    "PlateEquilibriumSI",
     "PlateKirchhoffLoveEquilibrium",
     "PlateShearEquilibrium",
+    "PlateDrillingPenalty",
     "StressEquilibrium",
     "StressEquilibriumFbar",
+    "StressEquilibriumBbar",
     "StressEquilibriumMixed",
     "StressEquilibriumRI",
     "HourglassStiffness",
     "HeatEquation",
-    "SteadyHeatEquation",
-    "TemperatureTimeDerivative",
+    "HeatCapacity",
     "ImplicitDynamic",
     "ImplicitDynamic2",
     "ParametricBeam",
@@ -102,4 +112,10 @@ __all__ = [
     "DistributedLoad",
     "ExternalPressure",
     "ArtificialDamping",
+    "PoroMechanics",
+    "PoroMechanicsSimple",
+    "PoroMomentum",
+    "PoroMomentumSimple",
+    "PoroDarcy",
+    "PoroMassStorage",
 ]

@@ -46,7 +46,7 @@ fd.weakform.StressEquilibrium("FEM", name="WeakForm")
 
 # Create a global assembly
 macro_assembly = fd.Assembly.create(
-    "WeakForm", "macro", name="Assembly", MeshChange=True
+    "WeakForm", "macro", name="Assembly", mesh_change=True
 )
 
 # Define a new static problem

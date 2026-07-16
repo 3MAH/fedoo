@@ -13,6 +13,7 @@ Welcome to FEDOO's documentation!
    ConstitutiveLaw
    WeakForm
    Assembly   
+   Time
    Problem
    boundary_conditions
    post_processing

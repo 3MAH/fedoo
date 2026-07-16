@@ -5,6 +5,7 @@ from . import (
     homogen,
     mesh,
     problem,
+    time,
     weakform,
     post_processing,
 )
@@ -17,12 +18,20 @@ from .core import (
     DataSet,
     ListBC,
     Mesh,
+    MultiMesh,
     ModelingSpace,
     MultiFrameDataSet,
+    MultiMeshData,
     Problem,
     WeakForm,
     WeakFormSum,
     read_data,
+)
+from .util.recovery import (
+    recover_gradient,
+    recover_hessian,
+    to_upper_diagonal,
+    to_voigt,
 )
 
 try:

@@ -46,9 +46,20 @@ class StressEquilibriumBbar(StressEquilibrium):
         the active ModelingSpace is considered.
     """
 
+    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
+        super().__init__(constitutivelaw, name, nlgeom, space)
+        self.assembly_options["elm_type", "quad4"] = "quad4sri"
+        self.assembly_options["elm_type", "hex8"] = "hex8sri"
+
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
         if assembly._nlgeom == "TL":  # add initial displacement effect
+            if self.space.is_axisymmetric:
+                raise NotImplementedError(
+                    "'2Daxi' ModelingSpace is not implemented with the total "
+                    "lagrangian formulation for the b-bar / sub-integration "
+                    "weak form. Use updated lagrangian instead."
+                )
             eps = self.space.op_strain(assembly.sv["DispGradient"])
             initial_stress = assembly.sv["PK2"]
         else:
@@ -75,7 +86,7 @@ class StressEquilibriumBbar(StressEquilibrium):
                 "Stress"
             ]  # Stress = Cauchy for updated lagrangian method
 
-            if self.space._dimension == "2Daxi":
+            if self.space.is_axisymmetric:
                 rr = assembly.sv["_R_gausspoints"]
 
                 # nlgeom = False
@@ -97,11 +108,15 @@ class StressEquilibriumBbar(StressEquilibrium):
 
         if not np.array_equal(initial_stress, 0):
             # this term doesnt seem to improve convergence !
-            # if assembly._nlgeom:
-            #     DiffOp = DiffOp + \
-            #         sum([0 if self._nl_strain_op_vir[i] == 0 else
-            #              self._nl_strain_op_vir[i] * initial_stress[i]
-            #              for i in range(6)])
+            if self.geometric_stiffness:
+                DiffOp = DiffOp + sum(
+                    [
+                        0
+                        if self._nl_strain_op_vir[i] == 0
+                        else self._nl_strain_op_vir[i] * initial_stress[i]
+                        for i in range(6)
+                    ]
+                )
 
             DiffOp = DiffOp + sum(
                 [
@@ -110,7 +125,7 @@ class StressEquilibriumBbar(StressEquilibrium):
                 ]
             )
 
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             DiffOp = DiffOp * ((2 * np.pi) * rr)
 
         return DiffOp
@@ -129,9 +144,6 @@ class StressEquilibriumBbar(StressEquilibrium):
             self.space.variable_alias("_DispY", "DispY")
             if self.space.ndim == 3:
                 self.space.variable_alias("_DispZ", "DispZ")
-                self.space.new_vector("_Disp", ("_DispX", "_DispY", "_DispZ"))
-            else:
-                self.space.new_vector("_Disp", ("_DispX", "_DispY"))
 
 
 class StressEquilibriumFbar(StressEquilibrium):
@@ -174,6 +186,14 @@ class StressEquilibriumFbar(StressEquilibrium):
 
     def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
         super().__init__(constitutivelaw, name, nlgeom, space)
+        if self.space.is_axisymmetric:
+            raise NotImplementedError(
+                "StressEquilibriumFbar is not implemented in '2Daxi': the "
+                "F-bar volumetric correction requires the hoop component "
+                "of the strain at the element centroid, which is not yet "
+                "wired through _op_strain_center. Use StressEquilibrium "
+                "(standard) or StressEquilibriumMixed in 2Daxi instead."
+            )
         self.fbar = True
         self.assembly_options["elm_type", "quad4"] = "quad4sri"
         self.assembly_options["elm_type", "hex8"] = "hex8sri"
@@ -181,6 +201,12 @@ class StressEquilibriumFbar(StressEquilibrium):
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
         if assembly._nlgeom == "TL":  # add initial displacement effect
+            if self.space.is_axisymmetric:
+                raise NotImplementedError(
+                    "'2Daxi' ModelingSpace is not implemented with the total "
+                    "lagrangian formulation for the f-bar weak form. "
+                    "Use updated lagrangian instead."
+                )
             eps = self.space.op_strain(assembly.sv["DispGradient"])
             initial_stress = assembly.sv["PK2"]
         else:
@@ -189,7 +215,7 @@ class StressEquilibriumFbar(StressEquilibrium):
                 "Stress"
             ]  # Stress = Cauchy for updated lagrangian method
 
-            if self.space._dimension == "2Daxi":
+            if self.space.is_axisymmetric:
                 rr = assembly.sv["_R_gausspoints"]
 
                 # nlgeom = False
@@ -259,7 +285,7 @@ class StressEquilibriumFbar(StressEquilibrium):
                 ]
             )
 
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             DiffOp = DiffOp * ((2 * np.pi) * rr)
 
         return DiffOp
@@ -364,6 +390,13 @@ class HourglassStiffness(WeakFormBase):
 
     def __init__(self, stiffness_coef=0.01, name="", nlgeom=False, space=None):
         WeakFormBase.__init__(self, name, space)
+        if self.space.is_axisymmetric:
+            raise NotImplementedError(
+                "HourglassStiffness is not implemented in '2Daxi': the "
+                "2*pi*r integration weight on the stabilization term has "
+                "not been validated. Use full integration (no hourglass "
+                "stabilization needed) in 2Daxi."
+            )
         self.assembly_options["n_elm_gp"] = 1
         self.assembly_options["elm_type", "quad4"] = "quad4hourglass"
         self.assembly_options["elm_type", "hex8"] = "hex8hourglass"
@@ -438,8 +471,12 @@ class HourglassStiffness(WeakFormBase):
                     assembly.stress_equilibrium_assembly
                 )
             else:
-                raise (TypeError)
-                # pwave_modulus = 1
+                raise TypeError(
+                    "HourglassStiffness could not find the StressEquilibrium "
+                    "assembly required to compute the p-wave modulus. Set the "
+                    "stress_equilibrium_assembly attribute of the "
+                    "HourglassStiffness weakform explicitly."
+                )
 
             hourglass_stiffness = 1 / ndim * self.stiffness_coef * pwave_modulus * coef
             # Formulation from Flanagan, D.P. and Belytschko, T. (1981)
@@ -458,7 +495,7 @@ class HourglassStiffness(WeakFormBase):
 
         DiffOp = DiffOp * hourglass_stiffness
 
-        # if self.space._dimension == "2Daxi":
+        # if self.space.is_axisymmetric:
         #     # not sur it works
         #     DiffOp = DiffOp * ((2 * np.pi) * rr)
 
@@ -469,10 +506,10 @@ class HourglassStiffness(WeakFormBase):
         super().initialize(assembly, pb)
         self._initialize_nlgeom(assembly, pb)
         if self.compute_stiffness_only_once is None:
-            if assembly._nlgeom:
-                self.compute_stiffness_only_once = False
-            else:
-                self.compute_stiffness_only_once = True
+            is_nonlinear_problem = pb.__class__.__name__.lower().startswith("nonlinear")
+            self.compute_stiffness_only_once = not (
+                assembly._nlgeom or is_nonlinear_problem
+            )
 
         assembly.stress_equilibrium_assembly = (
             self.stress_equilibrium_assembly
@@ -480,12 +517,16 @@ class HourglassStiffness(WeakFormBase):
         if self.stress_equilibrium_assembly is None:
             # extract the assembly associated to StressEquilibrium.
             # required to compute the tangent bulk modulus
+            # The StressEquilibrium weakform may be wrapped inside a
+            # WeakFormSum (e.g. compiled by a problem-level time integrator),
+            # so the members of a sum are probed as well.
             list_assembly = assembly.associated_assembly_sum.list_assembly
             for a in list_assembly:
-                if isinstance(a.weakform, StressEquilibrium) and a.elm_type in [
-                    "quad4",
-                    "hex8",
-                ]:
+                if a.elm_type not in ["quad4", "hex8"]:
+                    continue
+                wf = a.weakform
+                list_wf = getattr(wf, "list_weakform", [wf])
+                if any(isinstance(w, StressEquilibrium) for w in list_wf):
                     assembly.stress_equilibrium_assembly = a
                     break
 
@@ -498,6 +539,13 @@ class HourglassStiffness(WeakFormBase):
         if assembly._nlgeom == "UL":
             # if updated lagragian method
             # -> update the mesh and recompute elementary op
+            assembly.set_disp(pb.get_disp())
+
+    def to_start(self, assembly, pb):
+        """Reset the current time increment."""
+        if assembly._nlgeom == "UL":
+            # if updated lagrangian method -> reset the mesh to the begining
+            # of the increment
             assembly.set_disp(pb.get_disp())
 
     def get_p_wave_modulus(self, assembly):

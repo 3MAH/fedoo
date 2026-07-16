@@ -59,6 +59,12 @@ class StressEquilibriumMixed(StressEquilibrium):
         # 1. Kinematics (Strain / Deformation Gradient)
         # -----------------------------------------------------------
         if assembly._nlgeom == "TL":  # add initial displacement effect
+            if self.space.is_axisymmetric:
+                raise NotImplementedError(
+                    "'2Daxi' ModelingSpace is not implemented with the total "
+                    "lagrangian formulation for the mixed (u, p) weak form. "
+                    "Use updated lagrangian instead."
+                )
             eps = self.space.op_strain(assembly.sv["DispGradient"])
             initial_stress = assembly.sv["PK2"]
         else:
@@ -66,7 +72,7 @@ class StressEquilibriumMixed(StressEquilibrium):
             # Stress = Cauchy for updated lagrangian method
             initial_stress = assembly.sv["Stress"]
 
-            if self.space._dimension == "2Daxi":
+            if self.space.is_axisymmetric:
                 rr = assembly.sv["_R_gausspoints"]
                 eps[2] = self.space.variable("DispX") * np.divide(
                     1, rr, out=np.zeros_like(rr), where=rr != 0
@@ -206,8 +212,9 @@ class StressEquilibriumMixed(StressEquilibrium):
         else:
             # Small strain: constraint on p = p_mat
             if self.bulk_modulus is None:
-                trH = H[0][0] + H[1][1] + H[2][2]
-                K_scale = trH / 9.0
+                # Bulk modulus read from the tangent: K = (1/9) sum_{i,j<3} H[i][j]
+                # (this equals vol_vol of the P:H:P split).
+                K_scale = sum(H[i][j] for i in range(3) for j in range(3)) / 9.0
                 K_scale = np.where(K_scale == 0, 1.0, K_scale)
             else:
                 K_scale = self.bulk_modulus
@@ -222,7 +229,7 @@ class StressEquilibriumMixed(StressEquilibrium):
             DiffOp += P_inc.virtual * (pressure_residual + pressure_stiffness_term)
 
         # Axisymmetric volume integration factor
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             DiffOp = DiffOp * ((2 * np.pi) * rr)
 
         return DiffOp

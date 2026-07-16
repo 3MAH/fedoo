@@ -179,8 +179,8 @@ def extract_surface(
             element_face = get_element("lin2")(1)
             elm_nodes_crd = mesh.nodes[surf_elements[:, :2]]
 
-            local_frame = element_face.GetLocalFrame(
-                elm_nodes_crd, element_face.get_gp_elm_coordinates(1)
+            local_frame = element_face.get_local_frame(
+                elm_nodes_crd, element_face.get_gp_elm_coordinates(1)[0]
             )
 
             tangent_axis = local_frame[:, 0, 0]
@@ -232,7 +232,7 @@ def extract_surface(
                 ),
             )
 
-            # local_frame = element_face.GetLocalFrame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
+            # local_frame = element_face.get_local_frame(elm_nodes_crd, element_face.get_gp_elm_coordinates(1))
             # normal_axis = local_frame[:,0,-1]
             normal_axis = np.cross(tangent[:, 0, :], tangent[:, 1, :])
             normal_axis = normal_axis / np.linalg.norm(normal_axis, axis=1).reshape(

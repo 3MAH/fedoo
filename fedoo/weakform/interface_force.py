@@ -1,5 +1,6 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.weakform._axi_utils import axi_volume_weight
 import numpy as np
 
 
@@ -121,5 +122,10 @@ class InterfaceForce(WeakFormBase):
                     for i in range(dim)
                 ]
             )
+
+        # An interface in the (r, z) plane is a cylindrical surface with
+        # area dA = 2*pi*r * ds.
+        if self.space.is_axisymmetric:
+            diff_op = diff_op * axi_volume_weight(assembly)
 
         return diff_op

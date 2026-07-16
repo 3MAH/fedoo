@@ -37,6 +37,7 @@ left = mesh.find_nodes("X", Xmin[2])
 right = mesh.find_nodes("X", Xmax[2])
 
 pb = fd.problem.NonLinear("Assembling")
+pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
 
 # Problem.set_solver('cg', precond = True)
 

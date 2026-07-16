@@ -166,8 +166,36 @@ def rectangle_mesh(
             "right": [nd for nd in range(nx - 1, N, nx)],
         }
     else:
-        node_sets = {}
-        print("Warning: no boundary set of nodes defined for quad8 elements")
+        # Index offsets for stacked coordinates
+        crd1_size = nx * ny
+        crd2_size = (nx - 1) * ny
+
+        # 1. Base corner node sets (from crd)
+        bottom_nodes = [nd for nd in range(nx)]
+        top_nodes = [nd for nd in range(crd1_size - nx, crd1_size)]
+        left_nodes = [nd for nd in range(0, crd1_size, nx)]
+        right_nodes = [nd for nd in range(nx - 1, crd1_size, nx)]
+
+        # 2. Add mid-side nodes along horizontal boundaries (from crd2)
+        # Bottom of crd2 is the first row of its mesh grid layout
+        bottom_nodes += [crd1_size + nd for nd in range(nx - 1)]
+        # Top of crd2 is the last row of its mesh grid layout
+        top_nodes += [crd1_size + nd for nd in range(crd2_size - (nx - 1), crd2_size)]
+
+        # 3. Add mid-side nodes along vertical boundaries (from crd3)
+        # Left of crd3 is the first column element of each row
+        left_nodes += [crd1_size + crd2_size + nd for nd in range(0, nx * (ny - 1), nx)]
+        # Right of crd3 is the last column element of each row
+        right_nodes += [
+            crd1_size + crd2_size + nd for nd in range(nx - 1, nx * (ny - 1), nx)
+        ]
+
+        node_sets = {
+            "bottom": bottom_nodes,
+            "top": top_nodes,
+            "left": left_nodes,
+            "right": right_nodes,
+        }
 
     return Mesh(crd, elm, elm_type, node_sets, {}, ndim, name)
 
@@ -228,7 +256,6 @@ def grid_mesh_cylindric(
     theta = m.nodes[:, 1]
     crd = np.c_[r * np.cos(theta), r * np.sin(theta)]
     returned_mesh = Mesh(crd, m.elements, elm_type, ndim=ndim, name=name)
-    returned_mesh.local_frame = m.local_frame
 
     if theta_min < theta_max:
         returned_mesh.add_node_set(m.node_sets["left"], "bottom")

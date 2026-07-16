@@ -1,5 +1,7 @@
 from fedoo.constitutivelaw.beam import BeamProperties
-from fedoo.core.weakform import WeakFormBase
+from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.weakform.inertia import Inertia, RotaryInertia
 from scipy.spatial.transform import Rotation
 import numpy as np
 
@@ -72,16 +74,29 @@ class BeamEquilibrium(WeakFormBase):
             self.properties = BeamProperties(
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
+        self.time_evolution = SECOND_ORDER
         self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
         self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
-        """Method used to treat the geometric non linearities.
+        """Property used to treat the geometric non linearities.
             * Set to False if geometric non linarities are ignored (default).
             * Set to True or 'UL' to use the updated lagrangian method
               (update the mesh)
             * Set to 'TL' to use the total lagrangian method (base on the
               initial mesh with initial displacement effet)
         """
+
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        translational_inertia = Inertia(
+            self.properties.linear_density, space=self.space
+        )
+        rotary_density = self.properties.rotary_density
+        if self.space.ndim == 2:
+            rotary_density = rotary_density[2]
+        rotary_inertia = RotaryInertia(rotary_density, space=self.space)
+        return WeakFormSum([translational_inertia, rotary_inertia])
 
     def initialize(self, assembly, pb):
         assembly.sv["BeamStrain"] = 0
@@ -321,7 +336,7 @@ class BeamEquilibrium(WeakFormBase):
                                 .T.ravel()
                             )
 
-                            # Or equivalent bug sigularité if angle > pi
+                            # Or equivalent but sigularité if angle > pi
                             # pb._dU[
                             #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             #     * assembly.mesh.n_nodes

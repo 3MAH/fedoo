@@ -27,6 +27,13 @@ class ElasticOrthotropic(ElasticAnisotropic):
         Shear modulus
     nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
         Poisson's ratio
+
+    Notes
+    -----
+    Material directions X / Y / Z map to fedoo's slot ordering. In ``2Daxi``,
+    slot 2 carries the hoop response, so **EZ, GYZ, GXZ, nuYZ, nuXZ refer
+    to the hoop direction**, not Cartesian z. See
+    :class:`fedoo.core.mechanical3d.Mechanical3D` for details.
     """
 
     def __init__(self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name=""):

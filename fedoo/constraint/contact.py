@@ -273,7 +273,7 @@ class Contact(AssemblyBase):
         elm_nodes_crd = surf.nodes[surf.elements]
 
         if surf.elm_type == "lin2":
-            local_frame = elm_ref.GetLocalFrame(
+            local_frame = elm_ref.get_local_frame(
                 elm_nodes_crd, elm_ref.get_gp_elm_coordinates(1)
             )
 
@@ -297,7 +297,7 @@ class Contact(AssemblyBase):
         contact_elements = []
         contact_g = []
 
-        is_axi = self.space._dimension == "2Daxi"
+        is_axi = self.space.is_axisymmetric
         if is_axi:
             contact_r = []  # radial coordinate for 2πr weighting
 

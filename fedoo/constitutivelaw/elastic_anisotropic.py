@@ -21,6 +21,14 @@ class ElasticAnisotropic(Mechanical3D):
         If H is a list of gauss point values, the shape shoud be H.shape = (6,6,NumberOfGaussPoints)
     name : str, optional
         The name of the constitutive law
+
+    Notes
+    -----
+    H is interpreted in the slot ordering documented on
+    :class:`fedoo.core.mechanical3d.Mechanical3D`. In ``2Daxi``, slot 2 is
+    the **hoop** direction (not Cartesian z): rows/columns labelled "3" of
+    H apply to the hoop response. Define the rigidity matrix accordingly,
+    or use a local frame.
     """
 
     def __init__(self, H, name=""):

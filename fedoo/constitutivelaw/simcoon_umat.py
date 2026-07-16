@@ -21,6 +21,27 @@ class Simcoon(Mechanical3D):
         The constitive laws properties
     name : str
         The name of the constitutive law
+
+    Notes
+    -----
+    UMAT compatibility with the ``2Daxi`` ModelingSpace:
+
+    * **Isotropic UMATs** (e.g. ``ELI``, ``NEOH``, ``MOON``, ``EPICP`` J2
+      plasticity): supported. Hooke's response and J2 invariants are
+      invariant under the slot remapping fedoo applies in 2Daxi
+      (cf. :class:`fedoo.core.mechanical3d.Mechanical3D`).
+
+    * **Orthotropic / anisotropic UMATs** (e.g. ``ELIO``, composite
+      Mori-Tanaka, anisotropic damage / plasticity): user-supplied
+      material direction "3" is silently the **hoop** direction in
+      2Daxi (because slot 2 of the 6-vector carries ε_θθ). Define the
+      stiffness / hardening parameters with this convention or the
+      response will not match the intended material orientation.
+
+    * Hyperelastic laws are gated on plane stress (see
+      ``_Lt_from_F`` branch); they remain compatible with 2Daxi at
+      finite strain provided the F[θθ] = r/R fix is in effect (see
+      :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
     """
 
     def __init__(self, umat_name, props, name=""):
@@ -41,6 +62,8 @@ class Simcoon(Mechanical3D):
 
         self.use_elastic_lt = True
         # option to use the elastic tangeant matrix
+        self.tangent_mode = 0
+        # 0 = continuum tangent (default); 1 = Simo-Hughes algorithmic (consistent) tangent
         # (in principle = initial tangent matrix)
         # at the begining of each time step
 
@@ -261,7 +284,7 @@ class Simcoon(Mechanical3D):
                 "T": 0,
                 "EP": slice(1, 7),
             }  # Pi:i*7+7, EPi:slice(i*7+8,i*7+14)
-        elif umat_name == "SMAUT":
+        elif umat_name == "SMADI" or umat_name == "SMAUT":
             self.n_statev = 17
             self.props_label = {
                 "flagT": 0,
@@ -306,6 +329,408 @@ class Simcoon(Mechanical3D):
                 "a2": 14,
                 "a3": 15,
                 "Y0t": 16,
+            }
+        elif umat_name == "SMADC":
+            self.n_statev = 17
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "G_A": 5,
+                "G_M": 6,
+                "alphaA": 7,
+                "alphaM": 8,
+                "Hmin": 9,
+                "Hmax": 10,
+                "k1": 11,
+                "sigmacrit": 12,
+                "C_A": 13,
+                "C_M": 14,
+                "Ms0": 15,
+                "Mf0": 16,
+                "As0": 17,
+                "Af0": 18,
+                "n1": 19,
+                "n2": 20,
+                "n3": 21,
+                "n4": 22,
+                "sigmacaliber": 23,
+                "b_prager": 24,
+                "n_prager": 25,
+                "c_lambda": 26,
+                "p0_lambda": 27,
+                "n_lambda": 28,
+                "alpha_lambda": 29,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+            }
+        elif umat_name == "SMAAI" or umat_name == "SMANI":
+            self.n_statev = 17
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "alphaA": 5,
+                "alphaM": 6,
+                "Hmin": 7,
+                "Hmax": 8,
+                "k1": 9,
+                "sigmacrit": 10,
+                "C_A": 11,
+                "C_M": 12,
+                "Ms0": 13,
+                "Mf0": 14,
+                "As0": 15,
+                "Af0": 16,
+                "n1": 17,
+                "n2": 18,
+                "n3": 19,
+                "n4": 20,
+                "sigmacaliber": 21,
+                "b_prager": 22,
+                "n_prager": 23,
+                "c_lambda": 24,
+                "p0_lambda": 25,
+                "n_lambda": 26,
+                "alpha_lambda": 27,
+                "F_dfa": 28,
+                "G_dfa": 29,
+                "H_dfa": 30,
+                "L_dfa": 31,
+                "M_dfa": 32,
+                "N_dfa": 33,
+                "K_dfa": 34,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+            }
+        elif umat_name == "SMAAC":
+            self.n_statev = 17
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "G_A": 5,
+                "G_M": 6,
+                "alphaA": 7,
+                "alphaM": 8,
+                "Hmin": 9,
+                "Hmax": 10,
+                "k1": 11,
+                "sigmacrit": 12,
+                "C_A": 13,
+                "C_M": 14,
+                "Ms0": 15,
+                "Mf0": 16,
+                "As0": 17,
+                "Af0": 18,
+                "n1": 19,
+                "n2": 20,
+                "n3": 21,
+                "n4": 22,
+                "sigmacaliber": 23,
+                "b_prager": 24,
+                "n_prager": 25,
+                "c_lambda": 26,
+                "p0_lambda": 27,
+                "n_lambda": 28,
+                "alpha_lambda": 29,
+                "F_dfa": 30,
+                "G_dfa": 31,
+                "H_dfa": 32,
+                "L_dfa": 33,
+                "M_dfa": 34,
+                "N_dfa": 35,
+                "K_dfa": 36,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+            }
+        elif umat_name == "SMRDI":
+            # unified_TR (transformation + reorientation), isotropic elasticity
+            self.n_statev = 30
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "alphaA": 5,
+                "alphaM": 6,
+                "Hmin": 7,
+                "Hmax": 8,
+                "k1": 9,
+                "sigmacrit": 10,
+                "C_A": 11,
+                "C_M": 12,
+                "Ms0": 13,
+                "Mf0": 14,
+                "As0": 15,
+                "Af0": 16,
+                "n1": 17,
+                "n2": 18,
+                "n3": 19,
+                "n4": 20,
+                "sigmacaliber": 21,
+                "b_prager": 22,
+                "n_prager": 23,
+                "c_lambda": 24,
+                "p0_lambda": 25,
+                "n_lambda": 26,
+                "alpha_lambda": 27,
+                "YReo": 28,
+                "HReo": 29,
+                "ETRmax": 30,
+                "c_lambdaReo": 31,
+                "p0_lambdaReo": 32,
+                "n_lambdaReo": 33,
+                "alpha_lambdaReo": 34,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+                "pTR": 17,
+                "areo": slice(18, 24),
+                "EReo": slice(24, 30),
+            }
+        elif umat_name == "SMRDC":
+            # unified_TR (transformation + reorientation), cubic elasticity
+            self.n_statev = 30
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "G_A": 5,
+                "G_M": 6,
+                "alphaA": 7,
+                "alphaM": 8,
+                "Hmin": 9,
+                "Hmax": 10,
+                "k1": 11,
+                "sigmacrit": 12,
+                "C_A": 13,
+                "C_M": 14,
+                "Ms0": 15,
+                "Mf0": 16,
+                "As0": 17,
+                "Af0": 18,
+                "n1": 19,
+                "n2": 20,
+                "n3": 21,
+                "n4": 22,
+                "sigmacaliber": 23,
+                "b_prager": 24,
+                "n_prager": 25,
+                "c_lambda": 26,
+                "p0_lambda": 27,
+                "n_lambda": 28,
+                "alpha_lambda": 29,
+                "YReo": 30,
+                "HReo": 31,
+                "ETRmax": 32,
+                "c_lambdaReo": 33,
+                "p0_lambdaReo": 34,
+                "n_lambdaReo": 35,
+                "alpha_lambdaReo": 36,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+                "pTR": 17,
+                "areo": slice(18, 24),
+                "EReo": slice(24, 30),
+            }
+        elif umat_name == "SMRAI":
+            # unified_TR (transformation + reorientation), isotropic elasticity + DFA anisotropic criterion
+            self.n_statev = 30
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "alphaA": 5,
+                "alphaM": 6,
+                "Hmin": 7,
+                "Hmax": 8,
+                "k1": 9,
+                "sigmacrit": 10,
+                "C_A": 11,
+                "C_M": 12,
+                "Ms0": 13,
+                "Mf0": 14,
+                "As0": 15,
+                "Af0": 16,
+                "n1": 17,
+                "n2": 18,
+                "n3": 19,
+                "n4": 20,
+                "sigmacaliber": 21,
+                "b_prager": 22,
+                "n_prager": 23,
+                "c_lambda": 24,
+                "p0_lambda": 25,
+                "n_lambda": 26,
+                "alpha_lambda": 27,
+                "F_dfa": 28,
+                "G_dfa": 29,
+                "H_dfa": 30,
+                "L_dfa": 31,
+                "M_dfa": 32,
+                "N_dfa": 33,
+                "K_dfa": 34,
+                "YReo": 35,
+                "HReo": 36,
+                "ETRmax": 37,
+                "c_lambdaReo": 38,
+                "p0_lambdaReo": 39,
+                "n_lambdaReo": 40,
+                "alpha_lambdaReo": 41,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+                "pTR": 17,
+                "areo": slice(18, 24),
+                "EReo": slice(24, 30),
+            }
+        elif umat_name == "SMRAC":
+            # unified_TR (transformation + reorientation), cubic elasticity + DFA anisotropic criterion
+            self.n_statev = 30
+            self.props_label = {
+                "flagT": 0,
+                "E_A": 1,
+                "E_M": 2,
+                "nu_A": 3,
+                "nu_M": 4,
+                "G_A": 5,
+                "G_M": 6,
+                "alphaA": 7,
+                "alphaM": 8,
+                "Hmin": 9,
+                "Hmax": 10,
+                "k1": 11,
+                "sigmacrit": 12,
+                "C_A": 13,
+                "C_M": 14,
+                "Ms0": 15,
+                "Mf0": 16,
+                "As0": 17,
+                "Af0": 18,
+                "n1": 19,
+                "n2": 20,
+                "n3": 21,
+                "n4": 22,
+                "sigmacaliber": 23,
+                "b_prager": 24,
+                "n_prager": 25,
+                "c_lambda": 26,
+                "p0_lambda": 27,
+                "n_lambda": 28,
+                "alpha_lambda": 29,
+                "F_dfa": 30,
+                "G_dfa": 31,
+                "H_dfa": 32,
+                "L_dfa": 33,
+                "M_dfa": 34,
+                "N_dfa": 35,
+                "K_dfa": 36,
+                "YReo": 37,
+                "HReo": 38,
+                "ETRmax": 39,
+                "c_lambdaReo": 40,
+                "p0_lambdaReo": 41,
+                "n_lambdaReo": 42,
+                "alpha_lambdaReo": 43,
+            }
+            self.statev_label = {
+                "T_init": 0,
+                "xi": 1,
+                "ET": slice(2, 8),
+                "xi_F": 8,
+                "xi_R": 9,
+                "rhoDs0": 10,
+                "rhoDE0": 11,
+                "D": 12,
+                "a1": 13,
+                "a2": 14,
+                "a3": 15,
+                "Y0t": 16,
+                "pTR": 17,
+                "areo": slice(18, 24),
+                "EReo": slice(24, 30),
             }
         elif umat_name == "LLDM0":
             self.n_statev = 10
@@ -498,6 +923,7 @@ class Simcoon(Mechanical3D):
                 assembly.sv["Wm"],
                 temp,
                 ndi=ndi,
+                tangent_mode=self.tangent_mode,
             )
 
             if ndi == 2:  # plane stress assumption
@@ -549,6 +975,7 @@ class Simcoon(Mechanical3D):
             assembly.sv_start["Wm"],
             temp,
             ndi=ndi,
+            tangent_mode=self.tangent_mode,
         )
         if ndi == 2:  # plane stress assumption
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
@@ -571,17 +998,20 @@ class Simcoon(Mechanical3D):
     def get_temp_gp(self, assembly, pb):
         """Get the current temperature field at Gauss Point.
 
-        If a temperature field 'Temp' is defined in the ModelingSpace, extract the
-        node values from the problem and them to Gauss Points.
-        If not, check if the 'Temp' field is defined in the assembly.sv dict (among
-        state variables). If no temperature is found or if it is set to 0, return None.
+        An explicitly set 'Temp' field in the assembly.sv dict takes precedence:
+        it is used as is (it is already defined at Gauss Points). This is the
+        historical way to impose a temperature (e.g. a constant field, or a weak
+        thermo-mechanical coupling that copies the thermal solution into sv).
+        Otherwise, if 'Temp' is a variable of the ModelingSpace, the nodal dof
+        solution is extracted from the problem and converted to Gauss Points.
+        If no temperature is found or if it is set to 0, return None.
         """
-        if "Temp" in assembly.space.list_variables():
+        if "Temp" in assembly.sv:
+            temp = assembly.sv["Temp"]
+        elif "Temp" in assembly.space.list_variables():
             temp = assembly.convert_data(
                 pb.get_dof_solution("Temp"), "Node", "GaussPoint"
             )
-        elif "Temp" in assembly.sv:
-            temp = assembly.sv["Temp"]
         else:
             return None
         if np.isscalar(temp) and temp == 0:

@@ -2,6 +2,7 @@
 
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import SECOND_ORDER, normalize_time_evolution
 
 
 # =======================================================================
@@ -83,6 +84,9 @@ class WeakFormBase:
         self.assembly_options = _AssemblyOptions()
 
         self.constitutivelaw = None  # no constitutivelaw by default
+        self.storage = None
+        self.dissipation = None
+        self.time_evolution = None
 
         if name != "":
             WeakFormBase.__dic[self.__name] = self
@@ -125,6 +129,91 @@ class WeakFormBase:
 
     def get_weak_equation(self, assembly):
         return NotImplemented
+
+    def set_storage(self, storage, evolution=None):
+        """Attach a time-storage weakform to this static weakform.
+
+        Examples are mechanical inertia, heat capacity, or any matrix-like
+        term that stores the state advanced by a problem-level time integrator.
+        """
+        self.storage = storage
+        if evolution is not None:
+            self.time_evolution = normalize_time_evolution(evolution)
+        return self
+
+    def get_storage(self):
+        """Return the optional storage weakform for a time integrator.
+
+        Subclasses may derive storage from their constitutive data (for
+        example inertia from material density). Return ``None`` when the
+        weakform has no transient storage contribution.
+        """
+        return self.storage
+
+    def set_dissipation(self, dissipation=None, evolution=None, **kargs):
+        """Attach a dissipative contribution.
+
+        For mechanical weakforms, ``set_dissipation(alpha=..., beta=...)`` is
+        the shorthand Rayleigh form ``C = alpha*M + beta*K``. A weakform or
+        assembly can also be stored here for custom dissipation providers.
+
+        ``evolution`` tags the weakform with a time-evolution category so a
+        matching problem-level integrator picks it up; pass it when the
+        weakform does not already declare ``time_evolution``.
+        """
+        if kargs:
+            if dissipation is not None:
+                raise ValueError(
+                    "Pass either a dissipation object or keyword parameters, not both."
+                )
+            from fedoo.time import RayleighDamping
+
+            allowed = {"alpha", "beta"}
+            unknown = set(kargs) - allowed
+            if unknown:
+                raise TypeError(
+                    "Unknown dissipation keyword(s): " + ", ".join(sorted(unknown))
+                )
+            dissipation = RayleighDamping(
+                alpha=kargs.get("alpha", 0.0),
+                beta=kargs.get("beta", 0.0),
+            )
+        self.dissipation = dissipation
+        if evolution is not None:
+            self.time_evolution = normalize_time_evolution(evolution)
+        return self
+
+    def get_dissipation(self):
+        """Return the optional dissipative provider for a time integrator."""
+        return self.dissipation
+
+    def set_inertia(self, density_or_storage):
+        """Mechanical alias for ``set_storage``.
+
+        Tags the weakform as a second-order evolution unless it already
+        declares one (an existing first-order tag is preserved).
+        """
+        from fedoo.weakform.inertia import Inertia
+
+        if isinstance(density_or_storage, WeakFormBase):
+            storage = density_or_storage
+        else:
+            storage = Inertia(density_or_storage, space=self.space)
+        self.set_storage(storage)
+        if self.time_evolution is None:
+            self.time_evolution = SECOND_ORDER
+        return self
+
+    def set_damping(self, damping=None, **kargs):
+        """Mechanical alias for ``set_dissipation``.
+
+        Tags the weakform as a second-order evolution unless it already
+        declares one (an existing first-order tag is preserved).
+        """
+        self.set_dissipation(damping, **kargs)
+        if self.time_evolution is None:
+            self.time_evolution = SECOND_ORDER
+        return self
 
     def initialize(self, assembly, pb):
         # function called at the very begining of the resolution

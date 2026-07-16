@@ -97,3 +97,7 @@ def test_periodic_bc_works_on_clean_box_at_default_tol():
     bc = fd.constraint.PeriodicBC("small_strain")  # default tol=1e-8
     pb.bc.add(bc)
     pb.apply_boundary_conditions()  # initializes the BC list
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

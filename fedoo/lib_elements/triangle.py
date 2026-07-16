@@ -114,6 +114,16 @@ class Tri3(ElementTriangle):
         return [np.array([[-1.0, 1.0, 0.0], [-1.0, 0.0, 1.0]]) for x in xi]
 
 
+class Tri3r(Tri3):
+    name = "tri3r"
+    default_n_gp = 1
+    n_nodes = 3
+
+    def shape_function(self, vec_xi):
+        # return center value every where (as if n_pg = 1)
+        return np.full((len(vec_xi), 3), 1 / 3)
+
+
 class Tri3Bubble(Tri3):
     name = "tri3bubble"
     n_nodes = 4
@@ -140,10 +150,10 @@ class Tri3Bubble(Tri3):
 
 class Tri6(ElementTriangle):
     name = "tri6"
-    default_n_gp = 4
+    default_n_gp = 7
     n_nodes = 6
 
-    def __init__(self, n_elm_gp=4, **kargs):
+    def __init__(self, n_elm_gp=7, **kargs):
         self.xi_nd = np.c_[
             [0.0, 1.0, 0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0, 0.5, 0.5]
         ]

@@ -105,12 +105,48 @@ ____________________________________________
    fedoo.MPC
 
 
-Avdanced BC and constraints
+Advanced BC and constraints
 ==============================
 
-Distributed loads are applied to a Problem by building dedicated assembly
-objects. To add them to a problem, one should add the constraint assembly
-to the assembly defining the stiffness matrix.
+Fedoo also provides higher-level boundary-condition objects for common
+distributed loads and constraint patterns. Distributed loads are converted to
+external Neumann forces, while the kinematic constraints below are based on
+MPC equations and can be added directly to ``pb.bc``.
+
+
+Distributed loads
+_________________
+
+Distributed loads are defined by dedicated assembly objects. The recommended
+way to apply them is to add the load assembly to the problem boundary
+conditions. If the assembly provides an ``as_neumann()`` method,
+:py:meth:`fedoo.ListBC.add` automatically converts it to an equivalent
+Neumann boundary condition. This is especially useful for nonlinear problems:
+the load is included in the external force vector, follows the usual load
+coefficient, and is taken into account by the residual normalization.
+
+.. code-block:: python
+
+    solid_assembly = fd.Assembly.create(wf, mesh)
+    pressure = fd.constraint.Pressure(surface_mesh, value, nlgeom=True)
+
+    pb = fd.problem.NonLinear(solid_assembly, nlgeom=True)
+    pb.bc.add(pressure)
+
+The explicit form is also available:
+
+.. code-block:: python
+
+    pb.bc.add(pressure.as_neumann())
+
+The load assembly can still be combined directly with the mechanical assembly.
+This form is kept as an alternative, but is not recommended for nonlinear
+analyses because the load is part of the residual assembly rather than a
+boundary-condition force.
+
+.. code-block:: python
+
+    pb = fd.problem.Linear(solid_assembly + pressure)
 
 .. autosummary::
     :toctree: generated/
@@ -120,16 +156,116 @@ to the assembly defining the stiffness matrix.
     fedoo.constraint.Pressure
     fedoo.constraint.SurfaceForce
 
-Some advanced constraints base on multiple linearized MPC are available in
-fedoo. They can be created and add to the problem with the pb.bc.add method.
+
+Kinematic MPC constraints
+_________________________
+
+Rigid tie
+~~~~~~~~~
+
+The :py:class:`fedoo.constraint.RigidTie` constraint couples a set of nodes to
+a rigid-body motion. It creates global degrees of freedom for rigid
+translation and rotation, then eliminates the selected nodal displacement DOFs
+through MPC equations. Prescribing ``RigidDisp`` or ``RigidRot`` therefore
+drives the whole selected node set as a rigid object.
+
+This constraint is useful to impose a strict rigid connection, for instance to
+drive a face from a reference rigid point. It is more restrictive than
+:py:class:`fedoo.constraint.MeanMotion`, because all selected nodes follow the
+same rigid-body kinematics and local warping of the selected surface is
+suppressed.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.constraint.RigidTie
+   fedoo.constraint.RigidTie2D
+
+
+Mean motion control
+~~~~~~~~~~~~~~~~~~~
+
+The :py:class:`fedoo.constraint.MeanMotion` constraint is a less
+restrictive alternative to :py:class:`fedoo.constraint.RigidTie`. It extracts
+selected components of the best-fit motion of a node set or surface mesh in a
+mean sense, without forcing every selected node to follow a rigid motion. The
+selected surface can therefore deform locally while selected mean translation
+and rotation components are controlled.
+
+The ``components`` argument is required and defines which global DOFs are
+created. Accepted component names include ``"RotX"``, ``"MeanRotX"``,
+``"DispZ"`` and ``"MeanDispZ"``. The vector aliases ``"Rot"``/``"MeanRot"``
+and ``"Disp"``/``"MeanDisp"`` select all rotation or displacement components
+available in the current modeling dimension. In 2D, the rotation vector
+contains only ``MeanRotZ``.
+
+When a surface mesh is passed, nodal weights are computed from the element
+area, or from the element length in 2D. These weights define an area-weighted
+least-squares projection of the displacement field onto rigid-body modes.
+
+For displacement-only mean control, select only displacement components:
+
+.. code-block:: python
+
+    mean_disp = fd.constraint.MeanMotion(surface_mesh, components="DispZ")
+    pb.bc.add(mean_disp)
+    pb.bc.add("Dirichlet", "MeanDispZ", -delta)
+
+When ``finite_rotation`` is left to ``None`` (the default), rotational
+components use finite rotations automatically if geometrical nonlinearity is
+enabled on the problem. Otherwise, the rotation components are small-rotation
+vector components. The finite-rotation mode uses a rotation-vector convention
+and linearizes the constraint at each Newton iteration using the derivative of
+the rotation matrix with respect to the rotation vector.
+
+.. code-block:: python
+
+    face_motion = fd.constraint.MeanMotion(
+        surface_mesh,
+        components="RotZ",
+    )
+    pb.bc.add(face_motion)
+    pb.bc.add("Dirichlet", face_motion.node_by_variable["MeanRotZ"], "MeanRotZ", angle)
+
+.. code-block:: python
+
+    face_motion = fd.constraint.MeanMotion(
+        surface_mesh,
+        components=["RotZ", "DispZ"],
+    )
+    pb.bc.add(face_motion)
+    pb.bc.add("Dirichlet", "MeanRotZ", angle)
+    pb.bc.add("Dirichlet", "MeanDispZ", -delta)
+
+The reactions on the created global DOFs are generalized forces. For instance,
+the reaction associated with ``MeanRotZ`` is the conjugate moment around the
+mean-motion center.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.constraint.MeanMotion
+
+
+Periodic boundary conditions
+____________________________
+
+The :py:class:`fedoo.constraint.PeriodicBC` constraint creates MPC equations
+between opposite boundaries so that their displacement fluctuations are
+periodic. It is mainly used for representative volume elements and
+homogenization problems, where the boundary kinematics must be compatible with
+a prescribed macroscopic strain or displacement gradient.
+
+The constraint can build the required node pairings from opposite node sets
+and then be added to ``pb.bc`` like the other MPC-based constraints.
 
 .. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
 
    fedoo.constraint.PeriodicBC
-   fedoo.constraint.RigidTie
-   fedoo.constraint.RigidTie2D
 
 
 Contact

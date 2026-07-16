@@ -2,6 +2,8 @@
 
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.weakform.inertia import Inertia
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -61,6 +63,11 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector("Disp", ("DispX", "DispY"))
 
         self.constitutivelaw = constitutivelaw
+        # Tag a second-order (dynamic) evolution. The mass term is resolved from
+        # the material density (or an explicit set_inertia) at integrator
+        # compile time, so a set_density() call made after the weakform is built
+        # is still honored, and the inertia stays absent for static analyses.
+        self.time_evolution = SECOND_ORDER
 
         self.nlgeom = nlgeom
         """Method used to treat the geometric non linearities.
@@ -83,6 +90,22 @@ class StressEquilibrium(WeakFormBase):
         # (if TangentMatrix is symmetric)
         # -> need to be checked for general case
 
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        density = getattr(self.constitutivelaw, "density", None)
+        if density is None:
+            material_name = getattr(
+                self.constitutivelaw, "name", type(self.constitutivelaw).__name__
+            )
+            raise ValueError(
+                "StressEquilibrium requires a material density for dynamic "
+                f"analysis, but material {material_name!r} has no density. "
+                "Set it with material.set_density(rho), or attach inertia "
+                "explicitly with weakform.set_inertia(density_or_weakform)."
+            )
+        return Inertia(density, space=self.space)
+
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
         if assembly._nlgeom == "TL":  # add initial displacement effect
@@ -94,7 +117,7 @@ class StressEquilibrium(WeakFormBase):
                 "Stress"
             ]  # Stress = Cauchy for updated lagrangian method
 
-            if self.space._dimension == "2Daxi":
+            if self.space.is_axisymmetric:
                 rr = assembly.sv["_R_gausspoints"]
 
                 # nlgeom = False
@@ -133,7 +156,7 @@ class StressEquilibrium(WeakFormBase):
                 ]
             )
 
-        if self.space._dimension == "2Daxi":
+        if self.space.is_axisymmetric:
             DiffOp = DiffOp * ((2 * np.pi) * rr)
 
         return DiffOp
@@ -159,18 +182,44 @@ class StressEquilibrium(WeakFormBase):
             )
         assembly.sv["DispGradient"] = 0
 
-        if self.space._dimension == "2Daxi":
-            assembly.sv["_R_gausspoints"] = assembly.mesh.convert_data(
-                assembly.mesh.nodes[:, 0],
+        if self.space.is_axisymmetric:
+            # ``assembly.mesh`` is treated as the *reference* configuration:
+            # any subsequent ``set_disp`` only mutates ``assembly.current.mesh``
+            # (see fedoo/core/assembly.py: set_disp). Capture R0 from the
+            # reference mesh here, once. If the mesh has already been deformed
+            # before initialize is reached (unusual, e.g. chained problems
+            # sharing an assembly), the captured R0 will be the deformed
+            # radius, breaking F_theta-theta = r/R at finite strain. Callers
+            # should rebuild the assembly before initializing a 2Daxi problem
+            # in that case.
+            r_nodes = assembly.mesh.nodes[:, 0]
+            if r_nodes.min() < 0:
+                raise ValueError(
+                    "2Daxi requires non-negative radial coordinates "
+                    "(mesh.nodes[:, 0] >= 0). Found "
+                    f"min(r) = {r_nodes.min():.6g}. "
+                    "The convention is r = X (column 0), z = Y (column 1)."
+                )
+            # Reference radial coordinate at gauss points (initial mesh).
+            # Captured once and never overwritten: used to form the canonical
+            # hoop deformation gradient F_theta-theta = r_current / R_reference
+            # in finite-strain UL+axi (Bonet & Wood, Box 8.3).
+            assembly.sv["_R0_gausspoints"] = assembly.mesh.convert_data(
+                r_nodes,
                 "Node",
                 "GaussPoint",
                 n_elm_gp=assembly.n_elm_gp,
             )
+            # Current radial coordinate at gauss points. Equal to the reference
+            # at initialize; refreshed each iteration in _comp_grad_disp to the
+            # deformed mesh (used for the 2*pi*r weak-form weight and the
+            # symbolic operator eps[2] = DispX / r at the current config).
+            assembly.sv["_R_gausspoints"] = assembly.sv["_R0_gausspoints"].copy()
 
         if assembly._nlgeom:
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
-                if self.space._dimension == "2Daxi":
+                if self.space.is_axisymmetric:
                     raise NotImplementedError(
                         "'2Daxi' ModelingSpace is not implemented with \
                          total lagrangian formulation. Use update \
@@ -470,29 +519,23 @@ class StressEquilibrium(WeakFormBase):
 # function to compute the displacement gradient
 def _comp_grad_disp(assembly, displacement):
     grad_values = assembly.get_grad_disp(displacement, "GaussPoint")
-    if assembly.space._dimension == "2Daxi":
-        # mesh = assembly.current.mesh
-        # eps_tt = np.divide(
-        #     pb.get_disp()[0],
-        #     mesh.nodes[:, 0],
-        #     out=np.zeros(mesh.n_nodes),
-        #     where=mesh.nodes[:, 0] != 0,
-        # )  # put zero if X==0 (division by 0)
-        # grad_values[2][2] = mesh.convert_data(
-        #     eps_tt, "Node", "GaussPoint"
-        # )
+    if assembly.space.is_axisymmetric:
         mesh = assembly.current.mesh
-        rr = mesh.convert_data(
+        # Refresh r_current at gauss points: used by the symbolic
+        # operator eps[2] = DispX / r in get_weak_equation and by the
+        # 2*pi*r weak-form integration weight, both at the current config.
+        assembly.sv["_R_gausspoints"] = mesh.convert_data(
             mesh.nodes[:, 0],
             "Node",
             "GaussPoint",
             n_elm_gp=assembly.n_elm_gp,
         )
 
-        assembly.sv["_R_gausspoints"] = rr
-        # grad_values[2][2] = mesh.convert_data(
-        #     pb.get_disp()[0]/mesh.nodes[:, 0], 'Node')
-
+        # F_theta-theta = r_current / R_reference, hence
+        # grad_values[2][2] = u_r / R_reference. See the
+        # "Theory of axisymmetric kinematics" section of
+        # :class:`fedoo.core.mechanical3d.Mechanical3D` for the derivation.
+        R0 = assembly.sv["_R0_gausspoints"]
         rank_dispx = assembly.space.variable_rank("DispX")
         n = mesh.n_nodes
         grad_values[2][2] = np.divide(
@@ -502,10 +545,10 @@ def _comp_grad_disp(assembly, displacement):
                 "GaussPoint",
                 n_elm_gp=assembly.n_elm_gp,
             ),
-            rr,
-            out=np.zeros_like(rr),
-            where=rr != 0,
-        )  # put zero if X==0 (division by 0)
+            R0,
+            out=np.zeros_like(R0),
+            where=R0 != 0,
+        )  # zero at the symmetry axis (R0 == 0)
     assembly.sv["DispGradient"] = grad_values
     return grad_values
 
@@ -640,52 +683,3 @@ def _comp_gn_strain(wf, assembly, pb):
     )
     assembly.sv["DR"] = DR
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
-
-
-# def _comp_linear_strain_pgd(wf, assembly, pb):
-#     # may be compatible with other methods like PGD
-#     # but not compatible with simcoon
-#     assert not (
-#         wf.nlgeom
-#     ), "the current strain measure isn't adapted for finite strain"
-#     grad_values = assembly.sv["DispGradient"]
-
-#     strain = [grad_values[i][i] for i in range(3)]
-#     strain += [
-#         grad_values[0][1] + grad_values[1][0],
-#         grad_values[0][2] + grad_values[2][0],
-#         grad_values[1][2] + grad_values[2][1],
-#     ]
-#     assembly.sv["Strain"] = StrainTensorList(strain)
-
-
-# def _comp_gl_strain(wf, assembly, pb):
-#     # not compatible with simcoon
-#     if not (wf.nlgeom):
-#         return _comp_linear_strain_pgd(wf, assembly, pb)
-#     else:
-#         grad_values = assembly.sv["DispGradient"]
-#         # GL strain tensor
-#         # possibility to be improve from simcoon functions
-#         # to get the logarithmic strain tensor...
-#         strain = [
-#             grad_values[i][i]
-#             + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
-#             for i in range(3)
-#         ]
-#         strain += [
-#             grad_values[0][1]
-#             + grad_values[1][0]
-#             + sum([grad_values[k][0] * grad_values[k][1] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[0][2]
-#             + grad_values[2][0]
-#             + sum([grad_values[k][0] * grad_values[k][2] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[1][2]
-#             + grad_values[2][1]
-#             + sum([grad_values[k][1] * grad_values[k][2] for k in range(3)])
-#         ]
-#         return StrainTensorList(strain)

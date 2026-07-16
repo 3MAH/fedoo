@@ -45,6 +45,7 @@ wf_th = fd.weakform.HeatEquation("ThermalLaw", space=thermal_space)
 assemb = fd.Assembly.create(wf_th, meshname, name="Assembling_T")
 
 pb_th = fd.problem.NonLinear("Assembling_T")
+pb_th.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
 
 # Problem.set_solver('cg', precond = True)
 pb_th.set_nr_criterion("Displacement", tol=5e-2, max_subiter=5, err0=100)
@@ -81,7 +82,7 @@ wf_mech = fd.weakform.StressEquilibrium("MechanicalLaw", nlgeom=NLGEOM)
 
 fd.Assembly.create(
     wf_mech, meshname, name="Assembling_M"
-)  # uses MeshChange=True when the mesh change during the time
+)  # uses mesh_change=True when the mesh change during the time
 
 pb_m = fd.problem.NonLinear("Assembling_M")
 # pb_m.set_solver('cg', precond = True)

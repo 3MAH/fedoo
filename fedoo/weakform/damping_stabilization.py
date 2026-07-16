@@ -2,6 +2,7 @@
 
 import numpy as np
 from fedoo.core.weakform import WeakFormBase
+from fedoo.weakform._axi_utils import axi_volume_weight
 
 
 class ArtificialDamping(WeakFormBase):
@@ -110,6 +111,8 @@ class ArtificialDamping(WeakFormBase):
             # Start with a very small global fraction
             self._c_stab = 1e-3 * self.target_ratio
             self._c_stab_initialized = False
+        else:
+            self._c_stab = self.c_stab
 
     def set_start(self, assembly, pb):
         """Update historical variables and adapt c_stab based on energy ratio."""
@@ -117,7 +120,13 @@ class ArtificialDamping(WeakFormBase):
             dt = pb.dtime
 
             # 1. Skip if it's the very first initialization or a zero-time step
-            if dt == 0:
+            if (
+                dt == 0
+                or not self._c_stab_initialized
+                or (np.isscalar(pb.get_A()) and pb.get_A() == 0)
+            ):
+                self._c_stab_initialized = True
+                assembly.sv["_DeltaDisp"] = 0
                 return
 
             # 2. Get the converged displacement increment from the PREVIOUS step
@@ -136,7 +145,11 @@ class ArtificialDamping(WeakFormBase):
             # F_damp = c_stab * M* * (delta_u / dt)
             # M  = assembly.get_global_matrix()
             # delta_E_damp = self._c_stab/dt * (delta_u @ M @ delta_u)
-            delta_E_damp = delta_u @ assembly.get_global_vector()
+            damping_force = assembly.get_global_vector()
+            if np.isscalar(damping_force):
+                assembly.sv["_DeltaDisp"] = 0
+                return
+            delta_E_damp = delta_u @ damping_force
 
             # 5. Adaptive Adjustment
             # We only adjust if there is significant external work being done
@@ -181,15 +194,15 @@ class ArtificialDamping(WeakFormBase):
             [a * b * (self._c_stab / dt) for (a, b) in zip(op_var_vir, op_var)]
         )
 
+        # 2*pi*r weight applied on the tangent so both the tangent
+        # contribution and the residual derived from it via operator_apply
+        # inherit it consistently.
+        if self.space.is_axisymmetric:
+            tangent_matrix = tangent_matrix * axi_volume_weight(assembly)
+
         # 4. Residual Contribution: c_stab * M* * v_pseudo
         if not np.array_equal(delta_u, 0):
             damping_force = assembly.operator_apply(tangent_matrix, delta_u)
-
-            # Axisymmetric correction
-            # if self.space is not None and getattr(self.space, "_dimension", "") == "2Daxi":
-            #     rr = assembly.sv["_R_gausspoints"]
-            #     damping_force = damping_force * ((2 * np.pi) * rr)
-
             return tangent_matrix + damping_force
 
         return tangent_matrix

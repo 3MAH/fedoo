@@ -1,11 +1,9 @@
 import numpy as np
-from numpy import linalg
-
 from fedoo.lib_elements.finite_difference_1d import Node, Parameter
 
 # from fedoo.lib_elements.beam import *
 # from fedoo.lib_elements.cohesive import Cohesive1D
-from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex8r, Hex8Hourglass
+from fedoo.lib_elements.hexahedron import Hex8, Hex20, Hex20r, Hex8r, Hex8Hourglass
 from fedoo.lib_elements.line import Lin2, Lin2Bubble, Lin3, Lin3Bubble
 from fedoo.lib_elements.quadrangle import (
     Quad4,
@@ -16,8 +14,8 @@ from fedoo.lib_elements.quadrangle import (
 )
 
 # from fedoo.lib_elements.plate import *
-from fedoo.lib_elements.tetrahedron import Tet4, Tet10
-from fedoo.lib_elements.triangle import Tri3, Tri3Bubble, Tri6
+from fedoo.lib_elements.tetrahedron import Tet4, Tet10, Tet10r
+from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
 _dict_elements = {
@@ -27,6 +25,7 @@ _dict_elements = {
     "lin3bubble": Lin3Bubble,
     # 'cohesive1d':Cohesive1D, 'lin2interface':Lin2Interface, 'quad4interface':Quad4Interface,
     "tri3": Tri3,
+    "tri3r": Tri3r,
     "tri6": Tri6,
     "tri3bubble": Tri3Bubble,
     "quad4": Quad4,
@@ -36,10 +35,12 @@ _dict_elements = {
     "quad9": Quad9,
     "tet4": Tet4,
     "tet10": Tet10,
+    "tet10r": Tet10r,
     "hex8": Hex8,
     "hex8r": Hex8r,
     "hex8hourglass": Hex8Hourglass,
     "hex20": Hex20,
+    "hex20r": Hex20r,
     "wed6": Wed6,
     "wed15": Wed15,
     "wed18": Wed18,
@@ -57,7 +58,7 @@ _dict_default_n_gp = {
     "lin2interface": 2,
     "quad4interface": 4,
     "tri3": 3,
-    "tri6": 4,
+    "tri6": 7,
     "tri3bubble": 3,
     "quad4": 4,
     "quad4hourglass": 1,
@@ -65,9 +66,11 @@ _dict_default_n_gp = {
     "quad9": 9,
     "tet4": 4,
     "tet10": 15,
+    "tet10r": 4,
     "hex8": 8,
     "hex8r": 1,
     "hex20": 27,
+    "hex20r": 14,
     "wed6": 6,
     "wed15": 21,
     "wed18": 21,
@@ -79,7 +82,7 @@ _dict_default_n_gp = {
     "pquad4": 4,
     "ptri3": 3,
     "pquad8": 9,
-    "ptri6": 4,
+    "ptri6": 7,
     "pquad9": 9,
 }
 
@@ -102,6 +105,8 @@ def get_node_elm_coordinates(element, nNd_elm=None):
     elif element in ["tri3", "tri6", "tri3bubble"]:
         if nNd_elm == 3:
             return np.c_[[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        elif nNd_elm == 4:
+            return np.c_[[0.0, 1.0, 0.0, 1 / 3], [0.0, 0.0, 1.0, 1 / 3]]
         elif nNd_elm == 6:
             return np.c_[[0.0, 1.0, 0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0, 0.5, 0.5]]
     elif element in ["quad4", "quad8", "quad9"]:
@@ -123,7 +128,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],
                 [-1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0],
             ]
-    elif element in ["tet4", "tet10"]:
+    elif element in ["tet4", "tet10", "tet10r"]:
         if nNd_elm == 4:
             return np.c_[
                 [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]
@@ -134,7 +139,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0],
                 [0.0, 1.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.5, 0.0],
             ]
-    elif element in ["hex8", "hex20", "hex8r"]:
+    elif element in ["hex8", "hex20", "hex8r", "hex20r"]:
         if nNd_elm == 8:
             return np.c_[
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],

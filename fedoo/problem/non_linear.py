@@ -1,7 +1,9 @@
 from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
+from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
 from scipy.sparse.linalg import eigs, eigsh, ArpackNoConvergence
 import warnings
@@ -61,16 +63,13 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
-
-        # Auto-register kinematic ties from any RigidBodyAssembly found in
-        # the assembly sum. Without this the user has to remember
-        # ``body.add_to_problem(pb)`` for each rigid body even though the
-        # body's assembly is already wired in through ``Assembly.sum``.
-        self._register_rigid_ties(assembly)
+        self.time_integrators = {}
+        self._time_integrators_compiled = False
         self.t0 = 0
         self.tmax = 1
         self.time = 0
         self.dtime = 0
+        self._dtime_prev = 0  # dt of the last completed increment
         self.__iter = 0
         self.__compteurOutput = 0
 
@@ -78,27 +77,6 @@ class _NonLinearBase:
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
-
-    def _register_rigid_ties(self, assembly):
-        """Walk the assembly tree and add any RigidBodyAssembly's tie to ``self.bc``.
-
-        FIFO traversal so the registration order matches the order in
-        which bodies appear inside ``Assembly.sum``. The slot a body
-        gets in ``RigidTie.node_cd`` is determined by this order, so
-        switching to LIFO would silently rewire the user's BCs.
-        """
-        # Local import — avoid a hard cycle with fedoo.constraint at module load.
-        from collections import deque
-        from fedoo.constraint.rigid_body import RigidBodyAssembly
-
-        queue = deque([assembly])
-        while queue:
-            a = queue.popleft()
-            if isinstance(a, RigidBodyAssembly) and a.rigid_tie not in self.bc:
-                self.bc.add(a.rigid_tie)
-            children = getattr(a, "_list_assembly", None)
-            if children:
-                queue.extend(children)
 
     @property
     def n_iter(self):
@@ -161,7 +139,117 @@ class _NonLinearBase:
         # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
+    def set_time_integrator(self, evolution, integrator):
+        """Attach or remove a problem-level time integrator.
+
+        The integrator compiles compatible static weakforms before assembly
+        initialization. For example::
+
+            pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+
+        Passing ``None`` removes the integrator associated with the evolution
+        category. This can only be used before a compatible weakform has been
+        compiled into its transient form.
+        """
+        evolution = normalize_time_evolution(evolution)
+        if self._time_integrators_compiled and self._has_time_integrated_weakform(
+            self.__assembly
+        ):
+            # Once compiled, the transient weakforms carry the previous
+            # integrator's coefficients: replacing or removing an integrator
+            # would silently be a no-op, so fail loudly instead.
+            raise RuntimeError(
+                "Cannot change time integrators after the assembly has been "
+                "compiled for transient analysis. Create a new problem or "
+                "change the assembly before modifying the integrators."
+            )
+        if integrator is None:
+            self.time_integrators.pop(evolution, None)
+            self._time_integrators_compiled = False
+            return None
+
+        integrator_evolution = normalize_time_evolution(
+            getattr(integrator, "evolution", evolution)
+        )
+        if integrator_evolution != evolution:
+            raise ValueError(
+                f"Time integrator {integrator!r} is not compatible with evolution "
+                f"{evolution!r}."
+            )
+
+        self.time_integrators[evolution] = integrator
+        self._time_integrators_compiled = False
+        return integrator
+
+    def _has_time_integrated_weakform(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            return any(
+                self._has_time_integrated_weakform(child)
+                for child in assembly.list_assembly
+            )
+        weakform = getattr(assembly, "weakform", None)
+        if getattr(weakform, "_fedoo_time_integrated", False):
+            return True
+        return any(
+            getattr(wf, "_fedoo_time_integrated", False)
+            for wf in getattr(weakform, "list_weakform", [])
+        )
+
+    def _compile_time_integrators(self):
+        if self._time_integrators_compiled:
+            return
+        for evolution, integrator in self.time_integrators.items():
+            self.__assembly = integrator.compile_assembly(self.__assembly, evolution)
+        self._time_integrators_compiled = True
+        self._warn_ignored_storage()
+
+    def _iter_leaf_weakforms(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            for child in assembly.list_assembly:
+                yield from self._iter_leaf_weakforms(child)
+            return
+        weakform = getattr(assembly, "weakform", None)
+        if weakform is None:
+            return
+        for wf in getattr(weakform, "list_weakform", [weakform]):
+            yield wf
+
+    def _warn_ignored_storage(self):
+        """Warn when declared storage/dissipation terms are silently ignored.
+
+        Weakforms may declare transient metadata (e.g. HeatEquation always
+        declares its heat capacity storage); without a matching problem-level
+        integrator the analysis is steady/static and these terms are dropped.
+        This is legitimate for a deliberately steady analysis, but silent for
+        a user migrating from the former transient-by-default weakforms, so a
+        warning is emitted once at compile time.
+        """
+        for wf in self._iter_leaf_weakforms(self.__assembly):
+            if getattr(wf, "_fedoo_time_integrated", False):
+                continue
+            evolution = getattr(wf, "time_evolution", None)
+            if evolution is None or evolution in self.time_integrators:
+                continue
+            if (
+                getattr(wf, "storage", None) is not None
+                or getattr(wf, "dissipation", None) is not None
+            ):
+                warnings.warn(
+                    f"Weakform '{wf.name}' declares storage or dissipation "
+                    f"terms for the '{evolution.kind}' time evolution, but no "
+                    "matching time integrator is attached to the problem: "
+                    "these terms are ignored and the analysis is treated as "
+                    "steady/static. For a transient analysis, attach an "
+                    "integrator, e.g. pb.set_time_integrator("
+                    "fd.time.FIRST_ORDER, fd.time.BackwardEuler()) or "
+                    "pb.set_time_integrator(fd.time.SECOND_ORDER, "
+                    "fd.time.Newmark()).",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
     def initialize(self):
+        self._compile_time_integrators()
         self.__assembly.initialize(self)
         self.set_A(0)
 
@@ -170,11 +258,6 @@ class _NonLinearBase:
         self._nr_min_subiter = 0  # reset SDI for new increment
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         if not (np.isscalar(self._dU) and self._dU == 0):
-            # Notify constraints of accepted increment (before _dU is reset)
-            for bc in self.bc:
-                if hasattr(bc, "set_start"):
-                    bc.set_start(self)
-
             self._U += self._dU
             self._dU = 0
             self.__assembly.set_start(self)
@@ -191,11 +274,6 @@ class _NonLinearBase:
             self.__assembly.set_start(self)
 
     def to_start(self):
-        # Notify constraints of reverted increment
-        for bc in self.bc:
-            if hasattr(bc, "to_start_bc"):
-                bc.to_start_bc(self)
-
         self._dU = 0
         self._nr_min_subiter = 0
         self._t_fact_inc = None
@@ -211,14 +289,6 @@ class _NonLinearBase:
             - Change in constitutive law (internal variable)
         Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
         """
-        # Pre-update hook: refresh slave positions (e.g. RigidTie) before
-        # assembly update so that other assemblies (e.g. IPCContact) see
-        # the correct geometry.
-        if self.bc._update_during_inc:
-            for bc in self.bc:
-                if hasattr(bc, "pre_update"):
-                    bc.pre_update(self)
-
         if updateWeakForm == True:
             self.__assembly.update(self, compute)
         else:
@@ -252,6 +322,7 @@ class _NonLinearBase:
             assembling = Assembly[assembling]
 
         self.__assembly = assembling
+        self._time_integrators_compiled = False
         if update:
             self.update()
 
@@ -712,23 +783,18 @@ class _NonLinearBase:
             dX = self.get_X()
             alpha = self._step_size_callback(self, dX)
             if alpha < 1.0:
-                # Scale only the free-DOF part of dX; keep the prescribed
-                # Dirichlet values unscaled.  Otherwise the Dirichlet
-                # increment is only partially applied to _dU, and the
-                # leftover (Xbc * (1-alpha)) gets wiped at the next
-                # update_boundary_conditions (where t_fact - t_fact_old
-                # == 0), so the BC target is never reached.
-                self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+                # Scale only free DOFs; preserve prescribed Dirichlet values
+                # self.set_X(dX * alpha + self._Xbc * (1 - alpha))
+                dX *= alpha
                 self._alpha = alpha
         if self._alpha == 1:
             self._boundary_is_0 = True
 
-        # Whether alpha < 1 or alpha == 1, the prescribed Dirichlet
-        # values have now been fully written into _dU (via the
-        # compensation term self._Xbc * (1 - alpha) above), so Xbc can
-        # be zeroed for all subsequent NR iterations of this increment.
-        self._Xbc *= 0
-        self._boundary_is_0 = True
+        if self._boundary_is_0:
+            # set the increment Dirichlet boundray conditions to 0 (i.e. will not change during the NR interations)
+            self._Xbc *= 0
+        else:
+            self._Xbc *= 1 - alpha
 
         # update displacement increment
         self._dU += self.get_X()
@@ -821,6 +887,10 @@ class _NonLinearBase:
                 error < tol_nr
                 and subiter >= self._nr_min_subiter
                 and self._boundary_is_0
+                # constraints such as MeanMotion publish the out-of-balance on
+                # their own nonlinear equations here; gate convergence on it so
+                # an unsatisfied constraint cannot report a converged increment.
+                and getattr(self, "_bc_residual_norm", 0.0) < 10 * tol_nr
             ):
                 self._t_fact_inc = None
                 return 1, subiter, error
@@ -1046,6 +1116,17 @@ class _NonLinearBase:
 
         if np.isscalar(self._U) and self._U == 0:  # Initialize only if 1st step
             self.initialize()
+        elif not self._time_integrators_compiled and self.time_integrators:
+            # Integrators attached (or the assembly changed) after the first
+            # solved stage: initialize() will not run again, so the transient
+            # weakforms would never be compiled and the stage would silently
+            # run static. Fail loudly instead.
+            raise RuntimeError(
+                "Time integrators were attached or modified after the first "
+                "solve, but they are only compiled when the problem "
+                "initializes. Create a new problem for the transient stage "
+                "(the assembly can be reused)."
+            )
 
         restart = False  # bool to know if the iteration is another attempt
 
@@ -1060,6 +1141,11 @@ class _NonLinearBase:
                 next_time = next_time + interval_output
                 if next_time > self.tmax - self.err_num:
                     next_time = self.tmax
+
+            # keep the time step of the increment that has just been completed:
+            # set_start finalizes state (e.g. Newmark velocity/acceleration)
+            # over that increment, while self.dtime below is the NEXT step.
+            self._dtime_prev = self.dtime
 
             if (
                 self.time + dt > next_time - self.err_num
@@ -1087,7 +1173,7 @@ class _NonLinearBase:
                 if self.print_info > 0:
                     print(
                         "Iter {} - Time: {:.5f} - dt {:.5f} - NR iter: {} - Err: {:.5f}".format(
-                            self.__iter, self.time, self.dtime, nb_nr_iter, error
+                            self.__iter, self.time, dt, nb_nr_iter, error
                         )
                     )
 
@@ -1104,21 +1190,20 @@ class _NonLinearBase:
                     )
                 if update_dt:
                     dt *= 0.25
-                    # if self.print_info > 0:
-                    # print(
-                    #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                    #         error, dt
-                    #     )
-                    # )
 
                     if dt < dt_min:
+                        # roll back to the last converged increment so accessors
+                        # return a clean state after the abort
+                        self.to_start()
                         raise RuntimeError(
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
+                    # Roll back the failed increment (to_start at the top of the loop)
                     restart = True
                     continue
                 else:
+                    self.to_start()
                     raise RuntimeError(
                         "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )
@@ -1167,3 +1252,46 @@ class _NonLinearBase:
 
 class NonLinear(_NonLinearBase, Problem):
     pass
+
+
+def NonLinearNewmark(
+    assembly,
+    beta=0.25,
+    gamma=0.5,
+    nlgeom=False,
+    name="MainProblem",
+    first_order_integrator=None,
+):
+    """Create a nonlinear Newmark problem with default time integrators.
+
+    This is a convenience factory around :class:`NonLinear`. It attaches a
+    Newmark integrator for second-order evolutions and a Backward-Euler
+    integrator for first-order evolutions.
+
+    .. note::
+        The signature changed: the mass is now derived from the material
+        density (``material.set_density(rho)``) or ``weakform.set_inertia(...)``,
+        so a separate mass assembly is no longer passed. The legacy
+        ``NonLinearNewmark(stiffness, mass, beta, gamma)`` form is rejected with
+        an explicit error.
+    """
+    import numbers
+
+    from fedoo import time
+
+    if not isinstance(beta, numbers.Number) or not isinstance(gamma, numbers.Number):
+        raise TypeError(
+            "NonLinearNewmark(assembly, beta, gamma) no longer takes a separate "
+            "mass assembly: the mass is derived from the material density "
+            "(material.set_density(rho)) or from weakform.set_inertia(...). "
+            "Replace NonLinearNewmark(stiffness, mass, beta, gamma) with "
+            "NonLinearNewmark(stiffness, beta, gamma). See fedoo.time for the "
+            "new time-integration API."
+        )
+
+    pb = NonLinear(assembly, nlgeom=nlgeom, name=name)
+    pb.set_time_integrator(time.SECOND_ORDER, time.Newmark(beta, gamma))
+    if first_order_integrator is None:
+        first_order_integrator = time.BackwardEuler()
+    pb.set_time_integrator(time.FIRST_ORDER, first_order_integrator)
+    return pb

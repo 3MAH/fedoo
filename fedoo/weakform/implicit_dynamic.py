@@ -24,12 +24,19 @@ class _NewmarkInertia(WeakFormBase):
         assembly.sv_type["Velocity"] = "Node"
         assembly.sv_type["Acceleration"] = "Node"
         assembly.sv_type["_DeltaDisp"] = "Node"
-        assembly.sv["Velocity"] = 0
-        assembly.sv["Acceleration"] = 0
-        assembly.sv["_DeltaDisp"] = 0
+        shape = (assembly.space.nvar, assembly.mesh.n_nodes)
+        assembly.sv["Velocity"] = np.zeros(shape)
+        assembly.sv["Acceleration"] = np.zeros(shape)
+        assembly.sv["_DeltaDisp"] = np.zeros(shape)
 
     def update(self, assembly, pb):
-        assembly.sv["_DeltaDisp"] = pb._get_vect_component(pb._dU, "Disp")
+        n_node_dof = assembly.space.nvar * assembly.mesh.n_nodes
+        if np.isscalar(pb._dU) and pb._dU == 0:
+            assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
+        else:
+            assembly.sv["_DeltaDisp"] = pb._dU[:n_node_dof].reshape(
+                assembly.space.nvar, assembly.mesh.n_nodes
+            )
 
     def update_2(self, assembly, pb):
         pass
@@ -40,7 +47,7 @@ class _NewmarkInertia(WeakFormBase):
     def set_start(self, assembly, pb):
         # This updates the historic variables to the newly converged step t
         dt = pb.dtime  # dt is the time step of the previous increment
-        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
+        if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
@@ -52,7 +59,7 @@ class _NewmarkInertia(WeakFormBase):
             )
             assembly.sv["Acceleration"] = new_acceleration
             # reset acumulated displacement
-            assembly.sv["_DeltaDisp"] = np.zeros((self.space.ndim, 1))
+            assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
 
     def get_weak_equation(self, assembly, pb):
         dt = pb.dtime
@@ -81,11 +88,9 @@ class _NewmarkInertia(WeakFormBase):
         # Apply the operator to the nodal v_curr to get the damping force residual
         if not np.array_equal(residual_val, 0):
             diff_op += assembly.operator_apply(wf, residual_val.ravel())
-        if self.space._dimension == "2Daxi":
-            rr = assembly.sv["_R_gausspoints"]
-            return diff_op * ((2 * np.pi) * rr)
-        else:
-            return diff_op
+        # Axisymmetric weighting is handled by the wrapped mass weakform
+        # itself; the standard Inertia weakform already applies 2*pi*r.
+        return diff_op
 
 
 class _NewmarkStiffness(WeakFormBase):
@@ -136,9 +141,6 @@ class _NewmarkStiffness(WeakFormBase):
             damping_force_wf = self.damping_coef * assembly.operator_apply(
                 mat, v_curr.ravel()
             )
-            if self.space._dimension == "2Daxi":
-                rr = assembly.sv["_R_gausspoints"]
-                damping_force_wf = damping_force_wf * ((2 * np.pi) * rr)
             return scaled_mat + vec + damping_force_wf
 
         return scaled_mat + vec
@@ -171,6 +173,13 @@ def ImplicitDynamic(
     constitutivelaw, density, beta=0.25, gamma=0.5, name="", nlgeom=False, space=None
 ):
     r"""Weak formulation for implicit dynamic problems.
+
+    .. deprecated::
+        Prefer defining a static weakform with ``set_storage`` or a material
+        density, then attach the time integrator to
+        :class:`fedoo.problem.NonLinear` with ``set_time_integrator``. This
+        factory is kept as a compact pedagogical example of the Newmark weakform
+        embedding.
 
     Constructs a dynamic weak formulation by combining internal forces
     (stiffness matrix) to inertia (mass matrix). Time integration is
@@ -267,6 +276,14 @@ class ImplicitDynamic2(WeakFormBase):
         space=None,
     ):
         super().__init__(name, space)
+
+        if self.space.is_axisymmetric:
+            raise NotImplementedError(
+                "ImplicitDynamic2 is not implemented in '2Daxi'. "
+                "Use the ImplicitDynamic factory (which builds an "
+                "ImplicitDynamicSum from _NewmarkStiffness + _NewmarkInertia) "
+                "instead — that path correctly applies the 2*pi*r weight."
+            )
 
         if name != "":
             stiffness_name = name + "_stiffness"
@@ -400,7 +417,7 @@ class ImplicitDynamic2(WeakFormBase):
                 initial_stress = assembly.sv["PK2"]
             else:
                 eps = self.space.op_strain()
-                if self.space._dimension == "2Daxi":
+                if self.space.is_axisymmetric:
                     raise NotImplementedError("2Daxi not implemented.")
                 #     rr = assembly.sv["_R_gausspoints"]
                 #     eps[2] = self.space.variable("DispX") * np.divide(
@@ -502,7 +519,7 @@ class ImplicitDynamic2(WeakFormBase):
                     for i in range(6)
                 ]
             )
-            # if self.space._dimension == "2Daxi":
+            # if self.space.is_axisymmetric:
             #     diff_op = diff_op * ((2 * np.pi) * rr)
 
         return diff_op

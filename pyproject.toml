@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fedoo"
-version = "0.8.3"
+version = "0.8.4"
 authors = [
     {name = "3MAH", email = 'set3mah@gmail.com'},
 ]
@@ -27,7 +27,8 @@ classifiers = [
 dependencies = [
     'numpy>=2.00',
     'scipy',
-    'simcoon>=1.11.2',
+    'h5py',
+    'simcoon>=1.13.1',
 ]
 
 [project.optional-dependencies]
@@ -38,11 +39,8 @@ solver = [
     'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
-    'matplotlib',
+    'matplotlib>=3.5',
     'pyvista[io]',
-]
-simcoon = [
-    'simcoon>=1.11.2'
 ]
 test = [
     'pytest',
