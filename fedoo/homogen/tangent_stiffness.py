@@ -10,6 +10,7 @@ from fedoo.core.problem import Problem
 from fedoo.problem.linear import Linear
 from fedoo.core.base import ProblemBase
 from fedoo.constraint.periodic_bc import PeriodicBC
+from fedoo.constraint.mean_value_constraint import MeanValueConstraint
 import numpy as np
 import os
 import time
@@ -34,17 +35,37 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     solver = kargs.get("solver", "direct")
     solver_type = kargs.get("solver_type", None)
     pc_type = kargs.get("pc_type", None)
+    rigid_body_constraint = kargs.get("rigid_body_constraint", "pin")
+    if rigid_body_constraint not in ("pin", "mean"):
+        raise ValueError(
+            'rigid_body_constraint should be "pin" (block the node nearest '
+            'to the center) or "mean" (constrain the mean displacement '
+            "with lagrange multipliers)."
+        )
+    is_direct_solver = (
+        not isinstance(solver, str)
+        or solver.lower() in {"direct", "direct_scipy", "pardiso", "mumps"}
+        or (
+            solver.lower() == "petsc"
+            and solver_type is not None
+            and solver_type.lower() == "preonly"
+            and pc_type is not None
+            and pc_type.lower() in {"lu", "cholesky"}
+        )
+    )
+    if rigid_body_constraint == "mean" and not is_direct_solver:
+        # the mean constraint borders the system with zero-diagonal lagrange
+        # rows (saddle point): iterative solvers diverge / return NaN.
+        raise ValueError(
+            'rigid_body_constraint="mean" requires a direct solver (the '
+            f"lagrange multipliers make the system indefinite); got solver={solver!r}."
+        )
 
     if pb is None:
         pb = ProblemBase.get_active()
     elif isinstance(pb, str):
         pb = ProblemBase.get_all()[pb]
     mesh = pb.mesh
-
-    crd = mesh.nodes
-
-    crd_center = mesh.bounding_box.center
-    center = [np.linalg.norm(crd - crd_center, axis=1).argmin()]
 
     ndim = pb.space.ndim
 
@@ -57,10 +78,15 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     DStrain = []
     DStress = []
 
-    if "_perturbation" in pb.get_all() and Problem["_perturbation"].mesh is not mesh:
+    if "_perturbation" in pb.get_all() and (
+        Problem["_perturbation"].mesh is not mesh
+        or getattr(Problem["_perturbation"], "_rigid_body_constraint", "pin")
+        != rigid_body_constraint
+    ):
         # if required an option could be added to delete '_perturbation' in case the mesh may change
         print(
-            'WARNING: delete old "_perturbation" problem that is related to another mesh'
+            'WARNING: delete old "_perturbation" problem that is related to '
+            "another mesh or rigid body constraint"
         )
         del pb.get_all()["_perturbation"]
 
@@ -82,13 +108,23 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
             )
         )
 
-        pb_post_tt.bc.add(
-            "Dirichlet",
-            center,
-            list(pb.space.list_variables()),
-            0,
-            name="center",
-        )
+        if rigid_body_constraint == "pin":
+            # block the node nearest to the RVE center
+            center = [
+                np.linalg.norm(mesh.nodes - mesh.bounding_box.center, axis=1).argmin()
+            ]
+            pb_post_tt.bc.add(
+                "Dirichlet",
+                center,
+                list(pb.space.list_variables()),
+                0,
+                name="center",
+            )
+        else:  # rigid_body_constraint == "mean"
+            constraint = MeanValueConstraint(mesh, "Disp", name="_MeanDisp")
+            constraint.initialize(pb_post_tt)
+            pb_post_tt._mean_disp_constraint = constraint
+        pb_post_tt._rigid_body_constraint = rigid_body_constraint
     else:
         pb_post_tt = Problem["_perturbation"]
 
@@ -96,6 +132,11 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
     if A is None and hasattr(pb, "assembly"):
         A = pb.assembly.get_global_matrix()
         pb.set_A(A)
+    if rigid_body_constraint == "mean":
+        # add the lagrange multiplier rows that enforce mean(disp) = 0
+        A = A.copy()
+        A.resize(pb_post_tt.n_dof, pb_post_tt.n_dof)
+        A = A + pb_post_tt._mean_disp_constraint.get_global_matrix()
     pb_post_tt.set_A(A)
     pb.bc.remove("_Strain")
 

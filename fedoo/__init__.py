@@ -17,6 +17,7 @@ from .core import (
     ConstitutiveLaw,
     DataSet,
     ListBC,
+    LagrangeMultiplierAssembly,
     Mesh,
     MultiMesh,
     ModelingSpace,

@@ -4,6 +4,7 @@ from .mesh import Mesh, MultiMesh
 from .weakform import WeakForm, WeakFormSum
 from .assembly import Assembly
 from .assembly_sum import AssemblySum
+from .lagrange_multiplier import LagrangeMultiplierAssembly
 from .dataset import (
     DataSet,
     MultiFrameDataSet,
@@ -18,6 +19,7 @@ __all__ = [
     "Mesh",
     "Assembly",
     "AssemblySum",
+    "LagrangeMultiplierAssembly",
     "ConstitutiveLaw",
     "WeakForm",
     "WeakFormSum",

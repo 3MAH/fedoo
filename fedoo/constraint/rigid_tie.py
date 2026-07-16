@@ -102,17 +102,7 @@ class RigidTie(BCBase):
 
         return "\n".join(list_str)
 
-    def initialize(self, problem):
-        if self.center is None:
-            # initialize the rotation center at center of rigid nodes bounding box
-            nodes_crd = problem.mesh.nodes[self.list_nodes]
-            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
-        elif np.isscalar(self.center):
-            # initialize the center at a position of a node
-            self.center = problem.mesh.nodes[self.center]
-        else:
-            self.center = np.asarray(self.center)
-
+    def _register_global_dofs(self, problem):
         dof_indice_disp = problem.add_global_dof(
             ["RigidDispX", "RigidDispY", "RigidDispZ"], 1, "RigidDisp"
         )
@@ -135,6 +125,17 @@ class RigidTie(BCBase):
             dof_indice_rot,
             dof_indice_rot,
         ]
+
+    def initialize(self, problem):
+        if self.center is None:
+            # initialize the rotation center at center of rigid nodes bounding box
+            nodes_crd = problem.mesh.nodes[self.list_nodes]
+            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
+        elif np.isscalar(self.center):
+            # initialize the center at a position of a node
+            self.center = problem.mesh.nodes[self.center]
+        else:
+            self.center = np.asarray(self.center)
 
         # extract indices array that gives the disp from the full dof solution
         n_nodes = problem.mesh.n_nodes
@@ -356,6 +357,14 @@ class RigidTie2D(BCBase):
 
         return "\n".join(list_str)
 
+    def _register_global_dofs(self, problem):
+        dof_indice_disp = problem.add_global_dof(
+            ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
+        )
+        dof_indice_rot = problem.add_global_dof(["RigidRotZ"], 1, "RidigRot")
+        self.var_cd = ["RigidDispX", "RigidDispY", "RigidRotZ"]
+        self.node_cd = [dof_indice_disp, dof_indice_disp, dof_indice_rot]
+
     def initialize(self, problem):
         if problem.space.is_axisymmetric:
             warnings.warn(
@@ -374,18 +383,6 @@ class RigidTie2D(BCBase):
             self.center = problem.mesh.nodes[self.center]
         else:
             self.center = np.asarray(self.center)
-
-        dof_indice_disp = problem.add_global_dof(
-            ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
-        )
-        dof_indice_rot = problem.add_global_dof(["RigidRotZ"], 1, "RidigRot")
-        self.var_cd = [
-            "RigidDispX",
-            "RigidDispY",
-            "RigidRotZ",
-        ]
-        self.node_cd = [dof_indice_disp, dof_indice_disp, dof_indice_rot]
-
         # extract indices array that gives the disp from the full dof solution
         n_nodes = problem.mesh.n_nodes
         rank = problem.space.variable_rank("DispX")

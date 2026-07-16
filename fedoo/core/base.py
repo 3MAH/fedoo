@@ -9,6 +9,7 @@ import scipy.sparse.linalg
 import scipy.sparse as sparse
 import numpy as np
 import warnings
+from weakref import WeakSet
 
 # try to find the best available direct solver
 try:
@@ -124,6 +125,7 @@ class AssemblyBase:
 
         self.global_matrix = None
         self.global_vector = None
+        self._global_dof_registered_problems = None
 
         if not hasattr(self, "mesh"):  # in case mesh is a property
             self.mesh = None
@@ -180,6 +182,25 @@ class AssemblyBase:
 
     def initialize(self, pb):
         """Initialize the assembly for the current problem."""
+        pass
+
+    def register_global_dofs(self, pb):
+        """Register global DOFs required by the assembly on a problem.
+
+        Subclasses should implement :meth:`_register_global_dofs` instead of
+        overriding this method. Registration is performed once per problem.
+        """
+        if type(self)._register_global_dofs is AssemblyBase._register_global_dofs:
+            return
+        if self._global_dof_registered_problems is None:
+            self._global_dof_registered_problems = WeakSet()
+        elif pb in self._global_dof_registered_problems:
+            return
+        self._register_global_dofs(pb)
+        self._global_dof_registered_problems.add(pb)
+
+    def _register_global_dofs(self, pb):
+        """Implement assembly-specific global-DOF registration if required."""
         pass
 
     def update(self, pb, compute="all"):
@@ -470,6 +491,12 @@ class ProblemBase:
           >>> # Use the MUMPS direct solver with petsc
           >>> pb.set_solver('petsc', solver_type='preonly', pc_type='lu', pc_factor_mat_solver_type='mumps')
         """
+        # These options apply only to PETSc. Treat None as "not specified" so
+        # callers can forward optional solver settings to any backend.
+        for option in ("solver_type", "pc_type", "pc_factor_mat_solver_type"):
+            if kargs.get(option) is None:
+                kargs.pop(option, None)
+
         return_info = False
         precond = False
         if isinstance(solver, str):

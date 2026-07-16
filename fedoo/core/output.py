@@ -647,7 +647,7 @@ class _ProblemOutput:
             # material = assemb.weakform.GetConstitutiveLaw()
 
             if file_format in _available_format:  # if not ignored
-                if (comp_output is None) or (file_format == "fdz"):
+                if (comp_output is None) or (file_format in ["fdz", "fdh5"]):
                     filename_compl = ""
                 else:
                     filename_compl = "_" + str(comp_output)
@@ -694,6 +694,17 @@ class _ProblemOutput:
                 file.close()
                 self.data_sets[list_filename[i]].list_data.append(
                     Path(list_full_filename[i], iter_name)
+                )
+
+            elif list_file_format[i] == "fdh5":
+                iteration = 0 if comp_output is None else comp_output
+                out.to_fdh5(
+                    list_full_filename[i],
+                    iteration=iteration,
+                    overwrite=(comp_output is None or comp_output == 0),
+                )
+                self.data_sets[list_filename[i]].list_data.append(
+                    ("fdh5", list_full_filename[i], iteration)
                 )
 
             else:

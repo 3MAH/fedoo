@@ -1,5 +1,6 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.lagrange_multiplier import LagrangeMultiplierAssembly
 from fedoo.core.problem import Problem
 
 
@@ -12,6 +13,7 @@ class _LinearBase:
 
         self.nlgeom = False
         self._register_assembly_constraints(assembly)
+        assembly.register_global_dofs(self)
         assembly.initialize(self)
         self.time = self.dtime = 0
         # self.set_A(assembly.get_global_matrix())
@@ -137,6 +139,8 @@ class _LinearBase:
 
     def _register_assembly_constraints(self, assembly):
         """Register constraints exposed by an assembly tree."""
+        if isinstance(assembly, LagrangeMultiplierAssembly):
+            return
         children = getattr(assembly, "_list_assembly", None)
         if children:
             for child in children:
