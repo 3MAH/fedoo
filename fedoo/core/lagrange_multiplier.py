@@ -19,6 +19,28 @@ class LagrangeMultiplierAssembly(AssemblyBase):
     method produces only MPC leaves, or an iterable of such objects. Wrapped
     constraints must not also be added to the problem boundary conditions,
     since that would enforce them a second time through elimination.
+
+    Parameters
+    ----------
+    mesh: fedoo.Mesh
+        Mesh associated with the constraint. It should share the nodes of the
+        assembly with which this constraint is summed.
+    constraints: MPC, ListBC, BC object or iterable of BC objects
+        Constraint(s) to enforce. Any wrapped object must generate only
+        :py:class:`fedoo.MPC` leaves.
+    name: str, default = "LagrangeMultiplier"
+        Assembly name. It is also the name of the global vector that gathers
+        the Lagrange-multiplier DOFs.
+    multiplier_names: list of str or None, default = None
+        Names of the multiplier DOFs, one per generated equation. If None, the
+        multipliers are gathered as a single global vector named ``name``.
+    space: ModelingSpace, optional
+        Modeling space. If None, the active modeling space is used.
+
+    Notes
+    -----
+    The multipliers give the system a zero diagonal block and an indefinite
+    saddle-point structure, so a direct solver is required.
     """
 
     def __init__(
@@ -50,7 +72,6 @@ class LagrangeMultiplierAssembly(AssemblyBase):
         self._registered_pbs = []
         self._equation_dofs = None
         self._equation_coefficients = None
-        self._constraint_values = None
 
     def __repr__(self):
         return (
@@ -67,7 +88,11 @@ class LagrangeMultiplierAssembly(AssemblyBase):
 
     def _collect_equations(self, pb):
         t_fact, t_fact_old = self._time_factors(pb)
-        generated = list(self.constraints.generate(pb, t_fact, t_fact_old))
+        # Non-incremental constraints express the LM residual with the total
+        # solution, not its increment, so they are generated with no previous
+        # time factor.
+        gen_t_fact_old = t_fact_old if self._incremental_equations else None
+        generated = list(self.constraints.generate(pb, t_fact, gen_t_fact_old))
         if not generated:
             raise ValueError(
                 "The wrapped boundary-condition object generated no constraints."
@@ -82,9 +107,6 @@ class LagrangeMultiplierAssembly(AssemblyBase):
                     "LagrangeMultiplierAssembly only accepts BC objects whose "
                     f"generated leaves are MPCs; got {type(constraint).__name__}."
                 )
-            if t_fact_old is not None and not self._incremental_equations:
-                # The LM residual uses the total solution, not its increment.
-                constraint.generate(pb, t_fact, None)
             dofs, coefficients, current_values = constraint.get_generated_equations()
             for dof_row, coefficient_row, value in zip(
                 dofs, coefficients, current_values
@@ -107,7 +129,7 @@ class LagrangeMultiplierAssembly(AssemblyBase):
             # driver values while generating their equations. Boundary
             # conditions have not been applied yet during assembly setup.
             pb._Xbc = np.zeros(pb.n_dof)
-        dofs, coefficients, values = self._collect_equations(pb)
+        dofs, coefficients, _ = self._collect_equations(pb)
         n_constraints = len(dofs)
 
         if self.multiplier_names is None:
@@ -144,7 +166,6 @@ class LagrangeMultiplierAssembly(AssemblyBase):
         self._n_constraints = n_constraints
         self._equation_dofs = dofs
         self._equation_coefficients = coefficients
-        self._constraint_values = values
         self.delete_global_mat()
 
     def _register_global_dofs(self, pb):
@@ -234,10 +255,8 @@ class LagrangeMultiplierAssembly(AssemblyBase):
                 "initialization; multiplier DOFs cannot be resized safely."
             )
 
-        matrix_changed = self._equations_changed(dofs, coefficients)
         if (
-            compute != "vector"
-            or matrix_changed
+            self._equations_changed(dofs, coefficients)
             or self.global_matrix is None
             or self.global_matrix.shape != (n_dof, n_dof)
         ):
@@ -245,7 +264,6 @@ class LagrangeMultiplierAssembly(AssemblyBase):
 
         self._equation_dofs = dofs
         self._equation_coefficients = coefficients
-        self._constraint_values = values
 
         if compute != "matrix":
             self.global_vector = self._assemble_vector(pb, n_dof, values)
@@ -268,4 +286,3 @@ class LagrangeMultiplierAssembly(AssemblyBase):
         self.delete_global_mat()
         self._equation_dofs = None
         self._equation_coefficients = None
-        self._constraint_values = None
