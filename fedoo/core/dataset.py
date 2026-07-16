@@ -807,9 +807,9 @@ class DataSet:
 
         edges = None
         if multiplot:
-            copy_mesh = True
-        else:
-            copy_mesh = False
+            # The cached plotting mesh is updated in place when another result
+            # iteration is loaded. Keep each actor's geometry independent.
+            mesh_to_show = mesh_to_show.copy(deep=True)
 
         if show_edges and self.mesh.elm_type in [
             "tri6",
@@ -836,7 +836,6 @@ class DataSet:
             pl.add_mesh(
                 mesh_to_show,
                 show_edges=show_edges,
-                copy_mesh=copy_mesh,
                 **kargs,
             )
             if title is None:
@@ -849,7 +848,6 @@ class DataSet:
                 scalar_bar_args=sargs,
                 cmap=cmap,
                 clim=clim,
-                copy_mesh=copy_mesh,
                 **kargs,
             )
             if title is None:
@@ -2357,7 +2355,7 @@ class MultiFrameDataSet(DataSet):
         """
         copy = MultiFrameDataSet(self.mesh.copy(), list(self.list_data))
         copy.active_submesh = self.active_submesh
-        if self.loaded_iter:
+        if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy
 
@@ -2373,7 +2371,7 @@ class MultiFrameDataSet(DataSet):
         """
         copy = MultiFrameDataSet(self.mesh.deepcopy(), list(self.list_data))
         copy.active_submesh = self.active_submesh
-        if self.loaded_iter:
+        if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy
 

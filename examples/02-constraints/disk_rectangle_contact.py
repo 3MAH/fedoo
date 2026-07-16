@@ -81,7 +81,7 @@ pb = fd.problem.NonLinear(assembly)
 
 # add some output that are automatically saved
 results = pb.add_output(
-    "contact_example", solid_assembly, ["Disp", "Stress", "Strain", "P", "Fext"]
+    "contact_example", ["Disp", "Stress", "Strain", "P", "Fext"]
 )
 
 # boundary conditions
@@ -106,15 +106,17 @@ pb.nlsolve(
     dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.1, dt_min=1e-8
 )
 
-# =============================================================
-# Example of plots with pyvista - uncomment the desired plot
-# =============================================================
+###############################################################################
+# Load and unload states
+# ----------------------
+#
+# Plot the von Mises stress at maximum loading, then the normal stress after
+# unloading. With ``multiplot=True``, each figure keeps an independent copy of
+# its deformed geometry, so loading the second saved state does not update the
+# first figure.
 
-# ------------------------------------
-# Simple plot with default options
-# ------------------------------------
 results.load(n_iter_load - 1)  # load state at the end of load
-results.plot("Stress", "vm", "Node", show=True, scale=1, show_nodes=True)
+results.plot("Stress", "vm", "Node", scale=1, multiplot=True)
 
 results.load(-1)  # load state at the end of unload
-results.plot("Stress", "XX", "Node", show=True, scale=1, show_nodes=True)
+results.plot("Stress", "XX", "Node", scale=1, multiplot=True)
