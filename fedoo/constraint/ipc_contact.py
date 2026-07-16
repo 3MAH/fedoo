@@ -125,9 +125,9 @@ class IPCContact(AssemblyBase):
     eps_v : float, default=1e-3
         Friction smoothing velocity (only relevant when
         ``friction_coefficient > 0``).
-    broad_phase : str, default="hash_grid"
-        Broad-phase collision detection method.  One of ``"hash_grid"``,
-        ``"brute_force"``, ``"spatial_hash"`` or ``"bvh"``.
+    broad_phase : str, default="lbvh"
+        Broad-phase collision detection method.  One of ``"lbvh"``,
+        ``"hash_grid"``, ``"brute_force"`` or ``"spatial_hash"``.
     adaptive_barrier_stiffness : bool, default=True
         If ``True``, :math:`\kappa` is updated adaptively at each converged
         time increment using ``ipctk.update_barrier_stiffness``.
@@ -186,7 +186,7 @@ class IPCContact(AssemblyBase):
         barrier_stiffness=None,
         friction_coefficient=0.0,
         eps_v=1e-3,
-        broad_phase="hash_grid",
+        broad_phase="lbvh",
         adaptive_barrier_stiffness=True,
         use_ccd=None,
         line_search_energy=None,
@@ -265,10 +265,10 @@ class IPCContact(AssemblyBase):
         """Create an ipctk BroadPhase instance from the string name."""
         ipctk = _import_ipctk()
         mapping = {
+            "lbvh": ipctk.LBVH,
             "hash_grid": ipctk.HashGrid,
             "brute_force": ipctk.BruteForce,
             "spatial_hash": ipctk.SpatialHash,
-            "bvh": ipctk.BVH,
         }
         cls = mapping.get(self._broad_phase_str.lower())
         if cls is None:
@@ -871,7 +871,8 @@ class IPCContact(AssemblyBase):
             self._actual_dhat = self._dhat
 
         # Create barrier potential
-        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat)
+        # Fedoo applies the adaptive barrier stiffness separately.
+        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat, 1.0)
 
         # Create friction potential if needed
         if self.friction_coefficient > 0:
@@ -1184,7 +1185,7 @@ class IPCSelfContact(IPCContact):
         Coulomb friction coefficient :math:`\mu`.
     eps_v : float, default=1e-3
         Friction smoothing velocity.
-    broad_phase : str, default="hash_grid"
+    broad_phase : str, default="lbvh"
         Broad-phase collision detection method.
     adaptive_barrier_stiffness : bool, default=True
         Adaptively update :math:`\kappa` at each converged time increment.
@@ -1236,7 +1237,7 @@ class IPCSelfContact(IPCContact):
         barrier_stiffness=None,
         friction_coefficient=0.0,
         eps_v=1e-3,
-        broad_phase="hash_grid",
+        broad_phase="lbvh",
         adaptive_barrier_stiffness=True,
         use_ccd=None,
         line_search_energy=None,

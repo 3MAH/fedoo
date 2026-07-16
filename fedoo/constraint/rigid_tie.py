@@ -4,9 +4,8 @@ import warnings
 
 import numpy as np
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
-
-
-from scipy.spatial.transform import Rotation
+from simcoon import Rotation
+from simcoon import dR_drotvec
 
 
 class RigidTie(BCBase):
@@ -46,15 +45,9 @@ class RigidTie(BCBase):
 
     Definition of rotations
     -----------------------
-    A convention needs to be defined the orders of rotations.
-    The convention used in this class is: First rotation around X, then
-    rotation around Y' (Y' being the new Y afte r rotation around X)
-    and finaly the rotation arould Z" (Z" beging the new Z after the 2 first
-    rotations).
-
-    We can note that this convention can also be interpreted using global axis
-    not attached to the solid by applying first the rotation around Z, then the
-    rotation around Y and finally, the rotation around X.
+    ``RigidRotX``, ``RigidRotY`` and ``RigidRotZ`` use a rotation-vector
+    convention. The vector direction defines the rotation axis and its norm is
+    the rotation angle.
 
 
     Notes
@@ -99,27 +92,7 @@ class RigidTie(BCBase):
 
         return "\n".join(list_str)
 
-    def initialize(self, problem):
-        if problem.space.is_axisymmetric:
-            warnings.warn(
-                "RigidTie under the '2Daxi' ModelingSpace: the constraint "
-                "is applied as pure-kinematics MPCs and will function, but "
-                "only rigid motions consistent with axisymmetry (axial "
-                "translation along the symmetry axis) preserve the "
-                "axisymmetric assumption. Radial translation and any "
-                "rotation around the in-plane axes break it.",
-                stacklevel=2,
-            )
-        if self.center is None:
-            # initialize the rotation center at center of rigid nodes bounding box
-            nodes_crd = problem.mesh.nodes[self.list_nodes]
-            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
-        elif np.isscalar(self.center):
-            # initialize the center at a position of a node
-            self.center = problem.mesh.nodes[self.center]
-        else:
-            self.center = np.asarray(self.center)
-
+    def _register_global_dofs(self, problem):
         dof_indice_disp = problem.add_global_dof(
             ["RigidDispX", "RigidDispY", "RigidDispZ"], 1, "RigidDisp"
         )
@@ -142,6 +115,27 @@ class RigidTie(BCBase):
             dof_indice_rot,
             dof_indice_rot,
         ]
+
+    def initialize(self, problem):
+        if problem.space.is_axisymmetric:
+            warnings.warn(
+                "RigidTie under the '2Daxi' ModelingSpace: the constraint "
+                "is applied as pure-kinematics MPCs and will function, but "
+                "only rigid motions consistent with axisymmetry (axial "
+                "translation along the symmetry axis) preserve the "
+                "axisymmetric assumption. Radial translation and any "
+                "rotation around the in-plane axes break it.",
+                stacklevel=2,
+            )
+        if self.center is None:
+            # initialize the rotation center at center of rigid nodes bounding box
+            nodes_crd = problem.mesh.nodes[self.list_nodes]
+            self.center = 0.5 * (nodes_crd.min(axis=0) + nodes_crd.max(axis=0))
+        elif np.isscalar(self.center):
+            # initialize the center at a position of a node
+            self.center = problem.mesh.nodes[self.center]
+        else:
+            self.center = np.asarray(self.center)
 
         # extract indices array that gives the disp from the full dof solution
         n_nodes = problem.mesh.n_nodes
@@ -173,16 +167,9 @@ class RigidTie(BCBase):
             )
 
         disp_ref = dof_ref[:3]  # reference displacement
-        angles = dof_ref[3:]  # rotation angle
+        rotvec = dof_ref[3:]
 
-        sin = np.sin(angles)
-        cos = np.cos(angles)
-
-        R = Rotation.from_euler("XYZ", angles).as_matrix()
-        # #or
-        # R = np.array([[cos[1]*cos[2], -cos[1]*sin[2], sin[1]],
-        #           [cos[0]*sin[2] + cos[2]*sin[0]*sin[1], cos[0]*cos[2]-sin[0]*sin[1]*sin[2], -cos[1]*sin[0]],
-        #           [sin[0]*sin[2] - cos[0]*cos[2]*sin[1], cos[2]*sin[0]+cos[0]*sin[1]*sin[2], cos[0]*cos[1]]] )
+        R = Rotation.from_rotvec(rotvec).as_matrix()
 
         # Correct displacement of slave nodes to be consistent with the master nodes
         new_disp = (
@@ -201,60 +188,11 @@ class RigidTie(BCBase):
                 )
 
         # approche incrémentale:
-        dR_drx = np.array(
-            [
-                [0, 0, 0],
-                [
-                    -sin[0] * sin[2] + cos[2] * cos[0] * sin[1],
-                    -sin[0] * cos[2] - cos[0] * sin[1] * sin[2],
-                    -cos[1] * cos[0],
-                ],
-                [
-                    cos[0] * sin[2] + sin[0] * cos[2] * sin[1],
-                    cos[2] * cos[0] - sin[0] * sin[1] * sin[2],
-                    -sin[0] * cos[1],
-                ],
-            ]
-        )
-
-        dR_dry = np.array(
-            [
-                [-sin[1] * cos[2], +sin[1] * sin[2], cos[1]],
-                [
-                    cos[2] * sin[0] * cos[1],
-                    -sin[0] * cos[1] * sin[2],
-                    sin[1] * sin[0],
-                ],
-                [
-                    -cos[0] * cos[2] * cos[1],
-                    cos[0] * cos[1] * sin[2],
-                    -cos[0] * sin[1],
-                ],
-            ]
-        )
-
-        dR_drz = np.array(
-            [
-                [-cos[1] * sin[2], -cos[1] * cos[2], 0],
-                [
-                    cos[0] * cos[2] - sin[2] * sin[0] * sin[1],
-                    -cos[0] * sin[2] - sin[0] * sin[1] * cos[2],
-                    0,
-                ],
-                [
-                    sin[0] * cos[2] + cos[0] * sin[2] * sin[1],
-                    -sin[2] * sin[0] + cos[0] * sin[1] * cos[2],
-                    0,
-                ],
-            ]
-        )
-
+        dR = dR_drotvec(rotvec)
         crd = mesh.nodes[list_nodes] - self.center
-        du_drx = crd @ dR_drx.T
-        du_dry = crd @ dR_dry.T
-        du_drz = (
-            crd @ dR_drz.T
-        )  # shape = (nnodes, nvar) with nvar = 3 in 3d (ux, uy, uz)
+        du_drx = crd @ dR[:, :, 0].T
+        du_dry = crd @ dR[:, :, 1].T
+        du_drz = crd @ dR[:, :, 2].T
 
         #### MPC ####
 
@@ -351,6 +289,14 @@ class RigidTie2D(BCBase):
 
         return "\n".join(list_str)
 
+    def _register_global_dofs(self, problem):
+        dof_indice_disp = problem.add_global_dof(
+            ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
+        )
+        dof_indice_rot = problem.add_global_dof(["RigidRotZ"], 1, "RidigRot")
+        self.var_cd = ["RigidDispX", "RigidDispY", "RigidRotZ"]
+        self.node_cd = [dof_indice_disp, dof_indice_disp, dof_indice_rot]
+
     def initialize(self, problem):
         if problem.space.is_axisymmetric:
             warnings.warn(
@@ -367,17 +313,6 @@ class RigidTie2D(BCBase):
         elif np.isscalar(self.center):
             # initialize the center at a position of a node
             self.center = problem.mesh.nodes[self.center]
-        dof_indice_disp = problem.add_global_dof(
-            ["RigidDispX", "RigidDispY"], 1, "RidigDisp"
-        )
-        dof_indice_rot = problem.add_global_dof(["RigidRotZ"], 1, "RidigRot")
-        self.var_cd = [
-            "RigidDispX",
-            "RigidDispY",
-            "RigidRotZ",
-        ]
-        self.node_cd = [dof_indice_disp, dof_indice_disp, dof_indice_rot]
-
         # extract indices array that gives the disp from the full dof solution
         n_nodes = problem.mesh.n_nodes
         rank = problem.space.variable_rank("DispX")

@@ -70,3 +70,9 @@ def test_cantilever_beam_3D_model():
     )
 
     assert np.abs(TensorStress[5][-1] + 0.9007983467254552) < 1e-10
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])

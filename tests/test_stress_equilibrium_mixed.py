@@ -102,6 +102,6 @@ def test_mixed_bulk_none_matches_explicit_bulk():
 
 
 if __name__ == "__main__":
-    test_mixed_nearly_incompressible_default_bulk()
-    test_mixed_bulk_none_matches_explicit_bulk()
-    print("test_stress_equilibrium_mixed: OK")
+    import pytest
+
+    pytest.main([__file__])

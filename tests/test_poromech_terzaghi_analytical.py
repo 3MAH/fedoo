@@ -142,5 +142,6 @@ def test_terzaghi_consolidation_vs_analytical():
 
 
 if __name__ == "__main__":
-    test_terzaghi_consolidation_vs_analytical()
-    print("test_poromech_terzaghi_analytical: OK")
+    import pytest
+
+    pytest.main([__file__])

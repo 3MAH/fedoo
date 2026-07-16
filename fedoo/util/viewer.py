@@ -1,6 +1,7 @@
 import fedoo as fd
 import numpy as np
 import sys
+from contextlib import contextmanager
 from qtpy import QtWidgets, QtGui
 from qtpy.QtWidgets import (
     QDockWidget,
@@ -26,7 +27,97 @@ from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToo
 import os
 import re
 
+from fedoo.core.multimeshdata import MultiMeshData
+from fedoo.core.mesh import MultiMesh
+
 USE_PYVISTA_QT = True
+
+
+def _is_multimesh(mesh):
+    return isinstance(mesh, MultiMesh)
+
+
+def _global_data_array(data):
+    if isinstance(data, MultiMeshData):
+        return data.to_global()
+    return data
+
+
+def _data_n_iter(data):
+    return getattr(data, "n_iter", 1)
+
+
+@contextmanager
+def _defer_rendering(plotter, enabled):
+    """Render a rebuilt scene only after all its actors are ready."""
+    if not enabled or not hasattr(plotter, "suppress_rendering"):
+        yield
+        return
+
+    was_suppressed = plotter.suppress_rendering
+    plotter.suppress_rendering = True
+    try:
+        yield
+    finally:
+        plotter.suppress_rendering = was_suppressed
+        if not was_suppressed:
+            plotter.render()
+
+
+def _as_3d_tuple(values, fill=0.0):
+    if values is None:
+        return (fill, fill, fill)
+    values = tuple(values)
+    if len(values) >= 3:
+        return values[:3]
+    return values + (fill,) * (3 - len(values))
+
+
+def _element_data_value(data, field, component, data_type, element_id):
+    values = data.get_data(field, component, data_type)
+    if isinstance(values, MultiMeshData):
+        return values.global_element_value(element_id)
+    return values[..., element_id]
+
+
+def _gausspoint_values_for_element(data, field, component, element_id):
+    values = data.get_data(field, component, "GaussPoint")
+    if isinstance(values, MultiMeshData):
+        submesh_id, local_id = data.global_element_location(element_id)
+        block = values.submesh(submesh_id)
+        if block is None:
+            return np.array([])
+        block = np.asarray(block)
+        n_elements = data.mesh[submesh_id].n_elements
+        return block.reshape(-1, n_elements)[:, local_id]
+
+    values = np.asarray(values)
+    return values.reshape(-1, data.mesh.n_elements)[:, element_id]
+
+
+def _gausspoint_global_indices_for_element(data, field, component, element_id):
+    values = data.get_data(field, component, "GaussPoint")
+    if isinstance(values, MultiMeshData):
+        submesh_id, local_id = data.global_element_location(element_id)
+        offset = 0
+        for i in range(submesh_id):
+            block = values.submesh(i)
+            if block is None:
+                offset += data.mesh[i].n_elements
+            else:
+                offset += np.asarray(block).shape[-1]
+
+        block = values.submesh(submesh_id)
+        if block is None:
+            return []
+        block = np.asarray(block)
+        n_elements = data.mesh[submesh_id].n_elements
+        n_gp = block.shape[-1] // n_elements
+        return [offset + local_id + i * n_elements for i in range(n_gp)]
+
+    values = np.asarray(values)
+    n_gp = values.shape[-1] // data.mesh.n_elements
+    return [element_id + i * data.mesh.n_elements for i in range(n_gp)]
 
 
 class DockTitleBar(QtWidgets.QWidget):
@@ -99,14 +190,16 @@ class DockTitleBar(QtWidgets.QWidget):
 class PlotDock(QDockWidget):
     _n_created_dock = 0  # total dock created
 
-    def __init__(self, data, title, parent=None, opts=None):
+    def __init__(self, data, title, parent=None, opts=None, filename=None):
         PlotDock._n_created_dock += 1
         self._dock_index = PlotDock._n_created_dock
         self.title = title
+        self.filename = filename
         title = f"{self._dock_index }: " + str(title)
         super().__init__(title, parent)
         self.data = data
         self.element_sets = None
+        self.unsaved_element_set_names = set()
         # visibility_mode to keep track on current_selection for element_sets dialog box
         #  -> None for show all, "show" or "hide"
         self.visibility_mode = None
@@ -212,9 +305,41 @@ class PlotDock(QDockWidget):
     @property
     def pv_mesh(self, id_mesh=1):
         mesh_name = "data" + str(id_mesh)
-        if mesh_name not in self.plotter.actors:
+        if mesh_name in self.plotter.actors:
+            return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
+
+        def actor_sort_key(name):
+            try:
+                return (0, int(name.rsplit("_", 1)[1]))
+            except (IndexError, ValueError):
+                return (1, name)
+
+        multimesh_actor_names = sorted(
+            (name for name in self.plotter.actors if name.startswith("data_")),
+            key=actor_sort_key,
+        )
+        if not multimesh_actor_names:
             return None
-        return pv.wrap(self.plotter.actors[mesh_name].GetMapper().GetInput())
+
+        meshes = [
+            pv.wrap(self.plotter.actors[name].GetMapper().GetInput())
+            for name in multimesh_actor_names
+        ]
+        if len(meshes) == 1:
+            return meshes[0]
+        return pv.MultiBlock(meshes).combine()
+
+    def picked_actor_mesh(self, actor):
+        """Return the actor name and PyVista mesh for a picked VTK actor."""
+        for name, candidate in self.plotter.actors.items():
+            if candidate is actor:
+                return name, pv.wrap(candidate.GetMapper().GetInput())
+            try:
+                if candidate.GetAddressAsString("") == actor.GetAddressAsString(""):
+                    return name, pv.wrap(candidate.GetMapper().GetInput())
+            except AttributeError:
+                pass
+        return None, None
 
     def get_components(self, field):
         if field == "":
@@ -272,40 +397,47 @@ class PlotDock(QDockWidget):
             # "n_colors": self.opts['n_colors'],
             "n_labels": self.opts["n_labels"],
         }
-        # plotter.clear()  # not compatible with pbr ???
-        plotter.renderer.clear_actors()
+        is_multimesh = _is_multimesh(self.data.mesh)
+        multimesh_kargs = {}
+        if is_multimesh:
+            multimesh_kargs["global_element_set"] = True
+            multimesh_kargs["name"] = "data"
 
-        self.data.plot(
-            field=self.current_field,
-            component=self.current_comp,
-            data_type=self.current_data_type,
-            clim=clim,
-            plotter=plotter,
-            show=False,
-            show_edges=self.opts["show_edges"],
-            show_scalar_bar=self.opts["show_scalar_bar"],
-            scalar_bar_args=sargs,
-            node_labels=self.opts["node_labels"],
-            element_labels=self.opts["element_labels"],
-            scale=self.opts["scale"],
-            opacity=self.opts["opacity"],
-            pbr=self.opts["pbr"],
-            metallic=self.opts["metallic"],
-            roughness=self.opts["roughness"],
-            diffuse=self.opts["diffuse"],
-            clip_args=self.opts["clip_args"],
-            lock_view=lock_view,
-            title=self.opts["title_plot"],
-            element_set=self.opts["element_set"],
-            # element_set_invert = self.opts["element_set_invert"],
-            cmap=self.opts["cmap"],
-        )
+        with _defer_rendering(plotter, is_multimesh):
+            # plotter.clear()  # not compatible with pbr ???
+            plotter.renderer.clear_actors()
+            self.data.plot(
+                field=self.current_field,
+                component=self.current_comp,
+                data_type=self.current_data_type,
+                clim=clim,
+                plotter=plotter,
+                show=False,
+                show_edges=self.opts["show_edges"],
+                show_scalar_bar=self.opts["show_scalar_bar"],
+                scalar_bar_args=sargs,
+                node_labels=self.opts["node_labels"],
+                element_labels=self.opts["element_labels"],
+                scale=self.opts["scale"],
+                opacity=self.opts["opacity"],
+                pbr=self.opts["pbr"],
+                metallic=self.opts["metallic"],
+                roughness=self.opts["roughness"],
+                diffuse=self.opts["diffuse"],
+                clip_args=self.opts["clip_args"],
+                lock_view=lock_view,
+                title=self.opts["title_plot"],
+                element_set=self.opts["element_set"],
+                # element_set_invert = self.opts["element_set_invert"],
+                cmap=self.opts["cmap"],
+                **multimesh_kargs,
+            )
 
-        if self.parent()._plane_widget_enabled:
-            self.parent().enable_plane_widget()
+            if self.parent()._plane_widget_enabled:
+                self.parent().enable_plane_widget()
 
-        if self.parent()._line_widget_enabled:
-            self.parent()._rebuild_line_widget()
+            if self.parent()._line_widget_enabled:
+                self.parent()._rebuild_line_widget()
 
     def closeEvent(self, event):
         self.plotter.close()
@@ -339,6 +471,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.element_sets_dialog = None
         self._window_index = 1
         self._picking_target = -1  # internal arg for picking tools. -1 = No target
+        self._syncing_line_widget = False
         self.window_layout = self._distribute_auto
 
         # if plane_widget or line wiget should be shown in the active dock
@@ -552,9 +685,21 @@ class MainWindow(QtWidgets.QMainWindow):
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
 
+        # Save Data
+        save_action = QtWidgets.QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save_current_data)
+        file_menu.addAction(save_action)
+
+        save_as_action = QtWidgets.QAction("Save as...", self)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.save_current_data_as)
+        file_menu.addAction(save_as_action)
+
+        file_menu.addSeparator()
+
         # Save Image
         save_image_action = QtWidgets.QAction("Save Image...", self)
-        save_image_action.setShortcut("Ctrl+S")
         save_image_action.triggered.connect(self.save_image_dialog)
         file_menu.addAction(save_image_action)
 
@@ -621,6 +766,7 @@ class MainWindow(QtWidgets.QMainWindow):
         clipAction.setShortcut("Ctrl+K")
         clipAction.triggered.connect(self.open_clip_dialog)
         tools_menu.addAction(clipAction)
+        self.clip_action = clipAction
 
         plotOverLineAction = QtWidgets.QAction("Plot over line...", self)
         plotOverLineAction.triggered.connect(self.open_plot_over_line_dialog)
@@ -721,6 +867,8 @@ class MainWindow(QtWidgets.QMainWindow):
             clim_action,
             renderer_options_action,
             copy_action,
+            save_action,
+            save_as_action,
             clipAction,
             plotOverLineAction,
             element_sets_action,
@@ -738,13 +886,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # Dockable PyVista Widget
         # -------------------------
         if data is not None:
+            filename = None
             if isinstance(data, str):
+                filename = data
                 title = os.path.basename(data)
                 data = fd.read_data(data)
             else:
                 title = "Data"
 
-            self.add_dataset_dock(data, title=title)
+            self.add_dataset_dock(data, title=title, filename=filename)
             # self.plotter = QtInteractor(self)
             # dock_plotter = QDockWidget("3D View", self)
             # dock_plotter.setWidget(self.plotter.interactor)
@@ -776,8 +926,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.active_dock:
             return self.active_dock.update_plot(*args, **kargs)
 
-    def add_dataset_dock(self, data, title, opts=None):
-        dock = PlotDock(data, title, self, opts)
+    def add_dataset_dock(self, data, title, opts=None, filename=None):
+        dock = PlotDock(data, title, self, opts, filename=filename)
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
         dock.visibilityChanged.connect(
@@ -932,6 +1082,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 dock_index += 1
         self.window_layout = self._distribute_auto
 
+    def _clip_is_supported(self, dock=None):
+        if dock is None:
+            dock = self.active_dock
+        mesh = getattr(getattr(dock, "data", None), "mesh", None)
+        return mesh is not None and getattr(mesh, "ndim", 3) == 3
+
     def _toggle_link_views(self, checked):
         # Synchronize both menu items
         self._link_views_action.setChecked(checked)
@@ -977,7 +1133,10 @@ class MainWindow(QtWidgets.QMainWindow):
             # Synchronize all docks to active dock's current iteration
             active_iter = self.active_dock.current_iter
             for dock in self.all_docks:
-                if dock is not self.active_dock and dock.data.n_iter > active_iter:
+                if (
+                    dock is not self.active_dock
+                    and _data_n_iter(dock.data) > active_iter
+                ):
                     dock.current_iter = active_iter
                     dock.update_plot(iteration=active_iter)
 
@@ -1040,13 +1199,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.active_dock = dock
 
+        if hasattr(self, "clip_action"):
+            clip_supported = self._clip_is_supported(dock)
+            self.clip_action.setEnabled(clip_supported)
+            if not clip_supported:
+                dock.opts["clip_args"] = None
+                self.disable_plane_widget()
+
         for d in self.all_docks:
             d._titlebar._set_active(d is dock)
 
-        if hasattr(dock.data, "n_iter"):
-            max_iter = dock.data.n_iter - 1
-        else:
-            max_iter = 0
+        max_iter = _data_n_iter(dock.data) - 1
         current_iter = dock.current_iter  # may be modified by setRange
         self.setRange(0, max_iter)
         self.iter_slider.setValue(current_iter)
@@ -1137,7 +1300,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Sync iteration across all docks if enabled
         if self._sync_iter:
             for dock in self.all_docks:
-                if dock.data.n_iter > val:  # only update if the dock has this iteration
+                if (
+                    _data_n_iter(dock.data) > val
+                ):  # only update if the dock has this iteration
                     dock.current_iter = val
                     dock.update_plot(iteration=val)
         else:
@@ -1156,7 +1321,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Sync iteration across all docks if enabled
         if self._sync_iter:
             for dock in self.all_docks:
-                if dock.data.n_iter > val:  # only update if the dock has this iteration
+                if (
+                    _data_n_iter(dock.data) > val
+                ):  # only update if the dock has this iteration
                     dock.current_iter = val
                     dock.update_plot(iteration=val)
         else:
@@ -1261,12 +1428,138 @@ class MainWindow(QtWidgets.QMainWindow):
             self,
             "Open file",
             "",
-            "Fedoo files (*.fdz) ;;VTK Files (*.vtk);;CSV Files (*.csv) ;; All Files (*)",
+            "Fedoo files (*.fdz *.fdh5) ;;VTK Files (*.vtk);;CSV Files (*.csv) ;; All Files (*)",
         )
         if fname:
             data = fd.read_data(fname)
             title = os.path.basename(fname)
-            self.add_dataset_dock(data, title=title)
+            self.add_dataset_dock(data, title=title, filename=fname)
+
+    def _fdh5_save_filename(self, filename):
+        root, ext = os.path.splitext(filename)
+        if ext == "":
+            return root + ".fdh5"
+        if ext.lower() != ".fdh5":
+            return None
+        return filename
+
+    def _default_element_sets_for_dock(self, dock):
+        element_sets = {"All": None}
+        unsaved = {"All"}
+
+        mesh = dock.data.mesh
+        if _is_multimesh(mesh):
+            offset = 0
+            for submesh_id, submesh in enumerate(mesh.submeshes):
+                label = submesh.name or submesh.elm_type
+                name = f"submesh_{submesh_id}: {label}"
+                if submesh.elm_type not in name:
+                    name = f"{name} ({submesh.elm_type})"
+                base_name = name
+                counter = 1
+                while name in element_sets or name in mesh.element_sets:
+                    counter += 1
+                    name = f"{base_name} #{counter}"
+                element_sets[name] = list(range(offset, offset + submesh.n_elements))
+                unsaved.add(name)
+                offset += submesh.n_elements
+
+        element_sets.update(mesh.element_sets)
+        return element_sets, unsaved
+
+    def _ensure_dock_element_sets(self, dock):
+        if dock.element_sets is None:
+            element_sets, unsaved = self._default_element_sets_for_dock(dock)
+            dock.element_sets = element_sets
+            dock.unsaved_element_set_names = unsaved
+
+    def _element_sets_for_save(self, dock):
+        self._ensure_dock_element_sets(dock)
+        excluded = getattr(dock, "unsaved_element_set_names", set())
+        return {
+            name: np.asarray(values, dtype=int)
+            for name, values in dock.element_sets.items()
+            if name not in excluded and values is not None
+        }
+
+    def _apply_saved_element_sets_to_mesh(self, mesh, element_sets):
+        if not _is_multimesh(mesh):
+            mesh.element_sets = {
+                name: np.asarray(values, dtype=int)
+                for name, values in element_sets.items()
+            }
+            return
+
+        submesh_sets = [{} for _ in mesh.submeshes]
+        dataset = fd.DataSet(mesh)
+        for name, values in element_sets.items():
+            for submesh_id, local in dataset.split_global_element_indices(
+                values
+            ).items():
+                submesh_sets[submesh_id][name] = local
+
+        for submesh, sets in zip(mesh.submeshes, submesh_sets):
+            submesh.element_sets = sets
+
+    def _data_for_fdh5_save(self, dock):
+        data = dock.data.deepcopy()
+        self._apply_saved_element_sets_to_mesh(
+            data.mesh,
+            self._element_sets_for_save(dock),
+        )
+        return data
+
+    def _save_data_to_fdh5(self, filename):
+        if self.active_dock is None:
+            return False
+
+        filename = self._fdh5_save_filename(filename)
+        if filename is None:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Save data",
+                "Only FDH5 files (*.fdh5) are supported.",
+            )
+            return False
+
+        data = self._data_for_fdh5_save(self.active_dock)
+        if isinstance(data, fd.MultiFrameDataSet):
+            data.save_all(filename, file_format="fdh5")
+        else:
+            data.save(filename)
+
+        self.active_dock.filename = filename
+        self.active_dock.title = os.path.basename(filename)
+        self.active_dock.setWindowTitle(
+            f"{self.active_dock._dock_index}: {self.active_dock.title}"
+        )
+        QtWidgets.QMessageBox.information(self, "Save data", f"Saved:\n{filename}")
+        return True
+
+    def save_current_data(self):
+        if self.active_dock is None:
+            return
+        filename = self.active_dock.filename
+        if not filename or os.path.splitext(filename)[1].lower() != ".fdh5":
+            self.save_current_data_as()
+            return
+        self._save_data_to_fdh5(filename)
+
+    def save_current_data_as(self):
+        if self.active_dock is None:
+            return
+        start = self.active_dock.filename or self.active_dock.title
+        if not start or os.path.splitext(start)[1].lower() != ".fdh5":
+            start = os.path.splitext(start)[0] + ".fdh5"
+
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save data as",
+            start,
+            "Fedoo HDF5 files (*.fdh5)",
+        )
+        if filename:
+            self._save_data_to_fdh5(filename)
 
     def open_clim_dialog(self):
         if self._clim_dialog is None:
@@ -1642,7 +1935,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         pl.write_frame()
 
-        for iteration in range(1, self.data.n_iter):
+        for iteration in range(1, _data_n_iter(self.data)):
             rot_azimuth = float(rot_azimuth_spin.value())
             rot_elevation = float(rot_elevation_spin.value())
             if rot_azimuth != 0:
@@ -1690,10 +1983,14 @@ class MainWindow(QtWidgets.QMainWindow):
     # Clip dialog : Open and close
     # ----------------------------
     def open_clip_dialog(self):
+        if not self._clip_is_supported():
+            self.statusBar().showMessage("Clip is only available for 3D meshes.", 3000)
+            return
+
         # Create clip dialog only if not already exist
         if self._clip_dialog is None:
             origin = (
-                tuple(self.data.mesh.bounding_box.center)
+                _as_3d_tuple(self.data.mesh.bounding_box.center)
                 if self.data.mesh is not None
                 else (0.0, 0.0, 0.0)
             )
@@ -1756,7 +2053,7 @@ class MainWindow(QtWidgets.QMainWindow):
             bounds = tuple(np.array(self.data.mesh.as_3d().bounding_box).T.ravel())
 
         if self.opts["clip_origin"] is None:
-            self.opts["clip_origin"] = tuple(self.data.mesh.bounding_box.center)
+            self.opts["clip_origin"] = _as_3d_tuple(self.data.mesh.bounding_box.center)
             self.opts["clip_normal"] = (1.0, 0.0, 0.0)
 
         origin = self.opts["clip_origin"]
@@ -1841,13 +2138,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotter.clear_line_widgets()
 
     def _on_pol_dialog_changed(self, p1, p2):
-        # update widget (emit no signal)
-        self._line_widget.SetPoint1(p1)
-        self._line_widget.SetPoint2(p2)
+        self._set_line_widget_points(p1, p2)
 
     def on_line_changed(self, p1, p2):
         """Called interactively while moving the widget"""
+        if self._syncing_line_widget:
+            return
+        p1, p2 = self._set_line_widget_points(p1, p2)
         self._plot_over_line_dialog.update_line(p1, p2)
+
+    def _line_points_for_active_mesh(self, p1, p2):
+        p1, p2 = tuple(p1), tuple(p2)
+        if self.data.mesh.ndim == 2:
+            p1, p2 = (p1[0], p1[1], 0.0), (p2[0], p2[1], 0.0)
+        return p1, p2
+
+    def _set_line_widget_points(self, p1, p2):
+        p1, p2 = self._line_points_for_active_mesh(p1, p2)
+        self._syncing_line_widget = True
+        try:
+            self._line_widget.SetPoint1(p1)
+            self._line_widget.SetPoint2(p2)
+        finally:
+            self._syncing_line_widget = False
+        return p1, p2
 
     def _rebuild_line_widget(self):
         if self._plot_over_line_dialog:
@@ -1879,6 +2193,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 p1 = tuple(point)
             else:
                 p2 = tuple(point)
+            p1, p2 = self._line_points_for_active_mesh(p1, p2)
 
             # Sync UI and scene
             self._on_pol_dialog_changed(p1, p2)  # update widget
@@ -1937,7 +2252,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         pid = self.data.mesh.nearest_node(point)
                 else:
                     pid = mesh.find_closest_point(point)
-                    if self.current_data_type == "GaussPoint":
+                    if self.current_data_type == "GaussPoint" and not _is_multimesh(
+                        self.data.mesh
+                    ):
                         pid = self.data.mesh.elements.ravel()[pid]
             except Exception:
                 pid = None
@@ -1948,7 +2265,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 msg = ""
             msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
             name = self.current_field
-            if name:
+            if name and pid is not None:
                 msg += (
                     f" | {name}={self.data[name, self.current_component, 'Node'][pid]}"
                 )
@@ -1974,7 +2291,10 @@ class MainWindow(QtWidgets.QMainWindow):
             cell_id = picker.GetCellId()
             if cell_id < 0:
                 return
-            mesh = self.active_dock.pv_mesh
+            display_cell_id = cell_id
+            actor_name, mesh = self.active_dock.picked_actor_mesh(picker.GetActor())
+            if mesh is None:
+                mesh = self.active_dock.pv_mesh
             if "vtkOriginalCellIds" in mesh.cell_data:
                 save_original_cell_ids = mesh.cell_data["vtkOriginalCellIds"]
                 cell = mesh.extract_cells(cell_id)
@@ -1992,17 +2312,35 @@ class MainWindow(QtWidgets.QMainWindow):
             elif "vtkOriginalCellIds" in mesh.cell_data:
                 # don't work !!!!
                 cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
+            if "_fedoo_global_cell_ids" in mesh.cell_data:
+                cell_id = mesh.cell_data["_fedoo_global_cell_ids"][display_cell_id]
+            cell_id = int(cell_id)
 
+            msg = ""
             if mesh is not None and cell_id is not None:
                 msg = f"Element id={cell_id} | "
             # msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
             name = self.current_field
-            data_gp = self.data[name, self.current_component, "GaussPoint"].reshape(
-                -1, self.data.mesh.n_elements
-            )[:, cell_id]
             if name:
-                msg += f"{name}_{self.current_component}={self.data[name, self.current_component, 'Element'][cell_id]}"
-                msg += f" | gp vals: {data_gp}"
+                try:
+                    elem_value = _element_data_value(
+                        self.data,
+                        name,
+                        self.current_component,
+                        "Element",
+                        cell_id,
+                    )
+                    msg += f"{name}_{self.current_component}={elem_value}"
+                except Exception:
+                    pass
+
+                try:
+                    data_gp = _gausspoint_values_for_element(
+                        self.data, name, self.current_component, cell_id
+                    )
+                    msg += f" | gp vals: {data_gp}"
+                except Exception:
+                    pass
 
             self.statusBar().showMessage(msg)
 
@@ -2379,7 +2717,8 @@ class ClimOptionsDialog(QtWidgets.QDialog):
         parent = self.parent()
         if self.rb_current.isChecked():
             data = parent.get_current_data()
-            clim = [data.min(), data.max()]
+            data = _global_data_array(data)
+            clim = [np.nanmin(data), np.nanmax(data)]
         elif self.rb_all.isChecked():
             if hasattr(parent.active_dock.data, "get_all_frame_lim"):
                 clim = parent.active_dock.data.get_all_frame_lim(
@@ -2389,7 +2728,8 @@ class ClimOptionsDialog(QtWidgets.QDialog):
                 )[2]
             else:
                 data = parent.get_current_data()
-                clim = [data.min(), data.max()]
+                data = _global_data_array(data)
+                clim = [np.nanmin(data), np.nanmax(data)]
         self.vmin_spin.setValue(float(clim[0]))
         self.vmax_spin.setValue(float(clim[1]))
 
@@ -2404,7 +2744,7 @@ class ClimOptionsDialog(QtWidgets.QDialog):
     def get_values(self):
         cmap_name = self.cmap_combo.currentText()
         n_colors = int(self.ncolors_spin.value())
-        cmap = mpl.cm.get_cmap(cmap_name, n_colors)
+        cmap = mpl.colormaps[cmap_name].resampled(n_colors)
         if self.cmap_reverse.isChecked():
             cmap = cmap.reversed()
         if self.rb_current.isChecked():
@@ -2439,7 +2779,7 @@ class CMapPreview(QtWidgets.QLabel):
     def update_preview(self, cmap_name: str, reverse: bool = False, n_colors=256):
         try:
             # cmap = mpl.colormaps.get(cmap_name)
-            cmap = mpl.cm.get_cmap(cmap_name, n_colors)
+            cmap = mpl.colormaps[cmap_name].resampled(n_colors)
         except Exception:
             self.setText(f"Colormap '{cmap_name}' introuvable")
             return
@@ -2593,6 +2933,8 @@ class ClipDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Clip Plane")
         self.setModal(False)  # non modale
+        default_origin = _as_3d_tuple(default_origin)
+        default_normal = _as_3d_tuple(default_normal)
 
         # --- Widgets ---------------------------------------------------------
         self.enableClipChk = QtWidgets.QCheckBox("Activate clipping")
@@ -2696,6 +3038,8 @@ class ClipDialog(QtWidgets.QDialog):
 
     def set_values_from_widget(self, origin, normal, invert=None):
         """Update widget values without emiting signal."""
+        origin = _as_3d_tuple(origin)
+        normal = _as_3d_tuple(normal)
         blockers = [
             QSignalBlocker(self.originX),
             QSignalBlocker(self.originY),
@@ -3052,20 +3396,21 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         self.parent().update_plot()
 
     # -------------- Element sets UI helpers -------------
+    def _default_element_sets(self):
+        return self.parent()._default_element_sets_for_dock(self.parent().active_dock)
+
     def _refresh_sets_list(self):
         if self.element_sets is None:
-            element_sets = {
-                "All": None,  # or set(range(self.mesh.n_cells))
-                # add your pre-defined sets...
-            }
-            element_sets.update(self.parent().data.mesh.element_sets)
+            element_sets, unsaved = self._default_element_sets()
             self.parent().active_dock.element_sets = element_sets
+            self.parent().active_dock.unsaved_element_set_names = unsaved
         self.sets_list.clear()
         for name in sorted(self.element_sets.keys()):
-            if self.element_sets[name]:
-                n_elements = len(self.element_sets[name])
-            else:
+            values = self.element_sets[name]
+            if values is None:
                 n_elements = self.parent().data.mesh.n_elements
+            else:
+                n_elements = len(values)
             item = QtWidgets.QListWidgetItem(f"{name} ({n_elements} elements)")
             item.setData(Qt.UserRole, name)
             self.sets_list.addItem(item)
@@ -3128,7 +3473,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 dtype=bool,
             )
             picked_ids = np.nonzero(inside_mask)[0].astype(int)
-            if "vtkOriginalCellIds" in pvmesh.cell_data:
+            if "_fedoo_global_cell_ids" in pvmesh.cell_data:
+                picked_ids = pvmesh.cell_data["_fedoo_global_cell_ids"][picked_ids]
+            elif "vtkOriginalCellIds" in pvmesh.cell_data:
                 picked_ids = pvmesh.cell_data["vtkOriginalCellIds"][picked_ids]
 
             picked_ids = set(picked_ids)
@@ -3186,6 +3533,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         if "Disp" in data.node_data and self.use_def_mesh.isChecked():
             mesh = data.mesh.copy()
             mesh.nodes = mesh.nodes + data.node_data["Disp"].T
+            if _is_multimesh(mesh):
+                for submesh in mesh.submeshes:
+                    submesh.nodes = mesh.nodes
         else:
             mesh = data.mesh
         ids = set(mesh.find_elements(expr))
@@ -3270,6 +3620,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "No set selected", "Please select a set to rename."
             )
             return
+        if name in self.parent().active_dock.unsaved_element_set_names:
+            QtWidgets.QMessageBox.information(
+                self, "Built-in set", "Built-in element sets cannot be renamed."
+            )
+            return
         new_name, ok = QtWidgets.QInputDialog.getText(
             self, "Rename Set", f"New name for '{name}':", text=name
         )
@@ -3292,6 +3647,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "No set selected", "Please select a set to rename."
             )
             return
+        if name in self.parent().active_dock.unsaved_element_set_names:
+            QtWidgets.QMessageBox.information(
+                self, "Built-in set", "Built-in element sets cannot be removed."
+            )
+            return
         del self.element_sets[name]
         self._refresh_sets_list()
         self.status_lbl.setText(f"Set '{name}' removed")
@@ -3306,6 +3666,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         if new_name in self.element_sets:
             QtWidgets.QMessageBox.warning(
                 self, "Name exists", f"A set named '{new_name}' already exists."
+            )
+            return
+        if new_name in self.parent().active_dock.unsaved_element_set_names:
+            QtWidgets.QMessageBox.warning(
+                self, "Reserved name", f"'{new_name}' is a built-in set name."
             )
             return
         if self.current_selection:
@@ -3612,7 +3977,9 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                     pid = mainwin.data.mesh.nearest_node(point)
             else:
                 pid = mesh.find_closest_point(point)
-                if mainwin.current_data_type == "GaussPoint":
+                if mainwin.current_data_type == "GaussPoint" and not _is_multimesh(
+                    mainwin.data.mesh
+                ):
                     pid = mainwin.data.mesh.elements.ravel()[pid]
 
             if mesh is not None and pid is not None and pid >= 0:
@@ -3637,7 +4004,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             cell_id = picker.GetCellId()
             if cell_id < 0:
                 return
-            mesh = mainwin.active_dock.pv_mesh
+            display_cell_id = cell_id
+            actor_name, mesh = mainwin.active_dock.picked_actor_mesh(picker.GetActor())
+            if mesh is None:
+                mesh = mainwin.active_dock.pv_mesh
             cell = mesh.extract_cells(cell_id)
             mainwin.plotter.remove_actor("_picked_cell")
             mainwin.plotter.add_mesh(
@@ -3645,8 +4015,12 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             )
             if mainwin.opts["clip_args"]:
                 cell_id = mesh.cell_data["cell_ids"][cell_id]
+            elif "vtkOriginalCellIds" in mesh.cell_data:
+                cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
+            if "_fedoo_global_cell_ids" in mesh.cell_data:
+                cell_id = mesh.cell_data["_fedoo_global_cell_ids"][display_cell_id]
             if mesh is not None and cell_id is not None:
-                self.id_spin.setValue(cell_id)
+                self.id_spin.setValue(int(cell_id))
             # Remove observer after pick
             if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
                 mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
@@ -3790,7 +4164,9 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                 if indice >= data.mesh.n_elements:
                     return False
             else:  # GaussPoint
-                if indice >= data[field, comp, "GaussPoint"].shape[-1]:
+                gp_data = data.get_data(field, comp, "GaussPoint")
+                gp_data = _global_data_array(gp_data)
+                if indice >= gp_data.shape[-1]:
                     return False
         return True
 
@@ -3815,7 +4191,7 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         field = self.field_combo.currentText()
         comp = self.comp_combo.currentText()
         dtype = self.data_type_combo.currentText()
-        if not indice:
+        if indice is None:
             idx = self.id_spin.value()
         else:
             idx = indice
@@ -3827,10 +4203,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         else:
             if indice is None and dtype == "GaussPoint":
                 # add all gauss points values
-                n_elements = data.mesh.n_elements
-                n_gp = data[field, comp, "GaussPoint"].shape[-1] // n_elements
-                for i in range(n_gp):
-                    self.add_y_data(indice=idx + i * n_elements)
+                for gp_id in _gausspoint_global_indices_for_element(
+                    data, field, comp, idx
+                ):
+                    self.add_y_data(indice=gp_id)
                 return
             label = f"{field}_{comp} ({dtype}, ID={idx})"
         # Add to list and table

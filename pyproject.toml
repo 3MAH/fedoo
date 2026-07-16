@@ -27,23 +27,21 @@ classifiers = [
 dependencies = [
     'numpy>=2.00',
     'scipy',
-    'simcoon>=1.11.0',
+    'h5py',
+    'simcoon>=1.14',
     'meshio',
 ]
 
 [project.optional-dependencies]
 all = ['fedoo[solver,plot,test,ipc]']
-ipc = ['ipctk']
+ipc = ['ipctk>=1.6.0']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
-    'matplotlib',
+    'matplotlib>=3.5',
     'pyvista[io]',
-]
-simcoon = [
-    'simcoon>=1.11.0'
 ]
 test = [
     'pytest',

@@ -151,5 +151,6 @@ def test_mandel_cryer_overshoot():
 
 
 if __name__ == "__main__":
-    test_mandel_cryer_overshoot()
-    print("test_poromech_mandel: OK")
+    import pytest
+
+    pytest.main([__file__])

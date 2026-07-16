@@ -8,12 +8,14 @@ dependencies:
   - python=3.10
   - numpy>=1.24
   - scipy
+  - h5py
   - pypardiso # [x86 or x86_64]
   # - scikit-umfpack # [(not x86) and (not x86_64)]
   - vtk>=9.2
   - pypandoc
   - pyvista>=0.39
-  - simcoon>=1.11.0
+  - meshio
+  - simcoon>=1.14
   - pytest
   - sphinx
   - sphinx_rtd_theme

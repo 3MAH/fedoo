@@ -63,6 +63,7 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
+        self.__assembly.register_global_dofs(self)
         self.time_integrators = {}
         self._time_integrators_compiled = False
         self.t0 = 0
@@ -887,6 +888,10 @@ class _NonLinearBase:
                 error < tol_nr
                 and subiter >= self._nr_min_subiter
                 and self._boundary_is_0
+                # constraints such as MeanMotion publish the out-of-balance on
+                # their own nonlinear equations here; gate convergence on it so
+                # an unsatisfied constraint cannot report a converged increment.
+                and getattr(self, "_bc_residual_norm", 0.0) < 10 * tol_nr
             ):
                 self._t_fact_inc = None
                 return 1, subiter, error
@@ -1186,21 +1191,20 @@ class _NonLinearBase:
                     )
                 if update_dt:
                     dt *= 0.25
-                    # if self.print_info > 0:
-                    # print(
-                    #     "NR failed to converge (err: {:.5f}) - reduce the time increment to {:.5f}".format(
-                    #         error, dt
-                    #     )
-                    # )
 
                     if dt < dt_min:
+                        # roll back to the last converged increment so accessors
+                        # return a clean state after the abort
+                        self.to_start()
                         raise RuntimeError(
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
+                    # Roll back the failed increment (to_start at the top of the loop)
                     restart = True
                     continue
                 else:
+                    self.to_start()
                     raise RuntimeError(
                         "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )

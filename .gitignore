@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 CLAUDE.md
 
-# Claude Code personal settings
-.claude/settings.local.json
+# Claude Code
+.claude/

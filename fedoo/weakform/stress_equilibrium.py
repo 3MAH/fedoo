@@ -3,6 +3,7 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.weakform.inertia import Inertia
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -89,6 +90,22 @@ class StressEquilibrium(WeakFormBase):
         # (if TangentMatrix is symmetric)
         # -> need to be checked for general case
 
+    def get_storage(self):
+        if self.storage is not None:
+            return self.storage
+        density = getattr(self.constitutivelaw, "density", None)
+        if density is None:
+            material_name = getattr(
+                self.constitutivelaw, "name", type(self.constitutivelaw).__name__
+            )
+            raise ValueError(
+                "StressEquilibrium requires a material density for dynamic "
+                f"analysis, but material {material_name!r} has no density. "
+                "Set it with material.set_density(rho), or attach inertia "
+                "explicitly with weakform.set_inertia(density_or_weakform)."
+            )
+        return Inertia(density, space=self.space)
+
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
         if assembly._nlgeom == "TL":  # add initial displacement effect
@@ -153,6 +170,13 @@ class StressEquilibrium(WeakFormBase):
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
         self.corate = self._corate  # to force the setter function
+
+        # the UL spatial Cauchy tangent of a hyperelastic law is not
+        # major-symmetric (stress term), so it must not be symmetrized
+        if assembly._nlgeom == "UL" and getattr(
+            self.constitutivelaw, "_Lt_from_F", False
+        ):
+            self.assembly_options["assume_sym"] = False
 
         # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
@@ -271,7 +295,10 @@ class StressEquilibrium(WeakFormBase):
                     order="F",
                 )
 
+            # simcoon UMATs return the "box" tangent d(tau_hat)/dD (Kirchhoff,
+            # log rate); convert it to what this configuration integrates.
             if assembly._nlgeom == "TL":
+                # reference config: material tangent dS/dE (DsigmaDe_2_DSDE)
                 assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                     assembly.sv["F"]
                 )
@@ -283,13 +310,25 @@ class StressEquilibrium(WeakFormBase):
                     self._convert_Lt_tag,
                 )
 
-            else:  # _Lt_from_F = True and assembly._nlgeom == "UL"
-                # need to convert Lt if Lt is defined related to F instead
-                # of log strain
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+            elif self._convert_Lt_tag == "DSDE_2_Dsigma_logarithmicDD":
+                # current config, log rate: Cauchy tangent = Kirchhoff box / J
+                jacobian = np.linalg.det(assembly.sv["F"].transpose(2, 0, 1))
+                assembly.sv["TangentMatrix"] = (
+                    assembly.sv["TangentMatrix"] / jacobian[None, None, :]
+                )
+
+            else:  # UL jaumann / green_naghdi: box -> dS/dE -> spatial rate
+                stress = assembly.sv["Stress"].asarray()
+                dsde = sim.Lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
-                    assembly.sv["Stress"].asarray(),
+                    stress,
+                    "DsigmaDe_2_DSDE",
+                )
+                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                    dsde,
+                    assembly.sv["F"],
+                    stress,
                     self._convert_Lt_tag,
                 )
 
@@ -450,22 +489,22 @@ class StressEquilibrium(WeakFormBase):
             value = value.lower()
             if value == "log":
                 self._corate_func = _comp_log_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
             elif value == "log_inc":
                 self._corate_func = _comp_log_strain_inc
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
             elif value in ["gn", "green_naghdi"]:
                 self._corate_func = _comp_gn_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_GreenNaghdiDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_GreenNaghdiDD"
             elif value == "jaumann":
                 self._corate_func = _comp_jaumann_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_JaumannDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_JaumannDD"
             elif value == "log_r":
                 self._corate_func = _comp_log_strain_R
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
             elif value == "log_r_inc":
                 self._corate_func = _comp_log_strain_R_inc
-                self._convert_Lt_tag = "Dsigma_LieDD_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
             else:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
@@ -476,22 +515,22 @@ class StressEquilibrium(WeakFormBase):
             value = value.lower()
             if value == "log":
                 self._corate_func = _comp_log_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "log_inc":
                 self._corate_func = _comp_log_strain_inc
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value in ["gn", "green_naghdi"]:
                 self._corate_func = _comp_gn_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "jaumann":
                 self._corate_func = _comp_jaumann_strain
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "log_r":
                 self._corate_func = _comp_log_strain_R
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "log_r_inc":
                 self._corate_func = _comp_log_strain_R_inc
-                self._convert_Lt_tag = "Dsigma_LieDD_2_DSDE"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             else:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
@@ -666,52 +705,3 @@ def _comp_gn_strain(wf, assembly, pb):
     )
     assembly.sv["DR"] = DR
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
-
-
-# def _comp_linear_strain_pgd(wf, assembly, pb):
-#     # may be compatible with other methods like PGD
-#     # but not compatible with simcoon
-#     assert not (
-#         wf.nlgeom
-#     ), "the current strain measure isn't adapted for finite strain"
-#     grad_values = assembly.sv["DispGradient"]
-
-#     strain = [grad_values[i][i] for i in range(3)]
-#     strain += [
-#         grad_values[0][1] + grad_values[1][0],
-#         grad_values[0][2] + grad_values[2][0],
-#         grad_values[1][2] + grad_values[2][1],
-#     ]
-#     assembly.sv["Strain"] = StrainTensorList(strain)
-
-
-# def _comp_gl_strain(wf, assembly, pb):
-#     # not compatible with simcoon
-#     if not (wf.nlgeom):
-#         return _comp_linear_strain_pgd(wf, assembly, pb)
-#     else:
-#         grad_values = assembly.sv["DispGradient"]
-#         # GL strain tensor
-#         # possibility to be improve from simcoon functions
-#         # to get the logarithmic strain tensor...
-#         strain = [
-#             grad_values[i][i]
-#             + 0.5 * sum([grad_values[k][i] ** 2 for k in range(3)])
-#             for i in range(3)
-#         ]
-#         strain += [
-#             grad_values[0][1]
-#             + grad_values[1][0]
-#             + sum([grad_values[k][0] * grad_values[k][1] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[0][2]
-#             + grad_values[2][0]
-#             + sum([grad_values[k][0] * grad_values[k][2] for k in range(3)])
-#         ]
-#         strain += [
-#             grad_values[1][2]
-#             + grad_values[2][1]
-#             + sum([grad_values[k][1] * grad_values[k][2] for k in range(3)])
-#         ]
-#         return StrainTensorList(strain)

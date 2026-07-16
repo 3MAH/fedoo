@@ -21,8 +21,6 @@ class AssemblySum(AssemblyBase):
         list of Assembly objects to sum
     name: str
         name of the Assembly
-    assembly_output: Assembly (optional keyword arg)
-        Assembly object used to extract output values (using Problem.get_results or Problem.save_results)
     """
 
     def __init__(self, list_assembly, name="", **kargs):
@@ -51,11 +49,6 @@ class AssemblySum(AssemblyBase):
         self.mesh = list_assembly[0].mesh
 
         self.current = _AssemblySumCurrent(list_assembly)
-
-        # for post-treatment only
-        self.__assembly_output = kargs.get("assembly_output", None)
-        if self.__assembly_output is not None:
-            self.sv = self.__assembly_output.sv  # alias
 
     def __add__(self, another_assembly):
         if isinstance(another_assembly, AssemblySum):
@@ -144,6 +137,10 @@ class AssemblySum(AssemblyBase):
         for assembly in self.list_assembly:
             assembly.initialize(pb)
 
+    def _register_global_dofs(self, pb):
+        for assembly in self.list_assembly:
+            assembly.register_global_dofs(pb)
+
     def to_start(self, pb):
         """
         Reset the current time increment (internal variable in the constitutive equation)
@@ -184,20 +181,12 @@ class AssemblySum(AssemblyBase):
     def list_assembly(self):
         return self._list_assembly
 
-    @property
-    def assembly_output(self):
-        return self.__assembly_output
-
 
 class _AssemblySumCurrent(
     AssemblySum
 ):  # same as AssemblySum using the current assemblies and without output function
     def __init__(self, list_assembly, **kargs):
         self._list_assembly = list_assembly
-        self.__assembly_output = None
-        # self.__assembly_output = kargs.get('assembly_output', None)
-        # if self.__assembly_output is not None: self.sv = self.__assembly_output.sv #alias
-
         self._reload = kargs.pop("reload", "all")
         AssemblyBase.__init__(self, name="")
 

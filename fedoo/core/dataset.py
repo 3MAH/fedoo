@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import os
-from zipfile import ZipFile, Path
-from fedoo.core.mesh import Mesh
+from zipfile import ZipFile, Path as ZipPath
+from fedoo.core.mesh import Mesh, MultiMesh
+from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
+from fedoo.lib_elements.element_list import get_default_n_gp
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 try:
@@ -34,6 +36,59 @@ try:
     USE_PANDAS = True
 except ImportError:
     USE_PANDAS = False
+
+
+def _as_3d_points(points: np.ndarray) -> np.ndarray:
+    """Return point coordinates padded or truncated to 3D."""
+    if points.shape[1] == 3:
+        return points
+    if points.shape[1] < 3:
+        return np.column_stack(
+            (points, np.zeros((points.shape[0], 3 - points.shape[1])))
+        )
+    return points[:, :3]
+
+
+def _array_to_pyvista_data(data: np.ndarray) -> np.ndarray:
+    """Return data in the component-last shape expected by pyvista."""
+    data = np.asarray(data)
+    if data.ndim == 1:
+        return data
+    return data.T
+
+
+def _component_from_array(field: str, data: np.ndarray, component=None):
+    """Extract one component from a Fedoo data array."""
+    if (
+        component is None
+        or np.isscalar(data)
+        or not hasattr(data, "shape")
+        or len(data.shape) <= 1
+    ):
+        return data
+
+    if isinstance(component, str):
+        component = {
+            "X": 0,
+            "Y": 1,
+            "Z": 2,
+            "XX": 0,
+            "YY": 1,
+            "ZZ": 2,
+            "XY": 3,
+            "XZ": 4,
+            "YZ": 5,
+        }.get(component, component)
+
+    if component == "norm":
+        return np.linalg.norm(data, axis=0)
+
+    if isinstance(component, str):
+        if field == "Stress":
+            data = StressTensorList(data)
+        elif field == "Strain":
+            data = StrainTensorList(data)
+    return data[component]
 
 
 class DataSet:
@@ -95,6 +150,14 @@ class DataSet:
         self.element_data = {}
         self.gausspoint_data = {}
         self.scalar_data = {}
+        self.active_submesh = 0
+        """Active submesh used by MultiMesh data access.
+
+        For ``MultiMesh`` datasets, element and Gauss point fields are returned
+        as ``MultiMeshData`` objects. Plain array access to these objects points
+        to ``active_submesh``. Node fields stay plain arrays; by default,
+        ``get_data`` fills nodes unused by the active submesh with zero.
+        """
 
         if isinstance(data, dict):
             data_type = data_type.lower()
@@ -114,6 +177,197 @@ class DataSet:
 
         self.meshplot = None
         self.meshplot_gp = None  # a mesh with discontinuity between each element to plot gauss points field
+
+    def _is_multimesh(self) -> bool:
+        return isinstance(self.mesh, MultiMesh)
+
+    def _resolve_submesh_indices(self, selector=None) -> list[int]:
+        if not self._is_multimesh():
+            return [0]
+        if selector is None:
+            return list(range(len(self.mesh.submeshes)))
+        if isinstance(selector, (list, tuple, set, np.ndarray)):
+            indices = []
+            for item in selector:
+                indices.extend(self._resolve_submesh_indices(item))
+            return list(dict.fromkeys(indices))
+        if isinstance(selector, int):
+            return [selector]
+        if isinstance(selector, str):
+            name_matches = [
+                i for i, mesh in enumerate(self.mesh.submeshes) if mesh.name == selector
+            ]
+            if name_matches:
+                return name_matches
+            type_matches = [
+                i
+                for i, mesh in enumerate(self.mesh.submeshes)
+                if mesh.elm_type == selector
+            ]
+            if type_matches:
+                return type_matches
+        raise KeyError(selector)
+
+    def _active_submesh_index(self) -> int:
+        return self._resolve_submesh_indices(self.active_submesh)[0]
+
+    def global_element_location(self, element_id: int) -> tuple[int, int]:
+        """Return ``(submesh_id, local_element_id)`` for a global element id.
+
+        For regular ``Mesh`` datasets, the returned submesh id is always 0.
+        For ``MultiMesh`` datasets, global element ids follow the same
+        concatenated order used by ``to_pyvista`` and multimesh plotting: all
+        elements of submesh 0, then all elements of submesh 1, and so on.
+        """
+        element_id = int(element_id)
+        if not self._is_multimesh():
+            if element_id < 0 or element_id >= self.mesh.n_elements:
+                raise IndexError(element_id)
+            return 0, element_id
+
+        offset = 0
+        for submesh_id, submesh in enumerate(self.mesh.submeshes):
+            stop = offset + submesh.n_elements
+            if offset <= element_id < stop:
+                return submesh_id, element_id - offset
+            offset = stop
+        raise IndexError(element_id)
+
+    def global_element_id(self, submesh_id: int, local_element_id: int) -> int:
+        """Return the global element id for a submesh-local element id."""
+        submesh_id = int(submesh_id)
+        local_element_id = int(local_element_id)
+
+        if not self._is_multimesh():
+            if submesh_id != 0:
+                raise IndexError(submesh_id)
+            if local_element_id < 0 or local_element_id >= self.mesh.n_elements:
+                raise IndexError(local_element_id)
+            return local_element_id
+
+        if submesh_id < 0 or submesh_id >= len(self.mesh.submeshes):
+            raise IndexError(submesh_id)
+        submesh = self.mesh[submesh_id]
+        if local_element_id < 0 or local_element_id >= submesh.n_elements:
+            raise IndexError(local_element_id)
+        return (
+            sum(mesh.n_elements for mesh in self.mesh.submeshes[:submesh_id])
+            + local_element_id
+        )
+
+    def split_global_element_indices(self, element_ids) -> dict[int, np.ndarray]:
+        """Split global element ids into submesh-local element ids.
+
+        Parameters
+        ----------
+        element_ids : array-like of int
+            Element ids in the concatenated global numbering used by
+            multimesh plotting and viewer selections.
+
+        Returns
+        -------
+        dict[int, numpy.ndarray]
+            Mapping ``submesh_id -> local_element_ids``. Empty submeshes are
+            omitted.
+        """
+        element_ids = np.asarray(element_ids, dtype=int)
+        if element_ids.ndim == 0:
+            element_ids = element_ids.reshape(1)
+
+        if not self._is_multimesh():
+            if np.any((element_ids < 0) | (element_ids >= self.mesh.n_elements)):
+                raise IndexError(element_ids)
+            return {0: element_ids}
+
+        split_indices = {}
+        offset = 0
+        for submesh_id, submesh in enumerate(self.mesh.submeshes):
+            stop = offset + submesh.n_elements
+            local_ids = (
+                element_ids[(element_ids >= offset) & (element_ids < stop)] - offset
+            )
+            if len(local_ids):
+                split_indices[submesh_id] = local_ids
+            offset = stop
+
+        if len(split_indices) == 0 and len(element_ids) > 0:
+            raise IndexError(element_ids)
+        return split_indices
+
+    def _selected_multimesh(self, selected_submeshes=None):
+        if not self._is_multimesh():
+            return self.mesh, [0]
+        indices = self._resolve_submesh_indices(selected_submeshes)
+        mesh = MultiMesh.from_mesh_list(
+            [self.mesh[i] for i in indices],
+            name=self.mesh.name,
+            node_sets=self.mesh.node_sets,
+            register_name=False,
+        )
+        return mesh, indices
+
+    def _as_multimesh_data(self, data) -> MultiMeshData:
+        return MultiMeshData(
+            self.mesh,
+            data,
+            active_submesh=self._active_submesh_index(),
+        )
+
+    def _convert_multimesh_data(self, data, convert_from: str, convert_to: str):
+        """Convert MultiMesh data block-by-block on each submesh."""
+        active_submesh = self._active_submesh_index()
+
+        if convert_from == convert_to:
+            if convert_to in ["Element", "GaussPoint"]:
+                return self._as_multimesh_data(data)
+            return data
+
+        if isinstance(data, MultiMeshData):
+            if convert_to == "Node":
+                block = data.submesh(active_submesh)
+                if block is None:
+                    raise NameError("Field data not found on the active submesh.")
+                return self.mesh[active_submesh].convert_data(
+                    np.asarray(block),
+                    convert_from=convert_from,
+                    convert_to=convert_to,
+                )
+
+            converted = {
+                submesh_id: self.mesh[submesh_id].convert_data(
+                    np.asarray(block),
+                    convert_from=convert_from,
+                    convert_to=convert_to,
+                )
+                for submesh_id, block in data.items()
+                if block is not None
+            }
+            return MultiMeshData(
+                self.mesh,
+                converted,
+                active_submesh=active_submesh,
+            )
+
+        if convert_from == "Node" and convert_to in ["Element", "GaussPoint"]:
+            converted = {
+                submesh_id: submesh.convert_data(
+                    data,
+                    convert_from=convert_from,
+                    convert_to=convert_to,
+                )
+                for submesh_id, submesh in enumerate(self.mesh.submeshes)
+            }
+            return MultiMeshData(
+                self.mesh,
+                converted,
+                active_submesh=active_submesh,
+            )
+
+        return self.mesh[active_submesh].convert_data(
+            data,
+            convert_from=convert_from,
+            convert_to=convert_to,
+        )
 
     def __getitem__(self, items):
         if isinstance(items, tuple):
@@ -165,6 +419,7 @@ class DataSet:
         multiplot: bool | None = None,
         element_set: str | np.ndarray[int] | None = None,
         element_set_invert: bool = False,
+        selected_submeshes=None,
         clip_args: tuple | None = None,
         lock_view: bool = False,
         iteration: int | None = None,
@@ -290,6 +545,10 @@ class DataSet:
         element_set_invert : bool, optional
             Used only if element_set is defined. Invert element set.
 
+        selected_submeshes : int, str or list, optional
+            Only used with MultiMesh objects. Restrict the plot to the selected
+            submesh ids, submesh names or element types.
+
         clip_args : dict, optional
             Dictionary of arguments to pass to the pyvista clip filter in
             order to clip the current plot.
@@ -341,6 +600,36 @@ class DataSet:
             "scalars", field
         )  # kargs scalars can be used instead of field
 
+        if self._is_multimesh():
+            return self._plot_multimesh(
+                field=field,
+                component=component,
+                data_type=data_type,
+                scale=scale,
+                show=show,
+                show_edges=show_edges,
+                clim=clim,
+                node_labels=node_labels,
+                element_labels=element_labels,
+                show_nodes=show_nodes,
+                plotter=plotter,
+                screenshot=screenshot,
+                azimuth=azimuth,
+                elevation=elevation,
+                roll=roll,
+                title=title,
+                title_size=title_size,
+                window_size=window_size,
+                multiplot=multiplot,
+                element_set=element_set,
+                element_set_invert=element_set_invert,
+                selected_submeshes=selected_submeshes,
+                clip_args=clip_args,
+                lock_view=lock_view,
+                return_cpos=kargs.pop("return_cpos", False),
+                **kargs,
+            )
+
         if field is not None:
             data, data_type = self.get_data(field, component, data_type, True)
         else:
@@ -351,6 +640,7 @@ class DataSet:
 
         return_cpos = kargs.pop("return_cpos", False)
         cmap = kargs.pop("cmap", "jet")  # if cmap not defined, default to "jet"
+        extra_cell_data = kargs.pop("_extra_cell_data", None)
 
         if data_type == "GaussPoint":
             if self.meshplot_gp is None:
@@ -403,6 +693,10 @@ class DataSet:
                 meshplot.points = as_3d_coordinates(self.mesh.nodes)
 
             center = 0.5 * (meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
+
+        if extra_cell_data:
+            for key, value in extra_cell_data.items():
+                meshplot.cell_data[key] = np.asarray(value)
 
         backgroundplotter = True
         if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
@@ -513,9 +807,9 @@ class DataSet:
 
         edges = None
         if multiplot:
-            copy_mesh = True
-        else:
-            copy_mesh = False
+            # The cached plotting mesh is updated in place when another result
+            # iteration is loaded. Keep each actor's geometry independent.
+            mesh_to_show = mesh_to_show.copy(deep=True)
 
         if show_edges and self.mesh.elm_type in [
             "tri6",
@@ -542,7 +836,6 @@ class DataSet:
             pl.add_mesh(
                 mesh_to_show,
                 show_edges=show_edges,
-                copy_mesh=copy_mesh,
                 **kargs,
             )
             if title is None:
@@ -555,7 +848,6 @@ class DataSet:
                 scalar_bar_args=sargs,
                 cmap=cmap,
                 clim=clim,
-                copy_mesh=copy_mesh,
                 **kargs,
             )
             if title is None:
@@ -647,7 +939,302 @@ class DataSet:
 
         return pl
 
-    def get_data(self, field, component=None, data_type=None, return_data_type=False):
+    def _multimesh_block_for_submesh(
+        self,
+        data,
+        submesh_id: int,
+        n_items: int,
+        fill_missing: bool = True,
+    ):
+        """Return one submesh data block without copying when possible."""
+        multimesh_data = self._as_multimesh_data(data)
+        block = multimesh_data.submesh(submesh_id)
+        if block is not None or not fill_missing:
+            return block
+
+        template_entry = next(
+            (item for item in multimesh_data.items() if item[1] is not None),
+            None,
+        )
+        if template_entry is None:
+            return None
+
+        template_id, template = template_entry
+        template = np.asarray(template)
+        if template.ndim > 1:
+            shape = template.shape[:-1] + (n_items,)
+        else:
+            shape = (n_items,)
+        return np.zeros(shape, dtype=template.dtype)
+
+    def _submesh_dataset(self, submesh_id: int) -> "DataSet":
+        """Build a lightweight DataSet view attached to one submesh."""
+        submesh = self.mesh[submesh_id]
+        dataset = DataSet(submesh)
+        dataset.node_data = self.node_data
+        dataset.scalar_data = self.scalar_data
+        dataset.element_data = {
+            field: block
+            for field, value in self.element_data.items()
+            if (
+                block := self._multimesh_block_for_submesh(
+                    value,
+                    submesh_id,
+                    submesh.n_elements,
+                )
+            )
+            is not None
+        }
+        dataset.gausspoint_data = {
+            field: block
+            for field, value in self.gausspoint_data.items()
+            if (
+                block := self._multimesh_block_for_submesh(
+                    value,
+                    submesh_id,
+                    submesh.n_elements * get_default_n_gp(submesh.elm_type, submesh),
+                )
+            )
+            is not None
+        }
+        return dataset
+
+    def _submesh_element_set(
+        self,
+        element_set,
+        submesh_id: int,
+        offsets: dict[int, int],
+        global_element_set: bool,
+        element_set_invert: bool,
+    ):
+        """Map a MultiMesh element selection to one submesh."""
+        if element_set is None:
+            return None, True
+
+        submesh = self.mesh[submesh_id]
+        if isinstance(element_set, str):
+            if element_set in submesh.element_sets:
+                return element_set, True
+            return None, bool(element_set_invert)
+
+        element_ids = np.asarray(element_set, dtype=int)
+        if not global_element_set:
+            return element_ids, True
+
+        offset = offsets[submesh_id]
+        local_ids = (
+            element_ids[
+                (element_ids >= offset) & (element_ids < offset + submesh.n_elements)
+            ]
+            - offset
+        )
+        if len(local_ids) == 0 and not element_set_invert:
+            return None, False
+        if len(local_ids) == 0 and element_set_invert:
+            return None, True
+        return local_ids, True
+
+    def _plot_multimesh(
+        self,
+        *,
+        field,
+        component,
+        data_type,
+        scale,
+        show,
+        show_edges,
+        clim,
+        node_labels,
+        element_labels,
+        show_nodes,
+        plotter,
+        screenshot,
+        azimuth,
+        elevation,
+        roll,
+        title,
+        title_size,
+        window_size,
+        multiplot,
+        element_set,
+        element_set_invert,
+        selected_submeshes,
+        clip_args,
+        lock_view,
+        return_cpos,
+        **kargs,
+    ):
+        """Plot a MultiMesh by reusing the single-mesh plotting path."""
+        global_element_set = kargs.pop("global_element_set", False)
+        submesh_indices = self._resolve_submesh_indices(selected_submeshes)
+        if (
+            element_set is not None
+            and not isinstance(element_set, str)
+            and not global_element_set
+        ):
+            submesh_indices = [self._active_submesh_index()]
+
+        offsets = {}
+        offset = 0
+        for i, submesh in enumerate(self.mesh.submeshes):
+            offsets[i] = offset
+            offset += submesh.n_elements
+
+        if screenshot and (plotter is None or plotter == "pv"):
+            pl = pv.Plotter(off_screen=True, window_size=window_size)
+            backgroundplotter = False
+        else:
+            pl = plotter
+            backgroundplotter = not (plotter is None or plotter == "pv")
+            if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
+                backgroundplotter = True
+
+        base_name = kargs.pop("name", None)
+        scalar_bar_added = False
+        plotted = False
+
+        for submesh_id in submesh_indices:
+            local_element_set, should_plot = self._submesh_element_set(
+                element_set,
+                submesh_id,
+                offsets,
+                global_element_set,
+                element_set_invert,
+            )
+            if not should_plot:
+                continue
+
+            subdataset = self._submesh_dataset(submesh_id)
+            if field is not None:
+                try:
+                    subdataset.get_data(field, component, data_type)
+                except NameError:
+                    continue
+            sub_kargs = dict(kargs)
+            if base_name is not None:
+                sub_kargs["name"] = f"{base_name}_{submesh_id}"
+            if field is not None and scalar_bar_added:
+                sub_kargs["show_scalar_bar"] = False
+            sub_kargs["_extra_cell_data"] = {
+                "_fedoo_global_cell_ids": (
+                    np.arange(subdataset.mesh.n_elements, dtype=int)
+                    + offsets[submesh_id]
+                ),
+                "_fedoo_submesh_id": np.full(
+                    subdataset.mesh.n_elements,
+                    submesh_id,
+                    dtype=int,
+                ),
+            }
+            if clip_args is not None:
+                sub_clip_args = dict(clip_args)
+            else:
+                sub_clip_args = None
+
+            pl = subdataset.plot(
+                field=field,
+                component=component,
+                data_type=data_type,
+                scale=scale,
+                show=False,
+                show_edges=show_edges,
+                clim=clim,
+                node_labels=False,
+                element_labels=element_labels,
+                show_nodes=False,
+                plotter=pl,
+                screenshot=None,
+                azimuth=azimuth,
+                elevation=elevation,
+                roll=roll,
+                title="",
+                title_size=title_size,
+                window_size=window_size,
+                multiplot=multiplot,
+                element_set=local_element_set,
+                element_set_invert=element_set_invert,
+                clip_args=sub_clip_args,
+                lock_view=True,
+                return_cpos=return_cpos,
+                **sub_kargs,
+            )
+            plotted = True
+            if field is not None:
+                scalar_bar_added = True
+
+        if pl is None:
+            pl = pv.Plotter(window_size=window_size)
+            backgroundplotter = False
+
+        if field is not None and not plotted:
+            raise NameError(f"Field data {field!r} not found on any selected submesh.")
+
+        if title is None:
+            title = "" if field is None else f"{field}_{component}"
+        pl.add_text(title, name="name", color="Black", font_size=title_size)
+
+        if not lock_view:
+            pl.set_background("White")
+            points = self.mesh.nodes
+            if "Disp" in self.node_data and scale != 0:
+                points = points + scale * np.asarray(self.node_data["Disp"]).T
+            points = _as_3d_points(points)
+            center = 0.5 * (points.min(axis=0) + points.max(axis=0))
+            length = np.linalg.norm(points.max(axis=0) - points.min(axis=0))
+            if length == 0:
+                length = 1
+            pl.camera.SetFocalPoint(center)
+            pl.camera.position = tuple(center + np.array([0, 0, 2 * length]))
+            pl.camera.up = tuple([0, 1, 0])
+            if roll != 0:
+                pl.camera.Roll(roll)
+            if self.mesh.ndim == 3:
+                pl.camera.Azimuth(azimuth)
+                pl.camera.Elevation(elevation)
+            pl.add_axes(color="Black", interactive=True)
+
+        if plotted and (node_labels or show_nodes):
+            crd_labels = self.mesh.nodes
+            if "Disp" in self.node_data and scale != 0:
+                crd_labels = crd_labels + scale * np.asarray(self.node_data["Disp"]).T
+            crd_labels = _as_3d_points(crd_labels)
+            if node_labels:
+                if node_labels is True:
+                    node_labels = list(range(self.mesh.n_nodes))
+                pl.add_point_labels(crd_labels, node_labels)
+            if show_nodes:
+                if show_nodes is True:
+                    show_nodes = 5
+                pl.add_points(
+                    crd_labels,
+                    render_points_as_spheres=True,
+                    point_size=show_nodes,
+                )
+
+        pl.renderer.ResetCameraClippingRange()
+
+        if screenshot:
+            ext = os.path.splitext(screenshot)[1].lower()
+            if ext in [".pdf", ".svg", ".eps", ".ps", ".tex"]:
+                pl.save_graphic(screenshot)
+            else:
+                pl.screenshot(screenshot)
+            return pl
+
+        if not backgroundplotter and show:
+            return pl.show(return_cpos=return_cpos)
+
+        return pl
+
+    def get_data(
+        self,
+        field,
+        component=None,
+        data_type=None,
+        return_data_type=False,
+        *,
+        fill_unused_nodes=0.0,
+    ):
         """Retrieve data from the DataSet for a given field.
 
         This method is equivalent to the `DataSet.__getitem__` magic method.
@@ -670,11 +1257,17 @@ class DataSet:
             If True, the method returns a tuple `(data, data_type)`
             where `data_type` is the type of the returned data. If False, only
             the data is returned.
+        fill_unused_nodes : scalar, optional
+            Value used for nodes that are not used by the active submesh when a
+            MultiMesh node field is restricted to one submesh. Default is 0.
+            If ``None``, the original node array is returned unchanged.
 
         Returns
         -------
-        data : np.ndarray
-            The requested data, possibly converted to the specified type.
+        data : np.ndarray or MultiMeshData
+            The requested data, possibly converted to the specified type. For a
+            ``MultiMesh`` dataset, element and Gauss point fields are returned
+            as ``MultiMeshData`` objects. Node fields remain NumPy arrays.
         data_type : str, optional
             Returned only if `return_data_type` is True.
             Indicates the type of the returned data.
@@ -683,6 +1276,22 @@ class DataSet:
         -----
         This method supports automatic conversion between node, element,
         and Gauss point data types when applicable.
+
+        With a ``MultiMesh``, element and Gauss point fields may be stored as a
+        dictionary keyed by submesh id, submesh name, or unique element type.
+        The active submesh is controlled by ``dataset.active_submesh``.
+
+        Element ids in a ``MultiMesh`` use a global, concatenated numbering:
+        all elements of submesh 0, then all elements of submesh 1, and so on.
+        Retrieve values using those ids from the returned ``MultiMeshData``::
+
+            stress = dataset.get_data("Stress", "vm", "Element")
+            value = stress.global_element_value(global_element_id)
+            values = stress.global_element_values(global_element_ids)
+
+        Use ``stress.to_global()`` when a single NumPy array in this global
+        order is needed. ``np.asarray(stress)`` instead returns the data of
+        the active submesh.
         """
 
         if data_type is None:  # search if field exist somewhere
@@ -701,39 +1310,51 @@ class DataSet:
             if field in self.dict_data[data_type]:
                 data = self.dict_data[data_type][field]
             else:  # if field is not present whith the given data_type search if it exist elsewhere and convert it
+                # Fetch the source field with all nodes intact: the fill applies
+                # only to a Node request restricted to the active submesh. When
+                # converting to Element/GaussPoint data every submesh is used,
+                # so masking the source nodes here would zero the other
+                # submeshes' converted values.
                 data, current_data_type = self.get_data(
-                    field, component, return_data_type=True
+                    field,
+                    component,
+                    return_data_type=True,
+                    fill_unused_nodes=None,
                 )
                 if current_data_type != "Scalar":
-                    data = self.mesh.convert_data(
-                        data, convert_from=current_data_type, convert_to=data_type
-                    )
+                    if self._is_multimesh():
+                        data = self._convert_multimesh_data(
+                            data,
+                            convert_from=current_data_type,
+                            convert_to=data_type,
+                        )
+                    else:
+                        data = self.mesh.convert_data(
+                            data,
+                            convert_from=current_data_type,
+                            convert_to=data_type,
+                        )
+
+        if self._is_multimesh() and data_type in ["Element", "GaussPoint"]:
+            data = self._as_multimesh_data(data)
+
+        if isinstance(data, MultiMeshData):
+            data = data.map(lambda val: _component_from_array(field, val, component))
+        else:
+            data = _component_from_array(field, data, component)
 
         if (
-            component is not None and not (np.isscalar(data)) and len(data.shape) > 1
-        ):  # if data is scalar or 1d array, component ignored
-            if isinstance(component, str):
-                component = {
-                    "X": 0,
-                    "Y": 1,
-                    "Z": 2,
-                    "XX": 0,
-                    "YY": 1,
-                    "ZZ": 2,
-                    "XY": 3,
-                    "XZ": 4,
-                    "YZ": 5,
-                }.get(component, component)
-
-            if component == "norm":
-                data = np.linalg.norm(data, axis=0)
-            else:
-                if isinstance(component, str):
-                    if field == "Stress":
-                        data = StressTensorList(data)
-                    elif field == "Strain":
-                        data = StrainTensorList(data)
-                data = data[component]
+            self._is_multimesh()
+            and data_type == "Node"
+            and fill_unused_nodes is not None
+            and field in self.node_data
+        ):
+            active_mesh = self.mesh[self._active_submesh_index()]
+            used_nodes = np.unique(active_mesh.elements)
+            unused_nodes = np.setdiff1d(np.arange(self.mesh.n_nodes), used_nodes)
+            if len(unused_nodes):
+                data = np.array(data, copy=True)
+                data[..., unused_nodes] = fill_unused_nodes
 
         if return_data_type:
             return data, data_type
@@ -745,7 +1366,7 @@ class DataSet:
             set(
                 list(self.gausspoint_data.keys())
                 + list(self.node_data.keys())
-                + list(self.node_data.keys())
+                + list(self.element_data.keys())
             )
         )
 
@@ -774,6 +1395,8 @@ class DataSet:
               pandas installed).
               The mesh is not included and may be saved beside in a vtk file.
             * 'xlsx': Same as csv but with the excel format.
+            * 'fdh5': HDF5 format for Fedoo meshes and results, including
+              MultiMesh element and Gauss point fields.
 
         Parameters
         ----------
@@ -788,7 +1411,7 @@ class DataSet:
         ext = os.path.splitext(filename)[1]
         ext = ext.lower()
         if ext == "":
-            ext = ".fdz"
+            ext = ".fdh5"
             filename = filename + ext
         if ext == ".vtk":
             self.to_vtk(filename)
@@ -807,6 +1430,8 @@ class DataSet:
             self.to_fdz(
                 filename, save_mesh=True, compressed=compressed
             )  # create a new file and add the mesh
+        elif ext == ".fdh5":
+            self.to_fdh5(filename, iteration=0, overwrite=True)
 
     def save_mesh(self, filename: str):
         """Save the mesh using a vtk file. The extension of filename is ignored and modified to '.vtk'."""
@@ -833,7 +1458,7 @@ class DataSet:
                 copy.
             * **str** :
                 Path to a data file. Supported file extensions are
-                ``'vtk'``, ``'msh'``, ``'fdz'``, and ``'npz'``.
+                ``'vtk'``, ``'msh'``, ``'fdz'``, ``'fdh5'`` and ``'npz'``.
 
         load_mesh : bool, optional
             If ``True``, the mesh is loaded from the file (when the file
@@ -858,7 +1483,7 @@ class DataSet:
             self.element_data = {k: v.T for k, v in data.cell_data.items()}
             if load_mesh:
                 self.mesh = Mesh.from_pyvista(data)
-        elif isinstance(data, Path):
+        elif isinstance(data, ZipPath):
             # used to load one iteration in fdz file
             data = np.load(data.open("rb"))
             self.load_dict(data)
@@ -876,6 +1501,10 @@ class DataSet:
                 DataSet.load(self, pv.read(filename))
             elif ext == ".msh":
                 return NotImplemented
+            elif ext == ".fdh5":
+                from fedoo.util.fdh5 import load_dataset_iteration
+
+                load_dataset_iteration(self, filename, iteration)
             elif ext in [".npz", ".fdz"]:
                 if ext == ".fdz":
                     file = ZipFile(filename, "r")
@@ -1030,20 +1659,45 @@ class DataSet:
 
             write_vtk(self, filename, gp_data_to_node)
 
-    def to_pyvista(self, gp_data_to_node: bool = True):
+    def to_pyvista(self, gp_data_to_node: bool = True, selected_submeshes=None):
+        """Convert the dataset to a PyVista unstructured grid.
+
+        Parameters
+        ----------
+        gp_data_to_node : bool, default=True
+            For a single ``Mesh``, convert Gauss point data to node data before
+            export. For a ``MultiMesh``, Gauss point conversion is currently
+            skipped.
+        selected_submeshes : int, str or sequence, optional
+            Only used with ``MultiMesh`` datasets. Restrict the exported grid
+            and element data to the selected submesh ids, names, or element
+            types.
+
+        Returns
+        -------
+        pyvista.UnstructuredGrid
+            Mesh with point, cell and field data attached.
+        """
         if self.mesh is not None:
-            pv_data = self.mesh.to_pyvista()
+            if self._is_multimesh():
+                mesh, submesh_indices = self._selected_multimesh(selected_submeshes)
+            else:
+                mesh, submesh_indices = self.mesh, None
+
+            pv_data = mesh.to_pyvista()
 
             for key, val in self.node_data.items():
                 pv_data.point_data[key] = val.T
 
             for key, val in self.element_data.items():
-                pv_data.cell_data[key] = val.T
+                if self._is_multimesh():
+                    val = self._as_multimesh_data(val).to_global(submesh_indices)
+                pv_data.cell_data[key] = _array_to_pyvista_data(val)
 
             for key, val in self.scalar_data.items():
                 pv_data.field_data[key] = np.array(val)
 
-            if gp_data_to_node:
+            if gp_data_to_node and not self._is_multimesh():
                 for key in self.gausspoint_data:
                     pv_data.point_data[key] = self.get_data(key, data_type="Node").T
 
@@ -1108,6 +1762,35 @@ class DataSet:
             os.remove("_mesh_.vtk")
         file.close()
 
+    def to_fdh5(
+        self,
+        filename: str,
+        iteration: int = 0,
+        overwrite: bool = False,
+    ) -> None:
+        """Write the dataset to a FDH5 file.
+
+        Parameters
+        ----------
+        filename : str
+            Name of the FDH5 file. If no extension is provided, ``.fdh5`` is
+            appended.
+        iteration : int, default=0
+            Result iteration id written under ``results/iter_<iteration>``.
+        overwrite : bool, default=False
+            If True, an existing file is removed before writing. If False, the
+            mesh is kept and only the requested iteration is added or replaced.
+
+        Notes
+        -----
+        Element and Gauss point fields attached to a ``MultiMesh`` are written
+        under their matching ``submesh_X`` groups. Single ``Mesh`` datasets are
+        written under ``submesh_0``.
+        """
+        from fedoo.util.fdh5 import write_dataset
+
+        write_dataset(self, filename, iteration=iteration, overwrite=overwrite)
+
     def savez(self, filename: str, save_mesh: bool = False) -> None:
         """Write a npz file using the numpy savez function.
 
@@ -1139,12 +1822,12 @@ class DataSet:
             self.save_mesh(filename)
 
     @staticmethod
-    def read(filename: str, file_format: str = "fdz") -> DataSet | MultiFrameDataSet:
+    def read(filename: str, file_format: str = "fdh5") -> DataSet | MultiFrameDataSet:
         """Read a file from disk.
 
         Same as :py:func:`fedoo.read_data`.
         """
-        return read_data(filename, file_format="fdz")
+        return read_data(filename, file_format=file_format)
 
     @property
     def dict_data(self) -> dict:
@@ -1172,6 +1855,7 @@ class DataSet:
         copy.element_data = dict(self.element_data)
         copy.gausspoint_data = dict(self.gausspoint_data)
         copy.scalar_data = dict(self.scalar_data)
+        copy.active_submesh = self.active_submesh
         return copy
 
     def deepcopy(self):
@@ -1183,17 +1867,23 @@ class DataSet:
         """
         copy = DataSet()
         copy.mesh = self.mesh.deepcopy()
-        copy.node_data = {key: value.copy() for key, value in self.node_data.items()}
+        copy.node_data = {
+            key: copy_data_value(value, deep=True)
+            for key, value in self.node_data.items()
+        }
         copy.element_data = {
-            key: value.copy() for key, value in self.element_data.items()
+            key: copy_data_value(value, deep=True)
+            for key, value in self.element_data.items()
         }
         copy.gausspoint_data = {
-            key: value.copy() for key, value in self.gausspoint_data.items()
+            key: copy_data_value(value, deep=True)
+            for key, value in self.gausspoint_data.items()
         }
         copy.scalar_data = {
             key: value if np.isscalar(value) else np.array(value).copy()
             for key, value in self.scalar_data.items()
         }
+        copy.active_submesh = self.active_submesh
         return copy
 
 
@@ -1215,20 +1905,21 @@ class MultiFrameDataSet(DataSet):
         return DataSet.__getitem__(self, items)
 
     def save_all(
-        self, filename: str, file_format: str = "fdz", compressed: bool = False
+        self, filename: str, file_format: str = "fdh5", compressed: bool = False
     ):
         """Save all data from MultiFrameDataSet.
 
         If filename has no extension, the format is given in the parameter file_format
-        (default = 'fdz').
-        If format is not 'fdz', the data files are saved using the given filename and format
+        (default = 'fdh5').
+        If format is not 'fdz' or 'fdh5', the data files are saved using the given filename and format
         simply adding the iteration number to the file name. The mesh is also saved in vtk format in the same directory.
+        For 'fdh5', all iterations are written into one HDF5 file.
         """
         dirname = os.path.dirname(filename)
         extension = os.path.splitext(filename)[1]
         if extension == "":
             file_format = file_format.lower()
-            if file_format != "fdz":
+            if file_format not in ["fdz", "fdh5"]:
                 dirname = filename + "/"
                 filename = dirname + os.path.basename(filename)
         else:
@@ -1246,6 +1937,12 @@ class MultiFrameDataSet(DataSet):
             for i in range(1, len(self.list_data)):
                 self.load(i)
                 self.to_fdz(filename, False, i, compressed)
+        elif file_format == "fdh5":
+            if os.path.splitext(filename)[1] == "":
+                filename += ".fdh5"
+            for i in range(len(self.list_data)):
+                self.load(i)
+                self.to_fdh5(filename, iteration=i, overwrite=(i == 0))
         else:
             for i in range(len(self.list_data)):
                 self.load(i)
@@ -1267,8 +1964,20 @@ class MultiFrameDataSet(DataSet):
                 return
             if iteration > len(self.list_data) or iteration < 0:
                 raise NameError("Number of iteration out of bounds")
-            DataSet.load(self, self.list_data[iteration])
+            data_ref = self.list_data[iteration]
+            if (
+                isinstance(data_ref, tuple)
+                and len(data_ref) == 3
+                and data_ref[0] == "fdh5"
+            ):
+                DataSet.load(self, data_ref[1], load_mesh, iteration=data_ref[2])
+            else:
+                DataSet.load(self, data_ref)
             self.loaded_iter = iteration
+
+        elif isinstance(data, tuple) and len(data) == 3 and data[0] == "fdh5":
+            DataSet.load(self, data[1], load_mesh, iteration=data[2])
+            self.loaded_iter = data[2]
 
         elif data:
             DataSet.load(self, data, load_mesh)
@@ -1506,6 +2215,8 @@ class MultiFrameDataSet(DataSet):
             self.load(it)
             for i, field in enumerate(list_fields):
                 data = self.get_data(field, component[i], data_type[i])
+                if isinstance(data, MultiMeshData):
+                    data = data.to_global()
                 if list_indices[i] is None or np.isscalar(
                     data
                 ):  # modify for allowing scalar_data
@@ -1604,9 +2315,11 @@ class MultiFrameDataSet(DataSet):
             self.load(i)
             if field is not None:
                 data = self.get_data(field, component, data_type)
+                if isinstance(data, MultiMeshData):
+                    data = data.to_global()
                 clim = [
-                    np.min([data.min(), clim[0]]),
-                    np.max([data.max(), clim[1]]),
+                    np.nanmin([np.nanmin(data), clim[0]]),
+                    np.nanmax([np.nanmax(data), clim[1]]),
                 ]
 
             if "Disp" in self.node_data:
@@ -1641,7 +2354,8 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.copy(), list(self.list_data))
-        if self.loaded_iter:
+        copy.active_submesh = self.active_submesh
+        if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy
 
@@ -1656,7 +2370,8 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.deepcopy(), list(self.list_data))
-        if self.loaded_iter:
+        copy.active_submesh = self.active_submesh
+        if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy
 
@@ -1665,16 +2380,17 @@ class MultiFrameDataSet(DataSet):
         return len(self.list_data)
 
 
-def read_data(filename: str, file_format: str = "fdz"):
+def read_data(filename: str, file_format: str = "fdh5"):
     """Read a file from disk.
 
     The file may be a single file or a directory containing files from
     several iterations. The file format may be specified either by the
     filename extension or by the ``file_format`` parameter (default is
-    ``"fdz"``) when the filename has no extension.
+    ``"fdh5"``) when the filename has no extension.
 
-    Supported file formats are ``"fdz"``, ``"vtk"``, and ``"npz"``.
-    For ``"npz"`` files, a VTK mesh with the same base name is also searched.
+    Supported file formats are ``"fdz"``, ``"fdh5"``, ``"vtk"``, and
+    ``"npz"``. For ``"npz"`` files, a VTK mesh with the same base name is
+    also searched.
 
     Parameters
     ----------
@@ -1682,7 +2398,7 @@ def read_data(filename: str, file_format: str = "fdz"):
         Path to the file or directory to read.
     file_format : str, optional
         File format identifier to use when the filename has no extension.
-        Default is ``"fdz"``.
+        Default is ``"fdh5"``.
 
     Returns
     -------
@@ -1696,6 +2412,10 @@ def read_data(filename: str, file_format: str = "fdz"):
 
     if file_format == "fdz":
         return read_fdz(filename)
+    if file_format == "fdh5":
+        from fedoo.util.fdh5 import read_fdh5
+
+        return read_fdh5(filename)
 
     dirname = os.path.dirname(filename)
     if extension == "":
@@ -1752,7 +2472,7 @@ def read_fdz(filename: str):
     dataset = MultiFrameDataSet(mesh)
     i = 0
     while "iter_" + str(i) + ".npz" in list_iter:
-        dataset.list_data.append(Path(filename, "iter_" + str(i) + ".npz"))
+        dataset.list_data.append(ZipPath(filename, "iter_" + str(i) + ".npz"))
         i += 1
 
     return dataset
