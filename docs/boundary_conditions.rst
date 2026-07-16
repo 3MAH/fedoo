@@ -157,6 +157,59 @@ boundary-condition force.
     fedoo.constraint.SurfaceForce
 
 
+Generic Lagrange-multiplier constraints
+______________________________________
+
+Any boundary-condition object that generates only :py:class:`fedoo.MPC` leaves
+can be enforced with Lagrange multipliers by wrapping it in
+:py:class:`fedoo.LagrangeMultiplierAssembly`. Original MPC
+coefficients are preserved; the first term is not normalized as a slave DOF.
+
+.. code-block:: python
+
+    periodic_lm = fd.LagrangeMultiplierAssembly(
+        mesh,
+        fd.constraint.PeriodicBC(periodicity_type="small_strain"),
+        name="PeriodicLM",
+    )
+    pb = fd.problem.Linear(solid_assembly + periodic_lm)
+
+Do not also add the wrapped constraint to ``pb.bc``: that would enforce its
+equations a second time through MPC elimination. The bordered system is
+an indefinite saddle-point system. Use a direct solver; positive-definite
+iterative solvers such as ``cg`` are not suitable.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.LagrangeMultiplierAssembly
+
+
+Mean-value constraint
+_____________________
+
+The mean value of a field can be constrained with
+:py:class:`fedoo.constraint.MeanValueConstraint`. It is an assembly object
+that is summed with the stiffness assembly. Its main use is to remove rigid
+body translation in periodic homogenization without pinning an arbitrary node:
+
+.. code-block:: python
+
+    pb = fd.problem.Linear(
+        assembly + fd.constraint.MeanValueConstraint(mesh)
+    )
+
+The constraint uses one Lagrange multiplier per variable. The zero-mean
+condition provides a canonical periodic fluctuation field while retaining the
+same stress field as a single-node pin.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   fedoo.constraint.MeanValueConstraint
+
 Kinematic MPC constraints
 _________________________
 

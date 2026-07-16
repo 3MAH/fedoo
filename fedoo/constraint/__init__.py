@@ -8,3 +8,4 @@ from .distributed_load import (
 )
 from .ipc_contact import IPCContact, IPCSelfContact
 from .mean_motion import MeanMotion
+from .mean_value_constraint import MeanValueConstraint

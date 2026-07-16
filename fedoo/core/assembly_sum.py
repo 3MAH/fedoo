@@ -137,6 +137,10 @@ class AssemblySum(AssemblyBase):
         for assembly in self.list_assembly:
             assembly.initialize(pb)
 
+    def _register_global_dofs(self, pb):
+        for assembly in self.list_assembly:
+            assembly.register_global_dofs(pb)
+
     def to_start(self, pb):
         """
         Reset the current time increment (internal variable in the constitutive equation)

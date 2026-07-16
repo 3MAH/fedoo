@@ -63,6 +63,7 @@ class _NonLinearBase:
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
         self.nlgeom = nlgeom
+        self.__assembly.register_global_dofs(self)
         self.time_integrators = {}
         self._time_integrators_compiled = False
         self.t0 = 0

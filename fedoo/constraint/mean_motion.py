@@ -115,7 +115,7 @@ class MeanMotion(BCBase):
             f"{', '.join(self._mean_variables or [])}"
         )
 
-    def initialize(self, problem):
+    def _register_global_dofs(self, problem):
         self._disp_variables = self._get_disp_variables(problem)
         n_dim = len(self._disp_variables)
 
@@ -139,11 +139,6 @@ class MeanMotion(BCBase):
         else:
             raise NotImplementedError("MeanMotion is implemented in 2D and 3D.")
 
-        self.nodes, self._weights = self._get_nodes_and_weights(problem)
-        self.center = self._get_center(problem)
-        self._node_coords = problem.mesh.nodes[self.nodes, :n_dim]
-        self._projection, self._mode_matrix = self._build_projection(problem)
-
         self._full_mean_variables = (
             self._full_mean_disp_variables + self._full_mean_rot_variables
         )
@@ -158,6 +153,30 @@ class MeanMotion(BCBase):
         self._mode_indices = [
             self._full_mean_variables.index(var) for var in self._mean_variables
         ]
+
+        self._node_by_variable = {}
+        if self._mean_disp_variables:
+            self.node_disp = problem.add_global_dof(
+                self._mean_disp_variables, 1, vector_name=_MEAN_DISP_VECTOR
+            )
+            self._node_by_variable.update(
+                {var: self.node_disp for var in self._mean_disp_variables}
+            )
+        if self._mean_rot_variables:
+            self.node_rot = problem.add_global_dof(
+                self._mean_rot_variables, 1, vector_name=_MEAN_ROT_VECTOR
+            )
+            self._node_by_variable.update(
+                {var: self.node_rot for var in self._mean_rot_variables}
+            )
+
+    def initialize(self, problem):
+        n_dim = len(self._disp_variables)
+
+        self.nodes, self._weights = self._get_nodes_and_weights(problem)
+        self.center = self._get_center(problem)
+        self._node_coords = problem.mesh.nodes[self.nodes, :n_dim]
+        self._projection, self._mode_matrix = self._build_projection(problem)
 
         n_nodes = problem.mesh.n_nodes
         self._phys_dof_index = np.array(
@@ -178,22 +197,6 @@ class MeanMotion(BCBase):
             # Newton iteration, independently of problem.nlgeom (a user may force
             # finite_rotation=True on a geometrically linear problem).
             self._update_during_inc = True
-
-        self._node_by_variable = {}
-        if self._mean_disp_variables:
-            self.node_disp = problem.add_global_dof(
-                self._mean_disp_variables, 1, vector_name=_MEAN_DISP_VECTOR
-            )
-            self._node_by_variable.update(
-                {var: self.node_disp for var in self._mean_disp_variables}
-            )
-        if self._mean_rot_variables:
-            self.node_rot = problem.add_global_dof(
-                self._mean_rot_variables, 1, vector_name=_MEAN_ROT_VECTOR
-            )
-            self._node_by_variable.update(
-                {var: self.node_rot for var in self._mean_rot_variables}
-            )
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
         res = ListBC()
