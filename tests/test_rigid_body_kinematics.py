@@ -24,9 +24,7 @@ def space():
 
 
 def _make_assembly(rest_positions, obstacle_positions, center):
-    rt = fd.constraint.RigidTie(
-        np.arange(len(rest_positions)), center=center
-    )
+    rt = fd.constraint.RigidTie(np.arange(len(rest_positions)), center=center)
     rt.center = np.asarray(center, dtype=float)
     asm = RigidBodyAssembly(mass=1.0, inertia_tensor=np.eye(3), rigid_tie=rt)
     asm._ipc_rest_positions = np.asarray(rest_positions, dtype=float)

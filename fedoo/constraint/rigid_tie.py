@@ -85,9 +85,7 @@ class RigidTie(BCBase):
         rigid_tie = fd.constraint.RigidTie(right_face)
     """
 
-    def __init__(
-        self, list_nodes, center=None, use_quaternion=True, name="Rigid Tie"
-    ):
+    def __init__(self, list_nodes, center=None, use_quaternion=True, name="Rigid Tie"):
         self.list_nodes = list_nodes
         self.center = center
         self.use_quaternion = bool(use_quaternion)
@@ -427,12 +425,7 @@ class RigidTie2D(BCBase):
     def _compute_slave_disp(self, problem, disp_ref, rotation):
         """Update 2D slave-node displacements for a rigid motion."""
         nodes = problem.mesh.nodes[self.list_nodes]
-        new_disp = (
-            (nodes - self.center) @ rotation.T
-            + self.center
-            + disp_ref
-            - nodes
-        )
+        new_disp = (nodes - self.center) @ rotation.T + self.center + disp_ref - nodes
         if not np.array_equal(problem._dU, 0):
             if np.array_equal(problem._U, 0):
                 problem._dU[self._disp_indices] = new_disp
@@ -449,7 +442,6 @@ class RigidTie2D(BCBase):
         self._compute_slave_disp(problem, dof_ref[:2], rotation)
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
-
         var_cd = self.var_cd
         node_cd = self.node_cd
         list_nodes = self.list_nodes

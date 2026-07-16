@@ -9,9 +9,7 @@ from simcoon import Rotation
 
 def _make_assembly(inertia, rotvec):
     space = fd.ModelingSpace("3D")
-    tie = fd.constraint.RigidTie(
-        np.array([0]), center=np.zeros(3), use_quaternion=True
-    )
+    tie = fd.constraint.RigidTie(np.array([0]), center=np.zeros(3), use_quaternion=True)
     tie._Q_base = Rotation.identity()
     tie._angles_at_base = np.zeros(3)
     state = {"rotvec": np.asarray(rotvec, dtype=float).copy()}
@@ -44,9 +42,7 @@ def test_non_spherical_inertia_adds_gyroscopic_force():
     )
     np.testing.assert_allclose(force[:3], 2.0 * acceleration[:3])
     np.testing.assert_allclose(force[3:], expected_moment)
-    assert not np.allclose(
-        np.cross(angular_velocity, inertia @ angular_velocity), 0.0
-    )
+    assert not np.allclose(np.cross(angular_velocity, inertia @ angular_velocity), 0.0)
 
 
 def test_spherical_inertia_has_no_gyroscopic_force():
@@ -142,6 +138,4 @@ def test_principal_axis_torque_matches_constant_angular_acceleration():
 
     expected_angle = 0.5 * torque / inertia[0, 0] * end_time**2
     rotation_vector = body.constraint.Q_total.as_rotvec()
-    np.testing.assert_allclose(
-        rotation_vector, [expected_angle, 0.0, 0.0], atol=1e-10
-    )
+    np.testing.assert_allclose(rotation_vector, [expected_angle, 0.0, 0.0], atol=1e-10)

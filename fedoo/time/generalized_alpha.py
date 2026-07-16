@@ -184,8 +184,8 @@ class GeneralizedAlphaAssemblyAdapter:
                 self.force_start if self.force_start is not None else static_force
             )
             force_alpha = (
-                (1.0 - self.alpha_f) * static_force + self.alpha_f * force_start
-            )
+                1.0 - self.alpha_f
+            ) * static_force + self.alpha_f * force_start
             inertia_force = self._inertia_force(
                 assembly, pb, mass, acc_alpha, vel_alpha
             )
@@ -208,9 +208,7 @@ class GeneralizedAlphaAssemblyAdapter:
                 )
                 assembly.sv["Acceleration"] = acc
                 assembly.sv["Velocity"] = vel
-                assembly.sv["_DeltaDisp"] = np.zeros_like(
-                    assembly.sv["_DeltaDisp"]
-                )
+                assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
                 if self.current_force is not None:
                     self.force_start = self.current_force.copy()
         assembly.sv_start = self._copy_state(assembly.sv)

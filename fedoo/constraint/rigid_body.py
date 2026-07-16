@@ -250,8 +250,7 @@ class RigidBodyAssembly(AssemblyBase):
         R, *dR = self.rigid_tie._compute_rotation(rotvec)
         inertia = R @ self.inertia_body @ R.T
         derivatives = tuple(
-            derivative @ self.inertia_body @ R.T
-            + R @ self.inertia_body @ derivative.T
+            derivative @ self.inertia_body @ R.T + R @ self.inertia_body @ derivative.T
             for derivative in dR
         )
         return R, inertia, derivatives
@@ -275,9 +274,7 @@ class RigidBodyAssembly(AssemblyBase):
         angular_velocity = velocity[3:]
         force[3:] = inertia @ angular_acceleration
         if self.rigid_tie.use_quaternion:
-            force[3:] += np.cross(
-                angular_velocity, inertia @ angular_velocity
-            )
+            force[3:] += np.cross(angular_velocity, inertia @ angular_velocity)
         return force
 
     def get_time_inertia_tangent(
@@ -312,8 +309,7 @@ class RigidBodyAssembly(AssemblyBase):
                 + np.cross(d_velocity, angular_momentum)
                 + np.cross(
                     angular_velocity,
-                    inertia_derivative @ angular_velocity
-                    + inertia @ d_velocity,
+                    inertia_derivative @ angular_velocity + inertia @ d_velocity,
                 )
             )
         return tangent
@@ -651,6 +647,7 @@ class RigidBody:
         pb = NonLinear(self.assembly)
         if self.dynamic:
             from fedoo.time import Newmark
+
             pb.set_time_integrator(SECOND_ORDER, Newmark())
         if solver is not None:
             pb.set_solver(solver)
