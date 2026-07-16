@@ -111,6 +111,29 @@ def test_mean_disp_constraint_nonlinear():
     assert np.abs(disp.mean(axis=1)).max() < 1e-8
 
 
+def test_mean_disp_constraint_nonzero_value():
+    """A nonzero prescribed mean value is enforced with the correct sign: the
+    raw value is used as the constraint right-hand side, so mean(u) == value
+    (not -value). The value=0 tests cannot catch a sign error here."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("2Dstress")
+
+    mesh = fd.mesh.hole_plate_mesh(nr=5, nt=5, length=10, height=10, radius=2)
+    material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
+    wf = fd.weakform.StressEquilibrium(material)
+    assemb = fd.Assembly.create(wf, mesh)
+
+    target = np.array([0.02, -0.01])
+    constraint = fd.constraint.MeanValueConstraint(mesh, "Disp", value=target)
+    pb = fd.problem.Linear(assemb + constraint)
+
+    pb.bc.add(fd.constraint.PeriodicBC(periodicity_type="small_strain"))
+    pb.bc.add("Dirichlet", "MeanStrain", [0.1, 0.05, 0.02])
+    pb.solve()
+
+    assert np.allclose(pb.get_disp().mean(axis=1), target, atol=1e-10)
+
+
 def test_mean_disp_constraint_volume_weights():
     """With weights="volume", the volume average of the displacement field
     should be zero."""
