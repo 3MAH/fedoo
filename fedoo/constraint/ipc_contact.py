@@ -871,7 +871,8 @@ class IPCContact(AssemblyBase):
             self._actual_dhat = self._dhat
 
         # Create barrier potential
-        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat)
+        # Fedoo applies the adaptive barrier stiffness separately.
+        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat, 1.0)
 
         # Create friction potential if needed
         if self.friction_coefficient > 0:
