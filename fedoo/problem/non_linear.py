@@ -1048,6 +1048,7 @@ class _NonLinearBase:
         interval_output: int | float | None = None,
         callback: Callable[[Problem, ...], None] | None = None,
         exec_callback_at_each_iter: bool | None = None,
+        dt_max: float | None = None,
     ) -> None:
         """Solve the non linear problem using the newton-raphson algorithm.
 
@@ -1070,6 +1071,10 @@ class _NonLinearBase:
             else, the attribute t0 is modified.
         dt_min: float, default = 1e-6
             Minimal time increment
+        dt_max: float, optional
+            Maximum time increment. The initial ``dt`` and subsequent
+            adaptive increases are capped to this value. If omitted, the time
+            increment has no upper bound other than output and end times.
         max_subiter: int, optional
             Maximal number of newton raphson iteration allowed for each time
             increment, after the initial linear guess.
@@ -1123,6 +1128,12 @@ class _NonLinearBase:
             self.tmax = tmax
         if t0 is not None:
             self.t0 = t0  # time at the start of the time step
+        if dt_max is not None:
+            if dt_max <= 0:
+                raise ValueError("dt_max should be strictly positive.")
+            if dt_max < dt_min:
+                raise ValueError("dt_max should be greater than or equal to dt_min.")
+            dt = min(dt, dt_max)
         if max_subiter is None:
             max_subiter = self.nr_parameters["max_subiter"]
         if dt_increase_niter is None:
@@ -1224,6 +1235,8 @@ class _NonLinearBase:
                 # Check if dt can be increased
                 if update_dt and nb_nr_iter <= dt_increase_niter and dt == self.dtime:
                     dt *= 1.25
+                    if dt_max is not None:
+                        dt = min(dt, dt_max)
 
             else:
                 if self.print_info > 0:
