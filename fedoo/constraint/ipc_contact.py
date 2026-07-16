@@ -268,12 +268,21 @@ class IPCContact(AssemblyBase):
     def add_rigid_body(self, rigid_body, surface_node_indices=None):
         """Register a :class:`RigidBody` with this IPCContact.
 
-        Use this for rigid-vs-deformable (or rigid-vs-rigid) contact where
-        a single ``IPCContact`` carries the full collision mesh. The body's
-        surface nodes are routed onto the 6 rigid-body global DOFs by the
-        scatter matrix via the exact rigid Jacobian
+        This optional convenience enables direct reduced-coordinate projection
+        for rigid-vs-deformable (or rigid-vs-rigid) contact where a single
+        ``IPCContact`` carries the full collision mesh. The body's surface
+        nodes are routed onto the 6 rigid-body global DOFs by the scatter
+        matrix via the exact rigid Jacobian
         ``J = [I_3 | dR/d(omega) @ r_ref]``, instead of placing forces at
         the per-node mesh DOFs.
+
+        Registration is not required for correctness when the rigid surface
+        nodes already belong to the contact mesh and a :class:`RigidTie` is
+        attached to the problem. In that generic path, IPC assembles nodal
+        contact contributions and the problem's MPC condensation projects
+        them onto the rigid DOFs. Registration additionally associates the
+        body with the shared mesh and lets automatic barrier-stiffness
+        estimation account for generalized rigid-body forces directly.
 
         For rigid-vs-static contact (rigid body bouncing on a fixed floor),
         use :meth:`RigidBody.set_static_obstacle` instead — that path uses
@@ -1057,7 +1066,8 @@ class IPCContact(AssemblyBase):
             self._actual_dhat = self._dhat
 
         # Create barrier potential
-        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat)
+        # Fedoo applies the adaptive barrier stiffness separately.
+        self._barrier_potential = ipctk.BarrierPotential(self._actual_dhat, 1.0)
 
         # Create friction potential if needed
         if self.friction_coefficient > 0:

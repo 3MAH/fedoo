@@ -2,7 +2,6 @@ from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.assembly_sum import AssemblySum
-from fedoo.core.lagrange_multiplier import LagrangeMultiplierAssembly
 from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
@@ -63,7 +62,6 @@ class _NonLinearBase:
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
-        self._register_assembly_constraints(assembly)
         self.nlgeom = nlgeom
         self.__assembly.register_global_dofs(self)
         self.time_integrators = {}
@@ -80,18 +78,6 @@ class _NonLinearBase:
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
-
-    def _register_assembly_constraints(self, assembly):
-        """Register constraints exposed by an assembly tree."""
-        if isinstance(assembly, LagrangeMultiplierAssembly):
-            return
-        if isinstance(assembly, AssemblySum):
-            for child in assembly.list_assembly:
-                self._register_assembly_constraints(child)
-            return
-        for constraint in getattr(assembly, "constraints", ()):
-            if constraint not in self.bc:
-                self.bc.add(constraint)
 
     def _run_constraint_hook(self, name):
         for bc in self.bc:

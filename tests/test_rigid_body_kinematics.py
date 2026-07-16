@@ -131,9 +131,23 @@ def _make_rigid_body(dynamic=True):
     return fd.constraint.RigidBody(mesh, dynamic=dynamic, **kwargs)
 
 
+def test_rigid_body_rayleigh_damping_accepts_mass_and_stiffness_terms(space):
+    body = _make_rigid_body()
+
+    body.set_rayleigh_damping(alpha=0.7, beta=0.2)
+
+    assert body.assembly.dissipation == fd.time.RayleighDamping(
+        alpha=0.7, beta=0.2
+    )
+
+
 def test_static_body_is_not_compiled_by_second_order_integrator(space):
     body = _make_rigid_body(dynamic=False)
     pb = fd.problem.NonLinear(body.assembly)
+
+    assert body.constraint in pb.bc
+    assert pb.n_global_dof == 6
+
     pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
 
     pb.initialize()

@@ -81,7 +81,6 @@ class RigidBodyAssembly(AssemblyBase):
         self.time_evolution = SECOND_ORDER if dynamic else None
         self.storage = self if dynamic else None
         self.dissipation = None
-        self.constraints = (rigid_tie,)
         self._time_integrator = None
         self._fedoo_time_integrated = False
         self.dynamic = bool(dynamic)
@@ -107,6 +106,11 @@ class RigidBodyAssembly(AssemblyBase):
         self._ipc_obstacle_nodes = None
         self._contact_force = np.zeros(6)
         self._contact_stiffness = np.zeros((6, 6))
+
+    def _register_global_dofs(self, pb):
+        """Register the rigid kinematic constraint and its global DOFs."""
+        if self.rigid_tie not in pb.bc:
+            pb.bc.add(self.rigid_tie)
 
     def initialize(self, pb):
         """Extract global DOF indices from the problem."""
@@ -538,9 +542,17 @@ class RigidBody:
         """Set full generalized force [Fx, Fy, Fz, Mx, My, Mz]."""
         self.assembly.force[:] = f
 
-    def set_rayleigh_damping(self, alpha):
-        """Set mass-proportional damping: C = alpha * M."""
-        self.assembly.dissipation = RayleighDamping(alpha=float(alpha))
+    def set_rayleigh_damping(self, alpha=0.0, beta=0.0):
+        """Set Rayleigh damping: ``C = alpha*M + beta*K``.
+
+        A rigid body has no elastic stiffness. With the private contact made
+        by :meth:`set_static_obstacle`, ``K`` is that contact tangent. With a
+        shared :class:`IPCContact`, the contact tangent belongs to the IPC
+        assembly instead and the rigid-body ``beta`` contribution is zero.
+        """
+        self.assembly.dissipation = RayleighDamping(
+            alpha=float(alpha), beta=float(beta)
+        )
 
     def set_static_obstacle(self, obstacle_mesh, dhat=0.01, kappa=None):
         """Enable IPC barrier contact with a STATIC obstacle surface.
@@ -552,10 +564,11 @@ class RigidBody:
 
         For rigid-vs-deformable contact (e.g., a punch crushing an elastic
         disc), build a shared :class:`IPCContact` over the union of all
-        surfaces and call ``ipc.add_rigid_body(body)`` instead. In that
-        path the deformable obstacle's vertex positions are tracked at
-        every NR iteration and the IPC reaction is scattered onto the
-        obstacle's mesh DOFs (Newton's 3rd law honoured).
+        surfaces instead. Calling ``ipc.add_rigid_body(body)`` optionally
+        projects contact directly onto the rigid DOFs; otherwise the same
+        projection is performed by ``RigidTie`` MPC condensation. In both
+        cases the deformable obstacle's vertex positions are tracked at every
+        NR iteration and its reaction is assembled on the mesh DOFs.
 
         Parameters
         ----------
@@ -594,7 +607,8 @@ class RigidBody:
         asm = self.assembly
         asm._ipc_collision_mesh = cm
         asm._ipc_collisions = ipctk.NormalCollisions()
-        asm._ipc_barrier = ipctk.BarrierPotential(dhat)
+        # Fedoo applies the contact stiffness separately through _ipc_kappa.
+        asm._ipc_barrier = ipctk.BarrierPotential(dhat, 1.0)
         if kappa is None:
             kappa = 1e9
         asm._ipc_kappa = kappa

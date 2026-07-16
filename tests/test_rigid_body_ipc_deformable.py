@@ -1,4 +1,4 @@
-"""Regression test for `RigidBody + IPCContact.add_rigid_body` coupling.
+"""Regression tests for rigid-body coupling with a shared ``IPCContact``.
 
 A coarse version of `examples/contact/ipc/rigid_deformable_punch.py`. The
 test asserts:
@@ -13,6 +13,8 @@ test asserts:
    surface (max abs error = 0 across X/Y/Z).
 5. ``set_static_obstacle`` and ``add_rigid_body`` are mutually exclusive
    on a single body.
+6. Generic nodal IPC followed by ``RigidTie`` MPC condensation works without
+   explicitly registering the body on ``IPCContact``.
 """
 
 import os
@@ -35,7 +37,7 @@ def fresh_3d_space():
     fd.Assembly.delete_memory()
 
 
-def _build_punch_problem():
+def _build_punch_problem(register_rigid_body=True):
     """Disc + one rigid piston above. Returns (pb, ipc, solid, body, mesh,
     n_disc, nodes_top)."""
     disc = fd.mesh.box_mesh(
@@ -87,7 +89,8 @@ def _build_punch_problem():
         inertia_tensor=0.01 * np.eye(3),
         name="piston",
     )
-    ipc.add_rigid_body(body)
+    if register_rigid_body:
+        ipc.add_rigid_body(body)
 
     assembly = fd.Assembly.sum(solid, body.assembly, ipc)
     pb = fd.problem.NonLinear(assembly, nlgeom=True)
@@ -106,6 +109,36 @@ def _build_punch_problem():
 
     pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=20)
     return pb, ipc, solid, body, mesh, n_disc, nodes_top
+
+
+def test_generic_ipc_uses_rigid_tie_mpc_condensation(fresh_3d_space):
+    pb, ipc, solid, body, mesh, n_disc, nodes_top = _build_punch_problem(
+        register_rigid_body=False
+    )
+
+    pb.nlsolve(dt=0.2, tmax=0.2, update_dt=True, print_info=0)
+
+    assert not ipc._rigid_bodies
+    disp = pb.get_disp()
+    plate_top_nodes = np.where(
+        (mesh.nodes[:n_disc, 2] > 0.099)
+        & (mesh.nodes[:n_disc, 0] > 0.25)
+        & (mesh.nodes[:n_disc, 0] < 0.75)
+        & (mesh.nodes[:n_disc, 1] > 0.25)
+        & (mesh.nodes[:n_disc, 1] < 0.75)
+    )[0]
+    assert disp[2, plate_top_nodes].min() < -1e-3
+
+    q = pb.get_dof_solution()[body.assembly._dof_indices]
+    rotation, *_ = body.constraint._compute_rotation(q[3:])
+    relative_position = mesh.nodes[nodes_top] - body.center_of_mass
+    expected = (
+        relative_position @ rotation.T
+        + body.center_of_mass
+        + q[:3]
+        - mesh.nodes[nodes_top]
+    )
+    np.testing.assert_allclose(disp[:, nodes_top].T, expected, atol=1e-9)
 
 
 def test_shapes_consistent_across_assembly_sum(fresh_3d_space):
