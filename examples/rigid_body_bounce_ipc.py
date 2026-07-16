@@ -55,6 +55,7 @@ body.set_static_obstacle(plane_mesh, dhat=0.01, kappa=1e8)
 
 # Solve using NonLinear via manual time stepping for trajectory collection
 pb = fd.problem.NonLinear(body.assembly)
+pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
 pb.initialize()
 
 idx = body.assembly._dof_indices

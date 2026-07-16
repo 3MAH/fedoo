@@ -34,7 +34,7 @@ def _run_freefall(dt, t_end, mass=1.0, z0=1.0, radius=0.1):
     )
     body.set_force([0.0, 0.0, -mass * G])
 
-    pb = body.solve(dt=dt, tmax=t_end, print_info=0)
+    pb = body.solve(dt=dt, tmax=t_end, print_info=0, solver="direct_scipy")
     dof = pb.get_dof_solution()
     idx = body.assembly._dof_indices
     return z0 + dof[idx[2]]
@@ -74,7 +74,7 @@ def test_freefall_no_horizontal_drift():
     )
     body.set_force([0.0, 0.0, -G])
 
-    pb = body.solve(dt=1e-3, tmax=t_end, print_info=0)
+    pb = body.solve(dt=1e-3, tmax=t_end, print_info=0, solver="direct_scipy")
     dof = pb.get_dof_solution()
     idx = body.assembly._dof_indices
     dx, dy = dof[idx[0]], dof[idx[1]]

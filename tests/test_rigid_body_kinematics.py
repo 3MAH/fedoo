@@ -15,12 +15,17 @@ from simcoon import Rotation  # required dependency (fedoo imports it at load)
 
 @pytest.fixture
 def space():
-    return fd.ModelingSpace("3D")
+    space = fd.ModelingSpace("3D")
+    space.new_variable("DispX")
+    space.new_variable("DispY")
+    space.new_variable("DispZ")
+    space.new_vector("Disp", ("DispX", "DispY", "DispZ"))
+    return space
 
 
 def _make_assembly(rest_positions, obstacle_positions, center):
     rt = fd.constraint.RigidTie(
-        np.arange(len(rest_positions)), center=center, use_quaternion=True
+        np.arange(len(rest_positions)), center=center
     )
     rt.center = np.asarray(center, dtype=float)
     asm = RigidBodyAssembly(mass=1.0, inertia_tensor=np.eye(3), rigid_tie=rt)
@@ -110,6 +115,85 @@ def test_build_ipc_jacobian_matches_finite_difference(space):
         eps[k] = h
         du_dq = (vertex_positions(q0 + eps) - vertex_positions(q0 - eps)) / (2 * h)
         assert np.allclose(J[:, k], du_dq, atol=1e-6), f"column {k} mismatch"
+
+
+def _make_rigid_body(dynamic=True):
+    nodes = np.array(
+        [
+            [-0.5, -0.5, 0.0],
+            [0.5, -0.5, 0.0],
+            [0.5, 0.5, 0.0],
+            [-0.5, 0.5, 0.0],
+        ]
+    )
+    mesh = fd.Mesh(nodes, np.array([[0, 1, 2, 3]]), "quad4")
+    kwargs = {}
+    if dynamic:
+        kwargs = {"mass": 1.0, "inertia_tensor": np.eye(3)}
+    return fd.constraint.RigidBody(mesh, dynamic=dynamic, **kwargs)
+
+
+def test_static_body_is_not_compiled_by_second_order_integrator(space):
+    body = _make_rigid_body(dynamic=False)
+    pb = fd.problem.NonLinear(body.assembly)
+    pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+
+    pb.initialize()
+
+    assert body.assembly.time_evolution is None
+    assert body.assembly.storage is None
+    assert body.assembly._time_integrator is None
+    assert not body.assembly._fedoo_time_integrated
+
+
+def test_rigid_body_integrator_is_recompiled_for_each_problem(space):
+    body = _make_rigid_body()
+
+    first = fd.problem.NonLinear(body.assembly)
+    first.set_time_integrator(
+        fd.time.SECOND_ORDER, fd.time.Newmark(beta=0.2, gamma=0.55)
+    )
+    first.initialize()
+    first_adapter = body.assembly._time_integrator
+    assert first_adapter.beta == pytest.approx(0.2)
+
+    second = fd.problem.NonLinear(body.assembly)
+    second.set_time_integrator(
+        fd.time.SECOND_ORDER, fd.time.Newmark(beta=0.3, gamma=0.6)
+    )
+    second.initialize()
+    assert body.assembly._time_integrator is not first_adapter
+    assert body.assembly._time_integrator.beta == pytest.approx(0.3)
+
+    static = fd.problem.NonLinear(body.assembly)
+    with pytest.warns(UserWarning, match="Assembly provider"):
+        static.initialize()
+    assert body.assembly._time_integrator is None
+    assert not body.assembly._fedoo_time_integrated
+
+
+def test_problem_set_start_commits_quaternion_increment(space):
+    body = _make_rigid_body(dynamic=False)
+    pb = fd.problem.NonLinear(body.assembly)
+    pb.initialize()
+    rotation_indices = body.assembly.dof_indices[3:]
+
+    first = np.array([0.2, 0.0, 0.0])
+    pb._dU = np.zeros(pb.n_dof)
+    pb._dU[rotation_indices] = first
+    pb.set_start()
+
+    second = np.array([0.0, -0.3, 0.1])
+    pb._dU = np.zeros(pb.n_dof)
+    pb._dU[rotation_indices] = second
+    pb.set_start()
+
+    expected = Rotation.from_rotvec(second) * Rotation.from_rotvec(first)
+    quaternion = body.constraint.Q_total.as_quat()
+    expected_quaternion = expected.as_quat()
+    assert np.allclose(quaternion, expected_quaternion) or np.allclose(
+        quaternion, -expected_quaternion
+    )
 
 
 if __name__ == "__main__":

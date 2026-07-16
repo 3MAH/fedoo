@@ -62,6 +62,7 @@ class _NonLinearBase:
 
         self.__assembly = assembly
         super().__init__(A, B, D, assembly.mesh, name, assembly.space)
+        self._register_assembly_constraints(assembly)
         self.nlgeom = nlgeom
         self.time_integrators = {}
         self._time_integrators_compiled = False
@@ -77,6 +78,22 @@ class _NonLinearBase:
         self.save_at_exact_time = True
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
+
+    def _register_assembly_constraints(self, assembly):
+        """Register constraints exposed by an assembly tree."""
+        if isinstance(assembly, AssemblySum):
+            for child in assembly.list_assembly:
+                self._register_assembly_constraints(child)
+            return
+        for constraint in getattr(assembly, "constraints", ()):
+            if constraint not in self.bc:
+                self.bc.add(constraint)
+
+    def _run_constraint_hook(self, name):
+        for bc in self.bc:
+            hook = getattr(bc, name, None)
+            if hook is not None:
+                hook(self)
 
     @property
     def n_iter(self):
@@ -182,6 +199,8 @@ class _NonLinearBase:
         return integrator
 
     def _has_time_integrated_weakform(self, assembly):
+        if getattr(assembly, "_fedoo_time_integrated", False):
+            return True
         if isinstance(assembly, AssemblySum):
             return any(
                 self._has_time_integrated_weakform(child)
@@ -214,12 +233,23 @@ class _NonLinearBase:
         for wf in getattr(weakform, "list_weakform", [weakform]):
             yield wf
 
+    def _iter_assembly_time_providers(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            for child in assembly.list_assembly:
+                yield from self._iter_assembly_time_providers(child)
+            return
+        if getattr(assembly, "weakform", None) is None and (
+            getattr(assembly, "storage", None) is not None
+            or getattr(assembly, "dissipation", None) is not None
+        ):
+            yield assembly
+
     def _warn_ignored_storage(self):
         """Warn when declared storage/dissipation terms are silently ignored.
 
-        Weakforms may declare transient metadata (e.g. HeatEquation always
-        declares its heat capacity storage); without a matching problem-level
-        integrator the analysis is steady/static and these terms are dropped.
+        Weakforms and assembly-level providers may declare transient metadata;
+        without a matching problem-level integrator the analysis is steady/static
+        and these terms are dropped.
         This is legitimate for a deliberately steady analysis, but silent for
         a user migrating from the former transient-by-default weakforms, so a
         warning is emitted once at compile time.
@@ -248,6 +278,21 @@ class _NonLinearBase:
                     stacklevel=3,
                 )
 
+        for assembly in self._iter_assembly_time_providers(self.__assembly):
+            evolution = getattr(assembly, "time_evolution", None)
+            if evolution is None or evolution in self.time_integrators:
+                continue
+            warnings.warn(
+                f"Assembly provider '{assembly.name}' declares storage or "
+                f"dissipation terms for the '{evolution.kind}' time evolution, "
+                "but no matching time integrator is attached to the problem: "
+                "these terms are ignored and the analysis is treated as "
+                "steady/static. Attach a matching integrator with "
+                "pb.set_time_integrator.",
+                UserWarning,
+                stacklevel=3,
+            )
+
     def initialize(self):
         self._compile_time_integrators()
         self.__assembly.initialize(self)
@@ -261,6 +306,7 @@ class _NonLinearBase:
             self._U += self._dU
             self._dU = 0
             self.__assembly.set_start(self)
+            self._run_constraint_hook("set_start")
 
             # Save results
             if save_results:
@@ -272,6 +318,7 @@ class _NonLinearBase:
                     callback(self)
         else:
             self.__assembly.set_start(self)
+            self._run_constraint_hook("set_start")
 
     def to_start(self):
         self._dU = 0
@@ -279,6 +326,7 @@ class _NonLinearBase:
         self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
+        self._run_constraint_hook("to_start")
 
     def update(self, compute="all", updateWeakForm=True):
         """
@@ -289,6 +337,12 @@ class _NonLinearBase:
             - Change in constitutive law (internal variable)
         Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
         """
+        if self.bc._update_during_inc:
+            for bc in self.bc:
+                pre_update = getattr(bc, "pre_update", None)
+                if pre_update is not None:
+                    pre_update(self)
+
         if updateWeakForm == True:
             self.__assembly.update(self, compute)
         else:

@@ -9,15 +9,10 @@ Provides:
 
 Large rotations
 ---------------
-Rotations are handled exactly (no small-angle approximation) via a
-multiplicative quaternion update (using ``simcoon.Rotation``):
-
-- The total rotation is stored as a quaternion ``Q_base`` in the RigidTie.
-- The rotation DOFs ``[rx, ry, rz]`` are rotation-vector components
-  representing a small increment from the current base state.
-- At each converged time step, the increment is composed into the
-  quaternion: ``Q_base = R_inc * Q_base`` (quaternion multiplication).
-- This avoids gimbal lock and supports arbitrarily large rotations.
+By default, each step uses an incremental rotation vector composed
+multiplicatively with the last converged quaternion orientation. ``RigidTie``
+evaluates the exact rotation matrix and its derivatives, so the kinematics do
+not rely on a small-angle approximation.
 
 The contact Jacobian ``J = [I_3 | dR/d(angle) @ r_ref]`` uses the exact
 rotation derivatives from ``RigidTie._compute_rotation()``, not the
@@ -26,8 +21,11 @@ infinitesimal skew-symmetric approximation.
 
 import numpy as np
 from scipy import sparse
+
 from fedoo.core.base import AssemblyBase
+from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.constraint.rigid_tie import RigidTie
+from fedoo.time.common import RayleighDamping
 
 
 class RigidBodyAssembly(AssemblyBase):
@@ -41,8 +39,8 @@ class RigidBodyAssembly(AssemblyBase):
         M = [[m*I_3,   0   ],
              [  0,   J_global]]
 
-    where ``J_global = Q.apply_tensor(J_body)`` is the inertia tensor rotated
-    to the current configuration via the RigidTie's quaternion.
+    where ``J_global = R @ J_body @ R.T`` is the inertia tensor rotated
+    to the current trial configuration.
 
     Parameters
     ----------
@@ -67,8 +65,6 @@ class RigidBodyAssembly(AssemblyBase):
         rigid_tie,
         mesh=None,
         space=None,
-        beta=0.25,
-        gamma=0.5,
         dynamic=True,
         name="RigidBodyAssembly",
     ):
@@ -82,27 +78,23 @@ class RigidBodyAssembly(AssemblyBase):
         self.rigid_tie = rigid_tie
         self.force = np.zeros(6)
         self.mesh = mesh
-        self.beta = beta
-        self.gamma = gamma
-        self.rayleigh_alpha = 0.0
-        # Static vs dynamic. In static mode, no Newmark inertia, no
-        # damping, no v/a state; only external force + contact tangent
-        # contribute to the 6 rigid DOFs.  A tiny diagonal regularisation
-        # is added to K to keep the linear solve well-posed when the body
-        # is not yet in contact (otherwise the unconstrained free rigid
-        # DOFs would produce a singular K row).
+        self.time_evolution = SECOND_ORDER if dynamic else None
+        self.storage = self if dynamic else None
+        self.dissipation = None
+        self.constraints = (rigid_tie,)
+        self._time_integrator = None
+        self._fedoo_time_integrated = False
         self.dynamic = bool(dynamic)
+        # A compiled time integrator supplies a mass tangent. Without one,
+        # the assembly is static and this tiny diagonal keeps free rigid DOFs
+        # well posed before contact.
         self.static_regularisation = 1e-9
 
         self._dof_indices = None
         self._pb_ref = None
 
-        self.sv = {
-            "Velocity": np.zeros(6),
-            "Acceleration": np.zeros(6),
-            "_DeltaDisp": np.zeros(6),
-        }
-        self.sv_start = {k: v.copy() for k, v in self.sv.items()}
+        self.sv = {}
+        self.sv_start = {}
 
         self._ipc_collision_mesh = None
         self._ipc_collisions = None
@@ -131,10 +123,11 @@ class RigidBodyAssembly(AssemblyBase):
         if self.mesh is None:
             self.mesh = pb.mesh
 
-        if self.dynamic and not np.any(self.sv["Acceleration"]):
-            M = self._get_mass_matrix()
-            self.sv["Acceleration"] = np.linalg.solve(M, self.force)
-            self.sv_start["Acceleration"] = self.sv["Acceleration"].copy()
+        if SECOND_ORDER not in getattr(pb, "time_integrators", {}):
+            self._time_integrator = None
+            self._fedoo_time_integrated = False
+        elif self._time_integrator is not None:
+            self._time_integrator.initialize(self, pb)
 
     @property
     def dof_indices(self):
@@ -242,15 +235,99 @@ class RigidBodyAssembly(AssemblyBase):
 
         return self._contact_force, self._contact_stiffness
 
-    def _get_mass_matrix(self):
-        """6x6 mass matrix in global frame."""
-        M = np.zeros((6, 6))
-        M[0, 0] = M[1, 1] = M[2, 2] = self.mass
-        Q = self.rigid_tie.Q_total
-        M[3:, 3:] = (
-            Q.apply_tensor(self.inertia_body) if Q is not None else self.inertia_body
+    @property
+    def time_dof_indices(self):
+        return self._dof_indices
+
+    def _get_rotation_inertia(self, pb=None):
+        """Return trial orientation, world inertia, and its DOF derivatives."""
+        pb = pb or self._pb_ref
+        rotvec = np.zeros(3)
+        if pb is not None and self._dof_indices is not None:
+            dof_ref, _ = self.rigid_tie._get_dof_ref(pb)
+            rotvec = np.asarray(dof_ref[3:], dtype=float)
+
+        R, *dR = self.rigid_tie._compute_rotation(rotvec)
+        inertia = R @ self.inertia_body @ R.T
+        derivatives = tuple(
+            derivative @ self.inertia_body @ R.T
+            + R @ self.inertia_body @ derivative.T
+            for derivative in dR
         )
+        return R, inertia, derivatives
+
+    def _get_mass_matrix(self, pb=None):
+        """Return the rigid-body mass matrix in the current global frame."""
+        M = np.zeros((6, 6))
+        M[:3, :3] = self.mass * np.eye(3)
+        _, M[3:, 3:], _ = self._get_rotation_inertia(pb)
         return M
+
+    def get_time_inertia_force(self, pb, acceleration, velocity):
+        """Return translational inertia and Euler's rotational inertia force."""
+        acceleration = np.asarray(acceleration, dtype=float)
+        velocity = np.asarray(velocity, dtype=float)
+        force = np.zeros(6)
+        force[:3] = self.mass * acceleration[:3]
+
+        _, inertia, _ = self._get_rotation_inertia(pb)
+        angular_acceleration = acceleration[3:]
+        angular_velocity = velocity[3:]
+        force[3:] = inertia @ angular_acceleration
+        if self.rigid_tie.use_quaternion:
+            force[3:] += np.cross(
+                angular_velocity, inertia @ angular_velocity
+            )
+        return force
+
+    def get_time_inertia_tangent(
+        self,
+        pb,
+        acceleration,
+        velocity,
+        acceleration_factor,
+        velocity_factor,
+    ):
+        """Return the effective tangent of the rigid-body inertia force."""
+        acceleration = np.asarray(acceleration, dtype=float)
+        velocity = np.asarray(velocity, dtype=float)
+        tangent = np.zeros((6, 6))
+        tangent[:3, :3] = acceleration_factor * self.mass * np.eye(3)
+
+        _, inertia, inertia_derivatives = self._get_rotation_inertia(pb)
+        if not self.rigid_tie.use_quaternion:
+            tangent[3:, 3:] = acceleration_factor * inertia
+            return tangent
+
+        angular_acceleration = acceleration[3:]
+        angular_velocity = velocity[3:]
+        angular_momentum = inertia @ angular_velocity
+        basis = np.eye(3)
+        for axis, inertia_derivative in enumerate(inertia_derivatives):
+            d_acceleration = acceleration_factor * basis[axis]
+            d_velocity = velocity_factor * basis[axis]
+            tangent[3:, 3 + axis] = (
+                inertia_derivative @ angular_acceleration
+                + inertia @ d_acceleration
+                + np.cross(d_velocity, angular_momentum)
+                + np.cross(
+                    angular_velocity,
+                    inertia_derivative @ angular_velocity
+                    + inertia @ d_velocity,
+                )
+            )
+        return tangent
+
+    def get_storage_matrix(self, pb=None):
+        """Assembly-level storage provider used by fedoo.time."""
+        return self._get_mass_matrix(pb)
+
+    def get_time_initial_force(self, pb=None):
+        return self.force + self._contact_force
+
+    def get_time_stiffness_matrix(self, pb=None):
+        """Return the static/contact tangent before time integration."""
+        return self._contact_stiffness
 
     def _get_n_dof(self):
         if self._pb_ref is not None:
@@ -261,133 +338,53 @@ class RigidBodyAssembly(AssemblyBase):
         )
 
     def assemble_global_mat(self, compute="all"):
-        """Assemble the 6×6 stiffness and residual at the rigid global DOFs.
-
-        Dynamic mode (Newmark):
-            K_eff = K_contact + (a0 + α·c0)·M
-            D     = F_ext + F_contact − M·a_pred − C·v_pred
-        where a0 = 1/(β·dt²), c0 = γ/(β·dt).
-
-        Static mode:
-            K_eff = K_contact + ε·I_6        (ε tiny, only to break
-                                              singularity of fully-free
-                                              rigid DOFs without contact)
-            D     = F_ext + F_contact
-        """
+        """Assemble static/contact terms, then apply the attached integrator."""
         if self._dof_indices is None:
             return
 
         n = self._get_n_dof()
         idx = self._dof_indices
-
-        if not self.dynamic:
-            # Pure static — no Newmark, no v/a state.
-            if compute in ("all", "matrix"):
-                K_eff_6 = self._contact_stiffness + (
-                    self.static_regularisation * np.eye(6)
-                )
-                self.global_matrix = sparse.csr_matrix(
-                    (K_eff_6.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
-                    shape=(n, n),
-                )
-            if compute in ("all", "vector"):
-                vec = np.zeros(n)
-                vec[idx] = self.force + self._contact_force
-                self.global_vector = vec
-            return
-
-        # Dynamic mode: guard against dt=0 (init-time probes) by emitting
-        # zeros instead of dividing.  This replaces the previous class-name
-        # filter band-aid in IPCContact._get_elastic_gradient_on_surface.
-        dt = self._pb_ref.dtime if self._pb_ref is not None else 0.0
-        if dt == 0:
-            if compute in ("all", "matrix"):
-                self.global_matrix = sparse.csr_matrix((n, n))
-            if compute in ("all", "vector"):
-                self.global_vector = np.zeros(n)
-            return
-
-        M = self._get_mass_matrix()
-        a0 = 1.0 / (self.beta * dt**2)
-        c0 = self.gamma / (self.beta * dt)
-        alpha = self.rayleigh_alpha
+        regularisation = (
+            self.static_regularisation if self._time_integrator is None else 0.0
+        )
 
         if compute in ("all", "matrix"):
-            K_eff_6 = self._contact_stiffness + (a0 + alpha * c0) * M
+            stiffness = self._contact_stiffness + regularisation * np.eye(6)
             self.global_matrix = sparse.csr_matrix(
-                (K_eff_6.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
+                (stiffness.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
                 shape=(n, n),
             )
-
         if compute in ("all", "vector"):
-            v_n = self.sv["Velocity"]
-            a_n = self.sv["Acceleration"]
-            delta_u = self.sv["_DeltaDisp"]
+            self.global_vector = np.zeros(n)
+            self.global_vector[idx] = self.force + self._contact_force
 
-            a_pred = a0 * (delta_u - dt * v_n) + (1 - 0.5 / self.beta) * a_n
-            v_pred = (
-                (1 - self.gamma / self.beta) * v_n
-                + (c0 * delta_u)
-                + dt * (1 - self.gamma / (2 * self.beta)) * a_n
-            )
-            C = alpha * M
-
-            D_6 = self.force + self._contact_force - M @ a_pred - C @ v_pred
-            vec = np.zeros(n)
-            vec[idx] = D_6
-            self.global_vector = vec
+        if self._time_integrator is not None:
+            self._time_integrator.integrate(self, self._pb_ref, compute)
 
     def update(self, pb, compute="all"):
-        """Update state from current displacement increment."""
         self._pb_ref = pb
-        dof_sol = pb.get_dof_solution()
-        if not (np.isscalar(dof_sol) and dof_sol == 0):
-            if np.isscalar(pb._dU) and pb._dU == 0:
-                self.sv["_DeltaDisp"] = np.zeros(6)
-            else:
-                self.sv["_DeltaDisp"] = pb._dU[self._dof_indices]
+        if self._time_integrator is not None:
+            self._time_integrator.update(self, pb)
 
+        dof_solution = pb.get_dof_solution()
         if self._ipc_collision_mesh is not None:
-            q = dof_sol[self._dof_indices] if not np.isscalar(dof_sol) else np.zeros(6)
+            q = (
+                np.asarray(dof_solution)[self._dof_indices]
+                if not np.isscalar(dof_solution)
+                else np.zeros(6)
+            )
             self.compute_contact(q, self.rigid_tie, compute="all")
 
         self.assemble_global_mat(compute)
 
     def set_start(self, pb):
-        """Accept converged increment: update velocity and acceleration."""
         self._pb_ref = pb
-        delta_u = self.sv["_DeltaDisp"]
-
-        self.sv_start = {
-            k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv.items()
-        }
-
-        # Static mode: no v/a state to update; just reset the increment.
-        if not self.dynamic:
-            self.sv["_DeltaDisp"] = np.zeros(6)
-            return
-
-        dt = pb.dtime
-        v_n = self.sv["Velocity"]
-        a_n = self.sv["Acceleration"]
-
-        if not np.any(delta_u):
-            return
-
-        new_a = (
-            (1 / (self.beta * dt**2)) * delta_u
-            - (1 / (self.beta * dt)) * v_n
-            - (0.5 / self.beta - 1) * a_n
-        )
-        self.sv["Velocity"] = v_n + dt * ((1 - self.gamma) * a_n + self.gamma * new_a)
-        self.sv["Acceleration"] = new_a
-        self.sv["_DeltaDisp"] = np.zeros(6)
+        if self._time_integrator is not None:
+            self._time_integrator.set_start(self, pb)
 
     def to_start(self, pb):
-        """Revert to start of failed increment."""
-        self.sv = {
-            k: v.copy() if hasattr(v, "copy") else v for k, v in self.sv_start.items()
-        }
+        if self._time_integrator is not None:
+            self._time_integrator.to_start(self, pb)
 
 
 class RigidBody:
@@ -397,14 +394,15 @@ class RigidBody:
     of surface nodes to 6 rigid DOFs) with a :class:`RigidBodyAssembly`
     (dynamics: 6x6 mass matrix and generalized force vector).
 
-    Supports arbitrarily large translations and rotations via quaternion-
-    based multiplicative update (no gimbal lock, no small-angle
-    approximation). IPC barrier contact is handled via direct Jacobian
+    Supports large translations and multiplicative incremental rotations.
+    IPC barrier contact is handled via direct Jacobian
     projection ``J^T @ F`` in the 6-DOF space.
 
     Solve via ``body.solve(dt, tmax)`` (wraps ``NonLinear``) or include
     ``body.assembly`` in an ``Assembly.sum`` — the kinematic tie is then
-    registered automatically when the problem is constructed.
+    registered automatically when the problem is constructed. Attach a
+    second-order integrator to manually constructed dynamic problems with
+    ``pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())``.
 
     Parameters
     ----------
@@ -424,7 +422,10 @@ class RigidBody:
     center_of_mass : array_like, shape (3,), optional
         Center of mass. Default: mean of mesh nodes.
     use_quaternion : bool, optional
-        Quaternion-based rotation in RigidTie (default True).
+        If ``True`` (default), compose incremental rotation vectors into a
+        quaternion orientation and include Euler's gyroscopic inertia term.
+        If ``False``, use one total rotation vector; this mode is primarily
+        retained for kinematic comparisons.
     name : str, optional
         Name of the rigid body.
 
@@ -474,8 +475,8 @@ class RigidBody:
         center_of_mass = np.asarray(center_of_mass, dtype=float)
 
         if self.dynamic:
-            # Mass and inertia are only used by the Newmark integrator.
-            # Static mode allows callers to omit them entirely.
+            # Mass and inertia are consumed by the problem's second-order
+            # time integrator. Static mode allows callers to omit them.
             if density is not None:
                 vol = mesh.get_volume()
                 if mass is None:
@@ -500,6 +501,11 @@ class RigidBody:
         self.mass = float(mass)
         self.center_of_mass = center_of_mass
         self.inertia_tensor = np.asarray(inertia_tensor, dtype=float)
+        if self.inertia_tensor.shape != (3, 3):
+            raise ValueError("inertia_tensor must have shape (3, 3).")
+        if not np.allclose(self.inertia_tensor, self.inertia_tensor.T):
+            raise ValueError("inertia_tensor must be symmetric.")
+        self.use_quaternion = bool(use_quaternion)
 
         # When ``mesh`` came from ``Mesh.extract_elements`` it carries
         # the parent-mesh active-node list used to slave the right DOFs
@@ -512,7 +518,7 @@ class RigidBody:
         self.constraint = RigidTie(
             tie_node_indices,
             center=center_of_mass,
-            use_quaternion=use_quaternion,
+            use_quaternion=self.use_quaternion,
             name=f"{name}_tie",
         )
         self.assembly = RigidBodyAssembly(
@@ -538,7 +544,7 @@ class RigidBody:
 
     def set_rayleigh_damping(self, alpha):
         """Set mass-proportional damping: C = alpha * M."""
-        self.assembly.rayleigh_alpha = float(alpha)
+        self.assembly.dissipation = RayleighDamping(alpha=float(alpha))
 
     def set_static_obstacle(self, obstacle_mesh, dhat=0.01, kappa=None):
         """Enable IPC barrier contact with a STATIC obstacle surface.
@@ -614,17 +620,13 @@ class RigidBody:
         if self.constraint not in pb.bc:
             pb.bc.add(self.constraint)
 
-    @property
-    def Q_total(self):
-        """Current total rotation as a Rotation object."""
-        return self.constraint.Q_total
-
-    def solve(self, dt, tmax, t0=0, print_info=1):
+    def solve(self, dt, tmax, t0=0, print_info=1, solver=None):
         """Solve rigid body dynamics using Fedoo's NonLinear solver.
 
-        Creates an internal ``NonLinear`` problem and calls ``nlsolve``.
-        The ``RigidBodyAssembly`` handles Newmark time integration,
-        IPC contact, and Rayleigh damping internally.
+        Creates an internal ``NonLinear`` problem, attaches
+        :class:`fedoo.time.Newmark` for a dynamic body, and calls ``nlsolve``.
+        IPC contact and Rayleigh damping remain assembly-level providers and
+        are integrated by the problem's time integrator.
 
         Parameters
         ----------
@@ -636,6 +638,8 @@ class RigidBody:
             Start time.
         print_info : int
             Verbosity (0=silent, 1=iterations).
+        solver : str or callable, optional
+            Linear solver forwarded to :meth:`Problem.set_solver`.
 
         Returns
         -------
@@ -645,6 +649,11 @@ class RigidBody:
         from fedoo.problem.non_linear import NonLinear
 
         pb = NonLinear(self.assembly)
+        if self.dynamic:
+            from fedoo.time import Newmark
+            pb.set_time_integrator(SECOND_ORDER, Newmark())
+        if solver is not None:
+            pb.set_solver(solver)
         pb.nlsolve(dt=dt, tmax=tmax, t0=t0, print_info=print_info, update_dt=False)
         return pb
 

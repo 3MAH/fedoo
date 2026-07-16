@@ -73,6 +73,7 @@ print(f"  Cow: {cow_mesh.n_nodes} nodes, mass={mass}kg")
 
 # Solve with NonLinear (manual stepping for trajectory)
 pb = fd.problem.NonLinear(body.assembly)
+pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
 pb.initialize()
 
 idx = body.assembly._dof_indices

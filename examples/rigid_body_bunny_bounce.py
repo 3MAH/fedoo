@@ -73,6 +73,7 @@ print(f"  Bunny: {bunny_mesh.n_nodes} nodes, mass={mass}kg")
 
 # Solve with manual loop for trajectory
 pb = fd.problem.NonLinear(body.assembly)
+pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
 pb.initialize()
 
 idx = body.assembly._dof_indices
