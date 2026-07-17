@@ -29,11 +29,11 @@ dependencies = [
     'scipy',
     'h5py',
     'simcoon>=1.14',
-    'meshio',
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,test,ipc]']
+all = ['fedoo[solver,plot,test,ipc,io]']
+io = ['meshio']
 ipc = ['ipctk>=1.6.0']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
