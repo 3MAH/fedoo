@@ -1,6 +1,24 @@
 from dataclasses import dataclass
 
 import numpy as np
+from scipy import sparse
+
+
+def scatter_dense_block(block, dof_indices, shape):
+    """Scatter a dense ``(k, k)`` block onto a global sparse matrix.
+
+    ``dof_indices`` (length ``k``) gives the global row/column position of each
+    local DOF: entry ``block[i, j]`` lands at
+    ``(dof_indices[i], dof_indices[j])``. Returns a
+    :class:`scipy.sparse.csr_matrix` of the requested ``shape``.
+    """
+    idx = np.asarray(dof_indices, dtype=int)
+    k = len(idx)
+    rows = np.repeat(idx, k)
+    cols = np.tile(idx, k)
+    return sparse.csr_matrix(
+        (np.asarray(block, dtype=float).ravel(), (rows, cols)), shape=shape
+    )
 
 
 @dataclass(frozen=True)

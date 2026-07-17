@@ -8,6 +8,45 @@ from simcoon import Rotation
 from simcoon import dR_drotvec
 
 
+def _resolve_rigid_dofs(problem, var_cd, node_cd, n_dof):
+    """Return the ``n_dof`` rigid DOF values and their global indices.
+
+    Shared by :class:`RigidTie` (6 DOF) and :class:`RigidTie2D` (3 DOF). The
+    values fall back to zeros before the problem holds a solution.
+    """
+    dof_cd = [
+        problem.n_node_dof + problem._global_dof.indice_start(var_cd[i]) + node_cd[i]
+        for i in range(n_dof)
+    ]
+    dof_sol = problem.get_dof_solution()
+    xbc = problem._Xbc
+
+    if np.isscalar(dof_sol) and dof_sol == 0:
+        if np.isscalar(xbc) and xbc == 0:
+            return np.zeros(n_dof), dof_cd
+        return np.asarray(xbc)[dof_cd], dof_cd
+    if np.isscalar(xbc) and xbc == 0:
+        return np.asarray(dof_sol)[dof_cd], dof_cd
+    return np.asarray(dof_sol)[dof_cd] + np.asarray(xbc)[dof_cd], dof_cd
+
+
+def _apply_slave_disp(problem, list_nodes, center, disp_ref, rotation, disp_indices):
+    """Write rigid slave-node displacements into ``problem._dU``.
+
+    Shared by :class:`RigidTie` (3D rotation matrix) and :class:`RigidTie2D`
+    (2D rotation matrix); ``rotation`` and ``center`` carry the dimension.
+    Returns the computed slave displacement.
+    """
+    nodes = problem.mesh.nodes[list_nodes]
+    new_disp = (nodes - center) @ rotation.T + center + disp_ref - nodes
+    if not np.array_equal(problem._dU, 0):
+        if np.array_equal(problem._U, 0):
+            problem._dU[disp_indices] = new_disp
+        else:
+            problem._dU[disp_indices] = new_disp - problem._U[disp_indices]
+    return new_disp
+
+
 class RigidTie(BCBase):
     """Constraint that eliminate dof assuming a rigid body tie between nodes.
 
@@ -152,22 +191,7 @@ class RigidTie(BCBase):
 
     def _get_dof_ref(self, problem):
         """Return the current six rigid-body DOFs and their global indices."""
-        dof_cd = [
-            problem.n_node_dof
-            + problem._global_dof.indice_start(self.var_cd[i])
-            + self.node_cd[i]
-            for i in range(6)
-        ]
-        dof_sol = problem.get_dof_solution()
-        xbc = problem._Xbc
-
-        if np.isscalar(dof_sol) and dof_sol == 0:
-            if np.isscalar(xbc) and xbc == 0:
-                return np.zeros(6), dof_cd
-            return np.asarray(xbc)[dof_cd], dof_cd
-        if np.isscalar(xbc) and xbc == 0:
-            return np.asarray(dof_sol)[dof_cd], dof_cd
-        return np.asarray(dof_sol)[dof_cd] + np.asarray(xbc)[dof_cd], dof_cd
+        return _resolve_rigid_dofs(problem, self.var_cd, self.node_cd, 6)
 
     def _compute_rotation(self, rotvec):
         """Return the orientation and exact derivatives for the active mode."""
@@ -193,23 +217,25 @@ class RigidTie(BCBase):
 
     def _compute_slave_disp(self, problem, disp_ref, R):
         """Update slave-node displacements for a given rigid motion."""
-        list_nodes = self.list_nodes
-        mesh = problem.mesh
-        new_disp = (
-            (mesh.nodes[list_nodes] - self.center) @ R.T
-            + self.center
-            + disp_ref
-            - mesh.nodes[list_nodes]
+        return _apply_slave_disp(
+            problem, self.list_nodes, self.center, disp_ref, R, self._disp_indices
         )
 
-        if not np.array_equal(problem._dU, 0):
-            if np.array_equal(problem._U, 0):
-                problem._dU[self._disp_indices] = new_disp
-            else:
-                problem._dU[self._disp_indices] = (
-                    new_disp - problem._U[self._disp_indices]
-                )
-        return new_disp
+    def rotation_jacobian(self, rotvec, points):
+        """Rotation matrix and per-point displacement/rotation derivatives.
+
+        For each point, ``du_dr{k} = (point - center) @ (dR/dr{k}).T`` is the
+        sensitivity of the slaved displacement to rigid rotation DOF ``k``.
+        Shared by the MPC linearization (:meth:`generate`) and the IPC contact
+        Jacobians (``RigidBodyAssembly`` and ``IPCContact``) so the three stay
+        consistent.
+
+        Returns ``(R, du_drx, du_dry, du_drz)`` where each derivative array has
+        the same shape as ``points``.
+        """
+        R, dR_drx, dR_dry, dR_drz = self._compute_rotation(rotvec)
+        rel = np.asarray(points, dtype=float) - self.center
+        return R, rel @ dR_drx.T, rel @ dR_dry.T, rel @ dR_drz.T
 
     def pre_update(self, problem):
         """Refresh rigid slave positions before contact assemblies update."""
@@ -252,15 +278,12 @@ class RigidTie(BCBase):
         disp_ref = dof_ref[:3]  # reference displacement
         rotvec = dof_ref[3:]
 
-        R, dR_drx, dR_dry, dR_drz = self._compute_rotation(rotvec)
+        # approche incrémentale
+        R, du_drx, du_dry, du_drz = self.rotation_jacobian(
+            rotvec, mesh.nodes[list_nodes]
+        )
 
         self._compute_slave_disp(problem, disp_ref, R)
-
-        # approche incrémentale:
-        crd = mesh.nodes[list_nodes] - self.center
-        du_drx = crd @ dR_drx.T
-        du_dry = crd @ dR_dry.T
-        du_drz = crd @ dR_drz.T
 
         #### MPC ####
 
@@ -393,22 +416,7 @@ class RigidTie2D(BCBase):
 
     def _get_dof_ref(self, problem):
         """Return [dx, dy, rotZ] and their global DOF indices."""
-        dof_cd = [
-            problem.n_node_dof
-            + problem._global_dof.indice_start(self.var_cd[i])
-            + self.node_cd[i]
-            for i in range(3)
-        ]
-        dof_sol = problem.get_dof_solution()
-        xbc = problem._Xbc
-
-        if np.isscalar(dof_sol) and dof_sol == 0:
-            if np.isscalar(xbc) and xbc == 0:
-                return np.zeros(3), dof_cd
-            return np.asarray(xbc)[dof_cd], dof_cd
-        if np.isscalar(xbc) and xbc == 0:
-            return np.asarray(dof_sol)[dof_cd], dof_cd
-        return np.asarray(dof_sol)[dof_cd] + np.asarray(xbc)[dof_cd], dof_cd
+        return _resolve_rigid_dofs(problem, self.var_cd, self.node_cd, 3)
 
     @staticmethod
     def _compute_rotation(angle):
@@ -421,16 +429,14 @@ class RigidTie2D(BCBase):
 
     def _compute_slave_disp(self, problem, disp_ref, rotation):
         """Update 2D slave-node displacements for a rigid motion."""
-        nodes = problem.mesh.nodes[self.list_nodes]
-        new_disp = (nodes - self.center) @ rotation.T + self.center + disp_ref - nodes
-        if not np.array_equal(problem._dU, 0):
-            if np.array_equal(problem._U, 0):
-                problem._dU[self._disp_indices] = new_disp
-            else:
-                problem._dU[self._disp_indices] = (
-                    new_disp - problem._U[self._disp_indices]
-                )
-        return new_disp
+        return _apply_slave_disp(
+            problem,
+            self.list_nodes,
+            self.center,
+            disp_ref,
+            rotation,
+            self._disp_indices,
+        )
 
     def pre_update(self, problem):
         """Refresh rigid slave positions before contact assemblies update."""

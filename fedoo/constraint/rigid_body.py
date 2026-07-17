@@ -20,13 +20,15 @@ infinitesimal skew-symmetric approximation.
 """
 
 import numpy as np
-from scipy import sparse
 
 from fedoo.core.base import AssemblyBase
 from fedoo.core.mesh import Mesh
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.constraint.rigid_tie import RigidTie
-from fedoo.time.common import RayleighDamping
+from fedoo.time.common import RayleighDamping, scatter_dense_block
+
+# Rigid-body dynamics is formulated in 3D: 3 translational + 3 rotational DOFs.
+_N_RIGID_DOF = 6
 
 
 class RigidBodyAssembly(AssemblyBase):
@@ -74,10 +76,16 @@ class RigidBodyAssembly(AssemblyBase):
 
             space = ModelingSpace.get_active()
         AssemblyBase.__init__(self, name, space)
+        if self.space.ndim != 3:
+            raise NotImplementedError(
+                "RigidBodyAssembly supports 3D modeling spaces only "
+                f"(got ndim={self.space.ndim}). RigidTie2D provides 2D rigid "
+                "kinematics, but 2D rigid-body dynamics is not yet implemented."
+            )
         self.mass = float(mass)
         self.inertia_body = np.asarray(inertia_tensor, dtype=float)
         self.rigid_tie = rigid_tie
-        self.force = np.zeros(6)
+        self.force = np.zeros(_N_RIGID_DOF)
         self.mesh = mesh
         self.time_evolution = SECOND_ORDER if dynamic else None
         self.storage = self if dynamic else None
@@ -85,10 +93,12 @@ class RigidBodyAssembly(AssemblyBase):
         self._time_integrator = None
         self._fedoo_time_integrated = False
         self.dynamic = bool(dynamic)
-        # A compiled time integrator supplies a mass tangent. Without one,
-        # the assembly is static and this tiny diagonal keeps free rigid DOFs
-        # well posed before contact.
-        self.static_regularisation = 1e-9
+        # A compiled time integrator supplies a mass tangent. Without one, the
+        # assembly is static and this tiny diagonal keeps the free rigid DOFs
+        # well posed before contact. It is scaled to the body's mass/inertia
+        # magnitude so it stays negligible yet non-zero under any unit system.
+        mass_scale = max(self.mass, float(np.trace(self.inertia_body)), 1.0)
+        self.static_regularisation = 1e-9 * mass_scale
 
         self._dof_indices = None
         self._pb_ref = None
@@ -107,8 +117,8 @@ class RigidBodyAssembly(AssemblyBase):
         self._ipc_obstacle_nodes = None
         self._ipc_obstacle_mesh = None
         self._ipc_obstacle_source_id = None
-        self._contact_force = np.zeros(6)
-        self._contact_stiffness = np.zeros((6, 6))
+        self._contact_force = np.zeros(_N_RIGID_DOF)
+        self._contact_stiffness = np.zeros((_N_RIGID_DOF, _N_RIGID_DOF))
 
     def _register_global_dofs(self, pb):
         """Register the rigid kinematic constraint and its global DOFs."""
@@ -118,14 +128,9 @@ class RigidBodyAssembly(AssemblyBase):
     def initialize(self, pb):
         """Extract global DOF indices from the problem."""
         rt = self.rigid_tie
-        self._dof_indices = np.array(
-            [
-                pb.n_node_dof
-                + pb._global_dof.indice_start(rt.var_cd[i])
-                + rt.node_cd[i]
-                for i in range(6)
-            ]
-        )
+        # Same global-DOF layout the RigidTie constraint resolves; reuse it
+        # so the two never drift apart.
+        self._dof_indices = np.array(rt._get_dof_ref(pb)[1])
         self._pb_ref = pb
         if self.mesh is None:
             self.mesh = pb.mesh
@@ -151,15 +156,13 @@ class RigidBodyAssembly(AssemblyBase):
         J : ndarray, shape (n_all*3, 6)
             Body vertices use exact derivatives; obstacle rows are zero.
         """
-        R, dR_drx, dR_dry, dR_drz = rt._compute_rotation(angles)
-        r_ref = self._ipc_rest_positions - rt.center
-        du_drx = r_ref @ dR_drx.T
-        du_dry = r_ref @ dR_dry.T
-        du_drz = r_ref @ dR_drz.T
+        _, du_drx, du_dry, du_drz = rt.rotation_jacobian(
+            angles, self._ipc_rest_positions
+        )
 
         n_body = self._ipc_n_body
         n_all = n_body + len(self._ipc_obstacle_nodes)
-        J = np.zeros((n_all * 3, 6))
+        J = np.zeros((n_all * 3, _N_RIGID_DOF))
         for d in range(3):
             J[d : n_body * 3 : 3, d] = 1.0
             J[d : n_body * 3 : 3, 3] = du_drx[:, d]
@@ -210,9 +213,7 @@ class RigidBodyAssembly(AssemblyBase):
             self._contact_stiffness[:] = 0
             return self._contact_force, self._contact_stiffness
 
-        from fedoo.constraint.ipc_contact import _import_ipctk
-
-        ipctk = _import_ipctk()
+        from fedoo.constraint.ipc_contact import _barrier_hessian_psd
 
         J = self._build_ipc_jacobian(rt, q[3:])
 
@@ -222,20 +223,12 @@ class RigidBodyAssembly(AssemblyBase):
         self._contact_force = -self._ipc_kappa * (J.T @ grad)
 
         if compute in ("all", "stiffness"):
-            try:
-                hess = self._ipc_barrier.hessian(
-                    self._ipc_collisions,
-                    self._ipc_collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
-                )
-            except RuntimeError:
-                hess = self._ipc_barrier.hessian(
-                    self._ipc_collisions,
-                    self._ipc_collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
-                )
+            hess = _barrier_hessian_psd(
+                self._ipc_barrier,
+                self._ipc_collisions,
+                self._ipc_collision_mesh,
+                vertices,
+            )
             self._contact_stiffness = self._ipc_kappa * (J.T @ (hess @ J))
         else:
             self._contact_stiffness[:] = 0
@@ -264,7 +257,7 @@ class RigidBodyAssembly(AssemblyBase):
 
     def _get_mass_matrix(self, pb=None):
         """Return the rigid-body mass matrix in the current global frame."""
-        M = np.zeros((6, 6))
+        M = np.zeros((_N_RIGID_DOF, _N_RIGID_DOF))
         M[:3, :3] = self.mass * np.eye(3)
         _, M[3:, 3:], _ = self._get_rotation_inertia(pb)
         return M
@@ -273,7 +266,7 @@ class RigidBodyAssembly(AssemblyBase):
         """Return translational inertia and Euler's rotational inertia force."""
         acceleration = np.asarray(acceleration, dtype=float)
         velocity = np.asarray(velocity, dtype=float)
-        force = np.zeros(6)
+        force = np.zeros(_N_RIGID_DOF)
         force[:3] = self.mass * acceleration[:3]
 
         _, inertia, _ = self._get_rotation_inertia(pb)
@@ -295,7 +288,7 @@ class RigidBodyAssembly(AssemblyBase):
         """Return the effective tangent of the rigid-body inertia force."""
         acceleration = np.asarray(acceleration, dtype=float)
         velocity = np.asarray(velocity, dtype=float)
-        tangent = np.zeros((6, 6))
+        tangent = np.zeros((_N_RIGID_DOF, _N_RIGID_DOF))
         tangent[:3, :3] = acceleration_factor * self.mass * np.eye(3)
 
         _, inertia, inertia_derivatives = self._get_rotation_inertia(pb)
@@ -352,11 +345,8 @@ class RigidBodyAssembly(AssemblyBase):
         )
 
         if compute in ("all", "matrix"):
-            stiffness = self._contact_stiffness + regularisation * np.eye(6)
-            self.global_matrix = sparse.csr_matrix(
-                (stiffness.ravel(), (np.repeat(idx, 6), np.tile(idx, 6))),
-                shape=(n, n),
-            )
+            stiffness = self._contact_stiffness + regularisation * np.eye(_N_RIGID_DOF)
+            self.global_matrix = scatter_dense_block(stiffness, idx, (n, n))
         if compute in ("all", "vector"):
             self.global_vector = np.zeros(n)
             self.global_vector[idx] = self.force + self._contact_force
@@ -374,7 +364,7 @@ class RigidBodyAssembly(AssemblyBase):
             q = (
                 np.asarray(dof_solution)[self._dof_indices]
                 if not np.isscalar(dof_solution)
-                else np.zeros(6)
+                else np.zeros(_N_RIGID_DOF)
             )
             self.compute_contact(q, self.rigid_tie, compute="all")
 
@@ -602,7 +592,8 @@ class RigidBody:
         edges = ipctk.edges(all_elms)
         cm = ipctk.CollisionMesh(all_nodes, edges, all_elms)
 
-        # Only body-obstacle collisions (no self-contact within either mesh).
+        # Only body-obstacle collisions (no self-contact within either mesh):
+        # the filter blocks same-patch pairs, so body (0) and obstacle (1) only.
         patches = np.zeros(len(all_nodes), dtype=np.int32)
         patches[n_body:] = 1
         cm.can_collide = ipctk.make_vertex_patches_filter(patches)

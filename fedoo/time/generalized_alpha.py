@@ -6,7 +6,11 @@ from scipy import sparse
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import TimeIntegratorBase
-from fedoo.time.common import RayleighDamping, newmark_acceleration_velocity
+from fedoo.time.common import (
+    RayleighDamping,
+    newmark_acceleration_velocity,
+    scatter_dense_block,
+)
 from fedoo.weakform.inertia import Inertia
 
 
@@ -169,11 +173,8 @@ class GeneralizedAlphaAssemblyAdapter:
                 (1.0 - self.alpha_f) * c0,
             )
             tangent += (1.0 - self.alpha_f) * c0 * damping
-            rows = np.repeat(idx, len(idx))
-            cols = np.tile(idx, len(idx))
-            dynamic_matrix = sparse.csr_matrix(
-                (tangent.ravel(), (rows, cols)),
-                shape=assembly.global_matrix.shape,
+            dynamic_matrix = scatter_dense_block(
+                tangent, idx, assembly.global_matrix.shape
             )
             assembly.global_matrix = assembly.global_matrix + dynamic_matrix
 

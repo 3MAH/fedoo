@@ -485,6 +485,10 @@ class Mesh(MeshBase):
             meshObject.merge_nodes(meshObject.find_coincident_nodes())
 
         where meshObject is the Mesh object containing merged coincidentNodes.
+
+        Detection here uses a round-to-tolerance lexsort. For a distance-based
+        (KDTree) detector that also collapses clusters of 3+ coincident nodes
+        in one call, see :py:meth:`merge_coincident_nodes`.
         """
         decimal_round = int(-np.log10(tol) - 1)
         crd = self.nodes.round(decimal_round)  # round coordinates to match tolerance
@@ -528,6 +532,11 @@ class Mesh(MeshBase):
         -------
         int
             Total number of node pairs merged across all passes.
+
+        See Also
+        --------
+        find_coincident_nodes : lighter round-to-tolerance detector returning
+            pairs for a single-pass ``merge_nodes`` call.
         """
         from scipy.spatial import cKDTree
 

@@ -33,6 +33,30 @@ def _import_ipctk():
     return ipctk
 
 
+def _barrier_hessian_psd(barrier, collisions, collision_mesh, vertices):
+    """ipctk barrier hessian with PSD projection and a degenerate fallback.
+
+    CLAMP/ABS PSD projection can raise on degenerate (zero-distance) contact
+    pairs; retry without projection so assembly still proceeds. Shared by
+    :class:`IPCContact` and ``RigidBodyAssembly`` so both use the same policy.
+    """
+    ipctk = _import_ipctk()
+    try:
+        return barrier.hessian(
+            collisions,
+            collision_mesh,
+            vertices,
+            project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
+        )
+    except RuntimeError:
+        return barrier.hessian(
+            collisions,
+            collision_mesh,
+            vertices,
+            project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
+        )
+
+
 class IPCContact(AssemblyBase):
     r"""Contact Assembly based on the IPC (Incremental Potential Contact) method.
 
@@ -433,7 +457,7 @@ class IPCContact(AssemblyBase):
 
             n_rb = len(local_indices)
 
-            # Get exact rotation derivatives from RigidTie. The Jacobian
+            # Exact rotation derivatives from RigidTie. The Jacobian
             # J = [I_3 | dR/d(omega) @ r_ref] uses only r_ref (reference
             # positions) — current vertex positions and translation are
             # not needed.
@@ -443,22 +467,17 @@ class IPCContact(AssemblyBase):
             else:
                 angles = np.zeros(3)
 
-            _, dR_drx, dR_dry, dR_drz = rt._compute_rotation(angles)
-            center = rt.center  # initial center position
-
             # Translation part: J_i[:3, :3] = I_3
             for d in range(ndim):
                 all_rows.append(np.full(n_rb, dof_indices[d]))
                 all_cols.append(local_indices * ndim + d)
                 all_data.append(np.ones(n_rb))
 
-            # Rotation part: exact derivatives from RigidTie
-            # J_i[d, 3+k] = (dR_drk @ r_ref_i)[d]
-            # where r_ref = vertex_ref - center (in reference config)
-            r_ref = self._rest_positions[local_indices] - center  # (n_rb, 3)
-            du_drx = r_ref @ dR_drx.T  # (n_rb, 3)
-            du_dry = r_ref @ dR_dry.T
-            du_drz = r_ref @ dR_drz.T
+            # Rotation part: J_i[d, 3+k] = (dR_drk @ r_ref_i)[d],
+            # r_ref = vertex_ref - center.
+            _, du_drx, du_dry, du_drz = rt.rotation_jacobian(
+                angles, self._rest_positions[local_indices]
+            )
 
             for d in range(ndim):
                 # RotX contribution
@@ -551,8 +570,17 @@ class IPCContact(AssemblyBase):
             n_mesh_dof = self.space.nvar * self.mesh.n_nodes
             grad_energy_full = grad_energy_full[:n_mesh_dof]
 
-        # Ensure dimension matches P rows
+        # Assembly vectors that don't span the extra global DOFs (PeriodicBC,
+        # RigidTie, RigidBody) are shorter than P's row count; zero-padding the
+        # global-DOF tail is correct since they contribute nothing there. A
+        # vector LONGER than P's rows means the DOF bookkeeping is inconsistent
+        # — fail loudly rather than silently truncate.
         n_P_rows = self._scatter_matrix.shape[0]
+        if len(grad_energy_full) > n_P_rows:
+            raise ValueError(
+                f"Global vector length {len(grad_energy_full)} exceeds scatter "
+                f"matrix rows {n_P_rows}; contact DOF bookkeeping is inconsistent."
+            )
         if len(grad_energy_full) < n_P_rows:
             grad_energy_full = np.pad(
                 grad_energy_full, (0, n_P_rows - len(grad_energy_full))
@@ -650,22 +678,12 @@ class IPCContact(AssemblyBase):
             self.global_vector = -self._kappa * (P @ grad_surf)
 
         if compute != "vector":
-            try:
-                hess_surf = self._barrier_potential.hessian(
-                    self._collisions,
-                    self._collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
-                )
-            except RuntimeError:
-                # CLAMP/ABS projection can fail on degenerate contact
-                # pairs (zero-distance); skip projection entirely.
-                hess_surf = self._barrier_potential.hessian(
-                    self._collisions,
-                    self._collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
-                )
+            hess_surf = _barrier_hessian_psd(
+                self._barrier_potential,
+                self._collisions,
+                self._collision_mesh,
+                vertices,
+            )
             if axi_D is not None:
                 # Axisymmetric IPC uses a single 2*pi*r weight on the residual.
                 # The physically closer single-weight tangent would be:
@@ -940,6 +958,22 @@ class IPCContact(AssemblyBase):
         else:
             self._ogc_filter_step(pb, dX)
 
+    def _refresh_rigid_scatter(self, pb):
+        """Rebuild the rotation-dependent scatter matrix for rigid bodies.
+
+        The rigid columns of the scatter matrix depend on the current rigid
+        rotation, so the matrix is refreshed on every NR iteration (from both
+        :meth:`update` and :meth:`assemble_global_mat`) whenever rigid bodies
+        are registered. No-op otherwise.
+        """
+        if self._rigid_bodies and pb is not None:
+            self._scatter_matrix = self._build_scatter_matrix(
+                self._surface_node_indices,
+                self.mesh.n_nodes,
+                self.space.ndim,
+                pb,
+            )
+
     def assemble_global_mat(self, compute="all"):
         """Recompute barrier contributions from cached vertex positions.
 
@@ -954,13 +988,7 @@ class IPCContact(AssemblyBase):
         consistent with the kinematic constraint.
         """
         if self._last_vertices is not None:
-            if self._rigid_bodies and self._pb is not None:
-                self._scatter_matrix = self._build_scatter_matrix(
-                    self._surface_node_indices,
-                    self.mesh.n_nodes,
-                    self.space.ndim,
-                    self._pb,
-                )
+            self._refresh_rigid_scatter(self._pb)
             self._compute_ipc_contributions(self._last_vertices, compute)
 
     def initialize(self, pb):
@@ -1247,15 +1275,9 @@ class IPCContact(AssemblyBase):
         vertices = self._get_current_vertices(pb)
         self._last_vertices = vertices
 
-        # Rebuild scatter matrix for rigid bodies (Jacobian uses r_ref but
-        # depends on the current rotation, so refresh after every update)
-        if self._rigid_bodies:
-            self._scatter_matrix = self._build_scatter_matrix(
-                self._surface_node_indices,
-                self.mesh.n_nodes,
-                self.space.ndim,
-                pb,
-            )
+        # The rigid Jacobian depends on the current rotation, so refresh the
+        # scatter matrix after every update.
+        self._refresh_rigid_scatter(pb)
 
         # Rebuild collision set
         self._collisions.build(
