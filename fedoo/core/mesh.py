@@ -27,6 +27,39 @@ try:
 except ImportError:
     USE_PYVISTA_QT = False
 
+try:
+    import meshio
+
+    USE_MESHIO = True
+except ImportError:
+    USE_MESHIO = False
+
+
+# Mapping from meshio cell type names to fedoo element types.
+# A value of None means the cell is recognized but intentionally ignored
+# (e.g. isolated vertices). Missing keys are reported as unavailable.
+_MESHIO_TO_FEDOO = {
+    "vertex": None,
+    "line": "lin2",
+    "line3": "lin3",
+    "triangle": "tri3",
+    "triangle6": "tri6",
+    "quad": "quad4",
+    "quad8": "quad8",
+    "quad9": "quad9",
+    "tetra": "tet4",
+    "tetra10": "tet10",
+    "hexahedron": "hex8",
+    "hexahedron20": "hex20",
+    "wedge": "wed6",
+    "wedge15": "wed15",
+    "wedge18": "wed18",
+}
+
+# File extensions read through meshio rather than pyvista. These are FEA
+# solver decks that the VTK readers behind pyvista cannot load reliably.
+_MESHIO_READ_EXTENSIONS = {".inp"}
+
 
 _PYVISTA_CELL_TYPES = {
     "spring": (3, 2),
@@ -267,13 +300,109 @@ class Mesh(MeshBase):
             raise NameError("Pyvista not installed.")
 
     @staticmethod
+    def from_meshio(io_mesh, name: str = "") -> "Mesh":
+        """Build a Mesh from a meshio mesh object.
+
+        Node coordinates, element connectivity, node sets (``point_sets``,
+        e.g. Abaqus ``*NSET``) and element sets (``cell_sets``, e.g. Abaqus
+        ``*ELSET``) are imported. Meshes holding several element types are
+        returned as a :py:class:`MultiMesh`; element sets are then split per
+        element type.
+
+        Parameters
+        ----------
+        io_mesh: meshio.Mesh
+            Mesh object returned by ``meshio.read``.
+        name : str
+            name of the new created Mesh. If specified, this Mesh is added to
+            the dict containing all the loaded Mesh (Mesh.get_all()).
+        """
+        points = np.asarray(io_mesh.points, dtype=float)
+
+        elements_dict = {}
+        # per cell block: (fedoo_elm_type or None, offset within that type)
+        block_meta = []
+        type_count = {}
+        for block in io_mesh.cells:
+            elm_type = _MESHIO_TO_FEDOO.get(block.type, "__unknown__")
+            if elm_type == "__unknown__":
+                warnings.warn(
+                    f"Element type '{block.type}' is not available in fedoo "
+                    "and was ignored during import."
+                )
+                block_meta.append((None, 0))
+                continue
+            if elm_type is None:
+                block_meta.append((None, 0))
+                continue
+            data = np.asarray(block.data)
+            offset = type_count.get(elm_type, 0)
+            block_meta.append((elm_type, offset))
+            type_count[elm_type] = offset + len(data)
+            if elm_type in elements_dict:
+                elements_dict[elm_type] = np.vstack([elements_dict[elm_type], data])
+            else:
+                elements_dict[elm_type] = data
+
+        if len(elements_dict) == 0:
+            raise NotImplementedError("This mesh contains no compatible element.")
+
+        # node sets: point_sets -> node_sets (global node indices)
+        node_sets = {
+            set_name: np.asarray(indices)
+            for set_name, indices in getattr(io_mesh, "point_sets", {}).items()
+        }
+
+        # element sets: cell_sets are given per cell block with block-local
+        # indices. Distribute them per fedoo element type, shifting by the
+        # offset each block occupies inside its (stacked) element type.
+        element_sets_by_type = {elm_type: {} for elm_type in elements_dict}
+        for set_name, per_block in getattr(io_mesh, "cell_sets", {}).items():
+            for block_idx, local_indices in enumerate(per_block):
+                if block_idx >= len(block_meta):
+                    continue
+                elm_type, offset = block_meta[block_idx]
+                if elm_type is None or len(local_indices) == 0:
+                    continue
+                indices = np.asarray(local_indices) + offset
+                type_sets = element_sets_by_type[elm_type]
+                if set_name in type_sets:
+                    type_sets[set_name] = np.concatenate([type_sets[set_name], indices])
+                else:
+                    type_sets[set_name] = indices
+
+        if len(elements_dict) == 1:
+            ((elm_type, elements),) = elements_dict.items()
+            return Mesh(
+                points,
+                elements,
+                elm_type,
+                node_sets=node_sets,
+                element_sets=element_sets_by_type[elm_type],
+                name=name,
+            )
+        # One submesh per element type, each carrying its own (type-local)
+        # element sets through the (elm_type, elements, element_sets) form.
+        return MultiMesh(
+            points,
+            {
+                elm_type: (elm_type, elements, element_sets_by_type[elm_type])
+                for elm_type, elements in elements_dict.items()
+            },
+            node_sets=node_sets,
+            name=name,
+        )
+
+    @staticmethod
     def read(filename: str, name: str = "") -> "Mesh":
         """Build a Mesh from a file.
 
-        The file type is inferred from the file name.
-        This function use the pyvista read method which
-        is itself based on the vtk native readers and the meshio readers
-        (available only if the meshio lib is installed.)
+        The file type is inferred from the file name. Abaqus decks (``.inp``)
+        are read with the meshio library; this supports second-order
+        (quadratic) elements, multiple element types (returned as a
+        :py:class:`MultiMesh`) and node/element sets (``*NSET``/``*ELSET``).
+        Other formats are read with pyvista, which relies on the native VTK
+        readers.
 
         Parameters
         ----------
@@ -283,17 +412,22 @@ class Mesh(MeshBase):
             name of the new created Mesh. If specitified, this Mesh will be
             added in the dict containing all the loaded Mesh (Mesh.get_all()).
             By default, the  Mesh is not added to the list.
-
-        Notes
-        -----
-        For now, only mesh with single element type may be imported.
-        Multi-element meshes will be integrated later.
         """
+        ext = splitext(filename)[1].lower()
+
+        if ext in _MESHIO_READ_EXTENSIONS:
+            if not USE_MESHIO:
+                raise ModuleNotFoundError(
+                    f"Reading '{ext}' files requires the 'meshio' library. "
+                    "Install it with `pip install meshio`."
+                )
+            return Mesh.from_meshio(meshio.read(filename), name=name)
+
         if USE_PYVISTA:
-            mesh = Mesh.from_pyvista(pv.read(filename), name=name)
-            return mesh
-        else:
-            raise NameError("Pyvista not installed.")
+            return Mesh.from_pyvista(pv.read(filename), name=name)
+        if USE_MESHIO:
+            return Mesh.from_meshio(meshio.read(filename), name=name)
+        raise NameError("Neither pyvista nor meshio is installed.")
 
     def add_node_set(
         self, node_indices: list[int] | np.ndarray[int], name: str

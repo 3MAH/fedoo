@@ -29,6 +29,7 @@ dependencies = [
     'scipy',
     'h5py',
     'simcoon>=1.14',
+    'meshio',
 ]
 
 [project.optional-dependencies]
