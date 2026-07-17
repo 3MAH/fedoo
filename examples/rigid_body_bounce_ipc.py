@@ -40,7 +40,8 @@ plane_mesh = fd.Mesh.from_pyvista(
         j_size=1.5,
         i_resolution=6,
         j_resolution=6,
-    ).triangulate()
+    ).triangulate(),
+    name="Floor",
 )
 
 body = fd.constraint.RigidBody(
@@ -53,39 +54,45 @@ body.set_force([0, 0, -mass * g])
 body.set_rayleigh_damping(1.0)
 body.set_static_obstacle(plane_mesh, dhat=0.01, kappa=1e8)
 
-# Solve using NonLinear via manual time stepping for trajectory collection
+# Solve with NonLinear and save the trajectory through Fedoo's output system.
 pb = fd.problem.NonLinear(body.assembly)
 pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
-pb.initialize()
 
-idx = body.assembly._dof_indices
-z_hist = [z0]
-t_hist = [0.0]
+results = pb.add_output(
+    "rigid_body_bounce",
+    ["Disp", "RigidDisp", "RigidRot"],
+    include_static_obstacles=True,  # include the plane_mesh in the results field
+)
 
 t0 = time.time()
-n_steps = int(round(t_end / dt))
-for step in range(n_steps):
-    pb.dtime = dt
-    pb.solve_time_increment()
-    pb.set_start()
-    dof = pb.get_dof_solution()
-    z_hist.append(z0 + dof[idx[2]])
-    t_hist.append((step + 1) * dt)
+pb.nlsolve(
+    dt=dt,
+    dt_max=dt,
+    tmax=t_end,
+    update_dt=True,
+    print_info=1,
+    interval_output=dt * 80,
+)
+
+# Results can be visualized with ``fd.viewer(results)``.
 
 elapsed = time.time() - t0
-t_hist = np.array(t_hist)
-z_hist = np.array(z_hist)
-print(
-    f"\n  {len(t_hist)} steps in {elapsed:.1f}s ({elapsed / len(t_hist) * 1000:.1f}ms/step)"
+# The initial state is prepended because output frames start after the first
+# requested output interval.
+history = results.get_history(
+    ["RigidDisp", "Time"],
+    component=["Z", 0],
 )
+t_hist = np.r_[0.0, history["Time"]]
+z_hist = z0 + np.r_[0.0, np.asarray(history["RigidDisp"]).reshape(-1)]
+print(f"\n  {results.n_iter} saved frames in {elapsed:.1f}s")
 print(f"  z_min={z_hist.min():.4f}m, z_max={z_hist.max():.4f}m")
 
 # Animation
 _here = os.path.dirname(__file__) if "__file__" in globals() else os.getcwd()
 gif_path = os.path.join(_here, "rigid_body_bounce_ipc.gif")
 fps = 25
-frame_skip = max(1, int(1.0 / (fps * dt)))
-frame_indices = np.arange(0, len(t_hist), frame_skip)
+frame_indices = np.arange(len(t_hist))
 
 sphere = pv.Sphere(
     radius=radius, center=(0, 0, z0), theta_resolution=20, phi_resolution=20

@@ -10,14 +10,27 @@ def _import_ipctk():
     """Lazy import of ipctk with a clear error message."""
     try:
         import ipctk
-
-        return ipctk
     except ImportError:
         raise ImportError(
             "The 'ipctk' package is required for IPC contact. "
             "Install it with: pip install ipctk\n"
             "Or install fedoo with IPC support: pip install fedoo[ipc]"
         )
+
+    version = getattr(ipctk, "__version__", "0")
+    try:
+        major_minor = tuple(int(part) for part in version.split(".")[:2])
+    except (AttributeError, ValueError):
+        major_minor = (0, 0)
+    if major_minor < (1, 6):
+        raise ImportError(
+            f"Fedoo IPC requires ipctk >= 1.6, but the loaded runtime is "
+            f"ipctk {version}. Restart Python after upgrading ipctk; mixing "
+            "Fedoo's 1.6 API calls with an already-loaded ipctk 1.5 changes "
+            "BarrierPotential argument semantics and produces invalid contact "
+            "forces."
+        )
+    return ipctk
 
 
 class IPCContact(AssemblyBase):

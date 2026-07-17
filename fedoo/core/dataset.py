@@ -549,6 +549,11 @@ class DataSet:
             Only used with MultiMesh objects. Restrict the plot to the selected
             submesh ids, submesh names or element types.
 
+        missing_field_color : color, optional
+            Only used with MultiMesh objects. Render submeshes on which the
+            selected element or Gauss-point field is absent with this solid
+            color. By default, submeshes missing the field are not plotted.
+
         clip_args : dict, optional
             Dictionary of arguments to pass to the pyvista clip filter in
             order to clip the current plot.
@@ -999,6 +1004,29 @@ class DataSet:
         }
         return dataset
 
+    def _submesh_has_field(self, field, submesh_id: int) -> bool:
+        """Return whether a field has data on one MultiMesh submesh."""
+        if field in self.node_data:
+            used_nodes = np.unique(self.mesh[submesh_id].elements)
+            values = np.asarray(self.node_data[field])[..., used_nodes]
+            try:
+                return not np.all(np.isnan(values))
+            except TypeError:
+                return True
+        for field_dict in (self.element_data, self.gausspoint_data):
+            if field in field_dict:
+                submesh = self.mesh[submesh_id]
+                return (
+                    self._multimesh_block_for_submesh(
+                        field_dict[field],
+                        submesh_id,
+                        submesh.n_elements,
+                        fill_missing=False,
+                    )
+                    is not None
+                )
+        return False
+
     def _submesh_element_set(
         self,
         element_set,
@@ -1066,6 +1094,8 @@ class DataSet:
     ):
         """Plot a MultiMesh by reusing the single-mesh plotting path."""
         global_element_set = kargs.pop("global_element_set", False)
+        missing_field_color = kargs.pop("missing_field_color", None)
+        default_solid_color = kargs.pop("color", "lightgray")
         submesh_indices = self._resolve_submesh_indices(selected_submeshes)
         if (
             element_set is not None
@@ -1092,6 +1122,7 @@ class DataSet:
         base_name = kargs.pop("name", None)
         scalar_bar_added = False
         plotted = False
+        scalar_plotted = False
 
         for submesh_id in submesh_indices:
             local_element_set, should_plot = self._submesh_element_set(
@@ -1105,15 +1136,28 @@ class DataSet:
                 continue
 
             subdataset = self._submesh_dataset(submesh_id)
-            if field is not None:
+            field_available = field is None or self._submesh_has_field(
+                field, submesh_id
+            )
+            if field is not None and not field_available:
+                if missing_field_color is None:
+                    continue
+                submesh_field = None
+                submesh_color = missing_field_color
+            else:
+                submesh_field = field
+                submesh_color = default_solid_color
+            if submesh_field is not None:
                 try:
-                    subdataset.get_data(field, component, data_type)
+                    subdataset.get_data(submesh_field, component, data_type)
                 except NameError:
                     continue
             sub_kargs = dict(kargs)
+            if submesh_field is None:
+                sub_kargs["color"] = submesh_color
             if base_name is not None:
                 sub_kargs["name"] = f"{base_name}_{submesh_id}"
-            if field is not None and scalar_bar_added:
+            if submesh_field is not None and scalar_bar_added:
                 sub_kargs["show_scalar_bar"] = False
             sub_kargs["_extra_cell_data"] = {
                 "_fedoo_global_cell_ids": (
@@ -1132,7 +1176,7 @@ class DataSet:
                 sub_clip_args = None
 
             pl = subdataset.plot(
-                field=field,
+                field=submesh_field,
                 component=component,
                 data_type=data_type,
                 scale=scale,
@@ -1159,14 +1203,15 @@ class DataSet:
                 **sub_kargs,
             )
             plotted = True
-            if field is not None:
+            if submesh_field is not None:
                 scalar_bar_added = True
+                scalar_plotted = True
 
         if pl is None:
             pl = pv.Plotter(window_size=window_size)
             backgroundplotter = False
 
-        if field is not None and not plotted:
+        if field is not None and not scalar_plotted:
             raise NameError(f"Field data {field!r} not found on any selected submesh.")
 
         if title is None:

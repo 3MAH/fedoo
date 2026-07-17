@@ -23,6 +23,7 @@ import numpy as np
 from scipy import sparse
 
 from fedoo.core.base import AssemblyBase
+from fedoo.core.mesh import Mesh
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.constraint.rigid_tie import RigidTie
 from fedoo.time.common import RayleighDamping
@@ -104,6 +105,8 @@ class RigidBodyAssembly(AssemblyBase):
         self._ipc_rest_positions = None
         self._ipc_n_body = 0
         self._ipc_obstacle_nodes = None
+        self._ipc_obstacle_mesh = None
+        self._ipc_obstacle_source_id = None
         self._contact_force = np.zeros(6)
         self._contact_stiffness = np.zeros((6, 6))
 
@@ -599,10 +602,10 @@ class RigidBody:
         edges = ipctk.edges(all_elms)
         cm = ipctk.CollisionMesh(all_nodes, edges, all_elms)
 
-        # Only body↔obstacle collisions (no self-contact within rigid body)
+        # Only body-obstacle collisions (no self-contact within either mesh).
         patches = np.zeros(len(all_nodes), dtype=np.int32)
         patches[n_body:] = 1
-        cm.can_collide = ipctk.VertexPatchesCanCollide(patches)
+        cm.can_collide = ipctk.make_vertex_patches_filter(patches)
 
         asm = self.assembly
         asm._ipc_collision_mesh = cm
@@ -613,10 +616,23 @@ class RigidBody:
             kappa = 1e9
         asm._ipc_kappa = kappa
         asm._ipc_dhat = dhat
-        asm._ipc_broad_phase = ipctk.HashGrid()
+        asm._ipc_broad_phase = ipctk.LBVH()
         asm._ipc_rest_positions = body_nodes.copy()
         asm._ipc_n_body = n_body
         asm._ipc_obstacle_nodes = obst_nodes.copy()
+        # Keep the same frozen geometry for optional result export. The source
+        # identity lets shared obstacles be deduplicated across rigid bodies.
+        asm._ipc_obstacle_mesh = Mesh(
+            obst_nodes.copy(),
+            obstacle_mesh.elements.copy(),
+            obstacle_mesh.elm_type,
+            node_sets=obstacle_mesh.node_sets,
+            element_sets=obstacle_mesh.element_sets,
+            ndim=obstacle_mesh.ndim,
+            name=obstacle_mesh.name,
+            register_name=False,
+        )
+        asm._ipc_obstacle_source_id = id(obstacle_mesh)
 
     def add_to_problem(self, pb):
         """Register the rigid body's kinematic tie with a Fedoo problem.
