@@ -1,376 +1,453 @@
-# derive de ConstitutiveLaw
-# The elastoplastic law should be used with an InternalForce WeakForm
-
-from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
+"""Small-strain J2 plasticity with isotropic hardening."""
 
 import numpy as np
+from simcoon import Rotation as SimRotation
+
+from fedoo.core.mechanical3d import Mechanical3D
+from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
 class ElastoPlasticity(Mechanical3D):
-    """
-    Elasto-Plastic constitutive law.
+    """Elasto-plastic constitutive law with isotropic hardening.
 
-    This law is based on the assumption of isotropic hardening with the
-    Von-Mises plasticity criterion. After creating an ElastoPlasticity object,
-    the hardening function must be set with the Method 'SetHardeningFunction'
-    This constitutive Law should be associated with
-    :mod:`fedoo.weakform.StressEquilibrium`
+    The stress integration uses a vectorized radial-return algorithm for the
+    von Mises yield criterion. In a finite-strain updated-Lagrangian analysis,
+    the law operates on the corotated strain increment prepared by
+    :class:`fedoo.weakform.StressEquilibrium`.
+
+    The returned elastoplastic tangent is the continuum tangent evaluated at
+    the updated stress. It is not the algorithmically consistent tangent of
+    the discrete radial-return integration. Consequently, global Newton
+    convergence is not guaranteed to be quadratic for finite plastic
+    increments or non-proportional loading paths.
+
+    .. warning::
+
+        This Python implementation is intended only for pedagogical use and
+        as a readable reference implementation. For computational analyses,
+        prefer :class:`fedoo.constitutivelaw.Simcoon`, which provides optimized
+        constitutive updates and algorithmically consistent tangent options.
 
     Parameters
     ----------
-    YoungModulus: scalars or arrays of gauss point values
-        Young modulus
-    PoissonRatio: scalars or arrays of gauss point values
-        Poisson's Ratio
-    YieldStress: scalars or arrays of gauss point values
-        Yield Stress Value
-    name: str, optional
-        The name of the constitutive law
+    young_modulus : float
+        Young modulus.
+    poisson_ratio : float
+        Poisson ratio.
+    yield_stress : float
+        Initial yield stress.
+    name : str, optional
+        Name of the constitutive law.
     """
 
-    def __init__(self, YoungModulus, PoissonRatio, YieldStress, name=""):
-        # only scalar values of YoungModulus and PoissonRatio are possible
-        Mechanical3D.__init__(self, name)  # heritage
+    def __init__(
+        self,
+        young_modulus,
+        poisson_ratio,
+        yield_stress,
+        name="",
+    ):
+        super().__init__(name)
+        self.young_modulus = young_modulus
+        self.poisson_ratio = poisson_ratio
+        self.yield_stress = yield_stress
+        self.return_mapping_tolerance = 1e-6
+        self.max_return_mapping_iterations = 50
 
-        self.__YoungModulus = YoungModulus
-        self.__PoissonRatio = PoissonRatio
-        self.__YieldStress = YieldStress
+        self._hardening_function = None
+        self._hardening_function_derivative = None
+        self._current_stress = None
+        self._current_plastic_strain = None
+        self._current_plasticity = None
+        self._current_tangent = None
 
-        self.__P = None  # irrevesrible plasticity
-        self.__currentP = None  # current iteration plasticity (reversible)
-        self.__PlasticStrainTensor = None
-        self.__currentPlasticStrainTensor = None
-        self.__currentSigma = 0  # lissStressTensor object describing the last computed stress (GetStress method)
-        self.__currentGradDisp = None
-        self.__TangeantModuli = None
+    @property
+    def shear_modulus(self):
+        """Shear modulus."""
+        return self.young_modulus / (2.0 * (1.0 + self.poisson_ratio))
 
-        self.__tol = 1e-6  # tolerance of Newton Raphson used to get the updated plasticity state (constutive law alogorithm)
-        self.nlgeom = False  # will be updated with the Initialize function
+    def set_return_mapping_tolerance(self, tolerance):
+        """Set the absolute tolerance used by the local return mapping."""
+        if tolerance <= 0:
+            raise ValueError("The return-mapping tolerance must be positive.")
+        self.return_mapping_tolerance = tolerance
 
-    def GetYoungModulus(self):
-        return self.__YoungModulus
+    def get_elastic_matrix(self, dimension="3D"):
+        """Return the isotropic elastic matrix in engineering Voigt form."""
+        if dimension == "2Dstress":
+            raise NotImplementedError(
+                "ElastoPlasticity does not yet implement plane-stress "
+                "return mapping."
+            )
 
-    def GetPoissonRatio(self):
-        return self.__PoissonRatio
-
-    def GetYieldStress(self):
-        return self.__YieldStress
-
-    def SetNewtonRaphsonTolerance(self, tol):
-        """
-        Set the tolerance of the Newton Raphson algorithm used to get the updated plasticity state (constutive law alogorithm)
-        """
-        self.__tol = tol
-
-    def GetHelas(self):
-        H = np.zeros((6, 6), dtype="object")
-        E = self.__YoungModulus
-        nu = self.__PoissonRatio
-
-        H[0, 0] = H[1, 1] = H[2, 2] = E * (
-            1.0 / (1 + nu) + nu / ((1.0 + nu) * (1 - 2 * nu))
-        )  # H1 = 2*mu+lamb
-        H[0, 1] = H[0, 2] = H[1, 2] = E * (nu / ((1 + nu) * (1 - 2 * nu)))  # H2 = lamb
-        H[3, 3] = H[4, 4] = H[5, 5] = 0.5 * E / (1 + nu)  # H3 = mu
-        H[1, 0] = H[0, 1]
-        H[2, 0] = H[0, 2]
-        H[2, 1] = H[1, 2]  # symétrie
-
-        return H
-
-    def HardeningFunction(self, p):
-        raise NameError(
-            "Hardening function not defined. Use the method SetHardeningFunction"
+        young_modulus = self.young_modulus
+        poisson_ratio = self.poisson_ratio
+        dtype = (
+            float
+            if np.isscalar(young_modulus) and np.isscalar(poisson_ratio)
+            else object
         )
-
-    def HardeningFunctionDerivative(self, p):
-        raise NameError(
-            "Hardening function not defined. Use the method SetHardeningFunction"
+        elastic_matrix = np.zeros((6, 6), dtype=dtype)
+        lame_parameter = (
+            young_modulus
+            * poisson_ratio
+            / ((1 + poisson_ratio) * (1 - 2 * poisson_ratio))
         )
+        elastic_matrix[:3, :3] = lame_parameter
+        elastic_matrix[0, 0] += 2 * self.shear_modulus
+        elastic_matrix[1, 1] += 2 * self.shear_modulus
+        elastic_matrix[2, 2] += 2 * self.shear_modulus
+        elastic_matrix[3, 3] = self.shear_modulus
+        elastic_matrix[4, 4] = self.shear_modulus
+        elastic_matrix[5, 5] = self.shear_modulus
+        return elastic_matrix
 
-    def SetHardeningFunction(self, FunctionType, **kargs):
+    def set_hardening_function(self, function_type, **kwargs):
+        """Define the isotropic hardening function.
+
+        ``function_type="power"`` defines ``R(p) = h * p**beta``.
+        ``function_type="user"`` accepts ``hardening_function`` and
+        ``hardening_function_derivative`` callables.
         """
-        Define the hardening function of the ElastoPlasticity law.
-        FunctionType is the type of hardening function.
+        function_type = function_type.lower()
 
-        For now, the only defined hardening function is a power law.
-        * F = H*p^{beta} were p is the cumuled plasticity
+        if function_type == "power":
+            if "h" not in kwargs:
+                raise TypeError("Keyword argument 'h' is required.")
+            if "beta" not in kwargs:
+                raise TypeError("Keyword argument 'beta' is required.")
 
-        Other type of hardening function may be added in future versions.
+            hardening_modulus = kwargs["h"]
+            beta = kwargs["beta"]
+            if hardening_modulus < 0:
+                raise ValueError("The hardening modulus h must be non-negative.")
+            if beta <= 0:
+                raise ValueError("The hardening exponent beta must be positive.")
 
-        Parameters
-        ----------
-        FunctionType: str
-            Type of hardening function.
-            For now, the only possible value is 'power' for power law.
-        H (keyword argument): scalar
-        beta(keyword argument): scalar
-        name: str, optional
-            The name of the constitutive law
+            def hardening_function(plasticity):
+                return hardening_modulus * np.asarray(plasticity) ** beta
 
-        """
-        if FunctionType.lower() == "power":
-            H = None
-            beta = None
-            for item in kargs:
-                if item.lower() == "h":
-                    H = kargs[item]
-                if item.lower() == "beta":
-                    beta = kargs[item]
+            def hardening_function_derivative(plasticity):
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    return (
+                        beta * hardening_modulus * np.asarray(plasticity) ** (beta - 1)
+                    )
 
-            if H is None:
-                raise NameError("Keyword arguments 'H' missing")
-            if beta is None:
-                raise NameError("Keyword arguments 'beta' missing")
-
-            def HardeningFunction(p):
-                return H * p**beta
-
-            def HardeningFunctionDerivative(p):
-                return np.nan_to_num(
-                    beta * H * p ** (beta - 1), posinf=1
-                )  # replace inf value by 1
-
-        elif FunctionType.lower() == "user":
-            HardeningFunction = None
-            HardeningFunctionDerivative = None
-            for item in kargs:
-                if item.lower() == "hardeningfunction":
-                    HardeningFunction = kargs[item]
-                if item.lower() == "hardeningfunctionderivative":
-                    HardeningFunctionDerivative = kargs[item]
-
-            if HardeningFunction is None:
-                raise NameError("Keyword arguments 'HardeningFunction' missing")
-            if HardeningFunctionDerivative is None:
-                raise NameError(
-                    "Keyword arguments 'HardeningFunctionDerivative' missing"
+        elif function_type == "user":
+            hardening_function = kwargs.get("hardening_function")
+            hardening_function_derivative = kwargs.get("hardening_function_derivative")
+            if hardening_function is None:
+                raise TypeError("Keyword argument 'hardening_function' is required.")
+            if hardening_function_derivative is None:
+                raise TypeError(
+                    "Keyword argument 'hardening_function_derivative' " "is required."
                 )
-
-        self.HardeningFunction = HardeningFunction
-        self.HardeningFunctionDerivative = HardeningFunctionDerivative
-
-    def YieldFunction(self, Stress, p):
-        return Stress.vonMises() - self.__YieldStress - self.HardeningFunction(p)
-
-    def YieldFunctionDerivativeSigma(self, sigma):
-        """
-        Derivative of the Yield Function with respect to the stress tensor defined in sigma
-        sigma should be a StressTensorList object
-        """
-        return StressTensorList(
-            (3 / 2) * np.array(sigma.deviatoric()) / sigma.vonMises()
-        ).toStrain()
-
-    def GetPlasticity(self):
-        return self.__currentP
-
-    def get_strain(self, **kargs):
-        return self.__currentPlasticStrainTensor
-
-    def get_pk2(self):
-        return self.__currentSigma
-
-    def get_cauchy(self, **kargs):  # same as GetPKII
-        # alias of GetPKII mainly use for small strain displacement problems
-        return self.__currentSigma
-
-    def get_stress(self, **kargs):  # same as GetPKII
-        # alias of GetPKII mainly use for small strain displacement problems
-        return self.__currentSigma
-
-    def get_disp_grad(self):
-        return self.__currentGradDisp
-
-    def get_tangent_matrix(self):
-        return self.__TangeantModuli
-
-    # def GetStressOperator(self, localFrame=None):
-    #     H = self.GetH()
-
-    #     eps, eps_vir = GetStrainOperator(self.__currentGradDisp)
-    #     sigma = [sum([0 if eps[j] is 0 else eps[j]*H[i][j] for j in range(6)]) for i in range(6)]
-
-    #     return sigma # list de 6 objets de type DiffOp
-
-    def NewTimeIncrement(self):
-        # Set Irreversible Plasticity
-        if self.__P is not None:
-            self.__P = self.__currentP.copy()
-            self.__PlasticStrainTensor = self.__currentPlasticStrainTensor.copy()
-        self.__TangeantModuli = self.GetHelas()
-
-    def to_start(self):
-        if self.__P is None:
-            self.__currentP = None
-            self.__currentPlasticStrainTensor = None
         else:
-            self.__currentP = self.__P.copy()
-            self.__currentPlasticStrainTensor = self.__PlasticStrainTensor.copy()
-        self.__TangeantModuli = self.GetHelas()
+            raise ValueError("function_type must be either 'power' or 'user'.")
+
+        self._hardening_function = hardening_function
+        self._hardening_function_derivative = hardening_function_derivative
+
+    def hardening_function(self, plasticity):
+        """Evaluate the isotropic hardening stress."""
+        if self._hardening_function is None:
+            raise RuntimeError(
+                "The hardening function has not been defined. Call "
+                "set_hardening_function first."
+            )
+        return self._hardening_function(plasticity)
+
+    def hardening_function_derivative(self, plasticity):
+        """Evaluate the derivative of the isotropic hardening stress."""
+        if self._hardening_function_derivative is None:
+            raise RuntimeError(
+                "The hardening function has not been defined. Call "
+                "set_hardening_function first."
+            )
+        return self._hardening_function_derivative(plasticity)
+
+    def yield_function(self, stress, plasticity):
+        """Evaluate the von Mises yield function."""
+        return (
+            stress.von_mises() - self.yield_stress - self.hardening_function(plasticity)
+        )
+
+    def yield_function_derivative(self, stress):
+        """Differentiate the yield function with respect to stress."""
+        equivalent_stress = np.asarray(stress.von_mises())
+        if np.any(equivalent_stress == 0):
+            raise ZeroDivisionError(
+                "The yield direction is undefined at zero deviatoric stress."
+            )
+        return StressTensorList(
+            1.5 * np.asarray(stress.deviatoric()) / equivalent_stress
+        ).to_strain()
+
+    @staticmethod
+    def _as_point_array(values):
+        array = np.asarray(values, dtype=float)
+        if array.ndim == 1:
+            array = array.reshape(6, 1)
+        if array.ndim != 2 or array.shape[0] != 6:
+            raise ValueError("Expected a Voigt array with shape (6, n_points).")
+        return array
+
+    @staticmethod
+    def _deviatoric(stress):
+        deviator = stress.copy()
+        mean_stress = np.mean(stress[:3], axis=0)
+        deviator[:3] -= mean_stress
+        return deviator
+
+    @staticmethod
+    def _flow_direction(stress):
+        stress_tensor = StressTensorList(stress)
+        equivalent_stress = np.asarray(stress_tensor.von_mises())
+        direction = 1.5 * np.asarray(stress_tensor.deviatoric()) / equivalent_stress
+        direction[3:] *= 2.0
+        return direction
+
+    def _plastic_increment(self, equivalent_trial_stress, plasticity_old):
+        """Solve all active radial-return consistency equations together."""
+        equivalent_trial_stress = np.asarray(equivalent_trial_stress, dtype=float)
+        plasticity_old = np.asarray(plasticity_old, dtype=float)
+        initial_residual = (
+            equivalent_trial_stress
+            - self.yield_stress
+            - self.hardening_function(plasticity_old)
+        )
+        lower_bound = np.zeros_like(initial_residual)
+        upper_bound = initial_residual / (3.0 * self.shear_modulus)
+
+        def residual(plastic_increment):
+            return (
+                equivalent_trial_stress
+                - 3.0 * self.shear_modulus * plastic_increment
+                - self.yield_stress
+                - self.hardening_function(plasticity_old + plastic_increment)
+            )
+
+        for _ in range(self.max_return_mapping_iterations):
+            points_to_expand = residual(upper_bound) > 0
+            if not np.any(points_to_expand):
+                break
+            upper_bound[points_to_expand] *= 2.0
+        else:
+            raise RuntimeError("Unable to bracket every plastic multiplier.")
+
+        plastic_increment = 0.5 * upper_bound
+        converged = np.zeros_like(plastic_increment, dtype=bool)
+
+        for _ in range(self.max_return_mapping_iterations):
+            value = residual(plastic_increment)
+            converged |= np.abs(value) <= self.return_mapping_tolerance
+            if np.all(converged):
+                return plastic_increment
+
+            active = ~converged
+            positive_residual = active & (value > 0)
+            negative_residual = active & ~positive_residual
+            lower_bound[positive_residual] = plastic_increment[positive_residual]
+            upper_bound[negative_residual] = plastic_increment[negative_residual]
+
+            hardening_slope = self.hardening_function_derivative(
+                plasticity_old + plastic_increment
+            )
+            denominator = 3.0 * self.shear_modulus + hardening_slope
+            candidate = plastic_increment + value / denominator
+            invalid_candidate = (
+                ~np.isfinite(candidate)
+                | (denominator <= 0)
+                | (candidate <= lower_bound)
+                | (candidate >= upper_bound)
+            )
+            candidate[invalid_candidate] = 0.5 * (
+                lower_bound[invalid_candidate] + upper_bound[invalid_candidate]
+            )
+            plastic_increment[active] = candidate[active]
+
+        unconverged_residual = np.max(np.abs(residual(plastic_increment)[~converged]))
+        raise RuntimeError(
+            "The radial-return algorithm did not converge after "
+            f"{self.max_return_mapping_iterations} iterations; maximum "
+            f"residual is {unconverged_residual:.6g}."
+        )
+
+    def _integrate(self, total_strain, plasticity_old, plastic_strain_old):
+        """Integrate all material points from their committed state."""
+        strain = self._as_point_array(total_strain)
+        plastic_strain_old = self._as_point_array(plastic_strain_old)
+        plasticity_old = np.asarray(plasticity_old, dtype=float).reshape(-1)
+        n_points = strain.shape[1]
+        if plastic_strain_old.shape[1] != n_points or len(plasticity_old) != n_points:
+            raise ValueError("Inconsistent number of constitutive-law points.")
+
+        elastic_matrix = np.asarray(self.get_elastic_matrix(), dtype=float)
+        trial_stress = elastic_matrix @ (strain - plastic_strain_old)
+        equivalent_trial_stress = np.asarray(StressTensorList(trial_stress).von_mises())
+        trial_yield = (
+            equivalent_trial_stress
+            - self.yield_stress
+            - self.hardening_function(plasticity_old)
+        )
+        plastic_points = trial_yield > self.return_mapping_tolerance
+
+        stress = trial_stress.copy()
+        plastic_strain = plastic_strain_old.copy()
+        plasticity = plasticity_old.copy()
+        tangent = np.repeat(elastic_matrix[:, :, None], n_points, axis=2)
+
+        if np.any(plastic_points):
+            plastic_increment = self._plastic_increment(
+                equivalent_trial_stress[plastic_points],
+                plasticity_old[plastic_points],
+            )
+            plasticity[plastic_points] += plastic_increment
+
+            trial_deviator = self._deviatoric(trial_stress[:, plastic_points])
+            radial_factor = (
+                1.0
+                - 3.0
+                * self.shear_modulus
+                * plastic_increment
+                / equivalent_trial_stress[plastic_points]
+            )
+            stress[:, plastic_points] = (
+                trial_stress[:, plastic_points]
+                - trial_deviator
+                + radial_factor[None, :] * trial_deviator
+            )
+
+            direction = self._flow_direction(stress[:, plastic_points])
+            plastic_strain[:, plastic_points] += direction * plastic_increment[None, :]
+
+            hardening_slope = self.hardening_function_derivative(
+                plasticity[plastic_points]
+            )
+            elastic_flow = elastic_matrix @ direction
+            denominator = (
+                np.einsum("ip,ip->p", direction, elastic_flow) + hardening_slope
+            )
+            tangent[:, :, plastic_points] -= (
+                np.einsum("ip,jp->ijp", elastic_flow, elastic_flow)
+                / denominator[None, None, :]
+            )
+
+        return (
+            StressTensorList(stress),
+            StrainTensorList(plastic_strain),
+            plasticity,
+            tangent,
+        )
+
+    def compute_stress(
+        self,
+        total_strain,
+        plasticity_old=None,
+        plastic_strain_old=None,
+    ):
+        """Integrate a material-point state without an assembly.
+
+        This helper is stateless with respect to history: callers advancing
+        several increments must pass the previously returned plasticity and
+        plastic strain explicitly.
+        """
+        strain = self._as_point_array(total_strain)
+        n_points = strain.shape[1]
+        if plasticity_old is None:
+            plasticity_old = np.zeros(n_points)
+        if plastic_strain_old is None:
+            plastic_strain_old = np.zeros((6, n_points))
+
+        (
+            self._current_stress,
+            self._current_plastic_strain,
+            self._current_plasticity,
+            self._current_tangent,
+        ) = self._integrate(strain, plasticity_old, plastic_strain_old)
+        return self._current_stress
+
+    def get_plasticity(self):
+        """Return plasticity from the most recent integration."""
+        return self._current_plasticity
+
+    def get_plastic_strain(self):
+        """Return plastic strain from the most recent integration."""
+        return self._current_plastic_strain
+
+    def get_stress(self):
+        """Return stress from the most recent integration."""
+        return self._current_stress
+
+    def get_tangent_matrix(self, assembly=None, dimension=None):
+        """Return the current tangent, or the elastic tangent initially."""
+        if assembly is not None:
+            if dimension is None:
+                dimension = assembly.space.get_dimension()
+            if "TangentMatrix" in assembly.sv:
+                return assembly.sv["TangentMatrix"]
+        if self._current_tangent is not None:
+            return self._current_tangent
+        return self.get_elastic_matrix(dimension or "3D")
+
+    def initialize(self, assembly, pb):
+        """Initialize finite-element state variables."""
+        self._dimension = assembly.space.get_dimension()
+        elastic_matrix = np.asarray(
+            self.get_elastic_matrix(self._dimension), dtype=float
+        )
+        n_points = assembly.n_gauss_points
+        assembly.sv["P"] = np.zeros(n_points)
+        assembly.sv["EP"] = StrainTensorList(np.zeros((6, n_points), order="F"))
+        assembly.sv["TangentMatrix"] = np.repeat(
+            elastic_matrix[:, :, None], n_points, axis=2
+        )
+        self.is_initialized = True
+
+    def update(self, assembly, pb):
+        """Update stress, plastic state, and tangent for the current iterate."""
+        if "DStrain" in assembly.sv:
+            total_strain = assembly.sv["Strain"] + assembly.sv["DStrain"]
+        else:
+            total_strain = assembly.sv["Strain"]
+
+        start_state = getattr(assembly, "sv_start", assembly.sv)
+        (
+            self._current_stress,
+            self._current_plastic_strain,
+            self._current_plasticity,
+            self._current_tangent,
+        ) = self._integrate(
+            total_strain,
+            start_state["P"],
+            start_state["EP"],
+        )
+        assembly.sv["Stress"] = self._current_stress
+        assembly.sv["EP"] = self._current_plastic_strain
+        assembly.sv["P"] = self._current_plasticity
+        assembly.sv["TangentMatrix"] = self._current_tangent
+
+    def set_start(self, assembly, pb):
+        """Commit the converged state and prepare the elastic predictor."""
+        if assembly._nlgeom and "DR" in assembly.sv:
+            rotation = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
+            assembly.sv["EP"] = StrainTensorList(
+                rotation.apply_strain(assembly.sv["EP"].asarray())
+            )
+
+        elastic_matrix = np.asarray(
+            self.get_elastic_matrix(self._dimension), dtype=float
+        )
+        assembly.sv["TangentMatrix"] = np.repeat(
+            elastic_matrix[:, :, None],
+            assembly.n_gauss_points,
+            axis=2,
+        )
 
     def reset(self):
-        """
-        reset the constitutive law (time history)
-        """
-        self.__P = None  # irrevesrible plasticity
-        self.__currentP = None  # current iteration plasticity (reversible)
-        self.__PlasticStrainTensor = None
-        self.__currentPlasticStrainTensor = None
-        self.__currentSigma = 0  # lissStressTensor object describing the last computed stress (GetStress method)
-        self.__TangeantModuli = self.GetHelas()
-
-    def initialize(self, assembly, pb, t0=0.0, nlgeom=False):
-        if self._dimension is None:
-            self._dimension = assembly.space.get_dimension()
-        self.NewTimeIncrement()
-        self.nlgeom = nlgeom
-
-    def update(self, assembly, pb, time):
-        displacement = pb.get_dof_solution()
-
-        if np.isscalar(displacement) and displacement == 0:
-            self.__currentGradDisp = 0
-            self.__currentSigma = 0
-        else:
-            self.__currentGradDisp = assembly.get_grad_disp(displacement, "GaussPoint")
-            GradValues = self.__currentGradDisp
-            if self.nlgeom == False:
-                Strain = [GradValues[i][i] for i in range(3)]
-                Strain += [
-                    GradValues[0][1] + GradValues[1][0],
-                    GradValues[0][2] + GradValues[2][0],
-                    GradValues[1][2] + GradValues[2][1],
-                ]
-            else:
-                Strain = [
-                    GradValues[i][i]
-                    + 0.5 * sum([GradValues[k][i] ** 2 for k in range(3)])
-                    for i in range(3)
-                ]
-                Strain += [
-                    GradValues[0][1]
-                    + GradValues[1][0]
-                    + sum([GradValues[k][0] * GradValues[k][1] for k in range(3)])
-                ]
-                Strain += [
-                    GradValues[0][2]
-                    + GradValues[2][0]
-                    + sum([GradValues[k][0] * GradValues[k][2] for k in range(3)])
-                ]
-                Strain += [
-                    GradValues[1][2]
-                    + GradValues[2][1]
-                    + sum([GradValues[k][1] * GradValues[k][2] for k in range(3)])
-                ]
-
-            TotalStrain = StrainTensorList(Strain)
-            self.ComputeStress(
-                TotalStrain, time
-            )  # compute the total stress in self.__currentSigma
-
-            # print(self.__currentP)
-
-            dphi_dp = self.HardeningFunctionDerivative(self.__currentP)
-            dphi_dsigma = self.YieldFunctionDerivativeSigma(self.__currentSigma)
-            Lambda = dphi_dsigma  # for isotropic hardening only
-            test = self.YieldFunction(self.__currentSigma, self.__P) > self.__tol
-
-            Helas = self.GetHelas()
-            ##### Compute new tangeant moduli
-            B = sum(
-                [
-                    sum([dphi_dsigma[j] * Helas[i][j] for j in range(6)]) * Lambda[i]
-                    for i in range(6)
-                ]
-            )
-            Ap = B - dphi_dp
-            CL = [
-                sum([Lambda[j] * Helas[i][j] for j in range(6)]) for i in range(6)
-            ]  # [C:Lambda]
-            Peps = [
-                sum([dphi_dsigma[i] * Helas[i][j] for i in range(6)]) / Ap
-                for j in range(6)
-            ]  # Peps
-            #        TangeantModuli = [[Helas[i][j] - CL[i]*Peps[j] for j in range(6)] for i in range(6)]
-            self.__TangeantModuli = [
-                [Helas[i][j] - (CL[i] * Peps[j] * test) for j in range(6)]
-                for i in range(6)
-            ]
-            ##### end Compute new tangeant moduli
-
-    def ComputeStress(self, StrainTensor, time=None):
-        # time not used here because this law require no time effect
-        # initilialize values plasticity variables if required
-        if self.__P is None:
-            self.__P = np.zeros(len(StrainTensor[0]))
-            self.__currentP = np.zeros(len(StrainTensor[0]))
-        if self.__PlasticStrainTensor is None:
-            self.__PlasticStrainTensor = StrainTensorList(
-                np.zeros((6, len(StrainTensor[0])))
-            )
-            self.__currentPlasticStrainTensor = StrainTensorList(
-                np.zeros((6, len(StrainTensor[0])))
-            )
-
-        H = (
-            self.GetHelas()
-        )  # no change of basis because only isotropic behavior are considered
-        sigma = StressTensorList(
-            [
-                sum(
-                    [
-                        (StrainTensor[j] - self.__PlasticStrainTensor[j]) * H[i][j]
-                        for j in range(6)
-                    ]
-                )
-                for i in range(6)
-            ]
-        )
-        test = self.YieldFunction(sigma, self.__P) > self.__tol
-        #        print(sum(test)/len(test)*100)
-
-        sigmaFull = np.array(sigma).T
-        Ep = np.array(self.__PlasticStrainTensor).T
-        #        Ep = np.array(self.__currentPlasticStrainTensor).T
-
-        for pg in range(len(sigmaFull)):
-            if test[pg] > 0:
-                sigma = StressTensorList(sigmaFull[pg])
-                p = self.__P[pg]
-                iter = 0
-                while abs(self.YieldFunction(sigma, p)) > self.__tol:
-                    dphi_dp = self.HardeningFunctionDerivative(p)
-                    dphi_dsigma = np.array(self.YieldFunctionDerivativeSigma(sigma))
-
-                    Lambda = dphi_dsigma  # for associated plasticity
-                    B = sum(
-                        [
-                            sum([dphi_dsigma[j] * H[i][j] for j in range(6)])
-                            * Lambda[i]
-                            for i in range(6)
-                        ]
-                    )
-
-                    dp = self.YieldFunction(sigma, p) / (B - dphi_dp)
-                    p += dp
-                    Ep[pg] += Lambda * dp
-                    sigma = StressTensorList(
-                        [
-                            sum(
-                                [
-                                    (StrainTensor[j][pg] - Ep[pg][j]) * H[i][j]
-                                    for j in range(6)
-                                ]
-                            )
-                            for i in range(6)
-                        ]
-                    )
-                self.__currentP[pg] = p
-                sigmaFull[pg] = sigma
-
-        self.__currentPlasticStrainTensor = StrainTensorList(Ep.T)
-        self.__currentSigma = StressTensorList(sigmaFull.T)  # list of 6 objets
-
-        return self.__currentSigma
+        """Reset cached results; assembly history is managed by Fedoo."""
+        super().reset()
+        self._current_stress = None
+        self._current_plastic_strain = None
+        self._current_plasticity = None
+        self._current_tangent = None

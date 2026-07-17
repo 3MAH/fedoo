@@ -81,7 +81,7 @@ if save_results:
 
 z, StressDistribution = fd.ConstitutiveLaw.get_all()[
     "PlateSection"
-].GetStressDistribution(assemb, 20)
+].get_stress_distribution(assemb, 20)
 plt.plot(StressDistribution[0], z)
 
 # plot the von mises stress on the upper face (position = +1)
