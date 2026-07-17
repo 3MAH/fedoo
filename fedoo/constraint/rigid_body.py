@@ -15,7 +15,7 @@ evaluates the exact rotation matrix and its derivatives, so the kinematics do
 not rely on a small-angle approximation.
 
 The contact Jacobian ``J = [I_3 | dR/d(angle) @ r_ref]`` uses the exact
-rotation derivatives from ``RigidTie._compute_rotation()``, not the
+rotation derivatives from ``RigidTie.rotation_jacobian()``, not the
 infinitesimal skew-symmetric approximation.
 """
 
@@ -23,9 +23,10 @@ import numpy as np
 
 from fedoo.core.base import AssemblyBase
 from fedoo.core.mesh import Mesh
+from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.constraint.rigid_tie import RigidTie
-from fedoo.time.common import RayleighDamping, scatter_dense_block
+from fedoo.time.common import RayleighDamping
 
 # Rigid-body dynamics is formulated in 3D: 3 translational + 3 rotational DOFs.
 _N_RIGID_DOF = 6
@@ -95,10 +96,8 @@ class RigidBodyAssembly(AssemblyBase):
         self.dynamic = bool(dynamic)
         # A compiled time integrator supplies a mass tangent. Without one, the
         # assembly is static and this tiny diagonal keeps the free rigid DOFs
-        # well posed before contact. It is scaled to the body's mass/inertia
-        # magnitude so it stays negligible yet non-zero under any unit system.
-        mass_scale = max(self.mass, float(np.trace(self.inertia_body)), 1.0)
-        self.static_regularisation = 1e-9 * mass_scale
+        # well posed before contact.
+        self.static_regularisation = 1e-9
 
         self._dof_indices = None
         self._pb_ref = None

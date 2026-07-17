@@ -3,14 +3,11 @@ import copy
 import numpy as np
 from scipy import sparse
 
+from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import TimeIntegratorBase
-from fedoo.time.common import (
-    RayleighDamping,
-    newmark_acceleration_velocity,
-    scatter_dense_block,
-)
+from fedoo.time.common import RayleighDamping, newmark_acceleration_velocity
 from fedoo.weakform.inertia import Inertia
 
 

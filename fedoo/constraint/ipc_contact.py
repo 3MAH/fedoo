@@ -40,7 +40,10 @@ def _barrier_hessian_psd(barrier, collisions, collision_mesh, vertices):
     pairs; retry without projection so assembly still proceeds. Shared by
     :class:`IPCContact` and ``RigidBodyAssembly`` so both use the same policy.
     """
-    ipctk = _import_ipctk()
+    # ipctk is already validated/imported by the callers; a plain cached import
+    # avoids re-running the version check on the contact hot path.
+    import ipctk
+
     try:
         return barrier.hessian(
             collisions,
