@@ -76,8 +76,11 @@ class ElastoPlasticity(Mechanical3D):
         """Return the isotropic elastic matrix in engineering Voigt form."""
         if dimension == "2Dstress":
             raise NotImplementedError(
-                "ElastoPlasticity does not yet implement plane-stress "
-                "return mapping."
+                "ElastoPlasticity does not implement the plane-stress "
+                "('2Dstress') return mapping. For plane-stress models or "
+                "through-thickness shell plasticity, use a Simcoon plasticity "
+                'law, e.g. fedoo.constitutivelaw.Simcoon("EPICP", props), '
+                "which supports the 2Dstress assumption."
             )
 
         young_modulus = self.young_modulus

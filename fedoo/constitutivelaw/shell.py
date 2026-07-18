@@ -111,9 +111,9 @@ class ShellBase(ConstitutiveLaw):
         if np.isscalar(ShellStrain) and ShellStrain == 0:
             zeros = np.zeros(assembly.n_gauss_points)
             return StrainTensorList([zeros.copy() for _ in range(6)])
-        Strain[0] = ShellStrain[0] + z * ShellStrain[4]  # epsXX -> membrane and bending
-        Strain[1] = ShellStrain[1] - z * ShellStrain[3]  # epsYY -> membrane and bending
-        Strain[3] = ShellStrain[2]  # 2epsXY
+        Strain[0] = ShellStrain[0] + z * ShellStrain[3]  # epsXX -> membrane and bending
+        Strain[1] = ShellStrain[1] + z * ShellStrain[4]  # epsYY -> membrane and bending
+        Strain[3] = ShellStrain[2] + z * ShellStrain[5]  # 2epsXY -> membrane and twist
         Strain[4:6] = ShellStrain[6:8]  # 2epsXZ and 2epsYZ -> shear
 
         return Strain
@@ -202,12 +202,14 @@ class ShellHomogeneous(ShellBase):
         Strain = StrainTensorList([0 for i in range(6)])
         ShellStrain = assembly.sv["ShellStrain"]
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[4][pg]
+            ShellStrain[0][pg] + z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] - z * ShellStrain[3][pg]
+            ShellStrain[1][pg] + z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
-        Strain[3] = ShellStrain[2][pg] * np.ones_like(z)  # 2epsXY
+        Strain[3] = (
+            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+        )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear
 
@@ -279,6 +281,38 @@ class _ShellMaterialPointAssembly:
         return data
 
 
+def _copy_state(state):
+    """Deep-ish copy of a state-variable dict (shared by the nonlinear shells)."""
+    copied = {}
+    for key, value in state.items():
+        if hasattr(value, "copy"):
+            copied[key] = value.copy()
+        else:
+            copied[key] = copy.deepcopy(value)
+    return copied
+
+
+def _tangent_array(tangent, n_points):
+    """Normalize scalar/pointwise tangent entries to a dense (6, 6, n) array."""
+    dense = np.empty((6, 6, n_points), dtype=float)
+    for row in range(6):
+        for column in range(6):
+            dense[row, column] = tangent[row][column]
+    return dense
+
+
+def _strain_matrix(z):
+    """Membrane+bending strain-interpolation matrix at through-thickness ``z``."""
+    matrix = np.zeros((6, 8))
+    matrix[0, 0] = 1
+    matrix[0, 3] = z
+    matrix[1, 1] = 1
+    matrix[1, 4] = z
+    matrix[3, 2] = 1
+    matrix[3, 5] = z
+    return matrix
+
+
 class ShellHomogeneousNonLinear(ShellBase):
     """Homogeneous shell integrated from nonlinear plane-stress material points.
 
@@ -288,7 +322,10 @@ class ShellHomogeneousNonLinear(ShellBase):
     interface. Transverse shear retains the elastic Reissner--Mindlin
     treatment used by :class:`ShellHomogeneous`.
 
-    This implementation is restricted to small-strain material laws.
+    This implementation is restricted to small-strain material laws. For
+    plasticity (or any law needing a plane-stress return mapping) use a Simcoon
+    law, e.g. ``fedoo.constitutivelaw.Simcoon("EPICP", props)``; the pedagogical
+    :class:`ElastoPlasticity` is 3D-only and does not support ``"2Dstress"``.
 
     Parameters
     ----------
@@ -336,36 +373,6 @@ class ShellHomogeneousNonLinear(ShellBase):
         density = self._material_density(self.material, self.name)
         return density * self.thickness**3 / 12.0
 
-    @staticmethod
-    def _copy_state(state):
-        copied = {}
-        for key, value in state.items():
-            if hasattr(value, "copy"):
-                copied[key] = value.copy()
-            else:
-                copied[key] = copy.deepcopy(value)
-        return copied
-
-    @staticmethod
-    def _tangent_array(tangent, n_points):
-        """Normalize scalar/pointwise tangent entries to a dense array."""
-        dense = np.empty((6, 6, n_points), dtype=float)
-        for row in range(6):
-            for column in range(6):
-                dense[row, column] = tangent[row][column]
-        return dense
-
-    @staticmethod
-    def _strain_matrix(z):
-        matrix = np.zeros((6, 8))
-        matrix[0, 0] = 1
-        matrix[0, 3] = z
-        matrix[1, 1] = 1
-        matrix[1, 4] = z
-        matrix[3, 2] = 1
-        matrix[3, 5] = z
-        return matrix
-
     def _elastic_shear_matrix(self):
         if self._shear_matrix is not None:
             return self._shear_matrix
@@ -384,7 +391,7 @@ class ShellHomogeneousNonLinear(ShellBase):
         plane = np.asarray(self.material.get_elastic_matrix("2Dstress"), dtype=float)
         tangent = np.zeros((8, 8))
         for z, weight in zip(self._z, self._weights):
-            strain_matrix = self._strain_matrix(z)
+            strain_matrix = _strain_matrix(z)
             tangent += weight * strain_matrix.T @ plane @ strain_matrix
         tangent[6:8, 6:8] = self.k * self.thickness * self._elastic_shear_matrix()
         return tangent
@@ -398,10 +405,10 @@ class ShellHomogeneousNonLinear(ShellBase):
         self._shear_material.reset()
         self.material.initialize(self._material_assembly, pb)
         self._shear_material.initialize(shear_assembly, pb)
-        shear_tangent = self._tangent_array(shear_assembly.sv["TangentMatrix"], 1)
+        shear_tangent = _tangent_array(shear_assembly.sv["TangentMatrix"], 1)
         shear_tangent = shear_tangent[:, :, 0]
         self._shear_matrix = shear_tangent[np.ix_([4, 5], [4, 5])]
-        self._material_assembly.sv_start = self._copy_state(self._material_assembly.sv)
+        self._material_assembly.sv_start = _copy_state(self._material_assembly.sv)
 
         assembly.sv["_ShellStiffnessMatrix"] = self._integrate_tangent()
         assembly.sv["ShellStress"] = 0
@@ -417,11 +424,11 @@ class ShellHomogeneousNonLinear(ShellBase):
                 for component in shell_strain
             ]
         )
-        strains = [self._strain_matrix(z) @ shell_array for z in self._z]
+        strains = [_strain_matrix(z) @ shell_array for z in self._z]
         return StrainTensorList(np.concatenate(strains, axis=1))
 
     def _integrate_tangent(self):
-        material_tangent = self._tangent_array(
+        material_tangent = _tangent_array(
             self._material_assembly.sv["TangentMatrix"],
             self.n_thickness_points * self._n_shell_points,
         )
@@ -432,7 +439,7 @@ class ShellHomogeneousNonLinear(ShellBase):
                 index * self._n_shell_points,
                 (index + 1) * self._n_shell_points,
             )
-            strain_matrix = self._strain_matrix(z)
+            strain_matrix = _strain_matrix(z)
             shell_tangent += weight * np.einsum(
                 "ia,ijp,jb->abp",
                 strain_matrix,
@@ -455,7 +462,7 @@ class ShellHomogeneousNonLinear(ShellBase):
                 (index + 1) * self._n_shell_points,
             )
             resultants += weight * (
-                self._strain_matrix(z).T @ material_stress[:, point_slice]
+                _strain_matrix(z).T @ material_stress[:, point_slice]
             )
 
         shear_strain = np.asarray(
@@ -485,11 +492,11 @@ class ShellHomogeneousNonLinear(ShellBase):
 
     def set_start(self, assembly, pb):
         self.material.set_start(self._material_assembly, pb)
-        self._material_assembly.sv_start = self._copy_state(self._material_assembly.sv)
+        self._material_assembly.sv_start = _copy_state(self._material_assembly.sv)
 
     def to_start(self, assembly, pb):
         self.material.to_start(self._material_assembly, pb)
-        self._material_assembly.sv = self._copy_state(self._material_assembly.sv_start)
+        self._material_assembly.sv = _copy_state(self._material_assembly.sv_start)
 
     def get_stress_distribution(self, assembly, pg, resolution=None):
         """Return stresses through the thickness at one shell Gauss point.
@@ -546,7 +553,10 @@ class ShellLaminateNonLinear(ShellBase):
     elastically using the three-dimensional initial tangent of each material
     and the shell correction factor ``k``.
 
-    This implementation is restricted to small-strain material laws.
+    This implementation is restricted to small-strain material laws. For
+    plasticity (or any law needing a plane-stress return mapping) use a Simcoon
+    law, e.g. ``fedoo.constitutivelaw.Simcoon("EPICP", props)``; the pedagogical
+    :class:`ElastoPlasticity` is 3D-only and does not support ``"2Dstress"``.
 
     Parameters
     ----------
@@ -654,7 +664,7 @@ class ShellLaminateNonLinear(ShellBase):
         for index, material in enumerate(self.materials):
             plane = np.asarray(material.get_elastic_matrix("2Dstress"), dtype=float)
             for z, weight in zip(self._layer_z[index], self._layer_weights[index]):
-                strain_matrix = ShellHomogeneousNonLinear._strain_matrix(z)
+                strain_matrix = _strain_matrix(z)
                 tangent += weight * strain_matrix.T @ plane @ strain_matrix
             tangent[6:8, 6:8] += (
                 self.k * self.list_thickness[index] * self._initial_shear_matrix(index)
@@ -680,14 +690,10 @@ class ShellLaminateNonLinear(ShellBase):
             material.initialize(material_assembly, pb)
             shear_material.initialize(shear_assembly, pb)
 
-            shear_tangent = ShellHomogeneousNonLinear._tangent_array(
-                shear_assembly.sv["TangentMatrix"], 1
-            )
+            shear_tangent = _tangent_array(shear_assembly.sv["TangentMatrix"], 1)
             shear_tangent = shear_tangent[:, :, 0]
             self._shear_matrices.append(shear_tangent[np.ix_([4, 5], [4, 5])])
-            material_assembly.sv_start = ShellHomogeneousNonLinear._copy_state(
-                material_assembly.sv
-            )
+            material_assembly.sv_start = _copy_state(material_assembly.sv)
             self._material_assemblies.append(material_assembly)
 
         assembly.sv["_ShellStiffnessMatrix"] = self._integrate_tangent()
@@ -704,16 +710,13 @@ class ShellLaminateNonLinear(ShellBase):
                 for component in shell_strain
             ]
         )
-        strains = [
-            ShellHomogeneousNonLinear._strain_matrix(z) @ shell_array
-            for z in self._layer_z[layer]
-        ]
+        strains = [_strain_matrix(z) @ shell_array for z in self._layer_z[layer]]
         return StrainTensorList(np.concatenate(strains, axis=1))
 
     def _integrate_tangent(self):
         shell_tangent = np.zeros((8, 8, self._n_shell_points))
         for layer, material_assembly in enumerate(self._material_assemblies):
-            material_tangent = ShellHomogeneousNonLinear._tangent_array(
+            material_tangent = _tangent_array(
                 material_assembly.sv["TangentMatrix"],
                 self.n_thickness_points[layer] * self._n_shell_points,
             )
@@ -728,7 +731,7 @@ class ShellLaminateNonLinear(ShellBase):
                     point * self._n_shell_points,
                     (point + 1) * self._n_shell_points,
                 )
-                strain_matrix = ShellHomogeneousNonLinear._strain_matrix(z)
+                strain_matrix = _strain_matrix(z)
                 shell_tangent += weight * np.einsum(
                     "ia,ijp,jb->abp",
                     strain_matrix,
@@ -760,8 +763,7 @@ class ShellLaminateNonLinear(ShellBase):
                     (point + 1) * self._n_shell_points,
                 )
                 resultants += weight * (
-                    ShellHomogeneousNonLinear._strain_matrix(z).T
-                    @ material_stress[:, point_slice]
+                    _strain_matrix(z).T @ material_stress[:, point_slice]
                 )
 
         shear_strain = np.asarray(
@@ -800,18 +802,14 @@ class ShellLaminateNonLinear(ShellBase):
             self.materials, self._material_assemblies
         ):
             material.set_start(material_assembly, pb)
-            material_assembly.sv_start = ShellHomogeneousNonLinear._copy_state(
-                material_assembly.sv
-            )
+            material_assembly.sv_start = _copy_state(material_assembly.sv)
 
     def to_start(self, assembly, pb):
         for material, material_assembly in zip(
             self.materials, self._material_assemblies
         ):
             material.to_start(material_assembly, pb)
-            material_assembly.sv = ShellHomogeneousNonLinear._copy_state(
-                material_assembly.sv_start
-            )
+            material_assembly.sv = _copy_state(material_assembly.sv_start)
 
     def get_stress_distribution(self, assembly, pg, resolution=None):
         """Return layerwise stresses at one shell Gauss point.
@@ -1014,12 +1012,14 @@ class ShellLaminate(ShellBase):
         ShellStrain = assembly.sv["ShellStrain"]
 
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[4][pg]
+            ShellStrain[0][pg] + z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] - z * ShellStrain[3][pg]
+            ShellStrain[1][pg] + z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
-        Strain[3] = ShellStrain[2][pg] * np.ones_like(z)  # 2epsXY
+        Strain[3] = (
+            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+        )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear
 

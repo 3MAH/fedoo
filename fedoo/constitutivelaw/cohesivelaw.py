@@ -100,6 +100,12 @@ class CohesiveLaw(Spring):
                 "in both fracture modes."
             )
 
+        # Mode-onset / failure separations are constant after construction;
+        # cache them so the damage update does not recompute them per Gauss point.
+        self._delta_0_I = delta_0_I
+        self._delta_0_II = delta_0_II
+        self._delta_m_II = delta_m_II
+
     def initialize(self, assembly, pb):
         assembly.sv["InterfaceStress"] = 0  # Interface Stress
         assembly.sv["DamageVariable"] = 0  # damage variable
@@ -139,20 +145,21 @@ class CohesiveLaw(Spring):
             _, _, damage_gradient = self._compute_damage(assembly, delta)
 
         delta = np.asarray(np.broadcast_arrays(*delta), dtype=float)
+        n_components = delta.shape[0]
         opening = delta[self.parameters["axis"]] > 0
         axis = self.parameters["axis"]
         stiffness = [
             self.parameters["KII"] if i != axis else self.parameters["KI"]
-            for i in range(3)
+            for i in range(n_components)
         ]
 
-        tangent = [[None for _ in range(3)] for _ in range(3)]
-        for i in range(3):
+        tangent = [[None for _ in range(n_components)] for _ in range(n_components)]
+        for i in range(n_components):
             row_gradient = damage_gradient
             if i == axis:
                 # Normal contact remains elastic in compression.
                 row_gradient = damage_gradient * opening
-            for j in range(3):
+            for j in range(n_components):
                 correction = stiffness[i] * delta[i] * row_gradient[j]
                 tangent[i][j] = secant[i][j] - correction
         return tangent
@@ -216,27 +223,30 @@ class CohesiveLaw(Spring):
         """
         alpha = 2.0
         delta = np.asarray(np.broadcast_arrays(*delta), dtype=float)
-        if delta.shape[0] != 3:
-            raise ValueError("CohesiveLaw expects three separation components.")
+        n_components = delta.shape[0]
+        if n_components not in (2, 3):
+            raise ValueError(
+                "CohesiveLaw expects two (2D) or three (3D) separation components."
+            )
+        axis = self.parameters["axis"]
+        if axis >= n_components:
+            raise ValueError(
+                f"CohesiveLaw normal 'axis'={axis} is out of range for "
+                f"{n_components} separation components; set axis to 0 or 1 in 2D."
+            )
 
         state_shape = delta.shape[1:]
-        delta = delta.reshape(3, -1)
+        delta = delta.reshape(n_components, -1)
         n_points = delta.shape[1]
-        axis = self.parameters["axis"]
-        tangential_axes = [i for i in range(3) if i != axis]
+        tangential_axes = [i for i in range(n_components) if i != axis]
 
         delta_n = delta[axis]
         delta_t_vector = delta[tangential_axes]
         delta_t = np.sqrt(np.sum(delta_t_vector**2, axis=0))
 
-        delta_0_I = self.parameters["SImax"] / self.parameters["KI"]
-        SIImax = self.parameters["SIImax"]
-        if SIImax is None:
-            SIImax = self.parameters["SImax"] * np.sqrt(
-                self.parameters["GIIc"] / self.parameters["GIc"]
-            )
-        delta_0_II = SIImax / self.parameters["KII"]
-        delta_m_II = 2.0 * self.parameters["GIIc"] / SIImax
+        delta_0_I = self._delta_0_I
+        delta_0_II = self._delta_0_II
+        delta_m_II = self._delta_m_II
 
         opening = delta_n > 0.0
         compression = ~opening
@@ -308,7 +318,7 @@ class CohesiveLaw(Spring):
         # max(d_irreversible, d_trial) makes this derivative vanish unless
         # trial damage is actively increasing.
         active = softening & (trial_damage > irreversible)
-        damage_gradient = np.zeros((3, n_points))
+        damage_gradient = np.zeros((n_components, n_points))
 
         active_compression = active & compression
         if np.any(active_compression):
@@ -360,7 +370,7 @@ class CohesiveLaw(Spring):
         return (
             damage.reshape(state_shape),
             (opening * damage).reshape(state_shape),
-            damage_gradient.reshape((3,) + state_shape),
+            damage_gradient.reshape((n_components,) + state_shape),
         )
 
     def _update_damage(self, assembly, delta):
