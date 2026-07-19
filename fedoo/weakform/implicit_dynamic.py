@@ -169,7 +169,7 @@ class ImplicitDynamicSum(WeakFormSum):
         self.list_weakform[1].damping_coef = value[0]  # mass matrix coef
 
 
-def ImplicitDynamic(
+def implicit_dynamic(
     constitutivelaw, density, beta=0.25, gamma=0.5, name="", nlgeom=False, space=None
 ):
     r"""Weak formulation for implicit dynamic problems.
@@ -237,7 +237,7 @@ def ImplicitDynamic(
 
       .. code-block:: python
 
-          wf = fd.weakform.ImplicitDynamic(material, density)
+          wf = fd.weakform.implicit_dynamic(material, density)
           wf.rayleigh_damping = [alpha, beta]
     """
     if isinstance(constitutivelaw, WeakFormBase):
@@ -261,7 +261,7 @@ def ImplicitDynamic(
 class ImplicitDynamic2(WeakFormBase):
     r"""Weak formulation for implicit dynamic problems.
 
-    Alternative implementation of ImplicitDynamic WeakForm.
+    Alternative implementation of implicit_dynamic WeakForm.
     Kept only for debug purpose. Should give exatly the same results.
     """
 
@@ -280,7 +280,7 @@ class ImplicitDynamic2(WeakFormBase):
         if self.space.is_axisymmetric:
             raise NotImplementedError(
                 "ImplicitDynamic2 is not implemented in '2Daxi'. "
-                "Use the ImplicitDynamic factory (which builds an "
+                "Use the implicit_dynamic factory (which builds an "
                 "ImplicitDynamicSum from _NewmarkStiffness + _NewmarkInertia) "
                 "instead — that path correctly applies the 2*pi*r weight."
             )
@@ -527,3 +527,9 @@ class ImplicitDynamic2(WeakFormBase):
     @property
     def nlgeom(self):
         return self.__nlgeom
+
+
+# Backward-compatible PascalCase aliases (deprecated).
+from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
+
+ImplicitDynamic = _deprecated_alias(implicit_dynamic, "ImplicitDynamic")

@@ -23,7 +23,7 @@ cap is driven by prescribing its transverse displacement ``RigidDispX``.
 
 The mesh is read from an Abaqus ``.inp`` deck. Two are provided and give the same
 result: a **linear** hex8 mesh solved with reduced integration
-(:func:`fedoo.weakform.StressEquilibriumRI`, which avoids volumetric locking at
+(:func:`fedoo.weakform.stress_equilibrium_ri`, which avoids volumetric locking at
 :math:`\\nu = 0.49`), and a **quadratic** hex20 mesh solved with full integration
 (:class:`fedoo.weakform.StressEquilibrium`).
 
@@ -31,7 +31,7 @@ Displacement control is used because static *force* control is ill-conditioned
 for such a flexible structure: the cap's transverse stiffness is tiny next to the
 internal stiffness, so a force increment demands a large displacement jump.
 Loading by force is done through implicit dynamics
-(:class:`fedoo.weakform.implicit_dynamic.ImplicitDynamic`), where the cap's
+(:func:`fedoo.weakform.implicit_dynamic`), where the cap's
 inertia/damping regularise that soft mode.
 """
 
@@ -49,7 +49,7 @@ kappa = E / (3 * (1 - 2 * nu))
 
 U_CAP = 0.03  # prescribed transverse cap displacement [m] (~0.6 L)
 
-# "linear"    -> hex8,  reduced integration (StressEquilibriumRI); faster
+# "linear"    -> hex8,  reduced integration (stress_equilibrium_ri); faster
 # "quadratic" -> hex20, full integration    (StressEquilibrium)
 MESH = "linear"
 
@@ -92,7 +92,7 @@ material = fd.constitutivelaw.Simcoon("NEOHC", [mu, kappa], name="neohookean")
 
 if mesh.elm_type == "hex8":
     # reduced integration + hourglass control avoids volumetric locking
-    wf = fd.weakform.StressEquilibriumRI(material, nlgeom="UL")
+    wf = fd.weakform.stress_equilibrium_ri(material, nlgeom="UL")
     stress_wf = wf.list_weakform[0]
 else:  # hex20: full integration
     wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")

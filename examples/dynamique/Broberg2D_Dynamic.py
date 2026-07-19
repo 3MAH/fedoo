@@ -94,7 +94,7 @@ pb.solve()
 
 # post traitement
 U = pb.get_dof_solution()
-Gqs = pb.GetElasticEnergy() / (length)
+Gqs = pb.get_elastic_energy() / (length)
 
 # OUT = Util.ExportData(meshID)
 # OUT.addNodeData(np.reshape(U,(2,-1)).T,'Displacement')
@@ -110,10 +110,10 @@ Ecin, Eela = [], []
 # previousU = U*0.
 
 pb = fd.problem.Newmark("StiffAssembling", "MassAssembling", Beta, Gamma, dt)
-pb.SetInitialDisplacement("all", U)
+pb.set_initial_displacement("all", U)
 
-pb.SetInitialVelocity("all", 0)
-pb.SetInitialAcceleration("all", 0)
+pb.set_initial_velocity("all", 0)
+pb.set_initial_acceleration("all", 0)
 pb.initialize()
 # pb.set_solver('cg', precond = True)
 
@@ -141,8 +141,8 @@ for i in range(popo):
 
     U = pb.get_disp()
 
-    Ecin.append(pb.GetKineticEnergy())
-    Eela.append(pb.GetElasticEnergy())
+    Ecin.append(pb.get_kinetic_energy())
+    Eela.append(pb.get_elastic_energy())
 
 Ecin = np.array(Ecin)
 Eela = np.array(Eela)

@@ -92,7 +92,7 @@ def test_mandel_vs_abousleiman():
         initial_porosity=0.5,
         name="Fl",
     )
-    wf = fd.weakform.PoroMechanicsSimple(skel, fluid, nlgeom=False, name="P")
+    wf = fd.weakform.poro_mechanics_simple(skel, fluid, nlgeom=False, name="P")
     poro = fd.Assembly.create(wf, mesh, name="A")
 
     top = mesh.find_nodes("Z", b)

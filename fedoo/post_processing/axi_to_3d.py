@@ -158,6 +158,12 @@ def axi_to_3d(axi_data: DataSet | MultiFrameDataSet, n_theta: int = 41, filename
         axi_data = axi_to_3d_dataset(axi_data, n_theta)
         if filename:
             axi_data.save(filename, True, False)
+        return axi_data
+    else:
+        raise TypeError(
+            "axi_to_3d expects a DataSet or MultiFrameDataSet (or a path to one), "
+            f"got {type(axi_data).__name__}."
+        )
 
 
 def axi_to_3d_dataset(axi_data: DataSet, n_theta: int = 41):

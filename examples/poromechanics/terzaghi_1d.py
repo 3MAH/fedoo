@@ -57,7 +57,7 @@ fluid = fd.constitutivelaw.PoroFluidProperties(
     initial_porosity=0.5,
 )
 K_bulk = E / (3.0 * (1.0 - 2.0 * nu))
-wf = fd.weakform.PoroMechanics(
+wf = fd.weakform.poro_mechanics(
     skel, fluid, bulk_modulus=K_bulk, nlgeom=False, name="Poro"
 )
 fd.Assembly.create(wf, mesh, name="PoroAssembly")

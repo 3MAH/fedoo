@@ -161,7 +161,7 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
       :class:`fedoo.weakform.StressEquilibrium` weak form.
     * For higher accuracy in the consistent tangent matrix, use the specialized 
       :class:`fedoo.weakform.StressEquilibriumFbar` weak form.
-* **Reduced Integration**: Use the :class:`fedoo.weakform.StressEquilibriumRI` 
+* **Reduced Integration**: Use the :class:`fedoo.weakform.stress_equilibrium_ri` 
   weak form. This evaluates volumetric terms at fewer integration points to 
   relax the incompressibility constraint. Reduced integration is known to be 
   prone to **hourglass** instabilities; this weak form includes an hourglass 
@@ -286,7 +286,7 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
 * **Stabilization**: Add **Rayleigh Damping**
   (:math:`\mathbf{C} = a\mathbf{M} + b\mathbf{K}`) to dissipate high-frequency 
   numerical noise and stabilize the inertial response during sudden transitions.
-  The legacy :class:`fedoo.weakform.ImplicitDynamic` weak form is kept for
+  The legacy :class:`fedoo.weakform.implicit_dynamic` weak form is kept for
   pedagogical purposes, but new transient models should prefer
   problem-level time integrators.
 """

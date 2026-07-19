@@ -245,10 +245,10 @@ class WeakFormBase:
         # function called if all the problem history is reseted.
         pass
 
-    @staticmethod
+    @property
     def nvar(self):
-        """Return the number of variables used in the modeling space associated to the WeakForm."""
-        return self.__space.nvar
+        """Number of variables in the modeling space associated to the WeakForm."""
+        return self.space.nvar
 
     @staticmethod
     def get_all():

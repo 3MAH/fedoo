@@ -132,11 +132,11 @@ class _NonLinearBase:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
 
-    def updateA(self):
+    def _update_a(self):
         # dt not used for static problem
         self.set_A(self.__assembly.current.get_global_matrix())
 
-    def updateD(self, start=False):
+    def _update_d(self, start=False):
         # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
@@ -768,9 +768,9 @@ class _NonLinearBase:
         # A new tangent matrix is computed only for the very first increment,
         # where the matrix has its initial value of 0.
         if np.isscalar(self.get_A()) and self.get_A() == 0:
-            self.updateA()
+            self._update_a()
 
-        self.updateD(
+        self._update_d(
             start=True
         )  # not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
         self.solve()
@@ -879,7 +879,7 @@ class _NonLinearBase:
         while subiter < max_subiter:
             # update Stress and initial displacement and Update stiffness matrix
             self.update(compute="vector")  # update the out of balance force vector
-            self.updateD()  # required to compute the NR error
+            self._update_d()  # required to compute the NR error
 
             # Check convergence
             prev_error = error

@@ -45,9 +45,7 @@ def test_2DDynamicPlasticBending_v2():
     else:
         material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-    wf = fd.weakform.implicit_dynamic.ImplicitDynamic(
-        "ConstitutiveLaw", rho, 0.25, 0.5, nlgeom=NLGEOM
-    )
+    wf = fd.weakform.implicit_dynamic("ConstitutiveLaw", rho, 0.25, 0.5, nlgeom=NLGEOM)
     wf.rayleigh_damping = [0.1, 0.1]
 
     # note set for boundary conditions

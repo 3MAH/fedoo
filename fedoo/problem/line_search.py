@@ -33,7 +33,7 @@ def _evaluate_residual_norm(pb, dX, alpha):
     # Note: 'vector' compute usually updates internal forces/stresses
     pb._line_search_update = True
     pb.update(compute="vector")
-    pb.updateD()
+    pb._update_d()
     pb._line_search_update = False
 
     # 3. Calculate residual R = B + D

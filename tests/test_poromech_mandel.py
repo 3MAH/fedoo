@@ -66,7 +66,7 @@ def test_mandel_cryer_overshoot():
         initial_porosity=0.5,
         name="Fluid",
     )
-    wf = fd.weakform.PoroMechanicsSimple(skel, fluid, nlgeom=False, name="Poro")
+    wf = fd.weakform.poro_mechanics_simple(skel, fluid, nlgeom=False, name="Poro")
     fd.Assembly.create(wf, mesh, name="MandelAssembly")
     pb = fd.problem.NonLinear("MandelAssembly")
     pb.set_nr_criterion("Displacement", tol=1e-3, max_subiter=80)

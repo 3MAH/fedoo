@@ -1,6 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.util.deprecation import deprecated_alias
 import scipy.sparse as sparse
 
 
@@ -46,7 +47,7 @@ class _ExplicitDynamicBase:
         # if MassLumping == True, A is a vector representing the diagonal value
         self.set_A(self.__MassMatrix / (self.__TimeStep**2))
 
-    def updateStiffness(
+    def update_stiffness(
         self, StiffnessAssembly
     ):  # internal function to be used when modifying the siffness matrix
         if isinstance(StiffnessAssembly, str):
@@ -54,40 +55,54 @@ class _ExplicitDynamicBase:
 
         self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
 
-    def MassLumping(self):  # internal function to be used when modifying M
+    def mass_lumping(self):  # internal function to be used when modifying M
         self.__MassLuming = True
         if len(self.__MassMatrix.shape) == 2:
             self.__MassMatrix = np.array(self.__MassMatrix.sum(1))[:, 0]
             self.__UpdateA()
 
+    updateStiffness = deprecated_alias(update_stiffness, "updateStiffness")
+    UpdateStiffness = deprecated_alias(update_stiffness, "UpdateStiffness")
+    MassLumping = deprecated_alias(mass_lumping, "MassLumping")
+
     def get_X(self):
         return self.get_dof_solution("all")
 
-    def get_Xdot(self):
+    def get_velocity(self):
         return self.__Xdot
 
-    def SetInitialDisplacement(self, name, value):
+    get_Xdot = deprecated_alias(get_velocity, "get_Xdot")
+
+    def set_initial_displacement(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial displacement of each nodes
         """
         self._set_vect_component(self.__Xold, name, value)
 
-    def SetInitialVelocity(self, name, value):
+    def set_initial_velocity(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial velocity of each nodes
         """
         self._set_vect_component(self.__Xdot, name, value)
 
-    def SetInitialAcceleration(self, name, value):
+    def set_initial_acceleration(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial acceleration of each nodes
         """
         self._set_vect_component(self.__Xdotdot, name, value)
 
-    def SetRayleighDamping(self, alpha, beta):
+    SetInitialDisplacement = deprecated_alias(
+        set_initial_displacement, "SetInitialDisplacement"
+    )
+    SetInitialVelocity = deprecated_alias(set_initial_velocity, "SetInitialVelocity")
+    SetInitialAcceleration = deprecated_alias(
+        set_initial_acceleration, "SetInitialAcceleration"
+    )
+
+    def set_rayleigh_damping(self, alpha, beta):
         """
         Compute the damping matrix from the Rayleigh's model:
         [C] = alpha*[M] + beta*[K]
@@ -105,6 +120,8 @@ class _ExplicitDynamicBase:
         else:
             self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix
         self.__UpdateA()
+
+    SetRayleighDamping = deprecated_alias(set_rayleigh_damping, "SetRayleighDamping")
 
     def initialize(self):
         D = (
@@ -124,7 +141,7 @@ class _ExplicitDynamicBase:
         self.__Xold[:] = Problem.get_dof_solution("all")
         self.initialize()
 
-    def GetElasticEnergy(self):
+    def get_elastic_energy(self):
         """
         returns : 0.5 * U.transposed * K * U
         """
@@ -134,14 +151,14 @@ class _ExplicitDynamicBase:
             self.__StiffMatrix * self.get_dof_solution("all"),
         )
 
-    def GetKineticEnergy(self):
+    def get_kinetic_energy(self):
         """
         returns : 0.5 * Udot.transposed * M * Udot
         """
 
         return 0.5 * np.dot(self.__Xdot, self.__MassMatrix * self.__Xdot)
 
-    def get_DampingPower(self):
+    def get_damping_power(self):
         """
         returns : Udot.transposed * C * Udot
         The damping disspated energy can be approximated by:
@@ -149,11 +166,18 @@ class _ExplicitDynamicBase:
         """
         return np.dot(self.__Xdot, self.__DampMatrix * self.__Xdot)
 
-    def SetStiffnessMatrix(self, e):
+    def set_stiffness_matrix(self, e):
         self.__StiffMatrix = e
 
-    def SetMassMatrix(self, e):
+    def set_mass_matrix(self, e):
         self.__MassMatrix = e
+
+    GetElasticEnergy = deprecated_alias(get_elastic_energy, "GetElasticEnergy")
+    GetKineticEnergy = deprecated_alias(get_kinetic_energy, "GetKineticEnergy")
+    get_DampingPower = deprecated_alias(get_damping_power, "get_DampingPower")
+    GetDampingPower = deprecated_alias(get_damping_power, "GetDampingPower")
+    SetStiffnessMatrix = deprecated_alias(set_stiffness_matrix, "SetStiffnessMatrix")
+    SetMassMatrix = deprecated_alias(set_mass_matrix, "SetMassMatrix")
 
 
 class ExplicitDynamic(_ExplicitDynamicBase, Problem):

@@ -1,4 +1,5 @@
 from fedoo.core.mesh import Mesh
+from fedoo.util.deprecation import deprecated_alias
 from simcoon import Rotation
 
 import numpy as np
@@ -19,7 +20,7 @@ class LocalFrame(np.ndarray):
     def __new__(cls, localFrame):
         return np.asarray(localFrame).view(cls)
 
-    def Rotate(self, angle, axis="Z"):
+    def rotate(self, angle, axis="Z"):
         """Rotate all local frames by a given angle around a global axis.
 
         Parameters
@@ -36,7 +37,9 @@ class LocalFrame(np.ndarray):
         if angle != 0:
             rot = Rotation.from_euler(axis.upper(), angle, degrees=True)
             self[:] = np.matmul(self, rot.as_matrix().T)
-            return self
+        return self
+
+    Rotate = deprecated_alias(rotate, "Rotate")
 
     def as_rotation(self):
         """Convert local frames to a batch simcoon.Rotation object.
@@ -61,7 +64,7 @@ def global_local_frame(n_points):
     return LocalFrame(np.tile(np.eye(3), (n_points, 1, 1)))
 
 
-def GenerateCylindricalLocalFrame(crd, axis=2, origin=[0, 0, 0], dim=3):
+def generate_cylindrical_local_frame(crd, axis=2, origin=[0, 0, 0], dim=3):
     """Generate cylindrical local frames (er, etheta, ez) at each node.
 
     Parameters
@@ -106,3 +109,9 @@ def GenerateCylindricalLocalFrame(crd, axis=2, origin=[0, 0, 0], dim=3):
         localFrame[:, 1, 0] = -localFrame[:, 0, 1]
         localFrame[:, 1, 1] = localFrame[:, 0, 0]
     return localFrame.view(LocalFrame)
+
+
+# Backward-compatible alias (deprecated).
+GenerateCylindricalLocalFrame = deprecated_alias(
+    generate_cylindrical_local_frame, "GenerateCylindricalLocalFrame"
+)

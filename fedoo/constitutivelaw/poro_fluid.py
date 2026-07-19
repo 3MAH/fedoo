@@ -12,7 +12,7 @@ class PoroFluidProperties(ConstitutiveLaw):
     the fluid viscosity, and the initial Lagrangian porosity. The skeleton
     constitutive law (hyperelastic, viscoelastic, ...) is provided separately
     and remains unaware of the pore pressure. The Biot/Terzaghi coupling is
-    handled at the weak form level (see :py:class:`fedoo.weakform.PoroMechanics`).
+    handled at the weak form level (see :py:class:`fedoo.weakform.poro_mechanics`).
 
     Parameters
     ----------

@@ -129,7 +129,7 @@ while pb.time < tmax - err_num:
     pb.set_A(pb.assembly.get_global_matrix())
     pb.set_D(pb.assembly.get_global_vector())
 
-    # pb.updateD(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
+    # pb._update_d(start = True) #not modified in principle if dt is not modified, except the very first iteration. May be optimized by testing the change of dt
     pb.solve()
 
     pb._Xbc *= 0  # boundary conditions increment are now set to 0 because the current prediction already satisfy the bc

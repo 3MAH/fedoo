@@ -346,7 +346,7 @@ class HourglassStiffness(WeakFormBase):
 
     This WeakForm should be added to a StressEquilibrium WeakForm to control
     the hourglass deformation modes associated to reduced integration.
-    In most cases, the use of :py:func:`StressEquilibriumRI` that combines both
+    In most cases, the use of :py:func:`stress_equilibrium_ri` that combines both
     HourglassStiffness and StressEquilibrium is prefered.
 
     This weakform should be used only for 'hex8' or 'quad4' elements with
@@ -560,7 +560,7 @@ class HourglassStiffness(WeakFormBase):
         return bulk_modulus + 4 / 3 * shear_modulus
 
 
-def StressEquilibriumRI(
+def stress_equilibrium_ri(
     constitutivelaw,
     hourglass_stiffness=0.01,
     name="",
@@ -612,7 +612,7 @@ def StressEquilibriumRI(
       >>> import fedoo as fd
       >>> fd.ModelingSpace("2Dstress")
       >>> material = fd.constitutivelaw.ElasticIsotrop(100e3, 0.3)
-      >>> wf = fd.StressEquilibriumRI(material)
+      >>> wf = fd.stress_equilibrium_ri(material)
     """
     wf = StressEquilibrium(constitutivelaw, nlgeom=nlgeom, space=space)
     # use reduced intagration with quad4 or hex8
@@ -629,7 +629,7 @@ def StressEquilibriumRI(
         name=name,
     )
 
-    # dynamically add corate property to the StressEquilibriumRI weakform instance
+    # dynamically add corate property to the stress_equilibrium_ri weakform instance
 
     def corate_getter(self):
         return self.list_weakform[0].corate
@@ -639,3 +639,9 @@ def StressEquilibriumRI(
 
     setattr(wf.__class__, "corate", property(corate_getter, corate_setter))
     return wf
+
+
+# Backward-compatible PascalCase aliases (deprecated).
+from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
+
+StressEquilibriumRI = _deprecated_alias(stress_equilibrium_ri, "StressEquilibriumRI")

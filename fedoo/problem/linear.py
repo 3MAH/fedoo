@@ -1,6 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.util.deprecation import deprecated_alias
 
 
 class _LinearBase:
@@ -103,7 +104,7 @@ class _LinearBase:
         if update:
             self.update()
 
-    def GetElasticEnergy(self):  # only work for classical FEM
+    def get_elastic_energy(self):  # only work for classical FEM
         """
         returns : sum (0.5 * U.transposed * K * U)
         """
@@ -115,7 +116,7 @@ class _LinearBase:
             * self.get_dof_solution("all")
         )
 
-    def GetNodalElasticEnergy(self):
+    def get_nodal_elastic_energy(self):
         """
         returns : 0.5 * K * U . U
         """
@@ -130,6 +131,11 @@ class _LinearBase:
         E = np.reshape(E, (3, -1)).T
 
         return E
+
+    GetElasticEnergy = deprecated_alias(get_elastic_energy, "GetElasticEnergy")
+    GetNodalElasticEnergy = deprecated_alias(
+        get_nodal_elastic_energy, "GetNodalElasticEnergy"
+    )
 
     @property
     def assembly(self):

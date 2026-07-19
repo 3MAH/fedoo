@@ -66,7 +66,7 @@ else:
 wf = fd.weakform.StressEquilibriumFbar("constitutivelaw", nlgeom=NLGEOM)
 
 # or alternatively with reduced integration + hourglass stiffness :
-# wf = fd.weakform.StressEquilibriumRI("constitutivelaw", nlgeom = True)
+# wf = fd.weakform.stress_equilibrium_ri("constitutivelaw", nlgeom = True)
 
 # note set for boundary conditions
 nodes_bottomLeft = mesh.find_nodes("XY", (0, 0))

@@ -1,6 +1,7 @@
 import numpy as np
 from fedoo.core.assembly import Assembly
 from fedoo.core.problem import Problem
+from fedoo.util.deprecation import deprecated_alias
 
 
 class _NewmarkBase:
@@ -81,43 +82,51 @@ class _NewmarkBase:
     def get_X(self):
         return self.get_dof_solution("all")
 
-    def get_Xdot(self):
+    def get_velocity(self):
         return self.__Xdot
 
-    def get_Xdotdot(self):
+    def get_acceleration(self):
         return self.__Xdotdot
 
     def get_disp(self, name="Disp"):  # same as get_X
         return self.get_dof_solution(name)
 
-    def GetVelocity(self):  # same as get_Xdot
-        return self.__Xdot
+    GetVelocity = deprecated_alias(get_velocity, "GetVelocity")
+    get_Acceleration = deprecated_alias(get_acceleration, "get_Acceleration")
+    GetAcceleration = deprecated_alias(get_acceleration, "GetAcceleration")
+    get_Xdot = deprecated_alias(get_velocity, "get_Xdot")
+    get_Xdotdot = deprecated_alias(get_acceleration, "get_Xdotdot")
 
-    def get_Acceleration(self):  # same as get_Xdotdot
-        return self.__Xdotdot
-
-    def SetInitialDisplacement(self, name, value):
+    def set_initial_displacement(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial displacement of each nodes
         """
         self._set_vect_component(self.__Xold, name, value)
 
-    def SetInitialVelocity(self, name, value):
+    def set_initial_velocity(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial velocity of each nodes
         """
         self._set_vect_component(self.__Xdot, name, value)
 
-    def SetInitialAcceleration(self, name, value):
+    def set_initial_acceleration(self, name, value):
         """
         name is the name of the associated variable (generaly 'DispX', 'DispY' or 'DispZ')
         value is an array containing the initial acceleration of each nodes
         """
         self._set_vect_component(self.__Xdotdot, name, value)
 
-    def SetRayleighDamping(self, alpha, beta):
+    SetInitialDisplacement = deprecated_alias(
+        set_initial_displacement, "SetInitialDisplacement"
+    )
+    SetInitialVelocity = deprecated_alias(set_initial_velocity, "SetInitialVelocity")
+    SetInitialAcceleration = deprecated_alias(
+        set_initial_acceleration, "SetInitialAcceleration"
+    )
+
+    def set_rayleigh_damping(self, alpha, beta):
         """
         Compute the damping matrix from the Rayleigh's model:
         [C] = alpha*[M] + beta*[K]
@@ -130,6 +139,8 @@ class _NewmarkBase:
 
         self.__DampMatrix = alpha * self.__MassMatrix + beta * self.__StiffMatrix
         self.__UpdateA()
+
+    SetRayleighDamping = deprecated_alias(set_rayleigh_damping, "SetRayleighDamping")
 
     def initialize(self, t0=0.0):
         D = self.__MassMatrix * (
@@ -159,7 +170,7 @@ class _NewmarkBase:
 
     #        self.set_D(self.__MassMatrix * ( (1/self.__Beta/(self.__TimeStep**2))*self.__Xold + (1/self.__Beta/self.__TimeStep)*self.__Xdot + (1/2/self.__Beta -1)*self.__Xdotdot) )
 
-    def GetElasticEnergy(self):
+    def get_elastic_energy(self):
         """
         returns : sum(0.5 * U.transposed * K * U)
         """
@@ -169,7 +180,7 @@ class _NewmarkBase:
             self.__StiffMatrix * self.get_dof_solution("all"),
         )
 
-    def GetNodalElasticEnergy(self):
+    def get_nodal_elastic_energy(self):
         """
         returns : 0.5 * K * U . U
         """
@@ -185,14 +196,14 @@ class _NewmarkBase:
 
         return E
 
-    def GetKineticEnergy(self):
+    def get_kinetic_energy(self):
         """
         returns : 0.5 * Udot.transposed * M * Udot
         """
 
         return 0.5 * np.dot(self.__Xdot, self.__MassMatrix * self.__Xdot)
 
-    def get_DampingPower(self):
+    def get_damping_power(self):
         """
         returns : Udot.transposed * C * Udot
         The damping disspated energy can be approximated by:
@@ -202,7 +213,7 @@ class _NewmarkBase:
         """
         return np.dot(self.__Xdot, self.__DampMatrix * self.__Xdot)
 
-    def GetExternalForceWork(self):
+    def get_external_force_work(self):
         """
         with (KU + CU_dot + MU_dot_dot) = Fext
         this function returns sum(Fext.(U-Uold))
@@ -211,15 +222,28 @@ class _NewmarkBase:
         M = self.__MassMatrix
         C = self.__DampMatrix
         return np.sum(
-            (K * self.get_X() + C * self.get_Xdot() + M * self.get_Xdotdot())
+            (K * self.get_X() + C * self.get_velocity() + M * self.get_acceleration())
             * (self.get_X() - self.__Xold)
         )
 
-    def updateStiffness(self, StiffnessAssembling):
+    def update_stiffness(self, StiffnessAssembling):
         if isinstance(StiffnessAssembling, str):
             StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
         self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
         self.__UpdateA()
+
+    GetElasticEnergy = deprecated_alias(get_elastic_energy, "GetElasticEnergy")
+    GetNodalElasticEnergy = deprecated_alias(
+        get_nodal_elastic_energy, "GetNodalElasticEnergy"
+    )
+    GetKineticEnergy = deprecated_alias(get_kinetic_energy, "GetKineticEnergy")
+    get_DampingPower = deprecated_alias(get_damping_power, "get_DampingPower")
+    GetDampingPower = deprecated_alias(get_damping_power, "GetDampingPower")
+    GetExternalForceWork = deprecated_alias(
+        get_external_force_work, "GetExternalForceWork"
+    )
+    updateStiffness = deprecated_alias(update_stiffness, "updateStiffness")
+    UpdateStiffness = deprecated_alias(update_stiffness, "UpdateStiffness")
 
 
 class Newmark(_NewmarkBase, Problem):

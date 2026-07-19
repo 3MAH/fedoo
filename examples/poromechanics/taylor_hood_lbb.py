@@ -122,7 +122,7 @@ fluid = fd.constitutivelaw.PoroFluidProperties(
     initial_porosity=0.5,
     name="fluid",
 )
-wf = fd.weakform.PoroMechanicsSimple(skel, fluid, nlgeom=False, name="poro")
+wf = fd.weakform.poro_mechanics_simple(skel, fluid, nlgeom=False, name="poro")
 
 elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")
 elm.set_variable_interpolation("PorePressure", "hex8")

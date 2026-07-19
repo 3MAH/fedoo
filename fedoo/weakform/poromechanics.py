@@ -491,7 +491,7 @@ class PoroMomentumSimple(StressEquilibrium):
 # ----------------------------------------------------------------------
 # 4. Factory
 # ----------------------------------------------------------------------
-def PoroMechanics(
+def poro_mechanics(
     skeleton_law,
     fluid_props,
     bulk_modulus=None,
@@ -542,7 +542,7 @@ def PoroMechanics(
     return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)
 
 
-def PoroMechanicsSimple(skeleton_law, fluid_props, name="", nlgeom=None, space=None):
+def poro_mechanics_simple(skeleton_law, fluid_props, name="", nlgeom=None, space=None):
     """Build the non-mixed (u, PorePressure) poromechanics weak form.
 
     Returns a :py:class:`WeakFormSum` of:
@@ -554,7 +554,7 @@ def PoroMechanicsSimple(skeleton_law, fluid_props, name="", nlgeom=None, space=N
 
     Use this variant for problems with **free-traction boundaries** (Mandel
     consolidation, unconfined compression of cartilage, soft tissue
-    indentation) where the mixed :py:class:`PoroMechanics` oscillates.
+    indentation) where the mixed :py:class:`poro_mechanics` oscillates.
     No ``bulk_modulus`` parameter is required.
 
     Parameters
@@ -581,3 +581,10 @@ def PoroMechanicsSimple(skeleton_law, fluid_props, name="", nlgeom=None, space=N
         name = getattr(skeleton_law, "name", "") or "poromechanics_simple"
 
     return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)
+
+
+# Backward-compatible PascalCase aliases (deprecated).
+from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
+
+PoroMechanicsSimple = _deprecated_alias(poro_mechanics_simple, "PoroMechanicsSimple")
+PoroMechanics = _deprecated_alias(poro_mechanics, "PoroMechanics")

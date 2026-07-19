@@ -3,7 +3,6 @@ import time
 import numpy as np
 
 import fedoo as fd
-from fedoo.util.abaqus_inp import ReadINP
 
 # ------------------------------------------------------------------------------
 # Défine inplane 2D periodic boundary conditions for a composite ply using a 3D
@@ -18,11 +17,8 @@ fd.ModelingSpace("3D")
 # ------------------------------------------------------------------------------
 # Definition of the Geometry
 # ------------------------------------------------------------------------------
-# INP = Util.ReadINP('Job-1.inp')
-
 # warning: this mesh is not periodic and should be replaced by a better one !
-INP = ReadINP("cell_taffetas.inp")
-mesh = INP.toMesh()
+mesh = fd.Mesh.read("cell_taffetas.inp")
 
 E_fiber = 250e3
 E_matrix = 4e3
@@ -32,7 +28,7 @@ nu_matrix = 0.33
 # E_fiber = E_matrix
 # nu_fiber = nu_matrix
 
-list_elm_matrix = mesh.element_sets["alla_matrix"]
+list_elm_matrix = mesh.element_sets["Alla_matrix"]
 
 # ------------------------------------------------------------------------------
 # Set of nodes for boundary conditions
@@ -109,7 +105,7 @@ mean_strain = pb.get_disp("MeanStrain")
 print("Strain tensor ([Exx, Eyy, Ezz, Exy, Exz, Eyz]): ", mean_strain)
 print("Stress tensor ([Sxx, Syy, Szz, Sxy, Sxz, Syz]): ", mean_stress)
 
-print("Elastic Energy: " + str(pb.GetElasticEnergy()))
+print("Elastic Energy: " + str(pb.get_elastic_energy()))
 
 # ------------------------------------------------------------------------------
 # Optional: Write data in a vtk file (for visualization with paraview for instance)
@@ -121,6 +117,6 @@ print("Elastic Energy: " + str(pb.GetElasticEnergy()))
 # Optional: Get data for fibers only and plot results
 # ------------------------------------------------------------------------------
 res_fibers = pb.get_results(
-    assemb, ["Stress", "Strain", "Disp"], element_set="all_fibers"
+    assemb, ["Stress", "Strain", "Disp"], element_set="All_fibers"
 )
 res_fibers.plot("Stress", "XX")
