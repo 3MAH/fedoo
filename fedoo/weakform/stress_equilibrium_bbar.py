@@ -346,7 +346,7 @@ class HourglassStiffness(WeakFormBase):
 
     This WeakForm should be added to a StressEquilibrium WeakForm to control
     the hourglass deformation modes associated to reduced integration.
-    In most cases, the use of :py:func:`stress_equilibrium_ri` that combines both
+    In most cases, the use of :py:class:`StressEquilibriumRI` that combines both
     HourglassStiffness and StressEquilibrium is prefered.
 
     This weakform should be used only for 'hex8' or 'quad4' elements with
@@ -560,88 +560,70 @@ class HourglassStiffness(WeakFormBase):
         return bulk_modulus + 4 / 3 * shear_modulus
 
 
-def stress_equilibrium_ri(
-    constitutivelaw,
-    hourglass_stiffness=0.01,
-    name="",
-    nlgeom=None,
-    nlgeom_hourglass=False,
-    space=None,
-):
-    """Stress equilibrium weak formulation with reduced integration.
+class StressEquilibriumRI(WeakFormSum):
+    """Stress-equilibrium weak form with reduced integration.
 
-    This WeakForm includes hourglass stiffness to control
-    the hourglass deformation modes associated to reduced integration.
+    This weak form combines :class:`StressEquilibrium` with
+    :class:`HourglassStiffness` to control the hourglass deformation modes
+    associated with reduced integration.
 
-    This weakform should be used only for 'hex8' or 'quad4' elements.
-    Contrary to the Standard StressEquilibrium weakform, The number of Gauss
-    point is set to 1 by default. An hourglass stabilization stiffness is
-    added, based on the method proposed by Flanagan and Belytschko in 1981.
-
+    It should only be used with ``hex8`` or ``quad4`` elements. Unlike the
+    standard :class:`StressEquilibrium` weak form, it uses one Gauss point by
+    default and adds the hourglass stabilization proposed by Flanagan and
+    Belytschko.
 
     Parameters
     ----------
-    hourglass_stiffness: float, default: 0.01
-        Coefficient to control the hourglass stiffness. This coefficient is a
-        compromise between a sufficient stiffness to suppress hourglass modes
-        and a not too high stiffness to avoid non physical flexural stiffness.
-    name: str
-        name of the WeakForm
-    nlgeom: bool, 'UL' or 'TL', optional
-        If True, the geometrical non linearities are activate based on the
-        updated lagrangian method. This parameters is used only in the
-        context of NonLinearProblems such as
-        :mod:`fedoo.problem.NonLinearStatic` or
-        :mod:`fedoo.problem.NonLinearNewmark`.
-        If nlgeom == 'UL' the updated lagrangian method is used (same as True).
-        If nlgeom == 'TL' the total lagrangian method is used.
-        If not defined, the problem.nlgeom parameter is used instead.
-    nlgeom_hourglass: bool, 'UL' or 'TL', default: False
-        nlgeom for the hourglass stiffness term. The use of
-        nlgeom_hourglass = False seems to produced accurate
-        results in most cases, even for finite strain problems
-        with nlgeom = True.
-    space: ModelingSpace
-        Modeling space associated to the weakform. If None is specified,
-        the active ModelingSpace is considered.
+    constitutivelaw : ConstitutiveLaw or str
+        Constitutive law used by the stress-equilibrium term.
+    hourglass_stiffness : float, default=0.01
+        Coefficient controlling the hourglass stiffness. It should be large
+        enough to suppress hourglass modes without introducing excessive
+        artificial flexural stiffness.
+    name : str, optional
+        Name of the weak form.
+    nlgeom : bool or {'UL', 'TL'}, optional
+        Geometric-nonlinearity formulation used by the stress-equilibrium
+        term. ``True`` and ``"UL"`` select the updated Lagrangian method;
+        ``"TL"`` selects the total Lagrangian method.
+    nlgeom_hourglass : bool or {'UL', 'TL'}, default=False
+        Geometric-nonlinearity formulation used by the hourglass term.
+        Keeping this false generally gives accurate results, including for
+        finite-strain problems.
+    space : ModelingSpace, optional
+        Modeling space. Defaults to the active modeling space.
 
     Example
-    --------
-    Define a reduced integration weakform with default values for a 2D problem.
+    -------
+    Define a reduced-integration weak form for a 2D problem:
 
-      >>> import fedoo as fd
-      >>> fd.ModelingSpace("2Dstress")
-      >>> material = fd.constitutivelaw.ElasticIsotrop(100e3, 0.3)
-      >>> wf = fd.stress_equilibrium_ri(material)
+    >>> import fedoo as fd
+    >>> fd.ModelingSpace("2Dstress")
+    >>> material = fd.constitutivelaw.ElasticIsotrop(100e3, 0.3)
+    >>> wf = fd.weakform.StressEquilibriumRI(material)
     """
-    wf = StressEquilibrium(constitutivelaw, nlgeom=nlgeom, space=space)
-    # use reduced intagration with quad4 or hex8
-    wf.assembly_options["n_elm_gp", "quad4"] = 1
-    wf.assembly_options["n_elm_gp", "hex8"] = 1
 
-    wf = WeakFormSum(
-        [
-            wf,
-            HourglassStiffness(
-                hourglass_stiffness, nlgeom=nlgeom_hourglass, space=space
-            ),
-        ],
-        name=name,
-    )
+    def __init__(
+        self,
+        constitutivelaw,
+        hourglass_stiffness=0.01,
+        name="",
+        nlgeom=None,
+        nlgeom_hourglass=False,
+        space=None,
+    ):
+        equilibrium = StressEquilibrium(constitutivelaw, nlgeom=nlgeom, space=space)
+        equilibrium.assembly_options["n_elm_gp", "quad4"] = 1
+        equilibrium.assembly_options["n_elm_gp", "hex8"] = 1
+        hourglass = HourglassStiffness(
+            hourglass_stiffness, nlgeom=nlgeom_hourglass, space=space
+        )
+        super().__init__([equilibrium, hourglass], name)
 
-    # dynamically add corate property to the stress_equilibrium_ri weakform instance
-
-    def corate_getter(self):
+    @property
+    def corate(self):
         return self.list_weakform[0].corate
 
-    def corate_setter(self, value):
+    @corate.setter
+    def corate(self, value):
         self.list_weakform[0].corate = value
-
-    setattr(wf.__class__, "corate", property(corate_getter, corate_setter))
-    return wf
-
-
-# Backward-compatible PascalCase aliases (deprecated).
-from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
-
-StressEquilibriumRI = _deprecated_alias(stress_equilibrium_ri, "StressEquilibriumRI")

@@ -72,7 +72,7 @@ def test_terzaghi_consolidation_vs_analytical():
         initial_porosity=0.5,
         name="Fl",
     )
-    wf = fd.weakform.poro_mechanics(skel, fluid, bulk_modulus=K, nlgeom=False, name="P")
+    wf = fd.weakform.PoroMechanics(skel, fluid, bulk_modulus=K, nlgeom=False, name="P")
     poro_asm = fd.Assembly.create(wf, mesh, name="A")
 
     top = mesh.find_nodes("Z", L)

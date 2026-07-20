@@ -56,7 +56,7 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.stress_equilibrium_ri("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
+wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
 
 assemb = fd.Assembly.create("wf", mesh, name="Assembling")
 

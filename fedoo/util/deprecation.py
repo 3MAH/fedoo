@@ -8,9 +8,6 @@ These helpers make that cheap and uniform:
   :class:`DeprecationWarning`.
 * :func:`deprecated` is the decorator form, for a method that is itself the old
   name.
-* :func:`rename_kwargs` remaps deprecated keyword-argument names, so a renamed
-  constructor/method parameter keeps accepting its old spelling.
-
 All warnings name both the old and the new symbol so users get an actionable
 message.
 """
@@ -18,7 +15,7 @@ message.
 import functools
 import warnings
 
-__all__ = ["deprecated_alias", "deprecated", "rename_kwargs"]
+__all__ = ["deprecated_alias", "deprecated"]
 
 
 def deprecated_alias(new, old_name=None):
@@ -68,32 +65,3 @@ def deprecated(new_name, since=None):
         return _wrapped
 
     return _decorator
-
-
-def rename_kwargs(func_name, kwargs, aliases):
-    """Remap deprecated keyword-argument names in place, emitting a warning.
-
-    ``aliases`` maps ``old -> new``. Call at the top of a function whose kwargs
-    were renamed::
-
-        def __init__(self, *args, **kwargs):
-            rename_kwargs(
-                "Newmark", kwargs, {"StiffnessAssembly": "stiffness_assembly"}
-            )
-
-    Raises ``TypeError`` if both the old and new name are supplied.
-    """
-    for old, new in aliases.items():
-        if old in kwargs:
-            if new in kwargs:
-                raise TypeError(
-                    f"{func_name}() received both '{old}' (deprecated) and '{new}'."
-                )
-            warnings.warn(
-                f"'{old}' is a deprecated argument name for {func_name}(); "
-                f"use '{new}' instead.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            kwargs[new] = kwargs.pop(old)
-    return kwargs

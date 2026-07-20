@@ -13,51 +13,51 @@ class _NewmarkBase:
 
     def __init__(
         self,
-        StiffnessAssembling,
-        MassAssembling,
-        Beta,
-        Gamma,
-        TimeStep,
-        DampingAssembling=None,
+        stiffness_assembly,
+        mass_assembly,
+        beta,
+        gamma,
+        time_step,
+        damping_assembly=None,
         name="MainProblem",
     ):
-        if isinstance(StiffnessAssembling, str):
-            StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
+        if isinstance(stiffness_assembly, str):
+            stiffness_assembly = Assembly.get_all()[stiffness_assembly]
 
-        if isinstance(MassAssembling, str):
-            MassAssembling = Assembly.get_all()[MassAssembling]
+        if isinstance(mass_assembly, str):
+            mass_assembly = Assembly.get_all()[mass_assembly]
 
-        if isinstance(DampingAssembling, str):
-            DampingAssembling = Assembly.get_all()[DampingAssembling]
+        if isinstance(damping_assembly, str):
+            damping_assembly = Assembly.get_all()[damping_assembly]
 
-        if DampingAssembling is None:
+        if damping_assembly is None:
             A = (
-                StiffnessAssembling.get_global_matrix()
-                + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
+                stiffness_assembly.get_global_matrix()
+                + 1 / (beta * (time_step**2)) * mass_assembly.get_global_matrix()
             )
         else:
             A = (
-                StiffnessAssembling.get_global_matrix()
-                + 1 / (Beta * (TimeStep**2)) * MassAssembling.get_global_matrix()
-                + Gamma / (Beta * TimeStep) * DampingAssembling.get_global_matrix()
+                stiffness_assembly.get_global_matrix()
+                + 1 / (beta * (time_step**2)) * mass_assembly.get_global_matrix()
+                + gamma / (beta * time_step) * damping_assembly.get_global_matrix()
             )
 
         B = 0
         D = 0
 
-        self.__Beta = Beta
-        self.__Gamma = Gamma
-        self.__TimeStep = TimeStep
+        self.__Beta = beta
+        self.__Gamma = gamma
+        self.__TimeStep = time_step
 
-        self.__MassMatrix = MassAssembling.get_global_matrix()
-        self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
-        if DampingAssembling is None:
+        self.__MassMatrix = mass_assembly.get_global_matrix()
+        self.__StiffMatrix = stiffness_assembly.get_global_matrix()
+        if damping_assembly is None:
             self.__DampMatrix = None
         else:
-            self.__DampMatrix = DampingAssembling.get_global_matrix()
+            self.__DampMatrix = damping_assembly.get_global_matrix()
 
         super().__init__(
-            A, B, D, StiffnessAssembling.mesh, name, StiffnessAssembling.space
+            A, B, D, stiffness_assembly.mesh, name, stiffness_assembly.space
         )
 
         self.__Xold = self._new_vect_dof()  # displacement at the previous time step
@@ -226,10 +226,10 @@ class _NewmarkBase:
             * (self.get_X() - self.__Xold)
         )
 
-    def update_stiffness(self, StiffnessAssembling):
-        if isinstance(StiffnessAssembling, str):
-            StiffnessAssembling = Assembly.get_all()[StiffnessAssembling]
-        self.__StiffMatrix = StiffnessAssembling.get_global_matrix()
+    def update_stiffness(self, stiffness_assembly):
+        if isinstance(stiffness_assembly, str):
+            stiffness_assembly = Assembly.get_all()[stiffness_assembly]
+        self.__StiffMatrix = stiffness_assembly.get_global_matrix()
         self.__UpdateA()
 
     GetElasticEnergy = deprecated_alias(get_elastic_energy, "GetElasticEnergy")

@@ -44,13 +44,13 @@ elif mat == 1:
     material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
 
 
-# wf = fd.weakform.stress_equilibrium_ri("ConstitutiveLaw", nlgeom=NLGEOM)
+# wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM)
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
 # wf.fbar = True
 
 # alternative using element 'quad4' with reduced integration
 # ie n_elm_gp = 1 combined with hourglass control
-# wf = fd.weakform.stress_equilibrium_ri("ConstitutiveLaw", 0.005, nlgeom=NLGEOM)
+# wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", 0.005, nlgeom=NLGEOM)
 
 
 # note set for boundary conditions

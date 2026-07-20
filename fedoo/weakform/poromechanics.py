@@ -489,102 +489,107 @@ class PoroMomentumSimple(StressEquilibrium):
 
 
 # ----------------------------------------------------------------------
-# 4. Factory
+# 4. Composite weak forms
 # ----------------------------------------------------------------------
-def poro_mechanics(
-    skeleton_law,
-    fluid_props,
-    bulk_modulus=None,
-    name="",
-    nlgeom=None,
-    space=None,
-):
-    """Build the full (u, PorePressure, Pressure) poromechanics weak form.
+class PoroMechanics(WeakFormSum):
+    """Full mixed ``(u, PorePressure, Pressure)`` poromechanics weak form.
 
-    Returns a :py:class:`WeakFormSum` of:
+    This composite weak form contains:
 
-      * :py:class:`PoroMomentum` — momentum balance with Terzaghi coupling
-      * :py:class:`PoroDarcy` — steady Darcy diffusion of pore pressure
-      * :py:class:`PoroMassStorage` — storage and volumetric coupling
+    * :class:`PoroMomentum` — momentum balance with Terzaghi coupling.
+    * :class:`PoroDarcy` — steady Darcy diffusion of pore pressure.
+    * :class:`PoroMassStorage` — storage and volumetric coupling.
 
     Parameters
     ----------
     skeleton_law : ConstitutiveLaw
-        Skeleton constitutive law. Use ``fedoo.constitutivelaw.Simcoon`` with
-        any of the generic hyperelastic laws (``NEOHC``, ``MOORI``,
-        ``YEOHH``, ``ISHAH``, ``GETHH``, ``SWANH``), or
-        ``fedoo.constitutivelaw.ElasticIsotrop`` for small-strain validation.
+        Skeleton constitutive law. This can be
+        :class:`fedoo.constitutivelaw.ElasticIsotrop` for small-strain
+        analysis or a suitable finite-strain constitutive law.
     fluid_props : PoroFluidProperties
+        Fluid-phase constitutive properties.
     bulk_modulus : float, optional
-        Skeleton bulk modulus (required when ``nlgeom`` is not ``False``).
-    name : str, default ""
+        Skeleton bulk modulus. Required when ``nlgeom`` is not ``False``.
+    name : str, optional
+        Name of the weak form. Defaults to the skeleton-law name or
+        ``"poromechanics"``.
     nlgeom : bool or {'TL', 'UL'}, optional
+        Geometric-nonlinearity formulation.
     space : ModelingSpace, optional
-
-    Returns
-    -------
-    WeakFormSum
+        Modeling space. Defaults to the active modeling space.
     """
-    wf_mom = PoroMomentum(
+
+    def __init__(
+        self,
         skeleton_law,
         fluid_props,
-        bulk_modulus=bulk_modulus,
+        bulk_modulus=None,
         name="",
-        nlgeom=nlgeom,
-        space=space,
-    )
-    wf_darcy = PoroDarcy(fluid_props, name="", space=space)
-    wf_storage = PoroMassStorage(fluid_props, name="", space=space)
+        nlgeom=None,
+        space=None,
+    ):
+        momentum = PoroMomentum(
+            skeleton_law,
+            fluid_props,
+            bulk_modulus=bulk_modulus,
+            name="",
+            nlgeom=nlgeom,
+            space=space,
+        )
+        darcy = PoroDarcy(fluid_props, name="", space=space)
+        storage = PoroMassStorage(fluid_props, name="", space=space)
+        if name == "":
+            name = getattr(skeleton_law, "name", "") or "poromechanics"
+        super().__init__([momentum, darcy, storage], name)
 
-    if name == "":
-        name = getattr(skeleton_law, "name", "") or "poromechanics"
 
-    return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)
+class PoroMechanicsSimple(WeakFormSum):
+    """Non-mixed ``(u, PorePressure)`` poromechanics weak form.
 
+    This composite weak form contains:
 
-def poro_mechanics_simple(skeleton_law, fluid_props, name="", nlgeom=None, space=None):
-    """Build the non-mixed (u, PorePressure) poromechanics weak form.
+    * :class:`PoroMomentumSimple` — momentum balance and Biot coupling
+      without a skeleton-pressure Lagrange multiplier.
+    * :class:`PoroDarcy` — Darcy diffusion.
+    * :class:`PoroMassStorage` — storage and volumetric coupling.
 
-    Returns a :py:class:`WeakFormSum` of:
-
-      * :py:class:`PoroMomentumSimple` — momentum + Biot coupling (no
-        skeleton Lagrange multiplier)
-      * :py:class:`PoroDarcy` — Darcy diffusion
-      * :py:class:`PoroMassStorage` — storage + volumetric coupling
-
-    Use this variant for problems with **free-traction boundaries** (Mandel
-    consolidation, unconfined compression of cartilage, soft tissue
-    indentation) where the mixed :py:class:`poro_mechanics` oscillates.
-    No ``bulk_modulus`` parameter is required.
+    Use this variant for problems with free-traction boundaries, such as
+    Mandel consolidation, unconfined compression, and soft-tissue indentation,
+    where the mixed :class:`PoroMechanics` formulation can oscillate. No
+    ``bulk_modulus`` argument is required.
 
     Parameters
     ----------
     skeleton_law : ConstitutiveLaw
-        Skeleton constitutive law (``ElasticIsotrop``, simcoon ``NEOHC``,
-        ``YEOHH``, ``PRONK``, ...).
+        Skeleton constitutive law.
     fluid_props : PoroFluidProperties
-    name : str, default ""
+        Fluid-phase constitutive properties.
+    name : str, optional
+        Name of the weak form. Defaults to the skeleton-law name or
+        ``"poromechanics_simple"``.
     nlgeom : bool or {'TL', 'UL'}, optional
+        Geometric-nonlinearity formulation.
     space : ModelingSpace, optional
-
-    Returns
-    -------
-    WeakFormSum
+        Modeling space. Defaults to the active modeling space.
     """
-    wf_mom = PoroMomentumSimple(
-        skeleton_law, fluid_props, name="", nlgeom=nlgeom, space=space
-    )
-    wf_darcy = PoroDarcy(fluid_props, name="", space=space)
-    wf_storage = PoroMassStorage(fluid_props, name="", space=space)
 
-    if name == "":
-        name = getattr(skeleton_law, "name", "") or "poromechanics_simple"
-
-    return WeakFormSum([wf_mom, wf_darcy, wf_storage], name)
-
-
-# Backward-compatible PascalCase aliases (deprecated).
-from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
-
-PoroMechanicsSimple = _deprecated_alias(poro_mechanics_simple, "PoroMechanicsSimple")
-PoroMechanics = _deprecated_alias(poro_mechanics, "PoroMechanics")
+    def __init__(
+        self,
+        skeleton_law,
+        fluid_props,
+        name="",
+        nlgeom=None,
+        space=None,
+    ):
+        momentum = PoroMomentumSimple(
+            skeleton_law,
+            fluid_props,
+            name="",
+            nlgeom=nlgeom,
+            space=space,
+        )
+        darcy = PoroDarcy(fluid_props, name="", space=space)
+        storage = PoroMassStorage(fluid_props, name="", space=space)
+        if name == "":
+            name = getattr(skeleton_law, "name", "") or "poromechanics_simple"
+        super().__init__([momentum, darcy, storage], name)

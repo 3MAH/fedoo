@@ -8,52 +8,54 @@ import scipy.sparse as sparse
 class _ExplicitDynamicBase:
     def __init__(
         self,
-        StiffnessAssembly,
-        MassAssembly,
-        TimeStep,
-        DampingAssembly=None,
+        stiffness_assembly,
+        mass_assembly,
+        time_step,
+        damping_assembly=None,
         name="MainProblem",
     ):
-        if isinstance(StiffnessAssembly, str):
-            StiffnessAssembly = Assembly.get_all()[StiffnessAssembly]
+        if isinstance(stiffness_assembly, str):
+            stiffness_assembly = Assembly.get_all()[stiffness_assembly]
 
-        if isinstance(MassAssembly, str):
-            MassAssembly = Assembly.get_all()[MassAssembly]
+        if isinstance(mass_assembly, str):
+            mass_assembly = Assembly.get_all()[mass_assembly]
 
-        if isinstance(DampingAssembly, str):
-            DampingAssembly = Assembly.get_all()[DampingAssembly]
+        if isinstance(damping_assembly, str):
+            damping_assembly = Assembly.get_all()[damping_assembly]
 
-        A = 1 / (TimeStep**2) * MassAssembly.get_global_matrix()
+        A = 1 / (time_step**2) * mass_assembly.get_global_matrix()
         B = 0
         D = 0
 
-        self.__Xold = self._new_vect_dof(A)  # displacement at the previous time step
-        self.__Xdot = self._new_vect_dof(A)
-        self.__Xdotdot = self._new_vect_dof(A)
+        super().__init__(
+            A, B, D, stiffness_assembly.mesh, name, stiffness_assembly.space
+        )
 
-        self.__TimeStep = TimeStep
+        self.__Xold = self._new_vect_dof()
+        self.__Xdot = self._new_vect_dof()
+        self.__Xdotdot = self._new_vect_dof()
+
+        self.__TimeStep = time_step
         self.__MassLuming = False
 
-        self.__MassMatrix = MassAssembly.get_global_matrix()
-        self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
-        if DampingAssembly is None:
+        self.__MassMatrix = mass_assembly.get_global_matrix()
+        self.__StiffMatrix = stiffness_assembly.get_global_matrix()
+        if damping_assembly is None:
             self.__DampMatrix = None
         else:
-            self.__DampMatrix = DampingAssembly.get_global_matrix()
-
-        super().__init__(A, B, D, StiffnessAssembly.mesh, name)
+            self.__DampMatrix = damping_assembly.get_global_matrix()
 
     def __UpdateA(self):  # internal function to be used when modifying M
         # if MassLumping == True, A is a vector representing the diagonal value
         self.set_A(self.__MassMatrix / (self.__TimeStep**2))
 
     def update_stiffness(
-        self, StiffnessAssembly
+        self, stiffness_assembly
     ):  # internal function to be used when modifying the siffness matrix
-        if isinstance(StiffnessAssembly, str):
-            StiffnessAssembly = Assembly.get_all()[StiffnessAssembly]
+        if isinstance(stiffness_assembly, str):
+            stiffness_assembly = Assembly.get_all()[stiffness_assembly]
 
-        self.__StiffMatrix = StiffnessAssembly.get_global_matrix()
+        self.__StiffMatrix = stiffness_assembly.get_global_matrix()
 
     def mass_lumping(self):  # internal function to be used when modifying M
         self.__MassLuming = True

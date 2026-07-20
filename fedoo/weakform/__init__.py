@@ -29,8 +29,8 @@ The WeakForm library contains the following classes:
    :template: custom-class-template.rst
 
    StressEquilibrium
-   implicit_dynamic
-   stress_equilibrium_ri
+   ImplicitDynamic
+   StressEquilibriumRI
    StressEquilibriumMixed
    StressEquilibriumFbar
    StressEquilibriumBbar
@@ -57,7 +57,7 @@ from .heat_equation import (
     HeatCapacity,
     HeatEquation,
 )
-from .implicit_dynamic import implicit_dynamic, ImplicitDynamic, ImplicitDynamic2
+from .implicit_dynamic import ImplicitDynamic, ImplicitDynamic2
 from .inertia import Inertia, RotaryInertia
 from .interface_force import InterfaceForce
 from .plate import (
@@ -72,15 +72,12 @@ from .stress_equilibrium_mixed import StressEquilibriumMixed
 from .stress_equilibrium_bbar import (
     StressEquilibriumFbar,
     StressEquilibriumBbar,
-    stress_equilibrium_ri,
     StressEquilibriumRI,
     HourglassStiffness,
 )
 from .damping_stabilization import ArtificialDamping
 from .distributed_load import ExternalPressure, DistributedLoad
 from .poromechanics import (
-    poro_mechanics,
-    poro_mechanics_simple,
     PoroMechanics,
     PoroMechanicsSimple,
     PoroMomentum,
@@ -104,12 +101,10 @@ __all__ = [
     "StressEquilibriumFbar",
     "StressEquilibriumBbar",
     "StressEquilibriumMixed",
-    "stress_equilibrium_ri",
     "StressEquilibriumRI",
     "HourglassStiffness",
     "HeatEquation",
     "HeatCapacity",
-    "implicit_dynamic",
     "ImplicitDynamic",
     "ImplicitDynamic2",
     "ParametricBeam",
@@ -117,8 +112,6 @@ __all__ = [
     "DistributedLoad",
     "ExternalPressure",
     "ArtificialDamping",
-    "poro_mechanics",
-    "poro_mechanics_simple",
     "PoroMechanics",
     "PoroMechanicsSimple",
     "PoroMomentum",

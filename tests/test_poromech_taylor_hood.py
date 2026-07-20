@@ -48,7 +48,7 @@ def test_taylor_hood_poro_undrained_magnitude():
         initial_porosity=0.5,
         name="FlTH",
     )
-    wf = fd.weakform.poro_mechanics_simple(skel, fluid, nlgeom=False, name="PTH")
+    wf = fd.weakform.PoroMechanicsSimple(skel, fluid, nlgeom=False, name="PTH")
 
     # Taylor-Hood: quadratic displacement (hex20), linear PorePressure (hex8)
     elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")

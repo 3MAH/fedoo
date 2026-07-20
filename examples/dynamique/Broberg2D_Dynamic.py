@@ -19,8 +19,8 @@ E = 1.5e9  # Young Modulus
 nu = 0.33  # Poisson ratio
 rho = 1000  # Density
 
-Gamma = 0.5  # parameters for Newmark scheme (here Newmark-Wilson)
-Beta = 0.5  # parameters for Newmark scheme (here Newmark-Wilson)
+gamma = 0.5  # parameters for Newmark scheme (here Newmark-Wilson)
+beta = 0.5  # parameters for Newmark scheme (here Newmark-Wilson)
 
 # -------------------------------------------------------------------
 # Intern parameters
@@ -109,7 +109,13 @@ Ecin, Eela = [], []
 # A = U*0.
 # previousU = U*0.
 
-pb = fd.problem.Newmark("StiffAssembling", "MassAssembling", Beta, Gamma, dt)
+pb = fd.problem.Newmark(
+    stiffness_assembly="StiffAssembling",
+    mass_assembly="MassAssembling",
+    beta=beta,
+    gamma=gamma,
+    time_step=dt,
+)
 pb.set_initial_displacement("all", U)
 
 pb.set_initial_velocity("all", 0)

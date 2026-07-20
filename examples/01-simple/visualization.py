@@ -59,7 +59,7 @@ props = np.array(
 )
 
 material = fd.constitutivelaw.Simcoon("EPICP", props)
-wf = fd.weakform.stress_equilibrium_ri(material, nlgeom="UL")
+wf = fd.weakform.StressEquilibriumRI(material, nlgeom="UL")
 
 assembly = fd.Assembly.create(wf, mesh)
 

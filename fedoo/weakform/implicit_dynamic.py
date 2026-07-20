@@ -169,99 +169,92 @@ class ImplicitDynamicSum(WeakFormSum):
         self.list_weakform[1].damping_coef = value[0]  # mass matrix coef
 
 
-def implicit_dynamic(
-    constitutivelaw, density, beta=0.25, gamma=0.5, name="", nlgeom=False, space=None
-):
+class ImplicitDynamic(ImplicitDynamicSum):
     r"""Weak formulation for implicit dynamic problems.
 
-    .. deprecated::
-        Prefer defining a static weakform with ``set_storage`` or a material
-        density, then attach the time integrator to
-        :class:`fedoo.problem.NonLinear` with ``set_time_integrator``. This
-        factory is kept as a compact pedagogical example of the Newmark weakform
-        embedding.
-
     Constructs a dynamic weak formulation by combining internal forces
-    (stiffness matrix) to inertia (mass matrix). Time integration is
+    (stiffness matrix) with inertia (mass matrix). Time integration is
     performed using the Newmark-beta scheme.
 
     By default, the **Constant Average Acceleration** method is used
-    (:math:`\\gamma=0.5, \\beta=0.25`), which is unconditionally stable
+    (:math:`\gamma=0.5, \beta=0.25`), which is unconditionally stable
     and energy-preserving.
-
 
     Parameters
     ----------
-    stiffness : str, ConstitutiveLaw, WeakForm
+    constitutivelaw : str, ConstitutiveLaw, WeakForm
         Defines the internal forces (stiffness).
-        - If `str` or `ConstitutiveLaw`: Automatically creates a
-          :class:`fedoo.weakform.StressEquilibrium` instance based on
-          the given constitutive law.
-        - If `WeakForm`: Uses the provided weakform as the stiffness component.
+
+        * If a string or ``ConstitutiveLaw`` is given, a
+          :class:`fedoo.weakform.StressEquilibrium` instance is created.
+        * If a ``WeakForm`` is given, it is used as the stiffness component.
     density : float, ndarray, or WeakForm
         Defines the mass inertia component.
-        - If `float` or `ndarray`: Material density at Gauss points for 3D/2D
-          solid model.
-        - If `WeakForm`: A custom weakform used for mass assembly.
+
+        * A float or array gives the material density at Gauss points.
+        * A ``WeakForm`` provides a custom mass formulation.
     beta : float, default=0.25
-        Newmark integration parameter $\beta$. Controls the acceleration
+        Newmark integration parameter :math:`\beta`. Controls the acceleration
         variation over the time step.
     gamma : float, default=0.5
-        Newmark integration parameter $\gamma$. Controls numerical damping.
+        Newmark integration parameter :math:`\gamma`. Controls numerical
+        damping.
     name : str, optional
-        Name of the WeakForm instance.
+        Name of the weak form.
     nlgeom : bool or {'UL', 'TL'}, optional
-        Enable geometric nonlinearities:
-
-        * ``True`` or ``'UL'``: Updated Lagrangian method.
-        * ``'TL'``: Total Lagrangian method.
-        * ``None``: Uses the global ``problem.nlgeom`` setting.
+        Geometric-nonlinearity formulation. ``True`` and ``"UL"`` select the
+        updated Lagrangian method; ``"TL"`` selects the total Lagrangian
+        method.
     space : ModelingSpace, optional
-        Modeling space for the weakform. Defaults to the currently active
-        ``ModelingSpace``.
-
-    Returns
-    -------
-    ImplicitDynamicSum
-        A weakform containing both stiffness and inertia components
-        configured for Newmark time integration.
+        Modeling space. Defaults to the active modeling space.
 
     Notes
     -----
-    * **Stability:** The method is unconditionally stable if $\gamma \ge 0.5$
-      and $\beta \ge 0.25(\gamma + 0.5)^2$.
-    * **Numerical Damping:** Use $\gamma > 0.5$ to introduce algorithmic
-      damping, useful for filtering high-frequency parasitic oscillations.
-    * **Physical Damping:** To include Rayleigh damping ($\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}$),
-      modify the `rayleigh_damping` attribute of the returned object.
+    * The method is unconditionally stable if :math:`\gamma \ge 0.5` and
+      :math:`\beta \ge 0.25(\gamma + 0.5)^2`.
+    * Use :math:`\gamma > 0.5` to introduce algorithmic damping.
+    * Physical Rayleigh damping can be set through
+      :attr:`rayleigh_damping`.
 
-      .. code-block:: python
+    Example
+    -------
+    .. code-block:: python
 
-          wf = fd.weakform.implicit_dynamic(material, density)
-          wf.rayleigh_damping = [alpha, beta]
+        wf = fd.weakform.ImplicitDynamic(material, density)
+        wf.rayleigh_damping = [alpha, beta]
     """
-    if isinstance(constitutivelaw, WeakFormBase):
-        # weakform used to build the stiffness matrix
-        stiffness_weakform = constitutivelaw
-    else:
-        stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
-    parent = type(stiffness_weakform)
 
-    class NewmarkStiffness(_NewmarkStiffness, parent):
-        pass
+    def __init__(
+        self,
+        constitutivelaw,
+        density,
+        beta=0.25,
+        gamma=0.5,
+        name="",
+        nlgeom=False,
+        space=None,
+    ):
+        if isinstance(constitutivelaw, WeakFormBase):
+            stiffness_weakform = constitutivelaw
+        else:
+            stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
+        parent = type(stiffness_weakform)
 
-    stiffness_weakform.__class__ = NewmarkStiffness
-    _NewmarkStiffness.__init__(stiffness_weakform, beta, gamma)
+        class NewmarkStiffness(_NewmarkStiffness, parent):
+            pass
 
-    time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
-    time_integration.assembly_options["assume_sym"] = True
-    return ImplicitDynamicSum([stiffness_weakform, time_integration], name)
+        stiffness_weakform.__class__ = NewmarkStiffness
+        _NewmarkStiffness.__init__(stiffness_weakform, beta, gamma)
+
+        time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
+        time_integration.assembly_options["assume_sym"] = True
+        super().__init__([stiffness_weakform, time_integration], name)
 
 
 class ImplicitDynamic2(WeakFormBase):
     r"""Weak formulation for implicit dynamic problems.
 
-    Alternative implementation of implicit_dynamic WeakForm.
+    Alternative implementation of ImplicitDynamic WeakForm.
     Kept only for debug purpose. Should give exatly the same results.
     """
 
@@ -280,7 +273,7 @@ class ImplicitDynamic2(WeakFormBase):
         if self.space.is_axisymmetric:
             raise NotImplementedError(
                 "ImplicitDynamic2 is not implemented in '2Daxi'. "
-                "Use the implicit_dynamic factory (which builds an "
+                "Use the ImplicitDynamic class (which builds an "
                 "ImplicitDynamicSum from _NewmarkStiffness + _NewmarkInertia) "
                 "instead — that path correctly applies the 2*pi*r weight."
             )
@@ -527,9 +520,3 @@ class ImplicitDynamic2(WeakFormBase):
     @property
     def nlgeom(self):
         return self.__nlgeom
-
-
-# Backward-compatible PascalCase aliases (deprecated).
-from fedoo.util.deprecation import deprecated_alias as _deprecated_alias
-
-ImplicitDynamic = _deprecated_alias(implicit_dynamic, "ImplicitDynamic")
