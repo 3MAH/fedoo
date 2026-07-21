@@ -67,8 +67,13 @@ class TimeIntegratorBase:
         raise NotImplementedError
 
     def _compile_assembly_level_provider(self, assembly):
+        if getattr(assembly, "time_evolution", None) != self.evolution:
+            return assembly
+        if getattr(assembly, "_fedoo_time_integrated", False):
+            return assembly
         if any(hasattr(assembly, attr) for attr in ("storage", "dissipation")):
             raise NotImplementedError(
                 f"Assembly-level time providers are part of the architecture but "
                 f"do not have a concrete {type(self).__name__} adapter yet."
             )
+        return assembly

@@ -79,6 +79,12 @@ class _NonLinearBase:
         self.exec_callback_at_each_iter = False
         self.err_num = 1e-8  # numerical error
 
+    def _run_constraint_hook(self, name):
+        for bc in self.bc:
+            hook = getattr(bc, name, None)
+            if hook is not None:
+                hook(self)
+
     @property
     def n_iter(self):
         """Return the number of iterations made to solve the problem."""
@@ -183,6 +189,8 @@ class _NonLinearBase:
         return integrator
 
     def _has_time_integrated_weakform(self, assembly):
+        if getattr(assembly, "_fedoo_time_integrated", False):
+            return True
         if isinstance(assembly, AssemblySum):
             return any(
                 self._has_time_integrated_weakform(child)
@@ -215,12 +223,23 @@ class _NonLinearBase:
         for wf in getattr(weakform, "list_weakform", [weakform]):
             yield wf
 
+    def _iter_assembly_time_providers(self, assembly):
+        if isinstance(assembly, AssemblySum):
+            for child in assembly.list_assembly:
+                yield from self._iter_assembly_time_providers(child)
+            return
+        if getattr(assembly, "weakform", None) is None and (
+            getattr(assembly, "storage", None) is not None
+            or getattr(assembly, "dissipation", None) is not None
+        ):
+            yield assembly
+
     def _warn_ignored_storage(self):
         """Warn when declared storage/dissipation terms are silently ignored.
 
-        Weakforms may declare transient metadata (e.g. HeatEquation always
-        declares its heat capacity storage); without a matching problem-level
-        integrator the analysis is steady/static and these terms are dropped.
+        Weakforms and assembly-level providers may declare transient metadata;
+        without a matching problem-level integrator the analysis is steady/static
+        and these terms are dropped.
         This is legitimate for a deliberately steady analysis, but silent for
         a user migrating from the former transient-by-default weakforms, so a
         warning is emitted once at compile time.
@@ -249,6 +268,21 @@ class _NonLinearBase:
                     stacklevel=3,
                 )
 
+        for assembly in self._iter_assembly_time_providers(self.__assembly):
+            evolution = getattr(assembly, "time_evolution", None)
+            if evolution is None or evolution in self.time_integrators:
+                continue
+            warnings.warn(
+                f"Assembly provider '{assembly.name}' declares storage or "
+                f"dissipation terms for the '{evolution.kind}' time evolution, "
+                "but no matching time integrator is attached to the problem: "
+                "these terms are ignored and the analysis is treated as "
+                "steady/static. Attach a matching integrator with "
+                "pb.set_time_integrator.",
+                UserWarning,
+                stacklevel=3,
+            )
+
     def initialize(self):
         self._compile_time_integrators()
         self.__assembly.initialize(self)
@@ -262,6 +296,7 @@ class _NonLinearBase:
             self._U += self._dU
             self._dU = 0
             self.__assembly.set_start(self)
+            self._run_constraint_hook("set_start")
 
             # Save results
             if save_results:
@@ -273,6 +308,7 @@ class _NonLinearBase:
                     callback(self)
         else:
             self.__assembly.set_start(self)
+            self._run_constraint_hook("set_start")
 
     def to_start(self):
         self._dU = 0
@@ -280,6 +316,7 @@ class _NonLinearBase:
         self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
+        self._run_constraint_hook("to_start")
 
     def update(self, compute="all", updateWeakForm=True):
         """
@@ -290,6 +327,12 @@ class _NonLinearBase:
             - Change in constitutive law (internal variable)
         Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
         """
+        if self.bc._update_during_inc:
+            for bc in self.bc:
+                pre_update = getattr(bc, "pre_update", None)
+                if pre_update is not None:
+                    pre_update(self)
+
         if updateWeakForm == True:
             self.__assembly.update(self, compute)
         else:
@@ -1005,6 +1048,7 @@ class _NonLinearBase:
         interval_output: int | float | None = None,
         callback: Callable[[Problem, ...], None] | None = None,
         exec_callback_at_each_iter: bool | None = None,
+        dt_max: float | None = None,
     ) -> None:
         """Solve the non linear problem using the newton-raphson algorithm.
 
@@ -1027,6 +1071,10 @@ class _NonLinearBase:
             else, the attribute t0 is modified.
         dt_min: float, default = 1e-6
             Minimal time increment
+        dt_max: float, optional
+            Maximum time increment. The initial ``dt`` and subsequent
+            adaptive increases are capped to this value. If omitted, the time
+            increment has no upper bound other than output and end times.
         max_subiter: int, optional
             Maximal number of newton raphson iteration allowed for each time
             increment, after the initial linear guess.
@@ -1080,6 +1128,12 @@ class _NonLinearBase:
             self.tmax = tmax
         if t0 is not None:
             self.t0 = t0  # time at the start of the time step
+        if dt_max is not None:
+            if dt_max <= 0:
+                raise ValueError("dt_max should be strictly positive.")
+            if dt_max < dt_min:
+                raise ValueError("dt_max should be greater than or equal to dt_min.")
+            dt = min(dt, dt_max)
         if max_subiter is None:
             max_subiter = self.nr_parameters["max_subiter"]
         if dt_increase_niter is None:
@@ -1181,6 +1235,8 @@ class _NonLinearBase:
                 # Check if dt can be increased
                 if update_dt and nb_nr_iter <= dt_increase_niter and dt == self.dtime:
                     dt *= 1.25
+                    if dt_max is not None:
+                        dt = min(dt, dt_max)
 
             else:
                 if self.print_info > 0:
