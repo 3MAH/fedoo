@@ -2,6 +2,9 @@ import numpy as np
 
 
 class Element:
+    # Evaluate the physical derivative transformation at the element center.
+    use_center_jacobian = False
+
     # Lines of xi should contains the coordinates of each point to consider
     def shape_function(self, xi):
         pass  # to be defined in inherited classes

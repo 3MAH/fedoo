@@ -615,18 +615,17 @@ def _comp_Fbar(assembly, displacement):
 
     J = np.linalg.det(F1.transpose((2, 0, 1)))
 
-    # grad_values_center = [
-    #     [
-    #         assembly.get_gp_results(op, displacement, n_elm_gp=1)
-    #         if op != 0
-    #         else np.zeros(assembly.mesh.n_elements)
-    #         for op in line_op
-    #     ] for line_op in assembly.space.op_grad_u()
-    # ]
-    # Jcenter = np.linalg.det(
-    #     np.add(eye_3, grad_values_center).transpose((2,0,1))
-    # )
-    Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
+    grad_values_center = [
+        [
+            assembly.get_gp_results(op, displacement, n_elm_gp=1)
+            if op != 0
+            else np.zeros(assembly.mesh.n_elements)
+            for op in line_op
+        ]
+        for line_op in assembly.space.op_grad_u()
+    ]
+    Jcenter = np.linalg.det(np.add(eye_3, grad_values_center).transpose((2, 0, 1)))
+    # Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
     F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3))
 
     assembly.sv["F"] = F1

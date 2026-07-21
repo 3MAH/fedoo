@@ -1,7 +1,6 @@
 """Shared machinery for problem-level time integrators."""
 
 from fedoo.core.assembly import Assembly
-from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormSum
@@ -19,19 +18,16 @@ class TimeIntegratorBase:
 
     #: TimeEvolution category handled by this integrator (set by subclasses).
     evolution = None
+    is_explicit = False
 
     def compile_assembly(self, assembly, evolution=None):
         """Compile compatible weakforms in an assembly tree in place."""
         evolution = normalize_time_evolution(evolution or self.evolution)
-        if isinstance(assembly, AssemblySum):
-            for child in assembly.list_assembly:
-                self.compile_assembly(child, evolution)
-            return assembly
-
-        if isinstance(assembly, Assembly) and assembly.weakform is not None:
-            assembly.weakform = self.compile_weakform(assembly.weakform, evolution)
-        elif isinstance(assembly, AssemblyBase):
-            self._compile_assembly_level_provider(assembly)
+        for leaf in assembly.iter_leaf():
+            if isinstance(leaf, Assembly) and leaf.weakform is not None:
+                leaf.weakform = self.compile_weakform(leaf.weakform, evolution)
+            elif isinstance(leaf, AssemblyBase):
+                self._compile_assembly_level_provider(leaf)
         return assembly
 
     def compile_weakform(self, weakform, evolution=None):
@@ -41,10 +37,9 @@ class TimeIntegratorBase:
             return weakform
 
         if isinstance(weakform, WeakFormSum):
-            compiled = [
-                self.compile_weakform(wf, evolution) for wf in weakform.list_weakform
-            ]
-            if all(old is new for old, new in zip(weakform.list_weakform, compiled)):
+            leaves = tuple(weakform.iter_leaf())
+            compiled = [self.compile_weakform(wf, evolution) for wf in leaves]
+            if all(old is new for old, new in zip(leaves, compiled)):
                 return weakform
             # Build the compiled sum unnamed: a non-empty name would re-register
             # it in the WeakForm registry, clobbering the user's static sum.

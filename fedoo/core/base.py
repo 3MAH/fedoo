@@ -147,6 +147,10 @@ class AssemblyBase:
         """Get the assembly whose name is item."""
         return cls.__dic[item]
 
+    def iter_leaf(self):
+        """Iterate over the leaf assemblies contained in this object."""
+        yield self
+
     def get_global_matrix(self):
         """Get the last computed global matrix."""
         if self.global_matrix is None:

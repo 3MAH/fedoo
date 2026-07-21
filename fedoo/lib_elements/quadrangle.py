@@ -171,6 +171,7 @@ class Quad4r(Quad4):
     name = "quad4r"
     default_n_gp = 1
     n_nodes = 4
+    use_center_jacobian = True
 
     def shape_function(self, vec_xi):
         # return center value every where (as if n_pg = 1)

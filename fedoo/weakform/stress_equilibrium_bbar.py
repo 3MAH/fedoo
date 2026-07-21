@@ -9,7 +9,7 @@ import numpy as np
 
 
 class StressEquilibriumBbar(StressEquilibrium):
-    """Mechanical equilibrium equation for solids with the Fbar method.
+    """Mechanical equilibrium equation for solids with the B-bar method.
 
     This method is still experimental ! Use with caution. The fbar method
     from the standard StressEquilibrium should be prefered.
@@ -65,22 +65,17 @@ class StressEquilibriumBbar(StressEquilibrium):
         else:
             eps = self.space.op_strain()
             if assembly.elm_type in ["hex8sri", "quad4sri"]:
-                eps[0] = (
-                    eps[0]
-                    - self.space.derivative("DispX", "X")
-                    + self.space.derivative("_DispX", "X")
-                )
-                eps[1] = (
-                    eps[1]
-                    - self.space.derivative("DispY", "Y")
-                    + self.space.derivative("_DispY", "Y")
-                )
-                if assembly.space.ndim == 3:
-                    eps[2] = (
-                        eps[2]
-                        - self.space.derivative("DispZ", "Z")
-                        + self.space.derivative("_DispZ", "Z")
-                    )
+                n_normal_components = self.space.ndim
+                eps_vol = sum(eps[:n_normal_components])
+                eps_vol_reduced = self.space.derivative(
+                    "_DispX", "X"
+                ) + self.space.derivative("_DispY", "Y")
+                if n_normal_components == 3:
+                    eps_vol_reduced += self.space.derivative("_DispZ", "Z")
+
+                correction = (eps_vol_reduced - eps_vol) / n_normal_components
+                for i in range(n_normal_components):
+                    eps[i] = eps[i] + correction
 
             initial_stress = assembly.sv[
                 "Stress"

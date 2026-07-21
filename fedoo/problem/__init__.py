@@ -13,20 +13,13 @@ To create a new Problem, use one of the following function:
    :template: custom-class-template.rst
 
    Linear
+   LinearNewmark
    NonLinear
-   Newmark
    NonLinearNewmark
    ExplicitDynamic
 
 Each of these functions creates an object that is derived from the \
    base classes "ProblemBase" or "Problem".
-
-Transient analyses are controlled by problem-level integrators from
-:mod:`fedoo.time`. They are attached to a nonlinear problem with
-:meth:`NonLinear.set_time_integrator`, which keeps weak forms focused on their
-static, storage, and dissipation contributions. Without a time integrator, or
-after removing a pending one with ``set_time_integrator(..., None)`` before
-initialization, the problem remains static.
 
 .. currentmodule:: fedoo
 
@@ -36,6 +29,150 @@ initialization, the problem remains static.
 
    fedoo.core.base.ProblemBase
    fedoo.Problem
+
+
+Time integration
+================
+
+Fedoo separates the spatial formulation from the time-integration scheme.
+A weak form defines its static contribution and may declare storage and
+dissipation terms, while the problem selects an integrator from
+:mod:`fedoo.time`. This allows the same assembly to be used for a static
+analysis or with different transient schemes.
+
+Time-dependent weak forms are classified by an evolution category:
+
+* :data:`fedoo.time.FIRST_ORDER` is used for equations such as heat diffusion
+  and is integrated with schemes such as
+  :class:`fedoo.time.BackwardEuler`.
+* :data:`fedoo.time.SECOND_ORDER` is used for structural dynamics and is
+  integrated with an implicit or explicit second-order scheme.
+
+Storage must be declared by the physical model. For structural dynamics this
+usually comes from ``material.set_density(rho)`` or
+``weakform.set_inertia(rho)``. Fedoo does not silently introduce a default
+mass when no inertia is provided. Rayleigh damping may be attached with
+``weakform.set_damping(alpha=..., beta=...)``; different leaf assemblies may
+use different damping coefficients.
+
+Without a compatible time integrator, :class:`Linear` and :class:`NonLinear`
+remain static and storage or dissipation declarations are not included in the
+equations. :class:`ExplicitDynamic` is always transient and creates a
+:class:`fedoo.time.CentralDifference` integrator by default.
+
+Linear transient problems
+-------------------------
+
+:class:`Linear` provides an implicit second-order path for genuinely linear
+problems. It accepts :class:`fedoo.time.Newmark` and
+:class:`fedoo.time.GeneralizedAlpha`. The stiffness, mass and damping matrices
+are assembled and cached by :meth:`Linear.initialize`; subsequent increments
+normally rebuild only the effective right-hand side. Consequently, changing
+material state, geometry, contact or tangent stiffness requires
+:class:`NonLinear` instead.
+
+The integrator can be passed to the constructor:
+
+.. code-block:: python
+
+   import fedoo as fd
+
+   pb = fd.problem.Linear(
+       assembly,
+       time_step=dt,
+       integrator=fd.time.Newmark(beta=0.25, gamma=0.5),
+   )
+   pb.solve_history(tmax, interval_output=output_dt,
+                    update_weakform=True)
+
+or attached before initialization:
+
+.. code-block:: python
+
+   pb = fd.problem.Linear(assembly, time_step=dt)
+   pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+
+:meth:`Linear.solve_time_increment` advances one increment, while
+:meth:`Linear.solve_history` manages a complete history. Set
+``update_weakform=True`` when stresses, strains or other assembly-derived
+fields must be refreshed at every increment. This option does not rebuild the
+cached linear operators. :class:`LinearNewmark` is an alias of
+:class:`Linear` provided for convenience.
+
+Nonlinear transient problems
+----------------------------
+
+:class:`NonLinear` integrates time-dependent terms inside the nonlinear weak
+form and evaluates them during the Newton--Raphson iterations. It may attach
+one integrator per evolution category, which also permits coupled problems
+containing both first- and second-order fields:
+
+.. code-block:: python
+
+   pb = fd.problem.NonLinear(assembly, nlgeom=True)
+   pb.set_time_integrator(fd.time.FIRST_ORDER,
+                          fd.time.BackwardEuler())
+   pb.set_time_integrator(fd.time.SECOND_ORDER,
+                          fd.time.Newmark())
+   pb.nlsolve(dt=dt, tmax=tmax, interval_output=output_dt)
+
+Compatible storage and dissipation weak forms are compiled when the problem
+is initialized. Once transient weak forms have been compiled, their
+integrator cannot safely be replaced or removed on the same problem object;
+create a new problem if another scheme is required. An integrator that has
+only been attached, but not yet compiled, can be removed by passing ``None``
+to :meth:`NonLinear.set_time_integrator`.
+
+:meth:`NonLinear.solve_time_increment` performs the Newton--Raphson loop for
+one increment. :meth:`NonLinear.nlsolve` manages a complete history, including
+adaptive time-step reduction and retry after failed increments.
+:class:`NonLinearNewmark` is a convenience factory that attaches Newmark and,
+when required, Backward Euler integrators.
+
+Explicit transient problems
+---------------------------
+
+:class:`ExplicitDynamic` accepts explicit second-order integrators only. Its
+default is :class:`fedoo.time.CentralDifference`; generalized-alpha numerical
+dissipation is available through
+:class:`fedoo.time.ExplicitGeneralizedAlpha` or its
+:class:`fedoo.time.ExplicitNewmark` alias:
+
+.. code-block:: python
+
+   pb = fd.problem.ExplicitDynamic(
+       assembly,
+       time_step=dt,
+       integrator=fd.time.CentralDifference(),
+       mass_lumping=True,
+   )
+   pb.solve_history(tmax, interval_output=output_dt,
+                    update_weakform=False)
+
+The finite-element mass is row-sum lumped and cached by default. Use
+``mass_lumping=False`` for a consistent mass matrix. The integrator must be
+selected before :meth:`ExplicitDynamic.initialize` and cannot be changed
+afterwards.
+
+For a linear problem with fixed geometry, state-independent external loads
+and fixed contact state,
+``update_weakform=False`` reuses the cached stiffness and is the inexpensive
+path. Use ``update_weakform=True`` for nonlinear constitutive laws, geometric
+nonlinearity, evolving contact or other state-dependent forces. The managed
+path then evaluates and commits the constitutive state every increment.
+``update_mass`` independently controls whether mass contributions are
+refreshed.
+
+:meth:`ExplicitDynamic.solve_time_increment` advances one complete increment,
+and :meth:`ExplicitDynamic.solve_history` manages a complete history without
+Newton iterations. Advanced user loops may call
+:meth:`ExplicitDynamic.prepare_time_increment`,
+:meth:`ExplicitDynamic.apply_boundary_conditions`,
+:meth:`ExplicitDynamic.solve`, :meth:`ExplicitDynamic.update` and
+:meth:`ExplicitDynamic.set_start` separately.
+
+See :mod:`fedoo.time` for the definitions and parameters of the individual
+integration schemes.
 
 .. _stabilization_strategies:
 
@@ -292,14 +429,13 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
 """
 
 from .explicit_dynamic import ExplicitDynamic
-from .linear import Linear
-from .newmark import Newmark
+from .linear import Linear, LinearNewmark
 from .non_linear import NonLinear, NonLinearNewmark
 
 __all__ = [
     "Linear",
+    "LinearNewmark",
     "NonLinear",
-    "Newmark",
     "NonLinearNewmark",
     "ExplicitDynamic",
 ]

@@ -109,9 +109,3 @@ def generate_cylindrical_local_frame(crd, axis=2, origin=[0, 0, 0], dim=3):
         localFrame[:, 1, 0] = -localFrame[:, 0, 1]
         localFrame[:, 1, 1] = localFrame[:, 0, 0]
     return localFrame.view(LocalFrame)
-
-
-# Backward-compatible alias (deprecated).
-GenerateCylindricalLocalFrame = deprecated_alias(
-    generate_cylindrical_local_frame, "GenerateCylindricalLocalFrame"
-)

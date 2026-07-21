@@ -5,8 +5,12 @@ import numpy as np
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import TimeIntegratorBase
-from fedoo.time.common import RayleighDamping, newmark_acceleration_velocity
-from fedoo.weakform.inertia import Inertia
+from fedoo.time.common import (
+    RayleighDamping,
+    newmark_acceleration_velocity,
+    resolve_dissipation,
+    resolve_storage,
+)
 
 
 def _newmark_state(term, assembly, dt):
@@ -65,7 +69,7 @@ class GeneralizedAlpha(TimeIntegratorBase):
             raise ValueError("gamma must be strictly positive.")
 
     def _integrate_leaf(self, weakform):
-        storage = self._resolve_storage(weakform)
+        storage = resolve_storage(weakform)
         if storage is None:
             raise ValueError(
                 "A second-order (dynamic) time integrator is attached, but no "
@@ -76,7 +80,7 @@ class GeneralizedAlpha(TimeIntegratorBase):
                 "weakform.set_inertia(density_or_weakform)."
             )
 
-        dissipation = self._resolve_dissipation(weakform)
+        dissipation = resolve_dissipation(weakform)
         if dissipation is not None and not isinstance(
             dissipation, (RayleighDamping, WeakFormBase)
         ):
@@ -87,17 +91,6 @@ class GeneralizedAlpha(TimeIntegratorBase):
             )
 
         return self._wrap_static_weakform(weakform, storage, dissipation)
-
-    def _resolve_storage(self, weakform):
-        storage = weakform.get_storage()
-        if isinstance(storage, WeakFormBase):
-            return storage
-        return Inertia(storage, space=weakform.space)
-
-    def _resolve_dissipation(self, weakform):
-        if getattr(weakform, "dissipation", None) is not None:
-            return weakform.dissipation
-        return weakform.get_dissipation()
 
     def _wrap_static_weakform(self, weakform, storage, dissipation):
         # Decorate a *copy* of the user's weakform with the generalized-alpha

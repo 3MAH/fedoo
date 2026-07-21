@@ -48,14 +48,13 @@ mesh.nodes = mesh.nodes[:, :2]
 # OUT = Util.ExportData(meshID)
 # OUT.toVTK("Broberg2D_Dynamic_PreStress.vtk")
 
-fd.constitutivelaw.ElasticIsotrop(E, nu, name="ElasticLaw")
+material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ElasticLaw")
+material.set_density(rho)
 
 # ecriture des formes faibles
 fd.weakform.StressEquilibrium("ElasticLaw", name="StressEquilibrium")
-fd.weakform.Inertia(rho, "Inertia")
 
 fd.Assembly.create("StressEquilibrium", mesh, "tri3", name="StiffAssembling")
-fd.Assembly.create("Inertia", mesh, "tri3", name="MassAssembling")
 
 length = mesh.bounding_box.size_x
 height = mesh.bounding_box.size_y
@@ -109,12 +108,10 @@ Ecin, Eela = [], []
 # A = U*0.
 # previousU = U*0.
 
-pb = fd.problem.Newmark(
-    stiffness_assembly="StiffAssembling",
-    mass_assembly="MassAssembling",
-    beta=beta,
-    gamma=gamma,
+pb = fd.problem.LinearNewmark(
+    assembly="StiffAssembling",
     time_step=dt,
+    integrator=fd.time.Newmark(beta=beta, gamma=gamma),
 )
 pb.set_initial_displacement("all", U)
 

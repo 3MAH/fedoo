@@ -900,9 +900,13 @@ class Assembly(AssemblyBase):
 
             nb_dir_deriv = 0
             if hasattr(elmRef, "shape_function_derivative_gp"):
-                derivativePG = (
-                    elmRefGeom.inv_jacobian_matrix @ elmRef.shape_function_derivative_gp
-                )  # derivativePG = np.matmul(elmRefGeom.inv_jacobian_matrix , elmRef.shape_function_derivative_gp)
+                inv_jacobian_matrix = elmRefGeom.inv_jacobian_matrix
+                if elmRef.use_center_jacobian:
+                    # Reduced interpolation operators must use the geometry
+                    # transformation evaluated at the element center.
+                    mesh._compute_gaussian_quadrature_mat(1, self._element_local_frame)
+                    inv_jacobian_matrix = mesh._elm_interpolation[1].inv_jacobian_matrix
+                derivativePG = inv_jacobian_matrix @ elmRef.shape_function_derivative_gp
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = (
                 nb_dir_deriv + n_diff_interpolations

@@ -94,6 +94,10 @@ class WeakFormBase:
     def __class_getitem__(cls, item):
         return cls.__dic[item]
 
+    def iter_leaf(self):
+        """Iterate over the leaf weakforms contained in this object."""
+        yield self
+
     def __add__(self, wf):
         if isinstance(wf, WeakFormBase):
             return WeakFormSum([self, wf])
@@ -357,6 +361,10 @@ class WeakFormSum(WeakFormBase):
 
     def __getitem__(self, item):
         return self._list_weakform[item]
+
+    def iter_leaf(self):
+        """Iterate over the already flattened list of weakforms."""
+        yield from self._list_weakform
 
     def __repr__(self):
         return f"fedoo.WeakFormSum({self._list_weakform})"

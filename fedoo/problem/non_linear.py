@@ -1,7 +1,6 @@
 from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
-from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
@@ -153,17 +152,21 @@ class _NonLinearBase:
         compiled into its transient form.
         """
         evolution = normalize_time_evolution(evolution)
-        if self._time_integrators_compiled and self._has_time_integrated_weakform(
-            self.__assembly
-        ):
-            # Once compiled, the transient weakforms carry the previous
-            # integrator's coefficients: replacing or removing an integrator
-            # would silently be a no-op, so fail loudly instead.
-            raise RuntimeError(
-                "Cannot change time integrators after the assembly has been "
-                "compiled for transient analysis. Create a new problem or "
-                "change the assembly before modifying the integrators."
-            )
+        if self._time_integrators_compiled:
+            for assembly in self.__assembly.iter_leaf():
+                weakform = getattr(assembly, "weakform", None)
+                if weakform is not None and any(
+                    getattr(wf, "_fedoo_time_integrated", False)
+                    for wf in weakform.iter_leaf()
+                ):
+                    # Once compiled, the transient weakforms carry the previous
+                    # integrator's coefficients: replacing or removing an
+                    # integrator would silently be a no-op, so fail loudly.
+                    raise RuntimeError(
+                        "Cannot change time integrators after the assembly has been "
+                        "compiled for transient analysis. Create a new problem or "
+                        "change the assembly before modifying the integrators."
+                    )
         if integrator is None:
             self.time_integrators.pop(evolution, None)
             self._time_integrators_compiled = False
@@ -182,20 +185,6 @@ class _NonLinearBase:
         self._time_integrators_compiled = False
         return integrator
 
-    def _has_time_integrated_weakform(self, assembly):
-        if isinstance(assembly, AssemblySum):
-            return any(
-                self._has_time_integrated_weakform(child)
-                for child in assembly.list_assembly
-            )
-        weakform = getattr(assembly, "weakform", None)
-        if getattr(weakform, "_fedoo_time_integrated", False):
-            return True
-        return any(
-            getattr(wf, "_fedoo_time_integrated", False)
-            for wf in getattr(weakform, "list_weakform", [])
-        )
-
     def _compile_time_integrators(self):
         if self._time_integrators_compiled:
             return
@@ -203,17 +192,6 @@ class _NonLinearBase:
             self.__assembly = integrator.compile_assembly(self.__assembly, evolution)
         self._time_integrators_compiled = True
         self._warn_ignored_storage()
-
-    def _iter_leaf_weakforms(self, assembly):
-        if isinstance(assembly, AssemblySum):
-            for child in assembly.list_assembly:
-                yield from self._iter_leaf_weakforms(child)
-            return
-        weakform = getattr(assembly, "weakform", None)
-        if weakform is None:
-            return
-        for wf in getattr(weakform, "list_weakform", [weakform]):
-            yield wf
 
     def _warn_ignored_storage(self):
         """Warn when declared storage/dissipation terms are silently ignored.
@@ -225,29 +203,33 @@ class _NonLinearBase:
         a user migrating from the former transient-by-default weakforms, so a
         warning is emitted once at compile time.
         """
-        for wf in self._iter_leaf_weakforms(self.__assembly):
-            if getattr(wf, "_fedoo_time_integrated", False):
+        for assembly in self.__assembly.iter_leaf():
+            weakform = getattr(assembly, "weakform", None)
+            if weakform is None:
                 continue
-            evolution = getattr(wf, "time_evolution", None)
-            if evolution is None or evolution in self.time_integrators:
-                continue
-            if (
-                getattr(wf, "storage", None) is not None
-                or getattr(wf, "dissipation", None) is not None
-            ):
-                warnings.warn(
-                    f"Weakform '{wf.name}' declares storage or dissipation "
-                    f"terms for the '{evolution.kind}' time evolution, but no "
-                    "matching time integrator is attached to the problem: "
-                    "these terms are ignored and the analysis is treated as "
-                    "steady/static. For a transient analysis, attach an "
-                    "integrator, e.g. pb.set_time_integrator("
-                    "fd.time.FIRST_ORDER, fd.time.BackwardEuler()) or "
-                    "pb.set_time_integrator(fd.time.SECOND_ORDER, "
-                    "fd.time.Newmark()).",
-                    UserWarning,
-                    stacklevel=3,
-                )
+            for wf in weakform.iter_leaf():
+                if getattr(wf, "_fedoo_time_integrated", False):
+                    continue
+                evolution = getattr(wf, "time_evolution", None)
+                if evolution is None or evolution in self.time_integrators:
+                    continue
+                if (
+                    getattr(wf, "storage", None) is not None
+                    or getattr(wf, "dissipation", None) is not None
+                ):
+                    warnings.warn(
+                        f"Weakform '{wf.name}' declares storage or dissipation "
+                        f"terms for the '{evolution.kind}' time evolution, but no "
+                        "matching time integrator is attached to the problem: "
+                        "these terms are ignored and the analysis is treated as "
+                        "steady/static. For a transient analysis, attach an "
+                        "integrator, e.g. pb.set_time_integrator("
+                        "fd.time.FIRST_ORDER, fd.time.BackwardEuler()) or "
+                        "pb.set_time_integrator(fd.time.SECOND_ORDER, "
+                        "fd.time.Newmark()).",
+                        UserWarning,
+                        stacklevel=3,
+                    )
 
     def initialize(self):
         self._compile_time_integrators()
@@ -1210,24 +1192,6 @@ class _NonLinearBase:
                     )
 
         self.set_start(True, callback)
-
-    # def GetElasticEnergy(self): #only work for classical FEM
-    #     """
-    #     returns : sum (0.5 * U.transposed * K * U)
-    #     """
-
-    #     return sum( 0.5*self.get_X().transpose() * self.get_A() * self.get_X() )
-
-    # def GetNodalElasticEnergy(self):
-    #     """
-    #     returns : 0.5 * K * U . U
-    #     """
-
-    #     E = 0.5*self.get_X().transpose() * self.get_A() * self.get_X()
-
-    #     E = np.reshape(E,(3,-1)).T
-
-    #     return E
 
     @property
     def assembly(self):

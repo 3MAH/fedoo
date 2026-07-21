@@ -282,6 +282,7 @@ class Hex8r(Hex8):
     name = "hex8r"
     default_n_gp = 1
     n_nodes = 8
+    use_center_jacobian = True
 
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta, zeta)
     # vec_xi[:,0] -> list of values of xi for all points (gauss points in general but may be used with other points)

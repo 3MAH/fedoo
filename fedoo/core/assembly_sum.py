@@ -59,6 +59,11 @@ class AssemblySum(AssemblyBase):
     def __getitem__(self, item):
         return self._list_assembly[item]
 
+    def iter_leaf(self):
+        """Iterate recursively without changing the assembly hierarchy."""
+        for assembly in self._list_assembly:
+            yield from assembly.iter_leaf()
+
     def __repr__(self):
         return f"fedoo.AssemblySum({self._list_assembly})"
 
