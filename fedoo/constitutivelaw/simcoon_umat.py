@@ -62,10 +62,11 @@ class Simcoon(Mechanical3D):
 
         self.use_elastic_lt = True
         # option to use the elastic tangeant matrix
-        self.tangent_mode = 0
-        # 0 = continuum tangent (default); 1 = Simo-Hughes algorithmic (consistent) tangent
-        # (in principle = initial tangent matrix)
-        # at the begining of each time step
+        self.tangent_mode = 1
+        # simcoon 2.0 tangent numbering: 0 = none (elastic operator),
+        # 1 = continuum tangent (default), 2 = Simo-Hughes algorithmic (consistent).
+        # NB: pre-2.0 simcoon used 0 = continuum, 1 = algorithmic; literals were
+        # re-mapped for 2.0 (old 0 -> 1, old 1 -> 2).
 
         # _Lt_from_F attribute is set to True if the tangent matrix is related
         # to F instead of log epsilon, ie for hyper elastic materials
