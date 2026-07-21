@@ -74,7 +74,7 @@ elif mat == 1 or mat == 2:
         mechancial_law = fd.constitutivelaw.ElastoPlasticity(
             E, nu, Re, name="MechanicalLaw"
         )
-        mechancial_law.SetHardeningFunction("power", H=k, beta=m)
+        mechancial_law.set_hardening_function("power", h=k, beta=m)
 else:
     mechancial_law = fd.constitutivelaw.ElasticIsotrop(E, nu, name="MechanicalLaw")
 

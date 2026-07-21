@@ -79,7 +79,7 @@ if save_results:
     pb.save_results()  # save in vtk
 
 # plot the stress distribution
-z, StressDistribution = fd.ConstitutiveLaw["PlateSection"].GetStressDistribution(
+z, StressDistribution = fd.ConstitutiveLaw["PlateSection"].get_stress_distribution(
     fd.Assembly["plate"], 200
 )
 plt.plot(StressDistribution[0], z)

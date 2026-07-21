@@ -79,7 +79,9 @@ def test_laminate():
     assert np.abs(pb.get_disp("DispZ")[node_right_center] + 25.698414360666018) < 1e-7
 
     # plot the stress distribution
-    # z, StressDistribution = fd.ConstitutiveLaw['PlateSection'].GetStressDistribution(fd.Assembly['plate'],200)
+    # z, stress = fd.ConstitutiveLaw["PlateSection"].get_stress_distribution(
+    #     fd.Assembly["plate"], 200
+    # )
     # plt.plot(StressDistribution[0], z)
 
 
