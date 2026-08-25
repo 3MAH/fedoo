@@ -55,6 +55,15 @@ class ElasticAnisotropic(Mechanical3D):
         else:
             total_strain = assembly.sv["Strain"]
 
+        # Handle uninitialized strain (e.g. first Newmark step with zero
+        # displacement). The tangent ``H`` has already been stored in
+        # ``assembly.sv["TangentMatrix"]`` above, so the early return only
+        # skips the stress evaluation (correctly zero for zero strain) — no
+        # stale tangent is left behind.
+        if np.isscalar(total_strain) and total_strain == 0:
+            assembly.sv["Stress"] = 0
+            return
+
         assembly.sv["Stress"] = StressTensorList(
             [
                 sum(

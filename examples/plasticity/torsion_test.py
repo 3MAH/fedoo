@@ -52,7 +52,7 @@ elif mat == 1 or mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(
             E, nu, Re, name="ConstitutiveLaw"
         )
-        material.SetHardeningFunction("power", H=k, beta=m)
+        material.set_hardening_function("power", h=k, beta=m)
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 

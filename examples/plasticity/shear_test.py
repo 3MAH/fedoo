@@ -55,7 +55,7 @@ elif mat == 1 or mat == 2:
         material = fd.constitutivelaw.ElastoPlasticity(
             E, nu, Re, name="ConstitutiveLaw"
         )
-        material.SetHardeningFunction("power", H=k, beta=m)
+        material.set_hardening_function("power", h=k, beta=m)
 elif mat == 3:
     props = np.array([3.0, 0.5e2])
     material = fd.constitutivelaw.Simcoon("NEOHC", props, name="ConstitutiveLaw")

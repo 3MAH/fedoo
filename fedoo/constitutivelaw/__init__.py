@@ -66,7 +66,9 @@ These laws should be associated with :py:class:`fedoo.weakform.PlateEquilibrium`
    :template: custom-class-template.rst
 
    ShellLaminate
+   ShellLaminateNonLinear
    ShellHomogeneous
+   ShellHomogeneousNonLinear
 
 Thermal constitutive law
 ======================================
@@ -83,7 +85,6 @@ These laws should be associated with :py:class:`fedoo.weakform.HeatEquation`
 
 from .beam import BeamCircular, BeamPipe, BeamProperties, BeamRectangular
 from .cohesivelaw import CohesiveLaw
-from .cohesivelaw_mod import CohesiveLaw_mod
 from .composite_ud import CompositeUD
 from .elastic_anisotropic import ElasticAnisotropic
 from .elastic_isotrop import ElasticIsotrop
@@ -91,13 +92,18 @@ from .elastic_orthotropic import ElasticOrthotropic
 from .elasto_plasticity import ElastoPlasticity
 from .fe2 import FE2
 from .heterogeneous import Heterogeneous
-from .shell import ShellBase, ShellHomogeneous, ShellLaminate
+from .shell import (
+    ShellBase,
+    ShellHomogeneous,
+    ShellHomogeneousNonLinear,
+    ShellLaminate,
+    ShellLaminateNonLinear,
+)
 from .permeability import HolmesMowPermeability, KozenyCarmanPermeability
 from .poro_fluid import PoroFluidProperties
 from .simcoon_umat import Simcoon
 from .spring import Spring
 from .thermal_prop import ThermalProperties
-from .viso_elastic_orthotropic import ViscoElasticComposites
 
 __all__ = [
     "BeamCircular",
@@ -105,7 +111,6 @@ __all__ = [
     "BeamProperties",
     "BeamRectangular",
     "CohesiveLaw",
-    "CohesiveLaw_mod",
     "CompositeUD",
     "ElasticAnisotropic",
     "ElasticIsotrop",
@@ -115,12 +120,13 @@ __all__ = [
     "Heterogeneous",
     "ShellBase",
     "ShellHomogeneous",
+    "ShellHomogeneousNonLinear",
     "ShellLaminate",
+    "ShellLaminateNonLinear",
     "HolmesMowPermeability",
     "KozenyCarmanPermeability",
     "PoroFluidProperties",
     "Simcoon",
     "Spring",
     "ThermalProperties",
-    "ViscoElasticComposites",
 ]

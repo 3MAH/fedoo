@@ -1,4 +1,5 @@
 from .rigid_tie import RigidTie, RigidTie2D
+from .rigid_body import RigidBody, RigidBodyAssembly
 from .periodic_bc import PeriodicBC
 from .contact import Contact, SelfContact
 from .distributed_load import (

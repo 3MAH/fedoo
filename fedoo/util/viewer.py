@@ -31,6 +31,7 @@ from fedoo.core.multimeshdata import MultiMeshData
 from fedoo.core.mesh import MultiMesh
 
 USE_PYVISTA_QT = True
+SOLID_COLOR_FIELD = "Solid color"
 
 
 def _is_multimesh(mesh):
@@ -236,6 +237,8 @@ class PlotDock(QDockWidget):
         #####################################################################
         if opts:
             self.opts = opts
+            self.opts.setdefault("color", "lightgray")
+            self.opts.setdefault("color_missing_fields", True)
         else:
             self.opts = {
                 # Scalar bar options
@@ -259,6 +262,8 @@ class PlotDock(QDockWidget):
                 "metallic": 1.0,
                 "roughness": 0.5,
                 "diffuse": 1.0,
+                "color": "lightgray",
+                "color_missing_fields": True,
                 # Clip plane parameters
                 "clip_args": None,
                 "clip_origin": None,
@@ -281,7 +286,7 @@ class PlotDock(QDockWidget):
             self.current_field = "Stress"
             self.current_comp = "vm"
         elif "Disp" in field_names:
-            self.current_field = "disp"
+            self.current_field = "Disp"
             self.current_comp = "X"
         else:
             try:
@@ -402,10 +407,17 @@ class PlotDock(QDockWidget):
         if is_multimesh:
             multimesh_kargs["global_element_set"] = True
             multimesh_kargs["name"] = "data"
+            if self.current_field is not None and self.opts.get(
+                "color_missing_fields", True
+            ):
+                multimesh_kargs["missing_field_color"] = self.opts["color"]
 
         with _defer_rendering(plotter, is_multimesh):
             # plotter.clear()  # not compatible with pbr ???
             plotter.renderer.clear_actors()
+            plot_kargs = {}
+            if self.current_field is None:
+                plot_kargs["color"] = self.opts["color"]
             self.data.plot(
                 field=self.current_field,
                 component=self.current_comp,
@@ -431,6 +443,7 @@ class PlotDock(QDockWidget):
                 # element_set_invert = self.opts["element_set_invert"],
                 cmap=self.opts["cmap"],
                 **multimesh_kargs,
+                **plot_kargs,
             )
 
             if self.parent()._plane_widget_enabled:
@@ -1218,14 +1231,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # old_state = self.field_combo.blockSignals(True)
 
         # update_field_combo
+        dock = self.active_dock
+        current_field = dock.current_field
+        field_blocker = QSignalBlocker(self.field_combo)
         self.field_combo.clear()
+        self.field_combo.addItem(SOLID_COLOR_FIELD)
         if self.data is not None:
             self.field_combo.addItems(self.data.field_names())
-        dock = self.active_dock
         if dock.current_field is not None:
             self.field_combo.setCurrentText(dock.current_field)
         else:
-            self.field_combo.setCurrentIndex(0)
+            self.field_combo.setCurrentText(SOLID_COLOR_FIELD)
+        del field_blocker
         # self.field_combo.blockSignals(old_state)
 
         # update data_type value
@@ -1233,7 +1250,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.avg_combo.setCurrentText(dock.current_data_type)
 
         # update component combo
-        self.update_components(dock.current_field)
+        self.update_components(current_field)
 
         # self.avg_combo.blockSignals(old_state)
         if self._plot_dialog:  # if plot dialog exist
@@ -1372,6 +1389,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return self.iter_slider.value()
 
     def on_field_changed(self, field):
+        field = None if field == SOLID_COLOR_FIELD else field
         self.update_components(field)
         if self.active_dock:
             self.update_plot_with_clim(lock_view=True)
@@ -1380,8 +1398,10 @@ class MainWindow(QtWidgets.QMainWindow):
         return self.active_dock.get_components(field)
 
     def update_components(self, field):
-        if not field or not self.active_dock:
+        if not field or field == SOLID_COLOR_FIELD or not self.active_dock:
             comps = [""]
+            if self.active_dock:
+                self.active_dock.current_field = None
         else:
             comps = self.get_components(field)
             self.active_dock.current_field = field
@@ -1397,7 +1417,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @property
     def current_field(self):
         field = self.field_combo.currentText()
-        if field == "":
+        if field in ("", SOLID_COLOR_FIELD):
             return None
         else:
             return self.field_combo.currentText()
@@ -1672,6 +1692,10 @@ class MainWindow(QtWidgets.QMainWindow):
             list_docks = [self.active_dock]
         for dock in list_docks:
             dock.opts["opacity"] = float(self._renderer_dialog.opacity_spin.value())
+            dock.opts["color"] = self._renderer_dialog.color
+            dock.opts["color_missing_fields"] = (
+                self._renderer_dialog.missing_fields_cb.isChecked()
+            )
             dock.opts["pbr"] = self._renderer_dialog.pbr_cb.isChecked()
             dock.opts["metallic"] = float(self._renderer_dialog.metallic_spin.value())
             dock.opts["roughness"] = float(self._renderer_dialog.roughness_spin.value())
@@ -1684,7 +1708,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if dock is None:
             if self._sync_field:
                 for d in self.all_docks:
-                    if self.current_field in d.data.field_names():
+                    if self.current_field is None:
+                        d.current_field = None
+                    elif self.current_field in d.data.field_names():
                         d.current_field = self.current_field
                         # Only set component if field exists in this dock
                         comps = d.get_components(self.current_field)
@@ -1701,7 +1727,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         dock.current_data_type = self.current_data_type
 
-        if dock.opts["clim_mode"] == "all":
+        if dock.current_field is not None and dock.opts["clim_mode"] == "all":
             if hasattr(dock.data, "get_all_frame_lim"):
                 dock.opts["clim"] = dock.data.get_all_frame_lim(
                     field=dock.current_field,
@@ -2712,9 +2738,9 @@ class ClimOptionsDialog(QtWidgets.QDialog):
             self.cmap_preview.update_preview(filtered[0], self.cmap_reverse.isChecked())
 
     def _update_clim_values(self):
-        if self.rb_manual.isChecked():
-            return
         parent = self.parent()
+        if self.rb_manual.isChecked() or parent.current_field is None:
+            return
         if self.rb_current.isChecked():
             data = parent.get_current_data()
             data = _global_data_array(data)
@@ -2828,6 +2854,15 @@ class RedererOptionsDialog(QtWidgets.QDialog):
             "Overall opacity (0.0 = transparent, 1.0 = opaque)."
         )
 
+        self.color_button = QtWidgets.QPushButton()
+        self.color_button.setToolTip("Color used for geometry without field data.")
+        self.color_button.clicked.connect(self._choose_color)
+        self.color = "lightgray"
+
+        self.missing_fields_cb = QtWidgets.QCheckBox(
+            "Apply to objects missing selected field"
+        )
+
         self.pbr_cb = QtWidgets.QCheckBox("Activate Physically Based Rendering (PBR)")
         self.pbr_cb.setToolTip("Enable VTK's PBR shading model for the actor/material.")
 
@@ -2862,6 +2897,8 @@ class RedererOptionsDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         form.addRow("Opacity:", self.opacity_spin)
+        form.addRow("Solid color:", self.color_button)
+        form.addRow(self.missing_fields_cb)
         main.addLayout(form)
 
         # PBR layout
@@ -2895,10 +2932,24 @@ class RedererOptionsDialog(QtWidgets.QDialog):
     def update_values(self):
         opts = self.parent().opts
         self.opacity_spin.setValue(float(opts["opacity"]))
+        self._set_color(opts.get("color", "lightgray"))
+        self.missing_fields_cb.setChecked(opts.get("color_missing_fields", True))
         self.pbr_cb.setChecked(opts["pbr"])
         self.metallic_spin.setValue(float(opts["metallic"]))
         self.roughness_spin.setValue(float(opts["roughness"]))
         self.diffuse_spin.setValue(float(opts["diffuse"]))
+
+    def _set_color(self, color):
+        qcolor = QtGui.QColor(color)
+        if not qcolor.isValid():
+            qcolor = QtGui.QColor("lightgray")
+        self.color = qcolor.name()
+        self.color_button.setStyleSheet(f"background-color: {self.color};")
+
+    def _choose_color(self):
+        color = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.color), self)
+        if color.isValid():
+            self._set_color(color)
 
     def _toggle_pbr_group(self, checked: bool):
         self.pbr_group.setEnabled(checked)

@@ -4,7 +4,6 @@ from fedoo.constitutivelaw.spring import Spring
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.base import AssemblyBase
 import numpy as np
-from numpy import linalg
 
 
 class CohesiveLaw(Spring):
@@ -34,11 +33,25 @@ class CohesiveLaw(Spring):
         The axis is defined in local coordinate system.
     name: str, optional
         The name of the constitutive law
+    tangent_mode: {"secant", "consistent"}, default="secant"
+        Tangent stiffness used by the nonlinear solver. The secant tangent uses
+        the current damaged stiffness and is the more robust default. The
+        consistent tangent includes the derivative of damage during active
+        loading and can be selected explicitly.
     """
 
     # Use with WeakForm.InterfaceForce
     def __init__(
-        self, GIc=0.3, SImax=60, KI=1e4, GIIc=1.6, SIImax=None, KII=5e4, axis=2, name=""
+        self,
+        GIc=0.3,
+        SImax=60,
+        KI=1e4,
+        GIIc=1.6,
+        SIImax=None,
+        KII=5e4,
+        axis=2,
+        name="",
+        tangent_mode="secant",
     ):
         # GIc la ténacité (l'énergie à la rupture = l'aire sous la courbe du modèle en N/mm)
         #        SImax = 60.  # la contrainte normale maximale de l'interface (MPa)
@@ -55,6 +68,14 @@ class CohesiveLaw(Spring):
         # axis = axe dans le repère local perpendiculaire au plan (will be deprecated because = 2 by convention)
 
         ConstitutiveLaw.__init__(self, name)  # heritage
+        if axis not in (0, 1, 2):
+            raise ValueError("axis must be 0, 1, or 2.")
+
+        tangent_mode = tangent_mode.lower()
+        if tangent_mode not in ("consistent", "secant"):
+            raise ValueError("tangent_mode must be either 'consistent' or 'secant'.")
+        self.tangent_mode = tangent_mode
+
         self.parameters = {
             "GIc": GIc,
             "SImax": SImax,
@@ -64,6 +85,26 @@ class CohesiveLaw(Spring):
             "KII": KII,
             "axis": axis,
         }
+
+        delta_0_I = SImax / KI
+        delta_m_I = 2 * GIc / SImax
+        if SIImax is None:
+            SIImax_check = SImax * np.sqrt(GIIc / GIc)
+        else:
+            SIImax_check = SIImax
+        delta_0_II = SIImax_check / KII
+        delta_m_II = 2 * GIIc / SIImax_check
+        if delta_m_I <= delta_0_I or delta_m_II <= delta_0_II:
+            raise ValueError(
+                "Cohesive parameters must satisfy delta_m > delta_0 "
+                "in both fracture modes."
+            )
+
+        # Mode-onset / failure separations are constant after construction;
+        # cache them so the damage update does not recompute them per Gauss point.
+        self._delta_0_I = delta_0_I
+        self._delta_0_II = delta_0_II
+        self._delta_m_II = delta_m_II
 
     def initialize(self, assembly, pb):
         assembly.sv["InterfaceStress"] = 0  # Interface Stress
@@ -76,7 +117,8 @@ class CohesiveLaw(Spring):
         )
         assembly.sv["TangentMatrix"] = self.get_K(assembly)
 
-    def get_tangent_matrix(self, assembly):
+    def get_secant_matrix(self, assembly):
+        """Return the current damaged secant stiffness in local coordinates."""
         Umd = 1 - assembly.sv["DamageVariable"]
         UmdI = 1 - assembly.sv["DamageVariableOpening"]
 
@@ -87,16 +129,45 @@ class CohesiveLaw(Spring):
         Kdiag = [Kt if i != axis else Kn for i in range(3)]
         return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0, 0, Kdiag[2]]]
 
-        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]
-        # if get_Dimension() == "3D":        # tester si marche avec contrainte plane ou def plane
-        #     Kdiag = [Umd*self.parameters['KII'] if i != axis else UmdI*self.parameters['KI'] for i in range(3)]
-        #     return [[Kdiag[0], 0, 0], [0, Kdiag[1], 0], [0,0,Kdiag[2]]]
-        # else:
-        #     Kdiag = [Umd*self.parameters['KII'] if i != axis else UmdI*self.parameters['KI'] for i in range(2)]
-        #     return [[Kdiag[0], 0], [0, Kdiag[1]]]
+    def get_tangent_matrix(self, assembly, delta=None, damage_gradient=None):
+        """Return the selected tangent stiffness in local coordinates.
 
-    def get_K(self, assembly):
-        return self.local2global_K(self.get_tangent_matrix(assembly))
+        The consistent correction is active only while damage grows beyond
+        its committed value. During unloading, reloading below the historical
+        maximum, and after complete failure, ``damage_gradient`` is zero and
+        this method returns the damaged secant stiffness.
+        """
+        secant = self.get_secant_matrix(assembly)
+        if self.tangent_mode == "secant" or delta is None:
+            return secant
+
+        if damage_gradient is None:
+            _, _, damage_gradient = self._compute_damage(assembly, delta)
+
+        delta = np.asarray(np.broadcast_arrays(*delta), dtype=float)
+        n_components = delta.shape[0]
+        opening = delta[self.parameters["axis"]] > 0
+        axis = self.parameters["axis"]
+        stiffness = [
+            self.parameters["KII"] if i != axis else self.parameters["KI"]
+            for i in range(n_components)
+        ]
+
+        tangent = [[None for _ in range(n_components)] for _ in range(n_components)]
+        for i in range(n_components):
+            row_gradient = damage_gradient
+            if i == axis:
+                # Normal contact remains elastic in compression.
+                row_gradient = damage_gradient * opening
+            for j in range(n_components):
+                correction = stiffness[i] * delta[i] * row_gradient[j]
+                tangent[i][j] = secant[i][j] - correction
+        return tangent
+
+    def get_K(self, assembly, delta=None, damage_gradient=None):
+        return self.local2global_K(
+            self.get_tangent_matrix(assembly, delta, damage_gradient)
+        )
 
     def set_damage(self, assembly, value, irreversible=True):
         """
@@ -125,11 +196,15 @@ class CohesiveLaw(Spring):
         if isinstance(assembly, str):
             assembly = AssemblyBase.get_all()[assembly]
 
-        op_delta = assembly.space.op_disp()
+        # In an updated-Lagrangian analysis, the current assembly carries the
+        # deformed interface geometry and its updated local coordinate system.
+        # For a geometrically linear analysis, assembly.current is assembly.
+        result_assembly = getattr(assembly, "current", assembly)
+        op_delta = result_assembly.space.op_disp()
         if type_data == "Node":
-            delta = [assembly.get_node_results(op, U) for op in op_delta]
+            delta = [result_assembly.get_node_results(op, U) for op in op_delta]
         else:
-            delta = [assembly.get_gp_results(op, U) for op in op_delta]
+            delta = [result_assembly.get_gp_results(op, U) for op in op_delta]
 
         self._update_damage(assembly, delta)
 
@@ -138,125 +213,184 @@ class CohesiveLaw(Spring):
                 "DamageVariable"
             ].copy()
 
-    def _update_damage(self, assembly, delta):
-        alpha = 2  # for the power low
-        if (
-            np.isscalar(assembly.sv["DamageVariable"])
-            and assembly.sv["DamageVariable"] == 0
-        ):
-            assembly.sv["DamageVariable"] = 0 * delta[0]
-        if (
-            np.isscalar(assembly.sv["DamageVariableOpening"])
-            and assembly.sv["DamageVariableOpening"] == 0
-        ):
-            assembly.sv["DamageVariableOpening"] = 0 * delta[0]
+    def _compute_damage(self, assembly, delta):
+        """Compute damage and its derivative with respect to separation.
 
-        delta_n = delta[self.parameters["axis"]]
-        delta_t = [d for i, d in enumerate(delta) if i != self.parameters["axis"]]
-        if len(delta_t) == 1:
-            delta_t = delta_t[0]
-        else:
-            delta_t = np.sqrt(delta_t[0] ** 2 + delta_t[1] ** 2)
+        The derivative is the algorithmic derivative: it is nonzero only when
+        trial damage exceeds the irreversible damage stored at the start of the
+        increment. Unloading and elastic reloading therefore use the damaged
+        secant stiffness.
+        """
+        alpha = 2.0
+        delta = np.asarray(np.broadcast_arrays(*delta), dtype=float)
+        n_components = delta.shape[0]
+        if n_components not in (2, 3):
+            raise ValueError(
+                "CohesiveLaw expects two (2D) or three (3D) separation components."
+            )
+        axis = self.parameters["axis"]
+        if axis >= n_components:
+            raise ValueError(
+                f"CohesiveLaw normal 'axis'={axis} is out of range for "
+                f"{n_components} separation components; set axis to 0 or 1 in 2D."
+            )
 
-        # mode I
-        delta_0_I = (
-            self.parameters["SImax"] / self.parameters["KI"]
-        )  # critical relative displacement (begining of the damage)
-        delta_m_I = (
-            2 * self.parameters["GIc"] / self.parameters["SImax"]
-        )  # maximal relative displacement (total failure)
+        state_shape = delta.shape[1:]
+        delta = delta.reshape(n_components, -1)
+        n_points = delta.shape[1]
+        tangential_axes = [i for i in range(n_components) if i != axis]
 
-        # mode II
-        SIImax = self.parameters["SIImax"]
-        if SIImax == None:
-            SIImax = self.parameters["SImax"] * np.sqrt(
-                self.parameters["GIIc"] / self.parameters["GIc"]
-            )  # value by default used mainly to treat mode I dominant problems
-        delta_0_II = SIImax / self.parameters["KII"]
-        delta_m_II = 2 * self.parameters["GIIc"] / SIImax
+        delta_n = delta[axis]
+        delta_t_vector = delta[tangential_axes]
+        delta_t = np.sqrt(np.sum(delta_t_vector**2, axis=0))
 
-        t0 = 0.0 * delta_n
-        tm = 0.0 * delta_n
-        dta = 0.0 * delta_n
+        delta_0_I = self._delta_0_I
+        delta_0_II = self._delta_0_II
+        delta_m_II = self._delta_m_II
 
-        test = delta_n > 0  # test if traction loading (opening mode)
-        ind_traction = np.nonzero(test)[
-            0
-        ]  # indice of value where delta_n > 0 ie traction loading
-        ind_compr = np.nonzero(test - 1)[0]
+        opening = delta_n > 0.0
+        compression = ~opening
+        t0 = np.empty(n_points)
+        tm = np.empty(n_points)
+        equivalent_delta = np.empty(n_points)
+        beta = np.zeros(n_points)
+        t0_beta = np.zeros(n_points)
+        tm_beta = np.zeros(n_points)
 
-        #        beta = 0*delta_n
-        beta = (
-            delta_t[ind_traction] / delta_n[ind_traction]
-        )  # le rapport de mixité de mode
+        if np.any(opening):
+            beta[opening] = delta_t[opening] / delta_n[opening]
+            beta_opening = beta[opening]
 
-        t0[ind_traction] = (delta_0_II * delta_0_I) * (
-            np.sqrt((1 + (beta**2)) / ((delta_0_II**2) + ((beta * delta_0_I) ** 2)))
-        )  # Critical relative displacement in mixed mode
-        t0[ind_compr] = (
-            delta_0_II  # Critical relative displacement in mixed mode (only mode II)
+            denominator = delta_0_II**2 + (beta_opening * delta_0_I) ** 2
+            t0[opening] = (
+                delta_0_II * delta_0_I * np.sqrt((1.0 + beta_opening**2) / denominator)
+            )
+
+            mode_I_term = self.parameters["KI"] / self.parameters["GIc"]
+            mode_II_term = (
+                self.parameters["KII"] * beta_opening**2 / self.parameters["GIIc"]
+            )
+            power_sum = mode_I_term**alpha + mode_II_term**alpha
+            tm[opening] = (
+                2.0
+                * (1.0 + beta_opening) ** 2
+                / t0[opening]
+                * power_sum ** (-1.0 / alpha)
+            )
+            equivalent_delta[opening] = np.sqrt(
+                delta_t[opening] ** 2 + delta_n[opening] ** 2
+            )
+
+            t0_beta[opening] = t0[opening] * (
+                beta_opening / (1.0 + beta_opening**2)
+                - beta_opening * delta_0_I**2 / denominator
+            )
+            power_sum_beta = (
+                alpha
+                * mode_II_term ** (alpha - 1.0)
+                * (2.0 * self.parameters["KII"] * beta_opening)
+                / self.parameters["GIIc"]
+            )
+            tm_beta[opening] = tm[opening] * (
+                2.0 / (1.0 + beta_opening)
+                - t0_beta[opening] / t0[opening]
+                - power_sum_beta / (alpha * power_sum)
+            )
+
+        t0[compression] = delta_0_II
+        tm[compression] = delta_m_II
+        equivalent_delta[compression] = delta_t[compression]
+
+        trial_damage = (equivalent_delta >= tm).astype(float)
+        softening = (equivalent_delta > t0) & (equivalent_delta < tm)
+        softening_factor = np.zeros(n_points)
+        softening_factor[softening] = tm[softening] / (tm[softening] - t0[softening])
+        trial_damage[softening] = softening_factor[softening] * (
+            1.0 - t0[softening] / equivalent_delta[softening]
         )
 
-        tm[ind_traction] = (2 * ((1 + beta) ** 2) / t0[ind_traction]) * (
-            (
-                ((self.parameters["KI"] / self.parameters["GIc"]) ** alpha)
-                + (
-                    ((self.parameters["KII"] * beta**2) / self.parameters["GIIc"])
-                    ** alpha
+        irreversible = np.asarray(
+            assembly.sv["DamageVariableIrreversible"], dtype=float
+        )
+        irreversible = np.broadcast_to(irreversible, state_shape).reshape(-1)
+        damage = np.maximum(irreversible, trial_damage)
+
+        # max(d_irreversible, d_trial) makes this derivative vanish unless
+        # trial damage is actively increasing.
+        active = softening & (trial_damage > irreversible)
+        damage_gradient = np.zeros((n_components, n_points))
+
+        active_compression = active & compression
+        if np.any(active_compression):
+            r = equivalent_delta[active_compression]
+            damage_r = (
+                softening_factor[active_compression] * t0[active_compression] / r**2
+            )
+            for component, tangential_axis in enumerate(tangential_axes):
+                damage_gradient[tangential_axis, active_compression] = (
+                    damage_r * delta_t_vector[component, active_compression] / r
                 )
+
+        active_opening = active & opening
+        if np.any(active_opening):
+            r = equivalent_delta[active_opening]
+            t0_active = t0[active_opening]
+            tm_active = tm[active_opening]
+            factor = softening_factor[active_opening]
+
+            factor_beta = (
+                tm_active * t0_beta[active_opening]
+                - tm_beta[active_opening] * t0_active
+            ) / (tm_active - t0_active) ** 2
+            damage_r = factor * t0_active / r**2
+            damage_beta = factor_beta * (1.0 - t0_active / r) - (
+                factor * t0_beta[active_opening] / r
             )
-            ** (-1 / alpha)
-        )  # Maximal relative displacement in mixed mode (power low criterion)
-        tm[ind_compr] = (
-            delta_m_II  # Maximal relative displacement in mixed mode (power low criterion)
+
+            delta_n_active = delta_n[active_opening]
+            beta_active = beta[active_opening]
+            damage_gradient[axis, active_opening] = (
+                damage_r * delta_n_active / r
+                - damage_beta * beta_active / delta_n_active
+            )
+
+            delta_t_active = delta_t[active_opening]
+            nonzero_tangent = delta_t_active > 0.0
+            for component, tangential_axis in enumerate(tangential_axes):
+                gradient = damage_r * (delta_t_vector[component, active_opening] / r)
+                gradient[nonzero_tangent] += damage_beta[nonzero_tangent] * (
+                    delta_t_vector[component, active_opening][nonzero_tangent]
+                    / (
+                        delta_t_active[nonzero_tangent]
+                        * delta_n_active[nonzero_tangent]
+                    )
+                )
+                damage_gradient[tangential_axis, active_opening] = gradient
+
+        return (
+            damage.reshape(state_shape),
+            (opening * damage).reshape(state_shape),
+            damage_gradient.reshape((n_components,) + state_shape),
         )
 
-        dta[ind_traction] = np.sqrt(
-            delta_t[ind_traction] ** 2 + delta_n[ind_traction] ** 2
-        )  # Actual relative displacement in mixed mode
-        dta[ind_compr] = delta_t[
-            ind_compr
-        ]  # Actual relative displacement in mixed mode
-
-        # ---------------------------------------------------------------------------------------------------------------
-        # La variable d'endommagement "d"
-        # ---------------------------------------------------------------------------------------------------------------
-        d = (dta >= tm).astype(float)  # initialize d to 1 if dta>tm and else d=0
-        test = np.nonzero((dta > t0) * (dta < tm))[
-            0
-        ]  # indices where dta>t0 and dta<tm ie d should be between 0 and 1
-
-        d[test] = (tm[test] / (tm[test] - t0[test])) * (1 - (t0[test] / dta[test]))
-
-        if (
-            np.isscalar(assembly.sv["DamageVariableIrreversible"])
-            and assembly.sv["DamageVariableIrreversible"] == 0
-        ):
-            assembly.sv["DamageVariable"] = (
-                d  # I don't know why assembly.sv['DamageVariable'] = d end up in bads values
-            )
-        else:
-            assembly.sv["DamageVariable"] = np.max(
-                [assembly.sv["DamageVariableIrreversible"], d], axis=0
-            )
-
-        assembly.sv["DamageVariableOpening"] = (
-            (delta_n > 0) * assembly.sv["DamageVariable"]
-        )  # for opening the damage in considered to 0 when the relative displacement is negative (conctact)
-
-        # verification : the damage variable should be between 0 and 1
-        if (
-            assembly.sv["DamageVariable"].min() < 0
-            or assembly.sv["DamageVariable"].max() > 1
-        ):
-            print("Warning : the value of damage variable is incorrect")
+    def _update_damage(self, assembly, delta):
+        damage, damage_opening, damage_gradient = self._compute_damage(assembly, delta)
+        assembly.sv["DamageVariable"] = damage
+        assembly.sv["DamageVariableOpening"] = damage_opening
+        return damage_gradient
 
     def reset(self):
         pass
 
     def set_start(self, assembly, pb):
-        # Set Irreversible Damage
+        # Commit damage at the end of the converged increment. At the start of
+        # the next increment, the exact algorithmic response is unloading from
+        # that state, so the predictor matrix must be the damaged secant rather
+        # than the negative active-softening tangent from the previous step.
         self.update_irreversible_damage(assembly)
+        assembly.sv["TangentMatrix"] = self.local2global_K(
+            self.get_secant_matrix(assembly)
+        )
 
     # def to_start(self, assembly, pb):
     #     #Damage variable will be recompute. NPOthing to be done here (to be checked)
@@ -264,42 +398,31 @@ class CohesiveLaw(Spring):
 
     def update(self, assembly, pb):
         displacement = pb.get_dof_solution()
-        K = self.get_K()
-        assembly.sv["TangentMatrix"] = K
-        if np.isscalar(displacement) and displacement == 0:
-            assembly.sv["InterfaceStress"] = assembly.sv["RelativeDisp"] = 0
-        else:
-            op_delta = (
-                assembly.space.op_disp()
-            )  # relative displacement = disp if used with cohesive element
-            delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
-            assembly.sv["RelativeDisp"] = delta
-
-            # Compute interface stress
-            dim = len(delta)
-            assembly.sv["InterfaceStress"] = [
-                sum([delta[j] * K[i][j] for j in range(dim)]) for i in range(dim)
-            ]  # list of 3 objects
-
-    def update(self, assembly, pb):
-        displacement = pb.get_dof_solution()
 
         if np.isscalar(displacement) and displacement == 0:
             assembly.sv["InterfaceStress"] = assembly.sv["RelativeDisp"] = 0
-            K = self.get_K()
-        else:
-            op_delta = (
-                assembly.space.op_disp()
-            )  # relative displacement = disp if used with cohesive element
-            delta = [assembly.get_gp_results(op, displacement) for op in op_delta]
-            assembly.sv["RelativeDisp"] = delta
-
-            self._update_damage(assembly, delta)
-            dim = len(delta)
             K = self.get_K(assembly)
+        else:
+            # InterfaceForce updates assembly.current before this constitutive
+            # update. Evaluate the jump with its current local frame so damage,
+            # traction, and the assembled tangent use the same configuration.
+            result_assembly = getattr(assembly, "current", assembly)
+            op_delta = result_assembly.space.op_disp()
+            delta = [
+                result_assembly.get_gp_results(op, displacement) for op in op_delta
+            ]
+            assembly.sv["RelativeDisp"] = delta
+
+            damage_gradient = self._update_damage(assembly, delta)
+            dim = len(delta)
+            # Traction follows the secant constitutive relation. The
+            # consistent matrix is its derivative and is used only for the
+            # Newton Jacobian.
+            K_secant = self.local2global_K(self.get_secant_matrix(assembly))
             assembly.sv["InterfaceStress"] = [
-                sum([delta[j] * K[i][j] for j in range(dim)]) for i in range(dim)
+                sum([delta[j] * K_secant[i][j] for j in range(dim)]) for i in range(dim)
             ]  # list of 3 objects
+            K = self.get_K(assembly, delta, damage_gradient)
 
         assembly.sv["TangentMatrix"] = K
 

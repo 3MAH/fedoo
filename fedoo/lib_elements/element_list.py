@@ -102,6 +102,9 @@ def get_node_elm_coordinates(element, nNd_elm=None):
             return np.c_[[0.0, 1.0]]
         elif nNd_elm == 3:
             return np.c_[[0.0, 1.0, 0.5]]
+    elif element == "lin2interface":
+        if nNd_elm == 4:
+            return np.c_[[0.0, 1.0, 0.0, 1.0]]
     elif element in ["tri3", "tri6", "tri3bubble"]:
         if nNd_elm == 3:
             return np.c_[[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]

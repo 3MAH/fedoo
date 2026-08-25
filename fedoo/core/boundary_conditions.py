@@ -440,6 +440,10 @@ class BoundaryCondition(BCBase):
         if isinstance(variable, list):
             if np.isscalar(value):
                 value = [value for var in variable]
+            if start_value is None or np.isscalar(start_value):
+                start_values = [start_value for var in variable]
+            else:
+                start_values = start_value
 
             return ListBC(
                 [
@@ -449,7 +453,7 @@ class BoundaryCondition(BCBase):
                         var,
                         value[i],
                         time_func=time_func,
-                        start_value=start_value,
+                        start_value=start_values[i],
                         name=name,
                     )
                     for i, var in enumerate(variable)
