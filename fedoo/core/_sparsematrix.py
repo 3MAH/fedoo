@@ -541,3 +541,20 @@ def RowBlocMatrix(listBloc, nb_bloc, position, coef, n_cols=None):
 #    return sum([bloc_matrix(listBloc[ii], (1,nb_bloc), (0,position[ii])) if coef[ii] == 1 \
 #                else coef[ii]*bloc_matrix(listBloc[ii], (1,nb_bloc), (0,position[ii])) for ii in range(len(listBloc))])
 #
+
+
+def scatter_dense_block(block, dof_indices, shape):
+    """Scatter a dense ``(k, k)`` block onto a global sparse matrix.
+
+    ``dof_indices`` (length ``k``) gives the global row/column position of each
+    local DOF: entry ``block[i, j]`` lands at
+    ``(dof_indices[i], dof_indices[j])``. Returns a
+    :class:`scipy.sparse.csr_matrix` of the requested ``shape``.
+    """
+    idx = np.asarray(dof_indices, dtype=int)
+    k = len(idx)
+    rows = np.repeat(idx, k)
+    cols = np.tile(idx, k)
+    return sparse.csr_matrix(
+        (np.asarray(block, dtype=float).ravel(), (rows, cols)), shape=shape
+    )

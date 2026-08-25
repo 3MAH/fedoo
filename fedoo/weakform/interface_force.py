@@ -9,7 +9,7 @@ class InterfaceForce(WeakFormBase):
     Weak formulation of the interface equilibrium equation.
 
     * Require an interface constitutive law such as :mod:`fedoo.constitutivelaw.CohesiveLaw` or :mod:`fedoo.constitutivelaw.Spring`
-    * Geometrical non linearities not implemented
+    * Updated-Lagrangian geometrical nonlinearities are supported.
 
     Parameters
     ----------
@@ -18,12 +18,14 @@ class InterfaceForce(WeakFormBase):
         (:mod:`fedoo.constitutivelaw`)
     name: str, optional
         name of the WeakForm
-    nlgeom: bool (default = False)
-        For future development
-        If True, return a NotImplemented Error
+    nlgeom: {None, bool, "UL"}, optional
+        Geometrical-nonlinearity formulation. If ``None`` (default), use the
+        value defined by the associated problem. ``True`` and ``"UL"`` select
+        the updated-Lagrangian formulation. Total Lagrangian (``"TL"``) is not
+        implemented for interface forces.
     """
 
-    def __init__(self, constitutivelaw, name="", nlgeom=False, space=None):
+    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw[constitutivelaw]
 
@@ -39,27 +41,17 @@ class InterfaceForce(WeakFormBase):
 
         self.constitutivelaw = constitutivelaw
 
-        self.nlgeom = nlgeom  # geometric non linearities -> False, True, 'UL' or 'TL' (True or 'UL': updated lagrangian - 'TL': total lagrangian)
-        """Method used to treat the geometric non linearities. 
-            * Set to False if geometric non linarities are ignored (default). 
-            * Set to True or 'UL' to use the updated lagrangian method (update the mesh)
-            * Set to 'TL' to use the total lagrangian method (base on the initial mesh with initial displacement effet)
-        """
+        self.nlgeom = nlgeom
 
         self.assembly_options["assume_sym"] = False  # symetric ?
 
     def initialize(self, assembly, pb):
-        if self.nlgeom:
-            if self.nlgeom is True:
-                self.nlgeom = "UL"
-            elif isinstance(self.nlgeom, str):
-                self.nlgeom = self.nlgeom.upper()
-                if self.nlgeom != "UL":
-                    raise NotImplementedError(
-                        f"{self.nlgeom} nlgeom not implemented for Interface force."
-                    )
-            else:
-                raise TypeError("nlgeom should be in {'TL', 'UL', True, False}")
+        self._initialize_nlgeom(assembly, pb)
+        self.nlgeom = assembly._nlgeom
+        if self.nlgeom == "TL":
+            raise NotImplementedError(
+                "TL nlgeom is not implemented for InterfaceForce. Use 'UL'."
+            )
 
     def update(self, assembly, pb):
         # function called when the problem is updated (NR loop or time increment)

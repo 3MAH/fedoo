@@ -10,13 +10,53 @@ def _import_ipctk():
     """Lazy import of ipctk with a clear error message."""
     try:
         import ipctk
-
-        return ipctk
     except ImportError:
         raise ImportError(
             "The 'ipctk' package is required for IPC contact. "
             "Install it with: pip install ipctk\n"
             "Or install fedoo with IPC support: pip install fedoo[ipc]"
+        )
+
+    version = getattr(ipctk, "__version__", "0")
+    try:
+        major_minor = tuple(int(part) for part in version.split(".")[:2])
+    except (AttributeError, ValueError):
+        major_minor = (0, 0)
+    if major_minor < (1, 6):
+        raise ImportError(
+            f"Fedoo IPC requires ipctk >= 1.6, but the loaded runtime is "
+            f"ipctk {version}. Restart Python after upgrading ipctk; mixing "
+            "Fedoo's 1.6 API calls with an already-loaded ipctk 1.5 changes "
+            "BarrierPotential argument semantics and produces invalid contact "
+            "forces."
+        )
+    return ipctk
+
+
+def _barrier_hessian_psd(barrier, collisions, collision_mesh, vertices):
+    """ipctk barrier hessian with PSD projection and a degenerate fallback.
+
+    CLAMP/ABS PSD projection can raise on degenerate (zero-distance) contact
+    pairs; retry without projection so assembly still proceeds. Shared by
+    :class:`IPCContact` and ``RigidBodyAssembly`` so both use the same policy.
+    """
+    # ipctk is already validated/imported by the callers; a plain cached import
+    # avoids re-running the version check on the contact hot path.
+    import ipctk
+
+    try:
+        return barrier.hessian(
+            collisions,
+            collision_mesh,
+            vertices,
+            project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
+        )
+    except RuntimeError:
+        return barrier.hessian(
+            collisions,
+            collision_mesh,
+            vertices,
+            project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
         )
 
 
@@ -261,6 +301,77 @@ class IPCContact(AssemblyBase):
         self.sv = {}
         self.sv_start = {}
 
+        # Rigid body support: list of (node_indices, rigid_body) tuples
+        self._rigid_bodies = []
+        self._rigid_node_set = None  # set of rigid node indices (built in initialize)
+
+    def add_rigid_body(self, rigid_body, surface_node_indices=None):
+        """Register a :class:`RigidBody` with this IPCContact.
+
+        This optional convenience enables direct reduced-coordinate projection
+        for rigid-vs-deformable (or rigid-vs-rigid) contact where a single
+        ``IPCContact`` carries the full collision mesh. The body's surface
+        nodes are routed onto the 6 rigid-body global DOFs by the scatter
+        matrix via the exact rigid Jacobian
+        ``J = [I_3 | dR/d(omega) @ r_ref]``, instead of placing forces at
+        the per-node mesh DOFs.
+
+        Registration is not required for correctness when the rigid surface
+        nodes already belong to the contact mesh and a :class:`RigidTie` is
+        attached to the problem. In that generic path, IPC assembles nodal
+        contact contributions and the problem's MPC condensation projects
+        them onto the rigid DOFs. Registration additionally associates the
+        body with the shared mesh and lets automatic barrier-stiffness
+        estimation account for generalized rigid-body forces directly.
+
+        For rigid-vs-static contact (rigid body bouncing on a fixed floor),
+        use :meth:`RigidBody.set_static_obstacle` instead — that path uses
+        a private 6x6 fast route with no shared mesh.
+
+        Parameters
+        ----------
+        rigid_body : RigidBody
+            The rigid body. When the body's nodes live inside this
+            IPCContact's mesh (stacked rigid-plus-deformable case),
+            construct it from a :meth:`Mesh.extract_elements` of the
+            shared mesh so the carried ``parent_node_indices`` wires
+            RigidTie to the correct parent DOFs.
+            ``rigid_body.constraint.list_nodes`` is read as the default
+            surface index set.
+        surface_node_indices : array_like, optional
+            Override for ``rigid_body.constraint.list_nodes``. Rarely
+            needed; useful only when the rigid body's surface is a strict
+            subset of its tie node set.
+        """
+        if rigid_body.assembly._ipc_collision_mesh is not None:
+            raise RuntimeError(
+                f"{rigid_body.name}: cannot use set_static_obstacle() and "
+                "IPCContact.add_rigid_body() on the same body — choose "
+                "either the private rigid-vs-static path or the shared "
+                "IPCContact."
+            )
+        if surface_node_indices is None:
+            surface_node_indices = np.asarray(
+                rigid_body.constraint.list_nodes, dtype=int
+            )
+        else:
+            surface_node_indices = np.asarray(surface_node_indices, dtype=int)
+        # Point the body's RigidBodyAssembly at the shared problem mesh so
+        # ``Assembly.sum`` accepts it (mass / inertia / Newmark stay 6x6 and
+        # are scattered at the 6 global DOFs regardless of mesh size).
+        # This rebinds ``rigid_body.assembly.mesh`` as a side effect; guard
+        # against silently re-pointing a body already registered on a
+        # *different* IPCContact mesh (re-registering on the same mesh is OK).
+        prev_mesh = getattr(rigid_body, "_ipc_registered_mesh", None)
+        if prev_mesh is not None and prev_mesh is not self.mesh:
+            raise RuntimeError(
+                f"{rigid_body.name}: already registered on another IPCContact "
+                "mesh; create a fresh RigidBody per shared-IPC problem."
+            )
+        rigid_body.assembly.mesh = self.mesh
+        rigid_body._ipc_registered_mesh = self.mesh
+        self._rigid_bodies.append((surface_node_indices, rigid_body))
+
     def _create_broad_phase(self):
         """Create an ipctk BroadPhase instance from the string name."""
         ipctk = _import_ipctk()
@@ -278,13 +389,20 @@ class IPCContact(AssemblyBase):
             )
         return cls()
 
-    def _build_scatter_matrix(self, surface_node_indices, n_nodes, ndim):
+    def _build_scatter_matrix(self, surface_node_indices, n_nodes, ndim, pb=None):
         """Build sparse matrix mapping ipctk surface DOFs to fedoo full DOFs.
 
         ipctk uses interleaved layout for surface nodes:
             [x0, y0, z0, x1, y1, z1, ...]
         fedoo uses blocked layout for all nodes:
-            [ux_0..ux_N, uy_0..uy_N, uz_0..uz_N]
+            [ux_0..ux_N, uy_0..uy_N, uz_0..uz_N, global_DOFs...]
+
+        For deformable nodes, the mapping is a permutation (identity values).
+        For rigid body nodes, the mapping uses the exact contact Jacobian
+        ``J = [I_3 | dR/d(omega) @ r_ref]`` derived from the RigidTie
+        rotation derivatives, projecting surface DOFs directly onto the 6
+        rigid body global DOFs. Only ``r_ref`` (reference positions)
+        enters the Jacobian — current positions are not needed.
 
         Parameters
         ----------
@@ -294,31 +412,103 @@ class IPCContact(AssemblyBase):
             Total number of nodes in the full mesh.
         ndim : int
             Number of spatial dimensions (2 or 3).
+        pb : Problem, optional
+            Problem instance (needed for rigid body global DOF indices).
 
         Returns
         -------
         P : sparse csc_matrix
-            Shape (nvar * n_nodes, n_surf * ndim).
+            Shape (n_dof, n_surf * ndim) where n_dof includes global DOFs.
         """
         disp_ranks = np.array(self.space.get_rank_vector("Disp"))
         n_surf = len(surface_node_indices)
         nvar = self.space.nvar
+        n_global_dof = pb.n_global_dof if pb is not None else self._n_global_dof
+        n_dof = nvar * n_nodes + n_global_dof
 
-        rows = np.empty(n_surf * ndim, dtype=int)
-        cols = np.empty(n_surf * ndim, dtype=int)
+        # Collect sparse entries
+        all_rows = []
+        all_cols = []
+        all_data = []
 
-        for d in range(ndim):
-            start = d * n_surf
-            end = (d + 1) * n_surf
-            # fedoo blocked row: disp_ranks[d] * n_nodes + global_node
-            rows[start:end] = disp_ranks[d] * n_nodes + surface_node_indices
-            # ipctk interleaved col: local_i * ndim + d
-            cols[start:end] = np.arange(n_surf) * ndim + d
+        # Identify which surface nodes are rigid
+        if self._rigid_node_set is not None and len(self._rigid_node_set) > 0:
+            is_rigid = np.isin(surface_node_indices, list(self._rigid_node_set))
+        else:
+            is_rigid = np.zeros(n_surf, dtype=bool)
+        deformable_mask = ~is_rigid
 
-        data = np.ones(n_surf * ndim)
+        # --- Deformable nodes: identity mapping ---
+        deform_local = np.where(deformable_mask)[0]
+        if len(deform_local) > 0:
+            deform_global = surface_node_indices[deform_local]
+            for d in range(ndim):
+                all_rows.append(disp_ranks[d] * n_nodes + deform_global)
+                all_cols.append(deform_local * ndim + d)
+                all_data.append(np.ones(len(deform_local)))
+
+        # --- Rigid body nodes: contact Jacobian ---
+        for node_set, rb in self._rigid_bodies:
+            rt = rb.constraint
+            dof_indices = rb.assembly._dof_indices  # (6,) global DOF positions
+
+            # Find which surface indices belong to this rigid body
+            mask = np.isin(surface_node_indices, node_set)
+            local_indices = np.where(mask)[0]
+            if len(local_indices) == 0:
+                continue
+
+            n_rb = len(local_indices)
+
+            # Exact rotation derivatives from RigidTie. The Jacobian
+            # J = [I_3 | dR/d(omega) @ r_ref] uses only r_ref (reference
+            # positions) — current vertex positions and translation are
+            # not needed.
+            if pb is not None:
+                dof_ref, _ = rt._get_dof_ref(pb)
+                angles = dof_ref[3:]
+            else:
+                angles = np.zeros(3)
+
+            # Translation part: J_i[:3, :3] = I_3
+            for d in range(ndim):
+                all_rows.append(np.full(n_rb, dof_indices[d]))
+                all_cols.append(local_indices * ndim + d)
+                all_data.append(np.ones(n_rb))
+
+            # Rotation part: J_i[d, 3+k] = (dR_drk @ r_ref_i)[d],
+            # r_ref = vertex_ref - center.
+            _, du_drx, du_dry, du_drz = rt.rotation_jacobian(
+                angles, self._rest_positions[local_indices]
+            )
+
+            for d in range(ndim):
+                # RotX contribution
+                nonzero = np.abs(du_drx[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[3]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_drx[nonzero, d])
+                # RotY contribution
+                nonzero = np.abs(du_dry[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[4]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_dry[nonzero, d])
+                # RotZ contribution
+                nonzero = np.abs(du_drz[:, d]) > 1e-15
+                if np.any(nonzero):
+                    all_rows.append(np.full(nonzero.sum(), dof_indices[5]))
+                    all_cols.append(local_indices[nonzero] * ndim + d)
+                    all_data.append(du_drz[nonzero, d])
+
+        rows = np.concatenate(all_rows) if all_rows else np.array([], dtype=int)
+        cols = np.concatenate(all_cols) if all_cols else np.array([], dtype=int)
+        data = np.concatenate(all_data) if all_data else np.array([])
+
         P = sparse.csc_matrix(
             (data, (rows, cols)),
-            shape=(nvar * n_nodes, n_surf * ndim),
+            shape=(n_dof, n_surf * ndim),
         )
         return P
 
@@ -356,7 +546,13 @@ class IPCContact(AssemblyBase):
         if not hasattr(assembly, "_list_assembly"):
             return None
 
-        # Sum global vectors from all assemblies except this one
+        # Sum global vectors from all assemblies except this IPC one.
+        # RigidBodyAssembly safely returns zeros at init time (its
+        # assemble_global_mat guards against dt=0 internally), so we
+        # include it like any other assembly — its contribution at the
+        # 6 rigid DOFs is exactly the external/contact force balance,
+        # which is what kappa auto-tune wants to match against the
+        # barrier gradient.
         grad_energy_full = None
         for a in assembly._list_assembly:
             if a is self:
@@ -371,9 +567,27 @@ class IPCContact(AssemblyBase):
         if grad_energy_full is None:
             return None
 
-        # Truncate to mesh DOFs (remove global DOFs like PeriodicBC)
-        n_mesh_dof = self.space.nvar * self.mesh.n_nodes
-        grad_energy_full = grad_energy_full[:n_mesh_dof]
+        # When rigid bodies are present, P includes global DOF rows,
+        # so keep the full vector. Otherwise truncate to mesh DOFs.
+        if not self._rigid_bodies:
+            n_mesh_dof = self.space.nvar * self.mesh.n_nodes
+            grad_energy_full = grad_energy_full[:n_mesh_dof]
+
+        # Assembly vectors that don't span the extra global DOFs (PeriodicBC,
+        # RigidTie, RigidBody) are shorter than P's row count; zero-padding the
+        # global-DOF tail is correct since they contribute nothing there. A
+        # vector LONGER than P's rows means the DOF bookkeeping is inconsistent
+        # — fail loudly rather than silently truncate.
+        n_P_rows = self._scatter_matrix.shape[0]
+        if len(grad_energy_full) > n_P_rows:
+            raise ValueError(
+                f"Global vector length {len(grad_energy_full)} exceeds scatter "
+                f"matrix rows {n_P_rows}; contact DOF bookkeeping is inconsistent."
+            )
+        if len(grad_energy_full) < n_P_rows:
+            grad_energy_full = np.pad(
+                grad_energy_full, (0, n_P_rows - len(grad_energy_full))
+            )
 
         # Project to surface DOFs: P^T @ full_grad -> surface_grad
         return self._scatter_matrix.T @ grad_energy_full
@@ -467,22 +681,12 @@ class IPCContact(AssemblyBase):
             self.global_vector = -self._kappa * (P @ grad_surf)
 
         if compute != "vector":
-            try:
-                hess_surf = self._barrier_potential.hessian(
-                    self._collisions,
-                    self._collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
-                )
-            except RuntimeError:
-                # CLAMP/ABS projection can fail on degenerate contact
-                # pairs (zero-distance); skip projection entirely.
-                hess_surf = self._barrier_potential.hessian(
-                    self._collisions,
-                    self._collision_mesh,
-                    vertices,
-                    project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
-                )
+            hess_surf = _barrier_hessian_psd(
+                self._barrier_potential,
+                self._collisions,
+                self._collision_mesh,
+                vertices,
+            )
             if axi_D is not None:
                 # Axisymmetric IPC uses a single 2*pi*r weight on the residual.
                 # The physically closer single-weight tangent would be:
@@ -526,17 +730,10 @@ class IPCContact(AssemblyBase):
                         fric_hess_surf = axi_D @ fric_hess_surf @ axi_D
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
-        # Pad with zeros to account for extra global DOFs (e.g. PeriodicBC)
-        if self._n_global_dof > 0:
-            if compute != "matrix":
-                self.global_vector = np.pad(self.global_vector, (0, self._n_global_dof))
-            if compute != "vector":
-                self.global_matrix = sparse.block_diag(
-                    [
-                        self.global_matrix,
-                        sparse.csr_array((self._n_global_dof, self._n_global_dof)),
-                    ],
-                )
+        # P already has n_dof rows (mesh DOFs + global DOFs) — see
+        # _build_scatter_matrix — so P @ hess @ P.T and P @ grad are already
+        # the right size. No padding is needed for PeriodicBC, RigidTie, or
+        # registered RigidBody global DOFs.
 
     def _ccd_line_search(self, pb, dX):
         """Compute step size using CCD + energy-based backtracking.
@@ -570,10 +767,16 @@ class IPCContact(AssemblyBase):
         # Current vertices
         vertices_current = self._get_current_vertices(pb)
 
-        # Compute displacement of surface nodes from dX (fedoo blocked layout)
+        # Surface displacement from dX (fedoo blocked layout). For
+        # rigid-tied slave nodes, ``_MatCB`` has already written the
+        # kinematic motion back into the mesh-DOF rows (see
+        # ``problem.Problem.solve``: ``X = MatCB @ X_free + Xbc``), so we
+        # can read the surface displacement directly regardless of
+        # whether a node is deformable or rigid-slaved.
         disp_ranks = np.array(self.space.get_rank_vector("Disp"))
         n_nodes = self.mesh.n_nodes
-        surf_disp = np.zeros((len(self._surface_node_indices), ndim))
+        n_surf = len(self._surface_node_indices)
+        surf_disp = np.zeros((n_surf, ndim))
         for d in range(ndim):
             surf_disp[:, d] = dX[disp_ranks[d] * n_nodes + self._surface_node_indices]
 
@@ -758,14 +961,37 @@ class IPCContact(AssemblyBase):
         else:
             self._ogc_filter_step(pb, dX)
 
+    def _refresh_rigid_scatter(self, pb):
+        """Rebuild the rotation-dependent scatter matrix for rigid bodies.
+
+        The rigid columns of the scatter matrix depend on the current rigid
+        rotation, so the matrix is refreshed on every NR iteration (from both
+        :meth:`update` and :meth:`assemble_global_mat`) whenever rigid bodies
+        are registered. No-op otherwise.
+        """
+        if self._rigid_bodies and pb is not None:
+            self._scatter_matrix = self._build_scatter_matrix(
+                self._surface_node_indices,
+                self.mesh.n_nodes,
+                self.space.ndim,
+                pb,
+            )
+
     def assemble_global_mat(self, compute="all"):
         """Recompute barrier contributions from cached vertex positions.
 
         Called by the solver when the tangent matrix needs reassembly
         without a full ``update()`` cycle.  Uses vertex positions
         cached by the most recent ``update()`` or ``set_start()`` call.
+
+        When rigid bodies are registered the scatter matrix depends on the
+        current rigid rotation; the MPC coefficients have just been
+        refreshed by ``update_boundary_conditions`` for this NR step, so
+        refresh the scatter here too to keep the contact tangent
+        consistent with the kinematic constraint.
         """
         if self._last_vertices is not None:
+            self._refresh_rigid_scatter(self._pb)
             self._compute_ipc_contributions(self._last_vertices, compute)
 
     def initialize(self, pb):
@@ -825,9 +1051,22 @@ class IPCContact(AssemblyBase):
         # Rest positions of surface vertices
         self._rest_positions = self.mesh.nodes[self._surface_node_indices]
 
+        # Build rigid body node lookup set
+        if self._rigid_bodies:
+            self._rigid_node_set = set()
+            for node_set, rb in self._rigid_bodies:
+                self._rigid_node_set.update(node_set.tolist())
+
+            # OGC is incompatible with rigid bodies: per-vertex trust
+            # region cannot be reconciled with the 6-DOF rigid Jacobian
+            # reduction.  CCD is supported — _ccd_line_search reconstructs
+            # rigid surface motion from dX[rigid_global_dofs] via J.
+            if self._use_ogc:
+                raise ValueError("use_ogc=True is not supported with rigid bodies.")
+
         # Build scatter matrix for DOF mapping (ipctk surface -> fedoo full)
         self._scatter_matrix = self._build_scatter_matrix(
-            self._surface_node_indices, self.mesh.n_nodes, ndim
+            self._surface_node_indices, self.mesh.n_nodes, ndim, pb
         )
 
         # Create broad phase instance
@@ -1038,6 +1277,10 @@ class IPCContact(AssemblyBase):
         """
         vertices = self._get_current_vertices(pb)
         self._last_vertices = vertices
+
+        # The rigid Jacobian depends on the current rotation, so refresh the
+        # scatter matrix after every update.
+        self._refresh_rigid_scatter(pb)
 
         # Rebuild collision set
         self._collisions.build(

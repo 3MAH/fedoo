@@ -1,7 +1,9 @@
 import copy
 
 import numpy as np
+from scipy import sparse
 
+from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import TimeIntegratorBase
@@ -27,6 +29,194 @@ def _newmark_state(term, assembly, dt):
         assembly.sv["Velocity"],
         assembly.sv["Acceleration"],
     )
+
+
+class GeneralizedAlphaAssemblyAdapter:
+    """Apply generalized-alpha to an assembly-level matrix provider.
+
+    Assembly providers keep ownership of their static tangent and force. The
+    adapter owns the temporal state and augments those contributions on the
+    provider's declared time DOF indices.
+    """
+
+    def __init__(self, integrator):
+        self.alpha_m = integrator.alpha_m
+        self.alpha_f = integrator.alpha_f
+        self.beta = integrator.beta
+        self.gamma = integrator.gamma
+        self.force_start = None
+        self.current_force = None
+
+    @staticmethod
+    def _copy_state(state):
+        return {
+            key: value.copy() if hasattr(value, "copy") else value
+            for key, value in state.items()
+        }
+
+    def initialize(self, assembly, pb):
+        n_dof = len(assembly.time_dof_indices)
+        assembly.sv["Velocity"] = np.zeros(n_dof)
+        assembly.sv["Acceleration"] = np.zeros(n_dof)
+        assembly.sv["_DeltaDisp"] = np.zeros(n_dof)
+
+        initial_force = getattr(assembly, "get_time_initial_force", None)
+        if initial_force is not None:
+            force = np.asarray(initial_force(pb), dtype=float)
+            self.force_start = force.copy()
+            mass = np.asarray(assembly.get_storage_matrix(pb), dtype=float)
+            try:
+                assembly.sv["Acceleration"] = np.linalg.solve(mass, force)
+            except np.linalg.LinAlgError:
+                pass
+        else:
+            self.force_start = np.zeros(n_dof)
+
+        assembly.sv_start = self._copy_state(assembly.sv)
+
+    def update(self, assembly, pb):
+        if np.isscalar(pb._dU) and pb._dU == 0:
+            delta_disp = np.zeros(len(assembly.time_dof_indices))
+        else:
+            delta_disp = np.asarray(pb._dU)[assembly.time_dof_indices]
+        assembly.sv["_DeltaDisp"] = delta_disp.copy()
+
+    def _local_static_matrix(self, assembly):
+        provider = getattr(assembly, "get_time_stiffness_matrix", None)
+        if provider is not None:
+            return np.asarray(provider(), dtype=float)
+
+        idx = assembly.time_dof_indices
+        matrix = assembly.global_matrix
+        if sparse.issparse(matrix):
+            return matrix[idx][:, idx].toarray()
+        return np.asarray(matrix)[np.ix_(idx, idx)]
+
+    def _damping_matrix(self, assembly, mass, stiffness):
+        damping = getattr(assembly, "dissipation", None)
+        if damping is None:
+            return np.zeros_like(mass)
+        if not isinstance(damping, RayleighDamping):
+            raise NotImplementedError(
+                "Assembly-level generalized-alpha currently supports only "
+                "RayleighDamping."
+            )
+        return damping.alpha * mass + damping.beta * stiffness
+
+    @staticmethod
+    def _inertia_force(assembly, pb, mass, acceleration, velocity):
+        provider = getattr(assembly, "get_time_inertia_force", None)
+        if provider is not None:
+            return np.asarray(provider(pb, acceleration, velocity), dtype=float)
+        return mass @ acceleration
+
+    @staticmethod
+    def _inertia_tangent(
+        assembly,
+        pb,
+        mass,
+        acceleration,
+        velocity,
+        acceleration_factor,
+        velocity_factor,
+    ):
+        provider = getattr(assembly, "get_time_inertia_tangent", None)
+        if provider is not None:
+            return np.asarray(
+                provider(
+                    pb,
+                    acceleration,
+                    velocity,
+                    acceleration_factor,
+                    velocity_factor,
+                ),
+                dtype=float,
+            )
+        return acceleration_factor * mass
+
+    def integrate(self, assembly, pb, compute="all"):
+        dt = pb.dtime
+        if dt == 0:
+            return
+
+        idx = np.asarray(assembly.time_dof_indices, dtype=int)
+        mass = np.asarray(assembly.get_storage_matrix(pb), dtype=float)
+        stiffness = self._local_static_matrix(assembly)
+        damping = self._damping_matrix(assembly, mass, stiffness)
+        acc_np1, vel_np1 = newmark_acceleration_velocity(
+            self.beta,
+            self.gamma,
+            dt,
+            assembly.sv["_DeltaDisp"],
+            assembly.sv["Velocity"],
+            assembly.sv["Acceleration"],
+        )
+        acc_alpha = (1.0 - self.alpha_m) * acc_np1 + self.alpha_m * assembly.sv[
+            "Acceleration"
+        ]
+        vel_alpha = (1.0 - self.alpha_f) * vel_np1 + self.alpha_f * assembly.sv[
+            "Velocity"
+        ]
+
+        a0 = 1.0 / (self.beta * dt**2)
+        c0 = self.gamma / (self.beta * dt)
+
+        if compute != "vector":
+            if self.alpha_f != 0.0:
+                assembly.global_matrix = (1.0 - self.alpha_f) * assembly.global_matrix
+            tangent = self._inertia_tangent(
+                assembly,
+                pb,
+                mass,
+                acc_alpha,
+                vel_alpha,
+                (1.0 - self.alpha_m) * a0,
+                (1.0 - self.alpha_f) * c0,
+            )
+            tangent += (1.0 - self.alpha_f) * c0 * damping
+            dynamic_matrix = scatter_dense_block(
+                tangent, idx, assembly.global_matrix.shape
+            )
+            assembly.global_matrix = assembly.global_matrix + dynamic_matrix
+
+        if compute != "matrix":
+            static_force = np.asarray(assembly.global_vector)[idx].copy()
+            self.current_force = static_force
+            force_start = (
+                self.force_start if self.force_start is not None else static_force
+            )
+            force_alpha = (
+                1.0 - self.alpha_f
+            ) * static_force + self.alpha_f * force_start
+            inertia_force = self._inertia_force(
+                assembly, pb, mass, acc_alpha, vel_alpha
+            )
+            assembly.global_vector[idx] = (
+                force_alpha - inertia_force - damping @ vel_alpha
+            )
+
+    def set_start(self, assembly, pb):
+        dof_solution = pb.get_dof_solution()
+        if not (np.isscalar(dof_solution) and dof_solution == 0):
+            dt = getattr(pb, "_dtime_prev", None) or pb.dtime
+            if dt:
+                acc, vel = newmark_acceleration_velocity(
+                    self.beta,
+                    self.gamma,
+                    dt,
+                    assembly.sv["_DeltaDisp"],
+                    assembly.sv["Velocity"],
+                    assembly.sv["Acceleration"],
+                )
+                assembly.sv["Acceleration"] = acc
+                assembly.sv["Velocity"] = vel
+                assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
+                if self.current_force is not None:
+                    self.force_start = self.current_force.copy()
+        assembly.sv_start = self._copy_state(assembly.sv)
+
+    def to_start(self, assembly, pb):
+        assembly.sv = self._copy_state(assembly.sv_start)
 
 
 class GeneralizedAlpha(TimeIntegratorBase):
@@ -67,6 +257,20 @@ class GeneralizedAlpha(TimeIntegratorBase):
             raise ValueError("beta must be strictly positive.")
         if self.gamma <= 0.0:
             raise ValueError("gamma must be strictly positive.")
+
+    def _compile_assembly_level_provider(self, assembly):
+        if getattr(assembly, "time_evolution", None) != self.evolution:
+            return assembly
+        if not hasattr(assembly, "get_storage_matrix") or not hasattr(
+            assembly, "time_dof_indices"
+        ):
+            raise NotImplementedError(
+                "Second-order assembly providers must expose "
+                "get_storage_matrix(pb) and time_dof_indices."
+            )
+        assembly._time_integrator = GeneralizedAlphaAssemblyAdapter(self)
+        assembly._fedoo_time_integrated = True
+        return assembly
 
     def _integrate_leaf(self, weakform):
         storage = resolve_storage(weakform)

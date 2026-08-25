@@ -135,6 +135,7 @@ class Problem(ProblemBase):
         position=1,
         element_set=None,
         save_mesh=True,
+        include_static_obstacles=False,
     ):
         """Add output requirement for automatic saving during nlsolve.
 
@@ -179,6 +180,13 @@ class Problem(ProblemBase):
 
         save_mesh : bool, default = True
             If True the mesh is saved.
+
+        include_static_obstacles : bool, default = False
+            If True, static meshes registered by
+            :meth:`fedoo.constraint.RigidBody.set_static_obstacle` are added
+            to the output mesh. The same obstacle mesh shared by several
+            rigid bodies is included only once. This option requires the
+            ``fdh5`` file format, which preserves the MultiMesh structure.
         """
         if output_list is None and hasattr(self, "assembly"):
             output_list = assembly
@@ -194,6 +202,7 @@ class Problem(ProblemBase):
             position,
             element_set,
             save_mesh,
+            include_static_obstacles,
         )
 
     def save_results(self, iterOutput=None):

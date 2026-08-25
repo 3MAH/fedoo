@@ -619,6 +619,10 @@ class Mesh(MeshBase):
             meshObject.merge_nodes(meshObject.find_coincident_nodes())
 
         where meshObject is the Mesh object containing merged coincidentNodes.
+
+        Detection here uses a round-to-tolerance lexsort. For a distance-based
+        (KDTree) detector that also collapses clusters of 3+ coincident nodes
+        in one call, see :py:meth:`merge_coincident_nodes`.
         """
         decimal_round = int(-np.log10(tol) - 1)
         crd = self.nodes.round(decimal_round)  # round coordinates to match tolerance
@@ -631,6 +635,68 @@ class Mesh(MeshBase):
             np.linalg.norm(crd[ind_sorted[:-1]] - crd[ind_sorted[1:]], axis=1) == 0
         )[0]  # indices of the first coincident nodes
         return np.array([ind_sorted[ind_coincident], ind_sorted[ind_coincident + 1]]).T
+
+    def merge_coincident_nodes(self, tol: float) -> int:
+        """Find and merge node pairs whose Euclidean distance is below ``tol``.
+
+        Useful when stacking volumes from separate sources (e.g. several
+        STEP files meshed without a boolean fuse): the interface nodes are
+        geometrically close but distinct, and elements on either side
+        don't share connectivity.  After merging, an interface node from
+        one phase and its counterpart from another become a single node,
+        and any constraint or RigidTie applied via the surviving index
+        propagates kinematically across the interface.
+
+        The pairing is greedy by distance (closest pair first, each node
+        merged at most once per pass), and the whole pass is repeated until no
+        coincident pair remains.  A single greedy pass merges only one pair of
+        any cluster, so a point shared by three or more parts (e.g. an edge
+        where 3+ volumes meet) would be left partially merged; repeating the
+        pass collapses the whole cluster to a single survivor.  Within a pass
+        the each-node-once rule still prevents two corners of one element
+        collapsing to the same survivor (only degenerate sub-``tol`` elements
+        could).
+
+        Parameters
+        ----------
+        tol : float
+            Geometric distance threshold (same units as ``self.nodes``).
+
+        Returns
+        -------
+        int
+            Total number of node pairs merged across all passes.
+
+        See Also
+        --------
+        find_coincident_nodes : lighter round-to-tolerance detector returning
+            pairs for a single-pass ``merge_nodes`` call.
+        """
+        from scipy.spatial import cKDTree
+
+        total_merged = 0
+        while True:
+            tree = cKDTree(self.nodes)
+            pairs = tree.query_pairs(r=tol, output_type="ndarray")
+            if len(pairs) == 0:
+                break
+            dists = np.linalg.norm(
+                self.nodes[pairs[:, 0]] - self.nodes[pairs[:, 1]], axis=1
+            )
+            order = np.argsort(dists)
+            used = np.zeros(self.n_nodes, dtype=bool)
+            accepted = []
+            for k in order:
+                i, j = int(pairs[k, 0]), int(pairs[k, 1])
+                if used[i] or used[j]:
+                    continue
+                used[i] = used[j] = True
+                accepted.append((i, j))
+            if not accepted:
+                break
+            self.merge_nodes(np.asarray(accepted, dtype=int))
+            total_merged += len(accepted)
+        return total_merged
 
     def merge_nodes(self, node_couples: np.ndarray[int]) -> None:
         """
@@ -758,9 +824,14 @@ class Mesh(MeshBase):
 
         * The new mesh keep the former element_sets dict with only the extrated elements.
         * The element indices of the new mesh are not the same as the former one.
-        * The new mesh keep the initial nodes and node_sets. To also removed the
-          nodes, a simple solution is to use the method "remove_isolated_nodes"
-          with the new mesh.
+        * The new mesh keep the initial ``nodes`` array (shared with the parent), so
+          an assembly built on it stays in the parent DOF space and can be summed
+          with full-mesh assemblies. To also remove the nodes, a simple solution is
+          to use the method "remove_isolated_nodes" with the new mesh.
+        * The result carries a ``parent_node_indices`` attribute listing the rows of
+          ``self.nodes`` actually referenced by the extracted elements. Consumers
+          that need the active subset (e.g. ``RigidBody`` slaving the right DOFs)
+          read it directly without recomputing ``np.unique(elements.ravel())``.
         """
         if isinstance(element_set, str):
             element_set = self.element_sets[element_set]
@@ -778,6 +849,11 @@ class Mesh(MeshBase):
             self.elm_type,
             name=name,
         )
+        # ``parent_node_indices`` flags the nodes actually referenced by
+        # the extracted elements. Consumers that need the active subset
+        # (e.g. ``RigidBody`` slaving the right DOFs) can read it
+        # directly without recomputing ``np.unique(elements.ravel())``.
+        sub_mesh.parent_node_indices = np.unique(sub_mesh.elements.ravel())
         return sub_mesh
 
     def nearest_node(self, X: np.ndarray[float]) -> int:

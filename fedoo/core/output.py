@@ -137,6 +137,99 @@ def _output_mesh_for_assembly(assemb, element_set=None):
     return assemb.mesh.extract_elements(element_set)
 
 
+def _mesh_with_static_obstacles(assemb, element_set=None):
+    """Build an output MultiMesh containing results and static geometry."""
+    result_mesh = _output_mesh_for_assembly(assemb, element_set)
+
+    def leaf_assemblies(assembly):
+        children = getattr(assembly, "list_assembly", None)
+        if children is None:
+            yield assembly
+        else:
+            for child in children:
+                yield from leaf_assemblies(child)
+
+    obstacles = []
+    seen = set()
+    for sub_assemb in leaf_assemblies(assemb):
+        obstacle = getattr(sub_assemb, "_ipc_obstacle_mesh", None)
+        if obstacle is None:
+            continue
+        obstacle_id = getattr(sub_assemb, "_ipc_obstacle_source_id", None)
+        if obstacle_id is None:
+            obstacle_id = id(obstacle)
+        if obstacle_id not in seen:
+            seen.add(obstacle_id)
+            obstacles.append(obstacle)
+
+    if not obstacles:
+        return result_mesh
+    ndim = max(mesh.ndim for mesh in (result_mesh, *obstacles))
+
+    node_blocks = []
+    submesh_entries = {}
+    node_offset = 0
+
+    def append_mesh(mesh, default_name):
+        nonlocal node_offset
+        mesh = mesh.as_ndim(ndim)
+        node_blocks.append(mesh.nodes)
+        submeshes = mesh.submeshes if isinstance(mesh, MultiMesh) else (mesh,)
+        for submesh in submeshes:
+            base_name = submesh.name or default_name
+            name = base_name
+            suffix = 2
+            while name in submesh_entries:
+                name = f"{base_name}_{suffix}"
+                suffix += 1
+            submesh_entries[name] = (
+                submesh.elm_type,
+                submesh.elements + node_offset,
+                submesh.element_sets,
+            )
+        node_offset += mesh.n_nodes
+
+    append_mesh(result_mesh, "Results")
+    for i, obstacle in enumerate(obstacles, start=1):
+        append_mesh(obstacle, f"Static obstacle {i}")
+
+    return MultiMesh(
+        np.vstack(node_blocks),
+        submesh_entries,
+        ndim=ndim,
+        name=getattr(result_mesh, "name", ""),
+        register_name=False,
+    )
+
+
+def _add_static_geometry_to_results(result, result_mesh, output_mesh):
+    """Extend result fields to an output mesh containing static nodes."""
+    if output_mesh is result_mesh or output_mesh.n_nodes == result_mesh.n_nodes:
+        return result
+
+    n_extra = output_mesh.n_nodes - result_mesh.n_nodes
+    for field, value in tuple(result.node_data.items()):
+        value = np.asarray(value)
+        if value.ndim == 0 or value.shape[-1] != result_mesh.n_nodes:
+            continue
+        dtype = np.result_type(value.dtype, float)
+        value = value.astype(dtype, copy=False)
+        fill_value = 0.0 if field == "Disp" else np.nan
+        padding = np.full(value.shape[:-1] + (n_extra,), fill_value, dtype=dtype)
+        result.node_data[field] = np.concatenate((value, padding), axis=-1)
+
+    # A regular result mesh becomes submesh 0 of the augmented MultiMesh.
+    # Element and Gauss-point data therefore remain absent on obstacle blocks.
+    if not isinstance(result_mesh, MultiMesh):
+        result.element_data = {
+            field: {0: value} for field, value in result.element_data.items()
+        }
+        result.gausspoint_data = {
+            field: {0: value} for field, value in result.gausspoint_data.items()
+        }
+    return result
+
+
 def _find_constitutivelaw_with_method(weakform, method_name):
     """Return a constitutive law from a possibly nested weakform."""
     law = getattr(weakform, "constitutivelaw", None)
@@ -549,6 +642,7 @@ class _ProblemOutput:
         position=1,
         element_set=None,
         save_mesh=True,
+        include_static_obstacles=False,
     ):
         dirname = os.path.dirname(filename)
         # filename = os.path.basename(filename)
@@ -565,6 +659,11 @@ class _ProblemOutput:
             filename = os.path.splitext(filename)[
                 0
             ]  # remove extension for the base name
+
+        if include_static_obstacles and file_format != "fdh5":
+            raise ValueError(
+                "include_static_obstacles=True requires the 'fdh5' file format."
+            )
 
         if file_format not in _available_format:
             print(
@@ -590,7 +689,10 @@ class _ProblemOutput:
         if isinstance(assemb, str):
             assemb = AssemblyBase.get_all()[assemb]
 
-        mesh = _output_mesh_for_assembly(assemb, element_set)
+        if include_static_obstacles:
+            mesh = _mesh_with_static_obstacles(assemb, element_set)
+        else:
+            mesh = _output_mesh_for_assembly(assemb, element_set)
 
         if not (os.path.isdir(dirname)) and dirname != "":
             os.mkdir(dirname)
@@ -604,6 +706,7 @@ class _ProblemOutput:
             "position": position,
             "element_set": element_set,
             "compressed": compressed,
+            "include_static_obstacles": include_static_obstacles,
         }
         self.__list_output.append(new_output)
 
@@ -642,9 +745,15 @@ class _ProblemOutput:
             position = output["position"]
             element_set = output["element_set"]
             compressed = output["compressed"]
+            include_static_obstacles = output["include_static_obstacles"]
 
             assemb = output["assembly"]
             # material = assemb.weakform.GetConstitutiveLaw()
+            result_mesh = _output_mesh_for_assembly(assemb, element_set)
+            if include_static_obstacles:
+                output_mesh = _mesh_with_static_obstacles(assemb, element_set)
+            else:
+                output_mesh = result_mesh
 
             if file_format in _available_format:  # if not ignored
                 if (comp_output is None) or (file_format in ["fdz", "fdh5"]):
@@ -663,7 +772,7 @@ class _ProblemOutput:
                     list_file_format.append(file_format)
                     list_compressed.append(compressed)
 
-                    out = DataSet(_output_mesh_for_assembly(assemb, element_set))
+                    out = DataSet(output_mesh)
                     list_data.append(out)
                 else:
                     # else, the same file is used
@@ -679,6 +788,8 @@ class _ProblemOutput:
                     element_set,
                     False,
                 )
+                if include_static_obstacles:
+                    _add_static_geometry_to_results(res, result_mesh, output_mesh)
                 out.add_data(res)
 
         for i, out in enumerate(list_data):
