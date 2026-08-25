@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
