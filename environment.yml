@@ -6,7 +6,7 @@ channels:
 
 dependencies:
   - python>=3.10
-  - numpy>=1.26
+  - numpy>=2
   - scipy
   - h5py
   - pypardiso # [x86 or x86_64]
@@ -14,8 +14,8 @@ dependencies:
   - python-mumps  # exercises _solver_mumps default path and the
                   # _MumpsFactor reuse adapter, regardless of platform
   - vtk>=9.2
-  - pyvista>=0.39
-  - simcoon>=1.13.1
+  - pyvista>=0.42
+  - simcoon>=2.0.0b1
   - pytest
   - pytest-xdist
   - sphinx_rtd_theme

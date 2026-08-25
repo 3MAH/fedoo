@@ -40,9 +40,8 @@ Here are the main features:
 
 Documentation
 --------------
-The [documentation](https://fedoo.readthedocs.io/en/latest/?badge=latest) is
-provided by readthedocs at
-[https://fedoo.readthedocs.io](https://fedoo.readthedocs.io).
+The [documentation](https://3mah.github.io/fedoo-docs/) is published on
+a dedicated GitHub Pages.
 
 
 Installation

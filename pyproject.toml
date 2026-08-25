@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fedoo"
-version = "0.8.4"
+version = "1.0.0b1"
 authors = [
     {name = "3MAH", email = 'set3mah@gmail.com'},
 ]
@@ -25,16 +25,16 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    'numpy>=2.00',
+    'numpy>=2.0',
     'scipy',
     'h5py',
-    'simcoon>=2.0',
+    'simcoon>=2.0.0b1',
 ]
 
 [project.optional-dependencies]
 all = ['fedoo[solver,plot,test,ipc,io]']
 io = ['meshio']
-ipc = ['ipctk>=1.6.0']
+ipc = ['ipctk>=1.6']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
     'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
