@@ -291,9 +291,7 @@ def test_solve_history_saves_at_exact_time_intervals():
         assembly = _MatrixStorageAssembly(mesh, space)
         problem = fd.problem.ExplicitDynamic(assembly, time_step=0.03)
         saved = []
-        problem.save_results = lambda iteration: saved.append(
-            (iteration, problem.time)
-        )
+        problem.save_results = lambda iteration: saved.append((iteration, problem.time))
 
         problem.solve_history(
             tmax=0.25,

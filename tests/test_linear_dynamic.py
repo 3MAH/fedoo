@@ -5,9 +5,7 @@ import fedoo as fd
 
 def _dynamic_model():
     fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(
-        nx=3, ny=2, x_min=0.0, x_max=2.0, elm_type="quad4"
-    )
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, x_min=0.0, x_max=2.0, elm_type="quad4")
     material = fd.constitutivelaw.ElasticIsotrop(100.0, 0.3)
     material.set_density(2.0)
     weakform = fd.weakform.StressEquilibrium(material)
@@ -115,9 +113,7 @@ def test_linear_newmark_regression():
         ]
     )
     np.testing.assert_allclose(current.get_X(), expected_displacement, rtol=1e-11)
-    np.testing.assert_allclose(
-        current.get_velocity(), expected_velocity, rtol=1e-11
-    )
+    np.testing.assert_allclose(current.get_velocity(), expected_velocity, rtol=1e-11)
     np.testing.assert_allclose(
         current.get_acceleration(), expected_acceleration, rtol=1e-11
     )

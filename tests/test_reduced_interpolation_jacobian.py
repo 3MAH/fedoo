@@ -74,9 +74,9 @@ def test_reduced_solid_operator_uses_center_jacobian(
     full_variable = "DispX"
     for direction, coordinate in enumerate(coordinates):
         reduced_derivative = space.derivative(reduced_variable, coordinate).op[0]
-        reduced_operator = assembly._get_elementary_operator(
-            reduced_derivative
-        )[0].toarray()
+        reduced_operator = assembly._get_elementary_operator(reduced_derivative)[
+            0
+        ].toarray()
         expected_operator = np.tile(
             expected_derivative[direction], (assembly.n_elm_gp, 1)
         )
@@ -116,14 +116,12 @@ def test_reduced_shell_operator_uses_center_jacobian():
     center_natural_derivative = get_element("quad4r")(
         assembly.n_elm_gp
     ).shape_function_derivative_gp[0]
-    expected_x_derivative = (
-        center_inverse_jacobian @ center_natural_derivative
-    )[0]
+    expected_x_derivative = (center_inverse_jacobian @ center_natural_derivative)[0]
 
     reduced_derivative = space.derivative("_DispZ", "X").op[0]
-    reduced_operator = assembly._get_elementary_operator(
-        reduced_derivative
-    )[0].toarray()
+    reduced_operator = assembly._get_elementary_operator(reduced_derivative)[
+        0
+    ].toarray()
     expected_operator = np.tile(expected_x_derivative, (assembly.n_elm_gp, 1))
     assert np.allclose(reduced_operator, expected_operator)
 

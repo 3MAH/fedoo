@@ -68,9 +68,7 @@ def test_linear_supports_rayleigh_coefficients_per_assembly_part():
     problem.initialize()
 
     expected = _expected_damping(problem._dynamic_storage_data, problem.n_dof)
-    np.testing.assert_allclose(
-        problem._dynamic_damping.toarray(), expected.toarray()
-    )
+    np.testing.assert_allclose(problem._dynamic_damping.toarray(), expected.toarray())
 
 
 def test_explicit_supports_rayleigh_coefficients_per_assembly_part():
@@ -93,9 +91,7 @@ def test_explicit_supports_rayleigh_coefficients_per_assembly_part():
 def test_conflicting_damping_in_one_leaf_requires_separate_assemblies():
     _, assembly_1, assembly_2 = _heterogeneous_assembly()
     combined_weakform = assembly_1.weakform + assembly_2.weakform
-    combined_assembly = fd.Assembly.create(
-        combined_weakform, assembly_1.mesh, "quad4"
-    )
+    combined_assembly = fd.Assembly.create(combined_weakform, assembly_1.mesh, "quad4")
 
     with np.testing.assert_raises_regex(
         NotImplementedError, "separate leaf assemblies"

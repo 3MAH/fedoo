@@ -38,9 +38,7 @@ def test_legacy_factory_names_are_concrete_weakform_sum_types():
 
 
 def test_implicit_dynamic_module_is_not_shadowed_by_a_factory_function():
-    implicit_dynamic_module = importlib.import_module(
-        "fedoo.weakform.implicit_dynamic"
-    )
+    implicit_dynamic_module = importlib.import_module("fedoo.weakform.implicit_dynamic")
 
     assert isinstance(implicit_dynamic_module, types.ModuleType)
     assert implicit_dynamic_module.ImplicitDynamic is fd.weakform.ImplicitDynamic
@@ -86,9 +84,7 @@ def test_composite_weakforms_preserve_child_assembly_options():
     assert equilibrium.assembly_options.get("n_elm_gp", "hex8") == 1
     assert hourglass.assembly_options.get("n_elm_gp", "quad4") == 1
     assert hourglass.assembly_options.get("n_elm_gp", "hex8") == 1
-    assert (
-        hourglass.assembly_options.get("elm_type", "quad4") == "quad4hourglass"
-    )
+    assert hourglass.assembly_options.get("elm_type", "quad4") == "quad4hourglass"
     assert hourglass.assembly_options.get("elm_type", "hex8") == "hex8hourglass"
 
     poromechanics = [
@@ -103,9 +99,7 @@ def test_composite_weakforms_preserve_child_assembly_options():
     for weakform in poromechanics:
         assert weakform.assembly_options is None
         assert (
-            weakform.list_weakform[0].assembly_options.get(
-                "assume_sym", "quad4", True
-            )
+            weakform.list_weakform[0].assembly_options.get("assume_sym", "quad4", True)
             is False
         )
 
@@ -130,13 +124,9 @@ def test_composite_assembly_options_are_applied_by_assembly_create():
         "quad4",
         "quad4hourglass",
     ]
-    assert all(
-        assembly.n_elm_gp == 1 for assembly in reduced_assembly.list_assembly
-    )
+    assert all(assembly.n_elm_gp == 1 for assembly in reduced_assembly.list_assembly)
 
-    poromechanics = fd.weakform.PoroMechanicsSimple(
-        material, fluid, nlgeom=False
-    )
+    poromechanics = fd.weakform.PoroMechanicsSimple(material, fluid, nlgeom=False)
     poromechanics_assembly = fd.Assembly.create(poromechanics, mesh)
     assert isinstance(poromechanics_assembly, Assembly)
     assert poromechanics_assembly.assume_sym is False

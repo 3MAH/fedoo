@@ -11,9 +11,8 @@ class _ReferenceBbar(fd.weakform.StressEquilibriumBbar):
         eps = self.space.op_strain()
         n_normal_components = self.space.ndim
         eps_vol = sum(eps[:n_normal_components])
-        eps_vol_reduced = (
-            self.space.derivative("_DispX", "X")
-            + self.space.derivative("_DispY", "Y")
+        eps_vol_reduced = self.space.derivative("_DispX", "X") + self.space.derivative(
+            "_DispY", "Y"
         )
         if n_normal_components == 3:
             eps_vol_reduced += self.space.derivative("_DispZ", "Z")
@@ -25,16 +24,11 @@ class _ReferenceBbar(fd.weakform.StressEquilibriumBbar):
 
         tangent = assembly.sv["TangentMatrix"]
         stress_operator = [
-            sum(
-                0 if eps_bar[j] == 0 else eps_bar[j] * tangent[i][j]
-                for j in range(6)
-            )
+            sum(0 if eps_bar[j] == 0 else eps_bar[j] * tangent[i][j] for j in range(6))
             for i in range(6)
         ]
         return sum(
-            0
-            if eps_bar[i] == 0
-            else eps_bar[i].virtual * stress_operator[i]
+            0 if eps_bar[i] == 0 else eps_bar[i].virtual * stress_operator[i]
             for i in range(6)
         )
 
@@ -51,15 +45,11 @@ class _ComponentwiseReduced(fd.weakform.StressEquilibriumBbar):
 
         tangent = assembly.sv["TangentMatrix"]
         stress_operator = [
-            sum(
-                0 if eps[j] == 0 else eps[j] * tangent[i][j]
-                for j in range(6)
-            )
+            sum(0 if eps[j] == 0 else eps[j] * tangent[i][j] for j in range(6))
             for i in range(6)
         ]
         return sum(
-            0 if eps[i] == 0 else eps[i].virtual * stress_operator[i]
-            for i in range(6)
+            0 if eps[i] == 0 else eps[i].virtual * stress_operator[i] for i in range(6)
         )
 
 
