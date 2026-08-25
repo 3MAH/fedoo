@@ -66,7 +66,7 @@ add_module_names = False
 #
 html_theme = "sphinx_rtd_theme"
 # html_theme = 'sphinxdoc'
-html_logo = "_static/fedOOLogos_ss_fond.png"
+html_logo = "_static/fedoo_logos_ss_fond.png"
 
 html_theme_options = {
     # 'canonical_url': 'https://3mah.github.io/fedoo-docs/',

@@ -4,7 +4,7 @@ Overview
 About
 ______________
 
-.. image:: _static/fedOOLogos.png
+.. image:: _static/fedoo_logos.png
 
 Fedoo is a free open source Finite Element library developed in Python.
 It is mainly dedicated for mechanical problems but is easily developpable for other kind of problems (thermal laws already includes).

@@ -18,7 +18,7 @@ The main steps to define a problem are:
 Import library
 ______________
 
-The first step is to import the fedoo library. Obvisously, fedoo needs to be :doc:`installed <Install>`.
+The first step is to import the fedoo library. Obvisously, fedoo needs to be :doc:`installed <install>`.
 
 .. code-block:: python
 
@@ -60,9 +60,9 @@ In fedoo, the equation is defined by creating a WeakForm object.
 The type of WeakForm may be related to a specific type of elements. 
 
 For instance, a beam weak formulation should be associated to beam elements.
-The module :doc:`weakform <WeakForm>` list the available types of weak formulation. 
+The module :doc:`weakform <weak_form>` list the available types of weak formulation.
 Most of weak formulations needs the definition of a material constitutive law.
-The module :doc:`constitutivelaw <ConstitutiveLaw>` list the available ConstitutiveLaw.
+The module :doc:`constitutivelaw <constitutive_law>` list the available ConstitutiveLaw.
 
 For instance a simple weak formulation may be defined by:
 
@@ -111,7 +111,7 @@ For direct solver, it is strongly recommended to install one of
 ``pypardiso`` (Intel CPUs), ``python-mumps`` (cross-platform, also
 required for :meth:`Problem.set_reuse_factorization`) or ``petsc4py``
 for drastically improved computation performance. See
-:doc:`Install` for the recommended commands per platform.
+:doc:`install` for the recommended commands per platform.
 
 Boundary conditions
 _____________________

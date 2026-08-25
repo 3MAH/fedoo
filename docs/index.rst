@@ -6,15 +6,15 @@ Welcome to FEDOO's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   Overview
-   Install
-   Quick_Start  
-   Mesh
-   ConstitutiveLaw
-   WeakForm
-   Assembly   
-   Time
-   Problem
+   overview
+   install
+   quick_start
+   mesh
+   constitutive_law
+   weak_form
+   assembly
+   time
+   problem
    boundary_conditions
    post_processing
    examples/index
