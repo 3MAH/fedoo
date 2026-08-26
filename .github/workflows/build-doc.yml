@@ -4,11 +4,18 @@ on:
   workflow_dispatch:
   push:
     branches: [ master ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ master ]
 
 env:
   USE_CACHE: "false"
+
+# All documentation channels are stored on the same branch of fedoo-docs.
+# Serialize deployments so concurrent builds cannot overwrite each other's push.
+concurrency:
+  group: fedoo-documentation-publish
+  cancel-in-progress: false
 
 jobs:
   build-doc:
@@ -19,6 +26,31 @@ jobs:
     
     steps:
       - uses: actions/checkout@v6
+
+      - name: Select documentation channel
+        id: documentation
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            state="dev"
+            destination="dev_pr"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if [[ "$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$ ]]; then
+              state="beta"
+              destination="beta"
+            else
+              state="stable"
+              destination="stable"
+            fi
+          else
+            state="dev"
+            destination="dev"
+          fi
+
+          echo "FEDOO_DOC_STATE=$state" >> "$GITHUB_ENV"
+          echo "destination_dir=$destination" >> "$GITHUB_OUTPUT"
+          echo "Documentation state: $state"
+          echo "Deployment directory: $destination"
 
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v4
@@ -73,7 +105,7 @@ jobs:
           key: doc-build-${{ hashFiles('fedoo/_version.py') }}
 
       - name: Build Documentation
-        run: make -C docs html
+        run: make -C docs clean html
 
       - name: Upload HTML documentation
         if: always()
@@ -83,23 +115,16 @@ jobs:
           path:
             docs/build/html/
 
-      - name: Deploy HTML documentation (Release Only)
-        # Only runs if a tag starting with 'v' is pushed
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Deploy HTML documentation
+        # Fork pull requests do not have access to FEDOO_DOC_TOKEN. Their
+        # documentation remains available through the artifact uploaded above.
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
           external_repository: 3MAH/fedoo-docs
           publish_branch: main
           publish_dir: ./docs/build/html
-
-      - name: Deploy dev documentation
-        # Runs on master pushes or Pull Requests (NOT on tags)
-        # to preview dev documentation: "http://htmlpreview.github.io/?https://github.com/3MAH/fedoo-docs/blob/dev/index.html"
-        if: (!startsWith(github.ref, 'refs/tags/v'))
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          personal_token: ${{ secrets.FEDOO_DOC_TOKEN }}
-          external_repository: 3MAH/fedoo-docs
-          publish_branch: dev
-          publish_dir: ./docs/build/html
+          destination_dir: ${{ steps.documentation.outputs.destination_dir }}

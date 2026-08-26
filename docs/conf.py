@@ -13,6 +13,12 @@
 
 import os
 import sys
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 import pyvista
 from pyvista.plotting.utilities.sphinx_gallery import DynamicScraper
 from sphinx_gallery.sorting import FileNameSortKey
@@ -25,6 +31,22 @@ project = "fedoo"
 copyright = "2019, Etienne Prulière"
 author = "Etienne Prulière"
 master_doc = "index"
+
+with open(os.path.join(os.path.dirname(__file__), "..", "pyproject.toml"), "rb") as file:
+    release = tomllib.load(file)["project"]["version"]
+
+version = release
+documentation_state = os.environ.get("FEDOO_DOC_STATE", "dev").lower()
+if documentation_state not in {"beta", "stable", "dev"}:
+    raise ValueError(
+        "FEDOO_DOC_STATE must be one of 'beta', 'stable' or 'dev'; "
+        f"got {documentation_state!r}."
+    )
+
+rst_epilog = f"""
+.. |fedoo_version| replace:: {release}
+.. |documentation_state| replace:: {documentation_state}
+"""
 
 # -- General configuration ---------------------------------------------------
 
@@ -67,6 +89,7 @@ add_module_names = False
 html_theme = "sphinx_rtd_theme"
 # html_theme = 'sphinxdoc'
 html_logo = "_static/fedoo_logos_ss_fond.png"
+html_title = f"Fedoo {release} ({documentation_state})"
 
 html_theme_options = {
     # 'canonical_url': 'https://3mah.github.io/fedoo-docs/',

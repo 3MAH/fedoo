@@ -1,6 +1,12 @@
 Welcome to FEDOO's documentation!
 =================================
 
+.. important::
+
+   **Fedoo version:** |fedoo_version|
+
+   **Documentation state:** |documentation_state|
+
 
 .. toctree::
    :maxdepth: 2

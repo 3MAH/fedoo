@@ -6,6 +6,7 @@ channels:
 
 dependencies:
   - python=3.10
+  - tomli
   - numpy>=2
   - scipy
   - h5py
