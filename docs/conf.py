@@ -32,7 +32,9 @@ copyright = "2019, Etienne Prulière"
 author = "Etienne Prulière"
 master_doc = "index"
 
-with open(os.path.join(os.path.dirname(__file__), "..", "pyproject.toml"), "rb") as file:
+with open(
+    os.path.join(os.path.dirname(__file__), "..", "pyproject.toml"), "rb"
+) as file:
     release = tomllib.load(file)["project"]["version"]
 
 version = release
