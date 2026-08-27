@@ -40,8 +40,11 @@ Here are the main features:
 
 Documentation
 --------------
-The [documentation](https://3mah.github.io/fedoo-docs/) is published on
-a dedicated GitHub Pages.
+
+- [Stable documentation](https://3mah.github.io/fedoo-docs/stable/)
+- [Beta documentation](https://3mah.github.io/fedoo-docs/beta/)
+- [Development documentation](https://3mah.github.io/fedoo-docs/dev/)
+- [Release notes](https://github.com/3MAH/fedoo/releases)
 
 
 Installation
