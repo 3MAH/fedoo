@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import os
+import sys
 from zipfile import ZipFile, Path as ZipPath
 from fedoo.core.mesh import Mesh, MultiMesh
 from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
@@ -32,6 +33,20 @@ except (ImportError, RuntimeError):
     # RuntimeError: qtpy raises QtBindingsNotFoundError (RuntimeError subclass
     # in some versions) when pyvistaqt is installed without any Qt binding.
     USE_PYVISTA_QT = False
+
+
+def _in_interactive_session():
+    """True in a REPL/IPython session where a Qt event loop keeps running.
+
+    In a plain ``python script.py`` run there is no running event loop: a
+    ``BackgroundPlotter`` window would close as soon as the script ends, so
+    ``plot`` must block on the Qt event loop instead.
+    """
+    if hasattr(sys, "ps1"):
+        return True
+    ipython_mod = sys.modules.get("IPython")
+    return ipython_mod is not None and ipython_mod.get_ipython() is not None
+
 
 try:
     import pandas
@@ -707,9 +722,11 @@ class DataSet:
                 meshplot.cell_data[key] = np.asarray(value)
 
         backgroundplotter = True
+        owns_qt_plotter = False
         if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
             # use pyvistaqt plotter
             pl = pvqt.BackgroundPlotter(window_size=window_size)
+            owns_qt_plotter = True
         elif plotter is None or plotter == "pv":
             # default pyvista plotter
             backgroundplotter = False
@@ -944,6 +961,11 @@ class DataSet:
 
         if not (backgroundplotter) and show:
             return pl.show(return_cpos=return_cpos)
+
+        if owns_qt_plotter and show and not _in_interactive_session():
+            # Plain script run: block until the window is closed, otherwise
+            # the process exits and the window vanishes immediately.
+            pl.app.exec()
 
         return pl
 
@@ -1271,6 +1293,16 @@ class DataSet:
 
         if not backgroundplotter and show:
             return pl.show(return_cpos=return_cpos)
+
+        if (
+            USE_PYVISTA_QT
+            and (plotter is None or plotter == "qt")
+            and show
+            and not _in_interactive_session()
+        ):
+            # qt plotter created by the submesh plot calls above: same
+            # blocking behavior as in ``plot`` for plain script runs.
+            pl.app.exec()
 
         return pl
 
