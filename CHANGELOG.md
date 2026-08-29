@@ -8,7 +8,8 @@ semantic versioning.
 
 ### Changed
 
-- **fedoo now requires `simcoon >= 2.0`** (previously `>= 1.14`).
+- **fedoo now requires `simcoon >= 2.0.0b1`** (previously `>= 1.14`). fedoo 1.0
+  targets the simcoon 2.0 series, whose first release is the `2.0.0b1` beta.
 
 ### Migration — simcoon 2.0 `tangent_mode`
 

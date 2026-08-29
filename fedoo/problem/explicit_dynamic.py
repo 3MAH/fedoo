@@ -233,6 +233,43 @@ class ExplicitDynamic(Problem):
     def _mass_action(self, vector):
         return np.asarray(self._mass_matrix @ vector).ravel()
 
+    def _end_step_acceleration(self, velocity):
+        """Return ``M^-1 f_int(u)`` at the current displacement on free DOFs.
+
+        This closes the symplectic central-difference velocity update. The
+        acceleration is defined by the internal (and constant external) force
+        only; Rayleigh damping is applied explicitly in the drift, so it is
+        intentionally excluded here. Storage providers may however carry a
+        velocity-proportional term inside ``get_time_inertia_force`` (the same
+        bias subtracted by ``_update_d``): it is removed at ``velocity``, the
+        end-step velocity estimate used by the solve, so the balance
+        ``M a + f_v(v) = f`` holds for the reported acceleration. Blocked DOFs
+        are set by the driver from the prescribed motion.
+        """
+        if self._assembled_internal_force is not None:
+            internal_force = self._assembled_internal_force
+        else:
+            internal_force = self._linear_internal_force(self._state.displacement)
+        if self._assembly_storage_providers:
+            internal_force = internal_force - self._assembly_inertia_bias(velocity)
+        acceleration = self._new_vect_dof()
+        free = self._dof_free
+        if len(free) == 0:
+            return acceleration
+        if (
+            self.mass_lumping
+            and not self._assembly_storage_providers
+            and self._mass is not None
+        ):
+            acceleration[free] = internal_force[free] / self._mass[free]
+        else:
+            reduced_mass = self._MatCB.T @ self._mass_matrix @ self._MatCB
+            reduced_force = self._MatCB.T @ internal_force
+            acceleration = np.asarray(
+                self._MatCB @ self._solve(reduced_mass, reduced_force)
+            ).ravel()
+        return acceleration
+
     def _default_mass_refresh(self):
         return any(
             not getattr(provider, "storage_matrix_is_constant", False)
@@ -490,6 +527,7 @@ class ExplicitDynamic(Problem):
         """
         if not self._step_solved:
             raise RuntimeError("solve() must be called before update().")
+        previous_state = self._copy_state(self._state)
         self._state = self.time_integrator.state_from_displacement(
             self._state,
             self._predicted,
@@ -518,6 +556,35 @@ class ExplicitDynamic(Problem):
         if update_mass:
             self._assemble_fe_mass()
             self._mass_matrix = self._current_mass_matrix(refresh_providers=True)
+
+        if self.time_integrator.needs_end_step_acceleration:
+            # Close velocity Verlet: v_{n+1} = v_n + 0.5*dt*(a_n + a_{n+1}) with
+            # a_{n+1} = M^-1 f(u_{n+1}) evaluated at the just-updated state. The
+            # end-step acceleration also becomes a_n for the next drift, keeping
+            # the mass-history predictor consistent with the current geometry.
+            dt = self.time_step
+            # Velocity estimate for velocity-proportional provider forces: the
+            # one the solve used (alpha/predictor evaluation), still available
+            # here since _evaluation is cleared below.
+            if self._evaluation is not None:
+                evaluation_velocity = self._evaluation[1]
+            else:
+                evaluation_velocity = previous_state.velocity
+            end_acceleration = self._end_step_acceleration(evaluation_velocity)
+            velocity = previous_state.velocity + 0.5 * dt * (
+                previous_state.acceleration + end_acceleration
+            )
+            blocked = getattr(self, "_dof_blocked", None)
+            if blocked is not None and len(blocked):
+                displacement = self._state.displacement
+                velocity[blocked] = (
+                    displacement[blocked] - previous_state.displacement[blocked]
+                ) / dt
+                end_acceleration[blocked] = (
+                    velocity[blocked] - previous_state.velocity[blocked]
+                ) / dt
+            self._state.velocity = velocity
+            self._state.acceleration = end_acceleration
 
         self._step_prepared = False
         self._step_solved = False

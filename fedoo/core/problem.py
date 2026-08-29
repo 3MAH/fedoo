@@ -333,9 +333,18 @@ class Problem(ProblemBase):
             if self.__A.shape[0] != n_dof:  # probably not required
                 self.__A.resize((n_dof))
 
+            free_diagonal = self.__A[self._dof_free]
+            if np.any(free_diagonal == 0):
+                n_zero = int(np.count_nonzero(free_diagonal == 0))
+                raise ZeroDivisionError(
+                    f"{n_zero} free DOF(s) have a zero diagonal in the lumped "
+                    "mass matrix (e.g. a rotational/drilling DOF, or a node with "
+                    "no inertia contribution). Provide inertia for every active "
+                    "DOF, or constrain the massless DOFs, before solving."
+                )
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
-            ) / self.__A[self._dof_free]
+            ) / free_diagonal
 
     def get_X(self):  # solution of the linear system
         return self.__X

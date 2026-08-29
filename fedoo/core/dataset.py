@@ -25,9 +25,12 @@ except ImportError:
     USE_PYVISTA = False
 try:
     import pyvistaqt as pvqt
+    from qtpy import QtWidgets  # noqa: F401 - fails if no Qt binding is installed
 
     USE_PYVISTA_QT = True
-except ImportError:
+except (ImportError, RuntimeError):
+    # RuntimeError: qtpy raises QtBindingsNotFoundError (RuntimeError subclass
+    # in some versions) when pyvistaqt is installed without any Qt binding.
     USE_PYVISTA_QT = False
 
 try:

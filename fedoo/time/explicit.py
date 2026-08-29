@@ -56,6 +56,17 @@ class ExplicitSecondOrderIntegrator(TimeIntegratorBase):
     evolution = SECOND_ORDER
     is_explicit = True
 
+    @property
+    def needs_end_step_acceleration(self):
+        """True when the driver must re-evaluate acceleration at ``u_{n+1}``.
+
+        Symplectic central difference (velocity Verlet) needs the acceleration
+        at the end-of-step displacement to close the velocity update. Schemes
+        that recover their end-step kinematics from the predictor alone return
+        ``False``.
+        """
+        return False
+
     def compile_assembly(self, assembly, evolution=None):
         """Register assembly-level storage while keeping static weakforms."""
         return super().compile_assembly(assembly, evolution)
@@ -159,6 +170,12 @@ class ExplicitGeneralizedAlpha(ExplicitSecondOrderIntegrator):
         if self.gamma <= 0.0:
             raise ValueError("gamma must be strictly positive.")
 
+    @property
+    def needs_end_step_acceleration(self):
+        # beta == 0 is explicit central difference: close velocity Verlet with
+        # the acceleration evaluated at the end-of-step displacement.
+        return self.beta == 0.0
+
     def predict(self, state, dt):
         displacement = (
             state.displacement
@@ -205,13 +222,18 @@ class ExplicitGeneralizedAlpha(ExplicitSecondOrderIntegrator):
     def state_from_displacement(self, state, predicted, displacement, dt):
         predicted_displacement, predicted_velocity = predicted
         if self.beta == 0.0:
-            base_displacement = (
-                state.displacement
-                + dt * state.velocity
-                - 0.5 * dt**2 * state.acceleration
+            # Central difference (velocity Verlet). The end-step acceleration
+            # a_{n+1} = M^-1 f(u_{n+1}) is evaluated at the new displacement by
+            # the problem driver, which then closes the velocity update
+            # v_{n+1} = v_n + 0.5*dt*(a_n + a_{n+1}). Only advance displacement
+            # here; keep the current velocity/acceleration as provisional values
+            # so the invariant ``state.acceleration == a_n = M^-1 f(u_n)`` holds
+            # when the driver reads a_n for the trapezoidal velocity update.
+            return ExplicitDynamicState(
+                displacement.copy(),
+                state.velocity.copy(),
+                state.acceleration.copy(),
             )
-            acceleration = (displacement - base_displacement) / dt**2
-            velocity = state.velocity + 0.5 * dt * (state.acceleration + acceleration)
         else:
             acceleration = (displacement - predicted_displacement) / (self.beta * dt**2)
             velocity = predicted_velocity + self.gamma * dt * acceleration
