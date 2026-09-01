@@ -109,6 +109,10 @@ class ExplicitDynamic(Problem):
         self._evaluation = None
         self._force_is_assembled = False
         self._assembled_internal_force = None
+        self._assembled_force_displacement = None
+        self._assembled_force_complete = False
+        self._acceleration_initialized = False
+        self._initial_acceleration_user_supplied = False
         self._mass_assembly = None
         self._storage_data = None
         self._mass = None
@@ -127,19 +131,11 @@ class ExplicitDynamic(Problem):
             velocity=self._new_vect_dof(),
             acceleration=self._new_vect_dof(),
         )
-        self._state_start = self._copy_state(self._state)
+        self._state_start = self._state.copy()
         self._time_start = self.time
         self.set_X(self._state.displacement.copy())
         self.set_time_integrator(
             SECOND_ORDER, integrator if integrator is not None else CentralDifference()
-        )
-
-    @staticmethod
-    def _copy_state(state):
-        return ExplicitDynamicState(
-            state.displacement.copy(),
-            state.velocity.copy(),
-            state.acceleration.copy(),
         )
 
     def _global_matrix(self):
@@ -234,24 +230,23 @@ class ExplicitDynamic(Problem):
         return np.asarray(self._mass_matrix @ vector).ravel()
 
     def _end_step_acceleration(self, velocity):
-        """Return ``M^-1 f_int(u)`` at the current displacement on free DOFs.
+        """Return the complete acceleration at the current displacement.
 
         This closes the symplectic central-difference velocity update. The
-        acceleration is defined by the internal (and constant external) force
-        only; Rayleigh damping is applied explicitly in the drift, so it is
-        intentionally excluded here. Storage providers may however carry a
-        velocity-proportional term inside ``get_time_inertia_force`` (the same
-        bias subtracted by ``_update_d``): it is removed at ``velocity``, the
-        end-step velocity estimate used by the solve, so the balance
-        ``M a + f_v(v) = f`` holds for the reported acceleration. Blocked DOFs
-        are set by the driver from the prescribed motion.
+        force balance includes Neumann loads, internal force, Rayleigh damping
+        and velocity-proportional assembly-provider terms. ``velocity`` is an
+        explicit end-step predictor, so no nonlinear velocity iteration is
+        introduced. Blocked DOFs are set by the driver from prescribed motion.
         """
         if self._assembled_internal_force is not None:
-            internal_force = self._assembled_internal_force
+            force = self._assembled_internal_force.copy()
         else:
-            internal_force = self._linear_internal_force(self._state.displacement)
-        if self._assembly_storage_providers:
-            internal_force = internal_force - self._assembly_inertia_bias(velocity)
+            force = self._linear_internal_force(self._state.displacement)
+        external_force = self.get_B()
+        if not np.isscalar(external_force):
+            force = force + np.asarray(external_force).ravel()
+        force = force - self._assembly_inertia_bias(velocity)
+        force = force - self._damping_force(velocity)
         acceleration = self._new_vect_dof()
         free = self._dof_free
         if len(free) == 0:
@@ -261,14 +256,25 @@ class ExplicitDynamic(Problem):
             and not self._assembly_storage_providers
             and self._mass is not None
         ):
-            acceleration[free] = internal_force[free] / self._mass[free]
+            acceleration[free] = force[free] / self._mass[free]
         else:
             reduced_mass = self._MatCB.T @ self._mass_matrix @ self._MatCB
-            reduced_force = self._MatCB.T @ internal_force
+            reduced_force = self._MatCB.T @ force
             acceleration = np.asarray(
                 self._MatCB @ self._solve(reduced_mass, reduced_force)
             ).ravel()
         return acceleration
+
+    def _initialize_current_acceleration(self):
+        """Establish ``a_n = M^-1 f(u_n, v_n)`` before the first drift."""
+        if (
+            self._acceleration_initialized
+            or not self.time_integrator.needs_end_step_acceleration
+        ):
+            return
+        self._state.acceleration = self._end_step_acceleration(self._state.velocity)
+        self._acceleration_initialized = True
+        self._state_start = self._state.copy()
 
     def _default_mass_refresh(self):
         return any(
@@ -403,6 +409,8 @@ class ExplicitDynamic(Problem):
             + np.asarray(self._stiffness_matrix @ self._state.displacement).ravel()
         )
         self._assembled_internal_force = initial_force.copy()
+        self._assembled_force_displacement = self._state.displacement.copy()
+        self._assembled_force_complete = True
 
         self._storage_data = build_storage_assembly(self.__assembly, SECOND_ORDER)
         self._mass_assembly = self._storage_data.assembly
@@ -421,7 +429,7 @@ class ExplicitDynamic(Problem):
         self._update_a(update_mass=False)
         self.set_D(self._new_vect_dof())
         self._initialized = True
-        self._state_start = self._copy_state(self._state)
+        self._state_start = self._state.copy()
         self._time_start = self.time
 
     def evaluate(self, update_weakform=False, compute="all"):
@@ -442,20 +450,35 @@ class ExplicitDynamic(Problem):
         )
         self.set_X(self._evaluation[0].copy())
         if update_weakform:
-            self.__assembly.update(self, compute)
-            if compute != "vector":
-                self._stiffness_matrix = self._global_matrix()
-                self._refresh_rayleigh_damping_matrix()
-            if compute != "matrix":
-                force = self.__assembly.current.get_global_vector()
-                self._assembled_internal_force = (
-                    self._new_vect_dof()
-                    if np.isscalar(force)
-                    else np.asarray(force).ravel().copy()
+            reuse_complete_force = (
+                compute == "all"
+                and self._assembled_force_complete
+                and self._assembled_internal_force is not None
+                and self._assembled_force_displacement is not None
+                and np.array_equal(
+                    self._evaluation[0], self._assembled_force_displacement
                 )
+            )
+            if reuse_complete_force:
+                self._force_is_assembled = True
             else:
-                self._assembled_internal_force = None
-            self._force_is_assembled = compute != "matrix"
+                self.__assembly.update(self, compute)
+                if compute != "vector":
+                    self._stiffness_matrix = self._global_matrix()
+                    self._refresh_rayleigh_damping_matrix()
+                if compute != "matrix":
+                    force = self.__assembly.current.get_global_vector()
+                    self._assembled_internal_force = (
+                        self._new_vect_dof()
+                        if np.isscalar(force)
+                        else np.asarray(force).ravel().copy()
+                    )
+                    self._assembled_force_displacement = self._evaluation[0].copy()
+                else:
+                    self._assembled_internal_force = None
+                    self._assembled_force_displacement = None
+                self._assembled_force_complete = compute == "all"
+                self._force_is_assembled = compute != "matrix"
         else:
             evaluation_is_current = np.array_equal(
                 self._evaluation[0], self._state.displacement
@@ -472,6 +495,11 @@ class ExplicitDynamic(Problem):
         compute="all",
     ):
         """Prepare ``A`` and ``D`` for one subsequent call to ``solve()``."""
+        if not self._initialized:
+            self.initialize()
+        if np.isscalar(self._Xbc):
+            self.apply_boundary_conditions()
+        self._initialize_current_acceleration()
         self.evaluate(update_weakform=update_weakform, compute=compute)
         if update_mass is None:
             update_providers = self._default_mass_refresh()
@@ -497,10 +525,10 @@ class ExplicitDynamic(Problem):
             raise TypeError(
                 f"Unexpected ExplicitDynamic.solve keyword: {next(iter(kwargs))}"
             )
-        if not self._step_prepared:
-            self.prepare_time_increment(update_weakform=False)
         if np.isscalar(self._Xbc):
             self.apply_boundary_conditions()
+        if not self._step_prepared:
+            self.prepare_time_increment(update_weakform=False)
 
         operator = self.get_A()
         if getattr(operator, "ndim", 0) == 1:
@@ -527,7 +555,7 @@ class ExplicitDynamic(Problem):
         """
         if not self._step_solved:
             raise RuntimeError("solve() must be called before update().")
-        previous_state = self._copy_state(self._state)
+        previous_state = self._state.copy()
         self._state = self.time_integrator.state_from_displacement(
             self._state,
             self._predicted,
@@ -549,10 +577,15 @@ class ExplicitDynamic(Problem):
                     if np.isscalar(force)
                     else np.asarray(force).ravel().copy()
                 )
+                self._assembled_force_displacement = self._state.displacement.copy()
             else:
                 self._assembled_internal_force = None
+                self._assembled_force_displacement = None
+            self._assembled_force_complete = compute == "all"
         else:
             self._assembled_internal_force = None
+            self._assembled_force_displacement = None
+            self._assembled_force_complete = False
         if update_mass:
             self._assemble_fe_mass()
             self._mass_matrix = self._current_mass_matrix(refresh_providers=True)
@@ -563,19 +596,26 @@ class ExplicitDynamic(Problem):
             # end-step acceleration also becomes a_n for the next drift, keeping
             # the mass-history predictor consistent with the current geometry.
             dt = self.time_step
-            # Velocity estimate for velocity-proportional provider forces: the
-            # one the solve used (alpha/predictor evaluation), still available
-            # here since _evaluation is cleared below.
-            if self._evaluation is not None:
-                evaluation_velocity = self._evaluation[1]
-            else:
-                evaluation_velocity = previous_state.velocity
-            end_acceleration = self._end_step_acceleration(evaluation_velocity)
+            # Explicit full-step predictor used for damping and other
+            # velocity-dependent forces. It preserves one force evaluation per
+            # accepted nonlinear state and does not introduce an iteration.
+            predicted_end_velocity = previous_state.velocity + (
+                dt * previous_state.acceleration
+            )
+            end_acceleration = self._end_step_acceleration(predicted_end_velocity)
             velocity = previous_state.velocity + 0.5 * dt * (
                 previous_state.acceleration + end_acceleration
             )
-            blocked = getattr(self, "_dof_blocked", None)
-            if blocked is not None and len(blocked):
+            if self._MFext is None:
+                # Without MPCs, _dof_slave contains only Dirichlet DOFs and is
+                # already stored by the generic boundary-condition machinery.
+                blocked = self._dof_slave
+            else:
+                # With MPCs, distinguish directly prescribed DOFs from other
+                # eliminated slaves before enforcing their kinematics.
+                dirichlet = getattr(self, "_dof_blocked", set())
+                blocked = np.fromiter(dirichlet, dtype=int, count=len(dirichlet))
+            if len(blocked):
                 displacement = self._state.displacement
                 velocity[blocked] = (
                     displacement[blocked] - previous_state.displacement[blocked]
@@ -585,6 +625,7 @@ class ExplicitDynamic(Problem):
                 ) / dt
             self._state.velocity = velocity
             self._state.acceleration = end_acceleration
+            self._acceleration_initialized = True
 
         self._step_prepared = False
         self._step_solved = False
@@ -596,7 +637,17 @@ class ExplicitDynamic(Problem):
     def set_start(self, save_results=False, callback=None):
         """Commit assembly history and optionally save the accepted state."""
         self.__assembly.set_start(self)
-        self._state_start = self._copy_state(self._state)
+        self._stiffness_matrix = self._global_matrix()
+        force = self.__assembly.current.get_global_vector()
+        self._assembled_internal_force = (
+            self._new_vect_dof()
+            if np.isscalar(force)
+            else np.asarray(force).ravel().copy()
+        )
+        self._assembled_force_displacement = self._state.displacement.copy()
+        self._assembled_force_complete = True
+        self._refresh_rayleigh_damping_matrix()
+        self._state_start = self._state.copy()
         self._time_start = self.time
         if save_results:
             self.save_results(self._output_counter)
@@ -606,10 +657,13 @@ class ExplicitDynamic(Problem):
 
     def to_start(self):
         """Restore the last state committed by :meth:`set_start`."""
-        self._state = self._copy_state(self._state_start)
+        self._state = self._state_start.copy()
         self.time = self._time_start
         self.set_X(self._state.displacement.copy())
         self.__assembly.to_start(self)
+        self._assembled_internal_force = None
+        self._assembled_force_displacement = None
+        self._assembled_force_complete = False
         self._step_prepared = False
         self._step_solved = False
 
@@ -624,12 +678,12 @@ class ExplicitDynamic(Problem):
         t_fact=1.0,
     ):
         """Prepare, solve and update one complete explicit increment."""
+        if apply_boundary_conditions:
+            self.apply_boundary_conditions(t_fact=t_fact)
         self.prepare_time_increment(
             update_weakform=update_weakform,
             update_mass=update_mass,
         )
-        if apply_boundary_conditions:
-            self.apply_boundary_conditions(t_fact=t_fact)
         self.solve()
         self.update(update_weakform=update_weakform)
         if set_start:
@@ -651,6 +705,8 @@ class ExplicitDynamic(Problem):
             if np.isscalar(force)
             else np.asarray(force).ravel().copy()
         )
+        self._assembled_force_displacement = self._state.displacement.copy()
+        self._assembled_force_complete = False
 
     def solve_history(
         self,
@@ -806,12 +862,21 @@ class ExplicitDynamic(Problem):
     def set_initial_displacement(self, name, value):
         self._set_vect_component(self._state.displacement, name, value)
         self.set_X(self._state.displacement.copy())
+        self._assembled_internal_force = None
+        self._assembled_force_displacement = None
+        self._assembled_force_complete = False
+        if not self._initial_acceleration_user_supplied:
+            self._acceleration_initialized = False
 
     def set_initial_velocity(self, name, value):
         self._set_vect_component(self._state.velocity, name, value)
+        if not self._initial_acceleration_user_supplied:
+            self._acceleration_initialized = False
 
     def set_initial_acceleration(self, name, value):
         self._set_vect_component(self._state.acceleration, name, value)
+        self._initial_acceleration_user_supplied = True
+        self._acceleration_initialized = True
 
     def set_rayleigh_damping(self, alpha, beta):
         """Override weakform damping with ``C = alpha*M + beta*K``."""
@@ -835,8 +900,13 @@ class ExplicitDynamic(Problem):
             velocity=self._new_vect_dof(),
             acceleration=self._new_vect_dof(),
         )
-        self._state_start = self._copy_state(self._state)
+        self._state_start = self._state.copy()
         self._initialized = False
+        self._assembled_internal_force = None
+        self._assembled_force_displacement = None
+        self._assembled_force_complete = False
+        self._acceleration_initialized = False
+        self._initial_acceleration_user_supplied = False
         self._step_prepared = False
         self._step_solved = False
         self.time = 0.0

@@ -16,6 +16,14 @@ class ExplicitDynamicState:
     velocity: np.ndarray
     acceleration: np.ndarray
 
+    def copy(self):
+        """Return an independent copy of every kinematic field."""
+        return type(self)(
+            self.displacement.copy(),
+            self.velocity.copy(),
+            self.acceleration.copy(),
+        )
+
 
 class ExplicitAssemblyAdapter:
     """Mark an assembly-level provider for problem-driven explicit use.
