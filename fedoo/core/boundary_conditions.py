@@ -135,6 +135,13 @@ class ListBC(BCBase):
     #     self.data.insert(index, bc)
 
     def append(self, bc):
+        if any(existing is bc for existing in self):
+            # Same OBJECT already registered: e.g. a RigidTie explicitly
+            # added by the user AND auto-registered by a RigidBodyAssembly
+            # (constraint/rigid_body.py _register_global_dofs). Adding it
+            # twice duplicates its MPCs, which silently corrupts the
+            # elimination (MatCB) and destroys Newton convergence.
+            return
         if self._problem is not None:
             bc.register_global_dofs(self._problem)
             bc.initialize(self._problem)
@@ -147,14 +154,21 @@ class ListBC(BCBase):
             self._update_during_inc = True
 
     def extend(self, iterable):
+        # keep only objects not already registered (identity guard: see append)
+        new_bcs = []
+        for bc in iterable:
+            if not any(existing is bc for existing in self) and not any(
+                existing is bc for existing in new_bcs
+            ):
+                new_bcs.append(bc)
         if self._problem is not None:
-            for bc in iterable:
+            for bc in new_bcs:
                 bc.register_global_dofs(self._problem)
                 bc.initialize(self._problem)
         if hasattr(iterable, "_keep_at_end") and iterable._keep_at_end:
-            self.data_end.extend(iterable)
+            self.data_end.extend(new_bcs)
         else:
-            self.data.extend(iterable)
+            self.data.extend(new_bcs)
 
         if hasattr(iterable, "_update_during_inc") and iterable._update_during_inc:
             self._update_during_inc = True
@@ -207,6 +221,9 @@ class ListBC(BCBase):
         """
         if len(args) == 1:  # assume arg[0] is a boundary condition object
             bc = args[0]
+            # NB: an object already registered (by identity) is silently
+            # ignored -- the guard lives in ListBC.append, the single
+            # insertion point.
             if hasattr(bc, "assemble_global_mat") and hasattr(bc, "current"):
                 # Assembly object
                 if hasattr(bc, "as_neumann"):

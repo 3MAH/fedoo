@@ -1,4 +1,5 @@
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.time.base import warn_if_conditionally_stable
 from fedoo.weakform.inertia import Inertia
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
@@ -234,6 +235,10 @@ class ImplicitDynamic(ImplicitDynamicSum):
         nlgeom=False,
         space=None,
     ):
+        # Newmark = generalized-alpha with alpha_m = alpha_f = 0: warn on a
+        # conditionally stable (beta, gamma) pair (e.g. gamma=0.6 with the
+        # default-looking beta=0.25) -- see warn_if_conditionally_stable.
+        warn_if_conditionally_stable(beta, gamma, context="ImplicitDynamic")
         if isinstance(constitutivelaw, WeakFormBase):
             stiffness_weakform = constitutivelaw
         else:
@@ -247,7 +252,10 @@ class ImplicitDynamic(ImplicitDynamicSum):
         _NewmarkStiffness.__init__(stiffness_weakform, beta, gamma)
 
         time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
-        time_integration.assembly_options["assume_sym"] = True
+        # assume_sym is left unset so that both children share the same
+        # assembly grouping key (merged assembly); the stiffness weakform
+        # decides it at initialize (True except UL, where the Lie tangent is
+        # not major-symmetric).
         super().__init__([stiffness_weakform, time_integration], name)
 
 
@@ -287,6 +295,7 @@ class ImplicitDynamic2(WeakFormBase):
             constitutivelaw, stiffness_name, nlgeom, space
         )
         self.constitutivelaw = self.stiffness_weakform.constitutivelaw
+        warn_if_conditionally_stable(beta, gamma, context="ImplicitDynamic2")
         self.beta = beta
         self.gamma = gamma
         self.density = density

@@ -38,11 +38,14 @@ class Simcoon(Mechanical3D):
       stiffness / hardening parameters with this convention or the
       response will not match the intended material orientation.
 
-    * Hyperelastic laws are gated on plane stress (see
-      ``_Lt_from_F`` branch); they remain compatible with 2Daxi at
+    * Hyperelastic laws (those with ``_Lt_from_F = True``) are gated on
+      plane stress; they remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
     """
+
+    _corotational_box_tangent = True
+    # simcoon umats return the corotational box tangent d(tau_hat)/dD
 
     def __init__(self, umat_name, props, name=""):
         # props is a nparray containing all the material variables

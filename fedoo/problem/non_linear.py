@@ -5,6 +5,7 @@ from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
+from fedoo.core.base import InvalidKinematicStateError
 from scipy.sparse.linalg import eigs, eigsh, ArpackNoConvergence
 import warnings
 from typing import Callable
@@ -541,7 +542,7 @@ class _NonLinearBase:
             # Multiple constraints exist: use the manager
             self._step_size_callback = _line_search_manager
 
-    def add_line_search(self, method="Quadratic", name=None):
+    def add_line_search(self, method="Quadratic", name=None, mode="safeguard"):
         r"""Add line search algorithm for the Newton-Raphson solver.
 
         Line search improves global convergence by scaling the displacement
@@ -551,8 +552,21 @@ class _NonLinearBase:
 
         Parameters
         ----------
+        mode : {'safeguard', 'minimize'}, default 'safeguard'
+            The overall line search policy:
+
+            * **'safeguard'** (default): pure validity filter. The full
+              Newton step is accepted whenever the trial state is
+              kinematically valid; geometric backtracking is applied only
+              on a degenerated trial state (:math:`\det F \le 0`). This
+              never throttles the legitimate large steps of soft modes
+              (whose quadratic remainder inflates the residual norm as
+              :math:`\alpha^2` while remaining excellent steps), which any
+              residual-monotone rule would strangle. ``method`` is ignored.
+            * **'minimize'**: classical residual-descent line search using
+              ``method`` below (the pre-safeguard behavior).
         method : {'Armijo', 'Residual', 'Energy', 'Quadratic'} or callable, default 'Quadratic'
-            The strategy used to determine or refine the step size:
+            The residual-descent strategy used when ``mode='minimize'``:
 
             * **'Armijo'**: Ensures a "sufficient decrease" in the residual
               using a least-square assumption. Standard for most nonlinear applications.
@@ -564,7 +578,7 @@ class _NonLinearBase:
               function to jump directly to the estimated minimum.
             * **callable**: If a function is provided, it must follow the signature
               ``user_line_search(pb, dX) -> float`` and will be assigned directly
-              as the line search callback.
+              as the line search callback (``mode`` is then ignored).
         name : str, optional
             A unique identifier for the line search. If not provided, it defaults
             to 'standard' for built-in methods, or the function's name for callables.
@@ -572,8 +586,9 @@ class _NonLinearBase:
         Notes
         -----
         * **Implementation**: This method sets the `_step_size_callback` attribute
-          of the problem instance. Parameters like `ls_max_iter` and `ls_method`
-          are stored within the `self.nr_parameters` dictionary.
+          of the problem instance. Parameters `ls_mode`, `ls_method` and
+          `ls_max_iter` are stored within the `self.nr_parameters` dictionary
+          (they may also be set through :meth:`set_nr_criterion`).
         * **Objective Function**: For 'Armijo' and 'Quadratic' methods, the solver
           minimizes the squared L2-norm of the residual:
 
@@ -586,12 +601,16 @@ class _NonLinearBase:
 
         Example
         -------
-        >>> # Using a built-in method
-        >>> my_problem.add_line_search(method="Quadratic")
+        >>> # Default validity safeguard
+        >>> my_problem.add_line_search()
+        >>> # Classical residual-descent line search
+        >>> my_problem.add_line_search(mode="minimize", method="Quadratic")
         >>> # Using a custom function
         >>> def my_ls(pb, dX): return 0.5
         >>> my_problem.add_line_search(method=my_ls)
         """
+        if mode not in ["safeguard", "minimize"]:
+            raise ValueError("Line search mode should be 'safeguard' or 'minimize'")
         if callable(method):
             cb_name = name or getattr(method, "__name__", "custom_ls")
             self._ls_callbacks[cb_name] = method
@@ -606,6 +625,7 @@ class _NonLinearBase:
                 k: v for k, v in self._ls_callbacks.items() if v != line_search
             }
 
+            self.nr_parameters["ls_mode"] = mode
             self.nr_parameters["ls_method"] = method
             self._ls_callbacks[name or "standard"] = line_search
 
@@ -799,6 +819,9 @@ class _NonLinearBase:
             "check_early_divergence",
             "force_elastic_stiffness",
             "elastic_initial_guess",
+            "ls_mode",
+            "ls_method",
+            "ls_max_iter",
         ]
 
         for key in kargs:
@@ -808,6 +831,19 @@ class _NonLinearBase:
                 )
 
             self.nr_parameters[key] = kargs[key]
+
+    def _xbc_is_applied(self):
+        """True when no Dirichlet increment remains to be applied.
+
+        Under pure force control (or once the line search has fully applied
+        the scaled Dirichlet values), _Xbc is identically zero: convergence
+        may then be declared even if the line search kept returning
+        alpha < 1 (which leaves the _boundary_is_0 flag False forever).
+        """
+        xbc = self._Xbc
+        if np.isscalar(xbc):
+            return xbc == 0
+        return not np.any(xbc)
 
     def elastic_prediction(self):
         # update the boundary conditions with the time variation
@@ -929,7 +965,12 @@ class _NonLinearBase:
         error = float("inf")
         while subiter < max_subiter:
             # update Stress and initial displacement and Update stiffness matrix
-            self.update(compute="vector")  # update the out of balance force vector
+            try:
+                self.update(compute="vector")  # out of balance force vector
+            except InvalidKinematicStateError:
+                # the current iterate inverts elements: failed increment ->
+                # the caller cuts the time step and restores the state
+                return 0, subiter, error
             self._update_d()  # required to compute the NR error
 
             # Check convergence
@@ -938,7 +979,9 @@ class _NonLinearBase:
             if (
                 error < tol_nr
                 and subiter >= self._nr_min_subiter
-                and self._boundary_is_0
+                # NB: _boundary_is_0 True implies _Xbc was zeroed, so testing
+                # the actual _Xbc content subsumes the flag
+                and self._xbc_is_applied()
                 # constraints such as MeanMotion publish the out-of-balance on
                 # their own nonlinear equations here; gate convergence on it so
                 # an unsatisfied constraint cannot report a converged increment.

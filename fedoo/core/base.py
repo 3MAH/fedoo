@@ -11,6 +11,23 @@ import numpy as np
 import warnings
 from weakref import WeakSet
 
+
+class InvalidKinematicStateError(RuntimeError):
+    """A trial displacement state degenerates the kinematics.
+
+    Raised when a Newton iterate (or a line-search trial state) produces
+    det(F) <= 0 at some Gauss points: the constitutive evaluation is
+    meaningless there and assembling would fill the system with NaN.
+    RECOVERABLE in the NonLinear solver: its NR loop and line search treat
+    it as a failed iterate/increment (step backtracking or time-step
+    reduction). Other drivers (explicit dynamics, Linear solve_history)
+    have no rollback mechanism and let it propagate -- there it is a clear,
+    early abort instead of the silent NaN degradation it replaces.
+    """
+
+    pass
+
+
 # try to find the best available direct solver
 try:
     from pypardiso import spsolve
