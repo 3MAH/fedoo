@@ -6,6 +6,17 @@ from fedoo.core.base import ProblemBase, AssemblyBase
 from fedoo.core.output import _ProblemOutput, _get_results
 
 
+def _same_sparse(a, b):
+    """Cheap equality of two CSC matrices, short-circuiting on the metadata."""
+    return (
+        a.shape == b.shape
+        and a.nnz == b.nnz
+        and np.array_equal(a.indptr, b.indptr)
+        and np.array_equal(a.indices, b.indices)
+        and np.array_equal(a.data, b.data)
+    )
+
+
 class Problem(ProblemBase):
     """Base class to define a problem that generate a linear system and to solve
     the linear system with some defined boundary conditions.
@@ -263,6 +274,7 @@ class Problem(ProblemBase):
     def set_A(self, A):
         self.__A = A
         self.invalidate_factorization()
+        self._reduced_cache = None  # keyed on A: never outlive it
 
     def _set_A_from_assembly(self, A):
         """Internal: install the assembly's matrix without invalidating
@@ -277,9 +289,32 @@ class Problem(ProblemBase):
             return
         self.__A = A
         self.invalidate_factorization()
+        self._reduced_cache = None
 
     def get_A(self):
         return self.__A
+
+    def _reduced_system_matrix(self):
+        """Return MatCB.T A MatCB, the system matrix on the free dof.
+
+        Cached while A and MatCB are the same objects, so that with
+        factorization reuse (:meth:`set_reuse_factorization`) the elastic
+        prediction and the line-search trials skip the sparse triple product
+        as well as the factorization.
+        """
+        A, mat_cb = self.__A, self._MatCB
+        cache = getattr(self, "_reduced_cache", None)
+        if cache is None or cache[0] is not A or cache[1] is not mat_cb:
+            cache = (A, mat_cb, mat_cb.T @ A @ mat_cb)
+            self._reduced_cache = cache
+        return cache[2]
+
+    def _solve_reduced(self, rhs):
+        """Solve the free-dof system for a right-hand side (a
+        back-substitution when the factorization of the current matrix is
+        cached). Used by :meth:`solve` and by the line search for the
+        simplified Newton correction K^-1 R(u + alpha dX)."""
+        return self._solve(self._reduced_system_matrix(), rhs)
 
     def get_B(self):
         return self.__B
@@ -304,15 +339,10 @@ class Problem(ProblemBase):
 
             if len(self._dof_free) != 0:
                 if np.isscalar(self.__D) and self.__D == 0:
-                    self.__X[self._dof_free] = self._solve(
-                        self._MatCB.T @ self.__A @ self._MatCB,
-                        self._MatCB.T @ (self.__B - self.__A @ self._Xbc),
-                    )
+                    rhs = self._MatCB.T @ (self.__B - self.__A @ self._Xbc)
                 else:
-                    self.__X[self._dof_free] = self._solve(
-                        self._MatCB.T @ self.__A @ self._MatCB,
-                        self._MatCB.T @ (self.__B + self.__D - self.__A @ self._Xbc),
-                    )
+                    rhs = self._MatCB.T @ (self.__B + self.__D - self.__A @ self._Xbc)
+                self.__X[self._dof_free] = self._solve_reduced(rhs)
 
                 self.__X = self._MatCB * self.__X[self._dof_free] + self._Xbc
             else:
@@ -333,9 +363,18 @@ class Problem(ProblemBase):
             if self.__A.shape[0] != n_dof:  # probably not required
                 self.__A.resize((n_dof))
 
+            free_diagonal = self.__A[self._dof_free]
+            if np.any(free_diagonal == 0):
+                n_zero = int(np.count_nonzero(free_diagonal == 0))
+                raise ZeroDivisionError(
+                    f"{n_zero} free DOF(s) have a zero diagonal in the lumped "
+                    "mass matrix (e.g. a rotational/drilling DOF, or a node with "
+                    "no inertia contribution). Provide inertia for every active "
+                    "DOF, or constrain the massless DOFs, before solving."
+                )
             self.__X[self._dof_free] = (
                 self.__B[self._dof_free] + self.__D[self._dof_free]
-            ) / self.__A[self._dof_free]
+            ) / free_diagonal
 
     def get_X(self):  # solution of the linear system
         return self.__X
@@ -436,9 +475,14 @@ class Problem(ProblemBase):
             (data, np.ones(len(dof_free)))
         )  # data.append(np.ones(len(dof_free)))
 
-        self._MatCB = sparse.coo_matrix(
+        mat_cb = sparse.coo_matrix(
             (data, (row, col)), shape=(n_dof, len(dof_free))
         ).tocsc()  # so that self._MatCB.T is csr
+        if self._factor_valid and not _same_sparse(self._MatCB, mat_cb):
+            # a cached factorization (set_reuse_factorization) is that of
+            # MatCB.T A MatCB: stale if the constraint matrix changed
+            self.invalidate_factorization()
+        self._MatCB = mat_cb
 
         self.__B = F
         self._dof_slave = dof_slave

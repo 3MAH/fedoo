@@ -1,6 +1,10 @@
 """Mixed Stress Equilibrium weak form."""
 
-from fedoo.weakform.stress_equilibrium import StressEquilibrium, _comp_grad_disp
+from fedoo.weakform.stress_equilibrium import (
+    StressEquilibrium,
+    _check_F_validity,
+    _comp_grad_disp,
+)
 import numpy as np
 
 
@@ -315,8 +319,9 @@ class StressEquilibriumMixed(StressEquilibrium):
         eye_3[:, :, 0] = np.eye(3)
         F1 = np.add(eye_3, grad_values, order="F")
 
-        # Calculate J and save its log for the pressure constraint
-        J = np.linalg.det(F1.transpose((2, 0, 1)))
+        # Reject inverted trial states (det F <= 0) BEFORE log(J) turns
+        # them into silent NaNs, then save ln J for the pressure constraint
+        J = _check_F_validity(F1)
         assembly.sv["lnJ"] = np.log(J)
 
         F1 = F1 * (J.reshape(assembly.n_elm_gp, -1).ravel() ** (-1 / 3))

@@ -23,7 +23,10 @@ requirements:
     - h5py
     - pyvista>=0.42
     - simcoon>=2.0.0b1
-    - {{ solver_backend }}
+    # python-mumps works on every platform (unlike pypardiso, Intel-only),
+    # which keeps the package noarch. The runtime solver selection prefers
+    # pypardiso when the user installs it on top (Intel machines).
+    - python-mumps
 
 test:
   imports:

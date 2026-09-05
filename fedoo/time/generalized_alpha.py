@@ -6,12 +6,13 @@ from scipy import sparse
 from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
-from fedoo.time.base import TimeIntegratorBase
+from fedoo.time.base import TimeIntegratorBase, warn_if_conditionally_stable
 from fedoo.time.common import (
     RayleighDamping,
     newmark_acceleration_velocity,
     resolve_dissipation,
     resolve_storage,
+    increment_solved,
 )
 
 
@@ -197,7 +198,9 @@ class GeneralizedAlphaAssemblyAdapter:
 
     def set_start(self, assembly, pb):
         dof_solution = pb.get_dof_solution()
-        if not (np.isscalar(dof_solution) and dof_solution == 0):
+        if increment_solved(pb) and not (
+            np.isscalar(dof_solution) and dof_solution == 0
+        ):
             dt = getattr(pb, "_dtime_prev", None) or pb.dtime
             if dt:
                 acc, vel = newmark_acceleration_velocity(
@@ -257,6 +260,16 @@ class GeneralizedAlpha(TimeIntegratorBase):
             raise ValueError("beta must be strictly positive.")
         if self.gamma <= 0.0:
             raise ValueError("gamma must be strictly positive.")
+
+        # NB: the defaults (gamma = 1/2 - am + af, beta = (1 - am + af)^2 / 4)
+        # always satisfy the unconditional-stability conditions.
+        warn_if_conditionally_stable(
+            self.beta,
+            self.gamma,
+            alpha_m=self.alpha_m,
+            alpha_f=self.alpha_f,
+            context=type(self).__name__,
+        )
 
     def _compile_assembly_level_provider(self, assembly):
         if getattr(assembly, "time_evolution", None) != self.evolution:
@@ -387,11 +400,15 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
             )
 
     def set_start(self, assembly, pb):
-        if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
+        if increment_solved(pb) and not (
+            np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0
+        ):
             # _DeltaDisp was integrated over the increment that just completed,
             # so the recurrence must use that dt — pb.dtime already holds the
             # NEXT increment's step when set_start is called from nlsolve.
             dt = getattr(pb, "_dtime_prev", None) or pb.dtime
+            if not dt:  # no step yet: the recurrence would divide by zero
+                return
             acc, vel = _newmark_state(self, assembly, dt)
             assembly.sv["Velocity"] = vel
             assembly.sv["Acceleration"] = acc

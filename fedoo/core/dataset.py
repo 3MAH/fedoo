@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import os
+import sys
 from zipfile import ZipFile, Path as ZipPath
 from fedoo.core.mesh import Mesh, MultiMesh
 from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
@@ -25,10 +26,37 @@ except ImportError:
     USE_PYVISTA = False
 try:
     import pyvistaqt as pvqt
+    from qtpy import QtWidgets  # noqa: F401 - fails if no Qt binding is installed
 
     USE_PYVISTA_QT = True
-except ImportError:
+except (ImportError, RuntimeError):
+    # RuntimeError: qtpy raises QtBindingsNotFoundError (RuntimeError subclass
+    # in some versions) when pyvistaqt is installed without any Qt binding.
     USE_PYVISTA_QT = False
+
+
+def _has_interactor(plotter):
+    """True when the plotter owns a render window interactor.
+
+    A user-supplied pyvistaqt BackgroundPlotter under pyvista.OFF_SCREEN
+    has none: an interactive scalar bar must not be requested on it
+    (pyvista >= 0.48 fails instead of ignoring the request).
+    """
+    return getattr(plotter, "iren", None) is not None
+
+
+def _in_interactive_session():
+    """True in a REPL/IPython session where a Qt event loop keeps running.
+
+    In a plain ``python script.py`` run there is no running event loop: a
+    ``BackgroundPlotter`` window would close as soon as the script ends, so
+    ``plot`` must block on the Qt event loop instead.
+    """
+    if hasattr(sys, "ps1"):
+        return True
+    ipython_mod = sys.modules.get("IPython")
+    return ipython_mod is not None and ipython_mod.get_ipython() is not None
+
 
 try:
     import pandas
@@ -704,16 +732,19 @@ class DataSet:
                 meshplot.cell_data[key] = np.asarray(value)
 
         backgroundplotter = True
-        if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
+        owns_qt_plotter = False
+        # off-screen rendering (screenshot, or pyvista.OFF_SCREEN as set by
+        # the gallery build) needs a plain plotter: the Qt BackgroundPlotter
+        # has no interactor there and would block on its event loop
+        off_screen = bool(screenshot or pv.OFF_SCREEN)
+        if USE_PYVISTA_QT and (plotter is None or plotter == "qt") and not off_screen:
             # use pyvistaqt plotter
             pl = pvqt.BackgroundPlotter(window_size=window_size)
-        elif plotter is None or plotter == "pv":
+            owns_qt_plotter = True
+        elif plotter is None or plotter in ("pv", "qt"):
             # default pyvista plotter
             backgroundplotter = False
-            if screenshot:
-                pl = pv.Plotter(off_screen=True, window_size=window_size)
-            else:
-                pl = pv.Plotter(window_size=window_size)
+            pl = pv.Plotter(off_screen=off_screen, window_size=window_size)
         else:
             # try to use the given plotter
             # dont show
@@ -762,7 +793,7 @@ class DataSet:
             )
         else:
             sargs = dict(
-                interactive=True,
+                interactive=_has_interactor(pl),
                 title_font_size=20,
                 label_font_size=16,
                 color="Black",
@@ -941,6 +972,11 @@ class DataSet:
 
         if not (backgroundplotter) and show:
             return pl.show(return_cpos=return_cpos)
+
+        if owns_qt_plotter and show and not _in_interactive_session():
+            # Plain script run: block until the window is closed, otherwise
+            # the process exits and the window vanishes immediately.
+            pl.app.exec()
 
         return pl
 
@@ -1268,6 +1304,16 @@ class DataSet:
 
         if not backgroundplotter and show:
             return pl.show(return_cpos=return_cpos)
+
+        if (
+            USE_PYVISTA_QT
+            and (plotter is None or plotter == "qt")
+            and show
+            and not _in_interactive_session()
+        ):
+            # qt plotter created by the submesh plot calls above: same
+            # blocking behavior as in ``plot`` for plain script runs.
+            pl.app.exec()
 
         return pl
 

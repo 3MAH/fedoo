@@ -105,6 +105,13 @@ class Mechanical3D(ConstitutiveLaw):
 
     # model of constitutive law for InternalForce Weakform
 
+    _corotational_box_tangent = False
+    # True when the law returns the simcoon corotational "box" tangent
+    # d(tau_hat)/dD, which the UL weakform must convert to the Lie
+    # (Truesdell) spatial tangent (see StressEquilibrium.update_2).
+    # Native fedoo laws (e.g. ElasticIsotrop) return a plain engineering
+    # tangent and are left unconverted.
+
     def __init__(self, name="", density=None):
         ConstitutiveLaw.__init__(self, name)
         self.density = density

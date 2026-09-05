@@ -266,6 +266,15 @@ class Linear(Problem):
     def reset(self):
         self.__assembly.reset()
 
+        if self.is_dynamic:
+            # The transient effective (Newmark) matrix and the cached
+            # stiffness/mass/damping operators are rebuilt by initialize() on
+            # the next solve. Forcing the static stiffness here (and leaving
+            # _dynamic_initialized set) would silently run that solve on the
+            # static K with carried-over velocity/acceleration.
+            self._dynamic_initialized = False
+            return
+
         self.set_A(self.__assembly.get_global_matrix())  # tangent stiffness
         self.set_D(self.__assembly.get_global_vector())
         self.set_B(0)

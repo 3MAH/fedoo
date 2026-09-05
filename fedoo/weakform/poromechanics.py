@@ -48,9 +48,13 @@ class PoroMomentum(StressEquilibriumMixed):
     Parameters
     ----------
     constitutivelaw : ConstitutiveLaw
-        Skeleton constitutive law. Must satisfy ``_Lt_from_F = True`` in
-        large-strain mode (this is the case for all simcoon hyperelastic
-        and visco-elastic laws).
+        Skeleton constitutive law. In large-strain mode it must be a
+        hyperelastic law whose tangent is computed from F
+        (``_Lt_from_F = True`` — the case for all simcoon hyperelastic and
+        visco-elastic laws). NB: the UL box -> Lie tangent conversion is
+        driven by the separate ``_corotational_box_tangent`` attribute
+        (True for every simcoon umat, see
+        :class:`fedoo.core.mechanical3d.Mechanical3D`).
     fluid_props : PoroFluidProperties
         Fluid-phase parameters. Only the Biot coefficient ``alpha`` is used
         here; ``PoroDarcy`` and ``PoroMassStorage`` use the other fields.
