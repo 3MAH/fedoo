@@ -48,7 +48,12 @@ class _NewmarkInertia(WeakFormBase):
     def set_start(self, assembly, pb):
         # This updates the historic variables to the newly converged step t
         dt = pb.dtime  # dt is the time step of the previous increment
-        if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
+        # deferred import: fedoo.time.common imports weak forms
+        from fedoo.time.common import increment_solved
+
+        if increment_solved(pb) and not (
+            np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0
+        ):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]
@@ -340,7 +345,12 @@ class ImplicitDynamic2(WeakFormBase):
 
     def set_start(self, assembly, pb):
         dt = pb.dtime
-        if not (np.isscalar(pb.get_disp()) and pb.get_disp() == 0):
+        # deferred import: fedoo.time.common imports weak forms
+        from fedoo.time.common import increment_solved
+
+        if increment_solved(pb) and not (
+            np.isscalar(pb.get_disp()) and pb.get_disp() == 0
+        ):
             # update velocity and acceleration
             new_acceleration = (1 / (self.beta * dt**2)) * (
                 assembly.sv["_DeltaDisp"] - dt * assembly.sv["Velocity"]

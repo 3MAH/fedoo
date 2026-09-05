@@ -12,6 +12,7 @@ from fedoo.time.common import (
     newmark_acceleration_velocity,
     resolve_dissipation,
     resolve_storage,
+    increment_solved,
 )
 
 
@@ -197,7 +198,9 @@ class GeneralizedAlphaAssemblyAdapter:
 
     def set_start(self, assembly, pb):
         dof_solution = pb.get_dof_solution()
-        if not (np.isscalar(dof_solution) and dof_solution == 0):
+        if increment_solved(pb) and not (
+            np.isscalar(dof_solution) and dof_solution == 0
+        ):
             dt = getattr(pb, "_dtime_prev", None) or pb.dtime
             if dt:
                 acc, vel = newmark_acceleration_velocity(
@@ -397,11 +400,15 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
             )
 
     def set_start(self, assembly, pb):
-        if not (np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0):
+        if increment_solved(pb) and not (
+            np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0
+        ):
             # _DeltaDisp was integrated over the increment that just completed,
             # so the recurrence must use that dt — pb.dtime already holds the
             # NEXT increment's step when set_start is called from nlsolve.
             dt = getattr(pb, "_dtime_prev", None) or pb.dtime
+            if not dt:  # no step yet: the recurrence would divide by zero
+                return
             acc, vel = _newmark_state(self, assembly, dt)
             assembly.sv["Velocity"] = vel
             assembly.sv["Acceleration"] = acc

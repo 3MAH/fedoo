@@ -35,6 +35,16 @@ except (ImportError, RuntimeError):
     USE_PYVISTA_QT = False
 
 
+def _has_interactor(plotter):
+    """True when the plotter owns a render window interactor.
+
+    A user-supplied pyvistaqt BackgroundPlotter under pyvista.OFF_SCREEN
+    has none: an interactive scalar bar must not be requested on it
+    (pyvista >= 0.48 fails instead of ignoring the request).
+    """
+    return getattr(plotter, "iren", None) is not None
+
+
 def _in_interactive_session():
     """True in a REPL/IPython session where a Qt event loop keeps running.
 
@@ -723,17 +733,18 @@ class DataSet:
 
         backgroundplotter = True
         owns_qt_plotter = False
-        if USE_PYVISTA_QT and (plotter is None or plotter == "qt"):
+        # off-screen rendering (screenshot, or pyvista.OFF_SCREEN as set by
+        # the gallery build) needs a plain plotter: the Qt BackgroundPlotter
+        # has no interactor there and would block on its event loop
+        off_screen = bool(screenshot or pv.OFF_SCREEN)
+        if USE_PYVISTA_QT and (plotter is None or plotter == "qt") and not off_screen:
             # use pyvistaqt plotter
             pl = pvqt.BackgroundPlotter(window_size=window_size)
             owns_qt_plotter = True
-        elif plotter is None or plotter == "pv":
+        elif plotter is None or plotter in ("pv", "qt"):
             # default pyvista plotter
             backgroundplotter = False
-            if screenshot:
-                pl = pv.Plotter(off_screen=True, window_size=window_size)
-            else:
-                pl = pv.Plotter(window_size=window_size)
+            pl = pv.Plotter(off_screen=off_screen, window_size=window_size)
         else:
             # try to use the given plotter
             # dont show
@@ -782,7 +793,7 @@ class DataSet:
             )
         else:
             sargs = dict(
-                interactive=True,
+                interactive=_has_interactor(pl),
                 title_font_size=20,
                 label_font_size=16,
                 color="Black",

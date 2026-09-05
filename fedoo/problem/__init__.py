@@ -402,8 +402,13 @@ direction requires a "safe" search direction.
 ~~~~~~~~~~~~~~~~~~~~~~
 For strong instabilities (such as buckling or snap-through) where the tangent 
 stiffness matrix becomes non-positive definite, the **Eigenvalue Shift** technique might
-be effective. Note that this method is computationally 
-expensive with limited results, and should only be used as a last resort.
+be effective. This feature is **experimental**: it is computationally expensive
+and, as measured, often has no effect at all. Two known limitations: the
+spectral estimate is computed on the *unreduced* matrix (it therefore sees the
+modes of the blocked and rigid-body degrees of freedom, not those of the system
+actually solved), and the shift is added before that reduction, which with
+multi-point constraints does not yield ``reduced + alpha*I``. Use it only as a
+last resort, after ``adaptive_stiffness`` and a dynamic solver.
 
 * **Mechanism**: Adds a scaled identity matrix :math:`\alpha \mathbf{I}` to the 
   tangent stiffness :math:`\mathbf{K_T}`.

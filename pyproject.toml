@@ -32,8 +32,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,test,ipc,io]']
+all = ['fedoo[solver,plot,test,ipc,io,identify]']
 io = ['meshio']
+identify = ['scikit-learn']
 ipc = ['ipctk>=1.6']
 solver = [
     'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',

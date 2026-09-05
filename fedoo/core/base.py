@@ -691,6 +691,11 @@ class ProblemBase:
         """Return the current solver used for the problem."""
         return self.__solver[1]
 
+    @property
+    def _solver_type(self):
+        # name of the solver selected with set_solver ('direct', 'cg', ...)
+        return self.__solver[0]
+
 
 # Class to define global dof that are not associated with a mesh
 class _GlobalDof:

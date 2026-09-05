@@ -28,9 +28,11 @@ stabilization, are not used in this example). The robust protocol is
   (fedoo now warns in that case);
 * a slow force ramp (quadratic, gentle start) followed by a hold period so
   the response settles to the static equilibrium;
-* the (default) safeguard line search, which rejects only trial states
-  with inverted elements and never throttles legitimate large soft-mode
-  steps.
+* the safeguard line search (``mode="safeguard"``), which rejects only
+  trial states with inverted elements and never throttles legitimate large
+  soft-mode steps. The default ``mode="natural"`` (affine-invariant test on
+  the simplified Newton correction) handles them as well; a pure
+  residual-descent line search (``mode="minimize"``) would strangle them.
 
 Cross-check: the displacement-driven curve gives ``ux(F = 20 N) = 45.5 mm
 = 0.911 L``; this run settles within ~2% of it (the difference is the
@@ -101,7 +103,7 @@ assembly = assembly_fe + cap
 pb = fd.problem.NonLinear(assembly)
 pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark(beta=0.3025, gamma=0.6))
 pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-3, max_subiter=20)
-pb.add_line_search()  # default mode: validity safeguard
+pb.add_line_search(mode="safeguard")  # validity filter, never throttles
 
 results = pb.add_output(
     "neohookean_cantilever_force", assembly_fe, ["Disp", "Stress", "Strain"]

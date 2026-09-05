@@ -72,6 +72,10 @@ class _NonLinearBase:
         self.time = 0
         self.dtime = 0
         self._dtime_prev = 0  # dt of the last completed increment
+        # True while set_start closes an increment that has been solved
+        # (read by the time integrators, see set_start)
+        self._increment_solved = False
+        self._dU_old = 0  # last improving iterate, kept by adaptive_stiffness
         self.__iter = 0
         self.__compteurOutput = 0
 
@@ -301,7 +305,11 @@ class _NonLinearBase:
         # dt not used for static problem
         self._nr_min_subiter = 0  # reset SDI for new increment
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
-        if not (np.isscalar(self._dU) and self._dU == 0):
+        # Tell the time integrators whether this call closes an increment that
+        # was actually solved: on an empty increment their recurrence would
+        # still consume one time step (for Newmark it negates the velocity).
+        self._increment_solved = not (np.isscalar(self._dU) and self._dU == 0)
+        if self._increment_solved:
             self._U += self._dU
             self._dU = 0
             self.__assembly.set_start(self)
@@ -325,6 +333,10 @@ class _NonLinearBase:
         self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
+        # NB: the problem deliberately keeps the tangent of the diverged
+        # iterate here; the retry's elastic prediction reuses it (A != 0).
+        # Refreshing it from the restored assembly was tried and reverted: it
+        # drops the IPC contact block and breaks the punch benchmarks.
         self._run_constraint_hook("to_start")
 
     def update(self, compute="all", updateWeakForm=True):
@@ -542,7 +554,7 @@ class _NonLinearBase:
             # Multiple constraints exist: use the manager
             self._step_size_callback = _line_search_manager
 
-    def add_line_search(self, method="Quadratic", name=None, mode="safeguard"):
+    def add_line_search(self, method="Quadratic", name=None, mode="natural"):
         r"""Add line search algorithm for the Newton-Raphson solver.
 
         Line search improves global convergence by scaling the displacement
@@ -552,19 +564,33 @@ class _NonLinearBase:
 
         Parameters
         ----------
-        mode : {'safeguard', 'minimize'}, default 'safeguard'
+        mode : {'natural', 'minimize', 'safeguard'}, default 'natural'
             The overall line search policy:
 
-            * **'safeguard'** (default): pure validity filter. The full
-              Newton step is accepted whenever the trial state is
-              kinematically valid; geometric backtracking is applied only
-              on a degenerated trial state (:math:`\det F \le 0`). This
-              never throttles the legitimate large steps of soft modes
-              (whose quadratic remainder inflates the residual norm as
-              :math:`\alpha^2` while remaining excellent steps), which any
-              residual-monotone rule would strangle. ``method`` is ignored.
+            * **'natural'** (default): validity filter, then the step is
+              accepted when EITHER the classical Armijo test on
+              :math:`\|R\|` OR Deuflhard's affine-invariant test on the
+              simplified Newton correction :math:`K^{-1} R(u + \alpha dX)`
+              passes (see :func:`fedoo.problem.line_search._natural_test`).
+              The first one throttles the overshoot of penalty contact and
+              elastic-plastic transitions, the second one lets the
+              legitimate large steps of soft modes under force control
+              through. ``method`` is ignored. Factorization reuse
+              (:meth:`set_reuse_factorization`) is enabled automatically
+              with a direct solver so that each trial costs one
+              back-substitution.
             * **'minimize'**: classical residual-descent line search using
-              ``method`` below (the pre-safeguard behavior).
+              ``method`` below. Throttles the step against overshoot but
+              may strangle Newton on soft modes under force control.
+            * **'safeguard'**: pure validity filter. The full Newton step
+              is accepted whenever the trial state is kinematically valid;
+              geometric backtracking is applied only on a degenerated
+              trial state (:math:`\det F \le 0`). This never throttles the
+              legitimate large steps of soft modes (whose quadratic
+              remainder inflates the residual norm as :math:`\alpha^2`
+              while remaining excellent steps), which any residual-monotone
+              rule would strangle -- the right choice for force control of
+              soft (bending) modes. ``method`` is ignored.
         method : {'Armijo', 'Residual', 'Energy', 'Quadratic'} or callable, default 'Quadratic'
             The residual-descent strategy used when ``mode='minimize'``:
 
@@ -579,6 +605,16 @@ class _NonLinearBase:
             * **callable**: If a function is provided, it must follow the signature
               ``user_line_search(pb, dX) -> float`` and will be assigned directly
               as the line search callback (``mode`` is then ignored).
+
+              .. warning::
+                 A custom callback MUST return exactly 1 while a Dirichlet
+                 increment is still pending (test
+                 :meth:`_xbc_is_applied`, as the built-in line search does).
+                 A returned ``alpha < 1`` defers the remaining
+                 ``1 - alpha`` of the prescribed displacement to the next
+                 iterations, and convergence is only declared once nothing
+                 is left to apply: a callback that never returns 1 strands
+                 the increment and the time step collapses to ``dt_min``.
         name : str, optional
             A unique identifier for the line search. If not provided, it defaults
             to 'standard' for built-in methods, or the function's name for callables.
@@ -601,16 +637,20 @@ class _NonLinearBase:
 
         Example
         -------
-        >>> # Default validity safeguard
+        >>> # Default: natural monotonicity test
         >>> my_problem.add_line_search()
         >>> # Classical residual-descent line search
         >>> my_problem.add_line_search(mode="minimize", method="Quadratic")
+        >>> # Validity safeguard only (soft-mode force control)
+        >>> my_problem.add_line_search(mode="safeguard")
         >>> # Using a custom function
         >>> def my_ls(pb, dX): return 0.5
         >>> my_problem.add_line_search(method=my_ls)
         """
-        if mode not in ["safeguard", "minimize"]:
-            raise ValueError("Line search mode should be 'safeguard' or 'minimize'")
+        if mode not in ["natural", "minimize", "safeguard"]:
+            raise ValueError(
+                "Line search mode should be 'natural', 'minimize' or 'safeguard'"
+            )
         if callable(method):
             cb_name = name or getattr(method, "__name__", "custom_ls")
             self._ls_callbacks[cb_name] = method
@@ -645,6 +685,10 @@ class _NonLinearBase:
                     f"Line search '{name}' not found. No action taken.", UserWarning
                 )
 
+        if line_search not in self._ls_callbacks.values():
+            # solve_time_increment reads ls_mode to decide whether to enable
+            # factorization reuse: it must not outlive the line search
+            self.nr_parameters.pop("ls_mode", None)
         self._update_step_size_callback()
 
     def _get_free_dof_residual(self):
@@ -708,6 +752,8 @@ class _NonLinearBase:
             if self._err0 is None:
                 self._err0 = 1
                 self._err0 = self.compute_nr_error()
+                if self._err0 == 0:  # zero-work increment: keep a finite ref
+                    self._err0 = 1
                 return 1
             else:
                 if np.isscalar(self.get_D()) and self.get_D() == 0:
@@ -757,7 +803,8 @@ class _NonLinearBase:
             * 'dt_increase_niter': int or None, default = None.
               Number of nr iterations threshold that define an easy convergence.
               In problem allowing automatic convergence, if the Newton–Raphson
-              loop converges in strictly fewer iterations, the time step is increased.
+              loop converges in at most that many iterations, the time step is
+              increased.
               If None, defaults to max_subiter//3.
             * 'norm_type': int or numpy.inf, default = 2.
               Define the norm used to test the criterion.
@@ -780,10 +827,21 @@ class _NonLinearBase:
               max_subiter iterations are reached, regardless of tolerance criterion.
               Use only for special cases requiring forced convergence. Skips
               convergence tolerance check when iteration limit is reached.
-            * 'eigenvalue_shift': bool, default = False.
+            * 'eigenvalue_shift': bool, default = False. EXPERIMENTAL.
               If True, adds a shifted identity matrix to improve conditioning:
               A_eff = A + alpha*I where alpha = eigenvalue_shift_factor * R.
               R is estimated via Rayleigh quotient of the current stiffness.
+
+              .. warning::
+                 Known limitations, measured: the spectral estimate is run on
+                 the *unreduced* matrix, so it sees the modes of the blocked
+                 and rigid-body degrees of freedom rather than those of the
+                 system actually solved; and ``alpha*I`` is added before that
+                 reduction, which with multi-point constraints does not give
+                 ``reduced + alpha*I``. On a compressed buckling-prone plate
+                 the shift fired at 30 iterations without changing the
+                 iteration count at all. Treat it as a last resort, and
+                 prefer ``adaptive_stiffness`` or a dynamic solver.
             * 'eigenvalue_shift_factor': float, default = 1e-4.
               Scaling factor for the eigenvalue shift margin.
               Larger values = stronger stabilization but less accuracy.
@@ -796,7 +854,7 @@ class _NonLinearBase:
               If True, aborts the time step early if convergence trends are poor.
               A step is considered diverging if:
               1. The error remains "unproductive" (new_error > 0.999 * previous_error)
-                 for 3 consecutive Newton-Raphson iterations.
+                 for 4 consecutive Newton-Raphson iterations.
               2. The error spikes to more than 100 times the previous error.
         """
         if criterion not in ["Displacement", "Force", "Work"]:
@@ -832,6 +890,40 @@ class _NonLinearBase:
 
             self.nr_parameters[key] = kargs[key]
 
+    def _enable_factorization_reuse(self):
+        """Natural line search: make K^-1 R at trial states a back-substitution.
+
+        No-op with an iterative (or petsc) solver, which is left untouched:
+        the trials then re-solve the reduced system. NB: the reuse backend
+        follows the default direct priority (pypardiso > python-mumps >
+        petsc4py) whatever direct backend was forced with set_solver.
+        """
+        # only the default dispatch: a solver the user picked explicitly must
+        # not be silently swapped for the reuse backend
+        if self._factor_context is not None or self._solver_type != "direct":
+            return
+        try:
+            self.set_reuse_factorization(True)
+        except RuntimeError:  # no reuse backend installed (scipy only)
+            warnings.warn(
+                "natural line search: no factorization-reuse backend "
+                "(pypardiso, python-mumps or petsc4py); each line-search trial "
+                "will re-solve the tangent system.",
+                stacklevel=2,
+            )
+
+    def _elastic_reference_matrix(self, assemble=True):
+        """Return the "safe" fallback matrix of adaptive_stiffness.
+
+        Read from the CURRENT assembly: under ``nlgeom="UL"`` the reference
+        one holds the matrix of the undeformed configuration (and, for an
+        assembly sum, a state without the contact block), which would stay
+        frozen for the whole run.
+        """
+        if assemble:
+            self.assembly.current.assemble_global_mat("matrix")
+        return self.assembly.current.get_global_matrix()
+
     def _xbc_is_applied(self):
         """True when no Dirichlet increment remains to be applied.
 
@@ -845,7 +937,13 @@ class _NonLinearBase:
             return xbc == 0
         return not np.any(xbc)
 
-    def elastic_prediction(self):
+    def elastic_prediction(self, keep_tangent=False):
+        """Solve the elastic prediction of a new increment.
+
+        keep_tangent: do not touch the tangent matrix. Used by the
+        adaptive-stiffness restart, which has just installed the "safe"
+        elastic matrix on purpose.
+        """
         # update the boundary conditions with the time variation
         self._alpha = 1
         self.apply_boundary_conditions(self.t_fact, self.t_fact_old)
@@ -854,7 +952,22 @@ class _NonLinearBase:
         # matrix from the last converged iteration of the previous time step.
         # A new tangent matrix is computed only for the very first increment,
         # where the matrix has its initial value of 0.
-        if np.isscalar(self.get_A()) and self.get_A() == 0:
+        if keep_tangent:
+            pass
+        elif np.isscalar(self.get_A()) and self.get_A() == 0:
+            self._update_a()
+        elif self.time_integrators and self.dtime != self._dtime_prev:
+            # A transient tangent carries the 1/(beta dt^2) inertia term, so
+            # the matrix of the previous increment is wrong by (dt_prev/dt)^2
+            # once the time step changed -- x16 after the standard x0.25 cut,
+            # which wrecks the prediction exactly when the solver is already
+            # struggling. set_start/to_start have just re-assembled at the new
+            # dt, so this only installs that matrix. NB: gated on an actual
+            # integrator (the "compiled" flag is set even with none attached).
+            # Other dt-dependent tangents on a plain NonLinear -- the legacy
+            # ImplicitDynamic weak form, poromechanics, damping stabilization
+            # -- keep the previous behavior; covering them would need a
+            # `dt_dependent` property carried by the weak forms.
             self._update_a()
 
         self._update_d(
@@ -939,9 +1052,14 @@ class _NonLinearBase:
             )
 
         self._t_fact_inc = self.t_fact
+        if self.nr_parameters.get("ls_mode") == "natural":
+            self._enable_factorization_reuse()  # before the first solve
         if elastic_initial_guess or self._force_elastic_next_iter:
             # udpate assembly to the initial siffness given by the constitutive law
             self.assembly.current.assemble_global_mat("matrix")
+            # ... and hand it to the elastic prediction, which otherwise
+            # keeps the tangent of the previous iteration (A != 0)
+            self._update_a()
             if self._force_elastic_next_iter:
                 self._force_elastic_next_iter = (
                     False  # next iteration will be recomputed.
@@ -953,9 +1071,7 @@ class _NonLinearBase:
             # we take the assembled matrix computed after set_start and before
             # update. This should be the elastic or "safe" stiffness.
             # If not, adaptive_stiffness algorithm will not work as expected.
-            if not elastic_initial_guess:
-                self.assembly.current.assemble_global_mat("matrix")
-            KE = self.assembly.get_global_matrix()
+            KE = self._elastic_reference_matrix(assemble=not elastic_initial_guess)
             xi = 0.0
             xi_increased_this_step = False
 
@@ -1018,7 +1134,10 @@ class _NonLinearBase:
                 print(print_str)
 
             if adaptive_stiffness:
-                if consecutive_increases == 1:
+                if consecutive_increases == 0:
+                    # rolling backup of the last iterate that IMPROVED the
+                    # error: saving it once the error has already risen would
+                    # store the bad iterate the rollback below is meant to undo
                     self._dU_old = self._dU.copy()
                 if consecutive_increases >= 2 and xi < 1.0:
                     # Diverging - switch to elastic stiffness
@@ -1030,14 +1149,15 @@ class _NonLinearBase:
                     if subiter == 3:
                         # restart the iteration with the elastic stiffness
                         self.to_start()
+                        self._t_fact_inc = self.t_fact  # re-freeze (cleared above)
                         subiter = 1
                         error = float("inf")
                         self.set_A(KE)
-                        self.elastic_prediction()
+                        self.elastic_prediction(keep_tangent=True)
                         continue
                     else:
-                        # redo last iteration
-                        self._dU = self._dU_old
+                        # redo last iteration (copy: _dU is updated in place)
+                        self._dU = self._dU_old.copy()
                         subiter = max(subiter - 2, 1)
                         continue
                 elif consecutive_decreases > 0:
@@ -1079,9 +1199,19 @@ class _NonLinearBase:
 
             self.solve_nr_increment()
 
-        self._t_fact_inc = None
         if assume_cvg_at_max_subiter:
+            # the last correction was added to _dU without an update: bring
+            # the state variables (hence the outputs) to that iterate, with
+            # the load factor still frozen at the increment's target
+            try:
+                self.update(compute="vector")
+                self._update_d()
+            except InvalidKinematicStateError:
+                self._t_fact_inc = None
+                return 0, subiter, error
+            self._t_fact_inc = None
             return 1, subiter, error
+        self._t_fact_inc = None
         return 0, subiter, error
 
     def nlsolve(
@@ -1134,8 +1264,8 @@ class _NonLinearBase:
             (default = 10).
         dt_increase_niter: int, optional
             When ``update_dt`` is ``True``, the time increment is multiplied
-            by 1.25 if the Newton–Raphson loop converges in fewer
-            than ``dt_increase_niter`` iterations. If omitted, the
+            by 1.25 if the Newton–Raphson loop converges in at most
+            ``dt_increase_niter`` iterations. If omitted, the
             'dt_increase_niter' field in the nr_parameters attribute
             (ie nr_parameters['dt_increase_niter']) is considered
             (default = ``max_subiter // 3``).
@@ -1316,6 +1446,9 @@ class _NonLinearBase:
                         "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )
 
+        # the last increment is finalized with its own dt (the loop-top value
+        # is that of the previous one, or of a failed attempt)
+        self._dtime_prev = self.dtime
         self.set_start(True, callback)
 
     @property
