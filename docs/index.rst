@@ -23,9 +23,9 @@ Welcome to FEDOO's documentation!
    problem
    boundary_conditions
    post_processing
-   examples/index
    heterogeneous
-   .. simple_examples -> a effacer
+   user_problems
+   examples/index
    
 
 Indices and tables

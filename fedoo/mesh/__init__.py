@@ -24,6 +24,7 @@ Mesh manipulation functions
 
    stack
    extrude
+   thicken
    extract_surface
    extract_edges
    change_elm_type
@@ -61,6 +62,7 @@ Mesh Creation Functions
    line_mesh_cylindric
    circle_mesh
    grid_mesh_cylindric
+   generate_cylindrical_local_frame
    structured_mesh_2D
    generate_nodes
 """
@@ -87,6 +89,7 @@ from .importmesh import import_file, import_vtk, import_msh
 
 from .functions import (
     extrude,
+    thicken,
     extract_surface,
     extract_edges,
     change_elm_type,
@@ -102,3 +105,5 @@ from .structured_mesh import (
     hollow_disk_mesh,
     I_shape_mesh,
 )
+
+from fedoo.util.localframe import generate_cylindrical_local_frame

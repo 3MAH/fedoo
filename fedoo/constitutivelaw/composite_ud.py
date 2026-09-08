@@ -216,7 +216,7 @@ class CompositeUD(ElasticAnisotropic):
                 else:
                     H = np.rollaxis(H, 0, 3)
 
-        H = self.local2global_H(H)
+        H = self.local2global_H(H, assembly)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
         else:

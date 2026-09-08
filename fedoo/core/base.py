@@ -4,6 +4,11 @@ Should not be used, excepted to create inherited classes.
 """
 
 from fedoo.core.modelingspace import ModelingSpace
+from fedoo.util.localframe import (
+    _normalize_location,
+    as_local_frame,
+    local_frame_to_gausspoints,
+)
 
 import scipy.sparse.linalg
 import scipy.sparse as sparse
@@ -251,6 +256,7 @@ class ConstitutiveLaw:
         assert isinstance(name, str), "An name must be a string"
         self.__name = name
         self.local_frame = None
+        self._local_frame_location = None
         self.is_initialized = False
         """Tag set to True once the law is intialized.
         
@@ -288,6 +294,46 @@ class ConstitutiveLaw:
     def update(self, assembly, pb):
         """Update the constitutive law for the current problem state."""
         pass
+
+    def set_local_frame(self, local_frame, location=None):
+        """Define the material coordinate frame.
+
+        Parameters
+        ----------
+        local_frame : array_like or scipy/simcoon Rotation
+            One rotation, or rotations stored at nodes, elements, or Gauss
+            points. Matrix arrays must use their last two axes for 3x3
+            rotation matrices.
+        location : {'Node', 'Element', 'GaussPoint'}, optional
+            Storage location. By default it is inferred from the number of
+            frames when an assembly is available.
+
+        Returns
+        -------
+        self
+            The constitutive law, for fluent material construction.
+        """
+        if local_frame is None:
+            self.local_frame = None
+            self._local_frame_location = None
+            return self
+
+        # Validate immediately while retaining multidimensional storage, which
+        # can carry explicit (element, Gauss point, 3, 3) ordering information.
+        self.local_frame = as_local_frame(local_frame, dimension=3)
+        self._local_frame_location = _normalize_location(location)
+        return self
+
+    def get_local_frame(self, assembly=None):
+        """Return material frames, resolved at ``assembly`` Gauss points."""
+        if self.local_frame is None:
+            return None
+
+        if assembly is None:
+            return as_local_frame(self.local_frame, dimension=3)
+        return local_frame_to_gausspoints(
+            self.local_frame, assembly, self._local_frame_location
+        )
 
     @staticmethod
     def get_all():

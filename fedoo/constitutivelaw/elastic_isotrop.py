@@ -8,6 +8,8 @@ import numpy as np
 
 
 class ElasticIsotrop(ElasticAnisotropic):
+    is_isotropic = True
+
     """
     A simple linear elastic isotropic constitutive law defined from a Yound
     Modulus and a Poisson Ratio.

@@ -116,10 +116,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         if "_InitialNodeLocalPos" not in assembly.sv and (
             self.nlgeom or self._store_local_pos
         ):
-            if assembly._element_local_frame is None:
-                init_frame = assembly.mesh.get_element_local_frame()
-            else:
-                init_frame = assembly._element_local_frame
+            init_frame = assembly.get_element_local_frame()
 
             nodes_pos_init = assembly.mesh.nodes[assembly.mesh.elements]
             init_center = nodes_pos_init.mean(axis=1)

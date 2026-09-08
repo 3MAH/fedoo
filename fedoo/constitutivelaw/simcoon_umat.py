@@ -1,13 +1,12 @@
 # derive de ConstitutiveLaw
 # compatible with the simcoon strain and stress notation
 
-from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.voigt_tensors import StressTensorList
+from fedoo.core.mechanical3d import MechanicalUMAT
 import simcoon as sim
 import numpy as np
 
 
-class Simcoon(Mechanical3D):
+class Simcoon(MechanicalUMAT):
     """Constitutive laws from the simcoon library.
 
     The constitutive Law should be associated with
@@ -19,8 +18,26 @@ class Simcoon(Mechanical3D):
         Name of the constitutive law.
     props: numpy.array
         The constitive laws properties
+    tangent_mode : int, default=1
+        Tangent selector forwarded to the Simcoon UMAT.
     name : str
         The name of the constitutive law
+
+    Alternative constructor
+    -----------------------
+    :meth:`from_modular` builds the same Fedoo wrapper from a
+    :class:`simcoon.modular.ModularMaterial`. The configuration supplies its
+    own flattened properties and state-variable count::
+
+        from simcoon.modular import elastic_model
+
+        configuration = elastic_model(E=210000.0, nu=0.3)
+        material = Simcoon.from_modular(configuration, name="steel")
+
+    The regular constructor is
+    ``Simcoon(umat_name, props, tangent_mode=1, name="")``. For backward
+    compatibility, a string passed as the third positional argument is still
+    interpreted as ``name``.
 
     Notes
     -----
@@ -42,12 +59,311 @@ class Simcoon(Mechanical3D):
       ``_Lt_from_F`` branch); they remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
+
+    * A modular material uses the ``MODUL`` UMAT. In finite strain it requires
+      the ``log_R`` formulation; set ``weakform.corate = "log_R"`` before
+      initializing the problem. Small-strain analyses are unaffected.
     """
 
-    def __init__(self, umat_name, props, name=""):
+    manages_material_frame = True
+
+    _ISOTROPIC_UMATS = {
+        "ELISO",
+        "EPICP",
+        "EPKCP",
+        "EPCHA",
+        "ZENER",
+        "ZENNK",
+        "PRONK",
+        "NEOHC",
+        "MOORI",
+        "YEOHH",
+        "ISHAH",
+        "GETHH",
+        "SWANH",
+    }
+
+    @classmethod
+    def from_modular(cls, modular_material, tangent_mode=1, name=""):
+        """Build a Simcoon law from a modular material configuration.
+
+        Parameters
+        ----------
+        modular_material : simcoon.modular.ModularMaterial
+            Composable Simcoon material containing an elasticity block and
+            zero or more inelastic mechanisms.
+        tangent_mode : int, default=1
+            Tangent selector forwarded to the Simcoon ``MODUL`` UMAT.
+        name : str, optional
+            Fedoo constitutive-law registration name.
+
+        Returns
+        -------
+        Simcoon
+            A law dispatched through Simcoon's ``MODUL`` UMAT.
+
+        Notes
+        -----
+        Under finite strain, use ``corate="log_R"`` (or ``"log_R_inc"``)
+        in the associated stress-equilibrium weakform. This is required by
+        Simcoon's modular Hencky formulation.
+        """
+        if isinstance(tangent_mode, str) and name == "":
+            # Historical API: from_modular(configuration, name).
+            name = tangent_mode
+            tangent_mode = 1
+
+        try:
+            from simcoon import modular
+        except ImportError as error:
+            raise ImportError(
+                "Simcoon modular materials require simcoon.modular"
+            ) from error
+
+        if not isinstance(modular_material, modular.ModularMaterial):
+            raise TypeError(
+                "modular_material must be a simcoon.modular.ModularMaterial"
+            )
+
+        props_label, statev_label = cls._get_modular_labels(modular_material, modular)
+        material = cls.__new__(cls)
+        MechanicalUMAT.__init__(
+            material,
+            props=modular_material.props,
+            n_statev=modular_material.nstatev,
+            props_label=props_label,
+            statev_label=statev_label,
+            is_isotropic=cls._is_modular_isotropic(modular_material, modular),
+            tangent_mode=tangent_mode,
+            name=name,
+        )
+        material.umat_name = "MODUL"
+        material.modular_material = modular_material
+        material.required_corate = ("log_r", "log_r_inc")
+        return material
+
+    @staticmethod
+    def _is_modular_isotropic(modular_material, modular):
+        if not isinstance(modular_material.elasticity, modular.IsotropicElasticity):
+            return False
+        anisotropic_yields = (
+            modular.HillYield,
+            modular.DFAYield,
+            modular.AnisotropicYield,
+        )
+        return not any(
+            isinstance(mechanism, modular.Plasticity)
+            and isinstance(mechanism.yield_criterion, anisotropic_yields)
+            for mechanism in modular_material.mechanisms
+        )
+
+    @staticmethod
+    def _get_modular_labels(modular_material, modular):
+        """Generate collision-free labels for flattened modular data."""
+        props_label = {}
+        prop_index = 0
+
+        def add_props(prefix, names):
+            nonlocal prop_index
+            for label in names:
+                props_label[f"{prefix}.{label}"] = prop_index
+                prop_index += 1
+
+        add_props("elasticity", ["type"])
+        elasticity = modular_material.elasticity
+        if isinstance(elasticity, modular.IsotropicElasticity):
+            elastic_names = ["convention", "C1", "C2", "alpha"]
+        elif isinstance(elasticity, modular.CubicElasticity):
+            elastic_names = ["convention", "C1", "C2", "C3", "alpha"]
+        elif isinstance(elasticity, modular.TransverseIsotropicElasticity):
+            elastic_names = [
+                "convention",
+                "EL",
+                "ET",
+                "nuTL",
+                "nuTT",
+                "GLT",
+                "alpha_L",
+                "alpha_T",
+                "axis",
+            ]
+        elif isinstance(elasticity, modular.OrthotropicElasticity):
+            elastic_names = [
+                "convention",
+                "C1",
+                "C2",
+                "C3",
+                "C4",
+                "C5",
+                "C6",
+                "C7",
+                "C8",
+                "C9",
+                "alpha1",
+                "alpha2",
+                "alpha3",
+            ]
+        else:
+            raise TypeError(
+                f"unsupported modular elasticity {type(elasticity).__name__!r}"
+            )
+        add_props("elasticity", elastic_names)
+        add_props("mechanisms", ["count"])
+
+        statev_label = {"T_init": 0}
+        state_index = 1
+        for mechanism_index, mechanism in enumerate(modular_material.mechanisms):
+            prefix = f"mechanism_{mechanism_index}"
+            add_props(prefix, ["type"])
+
+            if isinstance(mechanism, modular.Plasticity):
+                add_props(
+                    prefix,
+                    [
+                        "yield_type",
+                        "isotropic_hardening_type",
+                        "kinematic_hardening_type",
+                        "n_isotropic_terms",
+                        "n_kinematic_terms",
+                        "sigma_Y",
+                    ],
+                )
+                yield_names = {
+                    modular.VonMisesYield: [],
+                    modular.TrescaYield: [],
+                    modular.DruckerYield: ["b", "n"],
+                    modular.HillYield: ["F", "G", "H", "L", "M", "N"],
+                    modular.DFAYield: ["F", "G", "H", "L", "M", "N", "K"],
+                    modular.AnisotropicYield: [
+                        "P11",
+                        "P22",
+                        "P33",
+                        "P12",
+                        "P13",
+                        "P23",
+                        "P44",
+                        "P55",
+                        "P66",
+                    ],
+                }
+                add_props(
+                    f"{prefix}.yield",
+                    yield_names[type(mechanism.yield_criterion)],
+                )
+
+                hardening = mechanism.isotropic_hardening
+                if isinstance(hardening, modular.NoIsotropicHardening):
+                    hardening_names = []
+                elif isinstance(hardening, modular.LinearIsotropicHardening):
+                    hardening_names = ["H"]
+                elif isinstance(hardening, modular.PowerLawHardening):
+                    hardening_names = ["k", "m"]
+                elif isinstance(hardening, modular.VoceHardening):
+                    hardening_names = ["Q", "b"]
+                elif isinstance(hardening, modular.CombinedVoceHardening):
+                    hardening_names = [
+                        component
+                        for index in range(len(hardening.terms))
+                        for component in (f"Q_{index}", f"b_{index}")
+                    ]
+                else:
+                    raise TypeError(
+                        "unsupported modular isotropic hardening "
+                        f"{type(hardening).__name__!r}"
+                    )
+                add_props(f"{prefix}.isotropic_hardening", hardening_names)
+
+                hardening = mechanism.kinematic_hardening
+                if isinstance(hardening, modular.NoKinematicHardening):
+                    hardening_names = []
+                elif isinstance(hardening, modular.PragerHardening):
+                    hardening_names = ["C"]
+                elif isinstance(hardening, modular.ArmstrongFrederickHardening):
+                    hardening_names = ["C", "D"]
+                elif isinstance(hardening, modular.ChabocheHardening):
+                    hardening_names = [
+                        component
+                        for index in range(len(hardening.terms))
+                        for component in (f"C_{index}", f"D_{index}")
+                    ]
+                else:
+                    raise TypeError(
+                        "unsupported modular kinematic hardening "
+                        f"{type(hardening).__name__!r}"
+                    )
+                add_props(f"{prefix}.kinematic_hardening", hardening_names)
+
+                statev_label[f"{prefix}.p"] = state_index
+                state_index += 1
+                statev_label[f"{prefix}.EP"] = slice(state_index, state_index + 6)
+                state_index += 6
+                for index in range(mechanism.kinematic_hardening.num_backstresses):
+                    statev_label[f"{prefix}.a_{index}"] = slice(
+                        state_index, state_index + 6
+                    )
+                    state_index += 6
+
+            elif isinstance(mechanism, modular.Viscoelasticity):
+                add_props(prefix, ["n_prony"])
+                add_props(
+                    f"{prefix}.prony",
+                    [
+                        component
+                        for index in range(len(mechanism.terms))
+                        for component in (
+                            f"E_{index}",
+                            f"nu_{index}",
+                            f"etaB_{index}",
+                            f"etaS_{index}",
+                        )
+                    ],
+                )
+                for index in range(len(mechanism.terms)):
+                    statev_label[f"{prefix}.v_{index}"] = state_index
+                    state_index += 1
+                    statev_label[f"{prefix}.EV_{index}"] = slice(
+                        state_index, state_index + 6
+                    )
+                    state_index += 6
+
+            elif isinstance(mechanism, modular.Damage):
+                damage_names = ["damage_type", "Y_0", "Y_c"]
+                if mechanism.damage_type == modular.DamageType.EXPONENTIAL:
+                    damage_names.append("A")
+                elif mechanism.damage_type == modular.DamageType.POWER_LAW:
+                    damage_names.append("n")
+                elif mechanism.damage_type == modular.DamageType.WEIBULL:
+                    damage_names.extend(["A", "n"])
+                add_props(prefix, damage_names)
+                statev_label[f"{prefix}.D"] = state_index
+                state_index += 1
+                statev_label[f"{prefix}.Y_max"] = state_index
+                state_index += 1
+            else:
+                raise TypeError(
+                    f"unsupported modular mechanism {type(mechanism).__name__!r}"
+                )
+
+        if prop_index != modular_material.nprops:
+            raise RuntimeError(
+                "generated modular property labels do not match the Simcoon "
+                f"property layout ({prop_index} != {modular_material.nprops})"
+            )
+        if state_index != modular_material.nstatev:
+            raise RuntimeError(
+                "generated modular state labels do not match the Simcoon "
+                f"state layout ({state_index} != {modular_material.nstatev})"
+            )
+        return props_label, statev_label
+
+    def __init__(self, umat_name, props, tangent_mode=1, name=""):
         # props is a nparray containing all the material variables
         # nstatev is a nparray containing all the material variables
-        Mechanical3D.__init__(self, name)  # heritage
+        if isinstance(tangent_mode, str) and name == "":
+            # Historical API: Simcoon(umat_name, props, name).
+            name = tangent_mode
+            tangent_mode = 1
+        MechanicalUMAT.__init__(self, props=props, tangent_mode=tangent_mode, name=name)
         # self._statev_initial = statev #statev may be an int or an array
         # self.__useElasticModulus = True ??
 
@@ -55,18 +371,9 @@ class Simcoon(Mechanical3D):
 
         # ndi = nshr = 3 #compute the 3D constitutive law even for 2D law
         self.umat_name = umat_name
-        self.props = np.asfortranarray(
-            np.c_[props]
-        )  # if props is 1d -> take it as column.
-        # ensure a fortran order for compatibility with armadillo
-
-        self.use_elastic_lt = True
-        # option to use the elastic tangeant matrix
-        self.tangent_mode = 1
-        # simcoon 2.0 tangent numbering: 0 = none (elastic operator),
-        # 1 = continuum tangent (default), 2 = Simo-Hughes algorithmic (consistent).
-        # NB: pre-2.0 simcoon used 0 = continuum, 1 = algorithmic; literals were
-        # re-mapped for 2.0 (old 0 -> 1, old 1 -> 2).
+        self.is_isotropic = umat_name in self._ISOTROPIC_UMATS
+        # MechanicalUMAT retains the historical defaults: cache the elastic
+        # tangent and request Simcoon's continuum tangent (mode 1).
 
         # _Lt_from_F attribute is set to True if the tangent matrix is related
         # to F instead of log epsilon, ie for hyper elastic materials
@@ -866,168 +1173,6 @@ class Simcoon(Mechanical3D):
         else:
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
-    def initialize(self, assembly, pb):
-        if "Statev" not in assembly.sv or not (self.is_initialized):
-            # initialize data with the right shapes
-            assembly.sv["Statev"] = np.zeros(
-                (self.n_statev, assembly.n_gauss_points), order="F"
-            )  # initialize all statev to 0
-
-            # Define sv_component
-            for label in self.statev_label:
-                assembly.sv_component[label] = ("Statev", self.statev_label[label])
-
-            # initialize all DR to np.eye(3)
-            DR = np.empty((3, 3, assembly.n_gauss_points), order="F")
-            DR[...] = np.eye(3).reshape(3, 3, 1)
-            assembly.sv["DR"] = DR
-
-            if assembly._nlgeom:
-                F = np.empty((3, 3, assembly.n_gauss_points), order="F")
-                F[...] = np.eye(3).reshape(3, 3, 1)
-                assembly.sv["F"] = F
-            else:
-                F = np.array([])
-
-            temp = self.get_temp_gp(assembly, pb)
-
-            assembly.sv["Wm"] = np.zeros((4, assembly.n_gauss_points), order="F")
-            # assembly.sv["Stress"] = StressTensorList(
-            #     np.zeros((6, assembly.n_gauss_points), order="F")
-            # )
-
-            # Launch the UMAT to compute the elastic matrix in "TangentMatrix"
-            zeros_6 = np.zeros((6, assembly.n_gauss_points), order="F")
-
-            if assembly.space.get_dimension() == "2Dstress":
-                if self._Lt_from_F:
-                    raise NotImplementedError(
-                        "Simcoon hyperelastic law are not compatible with "
-                        "2D plane stress assumption"
-                    )
-                ndi = 2
-            else:
-                ndi = 3
-
-            (sigma, statev, wm, assembly.sv["TangentMatrix"]) = sim.umat(
-                self.umat_name,
-                zeros_6,
-                zeros_6,
-                F,
-                F,
-                zeros_6,
-                DR,
-                self.props,
-                assembly.sv["Statev"],
-                0,
-                0,
-                assembly.sv["Wm"],
-                temp,
-                ndi=ndi,
-                tangent_mode=self.tangent_mode,
-            )
-
-            if ndi == 2:  # plane stress assumption
-                assembly.sv["TangentMatrix"] = self.get_tangent_matrix(
-                    assembly, "2Dstress"
-                )
-
-            if self.use_elastic_lt:
-                assembly.sv["ElasticMatrix"] = assembly.sv["TangentMatrix"]
-
-            self.is_initialized = True
-
-    def update(self, assembly, pb):
-        if "DStrain" in assembly.sv:
-            de = assembly.sv["DStrain"]
-        else:
-            de = assembly.sv["Strain"] - assembly.sv_start["Strain"]
-
-        temp = self.get_temp_gp(assembly, pb)
-
-        if assembly._nlgeom:
-            F0 = assembly.sv_start["F"]
-            F1 = assembly.sv["F"]
-        else:
-            F0 = F1 = np.array([])
-
-        if assembly.space.get_dimension() == "2Dstress":
-            ndi = 2
-        else:
-            ndi = 3
-
-        (
-            stress,
-            assembly.sv["Statev"],
-            assembly.sv["Wm"],
-            assembly.sv["TangentMatrix"],
-        ) = sim.umat(
-            self.umat_name,
-            assembly.sv_start["Strain"].array,
-            de.array,
-            F0,
-            F1,
-            assembly.sv_start["Stress"].array,
-            assembly.sv["DR"],
-            self.props,
-            assembly.sv_start["Statev"],
-            pb.time,
-            pb.dtime,
-            assembly.sv_start["Wm"],
-            temp,
-            ndi=ndi,
-            tangent_mode=self.tangent_mode,
-        )
-        if ndi == 2:  # plane stress assumption
-            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
-
-        assembly.sv["Stress"] = StressTensorList(stress)
-        # to check the symetriy of the tangentmatrix :
-        # print(
-        #     np.abs(
-        #         assembly.sv["TangentMatrix"]
-        #         - assembly.sv["TangentMatrix"].transpose((1, 0, 2))
-        #     ).max()
-        # )
-        # check if all eigvalues are positive
-        # print((np.linalg.eig(assembly.sv['TangentMatrix'].transpose(2,0,1))[0]<0).any())
-
-    def set_start(self, assembly, pb):
-        if self.use_elastic_lt:
-            assembly.sv["TangentMatrix"] = assembly.sv["ElasticMatrix"]
-
-    def get_temp_gp(self, assembly, pb):
-        """Get the current temperature field at Gauss Point.
-
-        An explicitly set 'Temp' field in the assembly.sv dict takes precedence:
-        it is used as is (it is already defined at Gauss Points). This is the
-        historical way to impose a temperature (e.g. a constant field, or a weak
-        thermo-mechanical coupling that copies the thermal solution into sv).
-        Otherwise, if 'Temp' is a variable of the ModelingSpace, the nodal dof
-        solution is extracted from the problem and converted to Gauss Points.
-        If no temperature is found or if it is set to 0, return None.
-        """
-        if "Temp" in assembly.sv:
-            temp = assembly.sv["Temp"]
-        elif "Temp" in assembly.space.list_variables():
-            temp = assembly.convert_data(
-                pb.get_dof_solution("Temp"), "Node", "GaussPoint"
-            )
-        else:
-            return None
-        if np.isscalar(temp) and temp == 0:
-            return None
-        return temp
-
-    def get_tangent_matrix(self, assembly, dimension=None):
-        if dimension is None:
-            dimension = assembly.space.get_dimension()
-
-        H = self.local2global_H(assembly.sv["TangentMatrix"])
-        if dimension == "2Dstress":
-            return self.get_H_plane_stress(H)
-        else:
-            return H
-
-    # def get_elastic_matrix(self, dimension = "3D"):
-    #     return self.get_tangent_matrix(None,dimension)
+    def _call_umat(self, *args, **kwargs):
+        """Dispatch the generic MechanicalUMAT call to Simcoon."""
+        return sim.umat(self.umat_name, *args, **kwargs)

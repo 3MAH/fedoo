@@ -1297,23 +1297,114 @@ class Mesh(MeshBase):
         else:
             raise NameError("Pyvista not installed.")
 
-    def get_element_local_frame(self, n_elm_gp: int = 1) -> np.ndarray:
-        # 1 gauss point by default to compute the local frame at the center of the element
+    def get_element_local_frame(
+        self,
+        n_elm_gp: int = 1,
+        guide=None,
+        location: str | None = None,
+        guide_direction: str | None = None,
+    ) -> np.ndarray:
+        """Return geometrical local frames at element evaluation points.
+
+        For beams, the first axis is the geometrical tangent and ``guide``
+        approximates the local y axis (or z axis when
+        ``guide_direction='z'``). For shells, the third axis is the
+        geometrical normal and ``guide`` approximates the local x axis.
+        A guide can be global, nodal, elemental, or defined at every requested
+        evaluation point. Nodal guides are interpolated before projection onto
+        the appropriate geometrical plane.
+        """
         elm_ref = get_element(self.elm_type)
         if hasattr(elm_ref, "geometry_elm"):
             elm_ref = elm_ref.geometry_elm
         elm_ref = elm_ref(n_elm_gp)
-        elm_nodes_crd = self.nodes[self.elements]
+        element_nodes = getattr(self, "_elements_geom", self.elements)
+        elm_nodes_crd = self.nodes[element_nodes]
+        vec_xi = elm_ref.get_gp_elm_coordinates(n_elm_gp)
+        topology_dim = np.asarray(elm_ref.shape_function_derivative(vec_xi)).shape[1]
+
+        guide_at_points = None
+        if guide is not None:
+            guide = np.asarray(guide, dtype=float)
+            if guide.shape == (self.ndim,):
+                guide_at_points = guide
+            else:
+                if guide.ndim == 1 or guide.shape[-1] != self.ndim:
+                    raise ValueError(f"guide vectors must have {self.ndim} components")
+                if location not in (None, "Node", "Element", "GaussPoint"):
+                    raise ValueError(
+                        "guide location must be 'Node', 'Element' or " "'GaussPoint'"
+                    )
+
+                if guide.ndim == 3:
+                    if guide.shape[:2] != (self.n_elements, n_elm_gp):
+                        raise ValueError(
+                            "3D guide arrays must have shape "
+                            "(n_elements, n_elm_gp, ndim)"
+                        )
+                    guide_at_points = guide
+                else:
+                    guide = guide.reshape(-1, self.ndim)
+                    expected = {
+                        "Node": self.n_nodes,
+                        "Element": self.n_elements,
+                        "GaussPoint": self.n_elements * n_elm_gp,
+                    }
+                    if location is None:
+                        matches = [
+                            key
+                            for key, value in expected.items()
+                            if value == len(guide)
+                        ]
+                        if len(matches) != 1:
+                            raise ValueError(
+                                "guide location is ambiguous; specify location='Node', "
+                                "'Element' or 'GaussPoint'"
+                            )
+                        location = matches[0]
+                    elif len(guide) != expected[location]:
+                        raise ValueError(
+                            f"{location} guides require {expected[location]} vectors, "
+                            f"got {len(guide)}"
+                        )
+
+                    if location == "Node":
+                        shape = elm_ref.shape_function(vec_xi)
+                        guide_at_points = np.einsum(
+                            "gn,end->egd", shape, guide[element_nodes]
+                        )
+                    elif location == "Element":
+                        guide_at_points = np.broadcast_to(
+                            guide[:, np.newaxis, :],
+                            (self.n_elements, n_elm_gp, self.ndim),
+                        )
+                    else:
+                        # Fedoo's flattened Gauss-point order is gp-major.
+                        guide_at_points = guide.reshape(
+                            n_elm_gp, self.n_elements, self.ndim
+                        ).transpose(1, 0, 2)
+
+        if topology_dim == 1:
+            frame = elm_ref.get_local_frame(
+                elm_nodes_crd,
+                vec_xi,
+                guide_at_points,
+                guide_direction or "y",
+            )
+        elif topology_dim == 2 and self.ndim == 3:
+            if guide_direction not in (None, "x"):
+                raise ValueError("guide_direction must be 'x' for a shell")
+            frame = elm_ref.get_local_frame(elm_nodes_crd, vec_xi, guide_at_points)
+        else:
+            if guide is not None:
+                raise ValueError("guides are only supported for beam and shell meshes")
+            frame = elm_ref.get_local_frame(elm_nodes_crd, vec_xi)
 
         if n_elm_gp == 1:
-            return elm_ref.get_local_frame(
-                elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp)
-            )[:, 0, :]
+            return frame[:, 0, :]
         else:
             return np.transpose(
-                elm_ref.get_local_frame(
-                    elm_nodes_crd, elm_ref.get_gp_elm_coordinates(n_elm_gp)
-                ),
+                frame,
                 (1, 0, 2, 3),
             ).reshape(-1, self.ndim, self.ndim)
 

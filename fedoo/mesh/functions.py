@@ -273,9 +273,9 @@ def extrude(
     mesh,
     extrude_path,
     n_nodes=11,
-    use_local_frame=False,
     ndim=None,
     name="",
+    local_frame=None,
 ):
     """
     Build a volume or surface mesh from the extrusion of a surface or wire mesh.
@@ -292,9 +292,17 @@ def extrude(
         - a fedoo.Mesh with line elements: define the path along which the mesh is extruded.
     n_nodes : int
         number of nodes in the extrusion direction. n_nodes is ignored if extrude_path is a Mesh.
-    use_local_frame : bool
-        If True, the extrusion use the nodal local_frame of the extrude_path Mesh
-        (if available). The default is False.
+    ndim : int, optional
+        Spatial dimension of an ordinary extrusion. With ``local_frame``, the
+        frame dimension determines the output dimension; an explicitly given
+        ``ndim`` must match it.
+    local_frame : array_like or scipy/simcoon Rotation, optional
+        Smooth local frames along the extrusion path. One frame is broadcast
+        to all path nodes; otherwise one frame per path node is required.
+        Frame rows are the local basis vectors expressed in global coordinates.
+        For a conventional sweep along a curved path, the first frame axis
+        generally follows the path tangent. Other orientations may be used to
+        create an oblique sweep.
     name : str, optional
         The name of the final Mesh.
 
@@ -331,6 +339,18 @@ def extrude(
         else:
             raise NameError("extrude_path argument not understood. ")
 
+    path_element = get_element(mesh1.elm_type)
+    if hasattr(path_element, "geometry_elm"):
+        path_element = path_element.geometry_elm
+    path_element = path_element(1)
+    path_coordinates = path_element.get_gp_elm_coordinates(1)
+    path_dimension = np.asarray(
+        path_element.shape_function_derivative(path_coordinates)
+    ).shape[1]
+    if path_dimension != 1:
+        raise ValueError("extrude_path must be a mesh of line elements")
+
+    ndim_is_explicit = ndim is not None
     if ndim is None:
         ndim = min(3, mesh.ndim + mesh1.ndim)  # dim of the extruded mesh
 
@@ -413,7 +433,36 @@ def extrude(
         raise NameError("Element not implemented")
 
     n_nodes_extruded = mesh1.n_nodes * mesh.n_nodes
-    if not use_local_frame:
+    path_frames = None
+    if local_frame is not None:
+        from fedoo.util.localframe import as_local_frame
+
+        path_frames = as_local_frame(local_frame)
+        path_frames = path_frames.reshape(
+            -1, path_frames.shape[-2], path_frames.shape[-1]
+        )
+        frame_dimension = path_frames.shape[-1]
+        if ndim_is_explicit and ndim != frame_dimension:
+            raise ValueError(
+                f"ndim={ndim} is incompatible with {frame_dimension}D local frames"
+            )
+        ndim = frame_dimension
+        if mesh1.ndim > frame_dimension and np.any(
+            np.abs(mesh1.nodes[:, frame_dimension:]) > 1e-12
+        ):
+            raise ValueError(
+                f"{frame_dimension}D local frames cannot represent the "
+                f"{mesh1.ndim}D extrusion path"
+            )
+        if len(path_frames) == 1:
+            path_frames = np.repeat(path_frames, mesh1.n_nodes, axis=0)
+        elif len(path_frames) != mesh1.n_nodes:
+            raise ValueError(
+                "local-frame extrusion requires one frame or one frame per "
+                f"path node ({mesh1.n_nodes}); got {len(path_frames)}"
+            )
+
+    if path_frames is None:
         if mesh1.ndim + mesh.ndim <= ndim:
             crd = np.c_[
                 np.repeat(mesh.nodes, mesh1.n_nodes, axis=0),
@@ -423,26 +472,149 @@ def extrude(
             crd = np.repeat(mesh.as_ndim(ndim).nodes, mesh1.n_nodes, axis=0)
             crd[:, : mesh1.ndim] += np.tile(mesh1.nodes, (mesh.n_nodes, 1))
 
-    else:  # dim_mesh is the thickness
-        if dim_mesh == 1:
-            crd = np.zeros((n_nodes_extruded, np.shape(mesh1.nodes)[1]))
-            for i in range(mesh.n_nodes):
-                crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
-                    mesh1.nodes + mesh1.local_frame[:, -1, :] * mesh.nodes[i][0]
-                )
-        elif dim_mesh == 2:
-            crd = np.zeros((n_nodes_extruded, np.shape(mesh1.nodes)[1]))
-            for i in range(mesh.n_nodes):
-                crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes, :] = (
-                    mesh1.nodes
-                    + mesh1.local_frame[:, 1, :] * mesh.nodes[i][0]
-                    + mesh1.local_frame[:, 2, :] * mesh.nodes[i][1]
-                )
-        else:
-            return NotImplemented
+    else:  # dim_mesh is the profile dimension (the path tangent is excluded)
+        if dim_mesh >= frame_dimension:
+            raise ValueError(
+                "the local frame must contain a path tangent plus one axis "
+                "for every profile dimension"
+            )
+        path_nodes = mesh1.as_ndim(frame_dimension).nodes
+        crd = np.zeros((n_nodes_extruded, frame_dimension))
+        profile_nodes = mesh.as_ndim(dim_mesh).nodes
+        profile_axes = path_frames[:, -dim_mesh:, :]
+        for i in range(mesh.n_nodes):
+            offset = np.einsum("j,njk->nk", profile_nodes[i], profile_axes)
+            crd[i * mesh1.n_nodes : (i + 1) * mesh1.n_nodes] = path_nodes + offset
 
     ### CHECK ndim add add 0 if required ####
     return Mesh(crd, elm, type_elm, name=name)
+
+
+def thicken(mesh, thickness, n_nodes=2, normal=None, name=""):
+    """Create a solid by thickening a surface mesh along nodal normals.
+
+    Parameters
+    ----------
+    mesh : fedoo.Mesh
+        Two-dimensional surface mesh to thicken. ``tri3`` and ``quad4``
+        elements are supported.
+    thickness : float or tuple[float, float]
+        With a positive scalar, the original surface is the midsurface and the
+        offsets are ``(-thickness/2, thickness/2)``. A two-value tuple gives
+        the lower and upper offsets explicitly.
+    n_nodes : int, default=2
+        Number of nodes through the thickness.
+    normal : array_like, optional
+        One 3D normal vector, or one vector per surface node. Without this
+        argument, area-weighted nodal normals are computed from the adjacent
+        surface elements.
+    name : str, optional
+        Name of the generated solid mesh.
+
+    Returns
+    -------
+    fedoo.Mesh
+        Solid mesh made of ``wed6`` or ``hex8`` elements.
+
+    Notes
+    -----
+    The input surface must have consistently oriented elements. Large
+    thicknesses or highly curved surfaces may produce intersecting or inverted
+    solid elements; no geometric collision correction is performed.
+    """
+    if mesh.elm_type not in ("tri3", "quad4"):
+        raise ValueError("thicken only supports tri3 and quad4 surface meshes")
+    if not isinstance(n_nodes, (int, np.integer)) or n_nodes < 2:
+        raise ValueError("n_nodes must be an integer greater than or equal to 2")
+
+    if np.isscalar(thickness):
+        if thickness <= 0:
+            raise ValueError("thickness must be positive")
+        bounds = (-0.5 * thickness, 0.5 * thickness)
+    else:
+        try:
+            bounds = tuple(thickness)
+        except TypeError as exc:
+            raise ValueError("thickness must be a scalar or a two-value tuple") from exc
+        if len(bounds) != 2 or bounds[1] <= bounds[0]:
+            raise ValueError(
+                "thickness bounds must contain two increasing offset values"
+            )
+    offsets = np.linspace(bounds[0], bounds[1], n_nodes)
+
+    surface = mesh.as_ndim(3)
+    if normal is None:
+        element_normals = surface.get_element_local_frame()[:, -1]
+        element_areas = surface.get_element_volumes()
+        nodal_normals = np.zeros((surface.n_nodes, 3))
+        weighted_normals = element_normals * element_areas[:, np.newaxis]
+        for local_node in range(surface.n_elm_nodes):
+            np.add.at(
+                nodal_normals,
+                surface.elements[:, local_node],
+                weighted_normals,
+            )
+        normal_norm = np.linalg.norm(nodal_normals, axis=1)
+        if np.any(normal_norm < 1e-12):
+            raise ValueError(
+                "could not determine nodal normals; check surface orientation"
+            )
+        nodal_normals /= normal_norm[:, np.newaxis]
+    else:
+        nodal_normals = np.asarray(normal, dtype=float)
+        if nodal_normals.shape == (3,):
+            nodal_normals = np.broadcast_to(nodal_normals, (surface.n_nodes, 3)).copy()
+        elif nodal_normals.shape != (surface.n_nodes, 3):
+            raise ValueError(
+                "normal must be one 3D vector or an array with shape "
+                f"({surface.n_nodes}, 3)"
+            )
+        normal_norm = np.linalg.norm(nodal_normals, axis=1)
+        if np.any(normal_norm < 1e-12):
+            raise ValueError("normal vectors must have a nonzero magnitude")
+        nodal_normals = nodal_normals / normal_norm[:, np.newaxis]
+
+    crd = (
+        surface.nodes[:, np.newaxis, :]
+        + offsets[np.newaxis, :, np.newaxis] * nodal_normals[:, np.newaxis, :]
+    ).reshape(-1, 3)
+
+    layer_elements = []
+    for layer in range(n_nodes - 1):
+        lower = surface.elements * n_nodes + layer
+        upper = lower + 1
+        layer_elements.append(np.hstack((lower, upper)))
+    elements = np.vstack(layer_elements)
+    elm_type = "wed6" if mesh.elm_type == "tri3" else "hex8"
+
+    node_sets = {
+        set_name: (
+            np.asarray(nodes)[:, np.newaxis] * n_nodes
+            + np.arange(n_nodes)[np.newaxis, :]
+        ).reshape(-1)
+        for set_name, nodes in mesh.node_sets.items()
+    }
+    node_sets["thickness_bottom"] = np.arange(surface.n_nodes) * n_nodes
+    node_sets["thickness_top"] = node_sets["thickness_bottom"] + n_nodes - 1
+
+    element_sets = {
+        set_name: np.concatenate(
+            [
+                np.asarray(surface_elements) + layer * surface.n_elements
+                for layer in range(n_nodes - 1)
+            ]
+        )
+        for set_name, surface_elements in mesh.element_sets.items()
+    }
+
+    return Mesh(
+        crd,
+        elements,
+        elm_type,
+        node_sets=node_sets,
+        element_sets=element_sets,
+        name=name,
+    )
 
 
 def quad2tri(mesh):

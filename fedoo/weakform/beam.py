@@ -33,6 +33,12 @@ class BeamEquilibrium(WeakFormBase):
         hypothesis.
     name: str
         name of the WeakForm.
+
+    Notes
+    -----
+    The current beam formulation supports isotropic linear elastic materials
+    only. Material orientations are ignored; the beam cross-section
+    orientation is defined by the assembly element frame.
     """
 
     def __init__(
@@ -205,7 +211,7 @@ class BeamEquilibrium(WeakFormBase):
 
                         # element rigid rotation mat to get the local frame from global
                         assembly.sv["RigidRotationMat"] = (
-                            assembly.mesh.get_element_local_frame()
+                            assembly.get_element_local_frame()
                         )
                         # initial rotation mat to get the initial element local frame
                         initial_element_rotmat = assembly.sv[

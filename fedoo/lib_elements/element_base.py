@@ -267,14 +267,27 @@ class Element1D(Element):
             y_vec = np.stack([-x_vec[..., 1], x_vec[..., 0]], axis=-1)
             return np.stack([x_vec, y_vec], axis=-2)
 
+        if guide_direction not in ("y", "z"):
+            raise ValueError("guide_direction must be 'y' or 'z' for a beam")
+
         # Guide Vector
-        if guide is None:
+        default_guide = guide is None
+        if default_guide:
             guide = (
                 np.array([0.0, 1.0, 0.0])
                 if guide_direction == "y"
                 else np.array([0.0, 0.0, 1.0])
             )
-        guide = np.array(guide)
+        guide = np.asarray(guide, dtype=float)
+        if guide.ndim == 2 and guide.shape == (x_vec.shape[0], x_vec.shape[-1]):
+            guide = guide[:, np.newaxis, :]
+        try:
+            guide = np.broadcast_to(guide, x_vec.shape)
+        except ValueError as exc:
+            raise ValueError(
+                "beam guide must be a vector or contain one vector per element "
+                "and evaluation point"
+            ) from exc
 
         # Compute Orthogonal Vector with Guide
         # We'll compute the cross product for everything first
@@ -285,6 +298,8 @@ class Element1D(Element):
 
         # Handle Singularity (Parallel cases)
         singular = norm_v[..., 0] < 1e-6
+        if np.any(singular) and not default_guide:
+            raise ValueError("beam guide is parallel to the element tangent")
         if np.any(singular):
             # For singular elements, find the global axis least parallel to x_vec
             # We compare absolute components of the tangent
@@ -378,8 +393,11 @@ class Element1DGeom2(Element1D):
         tangent = vec_x[:, 1, :] - vec_x[:, 0, :]
         x_vec = tangent / np.linalg.norm(tangent, axis=-1, keepdims=True)
 
-        # Expand to (Nel, 1, 3) to keep consistent with Gauss points
-        x_vec = x_vec[:, np.newaxis, :]
+        # Expand the constant tangent to every requested evaluation point.
+        x_vec = np.broadcast_to(
+            x_vec[:, np.newaxis, :],
+            (x_vec.shape[0], len(vec_xi), x_vec.shape[-1]),
+        )
 
         return self._complete_beam_frame(x_vec, guide, guide_direction)
 
@@ -428,20 +446,36 @@ class Element2D(Element):
         listZ /= np.linalg.norm(listZ, axis=-1, keepdims=True)
 
         # Define the Guide Vector (Approximate X)
-        if guide_x is None:
+        default_guide = guide_x is None
+        if default_guide:
             # Default guide is global X
             x_guide = np.array([1.0, 0.0, 0.0])
         else:
-            x_guide = np.array(guide_x)
+            x_guide = np.asarray(guide_x, dtype=float)
+
+        if x_guide.ndim == 2 and x_guide.shape == (
+            listZ.shape[0],
+            listZ.shape[-1],
+        ):
+            x_guide = x_guide[:, np.newaxis, :]
+        try:
+            x_guide = np.broadcast_to(x_guide, listZ.shape)
+        except ValueError as exc:
+            raise ValueError(
+                "shell guide must be a vector or contain one vector per element "
+                "and evaluation point"
+            ) from exc
 
         # Project Guide X onto the tangent plane: X_local = X_guide - (X_guide . Z) * Z
-        dot_z_x = np.einsum("...i,i->...", listZ, x_guide)
+        dot_z_x = np.einsum("...i,...i->...", listZ, x_guide)
         listX = x_guide - dot_z_x[..., np.newaxis] * listZ
 
         # Handle Singularity (if guide_x is parallel to the normal listZ)
         normX = np.linalg.norm(listX, axis=-1)
         mask_singular = normX < 1e-6
 
+        if np.any(mask_singular) and not default_guide:
+            raise ValueError("shell guide is parallel to the element normal")
         if np.any(mask_singular):
             # Use Global Y as a fallback guide for singular points
             y_fallback = np.array([0.0, 1.0, 0.0])
