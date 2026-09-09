@@ -6,7 +6,6 @@ from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.problem.line_search import line_search, _line_search_manager
 from fedoo.core.base import InvalidKinematicStateError
-from scipy.sparse.linalg import eigs, eigsh, ArpackNoConvergence
 import warnings
 from typing import Callable
 
@@ -39,9 +38,6 @@ class _NonLinearBase:
             "elastic_initial_guess": False,
             "adaptive_stiffness": False,
             "assume_cvg_at_max_subiter": False,
-            "eigenvalue_shift": False,
-            "eigenvalue_assume_sym": True,
-            "eigenvalue_shift_factor": 1e-4,
             "check_early_divergence": True,
         }
         """Parameters to set the Newton-Raphson algorithm.
@@ -391,157 +387,6 @@ class _NonLinearBase:
         if update:
             self.update()
 
-    def _apply_eigenvalue_shift(self, A, shift_factor=1e-4, assume_sym=True):
-        """
-        Apply eigenvalue shift to improve matrix conditioning.
-
-        Adds alpha*I to the matrix if eigenvalue_shift is enabled and shift is
-        significant. Handles both sparse and dense matrices.
-
-        Parameters
-        ----------
-        A : sparse or dense matrix
-            The matrix to shift
-        shif_factor : float, default = 1e-4.
-            Scaling factor for the eigenvalue shift.
-            Larger values = stronger stabilization but less accuracy.
-            Smaller values = more accurate but weaker stabilization.
-
-        Returns
-        -------
-        matrix
-            The shifted matrix A + alpha*I, or original A if shift is negligible
-        """
-        alpha_shift = self._estimate_eigenvalue_shift(A, shift_factor, assume_sym)
-        if alpha_shift <= 1e-16:  # Shift too small to apply
-            return A
-
-        try:
-            from scipy import sparse
-
-            n = A.shape[0]
-            if sparse.issparse(A):
-                A_shifted = A + alpha_shift * sparse.identity(n, format=A.format)
-            else:
-                A_shifted = A + alpha_shift * np.eye(n)
-
-            if self.print_info > 1:
-                print("          Eigenvalue shift alpha: {:.4e}".format(alpha_shift))
-            return A_shifted
-        except Exception:
-            # If shift fails, return unmodified matrix
-            return A
-
-    def _estimate_eigenvalue_shift(self, A, shift_factor=1e-4, assume_sym=True):
-        """
-        Estimate eigenvalue shift parameter using Rayleigh quotient.
-
-        The shift improves matrix conditioning by adding alpha*I to the stiffness.
-        Uses a cheap estimate based on Rayleigh quotient with current displacement.
-
-        Parameters
-        ----------
-        A : sparse or dense matrix
-            The matrix for which to estimate eigenvalue shift (typically KT or KE)
-        shift_factor : float, default = 1e-4.
-            Scaling factor for the eigenvalue shift.
-            Larger values = stronger stabilization but less accuracy.
-            Smaller values = more accurate but weaker stabilization.
-        assume_sym : bool, default = True.
-            If True assume the tangent matrix is symmetric.
-
-        Returns
-        -------
-        float
-            Estimated shift parameter alpha >= 0
-        """
-        # Get current displacement increment to use for Rayleigh quotient
-        x = self.get_X()
-        if np.isscalar(x) or x.size == 0:
-            return 0.0
-        if np.isscalar(A):
-            return 0.0
-        # --- 1. Get Scale Estimate (The "Physics" of the problem) ---
-        x_norm_sq = np.dot(x, x)
-        if x_norm_sq < 1e-20:  # Prevent div by zero
-            return 0.0
-        Ax = A @ x
-        # rayleigh_max estimates the scale of the "active" stiffness
-        rayleigh = np.dot(x, Ax) / x_norm_sq
-
-        # Define a physics-aware margin
-        margin = shift_factor * max(abs(rayleigh), 1.0)
-
-        # --- 2. Two-Stage Lanczos Check ---
-        # Stage 1: Check for massive material negative eigenvalues
-        # (Algebraically Smallest 'SA' without shift-invert)
-        try:
-            # We use a very loose tolerance (0.1) and low maxiter for speed
-            if assume_sym:
-                vals = eigsh(
-                    A,
-                    k=1,
-                    which="SA",
-                    maxiter=10,
-                    tol=0.1,
-                    v0=x,
-                    return_eigenvectors=False,
-                )
-                lambda_min = vals[0]
-            else:
-                vals = eigs(
-                    A,
-                    k=1,
-                    which="SR",
-                    maxiter=10,
-                    tol=0.1,
-                    v0=x,
-                    return_eigenvectors=False,
-                )
-                lambda_min = vals[
-                    0
-                ].real  # eigs returns complex numbers; get real part.
-
-            # If we found a significant negative eigenvalue (beyond our margin)
-            if lambda_min < -margin:
-                return abs(lambda_min) + margin
-        except (ArpackNoConvergence, Exception):
-            # If standard Lanczos fails to find a "loud" negative value,
-            # the instability is likely subtle and clustered near zero.
-            pass
-
-        # Stage 2: Check for subtle buckling/instability near zero
-        # (Smallest Magnitude 'LM' with Shift-Invert at sigma=0)
-        try:
-            # sigma=0 turns the "near zero" into the "easiest to find"
-            if assume_sym:
-                vals = eigsh(
-                    A, k=1, sigma=0.0, which="LM", tol=0.1, return_eigenvectors=False
-                )
-                lambda_near_zero = vals[0]
-            else:
-                vals = eigs(
-                    A, k=1, sigma=0.0, which="LM", tol=0.1, return_eigenvectors=False
-                )
-                lambda_near_zero = vals[0].real
-
-            if lambda_near_zero < margin:
-                # Shift enough to push it comfortably past zero
-                return abs(lambda_near_zero) + margin
-        except Exception as e:
-            if self.print_info > 1:
-                print(
-                    f"        [Diagnostic] Shift-invert failed (Likely singular matrix): {e}"
-                )
-
-        # --- 3. Rayleigh estimation of eig ---
-        if rayleigh < -1e-12:
-            # unstable matrix
-            return abs(rayleigh) + margin
-        else:
-            # no unstability detected
-            return 0.0
-
     def _update_step_size_callback(self):
         """Update the line search callback from 'ls_callbacks' attribute."""
         if not self._ls_callbacks:
@@ -554,7 +399,9 @@ class _NonLinearBase:
             # Multiple constraints exist: use the manager
             self._step_size_callback = _line_search_manager
 
-    def add_line_search(self, method="Quadratic", name=None, mode="natural"):
+    def add_line_search(
+        self, method="Quadratic", name=None, mode="natural", apply_to_bc=True
+    ):
         r"""Add line search algorithm for the Newton-Raphson solver.
 
         Line search improves global convergence by scaling the displacement
@@ -606,25 +453,30 @@ class _NonLinearBase:
               ``user_line_search(pb, dX) -> float`` and will be assigned directly
               as the line search callback (``mode`` is then ignored).
 
-              .. warning::
-                 A custom callback MUST return exactly 1 while a Dirichlet
-                 increment is still pending (test
-                 :meth:`_xbc_is_applied`, as the built-in line search does).
-                 A returned ``alpha < 1`` defers the remaining
-                 ``1 - alpha`` of the prescribed displacement to the next
-                 iterations, and convergence is only declared once nothing
-                 is left to apply: a callback that never returns 1 strands
-                 the increment and the time step collapses to ``dt_min``.
+              A custom callback may scale a pending Dirichlet increment. A
+              returned ``alpha < 1`` defers its unapplied part to subsequent
+              Newton corrections, and convergence is declared only after the
+              complete prescribed increment has been applied. The callback
+              must therefore eventually accept the remaining increment.
         name : str, optional
             A unique identifier for the line search. If not provided, it defaults
             to 'standard' for built-in methods, or the function's name for callables.
+        apply_to_bc : bool, default True
+            If True, the built-in line search also scales a pending Dirichlet
+            increment. Its unapplied part is retained and carried by the next
+            Newton correction; convergence is accepted only after the complete
+            prescribed increment has been applied. If False, the built-in line
+            search returns a full step while a Dirichlet increment is pending
+            and starts scaling corrections only after that increment is applied.
+            This option does not alter custom callbacks.
 
         Notes
         -----
         * **Implementation**: This method sets the `_step_size_callback` attribute
-          of the problem instance. Parameters `ls_mode`, `ls_method` and
-          `ls_max_iter` are stored within the `self.nr_parameters` dictionary
-          (they may also be set through :meth:`set_nr_criterion`).
+          of the problem instance. Parameters `ls_mode`, `ls_method`,
+          `ls_max_iter` and `ls_apply_to_bc` are stored within the
+          `self.nr_parameters` dictionary (they may also be set through
+          :meth:`set_nr_criterion`).
         * **Objective Function**: For 'Armijo' and 'Quadratic' methods, the solver
           minimizes the squared L2-norm of the residual:
 
@@ -634,6 +486,11 @@ class _NonLinearBase:
           derivative of the potential energy (the external work).
         * **Safeguards**: To prevent solver stagnation, interpolated values are
           clipped such that :math:`\alpha_{new} \in [0.1\alpha, 0.5\alpha]`.
+          Invalid kinematic trials are reduced geometrically. If no valid
+          trial exists down to the minimum step, the complete increment is
+          rejected through the normal time-step reduction machinery. If the
+          natural-mode acceptance tests are exhausted, its last valid trial
+          is used and the Newton solver decides whether the increment converges.
 
         Example
         -------
@@ -643,6 +500,8 @@ class _NonLinearBase:
         >>> my_problem.add_line_search(mode="minimize", method="Quadratic")
         >>> # Validity safeguard only (soft-mode force control)
         >>> my_problem.add_line_search(mode="safeguard")
+        >>> # Apply prescribed displacement in one full step
+        >>> my_problem.add_line_search(apply_to_bc=False)
         >>> # Using a custom function
         >>> def my_ls(pb, dX): return 0.5
         >>> my_problem.add_line_search(method=my_ls)
@@ -664,9 +523,12 @@ class _NonLinearBase:
             self._ls_callbacks = {
                 k: v for k, v in self._ls_callbacks.items() if v != line_search
             }
+            if mode != "natural":
+                self._disable_line_search_factorization_reuse()
 
             self.nr_parameters["ls_mode"] = mode
             self.nr_parameters["ls_method"] = method
+            self.nr_parameters["ls_apply_to_bc"] = bool(apply_to_bc)
             self._ls_callbacks[name or "standard"] = line_search
 
         self._update_step_size_callback()
@@ -688,7 +550,9 @@ class _NonLinearBase:
         if line_search not in self._ls_callbacks.values():
             # solve_time_increment reads ls_mode to decide whether to enable
             # factorization reuse: it must not outlive the line search
+            self._disable_line_search_factorization_reuse()
             self.nr_parameters.pop("ls_mode", None)
+            self.nr_parameters.pop("ls_apply_to_bc", None)
         self._update_step_size_callback()
 
     def _get_free_dof_residual(self):
@@ -827,29 +691,6 @@ class _NonLinearBase:
               max_subiter iterations are reached, regardless of tolerance criterion.
               Use only for special cases requiring forced convergence. Skips
               convergence tolerance check when iteration limit is reached.
-            * 'eigenvalue_shift': bool, default = False. EXPERIMENTAL.
-              If True, adds a shifted identity matrix to improve conditioning:
-              A_eff = A + alpha*I where alpha = eigenvalue_shift_factor * R.
-              R is estimated via Rayleigh quotient of the current stiffness.
-
-              .. warning::
-                 Known limitations, measured: the spectral estimate is run on
-                 the *unreduced* matrix, so it sees the modes of the blocked
-                 and rigid-body degrees of freedom rather than those of the
-                 system actually solved; and ``alpha*I`` is added before that
-                 reduction, which with multi-point constraints does not give
-                 ``reduced + alpha*I``. On a compressed buckling-prone plate
-                 the shift fired at 30 iterations without changing the
-                 iteration count at all. Treat it as a last resort, and
-                 prefer ``adaptive_stiffness`` or a dynamic solver.
-            * 'eigenvalue_shift_factor': float, default = 1e-4.
-              Scaling factor for the eigenvalue shift margin.
-              Larger values = stronger stabilization but less accuracy.
-              Smaller values = more accurate but weaker stabilization.
-            * 'eigenvalue_assume_sym': bool, default = True.
-              If True, uses the symmetric Lanczos solver (eigsh) for efficiency.
-              If False, uses the general Arnoldi solver (eigs) to account for
-              non-symmetric tangent terms.
             * 'check_early_divergence': bool, default = True.
               If True, aborts the time step early if convergence trends are poor.
               A step is considered diverging if:
@@ -871,15 +712,13 @@ class _NonLinearBase:
             "norm_type",
             "adaptive_stiffness",
             "assume_cvg_at_max_subiter",
-            "eigenvalue_shift",
-            "eigenvalue_shift_factor",
-            "eigenvalue_assume_sym",
             "check_early_divergence",
             "force_elastic_stiffness",
             "elastic_initial_guess",
             "ls_mode",
             "ls_method",
             "ls_max_iter",
+            "ls_apply_to_bc",
         ]
 
         for key in kargs:
@@ -889,6 +728,9 @@ class _NonLinearBase:
                 )
 
             self.nr_parameters[key] = kargs[key]
+
+        if "ls_mode" in kargs and kargs["ls_mode"] != "natural":
+            self._disable_line_search_factorization_reuse()
 
     def _enable_factorization_reuse(self):
         """Natural line search: make K^-1 R at trial states a back-substitution.
@@ -904,6 +746,7 @@ class _NonLinearBase:
             return
         try:
             self.set_reuse_factorization(True)
+            self._line_search_factor_context = self._factor_context
         except RuntimeError:  # no reuse backend installed (scipy only)
             warnings.warn(
                 "natural line search: no factorization-reuse backend "
@@ -911,6 +754,13 @@ class _NonLinearBase:
                 "will re-solve the tangent system.",
                 stacklevel=2,
             )
+
+    def _disable_line_search_factorization_reuse(self):
+        """Release factorization reuse only when natural line search owns it."""
+        auto_context = getattr(self, "_line_search_factor_context", None)
+        if auto_context is not None and self._factor_context is auto_context:
+            self.set_reuse_factorization(False)
+        self._line_search_factor_context = None
 
     def _elastic_reference_matrix(self, assemble=True):
         """Return the "safe" fallback matrix of adaptive_stiffness.
@@ -1042,15 +892,8 @@ class _NonLinearBase:
                 "elastic_initial_guess", False
             )
 
-        eigenvalue_shift = self.nr_parameters.get("eigenvalue_shift", False)
-        if eigenvalue_shift:
-            eigenvalue_assume_sym = self.nr_parameters.get(
-                "eigenvalue_assume_sym", True
-            )
-            eigenvalue_shift_factor = self.nr_parameters.get(
-                "eigenvalue_shift_factor", 1e-4
-            )
-
+        subiter = 1
+        error = float("inf")
         self._t_fact_inc = self.t_fact
         if self.nr_parameters.get("ls_mode") == "natural":
             self._enable_factorization_reuse()  # before the first solve
@@ -1065,7 +908,13 @@ class _NonLinearBase:
                     False  # next iteration will be recomputed.
                 )
 
-        self.elastic_prediction()
+        try:
+            self.elastic_prediction()
+        except InvalidKinematicStateError:
+            # No kinematically valid line-search trial exists, even for its
+            # smallest step: use the normal failed-increment/time-step-cut path.
+            self._t_fact_inc = None
+            return 0, subiter, error
 
         if adaptive_stiffness or force_elastic_stiffness:
             # we take the assembled matrix computed after set_start and before
@@ -1077,8 +926,6 @@ class _NonLinearBase:
 
         consecutive_decreases = 0
         consecutive_increases = 0
-        subiter = 1
-        error = float("inf")
         while subiter < max_subiter:
             # update Stress and initial displacement and Update stiffness matrix
             try:
@@ -1153,7 +1000,11 @@ class _NonLinearBase:
                         subiter = 1
                         error = float("inf")
                         self.set_A(KE)
-                        self.elastic_prediction(keep_tangent=True)
+                        try:
+                            self.elastic_prediction(keep_tangent=True)
+                        except InvalidKinematicStateError:
+                            self._t_fact_inc = None
+                            return 0, subiter, error
                         continue
                     else:
                         # redo last iteration (copy: _dU is updated in place)
@@ -1186,18 +1037,13 @@ class _NonLinearBase:
             else:
                 A = self.__assembly.current.get_global_matrix()
 
-            # Apply eigenvalue shift only when divergence is detected
-            # (ARPACK calls are expensive, avoid at every iteration)
-            if eigenvalue_shift and consecutive_increases >= 1:
-                self.set_A(
-                    self._apply_eigenvalue_shift(
-                        A, eigenvalue_shift_factor, eigenvalue_assume_sym
-                    )
-                )
-            else:
-                self.set_A(A)
+            self.set_A(A)
 
-            self.solve_nr_increment()
+            try:
+                self.solve_nr_increment()
+            except InvalidKinematicStateError:
+                self._t_fact_inc = None
+                return 0, subiter, error
 
         if assume_cvg_at_max_subiter:
             # the last correction was added to _dU without an update: bring

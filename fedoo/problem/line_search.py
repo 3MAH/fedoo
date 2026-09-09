@@ -8,6 +8,7 @@ _ARMIJO_C1 = 1e-4  # Armijo sufficient-decrease constant (residual metric)
 _NATURAL_C = (
     1e-3  # sufficient-decrease margin of the natural test (displacement metric)
 )
+_ALPHA_MIN = 1e-4  # smallest trial before the whole increment is rejected
 
 
 def _line_search_manager(pb, dX):
@@ -39,6 +40,7 @@ def _evaluate_residual_norm(pb, dX, alpha):
     # 1. Temporarily update the displacement increment
     pb.assembly._save_sv()  # save assembly stat_variables
     d_0 = pb.get_D()
+    du_0 = pb._dU.copy() if hasattr(pb._dU, "copy") else pb._dU
     pb._dU += alpha * dX
     pb._line_search_update = True
     try:
@@ -61,7 +63,7 @@ def _evaluate_residual_norm(pb, dX, alpha):
         # 4. Cleanup: restore the original state so the search never
         # permanently alters it
         pb._line_search_update = False
-        pb._dU -= alpha * dX
+        pb._dU = du_0
         pb.assembly._load_sv()
         pb.set_D(d_0)
 
@@ -108,12 +110,11 @@ def line_search(pb, dX):
       Energy), selected by the nr parameter "ls_method";
     - "safeguard": pure validity filter.
     """
-    if not pb._xbc_is_applied():
-        # avoid using line_search if dirichlet increment values are not 0
-        # to avoid problems related to BC scaling. NB: testing the actual
-        # _Xbc content (and not only the _boundary_is_0 flag) keeps the
-        # line search ACTIVE on the elastic prediction under pure force
-        # control -- the most dangerous iterate for soft free modes.
+    if not pb.nr_parameters.get("ls_apply_to_bc", True) and not pb._xbc_is_applied():
+        # Optional strict-Dirichlet policy: apply the prescribed increment in
+        # full before scaling subsequent equilibrium corrections. By default,
+        # line search also scales the prescribed increment and the driver keeps
+        # its unapplied remainder for the following Newton corrections.
         return 1
 
     ls_mode = pb.nr_parameters.get("ls_mode", "natural")
@@ -127,27 +128,34 @@ def line_search(pb, dX):
 
     # --- Validity filter -----------------------------------------------------
     # A trial state with det F <= 0 (norm inf) is rejected by geometric
-    # backtracking to the first VALID alpha, whatever the mode.
+    # backtracking to the first VALID alpha, whatever the mode. If even the
+    # smallest trial is invalid, let solve_time_increment reject the whole
+    # increment through its existing InvalidKinematicStateError path.
     # TODO(perf): this full residual evaluation is, in safeguard mode, only
     # a det F > 0 test whose work is redone by the caller when the step is
     # valid (the common case). A kinematics-only validity probe would remove
     # one vector assembly + umat sweep per NR iteration.
-    norm_1, res_1 = _evaluate_residual_norm(pb, dX, 1.0)
-    alpha_valid = 1.0
-    while not np.isfinite(norm_1) and alpha_valid > 1e-4:
-        alpha_valid *= 0.5
-        norm_1, res_1 = _evaluate_residual_norm(pb, dX, alpha_valid)
+    # Find a valid state from which the acceptance tests can begin. The
+    # minimum alpha is itself evaluated; an invalid value is never returned.
+    alpha = 1.0
+    norm_1, res_1 = _evaluate_residual_norm(pb, dX, alpha)
+    while not np.isfinite(norm_1) and alpha > _ALPHA_MIN:
+        alpha = max(0.5 * alpha, _ALPHA_MIN)
+        norm_1, res_1 = _evaluate_residual_norm(pb, dX, alpha)
+    if not np.isfinite(norm_1):
+        raise InvalidKinematicStateError(
+            "line search found no valid displacement increment"
+        )
     if ls_mode == "safeguard":
-        if alpha_valid == 1.0:
+        if alpha == 1.0:
             return 1
-        return max(0.8 * alpha_valid, 1e-4)
+        return 0.8 * alpha
 
     # --- Descent tests ---------------------------------------------------------
     if ls_mode == "natural":
         method = "Natural"
     else:
         method = pb.nr_parameters.get("ls_method", "Quadratic")
-    alpha = alpha_valid
     rho = 0.5  # Standard backtracking contraction factor
     max_iter = pb.nr_parameters.get("ls_max_iter", 5)
 
@@ -165,10 +173,11 @@ def line_search(pb, dX):
     # Tracking the best step in case we exhaust max_iter. Start from the
     # last VALID alpha, never 1.0: if every trial below is invalid the
     # fallback must not return the full step the validity stage rejected.
-    best_alpha = alpha_valid
+    best_alpha = alpha
     best_norm = float("inf")
+    last_alpha_valid = alpha
 
-    # the first trial (alpha = alpha_valid) reuses the evaluation of the
+    # the first valid trial reuses the evaluation of the
     # validity stage above instead of re-assembling the same point
     norm_alpha, res_alpha = norm_1, res_1
     for i in range(max_iter):
@@ -180,6 +189,7 @@ def line_search(pb, dX):
             # (inf, None) sentinel must not reach the acceptance tests
             alpha *= rho
             continue
+        last_alpha_valid = alpha
         f_alpha = 0.5 * (norm_alpha**2)
 
         # Track the lowest residual seen so far
@@ -225,9 +235,10 @@ def line_search(pb, dX):
             alpha *= rho
 
     if method == "Natural":
-        # never fall back on the lowest-residual trial: that is precisely the
-        # merit this mode rejects for soft modes (it would return the most
-        # throttled alpha of the sweep). Keep the last kinematically valid one.
-        return alpha_valid
+        # Never fall back on the lowest-residual trial: that is precisely the
+        # merit this mode rejects for soft modes. Continue with the last step
+        # that was actually evaluated and found kinematically valid, and let
+        # the Newton convergence machinery accept or reject the increment.
+        return last_alpha_valid
     # Criteria were not met within max_iter. Fallback to best alpha found.
     return best_alpha

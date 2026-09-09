@@ -24,22 +24,36 @@ semantic versioning.
   be set through `set_nr_criterion`.
   Factorization reuse (`set_reuse_factorization`) is enabled automatically
   for the default direct solver.
+- **`NonLinear.add_line_search` gained an `apply_to_bc` argument**, defaulting
+  to `True`. The line search therefore also scales prescribed displacement
+  increments by default; their unapplied remainder is retained for subsequent
+  Newton corrections, and convergence is accepted only after the complete
+  increment has been applied. Set `apply_to_bc=False` to apply a Dirichlet
+  increment in one full step before scaling the remaining equilibrium
+  corrections. Custom callbacks keep direct control of their returned alpha.
+- The experimental `eigenvalue_shift` nonlinear-solver option and its
+  `eigenvalue_shift_factor` / `eigenvalue_assume_sym` parameters were removed.
+  The spectral estimate operated on the unreduced matrix, handled MPCs
+  inconsistently, added substantial cost, and did not improve the measured
+  nonlinear benchmarks.
 - A cached factorization (`set_reuse_factorization`) is now invalidated
   automatically when the constraint reduction matrix changes
   (`apply_boundary_conditions`), not only on `set_A`.
 
 ### Fixed
 
+- Line search no longer returns an untested minimum step when every trial
+  produces invalid kinematics. It now searches down to a very small step and,
+  if none is valid, reports a failed increment through the normal time-step
+  reduction machinery. Natural line search falls back to its last valid trial
+  when no acceptance test succeeds.
+- Natural line search now releases factorization reuse when it is removed or
+  replaced by another built-in mode. A factorization context subsequently
+  installed by the user is preserved.
 - `NonLinear`: the `elastic_initial_guess` / `force_elastic_matrix_next_iter`
   options re-assembled the elastic matrix but never handed it to the elastic
   prediction (a no-op beyond the first increment); they now refresh the
   tangent.
-- `NonLinear.add_line_search` documents a contract that was only implicit: a
-  custom step-size callback must return exactly 1 while a Dirichlet increment
-  is pending. Returning `alpha < 1` defers the remaining `1 - alpha` of the
-  prescribed displacement, and convergence is only declared once nothing is
-  left to apply, so a callback that never returns 1 strands the increment and
-  the time step collapses to `dt_min`.
 - `NonLinear` with a `fd.time` integrator: the elastic prediction reused the
   tangent of the previous increment even after the time step changed. A
   transient tangent carries the `1/(beta dt^2)` inertia term, so that matrix
