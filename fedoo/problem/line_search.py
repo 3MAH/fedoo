@@ -110,11 +110,11 @@ def line_search(pb, dX):
       Energy), selected by the nr parameter "ls_method";
     - "safeguard": pure validity filter.
     """
-    if not pb.nr_parameters.get("ls_apply_to_bc", True) and not pb._xbc_is_applied():
+    pending_bc = not pb._xbc_is_applied()
+    if not pb.nr_parameters.get("ls_apply_to_bc", True) and pending_bc:
         # Optional strict-Dirichlet policy: apply the prescribed increment in
         # full before scaling subsequent equilibrium corrections. By default,
-        # line search also scales the prescribed increment and the driver keeps
-        # its unapplied remainder for the following Newton corrections.
+        # the validity filter may instead scale an invalid prescribed increment.
         return 1
 
     ls_mode = pb.nr_parameters.get("ls_mode", "natural")
@@ -146,7 +146,9 @@ def line_search(pb, dX):
         raise InvalidKinematicStateError(
             "line search found no valid displacement increment"
         )
-    if ls_mode == "safeguard":
+    if pending_bc or ls_mode == "safeguard":
+        # While a prescribed displacement is pending, alpha=0 is the previous
+        # equilibrium. Apply only the kinematic safeguard until the BC is complete.
         if alpha == 1.0:
             return 1
         return 0.8 * alpha

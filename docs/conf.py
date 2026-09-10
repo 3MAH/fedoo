@@ -80,6 +80,9 @@ exclude_patterns = []
 
 autosummary_generate = True
 add_module_names = False
+# Keep Python objects (classes, methods, functions) out of the page TOCs.
+# They remain available through the autosummary tables in the page content.
+toc_object_entries = False
 # autodoc_mock_imports = ["simcoon"]
 # autosummary_mock_imports = ["simcoon"]
 
@@ -103,9 +106,9 @@ html_theme_options = {
     # Toc options
     "collapse_navigation": True,
     # 'sticky_navigation': True,
-    # 'navigation_depth': 4,
-    # 'includehidden': True,
-    "titles_only": True,
+    "navigation_depth": 3,
+    "includehidden": False,
+    "titles_only": False,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

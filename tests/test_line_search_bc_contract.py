@@ -52,6 +52,22 @@ def test_line_search_evaluates_pending_dirichlet_by_default(monkeypatch):
     assert trials == [1.0]
 
 
+def test_pending_dirichlet_uses_only_validity_filter_in_minimize_mode(monkeypatch):
+    problem = _problem_with_pending_dirichlet(apply_to_bc=True)
+    problem.nr_parameters["ls_mode"] = "minimize"
+    trials = []
+
+    def evaluate(pb, dX, alpha):
+        trials.append(alpha)
+        # The previous equilibrium has zero residual, so a positive residual
+        # would make residual minimization throttle an otherwise valid BC step.
+        return 1.0, np.ones(len(pb._dof_free))
+
+    monkeypatch.setattr(line_search_module, "_evaluate_residual_norm", evaluate)
+    assert line_search(problem, np.zeros(problem.n_dof)) == 1
+    assert trials == [1.0]
+
+
 def test_line_search_can_leave_pending_dirichlet_unscaled(monkeypatch):
     problem = _problem_with_pending_dirichlet(apply_to_bc=False)
 

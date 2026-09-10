@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Changed
 
+- **Energy-based artificial damping now decreases more conservatively.** Its
+  coefficient can fall by at most a factor of two after one converged
+  increment, preventing a noisy incremental-energy estimate near an
+  instability from abruptly removing most of the stabilization.
 - **`NonLinear.add_line_search` gained a `mode` argument** with three policies:
   `"natural"` (new default), `"minimize"` (the previous residual-descent
   behavior, with `method`) and `"safeguard"` (kinematic validity filter only,
@@ -25,20 +29,16 @@ semantic versioning.
   Factorization reuse (`set_reuse_factorization`) is enabled automatically
   for the default direct solver.
 - **`NonLinear.add_line_search` gained an `apply_to_bc` argument**, defaulting
-  to `True`. The line search therefore also scales prescribed displacement
-  increments by default; their unapplied remainder is retained for subsequent
-  Newton corrections, and convergence is accepted only after the complete
-  increment has been applied. Set `apply_to_bc=False` to apply a Dirichlet
-  increment in one full step before scaling the remaining equilibrium
-  corrections. Custom callbacks keep direct control of their returned alpha.
+  to `True`. Pending prescribed-displacement increments are scaled only when
+  required to maintain valid kinematics; residual and natural acceptance tests
+  resume after the complete increment has been applied. Set `apply_to_bc=False`
+  to apply it in one full step without this safeguard. Custom callbacks keep
+  direct control of their returned alpha.
 - The experimental `eigenvalue_shift` nonlinear-solver option and its
   `eigenvalue_shift_factor` / `eigenvalue_assume_sym` parameters were removed.
   The spectral estimate operated on the unreduced matrix, handled MPCs
   inconsistently, added substantial cost, and did not improve the measured
   nonlinear benchmarks.
-- A cached factorization (`set_reuse_factorization`) is now invalidated
-  automatically when the constraint reduction matrix changes
-  (`apply_boundary_conditions`), not only on `set_A`.
 
 ### Fixed
 
@@ -49,7 +49,9 @@ semantic versioning.
   when no acceptance test succeeds.
 - Natural line search now releases factorization reuse when it is removed or
   replaced by another built-in mode. A factorization context subsequently
-  installed by the user is preserved.
+  installed by the user is preserved. Cached factorizations are also
+  invalidated when `apply_boundary_conditions` changes the constraint
+  reduction matrix, not only when `set_A` changes the system matrix.
 - `NonLinear`: the `elastic_initial_guess` / `force_elastic_matrix_next_iter`
   options re-assembled the elastic matrix but never handed it to the elastic
   prediction (a no-op beyond the first increment); they now refresh the

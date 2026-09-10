@@ -10,7 +10,7 @@ import warnings
 from typing import Callable
 
 
-class _NonLinearBase:
+class NonLinear(Problem):
     def __init__(self, assembly, nlgeom=False, name="MainProblem"):
         if isinstance(assembly, str):
             assembly = Assembly.get_all()[assembly]
@@ -462,13 +462,14 @@ class _NonLinearBase:
             A unique identifier for the line search. If not provided, it defaults
             to 'standard' for built-in methods, or the function's name for callables.
         apply_to_bc : bool, default True
-            If True, the built-in line search also scales a pending Dirichlet
-            increment. Its unapplied part is retained and carried by the next
-            Newton correction; convergence is accepted only after the complete
-            prescribed increment has been applied. If False, the built-in line
-            search returns a full step while a Dirichlet increment is pending
-            and starts scaling corrections only after that increment is applied.
-            This option does not alter custom callbacks.
+            If True, the built-in line search applies its kinematic-validity
+            filter to a pending Dirichlet increment. An invalid advance is
+            scaled, its unapplied part is carried by the next Newton correction,
+            and convergence is accepted only after the complete prescribed
+            increment has been applied. Residual and natural acceptance tests
+            start after that remainder reaches zero. If False, the built-in line
+            search applies the complete Dirichlet increment without a validity
+            check. This option does not alter custom callbacks.
 
         Notes
         -----
@@ -1107,7 +1108,7 @@ class _NonLinearBase:
             increment, after the initial linear guess.
             If omitted, the 'max_subiter' field in the nr_parameters
             attribute (ie nr_parameters['max_subiter']) is considered
-            (default = 10).
+            (default = 16).
         dt_increase_niter: int, optional
             When ``update_dt`` is ``True``, the time increment is multiplied
             by 1.25 if the Newton–Raphson loop converges in at most
@@ -1177,9 +1178,6 @@ class _NonLinearBase:
             self.exec_callback_at_each_iter = exec_callback_at_each_iter
         if interval_output is None:
             interval_output = self.interval_output  # time step for output if save_at_exact_time == 'True' (default) or  number of iter increments between 2 output
-
-        # if kargs: #not empty
-        #    raise TypeError(f"{list(kargs)[0]} is an invalid keyword argument for the method nlsolve")
 
         if interval_output == -1:
             if self.save_at_exact_time:
@@ -1317,10 +1315,6 @@ class _NonLinearBase:
     def t_fact_old(self):
         """Previous adimensional time for boundary conditions."""
         return (self.time - self.t0) / (self.tmax - self.t0)
-
-
-class NonLinear(_NonLinearBase, Problem):
-    pass
 
 
 def NonLinearNewmark(

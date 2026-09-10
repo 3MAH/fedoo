@@ -369,11 +369,12 @@ lead to non-physical states or divergence.
   kinematics. If geometric backtracking finds no valid trial, the current
   increment fails and follows the solver's normal time-step reduction path.
 * **Dirichlet increments**: By default, ``apply_to_bc=True`` also scales a
-  prescribed displacement increment. Its unapplied part is retained for the
-  following Newton corrections, and convergence is accepted only once the
-  complete prescribed increment has been applied. Set ``apply_to_bc=False``
-  to apply prescribed displacements in one full step before line search acts
-  on the remaining equilibrium corrections.
+  prescribed displacement increment when required to keep its trial state
+  kinematically valid. Its unapplied part is retained for the following Newton
+  corrections, and convergence is accepted only once the complete prescribed
+  increment has been applied. Residual and natural acceptance tests start only
+  after that remainder reaches zero. Set ``apply_to_bc=False`` to apply
+  prescribed displacements in one full step without the validity safeguard.
 
 4. Stiffness Strategies (Blending & Elastic Overrides)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
