@@ -1,9 +1,53 @@
 """Shared machinery for problem-level time integrators."""
 
+import warnings
+
 from fedoo.core.assembly import Assembly
 from fedoo.core.base import AssemblyBase
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormSum
+
+_STAB_TOL = 1e-12
+
+
+def warn_if_conditionally_stable(beta, gamma, alpha_m=0.0, alpha_f=0.0, context=""):
+    """Warn when a Newmark / generalized-alpha set is only conditionally stable.
+
+    Unconditional (A-) stability of the generalized-alpha family
+    (Chung-Hulbert convention) requires::
+
+        alpha_m <= alpha_f <= 1/2
+        gamma >= 1/2 - alpha_m + alpha_f
+        beta >= gamma / 2
+
+    (Newmark is the ``alpha_m = alpha_f = 0`` special case.) A violating
+    set is CONDITIONALLY stable: with FE meshes (``omega_max*dt >> 1``) the
+    high-frequency modes grow geometrically and the solve collapses after a
+    few tens of increments regardless of dt or load level -- a failure that
+    masquerades as Newton divergence / element inversion.
+    """
+    prefix = f"{context}: " if context else ""
+    alpha_ordering_ok = alpha_m <= alpha_f + _STAB_TOL and alpha_f <= 0.5 + _STAB_TOL
+    if not alpha_ordering_ok:
+        warnings.warn(
+            f"{prefix}(alpha_m={alpha_m}, alpha_f={alpha_f}) violates "
+            "alpha_m <= alpha_f <= 1/2: the scheme is only CONDITIONALLY "
+            "stable.",
+            stacklevel=3,
+        )
+    gamma_min = 0.5 - alpha_m + alpha_f
+    if gamma < gamma_min - _STAB_TOL or beta < 0.5 * gamma - _STAB_TOL:
+        warnings.warn(
+            f"{prefix}(beta={beta}, gamma={gamma}) is only "
+            "CONDITIONALLY stable. Unconditional stability requires "
+            f"gamma >= {gamma_min} and beta >= gamma/2 = "
+            f"{0.5 * gamma:.4f} (recommended: beta = "
+            f"(gamma + 1/2)^2 / 4 = {0.25 * (gamma + 0.5) ** 2:.4f}"
+            " for oscillation-free high-frequency response). With "
+            "typical FE meshes the high-frequency modes will grow and "
+            "the solve will fail after a few tens of increments.",
+            stacklevel=3,
+        )
 
 
 class TimeIntegratorBase:

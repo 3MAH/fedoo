@@ -176,7 +176,8 @@ integration schemes.
 
 .. _stabilization_strategies:
 
-    
+.. currentmodule:: fedoo.problem
+
 Non-Linear Solver
 =================
 
@@ -361,9 +362,19 @@ Line search prevents the solver from taking steps that are too large, which can
 lead to non-physical states or divergence.
 
 * **Usage**: Enable via the :meth:`NonLinear.add_line_search` method.
-* **Mechanism**: Scales the displacement increment :math:`d\mathbf{U}` by a 
-  factor :math:`\eta \in (0, 1]` to minimize the residual norm along the 
-  search direction.
+* **Mechanism**: Scales the displacement increment :math:`d\mathbf{U}` by a
+  factor :math:`\eta \in (0, 1]`. The ``natural`` mode combines residual
+  decrease with an affine-invariant correction test, ``minimize`` provides
+  the residual-descent methods, and ``safeguard`` only rejects invalid
+  kinematics. If geometric backtracking finds no valid trial, the current
+  increment fails and follows the solver's normal time-step reduction path.
+* **Dirichlet increments**: By default, ``apply_to_bc=True`` also scales a
+  prescribed displacement increment when required to keep its trial state
+  kinematically valid. Its unapplied part is retained for the following Newton
+  corrections, and convergence is accepted only once the complete prescribed
+  increment has been applied. Residual and natural acceptance tests start only
+  after that remainder reaches zero. Set ``apply_to_bc=False`` to apply
+  prescribed displacements in one full step without the validity safeguard.
 
 4. Stiffness Strategies (Blending & Elastic Overrides)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -398,20 +409,7 @@ direction requires a "safe" search direction.
       Newton-Raphson initial guess only. This is ideal for manually
       "restarting" a stalled increment.
 
-5. Eigenvalue Shifting
-~~~~~~~~~~~~~~~~~~~~~~
-For strong instabilities (such as buckling or snap-through) where the tangent 
-stiffness matrix becomes non-positive definite, the **Eigenvalue Shift** technique might
-be effective. Note that this method is computationally 
-expensive with limited results, and should only be used as a last resort.
-
-* **Mechanism**: Adds a scaled identity matrix :math:`\alpha \mathbf{I}` to the 
-  tangent stiffness :math:`\mathbf{K_T}`.
-* **Usage**: Enable ``eigenvalue_shift=True`` in the Newton-Raphson parameters. 
-* **Benefit**: Forces the matrix to remain positive definite, ensuring the 
-  solver always finds a descent direction.
-
-6. Static vs. Dynamic Fallback
+5. Static vs. Dynamic Fallback
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 If a static simulation fails despite the above techniques, the problem may be 
 inherently dynamic (e.g., rapid snap-through or post-buckling).

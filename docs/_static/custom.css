@@ -1,0 +1,4 @@
+/* API pages are already linked from autosummary tables in the main content. */
+.wy-menu-vertical li:has(> a.reference.internal[href*="generated/"]) {
+  display: none;
+}

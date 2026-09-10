@@ -23,7 +23,8 @@ In addition, the conda package also includes some recommended dependencies:
 
     * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_
       brings a lot of features (finite strain, non-linear constitutive
-      laws, ...). Simcoon can be installed using conda or pip.
+      laws, ...). fedoo requires ``simcoon >= 2.0.0b1``. Simcoon can be
+      installed using conda or pip.
 
     * `PyVista <https://docs.pyvista.org/version/stable/>`_
       for results visualization and mesh utils.

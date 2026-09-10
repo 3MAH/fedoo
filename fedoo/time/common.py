@@ -150,6 +150,17 @@ def assemble_rayleigh_damping_matrix(
     return damping_matrix.tocsr()
 
 
+def increment_solved(pb):
+    """True when the problem's set_start closes an increment that was solved.
+
+    On an empty increment the Newmark recurrence is not the identity but
+    ``v <- v (1 - gamma/beta) + dt (1 - gamma/2beta) a``, i.e. exactly ``-v``
+    for the standard parameters, so it must not run. Drivers that do not
+    publish the flag are assumed to always close a solved increment.
+    """
+    return getattr(pb, "_increment_solved", True)
+
+
 def newmark_acceleration_velocity(beta, gamma, dt, delta_disp, v_n, a_n):
     """Newmark update of acceleration and velocity from a displacement increment.
 

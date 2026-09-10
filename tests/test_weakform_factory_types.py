@@ -72,9 +72,11 @@ def test_composite_weakforms_preserve_child_assembly_options():
 
     implicit = fd.weakform.ImplicitDynamic(material, density=1.0)
     assert implicit.assembly_options is None
+    # assume_sym is left unset at construction on both children (same
+    # assembly grouping key -> merged assembly); it is decided at initialize
+    # by the stiffness weakform (True except nlgeom='UL').
     assert all(
-        wf.assembly_options.get("assume_sym", "quad4", False)
-        for wf in implicit.list_weakform
+        wf.assembly_options.get("assume_sym") is None for wf in implicit.list_weakform
     )
 
     reduced_integration = fd.weakform.StressEquilibriumRI(material)
@@ -114,6 +116,9 @@ def test_composite_assembly_options_are_applied_by_assembly_create():
     implicit_assembly = fd.Assembly.create(implicit, mesh)
     assert isinstance(implicit_assembly, Assembly)
     assert implicit_assembly.n_elm_gp == 4
+    # assume_sym is decided at initialize (True here: no nlgeom)
+    pb = fd.problem.Linear(implicit_assembly)
+    pb.initialize()
     assert implicit_assembly.assume_sym is True
     assert implicit_assembly.mat_lumping == [False, False]
 
