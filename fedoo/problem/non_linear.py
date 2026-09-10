@@ -400,7 +400,7 @@ class NonLinear(Problem):
             self._step_size_callback = _line_search_manager
 
     def add_line_search(
-        self, method="Quadratic", name=None, mode="natural", apply_to_bc=True
+        self, method="Quadratic", mode="natural", apply_to_bc=True, name=None
     ):
         r"""Add line search algorithm for the Newton-Raphson solver.
 
@@ -411,6 +411,26 @@ class NonLinear(Problem):
 
         Parameters
         ----------
+        method : {'Armijo', 'Residual', 'Energy', 'Quadratic'} or callable, default 'Quadratic'
+            The residual-descent strategy used when ``mode='minimize'``:
+
+            * **'Armijo'**: Ensures a "sufficient decrease" in the residual
+              using a least-square assumption. Standard for most nonlinear applications.
+            * **'Residual'**: Simple backtracking that accepts any step reducing
+              the residual norm. Fast but less robust.
+            * **'Energy'**: Minimizes the out-of-balance work (residual projected
+              onto the search direction). Ideal for snap-through/buckling.
+            * **'Quadratic'**: Performs a parabolic interpolation of the objective
+              function to jump directly to the estimated minimum.
+            * **callable**: If a function is provided, it must follow the signature
+              ``user_line_search(pb, dX) -> float`` and will be assigned directly
+              as the line search callback (``mode`` is then ignored).
+
+              A custom callback may scale a pending Dirichlet increment. A
+              returned ``alpha < 1`` defers its unapplied part to subsequent
+              Newton corrections, and convergence is declared only after the
+              complete prescribed increment has been applied. The callback
+              must therefore eventually accept the remaining increment.
         mode : {'natural', 'minimize', 'safeguard'}, default 'natural'
             The overall line search policy:
 
@@ -438,29 +458,6 @@ class NonLinear(Problem):
               while remaining excellent steps), which any residual-monotone
               rule would strangle -- the right choice for force control of
               soft (bending) modes. ``method`` is ignored.
-        method : {'Armijo', 'Residual', 'Energy', 'Quadratic'} or callable, default 'Quadratic'
-            The residual-descent strategy used when ``mode='minimize'``:
-
-            * **'Armijo'**: Ensures a "sufficient decrease" in the residual
-              using a least-square assumption. Standard for most nonlinear applications.
-            * **'Residual'**: Simple backtracking that accepts any step reducing
-              the residual norm. Fast but less robust.
-            * **'Energy'**: Minimizes the out-of-balance work (residual projected
-              onto the search direction). Ideal for snap-through/buckling.
-            * **'Quadratic'**: Performs a parabolic interpolation of the objective
-              function to jump directly to the estimated minimum.
-            * **callable**: If a function is provided, it must follow the signature
-              ``user_line_search(pb, dX) -> float`` and will be assigned directly
-              as the line search callback (``mode`` is then ignored).
-
-              A custom callback may scale a pending Dirichlet increment. A
-              returned ``alpha < 1`` defers its unapplied part to subsequent
-              Newton corrections, and convergence is declared only after the
-              complete prescribed increment has been applied. The callback
-              must therefore eventually accept the remaining increment.
-        name : str, optional
-            A unique identifier for the line search. If not provided, it defaults
-            to 'standard' for built-in methods, or the function's name for callables.
         apply_to_bc : bool, default True
             If True, the built-in line search applies its kinematic-validity
             filter to a pending Dirichlet increment. An invalid advance is
@@ -470,6 +467,9 @@ class NonLinear(Problem):
             start after that remainder reaches zero. If False, the built-in line
             search applies the complete Dirichlet increment without a validity
             check. This option does not alter custom callbacks.
+        name : str, optional
+            A unique identifier for the line search. If not provided, it defaults
+            to 'standard' for built-in methods, or the function's name for callables.
 
         Notes
         -----
@@ -1322,14 +1322,30 @@ def NonLinearNewmark(
     beta=0.25,
     gamma=0.5,
     nlgeom=False,
-    name="MainProblem",
     first_order_integrator=None,
+    name="MainProblem",
 ):
     """Create a nonlinear Newmark problem with default time integrators.
 
     This is a convenience factory around :class:`NonLinear`. It attaches a
     Newmark integrator for second-order evolutions and a Backward-Euler
     integrator for first-order evolutions.
+
+    Parameters
+    ----------
+    assembly : Assembly-like object or str
+        Assembly used by the nonlinear problem, or its registered name.
+    beta : float, default=0.25
+        Newmark acceleration parameter.
+    gamma : float, default=0.5
+        Newmark velocity parameter.
+    nlgeom : bool or str, default=False
+        Geometric-nonlinearity option forwarded to :class:`NonLinear`.
+    first_order_integrator : fedoo.time.BackwardEuler, optional
+        Integrator for first-order evolution terms. A default Backward-Euler
+        integrator is created when omitted.
+    name : str, default="MainProblem"
+        Name of the problem.
 
     .. note::
         The signature changed: the mass is now derived from the material

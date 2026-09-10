@@ -27,8 +27,6 @@ class Linear(Problem):
     assembly : Assembly-like object or str
         Assembly used to construct the matrix ``A`` and vector ``D``, or the
         name of a registered assembly.
-    name : str, default="MainProblem"
-        Name of the problem.
     time_step : float, optional
         Constant time increment used when a second-order ``integrator`` is
         attached. Omit it for the original static behavior.
@@ -36,14 +34,16 @@ class Linear(Problem):
         Implicit second-order time integrator. The stiffness and consistent
         mass matrices are assembled once by :meth:`initialize` and reused at
         every constant-size increment. Only the right-hand side is rebuilt.
+    name : str, default="MainProblem"
+        Name of the problem.
     """
 
     def __init__(
         self,
         assembly: Assembly,
-        name: str = "MainProblem",
         time_step: float | None = None,
         integrator: GeneralizedAlpha | None = None,
+        name: str = "MainProblem",
     ):
         if isinstance(assembly, str):
             assembly = Assembly.get_all()[assembly]
