@@ -9,9 +9,9 @@ def test_linear_newmark_convenience_constructor():
     parameters = inspect.signature(fd.problem.LinearNewmark).parameters
     assert list(parameters) == [
         "assembly",
-        "name",
         "time_step",
         "integrator",
+        "name",
     ]
 
     fd.ModelingSpace("2Dplane")
