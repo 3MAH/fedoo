@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.0.0b2] - 2026-09-11
+
 ### Added
 
 - **Material local frames for mechanical constitutive laws.** Uniform, nodal,
