@@ -191,10 +191,10 @@ class IPCContact(AssemblyBase):
         ``use_ccd``.  **Only supported for shell / surface meshes**
         where all nodes are on the surface; raises ``ValueError``
         for solid meshes with interior nodes.
-    space : ModelingSpace, optional
-        Modeling space.  If ``None``, the active ``ModelingSpace`` is used.
     name : str, default="IPC Contact"
         Name of the contact assembly.
+    space : ModelingSpace, optional
+        Modeling space.  If ``None``, the active ``ModelingSpace`` is used.
 
     Notes
     -----
@@ -231,8 +231,8 @@ class IPCContact(AssemblyBase):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        space=None,
         name="IPC Contact",
+        space=None,
     ):
         if use_ccd is None:
             use_ccd = not use_ogc
@@ -1442,10 +1442,10 @@ class IPCSelfContact(IPCContact):
         Enable OGC trust-region step filtering.  Mutually exclusive
         with ``use_ccd``.  **Only supported for shell / surface
         meshes**; raises ``ValueError`` for solid meshes.
-    space : ModelingSpace, optional
-        Modeling space.
     name : str, default="IPC Self Contact"
         Name of the contact assembly.
+    space : ModelingSpace, optional
+        Modeling space.
 
     Examples
     --------
@@ -1485,8 +1485,8 @@ class IPCSelfContact(IPCContact):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        space=None,
         name="IPC Self Contact",
+        space=None,
     ):
         super().__init__(
             mesh=mesh,
@@ -1502,6 +1502,6 @@ class IPCSelfContact(IPCContact):
             use_ccd=use_ccd,
             line_search_energy=line_search_energy,
             use_ogc=use_ogc,
-            space=space,
             name=name,
+            space=space,
         )

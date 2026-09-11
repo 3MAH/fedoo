@@ -20,8 +20,8 @@ class Contact(AssemblyBase):
         surface_mesh: Mesh,
         normal_law: str = "linear",
         search_algorithm: str = "bucket",  # 'bucket', 'search_nearest', 'ipctk'
-        space: ModelingSpace | None = None,
         name: str = "Contact nodes 2 surface",
+        space: ModelingSpace | None = None,
     ):
         """Contact Assembly based on a node 2 surface penality formulation.
 
@@ -35,11 +35,11 @@ class Contact(AssemblyBase):
             Mesh of the master surface
         normal_law: str in {'linear', 'bilinear'}, default = 'linear'
             Type of contact law for the normal contact.
+        name: str
+            The name of contact assembly
         space: ModelingSpace
             Modeling space associated to the weakform. If None is specified,
             the active ModelingSpace is considered.
-        name: str
-            The name of contact assembly
 
         Notes
         -----
@@ -1048,8 +1048,8 @@ class SelfContact(Contact):
         normal_law: str = "linear",
         extract_surface: bool = False,
         search_algorithm: str = "search_nearest",  #'bucket', #'search_nearest'
-        space: ModelingSpace | None = None,
         name: str = "Self contact",
+        space: ModelingSpace | None = None,
     ):
         """
          Assembly related to surface 2 surface contact, using a node 2 surface formulation
@@ -1064,10 +1064,10 @@ class SelfContact(Contact):
              If the full object mesh is given, the extract_surface argument should be set to True.
          normal_law: str in {'linear', 'bilinear'}, default = 'linear'
              Type of contact law for the normal contact.
-         space: ModelingSpace
-             Modeling space associated to the weakform. If None is specified, the active ModelingSpace is considered.
          name: str
              The name of contact assembly
+         space: ModelingSpace
+             Modeling space associated to the weakform. If None is specified, the active ModelingSpace is considered.
 
          Notes
          --------------------------
@@ -1089,7 +1089,14 @@ class SelfContact(Contact):
 
         nodes = np.unique(mesh.elements)
 
-        super().__init__(nodes, mesh, normal_law, search_algorithm, space, name)
+        super().__init__(
+            nodes,
+            mesh,
+            normal_law,
+            search_algorithm,
+            name=name,
+            space=space,
+        )
 
     def _nearest_node(self):
         """Find a list of elements that may be in contact for all slave nodes.

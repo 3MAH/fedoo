@@ -10,6 +10,17 @@ from fedoo.util.voigt_tensors import StressTensorList
 class Mechanical3D(ConstitutiveLaw):
     """Base class for mechanical constitutive laws.
 
+    Attributes
+    ----------
+    is_isotropic : bool
+        Whether the constitutive response is invariant under material-frame
+        rotations. Subclasses should set this to ``True`` only when rotating
+        the constitutive operator cannot change the response.
+    manages_material_frame : bool
+        Whether the constitutive law transports its own material frame during
+        finite-strain updates. When ``False``, Fedoo maintains the current
+        orientation for anisotropic laws.
+
     Strain / stress 6-vector slot ordering
     --------------------------------------
     Strains and stresses are stored as 6-vectors (Voigt-like) at every Gauss
@@ -104,27 +115,25 @@ class Mechanical3D(ConstitutiveLaw):
     for Continua and Structures* (2014), §4.5.
     """
 
-    # model of constitutive law for InternalForce Weakform
-
     # Conservative default: a newly derived law is assumed anisotropic until
-    # it explicitly states otherwise.  The flag only skips transformations of
+    # it explicitly states otherwise. The flag only skips transformations of
     # invariant constitutive operators; stresses and state variables remain
     # subject to their normal objective update.
     is_isotropic = False
 
-    # Simcoon UMATs transport their material tensors and private state through
-    # DR themselves.  Fedoo-native anisotropic laws use the current material
-    # frame maintained below instead.
+    # Fedoo-native anisotropic laws use the current material frame maintained
+    # by this class. User-material adapters that perform this transport
+    # themselves override the flag.
     manages_material_frame = False
 
-    _corotational_box_tangent = False
     # True when the law returns the simcoon corotational "box" tangent
     # d(tau_hat)/dD, which the UL weakform must convert to the Lie
     # (Truesdell) spatial tangent (see StressEquilibrium.update_2).
     # Native fedoo laws (e.g. ElasticIsotrop) return a plain engineering
     # tangent and are left unconverted.
+    _corotational_box_tangent = False
 
-    def __init__(self, name="", density=None):
+    def __init__(self, density=None, name=""):
         ConstitutiveLaw.__init__(self, name)
         self.density = density
         # True when the tangent is based on deformation-gradient rather than
@@ -398,10 +407,10 @@ class MechanicalUMAT(Mechanical3D):
         Restore the initialization tangent at the start of every increment.
     tangent_mode : int, default=1
         Tangent selector forwarded unchanged to the UMAT callback.
-    name : str, optional
-        Fedoo constitutive-law registration name.
     density : float, optional
         Material mass density.
+    name : str, optional
+        Fedoo constitutive-law registration name.
 
     Notes
     -----
@@ -426,8 +435,8 @@ class MechanicalUMAT(Mechanical3D):
         tangent_from_F=False,
         use_elastic_tangent=True,
         tangent_mode=1,
-        name="",
         density=None,
+        name="",
     ):
         super().__init__(name=name, density=density)
         if umat is not None and not callable(umat):

@@ -37,7 +37,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
     """
 
     def __init__(self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name=""):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
 
         self.Ex = Ex
         self.Ey = Ey

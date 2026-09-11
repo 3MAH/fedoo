@@ -41,7 +41,7 @@ K = 500  # K = 18 #W/K/m
 c = 0.500  # J/kg/K
 rho = 7800  # kg/m2
 thermal_law = fd.constitutivelaw.ThermalProperties(K, c, rho, name="ThermalLaw")
-wf_th = fd.weakform.HeatEquation("ThermalLaw", space=thermal_space)
+wf_th = fd.weakform.HeatEquation(thermal_law, space=thermal_space)
 assemb = fd.Assembly.create(wf_th, meshname, name="Assembling_T")
 
 pb_th = fd.problem.NonLinear("Assembling_T")

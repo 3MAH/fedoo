@@ -7,6 +7,16 @@ from fedoo.core.weakform import WeakFormSum
 from fedoo.time.backward_euler import BackwardEulerStorageTerm
 
 
+def test_thermal_weakforms_do_not_inherit_the_material_name():
+    fd.ModelingSpace("3D")
+    material = fd.constitutivelaw.ThermalProperties(
+        18.0, 0.5, 7800.0, name="NamedThermalLaw"
+    )
+
+    assert fd.weakform.HeatEquation(material).name == ""
+    assert fd.weakform.HeatCapacity(material).name == ""
+
+
 def _legacy_transient_heat_equation(material):
     heat_eq_diffusion = fd.weakform.HeatEquation(material)
     heat_eq_time = fd.weakform.HeatCapacity(material)

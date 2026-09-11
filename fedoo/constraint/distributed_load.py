@@ -22,7 +22,7 @@ class _AssemblyNeumannBC(BCBase):
     reassembling. Follower loads refresh the reference vectors when generated.
     """
 
-    def __init__(self, assembly: Assembly, name: str = "", time_func=None):
+    def __init__(self, assembly: Assembly, time_func=None, name: str = ""):
         BCBase.__init__(self, name)
         self.bc_type = "Neumann"
         self.assembly = assembly
@@ -181,12 +181,12 @@ class Pressure(Assembly):
         If nlgeom == 'UL' the updated lagrangian method is used (same as True)
         If nlgeom == 'TL' the total lagrangian method is used
         If not defined, the problem.nlgeom attribute is used instead.
-    name: str, optional
-        Name of the created assembly.
     time_func: callable, optional
         Function that gives the temporal evolution of the pressure when the
         assembly is converted to a Neumann boundary condition. By default, a
         linear evolution is considered.
+    name: str, optional
+        Name of the created assembly.
 
     Notes
     -----
@@ -235,8 +235,8 @@ class Pressure(Assembly):
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         self.pressure = pressure
         self.initial_pressure = initial_pressure
@@ -263,11 +263,11 @@ class Pressure(Assembly):
         """Reset the assembly to the beginning of the time iteration."""
         self.set_start(pb)
 
-    def as_neumann(self, name: str = "", time_func=None):
+    def as_neumann(self, time_func=None, name: str = ""):
         """Return this pressure load as a Neumann boundary condition."""
         if time_func is None:
             time_func = self.time_func
-        return _AssemblyNeumannBC(self, name, time_func=time_func)
+        return _AssemblyNeumannBC(self, time_func=time_func, name=name)
 
     @staticmethod
     def from_nodes(
@@ -276,8 +276,8 @@ class Pressure(Assembly):
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         """Create a pressure assembly from a node set.
 
@@ -288,7 +288,12 @@ class Pressure(Assembly):
         """
         surface_mesh = extract_surface(mesh, node_set=node_set)
         return Pressure(
-            surface_mesh, pressure, initial_pressure, nlgeom, name, time_func
+            surface_mesh,
+            pressure,
+            initial_pressure=initial_pressure,
+            nlgeom=nlgeom,
+            time_func=time_func,
+            name=name,
         )
 
     @staticmethod
@@ -298,8 +303,8 @@ class Pressure(Assembly):
         pressure: float | np.ndarray,
         initial_pressure: float | np.ndarray | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         """Create a pressure assembly from an element set.
 
@@ -310,7 +315,12 @@ class Pressure(Assembly):
         """
         surface_mesh = extract_surface(mesh, element_set=element_set)
         return Pressure(
-            surface_mesh, pressure, initial_pressure, nlgeom, name, time_func
+            surface_mesh,
+            pressure,
+            initial_pressure=initial_pressure,
+            nlgeom=nlgeom,
+            time_func=time_func,
+            name=name,
         )
 
 
@@ -348,12 +358,12 @@ class DistributedForce(Assembly):
         :mod:`fedoo.problem.NonLinearNewmark`
         If nlgeom == 'UL' the updated lagrangian method is used (same as True)
         If nlgeom == 'TL' the total lagrangian method is used
-    name: str, optional
-        Name of the created assembly.
     time_func: callable, optional
         Function that gives the temporal evolution of the distributed load when
         the assembly is converted to a Neumann boundary condition. By default,
         a linear evolution is considered.
+    name: str, optional
+        Name of the created assembly.
 
     Notes
     -----
@@ -403,8 +413,8 @@ class DistributedForce(Assembly):
         force: list | np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         self.force = force
         if initial_force is not None:
@@ -443,11 +453,11 @@ class DistributedForce(Assembly):
         """Reset the assembly to the beginning of the time iteration."""
         self.set_start(pb)
 
-    def as_neumann(self, name: str = "", time_func=None):
+    def as_neumann(self, time_func=None, name: str = ""):
         """Return this distributed load as a Neumann boundary condition."""
         if time_func is None:
             time_func = self.time_func
-        return _AssemblyNeumannBC(self, name, time_func=time_func)
+        return _AssemblyNeumannBC(self, time_func=time_func, name=name)
 
 
 class SurfaceForce(DistributedForce):
@@ -466,8 +476,8 @@ class SurfaceForce(DistributedForce):
         force: np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         """Create a SurfaceForce assembly from an node set.
 
@@ -478,7 +488,12 @@ class SurfaceForce(DistributedForce):
         """
         surface_mesh = extract_surface(mesh, node_set=node_set)
         return DistributedForce(
-            surface_mesh, force, initial_force, nlgeom, name, time_func
+            surface_mesh,
+            force,
+            initial_force=initial_force,
+            nlgeom=nlgeom,
+            time_func=time_func,
+            name=name,
         )
 
     @staticmethod
@@ -488,8 +503,8 @@ class SurfaceForce(DistributedForce):
         force: np.typing.ArrayLike[float],
         initial_force: np.typing.ArrayLike[float] | None = None,
         nlgeom: bool | None = None,
-        name: str = "",
         time_func=None,
+        name: str = "",
     ):
         """Create a SurfaceForce assembly from an element set.
 
@@ -500,5 +515,10 @@ class SurfaceForce(DistributedForce):
         """
         surface_mesh = extract_surface(mesh, element_set=element_set)
         return DistributedForce(
-            surface_mesh, force, initial_force, nlgeom, name, time_func
+            surface_mesh,
+            force,
+            initial_force=initial_force,
+            nlgeom=nlgeom,
+            time_func=time_func,
+            name=name,
         )

@@ -870,12 +870,12 @@ class ShellLaminateNonLinear(ShellBase):
 
 
 class ShellLaminate(ShellBase):
-    def __init__(self, listMat, list_thickness, k=1, name=""):
+    def __init__(self, list_mat, list_thickness, k=1, name=""):
         # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
-        self.__listMat = [
+        self.__list_mat = [
             ConstitutiveLaw.get_all()[mat] if isinstance(mat, str) else mat
-            for mat in listMat
+            for mat in list_mat
         ]
         thickness = sum(list_thickness)  # total thickness
 
@@ -889,7 +889,7 @@ class ShellLaminate(ShellBase):
     def compute_area_density(self):
         return sum(
             self._material_density(material, self.name) * thickness
-            for material, thickness in zip(self.__listMat, self.list_thickness)
+            for material, thickness in zip(self.__list_mat, self.list_thickness)
         )
 
     def compute_rotary_density(self):
@@ -897,19 +897,19 @@ class ShellLaminate(ShellBase):
             self._material_density(material, self.name)
             * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3)
             / 3.0
-            for i, material in enumerate(self.__listMat)
+            for i, material in enumerate(self.__list_mat)
         )
 
     def get_shell_stiffness_matrix(self):
         H = np.zeros((8, 8), dtype="object")
         for i in range(len(self.list_thickness)):
-            Hplane = self.__listMat[i].get_elastic_matrix(
+            Hplane = self.__list_mat[i].get_elastic_matrix(
                 "2Dstress"
             )  # membrane rigidity matrix with plane stress assumption
             Hplane = np.array(
                 [[Hplane[i][j] for j in [0, 1, 3]] for i in [0, 1, 3]], dtype="object"
             )
-            Hshear = self.__listMat[i].get_elastic_matrix()
+            Hshear = self.__list_mat[i].get_elastic_matrix()
             Hshear = np.array(
                 [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
             )
@@ -932,7 +932,7 @@ class ShellLaminate(ShellBase):
         # only shear component are given for reduce integration part
         H = np.zeros((2, 2), dtype="object")
         for i in range(len(self.list_thickness)):
-            Hshear = self.__listMat[i].get_elastic_matrix()
+            Hshear = self.__list_mat[i].get_elastic_matrix()
             Hshear = np.array(
                 [[Hshear[i][j] for j in [4, 5]] for i in [4, 5]], dtype="object"
             )
@@ -944,7 +944,7 @@ class ShellLaminate(ShellBase):
         # membrane and flexural component are given for full integration part
         H = np.zeros((6, 6), dtype="object")
         for i in range(len(self.list_thickness)):
-            Hplane = self.__listMat[i].get_elastic_matrix(
+            Hplane = self.__list_mat[i].get_elastic_matrix(
                 "2Dstress"
             )  # membrane rigidity matrix with plane stress assumption
             Hplane = np.array(
@@ -971,7 +971,7 @@ class ShellLaminate(ShellBase):
             position
         )  # find the layer corresponding to the specified position
 
-        Hplane = self.__listMat[layer].get_elastic_matrix(
+        Hplane = self.__list_mat[layer].get_elastic_matrix(
             "2Dstress"
         )  # membrane rigidity matrix with plane stress assumption
         Stress = [
@@ -987,7 +987,7 @@ class ShellLaminate(ShellBase):
             )
             for i in range(4)
         ]  # SXX, SYY, SXY (SZZ should be = 0)
-        Hshear = self.__listMat[layer].get_elastic_matrix()
+        Hshear = self.__list_mat[layer].get_elastic_matrix()
         Stress += [
             sum(
                 [
@@ -1029,9 +1029,9 @@ class ShellLaminate(ShellBase):
         layer_z[0] = 0  # to avoid -1 value for 1st layer
 
         Hplane = [
-            mat.get_elastic_matrix("2Dstress") for mat in self.__listMat
+            mat.get_elastic_matrix("2Dstress") for mat in self.__list_mat
         ]  # membrane rigidity matrix with plane stress assumption
-        Hshear = [mat.get_elastic_matrix() for mat in self.__listMat]
+        Hshear = [mat.get_elastic_matrix() for mat in self.__list_mat]
         Hplane = [
             [
                 [

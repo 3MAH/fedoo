@@ -62,12 +62,12 @@ def test_simcoon_constructors_forward_tangent_mode():
     assert modular_material.tangent_mode == 2
 
 
-def test_simcoon_constructors_keep_positional_name_compatibility():
+def test_simcoon_constructors_accept_keyword_name():
     legacy = fd.constitutivelaw.Simcoon(
-        "ELISO", np.array([210000.0, 0.3, 0.0]), "legacy_name"
+        "ELISO", np.array([210000.0, 0.3, 0.0]), name="legacy_name"
     )
     modular_material = fd.constitutivelaw.Simcoon.from_modular(
-        modular.elastic_model(E=210000.0, nu=0.3), "modular_name"
+        modular.elastic_model(E=210000.0, nu=0.3), name="modular_name"
     )
 
     assert legacy.name == "legacy_name"

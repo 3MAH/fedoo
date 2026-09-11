@@ -48,9 +48,11 @@ class PeriodicBC(BCBase):
         faces. Used both to gather boundary-plane nodes and to validate
         the KDTree pairing. Must be smaller than the mesh element size.
         The default is 1e-8.
+    dic_closest_points_on_boundaries : dict, optional
+        Precomputed boundary-node correspondence used for a non-periodic
+        mesh.
     name : str, optional
         Name of the created boundary condition. The default is "Periodicity".
-
 
     Notes
     -----
@@ -139,8 +141,8 @@ class PeriodicBC(BCBase):
         dim: int = None,
         meshperio: bool = True,
         tol: float = 1e-8,
-        name: str = "Periodicity",
         dic_closest_points_on_boundaries: dict = None,
+        name: str = "Periodicity",
     ):
         if not isinstance(periodicity_type, str):
             raise TypeError("periodicity_type should be a string")

@@ -27,9 +27,9 @@ mesh = fd.Mesh[meshname]
 K = 18  # W/K/m
 c = 0.500  # J/kg/K
 rho = 7800  # kg/m2
-Material = fd.constitutivelaw.ThermalProperties(K, c, rho, name="ThermalLaw")
-wf = fd.weakform.HeatEquation("ThermalLaw")
-assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")
+material = fd.constitutivelaw.ThermalProperties(K, c, rho, name="ThermalLaw")
+wf = fd.weakform.HeatEquation(material)
+assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 
 left = mesh.find_nodes("X", 0)
 right = mesh.find_nodes("X", L)

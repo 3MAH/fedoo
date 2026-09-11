@@ -31,13 +31,13 @@ class CohesiveLaw(Spring):
         axis should be eiter 0,1 or 2 (default). It define the normal
         direction to the failure plane the is used for mode identification.
         The axis is defined in local coordinate system.
-    name: str, optional
-        The name of the constitutive law
     tangent_mode: {"secant", "consistent"}, default="secant"
         Tangent stiffness used by the nonlinear solver. The secant tangent uses
         the current damaged stiffness and is the more robust default. The
         consistent tangent includes the derivative of damage during active
         loading and can be selected explicitly.
+    name: str, optional
+        The name of the constitutive law
     """
 
     # Use with WeakForm.InterfaceForce
@@ -50,8 +50,8 @@ class CohesiveLaw(Spring):
         SIImax=None,
         KII=5e4,
         axis=2,
-        name="",
         tangent_mode="secant",
+        name="",
     ):
         # GIc la ténacité (l'énergie à la rupture = l'aire sous la courbe du modèle en N/mm)
         #        SImax = 60.  # la contrainte normale maximale de l'interface (MPa)

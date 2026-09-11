@@ -16,17 +16,14 @@ class HeatEquation(WeakFormBase):
     ----------
     thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Thermal Constitutive Law (:mod:`fedoo.constitutivelaw`)
-    name: str
-        name of the WeakForm
+    name: str, optional
+        Name of the weak form. An empty name leaves it unregistered.
     nlgeom: bool (default = False)
     """
 
-    def __init__(self, thermal_constitutivelaw, name=None, nlgeom=False, space=None):
+    def __init__(self, thermal_constitutivelaw, name="", nlgeom=False, space=None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
-
-        if name is None:
-            name = thermal_constitutivelaw.name
 
         WeakFormBase.__init__(self, name, space)
         if self.space.is_axisymmetric:
@@ -54,7 +51,12 @@ class HeatEquation(WeakFormBase):
         self.constitutivelaw = thermal_constitutivelaw
         self.time_evolution = FIRST_ORDER
         self.__nlgeom = nlgeom
-        self.storage = HeatCapacity(thermal_constitutivelaw, "", nlgeom, self.space)
+        self.storage = HeatCapacity(
+            thermal_constitutivelaw,
+            name="",
+            nlgeom=nlgeom,
+            space=self.space,
+        )
         self.storage.assembly_options["mat_lumping"] = True
 
         # self.__nlgeom = nlgeom #geometric non linearities
@@ -133,12 +135,9 @@ class HeatCapacity(WeakFormBase):
     discretization is handled by problem-level time integrators.
     """
 
-    def __init__(self, thermal_constitutivelaw, name=None, nlgeom=False, space=None):
+    def __init__(self, thermal_constitutivelaw, name="", nlgeom=False, space=None):
         if isinstance(thermal_constitutivelaw, str):
             thermal_constitutivelaw = ConstitutiveLaw.get_all()[thermal_constitutivelaw]
-
-        if name is None:
-            name = thermal_constitutivelaw.name
 
         WeakFormBase.__init__(self, name, space)
 

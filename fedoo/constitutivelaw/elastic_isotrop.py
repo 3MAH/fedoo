@@ -28,7 +28,7 @@ class ElasticIsotrop(ElasticAnisotropic):
     """
 
     def __init__(self, E, nu, name=""):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
         self.E = E
         """Young Modulus of the material"""
         self.nu = nu

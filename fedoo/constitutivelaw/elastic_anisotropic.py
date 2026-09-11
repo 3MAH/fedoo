@@ -32,7 +32,7 @@ class ElasticAnisotropic(Mechanical3D):
     """
 
     def __init__(self, H, name=""):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
 
         self._H = H
         # self._stress = 0

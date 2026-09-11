@@ -111,11 +111,6 @@ class Simcoon(MechanicalUMAT):
         in the associated stress-equilibrium weakform. This is required by
         Simcoon's modular Hencky formulation.
         """
-        if isinstance(tangent_mode, str) and name == "":
-            # Historical API: from_modular(configuration, name).
-            name = tangent_mode
-            tangent_mode = 1
-
         try:
             from simcoon import modular
         except ImportError as error:
@@ -362,10 +357,6 @@ class Simcoon(MechanicalUMAT):
     def __init__(self, umat_name, props, tangent_mode=1, name=""):
         # props is a nparray containing all the material variables
         # nstatev is a nparray containing all the material variables
-        if isinstance(tangent_mode, str) and name == "":
-            # Historical API: Simcoon(umat_name, props, name).
-            name = tangent_mode
-            tangent_mode = 1
         MechanicalUMAT.__init__(self, props=props, tangent_mode=tangent_mode, name=name)
         # self._statev_initial = statev #statev may be an int or an array
         # self.__useElasticModulus = True ??

@@ -54,7 +54,7 @@ class CompositeUD(ElasticAnisotropic):
         angle=0,
         name="",
     ):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
 
         self.__parameters = {
             "Vf": Vf,
