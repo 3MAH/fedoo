@@ -54,7 +54,7 @@ class CompositeUD(ElasticAnisotropic):
         angle=0,
         name="",
     ):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
 
         self.__parameters = {
             "Vf": Vf,
@@ -216,7 +216,7 @@ class CompositeUD(ElasticAnisotropic):
                 else:
                     H = np.rollaxis(H, 0, 3)
 
-        H = self.local2global_H(H)
+        H = self.local2global_H(H, assembly)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
         else:

@@ -87,14 +87,49 @@ class Problem(ProblemBase):
     def _set_vect_component(
         self, vector, name, value
     ):  # initialize a vector (force vector for instance) being giving the stiffness matrix
-        assert isinstance(name, str), "argument error"
+        if not isinstance(name, str):
+            raise TypeError("name must be a string")
 
         if name.lower() == "all":
-            vector[:] = value
+            target = vector
         else:
-            i = self.space.variable_rank(name)
             n = self.mesh.n_nodes
-            vector[i * n : (i + 1) * n] = value
+            if name in self.space.list_vectors():
+                ranks = self.space.get_rank_vector(name)
+                start = ranks[0] * n
+                target = vector[start : (ranks[0] + len(ranks)) * n].reshape(
+                    len(ranks), n
+                )
+            elif name in self.space.list_variables():
+                rank = self.space.variable_rank(name)
+                target = vector[rank * n : (rank + 1) * n]
+            elif name in self._global_dof:
+                rank = self._global_dof._variable[name]
+                start, stop = (
+                    self.n_node_dof + self._global_dof._indptr[[rank, rank + 1]]
+                )
+                target = vector[start:stop]
+            elif name in self._global_dof._vector:
+                variables = self._global_dof._vector[name]
+                rank = self._global_dof._variable[variables[0]]
+                start, stop = (
+                    self.n_node_dof
+                    + self._global_dof._indptr[[rank, rank + len(variables)]]
+                )
+                target = vector[start:stop].reshape(len(variables), -1)
+            else:
+                raise ValueError(f"Variable '{name}' doesn't exist.")
+
+        values = np.asarray(value)
+        if target.ndim == 2 and values.ndim == 1 and values.size == target.size:
+            values = values.reshape(target.shape)
+        try:
+            target[...] = values
+        except ValueError as error:
+            raise ValueError(
+                f"cannot assign values with shape {values.shape} to DOF field "
+                f"'{name}' with shape {target.shape}"
+            ) from error
 
     def _get_vect_component(
         self, vector, name
@@ -387,8 +422,25 @@ class Problem(ProblemBase):
     ):  # solution of the problem (same as get_X for linear problems if name=='all')
         return self._get_vect_component(self.__X, name)
 
-    def set_dof_solution(self, name, value):
-        self._set_vect_component(self.__X, name, value)
+    def set_dof(self, name, value):
+        """Set values in the current degree-of-freedom vector.
+
+        ``name`` may identify a scalar variable, a vector, a registered global
+        degree of freedom, or ``"all"``. Scalar values are broadcast over the
+        selected field.
+
+        Returns
+        -------
+        Problem
+            This problem, to allow chained configuration calls.
+        """
+        if np.isscalar(self.__X):
+            vector = self._new_vect_dof()
+        else:
+            vector = np.asarray(self.__X).copy()
+        self._set_vect_component(vector, name, value)
+        self.set_X(vector)
+        return self
 
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
         n_dof = self.n_dof

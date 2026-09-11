@@ -37,7 +37,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
     """
 
     def __init__(self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name=""):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
 
         self.Ex = Ex
         self.Ey = Ey
@@ -99,7 +99,7 @@ class ElasticOrthotropic(ElasticAnisotropic):
         H[4, 4] = GXZ
         H[5, 5] = GYZ
 
-        H = self.local2global_H(H)
+        H = self.local2global_H(H, assembly)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
         else:

@@ -208,7 +208,6 @@ def grid_mesh_cylindric(
     theta_min=0,
     theta_max=1,
     elm_type="quad4",
-    init_local_frame=0,
     ndim=None,
     name="",
 ):
@@ -227,9 +226,6 @@ def grid_mesh_cylindric(
         * 'quad4' -- 4 node quadrangular mesh
         * 'quad8' -- 8 node quadrangular mesh (à tester)
         * 'quad9' -- 9 node quadrangular mesh
-    init_local_frame : {0, 1}
-        if init_local_frame is set to 1, the local basis is initialized with the global basis.
-
     Returns
     -------
     Mesh
@@ -241,6 +237,11 @@ def grid_mesh_cylindric(
     rectangle_mesh : Surface mesh of a rectangle
     box_mesh : Volume mesh of a box
     line_mesh_cylindric : Line mesh in cylindrical coordinate
+
+    Notes
+    -----
+    Use :func:`fedoo.mesh.generate_cylindrical_local_frame` to generate
+    cylindrical local frames from the returned mesh.
     """
 
     if theta_min < theta_max:
@@ -371,7 +372,6 @@ def line_mesh_cylindric(
     theta_min=0,
     theta_max=3.14,
     elm_type="lin2",
-    init_local_frame=0,
     ndim=2,
     name="",
 ):
@@ -389,10 +389,6 @@ def line_mesh_cylindric(
         * 'lin2' -- 2 node line
         * 'lin3' -- 3 node line
         * 'lin4' -- 4 node line
-    init_local_frame : bool, default = False
-        if init_local_frame True, the local frame is initialized with the cylindrical
-        local basis.
-
     Returns
     -------
     Mesh
@@ -404,29 +400,25 @@ def line_mesh_cylindric(
     rectangle_mesh : Surface mesh of a rectangle
     box_mesh : Volume mesh of a box
     grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate
+
+    Notes
+    -----
+    Use :func:`fedoo.mesh.generate_cylindrical_local_frame` to generate
+    cylindrical local frames from the returned mesh.
     """
-    # init_local_frame = 1 si on veut initialiser le repère local (0 par défaut)
     m = line_mesh_1D(nt, theta_min, theta_max, elm_type, name)
     theta = m.nodes[:, 0]
     elm = m.elements
 
     crd = np.c_[r * np.cos(theta), r * np.sin(theta)]
 
-    returned_mesh = Mesh(crd, elm, elm_type, m.node_sets, {}, ndim, name)
-
-    if init_local_frame:
-        returned_mesh.local_frame = np.array(
-            [[[np.sin(t), -np.cos(t)], [np.cos(t), np.sin(t)]] for t in theta]
-        )
-
-    return returned_mesh
+    return Mesh(crd, elm, elm_type, m.node_sets, {}, ndim, name)
 
 
 def circle_mesh(
     n=12,
     r=1,
     elm_type="lin2",
-    init_local_frame=0,
     ndim=2,
     name="",
 ):
@@ -444,8 +436,6 @@ def circle_mesh(
         * 'lin2' -- 2-node line
         * 'lin3' -- 3-node line
         * 'lin4' -- 4-node line
-    init_local_frame : bool, default=False
-        If True, initializes the local frame using a cylindrical basis
     ndim : int, default=2
         Dimension of the mesh.
     name : str, optional
@@ -463,6 +453,11 @@ def circle_mesh(
     box_mesh : Volume mesh of a box
     grid_mesh_cylindric : Surface mesh of a grid in cylindrical coodrinate
     line_mesh_cylindric : Line mesh in cylindrical coordinate
+
+    Notes
+    -----
+    Use :func:`fedoo.mesh.generate_cylindrical_local_frame` to generate
+    cylindrical local frames from the returned mesh.
     """
     m = line_mesh_cylindric(
         n + 1,
@@ -470,16 +465,12 @@ def circle_mesh(
         0,
         2 * np.pi,
         elm_type,
-        init_local_frame,
         ndim,
         name,
     )
 
     m.nodes = m.nodes[:-1]
     m.elements[-1, -1] = 0
-
-    if init_local_frame:
-        m.local_frame = m.local_frame[:-1]
 
     return m
 
@@ -842,7 +833,7 @@ def box_mesh(
 if __name__ == "__main__":
     import math
 
-    a = line_mesh_cylindric(11, 1, 0, math.pi, "lin2", init_local_frame=0)
-    b = line_mesh_cylindric(11, 1, 0, math.pi, "lin4", init_local_frame=1)
+    a = line_mesh_cylindric(11, 1, 0, math.pi, "lin2")
+    b = line_mesh_cylindric(11, 1, 0, math.pi, "lin4")
 
     print(b.nodes)

@@ -56,10 +56,12 @@ class RigidBodyAssembly(AssemblyBase):
         The associated rigid tie constraint.
     mesh : fedoo.Mesh, optional
         Mesh (needed by the Fedoo Problem constructor).
-    space : ModelingSpace, optional
-        Modeling space.
+    dynamic : bool, default=True
+        Whether the assembly contributes second-order inertial terms.
     name : str, optional
         Name of the assembly.
+    space : ModelingSpace, optional
+        Modeling space.
     """
 
     def __init__(
@@ -68,9 +70,9 @@ class RigidBodyAssembly(AssemblyBase):
         inertia_tensor,
         rigid_tie,
         mesh=None,
-        space=None,
         dynamic=True,
         name="RigidBodyAssembly",
+        space=None,
     ):
         if space is None:
             from fedoo.core.modelingspace import ModelingSpace

@@ -14,6 +14,7 @@ from fedoo.lib_elements.element_list import (
     get_element,
     get_node_elm_coordinates,
 )
+from fedoo.util.localframe import as_local_frame
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
@@ -111,6 +112,7 @@ class Assembly(AssemblyBase):
 
         self._use_local_csys = self._test_if_local_csys()
         self._element_local_frame = None
+        self._initial_element_local_frame = None
 
         self._saved_bloc_structure = None  # use to save data about the sparse structure and avoid time consuming recomputation
         self._assembly_method = (
@@ -133,6 +135,108 @@ class Assembly(AssemblyBase):
         self._nlgeom = None
 
         self._pb = None
+
+    def set_element_local_frame(
+        self,
+        frames=None,
+        location="Element",
+        *,
+        guide=None,
+        guide_direction=None,
+    ):
+        """Define the initial local frame of beam or shell elements.
+
+        The element geometry fixes one axis of the frame. For a beam, the
+        local x axis is aligned with the element tangent. For a shell, the
+        local z axis is aligned with the surface normal. Consequently, a
+        supplied frame does not override these geometrical directions; it
+        determines the rotation of the remaining two axes around them.
+
+        ``guide`` provides a simpler way to define this remaining orientation.
+        For beams it approximates the local y axis by default, or the local z
+        axis with ``guide_direction="z"``. For shells it approximates the
+        local x axis. The guide is projected onto the plane perpendicular to
+        the geometrically fixed axis, and the last axis is then completed to
+        form an orthonormal, right-handed frame.
+
+        ``frames`` and ``guide`` may be uniform, elemental, or nodal. Nodal
+        values are interpolated to the element centres before the geometrical
+        projection is applied.
+
+        This method must be called before problem initialization. A Gauss-point
+        field is intentionally not accepted because an element rigid frame is
+        independent of the integration rule.
+        """
+        if self._pb is not None:
+            raise RuntimeError(
+                "element local frames must be set before problem initialization"
+            )
+        if frames is not None and guide is not None:
+            raise ValueError("provide either frames or guide, not both")
+        if frames is None and guide is None:
+            self._initial_element_local_frame = None
+            self._element_local_frame = None
+            return self
+
+        if location not in ("Node", "Element"):
+            raise ValueError("location must be 'Node' or 'Element'")
+
+        if frames is not None:
+            frames = np.asarray(as_local_frame(frames, self.mesh.ndim))
+            frames = frames.reshape(-1, self.mesh.ndim, self.mesh.ndim)
+            expected = self.mesh.n_nodes if location == "Node" else self.mesh.n_elements
+            if len(frames) not in (1, expected):
+                raise ValueError(
+                    f"{location} local frames require one or {expected} matrices, "
+                    f"got {len(frames)}"
+                )
+            guide_axis = 2 if guide_direction == "z" and self.mesh.ndim == 3 else 1
+            if len(frames) == 1:
+                frame_guide = frames[0, guide_axis]
+                guide_location = None
+            else:
+                frame_guide = frames[:, guide_axis]
+                guide_location = location
+
+            # Shell frames use their x axis as guide; beam frames use y (or z).
+            elm_ref = get_element(self.mesh.elm_type)
+            if hasattr(elm_ref, "geometry_elm"):
+                elm_ref = elm_ref.geometry_elm
+            elm_ref = elm_ref(1)
+            topology_dim = np.asarray(
+                elm_ref.shape_function_derivative(elm_ref.get_gp_elm_coordinates(1))
+            ).shape[1]
+            if topology_dim == 2 and self.mesh.ndim == 3:
+                frame_guide = frames[0, 0] if len(frames) == 1 else frames[:, 0]
+                guide_direction = "x"
+            elif topology_dim != 1:
+                raise ValueError(
+                    "element local frames are only supported for beam and shell meshes"
+                )
+        else:
+            frame_guide = guide
+            guide_location = location
+
+        resolved = self.mesh.get_element_local_frame(
+            guide=frame_guide,
+            location=guide_location,
+            guide_direction=guide_direction,
+        )
+        stored = np.asarray(resolved)[:, np.newaxis, :, :]
+        self._initial_element_local_frame = stored.copy()
+        self._element_local_frame = stored.copy()
+        return self
+
+    def get_element_local_frame(self):
+        """Return the current rigid frame, one rotation matrix per element."""
+        if self._element_local_frame is None:
+            return self.mesh.get_element_local_frame()
+        frames = np.asarray(self._element_local_frame)
+        if frames.ndim == 4:
+            if frames.shape[1] != 1:
+                raise ValueError("an element rigid frame must be unique per element")
+            return frames[:, 0]
+        return frames
 
     def __add__(self, another_assembly):
         return Assembly.sum(self, another_assembly)
@@ -762,6 +866,11 @@ class Assembly(AssemblyBase):
         self.delete_global_mat()
         # self.current.delete_global_mat()
         self.current = self
+        self._element_local_frame = (
+            None
+            if self._initial_element_local_frame is None
+            else self._initial_element_local_frame.copy()
+        )
 
         # remove all state variables
         self.sv = {}

@@ -3,17 +3,25 @@
 import numpy as np
 from simcoon import Rotation as SimRotation
 
-from fedoo.core.mechanical3d import Mechanical3D
+from fedoo.core.mechanical3d import MechanicalUMAT
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
-class ElastoPlasticity(Mechanical3D):
+class ElastoPlasticity(MechanicalUMAT):
     """Elasto-plastic constitutive law with isotropic hardening.
 
     The stress integration uses a vectorized radial-return algorithm for the
-    von Mises yield criterion. In a finite-strain updated-Lagrangian analysis,
-    the law operates on the corotated strain increment prepared by
-    :class:`fedoo.weakform.StressEquilibrium`.
+    von Mises yield criterion. The finite-element lifecycle is provided by
+    :class:`fedoo.core.mechanical3d.MechanicalUMAT`; the scalar accumulated
+    plastic strain ``P`` and plastic-strain tensor ``EP`` are exposed as
+    labelled components of the private ``Statev`` array.
+
+    In a geometrically nonlinear updated-Lagrangian analysis, this law is a
+    corotational extension of the same additive small-strain model. Tensorial
+    history is transported with the objective rotation increment before each
+    return mapping. This makes the response objective under finite rotations,
+    but it is not a multiplicative finite-plasticity model (there is no
+    decomposition ``F = Fe @ Fp``).
 
     The returned elastoplastic tangent is the continuum tangent evaluated at
     the updated stress. It is not the algorithmically consistent tangent of
@@ -40,6 +48,8 @@ class ElastoPlasticity(Mechanical3D):
         Name of the constitutive law.
     """
 
+    is_isotropic = True
+
     def __init__(
         self,
         young_modulus,
@@ -47,7 +57,18 @@ class ElastoPlasticity(Mechanical3D):
         yield_stress,
         name="",
     ):
-        super().__init__(name)
+        super().__init__(
+            props=[young_modulus, poisson_ratio, yield_stress],
+            n_statev=7,
+            props_label={
+                "young_modulus": 0,
+                "poisson_ratio": 1,
+                "yield_stress": 2,
+            },
+            statev_label={"P": 0, "EP": slice(1, 7)},
+            is_isotropic=True,
+            name=name,
+        )
         self.young_modulus = young_modulus
         self.poisson_ratio = poisson_ratio
         self.yield_stress = yield_stress
@@ -393,59 +414,98 @@ class ElastoPlasticity(Mechanical3D):
             return self._current_tangent
         return self.get_elastic_matrix(dimension or "3D")
 
-    def initialize(self, assembly, pb):
-        """Initialize finite-element state variables."""
-        self._dimension = assembly.space.get_dimension()
-        elastic_matrix = np.asarray(
-            self.get_elastic_matrix(self._dimension), dtype=float
-        )
-        n_points = assembly.n_gauss_points
-        assembly.sv["P"] = np.zeros(n_points)
-        assembly.sv["EP"] = StrainTensorList(np.zeros((6, n_points), order="F"))
-        assembly.sv["TangentMatrix"] = np.repeat(
-            elastic_matrix[:, :, None], n_points, axis=2
-        )
-        self.is_initialized = True
+    def _call_umat(
+        self,
+        strain,
+        dstrain,
+        F0,
+        F1,
+        stress_start,
+        DR,
+        props,
+        statev_start,
+        time,
+        dtime,
+        wm_start,
+        temperature,
+        *,
+        ndi,
+        tangent_mode,
+    ):
+        """Adapt the readable radial return to ``MechanicalUMAT``.
 
-    def update(self, assembly, pb):
-        """Update stress, plastic state, and tangent for the current iterate."""
-        if "DStrain" in assembly.sv:
-            total_strain = assembly.sv["Strain"] + assembly.sv["DStrain"]
+        ``EP`` is the only tensor-valued private state variable. It is
+        transported into the increment's corotational frame using ``DR``, in
+        the same way as Simcoon's ``EPICP`` UMAT. Fedoo transports the returned
+        stress when the converged increment is committed.
+        """
+        del F0, F1, props, time, dtime, temperature, tangent_mode
+        if ndi == 2:
+            self.get_elastic_matrix("2Dstress")
+
+        strain = self._as_point_array(strain)
+        dstrain = self._as_point_array(dstrain)
+        stress_start = self._as_point_array(stress_start)
+        statev_start = np.asarray(statev_start, dtype=float)
+        plasticity_old = statev_start[0]
+        plastic_strain_old = statev_start[1:7]
+
+        increments = np.asarray(DR, dtype=float)
+        if increments.ndim == 2:
+            rotation = SimRotation.from_matrix(increments)
         else:
-            total_strain = assembly.sv["Strain"]
+            rotation = SimRotation.from_matrix(increments.transpose(2, 0, 1))
+        plastic_strain_old = rotation.apply_strain(plastic_strain_old)
 
-        start_state = getattr(assembly, "sv_start", assembly.sv)
-        (
-            self._current_stress,
-            self._current_plastic_strain,
-            self._current_plasticity,
-            self._current_tangent,
-        ) = self._integrate(
-            total_strain,
-            start_state["P"],
-            start_state["EP"],
+        total_strain = strain + dstrain
+        initialization_without_hardening = (
+            self._hardening_function is None and not np.any(total_strain)
         )
-        assembly.sv["Stress"] = self._current_stress
-        assembly.sv["EP"] = self._current_plastic_strain
-        assembly.sv["P"] = self._current_plasticity
-        assembly.sv["TangentMatrix"] = self._current_tangent
-
-    def set_start(self, assembly, pb):
-        """Commit the converged state and prepare the elastic predictor."""
-        if assembly._nlgeom and "DR" in assembly.sv:
-            rotation = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
-            assembly.sv["EP"] = StrainTensorList(
-                rotation.apply_strain(assembly.sv["EP"].asarray())
+        if initialization_without_hardening:
+            n_points = total_strain.shape[1]
+            elastic_matrix = np.asarray(self.get_elastic_matrix(), dtype=float)
+            stress = StressTensorList(np.zeros_like(total_strain))
+            plastic_strain = StrainTensorList(plastic_strain_old)
+            plasticity = np.asarray(plasticity_old, dtype=float).copy()
+            tangent = np.repeat(elastic_matrix[:, :, None], n_points, axis=2)
+        else:
+            stress, plastic_strain, plasticity, tangent = self._integrate(
+                total_strain,
+                plasticity_old,
+                plastic_strain_old,
             )
 
-        elastic_matrix = np.asarray(
-            self.get_elastic_matrix(self._dimension), dtype=float
+        self._current_stress = stress
+        self._current_plastic_strain = plastic_strain
+        self._current_plasticity = plasticity
+        self._current_tangent = tangent
+
+        statev = np.array(statev_start, copy=True, order="F")
+        statev[0] = plasticity
+        statev[1:7] = plastic_strain.asarray()
+
+        wm = np.array(wm_start, copy=True, order="F")
+        stress_array = stress.asarray()
+        plastic_increment = plasticity - plasticity_old
+        plastic_strain_increment = plastic_strain.asarray() - plastic_strain_old
+        stress_average = 0.5 * (stress_start + stress_array)
+        if initialization_without_hardening:
+            hardening_work = np.zeros_like(plastic_increment)
+        else:
+            hardening_start = self.hardening_function(plasticity_old)
+            hardening_end = self.hardening_function(plasticity)
+            hardening_work = 0.5 * (hardening_start + hardening_end) * plastic_increment
+
+        wm[0] += np.einsum("ip,ip->p", stress_average, dstrain)
+        wm[1] += np.einsum(
+            "ip,ip->p", stress_average, dstrain - plastic_strain_increment
         )
-        assembly.sv["TangentMatrix"] = np.repeat(
-            elastic_matrix[:, :, None],
-            assembly.n_gauss_points,
-            axis=2,
+        wm[2] += hardening_work
+        wm[3] += (
+            np.einsum("ip,ip->p", stress_average, plastic_strain_increment)
+            - hardening_work
         )
+        return stress_array, statev, wm, tangent
 
     def reset(self):
         """Reset cached results; assembly history is managed by Fedoo."""

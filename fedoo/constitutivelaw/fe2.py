@@ -33,7 +33,7 @@ class FE2(Mechanical3D):
     def __init__(self, assemb, name=""):
         if isinstance(assemb, str):
             assemb = Assembly.get_all()[assemb]
-        super().__init__(name)
+        super().__init__(name=name)
 
         if isinstance(assemb, list):
             self.__assembly = [

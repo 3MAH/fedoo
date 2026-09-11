@@ -33,6 +33,12 @@ class BeamProperties(ConstitutiveLaw):
             hypothesis.
         name: str
             name of the WeakForm.
+
+        Notes
+        -----
+        The current beam formulation supports isotropic linear elastic
+        materials only. Material orientations are ignored; the beam
+        cross-section orientation is defined by the assembly element frame.
         """
         if isinstance(material, str):
             material = ConstitutiveLaw[material]
@@ -129,6 +135,12 @@ class BeamCircular(BeamProperties):
             Default is set to 0.9 (usual value for cylindrical beam).
         name: str
             Name of the WeakForm.
+
+        Notes
+        -----
+        The current beam formulation supports isotropic linear elastic
+        materials only. Material orientations are ignored; the beam
+        cross-section orientation is defined by the assembly element frame.
         """
         self.r = r
         """Radius of the beam section."""
@@ -158,6 +170,12 @@ class BeamPipe(BeamProperties):
             Default is set to 0.5 (usual value for thin tube)
         name: str
             Name of the WeakForm
+
+        Notes
+        -----
+        The current beam formulation supports isotropic linear elastic
+        materials only. Material orientations are ignored; the beam
+        cross-section orientation is defined by the assembly element frame.
         """
         self.r_int = r_int
         """Internal radius of the beam section."""
@@ -192,6 +210,12 @@ class BeamRectangular(BeamProperties):
             Default is set to 5/6 (usual value for rectangular beam).
         name: str
             Name of the WeakForm.
+
+        Notes
+        -----
+        The current beam formulation supports isotropic linear elastic
+        materials only. Material orientations are ignored; the beam
+        cross-section orientation is defined by the assembly element frame.
         """
         self.a = a
         """Dimension of the beam section along the y axis."""

@@ -28,12 +28,12 @@ class LagrangeMultiplierAssembly(AssemblyBase):
     constraints: MPC, ListBC, BC object or iterable of BC objects
         Constraint(s) to enforce. Any wrapped object must generate only
         :py:class:`fedoo.MPC` leaves.
-    name: str, default = "LagrangeMultiplier"
-        Assembly name. It is also the name of the global vector that gathers
-        the Lagrange-multiplier DOFs.
     multiplier_names: list of str or None, default = None
         Names of the multiplier DOFs, one per generated equation. If None, the
         multipliers are gathered as a single global vector named ``name``.
+    name: str, default = "LagrangeMultiplier"
+        Assembly name. It is also the name of the global vector that gathers
+        the Lagrange-multiplier DOFs.
     space: ModelingSpace, optional
         Modeling space. If None, the active modeling space is used.
 
@@ -47,8 +47,8 @@ class LagrangeMultiplierAssembly(AssemblyBase):
         self,
         mesh,
         constraints,
-        name="LagrangeMultiplier",
         multiplier_names=None,
+        name="LagrangeMultiplier",
         space: ModelingSpace | None = None,
     ):
         if space is None:

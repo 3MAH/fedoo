@@ -2170,6 +2170,9 @@ class MultiFrameDataSet(DataSet):
 
         kargs["title"] = kargs.get("title", "")
         kargs["clim"] = kargs.get("clim", clim)
+        # Use a stable name so that the plotter replaces the actors from the
+        # previous frame. MultiMesh derives one actor name per submesh.
+        kargs["name"] = kargs.get("name", "movie")
 
         ext = os.path.splitext(filename)[1].lower()
         if ext == "":
@@ -2180,7 +2183,7 @@ class MultiFrameDataSet(DataSet):
             pl = pv.Plotter(window_size=window_size, off_screen=True)
             lock_view = False
         else:
-            pl = kargs["plotter"]
+            pl = kargs.pop("plotter")
             lock_view = True  # don't change the current view
 
         self.plot(

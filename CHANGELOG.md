@@ -6,8 +6,42 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Material local frames for mechanical constitutive laws.** Uniform, nodal,
+  elemental, and Gauss-point rotations can be supplied as matrices or SciPy /
+  simcoon rotations. Anisotropic laws are transformed between material and
+  global coordinates, including material-frame transport in finite strain.
+- **`MechanicalUMAT`**, a generic corotational user-material base class that
+  handles the Fedoo constitutive lifecycle, frame transformations, stress and
+  tangent conversion, labeled properties and state variables, and initial
+  state-variable values defined independently on each assembly with
+  `set_initial_statev`.
+- **Simcoon modular-material construction** through `Simcoon.from_modular`,
+  with generated property and state-variable labels.
+- **Assembly-level beam and shell frame control**, including per-node,
+  per-element, and per-Gauss-point guides and projection onto the geometrical
+  tangent or normal.
+- **Local-frame mesh operations.** `extrude` can orient a profile from path
+  frames, `thicken` creates solids from shell meshes using explicit or
+  automatically oriented nodal normals, and cylindrical-frame generation is
+  exposed from `fedoo.mesh`.
+- **`Problem.set_dof`** for assigning scalar, vector, global, or complete DOF
+  fields with problem-specific storage handling.
+- A user-development guide covering custom weak forms, `MechanicalUMAT`, and
+  advanced `Mechanical3D` constitutive laws.
+
 ### Changed
 
+- Simcoon laws and the pedagogical `ElastoPlasticity` law now use the common
+  `MechanicalUMAT` lifecycle. Isotropic laws skip unnecessary material-frame
+  transformations.
+- Constructor argument ordering is consistent across constitutive laws,
+  constraints, and related helpers. Thermal weak forms remain unnamed unless
+  a name is supplied explicitly instead of inheriting the material name.
+- Material frames are owned by constitutive laws and assemblies rather than
+  meshes, avoiding ambiguous nodal or element storage when integration rules
+  vary.
 - **Energy-based artificial damping now decreases more conservatively.** Its
   coefficient can fall by at most a factor of two after one converged
   increment, preventing a noisy incremental-energy estimate near an
@@ -42,6 +76,11 @@ semantic versioning.
 
 ### Fixed
 
+- Movie export now replaces the previous plot actor at every frame instead of
+  accumulating prior images.
+- Finite-strain anisotropic updates now consistently transform kinematic,
+  stress, rotation-increment, and tangent quantities between material and
+  global frames.
 - Line search no longer returns an untested minimum step when every trial
   produces invalid kinematics. It now searches down to a very small step and,
   if none is valid, reports a failed increment through the normal time-step

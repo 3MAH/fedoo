@@ -55,13 +55,13 @@ class MeanValueConstraint(LagrangeMultiplierAssembly):
         * Array with the same length as ``node_set``: custom weights,
           normalized so that their sum is 1.
 
-    space: ModelingSpace, optional
-        Modeling space. If None, the active modeling space is used.
     name: str, default = "MeanValue"
         Constraint name. The Lagrange multiplier DOFs are named
         ``{name}_{variable}`` and gathered in the global vector ``{name}``.
         Use distinct names for multiple mean-value constraints on the same
         problem.
+    space: ModelingSpace, optional
+        Modeling space. If None, the active modeling space is used.
 
     Notes
     -----
@@ -94,8 +94,8 @@ class MeanValueConstraint(LagrangeMultiplierAssembly):
         value: float = 0.0,
         node_set=None,
         weights=None,
-        space: ModelingSpace | None = None,
         name: str = "MeanValue",
+        space: ModelingSpace | None = None,
     ):
         if space is None:
             space = ModelingSpace.get_active()

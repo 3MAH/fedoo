@@ -491,7 +491,7 @@ class Heterogeneous(Mechanical3D):
     """
 
     def __init__(self, tup_cl, tup_elset, name=""):
-        Mechanical3D.__init__(self, name)  # heritage
+        Mechanical3D.__init__(self, name=name)  # heritage
         self.list_cl = tup_cl
         self.list_elset = tup_elset
 

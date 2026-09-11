@@ -23,6 +23,7 @@ class NonLinear(Problem):
         self.print_info = 1  # print info of NR convergence during solve
         self._U = 0  # displacement at the end of the previous converged increment
         self._dU = 0  # displacement increment
+        self._initialized = False
 
         self._err0 = None  # initial error for NR error estimation
         self._alpha = 1  # line search current parameter
@@ -138,6 +139,25 @@ class NonLinear(Problem):
         if np.isscalar(self._dU) and self._dU == 0:
             return self._get_vect_component(self._U, name)
         return self._get_vect_component(self._U + self._dU, name)
+
+    def set_dof(self, name, value):
+        """Set the initial converged degree-of-freedom field.
+
+        Nonlinear constitutive state is initialized from this field, so it
+        must be prescribed before :meth:`initialize`.
+        """
+        if self._initialized:
+            raise RuntimeError(
+                "NonLinear.set_dof() must be called before problem initialization."
+            )
+        if np.isscalar(self._U):
+            vector = self._new_vect_dof()
+        else:
+            vector = np.asarray(self._U).copy()
+        self._set_vect_component(vector, name, value)
+        self._U = vector
+        self._dU = 0
+        return self
 
     def _update_a(self):
         # dt not used for static problem
@@ -296,6 +316,7 @@ class NonLinear(Problem):
         self._compile_time_integrators()
         self.__assembly.initialize(self)
         self.set_A(0)
+        self._initialized = True
 
     def set_start(self, save_results=False, callback=None):
         # dt not used for static problem
@@ -368,6 +389,7 @@ class NonLinear(Problem):
 
         self._U = 0
         self._dU = 0
+        self._initialized = False
 
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self._t_fact_inc = None
@@ -1194,7 +1216,7 @@ class NonLinear(Problem):
 
         self.time = self.t0  # time at the begining of the iteration
 
-        if np.isscalar(self._U) and self._U == 0:  # Initialize only if 1st step
+        if not self._initialized:
             self.initialize()
         elif not self._time_integrators_compiled and self.time_integrators:
             # Integrators attached (or the assembly changed) after the first

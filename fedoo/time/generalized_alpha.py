@@ -366,10 +366,10 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         wf,
         beta,
         gamma,
-        name="",
-        space=None,
         alpha_m=0.0,
         alpha_f=0.0,
+        name="",
+        space=None,
     ):
         super().__init__(name, space)
         self.beta = beta

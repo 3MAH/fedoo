@@ -213,6 +213,14 @@ class Linear(Problem):
         self._set_vect_component(self._dynamic_displacement, name, value)
         self.set_X(self._dynamic_displacement.copy())
 
+    def set_dof(self, name, value):
+        """Set a static solution field or the current dynamic displacement."""
+        if not self.is_dynamic:
+            return super().set_dof(name, value)
+        self.set_initial_displacement(name, value)
+        self._dynamic_step_solved = False
+        return self
+
     def set_initial_velocity(self, name, value):
         """Set a transient initial velocity component."""
         self._set_vect_component(self._dynamic_velocity, name, value)

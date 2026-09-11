@@ -26,8 +26,8 @@ K = 500  # K = 18 #W/K/m
 c = 0.500  # J/kg/K
 rho = 7800  # kg/m2
 material = fd.constitutivelaw.ThermalProperties(K, c, rho, name="ThermalLaw")
-wf = fd.weakform.HeatEquation("ThermalLaw")
-assemb = fd.Assembly.create("ThermalLaw", meshname, name="Assembling")
+wf = fd.weakform.HeatEquation(material)
+assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 
 # note set for boundary conditions
 Xmin, Xmax = mesh.bounding_box
