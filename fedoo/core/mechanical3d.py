@@ -629,6 +629,7 @@ class MechanicalUMAT(Mechanical3D):
     def initialize(self, assembly, pb):
         self._validate_kinematics(assembly)
         n_points = assembly.n_gauss_points
+        had_statev = "Statev" in assembly.sv
         statev = self._statev_array(assembly)
         for label, component in self.statev_label.items():
             assembly.sv_component[label] = ("Statev", component)
@@ -636,7 +637,7 @@ class MechanicalUMAT(Mechanical3D):
         initialized_fields = {"DR", "Wm", "TangentMatrix"}
         if assembly._nlgeom:
             initialized_fields.add("F")
-        if initialized_fields.issubset(assembly.sv):
+        if had_statev and all(field in assembly.sv for field in initialized_fields):
             self.is_initialized = True
             return
 
