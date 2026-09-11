@@ -179,7 +179,9 @@ Initialization call
 Fedoo calls the UMAT once during initialization with:
 
 * ``time == 0`` and ``dtime == 0``;
-* zero strain, strain increment, stress, state, and work arrays;
+* zero strain, strain increment, stress, and work arrays;
+* the assembly's initial state-variable values, or zeros when none were
+  supplied;
 * identity ``DR``;
 * identity ``F0`` and ``F1`` for finite strain, or empty deformation-gradient
   arrays for small strain.
@@ -189,6 +191,46 @@ the initial elastic tangent without advancing irreversible state, accumulating
 work, or evaluating expressions that divide by ``dtime``. This tangent is
 stored as ``ElasticMatrix`` when ``use_elastic_tangent=True`` and is restored
 at the beginning of each increment for the elastic predictor.
+
+Initial state variables
+^^^^^^^^^^^^^^^^^^^^^^^
+
+State-variable initial conditions belong to an assembly rather than to the
+material, allowing one material instance to be reused by several problems
+with different histories. Set labeled values after creating the assembly and
+before initializing the problem:
+
+.. code-block:: python
+
+   import fedoo as fd
+
+   material = MechanicalUMAT(
+       umat,
+       props,
+       n_statev=7,
+       statev_label={"P": 0, "EP": slice(1, 7)},
+   )
+   weakform = fd.weakform.StressEquilibrium(material)
+   assembly = fd.Assembly.create(weakform, mesh)
+
+   material.set_initial_statev(assembly, "P", 0.02)
+   material.set_initial_statev(assembly, "EP", initial_plastic_strain)
+
+A scalar is broadcast over the selected components and all Gauss points. A
+component vector is broadcast over the Gauss points, while a complete field
+has shape ``(n_components, assembly.n_gauss_points)``. For a scalar label, a
+one-dimensional array of length ``assembly.n_gauss_points`` supplies spatially
+varying values. Node and element fields are not converted implicitly.
+
+Advanced users may instead assign the complete
+``assembly.sv["Statev"]`` array manually before initialization. Its shape must
+be exactly ``(material.n_statev, assembly.n_gauss_points)``. In either case,
+the initial state is passed to the ``dtime == 0`` UMAT call, so it may affect
+the initial tangent.
+
+Calling ``assembly.reset()`` clears runtime state, including these initial
+values. Call ``set_initial_statev`` again before reinitializing a reset
+assembly.
 
 
 Minimal elastic callback
@@ -323,4 +365,3 @@ tangent required to assemble the first global system. The implementations of
 :class:`fedoo.constitutivelaw.ElasticAnisotropic` and the pedagogical
 :class:`fedoo.constitutivelaw.ElastoPlasticity` provide useful references; the
 latter uses ``MechanicalUMAT`` for its lifecycle.
-

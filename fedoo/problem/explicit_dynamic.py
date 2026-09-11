@@ -868,6 +868,16 @@ class ExplicitDynamic(Problem):
         if not self._initial_acceleration_user_supplied:
             self._acceleration_initialized = False
 
+    def set_dof(self, name, value):
+        """Set the current displacement outside an active explicit step."""
+        if self._step_prepared:
+            raise RuntimeError(
+                "ExplicitDynamic.set_dof() cannot be called during an active step."
+            )
+        self.set_initial_displacement(name, value)
+        self._state_start = self._state.copy()
+        return self
+
     def set_initial_velocity(self, name, value):
         self._set_vect_component(self._state.velocity, name, value)
         if not self._initial_acceleration_user_supplied:

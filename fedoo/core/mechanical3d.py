@@ -417,6 +417,11 @@ class MechanicalUMAT(Mechanical3D):
     Private state variables are deliberately opaque to Fedoo. The callback is
     responsible for their objective transport, using the supplied ``DR`` when
     tensor-valued state is present.
+
+    Initial values can be assigned to a particular assembly before problem
+    initialization with :meth:`set_initial_statev`. The values are stored on
+    the assembly, so one material instance can be reused with different
+    initial states.
     """
 
     manages_material_frame = True
@@ -527,15 +532,113 @@ class MechanicalUMAT(Mechanical3D):
             )
         return 2
 
+    def _statev_array(self, assembly):
+        """Return an assembly Statev array with the required exact shape."""
+        shape = (self.n_statev, assembly.n_gauss_points)
+        if "Statev" not in assembly.sv:
+            assembly.sv["Statev"] = np.zeros(shape, order="F")
+            return assembly.sv["Statev"]
+
+        statev = np.asarray(assembly.sv["Statev"])
+        if statev.shape != shape:
+            raise ValueError(
+                f"Statev has shape {statev.shape}, expected {shape} for "
+                f"{type(self).__name__} on this assembly"
+            )
+        assembly.sv["Statev"] = np.asfortranarray(statev, dtype=float)
+        return assembly.sv["Statev"]
+
+    @staticmethod
+    def _broadcast_initial_statev(values, n_components, n_points, label):
+        """Broadcast labeled initial values to component-by-point layout."""
+        values = np.asarray(values, dtype=float)
+        shape = (n_components, n_points)
+
+        if values.ndim == 0:
+            return np.full(shape, values.item())
+        if values.shape == shape:
+            return values
+        if values.shape == (n_components,) or values.shape == (n_components, 1):
+            return np.broadcast_to(values.reshape(n_components, 1), shape)
+        if n_components == 1 and values.shape == (n_points,):
+            return values.reshape(1, n_points)
+
+        raise ValueError(
+            f"initial Statev field {label!r} has shape {values.shape}; expected "
+            f"a scalar, ({n_components},), ({n_components}, 1), or {shape}"
+        )
+
+    def set_initial_statev(self, assembly, label, value):
+        """Set a labeled initial state-variable field on an assembly.
+
+        A scalar is broadcast over all selected components and Gauss points.
+        For a multi-component label, a component vector is broadcast over the
+        Gauss points. A complete field uses the Fedoo layout
+        ``(n_components, n_gauss_points)``. For a scalar label, a vector of
+        length ``n_gauss_points`` supplies one value per point.
+
+        This method must be called before the associated problem initializes.
+        Repeated calls preserve components initialized previously.
+
+        Parameters
+        ----------
+        assembly : Assembly
+            Assembly that will own the initial state.
+        label : str
+            Entry in :attr:`statev_label`.
+        value : scalar or array_like
+            Uniform, component-wise, or Gauss-point initial values.
+
+        Returns
+        -------
+        MechanicalUMAT
+            This material, to allow chained configuration calls.
+        """
+        if {"DR", "Wm", "TangentMatrix"}.issubset(assembly.sv):
+            raise RuntimeError(
+                "set_initial_statev() must be called before assembly initialization"
+            )
+        if label not in self.statev_label:
+            available = ", ".join(repr(name) for name in self.statev_label)
+            raise KeyError(
+                f"unknown state-variable label {label!r}; available labels: "
+                f"{available or 'none'}"
+            )
+
+        component = self.statev_label[label]
+        try:
+            indices = np.arange(self.n_statev)[component]
+        except (IndexError, TypeError) as error:
+            raise ValueError(
+                f"state-variable label {label!r} selects invalid component "
+                f"{component!r} for n_statev={self.n_statev}"
+            ) from error
+        indices = np.atleast_1d(indices)
+        if len(indices) == 0:
+            raise ValueError(f"state-variable label {label!r} selects no components")
+
+        statev = self._statev_array(assembly)
+        statev[indices, :] = self._broadcast_initial_statev(
+            value,
+            len(indices),
+            assembly.n_gauss_points,
+            label,
+        )
+        return self
+
     def initialize(self, assembly, pb):
         self._validate_kinematics(assembly)
-        if "Statev" in assembly.sv and self.is_initialized:
-            return
-
         n_points = assembly.n_gauss_points
-        assembly.sv["Statev"] = np.zeros((self.n_statev, n_points), order="F")
+        statev = self._statev_array(assembly)
         for label, component in self.statev_label.items():
             assembly.sv_component[label] = ("Statev", component)
+
+        initialized_fields = {"DR", "Wm", "TangentMatrix"}
+        if assembly._nlgeom:
+            initialized_fields.add("F")
+        if initialized_fields.issubset(assembly.sv):
+            self.is_initialized = True
+            return
 
         DR = np.empty((3, 3, n_points), order="F")
         DR[...] = np.eye(3).reshape(3, 3, 1)
@@ -560,7 +663,7 @@ class MechanicalUMAT(Mechanical3D):
             zeros_6,
             DR,
             self.props,
-            assembly.sv["Statev"],
+            statev,
             0,
             0,
             assembly.sv["Wm"],

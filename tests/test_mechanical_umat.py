@@ -98,3 +98,86 @@ def test_generic_mechanical_umat_callback_and_metadata():
     np.testing.assert_allclose(assembly.sv["Statev"], [[1.0], [0.0]])
     np.testing.assert_allclose(assembly.sv["Wm"][0], 2.0)
     np.testing.assert_allclose(assembly.sv["TangentMatrix"], tangent)
+
+
+def test_initial_statev_is_stored_on_the_assembly_and_broadcast_by_label():
+    initial_calls = []
+
+    def umat(
+        strain,
+        dstrain,
+        F0,
+        F1,
+        stress,
+        DR,
+        props,
+        statev_start,
+        time,
+        dtime,
+        wm_start,
+        temperature,
+        *,
+        ndi,
+        tangent_mode,
+    ):
+        initial_calls.append(statev_start.copy())
+        return stress, statev_start.copy(), wm_start.copy(), np.eye(6)
+
+    material = MechanicalUMAT(
+        umat,
+        n_statev=3,
+        statev_label={"P": 0, "EP": slice(1, 3)},
+    )
+    assembly = _assembly(n_points=3)
+
+    material.set_initial_statev(assembly, "P", [1.0, 2.0, 3.0])
+    material.set_initial_statev(assembly, "EP", [4.0, 5.0])
+
+    expected = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 4.0, 4.0],
+            [5.0, 5.0, 5.0],
+        ]
+    )
+    np.testing.assert_allclose(assembly.sv["Statev"], expected)
+
+    material.initialize(assembly, SimpleNamespace())
+    np.testing.assert_allclose(assembly.sv["Statev"], expected)
+    np.testing.assert_allclose(initial_calls[0], expected)
+    with np.testing.assert_raises_regex(RuntimeError, "before assembly initialization"):
+        material.set_initial_statev(assembly, "P", 0.0)
+
+    second_assembly = _assembly(n_points=2)
+    material.set_initial_statev(second_assembly, "P", 9.0)
+    material.initialize(second_assembly, SimpleNamespace())
+    np.testing.assert_allclose(second_assembly.sv["Statev"][0], [9.0, 9.0])
+    np.testing.assert_allclose(second_assembly.sv["Statev"][1:], 0.0)
+    np.testing.assert_allclose(initial_calls[1], second_assembly.sv["Statev"])
+
+
+def test_initialize_preserves_a_valid_manual_statev_array():
+    seen = []
+
+    def umat(*args, ndi, tangent_mode):
+        seen.append(args[7].copy())
+        return args[4], args[7].copy(), args[10].copy(), np.eye(6)
+
+    material = MechanicalUMAT(umat, n_statev=2)
+    assembly = _assembly(n_points=3)
+    initial = np.arange(6.0).reshape(2, 3)
+    assembly.sv["Statev"] = initial.copy()
+
+    material.initialize(assembly, SimpleNamespace())
+
+    np.testing.assert_allclose(assembly.sv["Statev"], initial)
+    np.testing.assert_allclose(seen[0], initial)
+
+
+def test_initialize_rejects_an_invalid_manual_statev_shape():
+    material = MechanicalUMAT(lambda *args, **kwargs: None, n_statev=2)
+    assembly = _assembly(n_points=3)
+    assembly.sv["Statev"] = np.zeros((2, 1))
+
+    with np.testing.assert_raises_regex(ValueError, "expected \\(2, 3\\)"):
+        material.initialize(assembly, SimpleNamespace())
