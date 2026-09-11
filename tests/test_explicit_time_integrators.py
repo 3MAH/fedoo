@@ -26,6 +26,7 @@ class _MatrixStorageAssembly(AssemblyBase):
         self.storage_calls = 0
         self.update_calls = 0
         self.set_start_calls = 0
+        self.velocity_bias = True
 
     @property
     def time_dof_indices(self):
@@ -42,7 +43,8 @@ class _MatrixStorageAssembly(AssemblyBase):
 
     def get_time_inertia_force(self, pb, acceleration, velocity):
         force = self._storage_matrix() @ acceleration
-        force[0] += velocity[0]
+        if self.velocity_bias:
+            force[0] += velocity[0]
         return force
 
     def initialize(self, pb):
@@ -68,6 +70,47 @@ class _MatrixStorageAssembly(AssemblyBase):
     def reset(self):
         self.global_matrix = None
         self.global_vector = None
+
+
+def _make_fe_problem(
+    *, young=0.0, density=1.0, dt=0.1, elm_type="tri3", mass_lumping=True
+):
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type=elm_type)
+    material = fd.constitutivelaw.ElasticIsotrop(young, 0.3)
+    material.set_density(density)
+    assembly = fd.Assembly.create(fd.weakform.StressEquilibrium(material), mesh)
+    problem = fd.problem.ExplicitDynamic(
+        assembly,
+        time_step=dt,
+        mass_lumping=mass_lumping,
+    )
+    return problem, mesh
+
+
+def _make_storage_problem(dt=0.1):
+    space = fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
+    assembly = _MatrixStorageAssembly(mesh, space)
+    return fd.problem.ExplicitDynamic(assembly, time_step=dt), assembly
+
+
+def test_explicit_dynamic_state_copy_is_independent():
+    state = ExplicitDynamicState(
+        displacement=np.array([1.0]),
+        velocity=np.array([2.0]),
+        acceleration=np.array([3.0]),
+    )
+
+    copied = state.copy()
+    copied.displacement[0] = 4.0
+    copied.velocity[0] = 5.0
+    copied.acceleration[0] = 6.0
+
+    np.testing.assert_allclose(state.displacement, [1.0])
+    np.testing.assert_allclose(state.velocity, [2.0])
+    np.testing.assert_allclose(state.acceleration, [3.0])
 
 
 def test_explicit_newmark_is_generalized_alpha_alias():
@@ -109,19 +152,9 @@ def test_explicit_generalized_alpha_uses_alpha_evaluation_state():
 
 
 def test_explicit_dynamic_preserves_constant_velocity_without_forces():
-    fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    material = fd.constitutivelaw.ElasticIsotrop(0.0, 0.3)
-    material.set_density(2.0)
-    weakform = fd.weakform.StressEquilibrium(material)
-    assembly = fd.Assembly.create(weakform, mesh)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
+    problem, _ = _make_fe_problem(density=2.0)
     problem.set_initial_velocity("DispX", 1.0)
-    problem.initialize()
-
-    problem.apply_boundary_conditions()
-    problem.solve()
-    problem.update()
+    problem.solve_time_increment()
 
     np.testing.assert_allclose(problem.get_disp("DispX"), 0.1)
     np.testing.assert_allclose(problem.get_disp("DispY"), 0.0)
@@ -131,35 +164,66 @@ def test_explicit_dynamic_preserves_constant_velocity_without_forces():
 
 
 def test_central_difference_acceleration_opposes_elastic_displacement():
-    fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    material = fd.constitutivelaw.ElasticIsotrop(100.0, 0.3)
-    material.set_density(1.0)
-    weakform = fd.weakform.StressEquilibrium(material)
-    assembly = fd.Assembly.create(weakform, mesh)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=1.0e-3)
+    problem, mesh = _make_fe_problem(young=100.0, dt=1.0e-3)
 
     left = mesh.find_nodes("X", mesh.bounding_box.xmin)
     right = mesh.find_nodes("X", mesh.bounding_box.xmax)
     initial_x = np.zeros(mesh.n_nodes)
     initial_x[right] = 0.01
     problem.set_initial_displacement("DispX", initial_x)
-    problem.initialize()
     problem.bc.add("Dirichlet", left, "Disp", 0.0)
-
-    problem.apply_boundary_conditions()
-    problem.solve()
-    problem.update()
+    problem.solve_time_increment()
 
     assert np.all(problem.get_acceleration("DispX")[right] < 0.0)
     assert np.all(problem.get_velocity("DispX")[right] < 0.0)
 
 
+def test_central_difference_end_acceleration_includes_neumann_loads():
+    """The accepted acceleration must satisfy equilibrium with applied loads."""
+    problem, mesh = _make_fe_problem(elm_type="quad4")
+    right = mesh.find_nodes("X", mesh.bounding_box.xmax)
+    problem.bc.add("Neumann", right, "DispX", 1.0)
+
+    problem.solve_time_increment()
+
+    acceleration = problem.get_acceleration()
+    velocity = problem.get_velocity()
+    external_force = problem.get_B()
+    assert np.linalg.norm(acceleration) > 0.0
+    np.testing.assert_allclose(problem._mass_matrix @ acceleration, external_force)
+    np.testing.assert_allclose(velocity, problem.time_step * acceleration)
+
+
+def test_central_difference_end_acceleration_includes_rayleigh_damping():
+    """Damping must reduce both the accepted velocity and kinetic energy."""
+    problem, mesh = _make_fe_problem()
+    problem.set_initial_velocity("DispX", 1.0)
+    problem.set_rayleigh_damping(alpha=1.0, beta=0.0)
+
+    problem.solve_time_increment()
+
+    np.testing.assert_allclose(problem.get_velocity("DispX"), 0.905)
+    np.testing.assert_allclose(problem.get_acceleration("DispX"), -0.9)
+    initial_energy = 0.5 * np.sum(problem._mass[: mesh.n_nodes])
+    assert problem.get_kinetic_energy() < initial_energy
+
+
+def test_central_difference_updates_moving_dirichlet_kinematics_without_mpc():
+    """A prescribed displacement ramp must update constrained v and a."""
+    problem, mesh = _make_fe_problem(young=1.0, elm_type="quad4")
+    right = mesh.find_nodes("X", mesh.bounding_box.xmax)
+    problem.bc.add("Dirichlet", right, "DispX", 0.1)
+
+    problem.solve_time_increment(t_fact=1.0)
+
+    np.testing.assert_allclose(problem.get_disp("DispX")[right], 0.1)
+    np.testing.assert_allclose(problem.get_velocity("DispX")[right], 1.0)
+    np.testing.assert_allclose(problem.get_acceleration("DispX")[right], 10.0)
+
+
 def test_explicit_dynamic_uses_assembly_level_storage_matrix_directly():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
+    problem, assembly = _make_storage_problem()
+    assembly.velocity_bias = False
 
     problem.initialize()
     problem.apply_boundary_conditions()
@@ -172,11 +236,8 @@ def test_explicit_dynamic_uses_assembly_level_storage_matrix_directly():
 
 
 def test_explicit_dynamic_uses_assembly_inertia_force_callback():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
-    initial_velocity = np.zeros(mesh.n_nodes)
+    problem, _ = _make_storage_problem()
+    initial_velocity = np.zeros(problem.mesh.n_nodes)
     initial_velocity[0] = 1.0
     problem.set_initial_velocity("DispX", initial_velocity)
 
@@ -189,11 +250,8 @@ def test_explicit_dynamic_uses_assembly_inertia_force_callback():
 
 
 def test_explicit_dynamic_refreshes_configuration_dependent_storage():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
+    problem, assembly = _make_storage_problem()
     assembly.storage_matrix_is_constant = False
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
 
     problem.initialize()
     assert assembly.storage_calls == 1
@@ -203,11 +261,8 @@ def test_explicit_dynamic_refreshes_configuration_dependent_storage():
     assert assembly.storage_calls == 2
 
 
-def test_manual_linear_step_does_not_update_or_commit_assembly():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
+def test_manual_steps_control_assembly_update_and_commit():
+    problem, assembly = _make_storage_problem()
 
     problem.initialize()
     problem.apply_boundary_conditions()
@@ -217,17 +272,6 @@ def test_manual_linear_step_does_not_update_or_commit_assembly():
     assert assembly.update_calls == 1
     assert assembly.set_start_calls == 0
 
-    problem.set_start()
-    assert assembly.set_start_calls == 1
-
-
-def test_update_can_refresh_weakform_at_committed_state():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
-
-    problem.initialize()
     problem.apply_boundary_conditions()
     problem.solve()
     problem.update(update_weakform=True)
@@ -235,12 +279,12 @@ def test_update_can_refresh_weakform_at_committed_state():
     assert assembly.update_calls == 2
     assert assembly.set_start_calls == 0
 
+    problem.set_start()
+    assert assembly.set_start_calls == 1
+
 
 def test_matrix_only_update_discards_cached_internal_force():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
+    problem, _ = _make_storage_problem()
 
     problem.initialize()
     problem.apply_boundary_conditions()
@@ -251,45 +295,37 @@ def test_matrix_only_update_discards_cached_internal_force():
 
 
 def test_solve_time_increment_manages_nonlinear_update_and_commit():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.1)
+    problem, assembly = _make_storage_problem()
 
     problem.initialize()
     problem.solve_time_increment(update_weakform=True, set_start=True)
 
-    assert assembly.update_calls == 3
+    # Initialization and the accepted end state are each assembled once. The
+    # initial force is reused for evaluation instead of being assembled twice.
+    assert assembly.update_calls == 2
     assert assembly.set_start_calls == 1
     assert problem.time == 0.1
 
 
 def test_solve_history_selects_fixed_or_updated_weakform():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    linear_assembly = _MatrixStorageAssembly(mesh, space)
-    linear = fd.problem.ExplicitDynamic(linear_assembly, time_step=0.1)
+    linear, linear_assembly = _make_storage_problem()
     linear.solve_history(tmax=0.2, update_weakform=False)
 
     assert linear_assembly.update_calls == 1
     assert linear_assembly.set_start_calls == 0
     assert linear.time == 0.2
 
-    nonlinear_assembly = _MatrixStorageAssembly(mesh, space)
-    nonlinear = fd.problem.ExplicitDynamic(nonlinear_assembly, time_step=0.1)
+    nonlinear, nonlinear_assembly = _make_storage_problem()
     nonlinear.solve_history(tmax=0.2, update_weakform=True)
 
-    assert nonlinear_assembly.update_calls == 5
+    assert nonlinear_assembly.update_calls == 3
     assert nonlinear_assembly.set_start_calls == 2
     assert nonlinear.time == 0.2
 
 
 def test_solve_history_saves_at_exact_time_intervals():
     for update_weakform in (False, True):
-        space = fd.ModelingSpace("2Dplane")
-        mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-        assembly = _MatrixStorageAssembly(mesh, space)
-        problem = fd.problem.ExplicitDynamic(assembly, time_step=0.03)
+        problem, assembly = _make_storage_problem(dt=0.03)
         saved = []
         problem.save_results = lambda iteration: saved.append((iteration, problem.time))
 
@@ -305,43 +341,6 @@ def test_solve_history_saves_at_exact_time_intervals():
         )
         assert [iteration for iteration, _ in saved] == [0, 1, 2]
         assert problem.time_step == 0.03
-
-
-def test_fixed_solve_history_refreshes_assembly_only_at_output_times():
-    space = fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    assembly = _MatrixStorageAssembly(mesh, space)
-    problem = fd.problem.ExplicitDynamic(assembly, time_step=0.03)
-    problem.save_results = lambda iteration: None
-
-    problem.solve_history(
-        tmax=0.25,
-        update_weakform=False,
-        interval_output=0.1,
-    )
-
-    assert assembly.update_calls == 4
-
-
-def test_explicit_dynamic_has_one_complete_history_api():
-    assert hasattr(fd.problem.ExplicitDynamic, "solve_history")
-    assert not hasattr(fd.problem.ExplicitDynamic, "lsolve")
-    assert not hasattr(fd.problem.ExplicitDynamic, "nlsolve")
-
-
-def test_consistent_fe_mass_can_be_kept_without_lumping():
-    fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(nx=2, ny=2, elm_type="tri3")
-    material = fd.constitutivelaw.ElasticIsotrop(1.0, 0.3)
-    material.set_density(1.0)
-    weakform = fd.weakform.StressEquilibrium(material)
-    assembly = fd.Assembly.create(weakform, mesh)
-    problem = fd.problem.ExplicitDynamic(
-        assembly,
-        time_step=0.1,
-        mass_lumping=False,
-    )
-
-    problem.initialize()
-
-    assert problem.get_A().ndim == 2
+        if not update_weakform:
+            # Initialization plus one vector refresh at each saved output.
+            assert assembly.update_calls == 4

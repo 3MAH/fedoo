@@ -1,7 +1,9 @@
 """The Strain equilibrium weak form from the fedoo finite element code."""
 
+import warnings
+
 from fedoo.core.weakform import WeakFormBase
-from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.base import ConstitutiveLaw, InvalidKinematicStateError
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.weakform.inertia import Inertia
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
@@ -78,17 +80,20 @@ class StressEquilibrium(WeakFormBase):
               initial mesh with initial displacement effet)
         """
 
-        self.corate = "log"
-        # 'log': logarithmic strain, 'jaumann': jaumann strain,
-        # or 'green_naghdi', 'gn', 'log_inc'...
+        self.corate = "log_r"
+        # 'log_r' (default): logarithmic strain with the exact polar frame
+        # increment DR = R1 R0^T — the corate whose tangent transport is
+        # exact in simcoon, including with rotated internal-variable history.
+        # Other options: 'log' (XBM), 'jaumann', 'green_naghdi'/'gn',
+        # 'log_inc', 'log_r_inc'...
 
         self.fbar = False  # by default, the fbar stabilization is not used
         self.geometric_stiffness = False
 
-        self.assembly_options["assume_sym"] = True
-        # internalForce weak form should be symmetric
-        # (if TangentMatrix is symmetric)
-        # -> need to be checked for general case
+        # assume_sym is decided at initialize time: True for linear / TL
+        # (symmetric tangent), False for UL where the Lie spatial tangent is
+        # not major-symmetric. A user-set value takes precedence (with a
+        # warning if True is forced in UL).
 
     def get_storage(self):
         if self.storage is not None:
@@ -171,12 +176,30 @@ class StressEquilibrium(WeakFormBase):
         self.nlgeom = assembly._nlgeom
         self.corate = self._corate  # to force the setter function
 
-        # the UL spatial Cauchy tangent of a hyperelastic law is not
-        # major-symmetric (stress term), so it must not be symmetrized
+        # assume_sym: the UL spatial (Lie) tangent is not major-symmetric
+        # (stress terms), so the default is False in UL -- but only for laws
+        # that actually receive the box -> Lie conversion in update_2
+        # (native laws keep their symmetric engineering tangent).
+        # NB: the Assembly reads assume_sym at creation time, so the instance
+        # attribute must be set here as well.
+        user_sym = self.assembly_options.get("assume_sym")
         if assembly._nlgeom == "UL" and getattr(
-            self.constitutivelaw, "_Lt_from_F", False
+            self.constitutivelaw, "_corotational_box_tangent", False
         ):
-            self.assembly_options["assume_sym"] = False
+            if user_sym is True:
+                warnings.warn(
+                    "assume_sym=True with nlgeom='UL': the UL (Lie) tangent "
+                    "matrix is not major-symmetric; the assembled matrix "
+                    "will be symmetrized, which may degrade Newton "
+                    "convergence at large rotation.",
+                    stacklevel=2,
+                )
+            else:
+                self.assembly_options["assume_sym"] = False
+                assembly.assume_sym = False
+        elif user_sym is None:
+            self.assembly_options["assume_sym"] = True
+            assembly.assume_sym = True
 
         # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
@@ -269,7 +292,8 @@ class StressEquilibrium(WeakFormBase):
         stiffness matrix).
         """
         if assembly._nlgeom == "TL" or (
-            assembly._nlgeom == "UL" and self.constitutivelaw._Lt_from_F
+            assembly._nlgeom == "UL"
+            and getattr(self.constitutivelaw, "_corotational_box_tangent", False)
         ):
             # check if TangentMatrix has the consistent array shape
             if not isinstance(assembly.sv["TangentMatrix"], np.ndarray):
@@ -298,11 +322,17 @@ class StressEquilibrium(WeakFormBase):
             # simcoon UMATs return the "box" tangent d(tau_hat)/dD (Kirchhoff,
             # log rate); convert it to what this configuration integrates.
             if assembly._nlgeom == "TL":
-                # reference config: material tangent dS/dE (DsigmaDe_2_DSDE)
+                # reference config: PK2 feeds the TL residual (initial-stress
+                # term), so it must be updated even on line-search trials
                 assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                     assembly.sv["F"]
                 )
+                if getattr(pb, "_line_search_update", False):
+                    # line-search trial: only the assembled vector is used,
+                    # skip the tangent conversion (same pattern as beam/plate)
+                    return
 
+                # material tangent dS/dE (DsigmaDe_2_DSDE)
                 assembly.sv["TangentMatrix"] = sim.Lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
@@ -310,26 +340,33 @@ class StressEquilibrium(WeakFormBase):
                     self._convert_Lt_tag,
                 )
 
-            elif self._convert_Lt_tag == "DSDE_2_Dsigma_logarithmicDD":
-                # current config, log rate: Cauchy tangent = Kirchhoff box / J
-                jacobian = np.linalg.det(assembly.sv["F"].transpose(2, 0, 1))
-                assembly.sv["TangentMatrix"] = (
-                    assembly.sv["TangentMatrix"] / jacobian[None, None, :]
-                )
-
-            else:  # UL jaumann / green_naghdi: box -> dS/dE -> spatial rate
+            else:
+                if getattr(pb, "_line_search_update", False):
+                    # line-search trial: only the assembled vector is used,
+                    # skip the tangent conversion (same pattern as beam/plate)
+                    return
+                # current config (UL), all corates (laws with a
+                # _corotational_box_tangent, i.e. simcoon umats): the box
+                # tangent d(tau_hat)/dD must be converted to the Lie
+                # (Truesdell) spatial tangent, which is the one consistent
+                # with the Cauchy-stress residual plus the standard
+                # initial-stress geometric term assembled here. Using the box
+                # (or box/J) directly leaves an O(sigma) inconsistency that
+                # destroys Newton convergence at large rotation (soft bending
+                # modes). _convert_Lt_tag holds the corate-specific
+                # box -> dS/dE first stage (see the corate setter).
                 stress = assembly.sv["Stress"].asarray()
                 dsde = sim.Lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     stress,
-                    "DsigmaDe_2_DSDE",
+                    self._convert_Lt_tag,
                 )
                 assembly.sv["TangentMatrix"] = sim.Lt_convert(
                     dsde,
                     assembly.sv["F"],
                     stress,
-                    self._convert_Lt_tag,
+                    "DSDE_2_Dsigma_LieDD",
                 )
 
     def to_start(self, assembly, pb):
@@ -373,7 +410,7 @@ class StressEquilibrium(WeakFormBase):
         op_grad_du = self.space.op_grad_u()
         # grad of displacement increment in incremental problems
 
-        if self.space.ndim == "3D":
+        if self.space.ndim == 3:
             # using voigt notation and with a 2 factor on non diagonal terms:
             # nl_strain_op_vir =
             #      0.5*(vir(duk/dxi) * duk/dxj + duk/dxi * vir(duk/dxj))
@@ -472,8 +509,13 @@ class StressEquilibrium(WeakFormBase):
         Properties defining the way strain is treated in finite strain problem
         (using a weakform with nlgeom = True)
         corate can take the following str values:
-            * "log" (default): exact logarithmic strain (strain is recomputed
-              at each iteration)
+            * "log_r" (default): exact logarithmic strain transported by the
+              exact polar rotation increment (strain is recomputed at each
+              iteration). This is the corate with an EXACT simcoon tangent
+              transport, including across committed increments with plastic
+              (or other rotated) history.
+            * "log": exact logarithmic strain, XBM logarithmic spin
+              transport (small tangent residual with rotated history)
             * "jaumann": Strain using the Jaumann derivative (strain is
               incremented)
             * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative
@@ -486,25 +528,29 @@ class StressEquilibrium(WeakFormBase):
     def corate(self, value):
         self._corate = value
         if self.nlgeom == "UL":
+            # In UL, the assembled tangent is always the Lie (Truesdell)
+            # spatial tangent (see update_2); _convert_Lt_tag holds the
+            # corate-specific first-stage conversion of the umat box tangent
+            # d(tau_hat)/dD to the material tangent dS/dE.
             value = value.lower()
             if value == "log":
                 self._corate_func = _comp_log_strain
-                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "log_inc":
                 self._corate_func = _comp_log_strain_inc
-                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value in ["gn", "green_naghdi"]:
                 self._corate_func = _comp_gn_strain
-                self._convert_Lt_tag = "DSDE_2_Dsigma_GreenNaghdiDD"
+                self._convert_Lt_tag = "DsigmaDe_GreenNaghdiDD_2_DSDE"
             elif value == "jaumann":
                 self._corate_func = _comp_jaumann_strain
-                self._convert_Lt_tag = "DSDE_2_Dsigma_JaumannDD"
+                self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
             elif value == "log_r":
                 self._corate_func = _comp_log_strain_R
-                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             elif value == "log_r_inc":
                 self._corate_func = _comp_log_strain_R_inc
-                self._convert_Lt_tag = "DSDE_2_Dsigma_logarithmicDD"
+                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
             else:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
@@ -591,12 +637,41 @@ def _comp_grad_disp_fbar(assembly, displacement):
 
 
 # function to compute F tensor (required nl corate function used with simcoon)
+def _check_F_validity(F1):
+    """Reject degenerated trial kinematics (det F <= 0) as a recoverable error.
+
+    A Newton iterate that inverts elements must be treated as a FAILED step
+    (backtrack / time-step cut), never assembled: downstream, the polar
+    decomposition aborts and the assembled matrix fills with NaN (reported
+    by direct solvers as a spurious 'numerically singular').
+
+    Returns det F (per Gauss point) so callers can reuse it as J.
+    """
+    # explicit 3x3 cofactor expansion: ~10x faster than np.linalg.det on
+    # (3, 3, n_gp) arrays, and the result is reused as J by _comp_Fbar
+    det_f = (
+        F1[0, 0] * (F1[1, 1] * F1[2, 2] - F1[1, 2] * F1[2, 1])
+        - F1[0, 1] * (F1[1, 0] * F1[2, 2] - F1[1, 2] * F1[2, 0])
+        + F1[0, 2] * (F1[1, 0] * F1[2, 1] - F1[1, 1] * F1[2, 0])
+    )
+    min_det = det_f.min()
+    if not np.isfinite(min_det) or min_det <= 1e-12:
+        n_bad = int(np.count_nonzero(~(det_f > 1e-12)))
+        raise InvalidKinematicStateError(
+            f"trial state degenerates the kinematics: {n_bad} Gauss "
+            f"point(s) with det F <= 0 (min det F = {min_det:.3e}). "
+            "Treated as a failed Newton iterate."
+        )
+    return det_f
+
+
 def _comp_F(assembly, displacement):
     grad_values = _comp_grad_disp(assembly, displacement)
 
     eye_3 = np.empty((3, 3, 1), order="F")
     eye_3[:, :, 0] = np.eye(3)
     F1 = np.add(eye_3, grad_values, order="F")
+    _check_F_validity(F1)
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
         F0 = np.empty_like(F1)
@@ -612,8 +687,7 @@ def _comp_Fbar(assembly, displacement):
     eye_3 = np.empty((3, 3, 1), order="F")
     eye_3[:, :, 0] = np.eye(3)
     F1 = np.add(eye_3, grad_values, order="F")
-
-    J = np.linalg.det(F1.transpose((2, 0, 1)))
+    J = _check_F_validity(F1)
 
     grad_values_center = [
         [
@@ -624,7 +698,9 @@ def _comp_Fbar(assembly, displacement):
         ]
         for line_op in assembly.space.op_grad_u()
     ]
-    Jcenter = np.linalg.det(np.add(eye_3, grad_values_center).transpose((2, 0, 1)))
+    # the element-center Jacobian must be validated too: a negative Jcenter
+    # would silently turn the fractional power below into NaN
+    Jcenter = _check_F_validity(np.add(eye_3, grad_values_center))
     # Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
     F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3))
 

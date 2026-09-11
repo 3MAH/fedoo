@@ -55,8 +55,8 @@ class Simcoon(MechanicalUMAT):
       stiffness / hardening parameters with this convention or the
       response will not match the intended material orientation.
 
-    * Hyperelastic laws are gated on plane stress (see
-      ``_Lt_from_F`` branch); they remain compatible with 2Daxi at
+    * Hyperelastic laws (those with ``_Lt_from_F = True``) are gated on
+      plane stress; they remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
 
@@ -66,6 +66,9 @@ class Simcoon(MechanicalUMAT):
     """
 
     manages_material_frame = True
+    _corotational_box_tangent = True
+    # Simcoon UMATs transport their material history through DR and return the
+    # corotational box tangent d(tau_hat)/dD.
 
     _ISOTROPIC_UMATS = {
         "ELISO",

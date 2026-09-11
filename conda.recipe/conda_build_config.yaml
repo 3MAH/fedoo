@@ -1,3 +1,0 @@
-solver_backend:
-   - pypardiso #[x86]
-   - petsc4py #[not x86]

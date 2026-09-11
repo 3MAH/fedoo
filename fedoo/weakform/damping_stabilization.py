@@ -163,9 +163,11 @@ class ArtificialDamping(WeakFormBase):
                     adjustment = self.target_ratio / current_ratio
 
                     if self._c_stab_initialized:
-                        # Safeguard: Don't let c_stab change by more than a factor of 10
-                        # in a single step to maintain numerical stability.
-                        self._c_stab *= np.clip(adjustment, 0.1, 10.0)
+                        # Increase damping quickly when it is insufficient, but
+                        # decrease it conservatively: the energy estimate comes
+                        # from only one converged increment and can spike near
+                        # an instability.
+                        self._c_stab *= np.clip(adjustment, 0.5, 10.0)
                     else:
                         self._c_stab *= adjustment
 
