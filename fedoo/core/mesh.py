@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from fedoo.core.base import MeshBase
+from fedoo.lib_elements.element_base import gausspoint_extrapolation_matrix
 from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from fedoo.util.test_periodicity import is_periodic
 from scipy import sparse
@@ -1505,9 +1506,11 @@ class Mesh(MeshBase):
         # -------------------------------------------------------------------
         # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)
         # -------------------------------------------------------------------
-        PGtoNode = np.linalg.pinv(
-            elm_interpol.shape_function_gp
-        )  # pseudo-inverse of NodeToPG
+        PGtoNode = gausspoint_extrapolation_matrix(
+            elm_interpol.xi_pg,
+            getattr(elm_interpol, "xi_nd", None),
+            elm_interpol.shape_function_gp,
+        )  # shape = (n_interpol_nodes, n_elm_gp)
         dataPGtoNode = PGtoNode.T.reshape(
             (1, n_elm_gp, n_interpol_nodes)
         ) / n_elm_with_nd[elm_geom].reshape(
@@ -1789,8 +1792,10 @@ class Mesh(MeshBase):
             Number of Gauss points per element.
         method : {'mean', 'l2', 'spr'}, optional
             Method used when converting Gauss-point values to nodes. ``'mean'``
-            keeps the historical element-wise extrapolation followed by nodal
-            averaging. ``'l2'`` performs a global L2 projection using fedoo's
+            extrapolates the Gauss-point values to the nodes of each element
+            (least-squares in the shape-function basis, or in a reduced
+            polynomial basis when there are fewer Gauss points than nodes)
+            and averages the contributions of the elements sharing a node. ``'l2'`` performs a global L2 projection using fedoo's
             node-to-Gauss-point interpolation and quadrature matrices. ``'spr'``
             performs a linear Superconvergent Patch Recovery around each node.
         """

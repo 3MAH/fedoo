@@ -1,6 +1,87 @@
 import numpy as np
 
 
+def _monomial_exponents(ndim, max_degree):
+    """Exponent tuples of the monomials in ``ndim`` variables, ordered by
+    total degree, then by maximum partial degree, then lexicographically."""
+    from itertools import product
+
+    exponents = [
+        e for e in product(range(max_degree + 1), repeat=ndim) if sum(e) <= max_degree
+    ]
+    exponents.sort(key=lambda e: (sum(e), max(e), e))
+    return exponents
+
+
+def _evaluate_monomials(xi, exponents):
+    xi = np.asarray(xi, dtype=float)
+    return np.column_stack(
+        [np.prod(xi ** np.asarray(e, dtype=float), axis=1) for e in exponents]
+    )
+
+
+def gausspoint_extrapolation_matrix(xi_gp, xi_nd, shape_function_gp, rtol=1e-10):
+    """Matrix extrapolating Gauss-point values to the element nodes.
+
+    Parameters
+    ----------
+    xi_gp : ndarray of shape (n_gp, ndim)
+        Gauss-point coordinates in the element reference frame.
+    xi_nd : ndarray of shape (n_nodes, ndim)
+        Node coordinates in the element reference frame.
+    shape_function_gp : ndarray of shape (n_gp, n_nodes)
+        Element shape functions evaluated at the Gauss points.
+    rtol : float, optional
+        Relative tolerance used to detect linearly dependent monomials.
+
+    Returns
+    -------
+    ndarray of shape (n_nodes, n_gp)
+
+    Notes
+    -----
+    When the number of Gauss points is at least the number of nodes, the
+    extrapolation is the least-squares fit in the element shape-function
+    basis, i.e. the pseudo-inverse of ``shape_function_gp``.
+
+    When there are fewer Gauss points than nodes this pseudo-inverse is the
+    minimum-norm solution of an under-determined system and does not
+    reproduce a constant field (for a tet10 with 4 Gauss points, the rows
+    sum to -0.2 at the corners and 0.8 at the mid-edge nodes). In that
+    case the values are instead interpolated in a reduced polynomial basis
+    with as many monomials as Gauss points (Hinton & Campbell, 1974): the
+    monomials are taken in increasing degree and kept only if they are
+    linearly independent on the Gauss points, so that the basis is exact
+    for constant and, whenever the quadrature allows it, linear fields.
+    """
+    shape_function_gp = np.asarray(shape_function_gp, dtype=float)
+    n_gp, n_nodes = shape_function_gp.shape
+    if n_gp >= n_nodes or xi_nd is None:
+        return np.linalg.pinv(shape_function_gp)
+
+    xi_gp = np.asarray(xi_gp, dtype=float).reshape(n_gp, -1)
+    xi_nd = np.asarray(xi_nd, dtype=float).reshape(n_nodes, -1)
+    ndim = xi_gp.shape[1]
+
+    max_degree = n_gp  # enough to interpolate n_gp distinct points
+    exponents = []
+    basis_gp = np.empty((n_gp, 0))
+    for e in _monomial_exponents(ndim, max_degree):
+        candidate = np.column_stack((basis_gp, _evaluate_monomials(xi_gp, [e])))
+        sv = np.linalg.svd(candidate, compute_uv=False)
+        if sv[-1] > rtol * sv[0]:
+            basis_gp = candidate
+            exponents.append(e)
+            if len(exponents) == n_gp:
+                break
+
+    basis_nd = _evaluate_monomials(xi_nd, exponents)
+    if basis_gp.shape[1] < n_gp:
+        # degenerate quadrature (coincident points): least-squares fallback
+        return basis_nd @ np.linalg.pinv(basis_gp)
+    return np.linalg.solve(basis_gp.T, basis_nd.T).T
+
+
 class Element:
     # Evaluate the physical derivative transformation at the element center.
     use_center_jacobian = False
