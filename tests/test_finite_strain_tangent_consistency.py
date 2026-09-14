@@ -312,8 +312,11 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
         pb.dtime = 1.0
         pb.set_start()
         pb.time = 0.0
-        convergence, _, _ = pb.solve_time_increment()
-        assert convergence, "EPICP single increment did not converge"
+        convergence, subiter, error = pb.solve_time_increment()
+        assert convergence, (
+            "EPICP single increment did not converge: "
+            f"subiter={subiter}, error={error:.16e}"
+        )
     else:
         pb.nlsolve(dt=0.2, tmax=1.0, update_dt=True, print_info=0)
 
