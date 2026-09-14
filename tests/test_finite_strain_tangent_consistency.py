@@ -297,8 +297,20 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
 
     bottom = mesh.find_nodes("Z", mesh.bounding_box.zmin)
     top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
+    rotation_anchor = int(
+        np.intersect1d(
+            bottom,
+            np.intersect1d(
+                mesh.find_nodes("X", mesh.bounding_box.xmax),
+                mesh.find_nodes("Y", mesh.bounding_box.ymin),
+            ),
+        )[0]
+    )
     pb.bc.add("Dirichlet", bottom, "DispZ", 0)
     pb.bc.add("Dirichlet", [0], "Disp", 0)
+    # Remove the remaining rigid rotation about Z without restraining the
+    # homogeneous lateral contraction (the anchor lies on Y = ymin = 0).
+    pb.bc.add("Dirichlet", [rotation_anchor], "DispY", 0)
     pb.bc.add("Dirichlet", top, "DispZ", STRETCH)
 
     if law == "EPICP":
@@ -321,7 +333,7 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
         pb.nlsolve(dt=0.2, tmax=1.0, update_dt=True, print_info=0)
 
     n_nodes = mesh.n_nodes
-    blocked = {0, n_nodes, 2 * n_nodes}
+    blocked = {0, n_nodes, 2 * n_nodes, rotation_anchor + n_nodes}
     for n in np.concatenate([bottom, top]):
         blocked.add(int(n) + 2 * n_nodes)
     free = np.array([i for i in range(3 * n_nodes) if i not in blocked])
