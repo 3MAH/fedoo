@@ -1,5 +1,7 @@
 """This module contains the core objects to create some weakforms"""
 
+from copy import copy as shallow_copy
+
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import SECOND_ORDER, normalize_time_evolution
@@ -97,6 +99,10 @@ class WeakFormBase:
     def iter_leaf(self):
         """Iterate over the leaf weakforms contained in this object."""
         yield self
+
+    def copy(self):
+        """Return a shallow copy sharing the weak form's model objects."""
+        return shallow_copy(self)
 
     def __add__(self, wf):
         if isinstance(wf, WeakFormBase):
@@ -366,6 +372,19 @@ class WeakFormSum(WeakFormBase):
         """Iterate over the already flattened list of weakforms."""
         yield from self._list_weakform
 
+    def copy(self):
+        """Return a recursive shallow copy of the weak-form sum."""
+        new_weakform = shallow_copy(self)
+        new_weakform._list_weakform = [wf.copy() for wf in self._list_weakform]
+        new_weakform.constitutivelaw = ListConstitutiveLaw(
+            [
+                wf.constitutivelaw
+                for wf in new_weakform._list_weakform
+                if wf.constitutivelaw is not None
+            ]
+        )
+        return new_weakform
+
     def __repr__(self):
         return f"fedoo.WeakFormSum({self._list_weakform})"
 
@@ -415,10 +434,6 @@ class WeakFormSum(WeakFormBase):
         # function called if all the problem history is reseted.
         for wf in self._list_weakform:
             wf.reset()
-
-    def copy(self):
-        # function to copy a weakform at the initial state
-        raise NotImplementedError()
 
     @property
     def list_weakform(self):

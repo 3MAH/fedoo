@@ -182,8 +182,9 @@ class Problem(ProblemBase):
         element_set=None,
         save_mesh=True,
         include_static_obstacles=False,
+        write_mode="overwrite",
     ):
-        """Add output requirement for automatic saving during nlsolve.
+        """Register an output for automatic saving managed by solve methods.
 
         optionnaly, the add_output can be used without specifying the assembly with the
         arguments:
@@ -233,6 +234,13 @@ class Problem(ProblemBase):
             to the output mesh. The same obstacle mesh shared by several
             rigid bodies is included only once. This option requires the
             ``fdh5`` file format, which preserves the MultiMesh structure.
+
+        write_mode : {"overwrite", "append", "error"}, default="overwrite"
+            Existing-file policy for ``fdh5`` output. ``"overwrite"`` replaces
+            an existing file on the first write, ``"append"`` continues after
+            its highest iteration, and ``"error"`` refuses to register an
+            existing file. Other formats, including ``fdz``, accept only
+            ``"overwrite"``.
         """
         if output_list is None and hasattr(self, "assembly"):
             output_list = assembly
@@ -249,9 +257,31 @@ class Problem(ProblemBase):
             element_set,
             save_mesh,
             include_static_obstacles,
+            write_mode,
         )
 
+    def clear_outputs(self):
+        """Stop automatic output by removing all registered requests.
+
+        Existing files are not deleted and previously created data sets remain
+        available through :attr:`results`.  New requests may immediately be
+        registered with :meth:`add_output`, including requests for a different
+        set of result fields.
+
+        Returns
+        -------
+        Problem
+            This problem, to allow method chaining.
+        """
+        self._problem_output.clear_outputs()
+        return self
+
     def save_results(self, iterOutput=None):
+        """Write the current state to every registered output.
+
+        This method is called automatically when the problem is solved.
+        In case of user-managed solution loops, it must be called manually.
+        """
         self._problem_output.save_results(self, iterOutput)
 
     def get_results(

@@ -330,6 +330,9 @@ class Linear(Problem):
 
         if update_weakform:
             self.update(compute="none")
+        if self._problem_output.has_outputs:
+            self.save_results(self._output_counter)
+            self._output_counter += 1
 
     def _dynamic_solve(self, **kargs):
         """Solve one prepared linear transient increment."""
@@ -408,7 +411,6 @@ class Linear(Problem):
         tmax,
         dt=None,
         interval_output=None,
-        save_results=False,
         update_weakform=False,
         callback=None,
     ):
@@ -432,7 +434,9 @@ class Linear(Problem):
         ``tmax`` are reached exactly by temporarily shortening the nominal
         increment; the original time step is restored afterwards. Boundary
         conditions are reapplied at every increment using a load factor that
-        progresses from zero to one over this call.
+        progresses from zero to one over this call. Outputs registered with
+        :meth:`add_output` are saved automatically, at every nominal increment
+        when ``interval_output`` is omitted.
         """
         if not self.is_dynamic:
             raise RuntimeError("No time integrator is attached to this Linear problem.")
@@ -448,12 +452,12 @@ class Linear(Problem):
         t0 = self.time
         duration = tmax - t0
         tolerance = np.finfo(float).eps * max(1.0, abs(t0), abs(tmax))
+        save_results = self._problem_output.has_outputs
         if interval_output is not None:
             if interval_output == -1:
                 interval_output = nominal_dt
             elif interval_output <= 0:
                 raise ValueError("interval_output must be positive or -1.")
-            save_results = True
         elif save_results:
             interval_output = nominal_dt
         output_index = 1

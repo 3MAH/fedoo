@@ -44,7 +44,7 @@ pb.bc.add("Dirichlet", nodes_left, ["Disp", "Rot"], 0)
 pb.bc.add("Dirichlet", nodes_right, "DispY", -50)
 
 pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=10)
-pb.nlsolve(dt=0.02, update_dt=True, print_info=1)
+pb.nlsolve(dt=0.02, update_dt=True, print_info=0)
 
 # Post treatment
 results = pb.get_results(assembly, ["Disp", "Rot", "BeamStress"])

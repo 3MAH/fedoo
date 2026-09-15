@@ -91,6 +91,12 @@ class BeamEquilibrium(WeakFormBase):
             * Set to 'TL' to use the total lagrangian method (base on the
               initial mesh with initial displacement effet)
         """
+        self.geometric_stiffness = None
+        """Whether to include initial-stress stiffness.
+
+        ``None`` preserves the historical behavior, in which the term follows
+        ``nlgeom``. A boolean value explicitly enables or disables it.
+        """
 
     def get_storage(self):
         if self.storage is not None:
@@ -438,7 +444,10 @@ class BeamEquilibrium(WeakFormBase):
             )
 
             # Geometrical stiffness (or initial stress stiffness)
-            if assembly._nlgeom:
+            geometric_stiffness = self.geometric_stiffness
+            if geometric_stiffness is None:
+                geometric_stiffness = bool(assembly._nlgeom)
+            if geometric_stiffness:
                 N = initial_stress[0]  # normal force
                 dv_dx = self.space.derivative("DispY", "X")
                 diff_op = diff_op + dv_dx.virtual * dv_dx * N

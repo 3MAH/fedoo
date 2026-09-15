@@ -714,7 +714,6 @@ class ExplicitDynamic(Problem):
         dt=None,
         update_weakform=False,
         update_mass=None,
-        save_results=False,
         interval_output=None,
         callback=None,
     ):
@@ -760,15 +759,14 @@ class ExplicitDynamic(Problem):
             none, keep finite-element mass cached while refreshing only
             assembly-level storage providers that do not declare
             ``storage_matrix_is_constant = True``.
-        save_results : bool, default=False
-            Save registered outputs. With no ``interval_output``, save after
-            every nominal time interval. Supplying ``interval_output`` also
-            enables saving, so this flag need not be set in that case.
         interval_output : float, optional
             Physical-time interval between saved results. Output times are
-            reached exactly, and the final state at ``tmax`` is always saved.
-            Use ``-1`` to select the nominal time increment. An iteration-count
-            interval is intentionally not supported by this explicit solver.
+            reached exactly when outputs have been registered with
+            :meth:`add_output`, and the final state at ``tmax`` is always
+            saved. When omitted, registered outputs are saved at every nominal
+            increment. Use ``-1`` to explicitly select the nominal time
+            increment. An iteration-count interval is intentionally not
+            supported by this explicit solver.
         callback : callable, optional
             Function called as ``callback(problem)`` after every accepted time
             increment, independently of the output interval.
@@ -800,12 +798,12 @@ class ExplicitDynamic(Problem):
         nominal_time_step = self.time_step
         tolerance = np.finfo(float).eps * max(1.0, abs(t0), abs(tmax))
 
+        save_results = self._problem_output.has_outputs
         if interval_output is not None:
             if interval_output == -1:
                 interval_output = nominal_time_step
             elif interval_output <= 0:
                 raise ValueError("interval_output must be strictly positive or -1.")
-            save_results = True
         elif save_results:
             interval_output = nominal_time_step
 

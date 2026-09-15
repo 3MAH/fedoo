@@ -91,3 +91,21 @@ print("Analytical deflection: ", sol)
 print(U[-1])
 
 M = fd.Assembly["beam"].global_matrix.todense()
+
+###############################################################################
+# Plot the deformed beam
+# ~~~~~~~~~~~~~~~~~~~~~~
+# The displacement is magnified so that the bending of the slender beam is
+# clearly visible. Colors represent the transverse displacement.
+
+plot_results = pb.get_results("beam", "Disp")
+max_displacement = np.max(np.linalg.norm(plot_results["Disp"], axis=0))
+display_scale = 0.15 * L / max_displacement
+plot_results.plot(
+    "Disp",
+    component="Y",
+    scale=display_scale,
+    show_edges=True,
+    show_nodes=True,
+    title="Transverse displacement of the cantilever beam",
+)
