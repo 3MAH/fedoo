@@ -60,7 +60,15 @@ def gausspoint_extrapolation_matrix(xi_gp, xi_nd, shape_function_gp, rtol=1e-10)
         return np.linalg.pinv(shape_function_gp)
 
     xi_gp = np.asarray(xi_gp, dtype=float).reshape(n_gp, -1)
-    xi_nd = np.asarray(xi_nd, dtype=float).reshape(n_nodes, -1)
+    xi_nd = np.asarray(xi_nd, dtype=float)
+    if xi_nd.ndim == 1:
+        xi_nd = xi_nd.reshape(-1, 1)
+    if xi_nd.shape[0] != n_nodes:
+        raise ValueError(
+            "xi_nd must contain one coordinate per interpolation node; "
+            "use the element's geometry_elm for enriched elements"
+        )
+    xi_nd = xi_nd.reshape(n_nodes, -1)
     ndim = xi_gp.shape[1]
 
     max_degree = n_gp  # enough to interpolate n_gp distinct points

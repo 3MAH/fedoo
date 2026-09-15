@@ -117,3 +117,37 @@ def test_mesh_convert_data_reduced_integration_constant_field(mesh_fn, elm_type,
         field_gp, "GaussPoint", "Node", n_elm_gp=n_gp, method="mean"
     )
     np.testing.assert_allclose(field_nd, 3.5, atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    "bubble_type, geometry_type",
+    [
+        ("lin2bubble", "lin2"),
+        ("lin3bubble", "lin3"),
+        ("tri3bubble", "tri3"),
+    ],
+)
+def test_bubble_elements_use_parent_geometry_for_gp_to_node_conversion(
+    bubble_type, geometry_type
+):
+    bubble = get_element(bubble_type)
+    geometry = get_element(geometry_type)
+    assert bubble.geometry_elm is geometry
+
+    geometry_elm = geometry(1)
+    mesh = fd.Mesh(
+        geometry_elm.xi_nd.copy(),
+        np.arange(geometry_elm.n_nodes).reshape(1, -1),
+        bubble_type,
+        register_name=False,
+    )
+    field_nd = mesh.convert_data(
+        np.array([3.5]), "GaussPoint", "Node", n_elm_gp=1, method="mean"
+    )
+    np.testing.assert_allclose(field_nd, 3.5, atol=1e-10)
+
+
+def test_reduced_extrapolation_rejects_missing_node_coordinates():
+    elm = get_element("tri3bubble")(3)
+    with pytest.raises(ValueError, match="geometry_elm"):
+        gausspoint_extrapolation_matrix(elm.xi_pg, elm.xi_nd, elm.shape_function_gp)

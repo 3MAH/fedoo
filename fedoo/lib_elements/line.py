@@ -24,6 +24,7 @@ class Lin2(Element1DGeom2, Element1D):
 class Lin2Bubble(Lin2):
     name = "lin2bubble"
     n_nodes = 3
+    geometry_elm = Lin2
 
     def shape_function(self, xi):
         return np.c_[(1 - xi), xi, xi * (1 - xi)]
@@ -50,6 +51,8 @@ class Lin3(Element1D):
 
 
 class Lin3Bubble(Lin3):
+    geometry_elm = Lin3
+
     def shape_function(self, xi):
         return np.c_[
             2 * xi**2 - 3 * xi + 1,
