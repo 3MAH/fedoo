@@ -1,32 +1,44 @@
 """
-Very simple example with multiple element type.
+Analysis and visualization of a multi-mesh model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The key points are:
-    - define two separated mesh that share to the same node
-      list with different elements.
-    - create two separated Assembly that are combined in a single AssemblySum
-      object.
-    - extract/save results separatedly for each elm_type.
+This example combines quadrilateral and triangular elements that share the
+same node array. Each element block has its own assembly, while their sum is
+used to solve a single mechanical problem.
+
+Results requested from the assembly sum are stored in a
+:class:`fedoo.MultiMesh`. Fedoo can therefore visualize all element blocks
+directly with one :meth:`fedoo.DataSet.plot` call.
 """
-
-###############################################################################
-# Extract and plot results:
-# For now, the DataSet class is only available for a single element type.
-# To plot the results, we need to extract two separated solution and plot
-# two separted meshes.
-#
 
 import fedoo as fd
 import numpy as np
 
-# Generate a mesh with a 'quad4' element
-mesh1 = fd.mesh.rectangle_mesh(2, 2, elm_type="quad4")
+###############################################################################
+# Build a mesh containing different element types
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# A ``MultiMesh`` owns one common node array and an ordered collection of
+# element blocks. Named entries make each submesh easy to retrieve later. The
+# tuple associated with each name contains its element type and connectivity.
 
-# Add a new node not connected to the quad mesh
-mesh1.add_nodes([0.5, 1.866])
-
-# Generate a new 'tri3' mesh with the same list of nodes (important)
-mesh2 = fd.Mesh(mesh1.nodes, elements=np.array([[2, 3, 4]]), elm_type="tri3")
+nodes = np.array(
+    [
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [1.0, 1.0],
+        [0.5, 1.866],
+    ]
+)
+mesh = fd.MultiMesh(
+    nodes,
+    {
+        "quadrilateral": ("quad4", np.array([[0, 1, 3, 2]])),
+        "triangle": ("tri3", np.array([[2, 3, 4]])),
+    },
+    node_sets={"left": np.array([0, 2]), "right": np.array([1, 3])},
+    name="mixed_mesh",
+)
 
 # Define equations as usual (constitutivelaw + weakform)
 fd.ModelingSpace("2Dstress")
@@ -34,38 +46,39 @@ material = fd.constitutivelaw.ElasticIsotrop(2e5, 0.3)
 wf = fd.weakform.StressEquilibrium(material)
 
 # Create a global assembly
-assembly1 = fd.Assembly.create(wf, mesh1)
-assembly2 = fd.Assembly.create(wf, mesh2)
+# Assemblies are created on the individual element blocks and then combined
+# into the assembly used by the problem.
+assembly1 = fd.Assembly.create(wf, mesh["quadrilateral"])
+assembly2 = fd.Assembly.create(wf, mesh["triangle"])
 assembly = assembly1 + assembly2
 
 # Define a new static problem
 pb = fd.problem.Linear(assembly)
 
-# Extract set of nodes for boundary conditions (here an use mesh1 or mesh2
-# because they share the same nodes)
-left = mesh1.find_nodes("X", mesh1.bounding_box.xmin)
-right = mesh1.find_nodes("X", mesh1.bounding_box.xmax)
-
-# displacement on left (ux=-0.1mm)
-pb.bc.add("Dirichlet", "left", "Disp", 0)
-# displacement on right (ux=0.1mm)
-pb.bc.add("Dirichlet", "right", "DispX", 0.5)
+# Clamp the left side and prescribe a horizontal displacement on the right.
+pb.bc.add("Dirichlet", mesh.node_sets["left"], "Disp", 0)
+pb.bc.add("Dirichlet", mesh.node_sets["right"], "DispX", 0.5)
 
 
 # Solve problem
 pb.solve()
 
 ###############################################################################
-# Extract and plot results:
-# For now, the DataSet class is only available for a single element type.
-# To plot the results, we need to extract two separated solution and plot
-# two separted meshes.
-#
+# Extract and plot multi-mesh results
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ``get_results`` collects the fields from both elementary assemblies. The
+# resulting dataset retains the quadrilateral and triangular submeshes and
+# their element data independently. Nevertheless, the complete model can be
+# drawn directly with the usual Fedoo plotting function.
 
-# extract the results from the two assembly objects
-results1 = pb.get_results(assembly1, output_list=["Stress", "Disp", "Strain"])
-results2 = pb.get_results(assembly2, output_list=["Stress", "Disp", "Strain"])
-
-plotter = results1.plot("Stress", "vm", show=False)
-results2.plot("Stress", "vm", plotter=plotter)
+results = pb.get_results(["Stress", "Disp", "Strain"])
+plotter = results.plot(
+    "Stress",
+    component="vm",
+    data_type="Node",
+    show=False,
+    show_edges=True,
+    show_nodes=True,
+    title="Von Mises stress on a MultiMesh",
+)
 plotter.show()

@@ -34,11 +34,12 @@ radius = 0.02
 material = fd.constitutivelaw.ElasticIsotrop(young_modulus, 0.3)
 properties = fd.constitutivelaw.BeamCircular(material, radius, k=0.5)
 
-x = np.linspace(0.0, length, 21)
-mesh = fd.Mesh(
-    np.column_stack((x, np.zeros_like(x))),
-    np.column_stack((np.arange(20), np.arange(1, 21))),
-    "lin2",
+mesh = fd.mesh.line_mesh(
+    n_nodes=21,
+    x_min=0.0,
+    x_max=length,
+    elm_type="lin2",
+    ndim=2,
 )
 weakform = fd.weakform.BeamEquilibrium(properties, nlgeom=False)
 assembly = fd.Assembly.create(weakform, mesh)
@@ -47,18 +48,21 @@ assembly = fd.Assembly.create(weakform, mesh)
 # Reference preload
 # ~~~~~~~~~~~~~~~~~
 # The geometric stiffness depends on the current stress state, so a preload
-# problem must be solved first. Here the reference compressive force is one
-# newton. Consequently, the buckling load factors obtained below also equal
-# the critical forces in newtons.
+# problem must be solved first. A linear static problem is sufficient here
+# because the reference response is linear. A nonlinear problem could instead
+# supply the preload when the reference equilibrium requires it.
+#
+# The reference compressive force is one newton. Consequently, the buckling
+# load factors obtained below also equal the critical forces in newtons.
 
 left = [0]
 right = [mesh.n_nodes - 1]
 
-preload = fd.problem.NonLinear(assembly, nlgeom=False)
+preload = fd.problem.Linear(assembly)
 preload.bc.add("Dirichlet", left, ["DispX", "DispY"], 0.0)
 preload.bc.add("Dirichlet", right, "DispY", 0.0)
 preload.bc.add("Neumann", right, "DispX", -1.0)
-preload.nlsolve(dt=1.0, tmax=1.0, update_dt=False, print_info=0)
+preload.solve()
 
 ###############################################################################
 # Linear buckling problem
