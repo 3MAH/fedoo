@@ -6,6 +6,26 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`Modal` problem** for linear free-vibration eigenvalue analysis of
+  constrained and free-free systems. Computed modes are mass-normalized, and
+  their mode indices, eigenvalues, angular frequencies, and frequencies can be
+  written to result files.
+- **`LinearBuckling` problem** for eigenvalue buckling analysis about a
+  preloaded state, with critical load factors and buckling modes available in
+  result files.
+- **`Problem.clear_outputs`** for changing registered outputs between stages
+  of chained analyses. FDH5 output also supports explicit `"overwrite"`,
+  `"append"`, and `"error"` write policies.
+
+### Changed
+
+- Registering an output with `Problem.add_output` now requests automatic
+  result writing from high-level solve methods. Modal and buckling analyses
+  write one frame per mode and include tutorial-style examples with
+  `DataSet` mode-shape plots.
+
 ## [1.0.0b2] - 2026-09-11
 
 ### Added
