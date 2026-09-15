@@ -127,6 +127,7 @@ class Tri3r(Tri3):
 class Tri3Bubble(Tri3):
     name = "tri3bubble"
     n_nodes = 4
+    geometry_elm = Tri3
 
     def shape_function(self, xi):
         return np.c_[

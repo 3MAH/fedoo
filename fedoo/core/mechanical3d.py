@@ -161,7 +161,7 @@ class Mechanical3D(ConstitutiveLaw):
         """
         return [
             [
-                H[i][j] - H[i][2] * H[j][2] / H[2][2] if j in [0, 1, 3] else 0
+                H[i][j] - H[i][2] * H[2][j] / H[2][2] if j in [0, 1, 3] else 0
                 for j in range(6)
             ]
             if i in [0, 1, 3]
