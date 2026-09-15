@@ -16,7 +16,6 @@ stress, and :math:`\lambda` is a critical load factor.
 """
 
 import numpy as np
-
 import fedoo as fd
 
 

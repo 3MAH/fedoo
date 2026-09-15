@@ -26,6 +26,12 @@ semantic versioning.
   write one frame per mode and include tutorial-style examples with
   `DataSet` mode-shape plots.
 
+### Fixed
+
+- Assembly caches now distinguish modeling spaces, preventing variable-rank
+  mappings and change-of-basis matrices from being reused incorrectly between
+  models, such as consecutive 3D and 2D beam examples.
+
 ## [1.0.0b2] - 2026-09-11
 
 ### Added
