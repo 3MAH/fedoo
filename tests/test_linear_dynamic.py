@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import fedoo as fd
 
@@ -39,6 +40,97 @@ def test_repeated_static_solve_replaces_the_previous_solution():
     problem.solve()
 
     np.testing.assert_allclose(problem.get_X(), first_solution)
+
+
+def test_static_linear_registered_output_is_automatic_and_can_be_cleared(tmp_path):
+    mesh, stiffness = _dynamic_model()
+    problem = fd.problem.Linear(stiffness)
+    left = mesh.find_nodes("X", mesh.bounding_box.xmin)
+    right = mesh.find_nodes("X", mesh.bounding_box.xmax)
+    problem.bc.add("Dirichlet", left, ["DispX", "DispY"], 0.0)
+    problem.bc.add("Neumann", right, "DispX", 1.0)
+
+    filename = tmp_path / "linear_results.fdh5"
+    results = problem.add_output(filename, ["Disp", "Stress"])
+    saved = []
+    problem.save_results = lambda iteration=None: saved.append(iteration)
+    problem.solve()
+
+    assert saved == [0]
+
+    assert problem.clear_outputs() is problem
+    problem.solve()
+    assert saved == [0]
+
+    continued_results = problem.add_output(filename, ["Disp"])
+    problem.solve()
+    assert continued_results is results
+    assert saved == [0, 1]
+
+
+def test_fdh5_write_modes_across_problems(tmp_path):
+    filename = tmp_path / "continued_results.fdh5"
+    _, stiffness = _dynamic_model()
+    first = fd.problem.Linear(stiffness)
+    first_results = first.add_output(
+        filename,
+        ["Disp"],
+        write_mode="overwrite",
+    )
+    first.save_results()
+    first.save_results()
+    assert first_results.n_iter == 2
+
+    continued = fd.problem.Linear(stiffness)
+    continued_results = continued.add_output(
+        filename,
+        ["Disp"],
+        write_mode="append",
+    )
+    assert continued_results.n_iter == 2
+    continued.save_results()
+    assert continued_results.n_iter == 3
+
+    loaded = fd.read_data(filename)
+    assert loaded.n_iter == 3
+
+    refusing = fd.problem.Linear(stiffness)
+    with pytest.raises(FileExistsError, match="already exists"):
+        refusing.add_output(filename, ["Disp"], write_mode="error")
+
+    replacing = fd.problem.Linear(stiffness)
+    replacing.add_output(filename, ["Disp"], write_mode="overwrite")
+    replacing.save_results()
+
+    from fedoo.util.fdh5 import FDH5Reader
+
+    assert FDH5Reader(filename).list_iterations() == [0]
+
+
+def test_fdz_write_modes_without_continuation(tmp_path):
+    filename = tmp_path / "results.fdz"
+    _, stiffness = _dynamic_model()
+
+    first = fd.problem.Linear(stiffness)
+    first_results = first.add_output(filename, ["Disp"])
+    first.save_results(0)
+    first.save_results(1)
+    assert first_results.n_iter == 2
+    assert fd.read_data(filename).n_iter == 2
+
+    continued = fd.problem.Linear(stiffness)
+    with pytest.raises(ValueError, match="only.*supported for 'fdh5'"):
+        continued.add_output(filename, ["Disp"], write_mode="append")
+
+    refusing = fd.problem.Linear(stiffness)
+    with pytest.raises(ValueError, match="only.*supported for 'fdh5'"):
+        refusing.add_output(filename, ["Disp"], write_mode="error")
+
+    replacing = fd.problem.Linear(stiffness)
+    replacing.add_output(filename, ["Disp"], write_mode="overwrite")
+    replacing.save_results()
+
+    assert fd.read_data(filename).n_iter == 1
 
 
 def test_linear_newmark_regression():
@@ -138,3 +230,21 @@ def test_linear_generalized_alpha_history():
     assert np.isclose(problem.time, 0.03)
     assert np.all(np.isfinite(problem.get_X()))
     assert np.all(np.isfinite(problem.get_velocity()))
+
+
+def test_linear_history_automatically_saves_registered_outputs(tmp_path):
+    mesh, stiffness = _dynamic_model()
+    problem = fd.problem.Linear(
+        stiffness,
+        time_step=0.01,
+        integrator=fd.time.Newmark(),
+    )
+    left = mesh.find_nodes("X", mesh.bounding_box.xmin)
+    problem.bc.add("Dirichlet", left, ["DispX", "DispY"], 0.0)
+    problem.add_output(tmp_path / "linear_history.fdh5", ["Disp"])
+    saved = []
+    problem.save_results = lambda iteration=None: saved.append(iteration)
+
+    problem.solve_history(tmax=0.01)
+
+    assert saved == [0]

@@ -13,6 +13,7 @@ To create a new Problem, use one of the following function:
    :template: custom-class-template.rst
 
    Linear
+   Modal
    LinearNewmark
    NonLinear
    NonLinearNewmark
@@ -29,6 +30,65 @@ Each of these functions creates an object that is derived from the \
 
    fedoo.core.base.ProblemBase
    fedoo.Problem
+
+
+Result output
+=============
+
+For every problem type, calling :meth:`~fedoo.core.problem.Problem.add_output`
+enables automatic result writing during the corresponding high-level solution
+procedure (``solve``, ``solve_history`` or ``nlsolve``). With no registered
+output, these procedures do not write files automatically. Output registrations
+can be removed between analysis stages with
+:meth:`~fedoo.core.problem.Problem.clear_outputs`; existing files and in-memory
+frames are retained. :meth:`~fedoo.core.problem.Problem.save_results` remains
+available for user-managed solution loops.
+
+For the multiframe ``fdh5`` format, ``add_output`` accepts a ``write_mode``.
+Its default, ``"overwrite"``, starts a new file; ``"append"`` continues an
+existing file after its highest stored iteration, including when it was
+produced by another problem; and ``"error"`` refuses to reuse an existing
+file. Other formats, including ``fdz``, retain their existing overwrite
+behavior. This makes staged output explicit, for example:
+
+.. code-block:: python
+
+   preload.add_output("history.fdh5", ["Disp", "Stress"])
+   preload.solve()
+
+   continuation.add_output(
+       "history.fdh5", ["Disp", "Stress"], write_mode="append"
+   )
+   continuation.nlsolve()
+
+
+Eigenvalue analyses
+===================
+
+Modal analysis
+--------------
+
+:class:`Modal` computes the natural frequencies and mass-normalized mode
+shapes of an undamped linear mechanical model. The stiffness and consistent
+mass matrices are obtained from the same assembly/storage declarations as
+linear transient dynamics. For example:
+
+.. code-block:: python
+
+   modal = fd.problem.Modal(assembly)
+   modal.bc.add("Dirichlet", fixed_nodes, "Disp", 0.0)
+   modal.add_output("modes.fdh5", assembly, ["Disp", "Stress"])
+   modal.solve(n_modes=10)
+
+   print(modal.frequencies)
+   modal.set_mode(0)  # expose the first mode through get_disp/get_results
+
+Dirichlet and multi-point constraints are applied to both operators. Prescribed
+displacements must be homogeneous. Registered outputs are written automatically
+by :meth:`Modal.solve`, with one frame per mode and its mode number, eigenvalue
+and frequency included as scalar metadata. To defer output, solve before
+calling :meth:`Modal.add_output`, then register the desired fields and call
+:meth:`Modal.save_modes` explicitly.
 
 
 Time integration
@@ -428,10 +488,12 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
 
 from .explicit_dynamic import ExplicitDynamic
 from .linear import Linear, LinearNewmark
+from .modal import Modal
 from .non_linear import NonLinear, NonLinearNewmark
 
 __all__ = [
     "Linear",
+    "Modal",
     "LinearNewmark",
     "NonLinear",
     "NonLinearNewmark",
