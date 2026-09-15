@@ -268,8 +268,7 @@ class LinearBuckling(Problem):
         self.apply_boundary_conditions()
         if not np.allclose(self._Xbc, 0.0):
             raise ValueError(
-                "Linear buckling requires homogeneous Dirichlet and MPC "
-                "constraints."
+                "Linear buckling requires homogeneous Dirichlet and MPC " "constraints."
             )
         if self._MatCB.shape[1] == 0:
             raise ValueError("Linear buckling has no free degrees of freedom.")
@@ -339,12 +338,12 @@ class LinearBuckling(Problem):
 
         reciprocal_values = np.asarray(reciprocal_values, dtype=float)
         reduced_vectors = np.asarray(reduced_vectors, dtype=float)
-        tolerance = 100.0 * np.finfo(float).eps * max(
-            1.0, float(np.max(np.abs(reciprocal_values)))
+        tolerance = (
+            100.0
+            * np.finfo(float).eps
+            * max(1.0, float(np.max(np.abs(reciprocal_values))))
         )
-        positive = np.isfinite(reciprocal_values) & (
-            reciprocal_values > tolerance
-        )
+        positive = np.isfinite(reciprocal_values) & (reciprocal_values > tolerance)
         if not np.any(positive):
             raise ValueError("No positive linear buckling load factor was found.")
 
