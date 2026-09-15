@@ -14,6 +14,7 @@ To create a new Problem, use one of the following function:
 
    Linear
    Modal
+   LinearBuckling
    LinearNewmark
    NonLinear
    NonLinearNewmark
@@ -89,6 +90,31 @@ by :meth:`Modal.solve`, with one frame per mode and its mode number, eigenvalue
 and frequency included as scalar metadata. To defer output, solve before
 calling :meth:`Modal.add_output`, then register the desired fields and call
 :meth:`Modal.save_modes` explicitly.
+
+Linear buckling analysis
+------------------------
+
+:class:`LinearBuckling` computes critical load factors and buckling modes from
+the converged state of a prestressed assembly. It separates the material and
+initial-stress stiffnesses by assembling shallow weak-form copies with
+geometric stiffness disabled and enabled, respectively. When possible, the
+matrix already assembled by the preload problem is reused:
+
+.. code-block:: python
+
+   preload = fd.problem.NonLinear(assembly, nlgeom="TL")
+   preload.bc.add("Dirichlet", fixed_nodes, "Disp", 0.0)
+   preload.nlsolve()
+
+   buckling = fd.problem.LinearBuckling(preload)
+   buckling.bc.add("Dirichlet", fixed_nodes, "Disp", 0.0)
+   buckling.solve(n_modes=5)
+
+   print(buckling.load_factors)
+
+Set ``reuse_assembled_matrix=False`` to rebuild both stiffness matrices. The
+first implementation supports fixed-geometry and total-Lagrangian preload
+states; updated-Lagrangian states are rejected.
 
 
 Time integration
@@ -488,11 +514,13 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
 
 from .explicit_dynamic import ExplicitDynamic
 from .linear import Linear, LinearNewmark
+from .linear_buckling import LinearBuckling
 from .modal import Modal
 from .non_linear import NonLinear, NonLinearNewmark
 
 __all__ = [
     "Linear",
+    "LinearBuckling",
     "Modal",
     "LinearNewmark",
     "NonLinear",
