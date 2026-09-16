@@ -66,6 +66,24 @@ behavior. This makes staged output explicit, for example:
 Eigenvalue analyses
 ===================
 
+Eigenvalue problems support solver choices tailored to symmetric generalized 
+eigenproblems:
+
+* ``"auto"``: Automatically selects between a dense or sparse solver based on
+  problem size.
+* ``"eigsh"``: Forces the SciPy sparse solver (ARPACK).
+* ``"eigh"``: Forces the SciPy dense solver.
+
+Solver options (such as tolerance or workspace settings) are configured using 
+:meth:`set_solver` and persistent across solves. Solve-specific parameters, such as 
+the number of requested modes (``n_modes``) and the optional shift target (``sigma``), 
+are specified directly during the solve phase.
+
+.. code-block:: python
+
+    modal.set_solver("eigsh", tol=1e-9, ncv=30)
+    modal.solve(n_modes=10, sigma=0.0)
+
 Modal analysis
 --------------
 

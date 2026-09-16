@@ -21,6 +21,15 @@ semantic versioning.
 
 ### Changed
 
+- Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
+  full and over-integration use a pseudo-inverse, while reduced-integration
+  elements use an independent reduced monomial basis. The mesh documentation
+  also clarifies the behavior of the `"mean"` conversion method, and regression
+  tests cover constant, linear, least-squares, and reduced-integration cases.
+- `Modal.set_solver` and `LinearBuckling.set_solver` now configure their
+  generalized eigensolver independently from linear-system solvers. The
+  automatic, sparse `eigsh`, and dense `eigh` strategies are available, with
+  persistent ARPACK options and per-solve mode counts and target shifts.
 - Registering an output with `Problem.add_output` now requests automatic
   result writing from high-level solve methods. Modal and buckling analyses
   write one frame per mode and include tutorial-style examples with
@@ -28,6 +37,8 @@ semantic versioning.
 
 ### Fixed
 
+- Corrected the `Mechanical3D` symmetric-product indexing, which used
+  `H[2][j]` where `H[j][2]` was required.
 - Assembly caches now distinguish modeling spaces, preventing variable-rank
   mappings and change-of-basis matrices from being reused incorrectly between
   models, such as consecutive 3D and 2D beam examples.

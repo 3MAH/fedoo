@@ -3,6 +3,7 @@ import pytest
 from scipy import linalg
 
 import fedoo as fd
+import fedoo.problem.modal as modal_module
 
 
 def _solid_model(with_density=True):
@@ -61,6 +62,54 @@ def test_modal_matches_dense_solution_and_mass_normalizes_modes():
             problem.stiffness_matrix @ mode - eigenvalue * (problem.mass_matrix @ mode)
         )
         np.testing.assert_allclose(residual, 0.0, atol=1e-3)
+
+
+def test_modal_set_solver_configures_sparse_eigensolver(monkeypatch):
+    mesh, assembly = _solid_model()
+    problem = fd.problem.Modal(assembly)
+    left = mesh.find_nodes("X", mesh.bounding_box.xmin)
+    problem.bc.add("Dirichlet", left, "Disp", 0.0)
+    captured = {}
+    scipy_eigsh = modal_module.eigsh
+
+    def recording_eigsh(*args, **kwargs):
+        captured.update(kwargs)
+        return scipy_eigsh(*args, **kwargs)
+
+    monkeypatch.setattr(modal_module, "eigsh", recording_eigsh)
+    returned = problem.set_solver("eigsh", which="lm", tol=1.0e-9, maxiter=100, ncv=6)
+    problem.solve(n_modes=2, sigma=0.0)
+
+    assert returned is problem
+    assert problem._solver_type == "eigsh"
+    assert captured["which"] == "LM"
+    assert captured["tol"] == 1.0e-9
+    assert captured["maxiter"] == 100
+    assert captured["ncv"] == 6
+
+
+def test_modal_set_solver_can_force_dense_eigensolver(monkeypatch):
+    mesh, assembly = _solid_model()
+    problem = fd.problem.Modal(assembly)
+    left = mesh.find_nodes("X", mesh.bounding_box.xmin)
+    problem.bc.add("Dirichlet", left, "Disp", 0.0)
+
+    def unexpected_eigsh(*args, **kwargs):
+        raise AssertionError("eigsh should not be called")
+
+    monkeypatch.setattr(modal_module, "eigsh", unexpected_eigsh)
+    problem.set_solver("eigh")
+    problem.solve(n_modes=2)
+
+    assert len(problem.eigenvalues) == 2
+
+
+def test_modal_set_solver_rejects_linear_solver_names():
+    _, assembly = _solid_model()
+    problem = fd.problem.Modal(assembly)
+
+    with pytest.raises(ValueError, match="auto.*eigsh.*eigh"):
+        problem.set_solver("direct")
 
 
 def test_modal_set_mode_controls_current_solution_without_rescaling_storage():

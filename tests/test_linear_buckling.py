@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import fedoo as fd
+import fedoo.problem.linear_buckling as buckling_module
 from fedoo.util.voigt_tensors import StressTensorList
 
 
@@ -87,6 +88,44 @@ def test_linear_buckling_can_disable_matrix_reuse():
 
     assert problem.material_assembly is not assembly
     assert problem.total_assembly is not assembly
+
+
+def test_linear_buckling_set_solver_configures_sparse_eigensolver(monkeypatch):
+    mesh, _, assembly, _ = _prestressed_beam(False)
+    problem = fd.problem.LinearBuckling(assembly)
+    _constrain_pinned_beam(problem, mesh)
+    captured = {}
+    scipy_eigsh = buckling_module.eigsh
+
+    def recording_eigsh(*args, **kwargs):
+        captured.update(kwargs)
+        return scipy_eigsh(*args, **kwargs)
+
+    monkeypatch.setattr(buckling_module, "eigsh", recording_eigsh)
+    returned = problem.set_solver("eigsh", which="la", tol=1.0e-9, maxiter=100, ncv=6)
+    problem.solve(n_modes=1)
+
+    assert returned is problem
+    assert problem._solver_type == "eigsh"
+    assert captured["which"] == "LA"
+    assert captured["tol"] == 1.0e-9
+    assert captured["maxiter"] == 100
+    assert captured["ncv"] == 6
+
+
+def test_linear_buckling_set_solver_can_force_dense_eigensolver(monkeypatch):
+    mesh, _, assembly, _ = _prestressed_beam(False)
+    problem = fd.problem.LinearBuckling(assembly)
+    _constrain_pinned_beam(problem, mesh)
+
+    def unexpected_eigsh(*args, **kwargs):
+        raise AssertionError("eigsh should not be called")
+
+    monkeypatch.setattr(buckling_module, "eigsh", unexpected_eigsh)
+    problem.set_solver("eigh")
+    problem.solve(n_modes=1)
+
+    assert len(problem.load_factors) == 1
 
 
 def test_linear_buckling_supports_solid_initial_stress_stiffness():

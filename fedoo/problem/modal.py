@@ -6,12 +6,12 @@ from scipy.sparse.linalg import eigsh
 
 from fedoo.core.assembly import Assembly
 from fedoo.core.matrix import as_global_csr
-from fedoo.core.problem import Problem
 from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.problem._eigenvalue_problem import _EigenvalueProblem
 from fedoo.time.common import build_storage_assembly
 
 
-class Modal(Problem):
+class Modal(_EigenvalueProblem):
     r"""Compute natural frequencies and mode shapes of a linear model.
 
     The undamped free-vibration problem is
@@ -53,7 +53,6 @@ class Modal(Problem):
         self._mass_matrix = None
         self._reduced_stiffness = None
         self._reduced_mass = None
-
         self.eigenvalues = np.empty(0)
         self.angular_frequencies = np.empty(0)
         self.frequencies = np.empty(0)
@@ -154,29 +153,31 @@ class Modal(Problem):
             )
 
     @staticmethod
-    def _dense_eigenpairs(stiffness, mass, n_modes):
+    def _dense_eigenpairs(stiffness, mass, n_modes, sigma=None):
         try:
-            values, vectors = linalg.eigh(
-                stiffness.toarray(),
-                mass.toarray(),
-                subset_by_index=(0, n_modes - 1),
-                check_finite=False,
-            )
+            if sigma is None or n_modes == stiffness.shape[0]:
+                values, vectors = linalg.eigh(
+                    stiffness.toarray(),
+                    mass.toarray(),
+                    subset_by_index=(0, n_modes - 1),
+                    check_finite=False,
+                )
+            else:
+                values, vectors = linalg.eigh(
+                    stiffness.toarray(),
+                    mass.toarray(),
+                    check_finite=False,
+                )
+                selected = np.argsort(np.abs(values - sigma))[:n_modes]
+                values = values[selected]
+                vectors = vectors[:, selected]
         except linalg.LinAlgError as error:
             raise ValueError(
                 "The constrained mass matrix must be symmetric positive definite."
             ) from error
         return values, vectors
 
-    def solve(
-        self,
-        n_modes=6,
-        sigma=None,
-        which=None,
-        tol=0.0,
-        maxiter=None,
-        ncv=None,
-    ):
+    def solve(self, n_modes=6, sigma=None):
         r"""Solve the generalized eigenvalue problem.
 
         Parameters
@@ -187,11 +188,6 @@ class Modal(Problem):
             Target eigenvalue :math:`\omega^2`. When supplied, shift-invert
             mode finds eigenvalues nearest ``sigma``. Leaving it unset avoids
             factorizing a potentially singular free-free stiffness matrix.
-        which : str, optional
-            ARPACK eigenvalue selection. Defaults to ``"SM"`` without a
-            shift and ``"LM"`` with a shift.
-        tol, maxiter, ncv : optional
-            Parameters forwarded to :func:`scipy.sparse.linalg.eigsh`.
         Returns
         -------
         Modal
@@ -206,16 +202,31 @@ class Modal(Problem):
         n_free = self._reduced_stiffness.shape[0]
         n_modes = min(int(n_modes), n_free)
 
-        if n_modes == n_free:
-            if n_free > 256:
+        use_dense = self._eigensolver == "eigh" or (
+            self._eigensolver == "auto" and n_modes == n_free
+        )
+        if self._eigensolver == "eigsh" and n_modes == n_free:
+            raise ValueError(
+                "eigsh requires n_modes to be smaller than the number of free "
+                "degrees of freedom. Use solver='auto' or solver='eigh' to "
+                "compute every mode."
+            )
+
+        if use_dense:
+            if self._eigensolver == "auto" and n_free > 256:
                 raise ValueError(
                     "Computing every mode requires a dense solve and is limited "
                     "to 256 free DOFs. Request fewer than the number of free DOFs."
                 )
             values, reduced_vectors = self._dense_eigenpairs(
-                self._reduced_stiffness, self._reduced_mass, n_modes
+                self._reduced_stiffness,
+                self._reduced_mass,
+                n_modes,
+                sigma,
             )
         else:
+            options = self._eigensolver_options
+            which = options["which"]
             if which is None:
                 which = "LM" if sigma is not None else "SM"
             values, reduced_vectors = eigsh(
@@ -224,9 +235,9 @@ class Modal(Problem):
                 M=self._reduced_mass,
                 sigma=sigma,
                 which=which,
-                tol=tol,
-                maxiter=maxiter,
-                ncv=ncv,
+                tol=options["tol"],
+                maxiter=options["maxiter"],
+                ncv=options["ncv"],
             )
 
         order = np.argsort(values)

@@ -8,7 +8,7 @@ from fedoo.core.assembly import Assembly
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
 from fedoo.core.matrix import as_global_csr
-from fedoo.core.problem import Problem
+from fedoo.problem._eigenvalue_problem import _EigenvalueProblem
 
 
 def _weakform_leaves(assembly):
@@ -57,7 +57,7 @@ def _set_geometric_stiffness(weakform, value):
         leaf.geometric_stiffness = value
 
 
-class LinearBuckling(Problem):
+class LinearBuckling(_EigenvalueProblem):
     r"""Compute linear buckling modes about a prestressed equilibrium state.
 
     The problem solved is
@@ -117,7 +117,6 @@ class LinearBuckling(Problem):
         self._total_stiffness_matrix = None
         self._reduced_material_stiffness = None
         self._reduced_geometric_stiffness = None
-
         self.eigenvalues = np.empty(0)
         self.load_factors = self.eigenvalues
         self.modes = np.empty((0, self.n_dof))
@@ -281,15 +280,7 @@ class LinearBuckling(Problem):
             transform.T @ self._geometric_stiffness_matrix @ transform
         ).tocsr()
 
-    def solve(
-        self,
-        n_modes=6,
-        sigma=None,
-        which=None,
-        tol=0.0,
-        maxiter=None,
-        ncv=None,
-    ):
+    def solve(self, n_modes=6, sigma=None):
         """Solve for positive critical load factors and buckling modes.
 
         ``sigma`` optionally targets modes near a positive load factor. The
@@ -307,7 +298,17 @@ class LinearBuckling(Problem):
         n_free = material.shape[0]
 
         try:
-            if n_free <= 256 or n_modes >= n_free:
+            use_dense = self._eigensolver == "eigh" or (
+                self._eigensolver == "auto" and (n_free <= 256 or n_modes >= n_free)
+            )
+            if self._eigensolver == "eigsh" and n_modes >= n_free:
+                raise ValueError(
+                    "eigsh requires n_modes to be smaller than the number of "
+                    "free degrees of freedom. Use solver='auto' or "
+                    "solver='eigh' to compute every mode."
+                )
+
+            if use_dense:
                 reciprocal_values, reduced_vectors = linalg.eigh(
                     minus_geometric.toarray(),
                     material.toarray(),
@@ -315,18 +316,23 @@ class LinearBuckling(Problem):
                 )
             else:
                 k = min(int(n_modes), n_free - 1)
+                options = self._eigensolver_options
                 eigsh_options = {
                     "k": k,
                     "M": material,
-                    "tol": tol,
-                    "maxiter": maxiter,
-                    "ncv": ncv,
+                    "tol": options["tol"],
+                    "maxiter": options["maxiter"],
+                    "ncv": options["ncv"],
                 }
                 if sigma is None:
-                    eigsh_options["which"] = "LA" if which is None else which
+                    eigsh_options["which"] = (
+                        "LA" if options["which"] is None else options["which"]
+                    )
                 else:
                     eigsh_options["sigma"] = 1.0 / sigma
-                    eigsh_options["which"] = "LM" if which is None else which
+                    eigsh_options["which"] = (
+                        "LM" if options["which"] is None else options["which"]
+                    )
                 reciprocal_values, reduced_vectors = eigsh(
                     minus_geometric, **eigsh_options
                 )
