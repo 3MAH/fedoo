@@ -6,6 +6,36 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`incompressibility` attribute of `StressEquilibrium`** (also a constructor
+  argument) to select the treatment of volumetric locking: `None` (default,
+  unchanged behavior), `"auto"`, `"mean_dilatation"`, `"sri"` or `"fbar"`
+  (`fbar = True` is kept as an alias).
+- **Mean dilatation method** (`incompressibility="mean_dilatation"`): B-bar
+  formulation based on a volume weighted projection of the dilatation,
+  equivalent to an element-wise discontinuous pressure eliminated at the
+  element level (one pressure for `quad4`, `hex8`, `wed6`, `tri6`, `tet10`;
+  linear pressure for `quad8`, `quad9`, `hex20`, `wed15`, `wed18`). Symmetric
+  tangent matrix, small strain and updated lagrangian ('3D', '2Dplane'), with
+  a consistent tangent when `geometric_stiffness` is enabled.
+
+### Fixed
+
+- The small strain F-bar method used an arithmetic mean of the volumetric
+  strain over the gauss points instead of the volume weighted mean (wrong for
+  distorted elements).
+- **F-bar tangent matrix.** The `fbar` attribute of `StressEquilibrium` only
+  modified the stress: the tangent matrix ignored the variation of the volume
+  change at the element center (~50% error on a nearly incompressible
+  test), now included for `quad4` and `hex8` elements. In
+  `StressEquilibriumFbar`, the stress contribution of this term used the 2/3
+  factor of the spatial modulus of de Souza Neto et al. instead of the 1/3
+  factor consistent with the Lie tangent assembled by fedoo (finite difference
+  error 6e-4 -> 3e-8), and the non symmetric matrix could be symmetrized.
+- `Mesh.get_volume` and `Mesh.get_element_volumes` ignored their `n_elm_gp`
+  argument.
+
 ## [1.0.0b2] - 2026-09-11
 
 ### Added

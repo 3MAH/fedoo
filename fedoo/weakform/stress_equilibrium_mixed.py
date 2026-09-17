@@ -296,6 +296,18 @@ class StressEquilibriumMixed(StressEquilibrium):
             assembly.sv["Strain"].array[:3] += (1 / 3.0) * assembly.sv["lnJ"]
 
     @property
+    def incompressibility(self):
+        """Not used: the mixed formulation already avoids volumetric locking."""
+        return None
+
+    @incompressibility.setter
+    def incompressibility(self, value):
+        if value is not None:
+            raise ValueError(
+                "incompressibility can't be activated for Mixed formulation"
+            )
+
+    @property
     def fbar(self):
         """Set to True to use the F-bar method.
 
