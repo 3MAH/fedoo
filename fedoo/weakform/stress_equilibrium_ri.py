@@ -293,6 +293,3 @@ class StressEquilibriumRI(WeakFormSum):
     @corate.setter
     def corate(self, value):
         self.list_weakform[0].corate = value
-
-
-
