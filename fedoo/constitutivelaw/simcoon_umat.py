@@ -3,7 +3,6 @@
 
 from fedoo.core.mechanical3d import MechanicalUMAT
 import simcoon as sim
-import numpy as np
 
 
 class Simcoon(MechanicalUMAT):
@@ -66,7 +65,6 @@ class Simcoon(MechanicalUMAT):
     """
 
     manages_material_frame = True
-    _corotational_box_tangent = True
     # Simcoon UMATs transport their material history through DR and return the
     # corotational box tangent d(tau_hat)/dD.
 

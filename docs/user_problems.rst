@@ -138,12 +138,14 @@ Its arguments follow these conventions:
 Argument             Meaning
 ===================  =========================================================
 ``strain``           Total strain at the beginning of the increment, shape
-                     ``(6, n_points)``.
+                     ``(6, n_points)``. In a finite-strain analysis this is
+                     the logarithmic strain in the corotational material
+                     frame, and the infinitesimal strain otherwise.
 ``dstrain``          Current strain increment, shape ``(6, n_points)``.
 ``F0``, ``F1``       Beginning and current deformation gradients, shape
                      ``(3, 3, n_points)`` in a finite-strain analysis. They
                      are empty in a small-strain analysis.
-``stress``           Stress at the beginning of the increment, shape
+``stress``           Cauchy stress at the beginning of the increment, shape
                      ``(6, n_points)``.
 ``DR``               Objective incremental rotation, shape
                      ``(3, 3, n_points)``.
@@ -171,6 +173,57 @@ the material tangent. A tangent can have shape ``(6, 6)`` when it is uniform,
 or ``(6, 6, n_points)`` when it varies between material points. Do not modify
 ``statev_start`` or ``wm_start`` in place: they represent the committed state
 and must remain available if the global increment is rejected.
+
+
+Finite-strain stress and tangent convention
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Fedoo follows the convention used by the Simcoon UMAT interface. A solid
+constitutive law returns the true Cauchy stress
+
+.. math::
+
+   \boldsymbol{\sigma},
+
+and an unnormalized corotational Kirchhoff (``box``) tangent
+
+.. math::
+
+   \overset{\Box}{\boldsymbol{\tau}}
+   = \mathbb{C}^{\Box}:\boldsymbol{D},
+   \qquad
+   \boldsymbol{\tau}=J\boldsymbol{\sigma}.
+
+Thus, a law written in terms of Kirchhoff stress must divide the updated
+stress by ``J = det(F1)`` before returning it. At small strain ``J`` tends to
+one, so this convention reduces to the usual stress--strain tangent.
+
+The constitutive law does not transform its tangent for the selected finite
+element formulation. :class:`fedoo.weakform.StressEquilibrium` performs the
+conversion centrally:
+
+* in TL, ``TangentMatrix`` is converted to the material tangent ``dS/dE``;
+* in UL, it is converted to the spatial Lie tangent consistent with the
+  Cauchy-stress residual;
+* the corresponding initial-stress geometric stiffness is enabled by
+  default in finite strain.
+
+This convention applies to continuum solid laws used by
+``StressEquilibrium``. Beam and shell laws use their own generalized forces,
+moments, strains, and curvatures.
+
+The low-level ``convert_tangent=False`` option disables these transformations.
+It is intended only for a custom weak-form implementation that already
+provides ``dS/dE`` in TL or the spatial Lie tangent in UL. When conversion is
+disabled, geometric stiffness is not enabled automatically.
+
+:class:`fedoo.constitutivelaw.ElastoPlasticity` is a readable Python
+reference for this convention: it integrates its radial return in the
+Kirchhoff measure and divides by ``J`` before returning the stress.
+
+See the `Simcoon UMAT documentation
+<https://3mah.github.io/simcoon-docs/simulation/umat_tutorial.html>`_ for the
+material-update interface from which this convention is taken.
 
 
 Initialization call
@@ -263,7 +316,13 @@ should also validate their parameters and supported dimensional assumptions.
        tangent[4, 4] = shear
        tangent[5, 5] = shear
 
-       stress_new = stress + tangent @ dstrain
+       if F1.size:
+           J0 = np.linalg.det(F0.transpose(2, 0, 1))
+           J1 = np.linalg.det(F1.transpose(2, 0, 1))
+           tau = J0 * stress + tangent @ dstrain
+           stress_new = tau / J1
+       else:
+           stress_new = stress + tangent @ dstrain
        return (
            stress_new,
            statev_start.copy(),

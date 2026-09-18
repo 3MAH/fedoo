@@ -22,6 +22,17 @@ class _SubAssembly(Assembly):
         )
 
     @property
+    def _nlgeom(self):
+        # geometric non-linearity of the parent assembly (set at problem
+        # initialization, after the sub-assemblies are created): the phase laws
+        # need it to apply their finite-strain stress conventions.
+        return self.assembly._nlgeom
+
+    @_nlgeom.setter
+    def _nlgeom(self, value):
+        pass  # always read from the parent assembly
+
+    @property
     def sv(self):
         elset = (
             self.assembly.mesh.element_sets[self.elset]
@@ -423,7 +434,21 @@ class Heterogeneous(Mechanical3D):
     
     To define constitutive from a list of phase constitutive laws, and a list of
     element sets.
-        
+
+    In a finite-strain analysis, the geometric non-linearity of the parent
+    assembly is forwarded to every phase, so that each phase law applies the
+    same finite-strain stress convention as it would in a homogeneous problem.
+
+    .. warning::
+
+        Every phase law must follow the finite-strain convention documented on
+        :class:`fedoo.core.mechanical3d.Mechanical3D` (true Cauchy stress and
+        corotational Kirchhoff tangent). The weak form converts the assembled
+        tangent once, for the whole domain: the
+        ``convert_tangent`` option of
+        :class:`fedoo.weakform.StressEquilibrium` cannot be selected phase by
+        phase.
+
     Parameters
     ----------
     

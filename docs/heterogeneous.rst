@@ -110,7 +110,7 @@ assemblies (see :py:meth:`fedoo.Assembly.sum` for more details).
 
 To allow for a more compact writting, and avoiding the sum of assemblies, fedoo propose 
 a built-in constitutive law dedicated to heterogeneous material:
-:py:class:`fedoo.constitutivelaw.heterogeneous.Heterogeneous`
+:py:class:`fedoo.constitutivelaw.Heterogeneous`
 
 This class allows to define one material as the combination of several materials 
 associated to sets of elements. The code is shorter and more easy to read. 
@@ -129,8 +129,12 @@ difference is barely visisble though and shouldn't be a real matter for everyone
  
     wf = fd.weakform.StressEquilibrium(material) 
     assembly = fd.Assembly.create(wf, mesh) 
-    
-    
+
+In a finite-strain analysis, the geometric non-linearity is forwarded to each
+phase, which therefore behaves exactly as it would in a homogeneous problem.
+Every phase law must follow the finite-strain convention described in
+:py:class:`fedoo.constitutivelaw.Heterogeneous`.
+
 
 Full example: 
 ==============================

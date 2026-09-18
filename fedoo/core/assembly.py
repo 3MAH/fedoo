@@ -109,7 +109,10 @@ class Assembly(AssemblyBase):
                 "n_elm_gp", elm_type, get_default_n_gp(elm_type, mesh)
             )
 
-        self.assume_sym = weakform.assembly_options.get("assume_sym", elm_type, False)
+        # ``None`` means that the weak form has not resolved this option yet.
+        # Formulation-dependent defaults are selected during initialization;
+        # an explicit boolean assigned before then is preserved.
+        self.assume_sym = weakform.assembly_options.get("assume_sym", elm_type)
         self.mat_lumping = weakform.assembly_options.get("mat_lumping", elm_type, False)
 
         self._use_local_csys = self._test_if_local_csys()
@@ -1818,9 +1821,15 @@ class Assembly(AssemblyBase):
                 )
                 for i, wf in enumerate(list_weakform)
             ]
-            list_assume_sym = [
-                wf.assembly_options.get("assume_sym", list_elm_type[i], False)
+            raw_assume_sym = [
+                wf.assembly_options.get("assume_sym", list_elm_type[i])
                 for i, wf in enumerate(list_weakform)
+            ]
+            # Preserve the historical grouping behavior: an unset option is
+            # grouped with the conservative non-symmetric path. The resulting
+            # assembly keeps ``None`` only when every grouped form is unset.
+            list_assume_sym = [
+                False if value is None else value for value in raw_assume_sym
             ]
             list_prop = list(zip(list_n_elm_gp, list_assume_sym, list_elm_type))
             list_diff_prop = []
@@ -1835,7 +1844,9 @@ class Assembly(AssemblyBase):
                 elm_type = prop[2]
                 weakform.assembly_options = _AssemblyOptions()
                 weakform.assembly_options["n_elm_gp", elm_type] = prop[0]
-                weakform.assembly_options["assume_sym", elm_type] = prop[1]
+                weakform.assembly_options["assume_sym", elm_type] = (
+                    None if all(value is None for value in raw_assume_sym) else prop[1]
+                )
                 weakform.assembly_options["mat_lumping", elm_type] = [
                     wf.assembly_options.get("mat_lumping", elm_type, False)
                     for wf in weakform.list_weakform
@@ -1845,8 +1856,9 @@ class Assembly(AssemblyBase):
             else:  # we need to create and sum several assemblies
                 list_assembly = []
                 for prop in list_diff_prop:
+                    indices = [i for i, value in enumerate(list_prop) if value == prop]
                     l_wf = [
-                        list_weakform[i] for i, p in enumerate(list_prop) if p == prop
+                        list_weakform[i] for i in indices
                     ]  # list_weakform with compatible properties
                     elm_type = prop[2]
                     if len(l_wf) == 1:
@@ -1857,7 +1869,11 @@ class Assembly(AssemblyBase):
                         # define the assembly_options of the new weakform
                         wf.assembly_options = _AssemblyOptions()
                         wf.assembly_options["n_elm_gp", elm_type] = prop[0]
-                        wf.assembly_options["assume_sym", elm_type] = prop[1]
+                        wf.assembly_options["assume_sym", elm_type] = (
+                            None
+                            if all(raw_assume_sym[i] is None for i in indices)
+                            else prop[1]
+                        )
                         wf.assembly_options["mat_lumping", elm_type] = [
                             w.assembly_options.get("mat_lumping", elm_type, False)
                             for w in l_wf

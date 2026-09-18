@@ -51,16 +51,17 @@ class PoroMomentum(StressEquilibriumMixed):
         Skeleton constitutive law. In large-strain mode it must be a
         hyperelastic law whose tangent is computed from F
         (``_Lt_from_F = True`` — the case for all simcoon hyperelastic and
-        visco-elastic laws). NB: the UL box -> Lie tangent conversion is
-        driven by the separate ``_corotational_box_tangent`` attribute
-        (True for every simcoon umat, see
-        :class:`fedoo.core.mechanical3d.Mechanical3D`).
+        visco-elastic laws). The parent stress-equilibrium weak form converts
+        the constitutive Kirchhoff box tangent to the active formulation.
     fluid_props : PoroFluidProperties
         Fluid-phase parameters. Only the Biot coefficient ``alpha`` is used
         here; ``PoroDarcy`` and ``PoroMassStorage`` use the other fields.
     bulk_modulus : float, optional
         Skeleton bulk modulus used to scale the ``Pressure`` constraint.
         Required for ``nlgeom`` modes.
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
     name : str, default ""
     nlgeom : bool or {'TL', 'UL'}, optional
         Geometric non-linearity flag.
@@ -72,6 +73,7 @@ class PoroMomentum(StressEquilibriumMixed):
         constitutivelaw,
         fluid_props,
         bulk_modulus=None,
+        convert_tangent=True,
         name="",
         nlgeom=None,
         space=None,
@@ -82,6 +84,7 @@ class PoroMomentum(StressEquilibriumMixed):
             name=name,
             nlgeom=nlgeom,
             space=space,
+            convert_tangent=convert_tangent,
         )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
@@ -125,10 +128,6 @@ class PoroMomentum(StressEquilibriumMixed):
         diff_op -= alpha * sum(
             [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
         )
-
-        if self.space._dimension == "2Daxi":
-            rr = assembly.sv["_R_gausspoints"]
-            diff_op = diff_op  # 2Daxi factor already applied by parent
 
         return diff_op
 
@@ -429,13 +428,30 @@ class PoroMomentumSimple(StressEquilibrium):
         Skeleton constitutive law. Any standard ``fedoo.constitutivelaw``
         law works (``ElasticIsotrop``, ``Simcoon`` with ``NEOHC``, etc.).
     fluid_props : PoroFluidProperties
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
     name : str, default ""
     nlgeom : bool or {'TL', 'UL'}, optional
     space : ModelingSpace, optional
     """
 
-    def __init__(self, constitutivelaw, fluid_props, name="", nlgeom=None, space=None):
-        super().__init__(constitutivelaw, name=name, nlgeom=nlgeom, space=space)
+    def __init__(
+        self,
+        constitutivelaw,
+        fluid_props,
+        convert_tangent=True,
+        name="",
+        nlgeom=None,
+        space=None,
+    ):
+        super().__init__(
+            constitutivelaw,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+            convert_tangent=convert_tangent,
+        )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
         # See PoroMomentum.__init__: disable the symmetric-assembly assumption

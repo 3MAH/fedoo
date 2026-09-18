@@ -1,4 +1,4 @@
-"""Small-strain J2 plasticity with isotropic hardening."""
+"""J2 plasticity with isotropic hardening, additive on the strain measure."""
 
 import numpy as np
 from simcoon import Rotation as SimRotation
@@ -8,7 +8,7 @@ from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
 class ElastoPlasticity(MechanicalUMAT):
-    """Elasto-plastic constitutive law with isotropic hardening.
+    r"""Elasto-plastic constitutive law with isotropic hardening.
 
     The stress integration uses a vectorized radial-return algorithm for the
     von Mises yield criterion. The finite-element lifecycle is provided by
@@ -16,12 +16,17 @@ class ElastoPlasticity(MechanicalUMAT):
     plastic strain ``P`` and plastic-strain tensor ``EP`` are exposed as
     labelled components of the private ``Statev`` array.
 
-    In a geometrically nonlinear updated-Lagrangian analysis, this law is a
-    corotational extension of the same additive small-strain model. Tensorial
-    history is transported with the objective rotation increment before each
-    return mapping. This makes the response objective under finite rotations,
-    but it is not a multiplicative finite-plasticity model (there is no
-    decomposition ``F = Fe @ Fp``).
+    In a geometrically nonlinear analysis, this law is a corotational
+    extension of the same additive small-strain model written on the
+    logarithmic strain. Tensorial history is transported with the objective
+    rotation increment before each return mapping. The stress returned by the
+    radial return is the Kirchhoff stress :math:`\boldsymbol{\tau}` conjugate
+    to the logarithmic strain and the Cauchy stress
+    :math:`\boldsymbol{\tau}/J` is handed to the assembly, so that the
+    response is the one of Simcoon's ``EPICP`` UMAT. This makes the response
+    objective under finite rotations, but it is not a multiplicative
+    finite-plasticity model (there is no decomposition
+    :math:`\mathbf{F} = \mathbf{F}^e \mathbf{F}^p`).
 
     The returned elastoplastic tangent is the continuum tangent evaluated at
     the updated stress. It is not the algorithmically consistent tangent of
@@ -438,8 +443,18 @@ class ElastoPlasticity(MechanicalUMAT):
         transported into the increment's corotational frame using ``DR``, in
         the same way as Simcoon's ``EPICP`` UMAT. Fedoo transports the returned
         stress when the converged increment is committed.
+
+        ``F0`` and ``F1`` are only used to detect a finite-strain increment
+        (they are empty in small strain) and to compute the volume changes
+        ``J0`` and ``J1``. The radial return then works in the Kirchhoff
+        measure conjugate to the logarithmic strain: ``stress_start`` is
+        scaled back by ``J0`` for the work increments, and the stress handed
+        back to the assembly is the Cauchy stress ``tau / J1``.
         """
-        del F0, F1, props, time, dtime, temperature, tangent_mode
+        del props, time, dtime, temperature, tangent_mode
+        F0 = np.asarray(F0)
+        F1 = np.asarray(F1)
+        finite_strain = F1.size > 0
         if ndi == 2:
             self.get_elastic_matrix("2Dstress")
 
@@ -486,6 +501,15 @@ class ElastoPlasticity(MechanicalUMAT):
 
         wm = np.array(wm_start, copy=True, order="F")
         stress_array = stress.asarray()
+        if finite_strain:
+            # The radial return works on the logarithmic strain, whose
+            # conjugate stress is the Kirchhoff stress tau (same convention as
+            # simcoon's EPICP): the stress handed back to the assembly is the
+            # Cauchy stress tau / J. stress_start is a Cauchy stress: bring it
+            # back to tau for the work increments.
+            J1 = np.linalg.det(np.moveaxis(F1, -1, 0))
+            J0 = np.linalg.det(np.moveaxis(F0, -1, 0)) if F0.size else 1.0
+            stress_start = stress_start * J0
         plastic_increment = plasticity - plasticity_old
         plastic_strain_increment = plastic_strain.asarray() - plastic_strain_old
         stress_average = 0.5 * (stress_start + stress_array)
@@ -505,6 +529,8 @@ class ElastoPlasticity(MechanicalUMAT):
             np.einsum("ip,ip->p", stress_average, plastic_strain_increment)
             - hardening_work
         )
+        if finite_strain:
+            stress_array = stress_array / J1
         return stress_array, statev, wm, tangent
 
     def reset(self):

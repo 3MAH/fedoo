@@ -30,6 +30,9 @@ class StressEquilibriumBbar(StressEquilibrium):
     ----------
     constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
@@ -46,8 +49,21 @@ class StressEquilibriumBbar(StressEquilibrium):
         the active ModelingSpace is considered.
     """
 
-    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
-        super().__init__(constitutivelaw, name, nlgeom, space)
+    def __init__(
+        self,
+        constitutivelaw,
+        convert_tangent=True,
+        name="",
+        nlgeom=None,
+        space=None,
+    ):
+        super().__init__(
+            constitutivelaw,
+            convert_tangent=convert_tangent,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+        )
         self.assembly_options["elm_type", "quad4"] = "quad4sri"
         self.assembly_options["elm_type", "hex8"] = "hex8sri"
 
@@ -163,6 +179,9 @@ class StressEquilibriumFbar(StressEquilibrium):
     ----------
     constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
@@ -179,8 +198,21 @@ class StressEquilibriumFbar(StressEquilibrium):
         the active ModelingSpace is considered.
     """
 
-    def __init__(self, constitutivelaw, name="", nlgeom=None, space=None):
-        super().__init__(constitutivelaw, name, nlgeom, space)
+    def __init__(
+        self,
+        constitutivelaw,
+        convert_tangent=True,
+        name="",
+        nlgeom=None,
+        space=None,
+    ):
+        super().__init__(
+            constitutivelaw,
+            convert_tangent=convert_tangent,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+        )
         if self.space.is_axisymmetric:
             raise NotImplementedError(
                 "StressEquilibriumFbar is not implemented in '2Daxi': the "
@@ -192,6 +224,10 @@ class StressEquilibriumFbar(StressEquilibrium):
         self.fbar = True
         self.assembly_options["elm_type", "quad4"] = "quad4sri"
         self.assembly_options["elm_type", "hex8"] = "hex8sri"
+        # The consistent F-bar tangent is generally non-symmetric. This is a
+        # default rather than an initialize-time override so advanced users
+        # can deliberately replace it through assembly_options.
+        self.assembly_options["assume_sym"] = False
 
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""
@@ -313,7 +349,6 @@ class StressEquilibriumFbar(StressEquilibrium):
     def initialize(self, assembly, pb):
         """Initialize the weakform at the begining of a problem."""
         super().initialize(assembly, pb)
-        self.assembly_options["assume_sym"] = False
 
         if assembly.elm_type in ["hex8sri", "quad4sri"]:
             if assembly._nlgeom == "TL":
@@ -575,6 +610,9 @@ class StressEquilibriumRI(WeakFormSum):
         Coefficient controlling the hourglass stiffness. It should be large
         enough to suppress hourglass modes without introducing excessive
         artificial flexural stiffness.
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
     name : str, optional
         Name of the weak form.
     nlgeom : bool or {'UL', 'TL'}, optional
@@ -602,12 +640,18 @@ class StressEquilibriumRI(WeakFormSum):
         self,
         constitutivelaw,
         hourglass_stiffness=0.01,
+        convert_tangent=True,
         name="",
         nlgeom=None,
         nlgeom_hourglass=False,
         space=None,
     ):
-        equilibrium = StressEquilibrium(constitutivelaw, nlgeom=nlgeom, space=space)
+        equilibrium = StressEquilibrium(
+            constitutivelaw,
+            nlgeom=nlgeom,
+            space=space,
+            convert_tangent=convert_tangent,
+        )
         equilibrium.assembly_options["n_elm_gp", "quad4"] = 1
         equilibrium.assembly_options["n_elm_gp", "hex8"] = 1
         hourglass = HourglassStiffness(
