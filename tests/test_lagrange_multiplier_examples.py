@@ -49,7 +49,7 @@ def _solve_rigid_tie_2d(use_lm, suffix):
         )
     pb = fd.problem.NonLinear(assembly, name=f"problem_{suffix}")
     pb.set_solver("direct_scipy")
-    pb.set_nr_criterion("Displacement", err0=1, tol=1e-5, max_subiter=40)
+    pb.set_nr_criterion("Displacement", err0=1, tol=1e-7, max_subiter=40)
     if not use_lm:
         pb.bc.add(constraint)
     pb.bc.add("Dirichlet", bottom, "Disp", 0.0)

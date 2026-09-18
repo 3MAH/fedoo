@@ -21,10 +21,10 @@ import os
 
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
-import numpy as np
-import pytest
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
-import fedoo as fd
+import fedoo as fd  # noqa: E402
 
 ipctk = pytest.importorskip("ipctk")
 
@@ -80,7 +80,11 @@ def _build_punch_problem(register_rigid_body=True):
         dhat=0.02,
         dhat_is_relative=False,
         use_ccd=False,
-        barrier_stiffness=1e6,
+        # The consistent finite-strain material tangent is less numerically
+        # damping than the former engineering-tangent approximation. This
+        # value remains much larger than the solid stiffness while avoiding
+        # an unnecessarily ill-conditioned contact transition.
+        barrier_stiffness=1e5,
     )
 
     body = fd.constraint.RigidBody(
@@ -192,7 +196,6 @@ def test_newton_third_law_on_ipc_gradient(fresh_3d_space):
     # Deformable side: sum the IPC Z-force at disc surface nodes.
     surface_idx = ipc._surface_node_indices
     disc_surf = surface_idx[np.isin(surface_idx, np.arange(n_disc))]
-    nvar = pb.space.nvar
     F_disc = np.array([F[d * mesh.n_nodes + disc_surf].sum() for d in range(3)])
 
     # Newton 3 (in the Z direction, which is where load lives):

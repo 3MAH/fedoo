@@ -47,6 +47,7 @@ corate log_R only.
 """
 
 import functools
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -54,7 +55,8 @@ from scipy.linalg import logm, sqrtm
 
 simcoon = pytest.importorskip("simcoon")
 
-import fedoo as fd
+import fedoo as fd  # noqa: E402
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList  # noqa: E402
 
 MU, KAPPA = 3.0, 150.0
 STRETCH = 0.10
@@ -95,9 +97,9 @@ def _box_tangent_pk2_fd_error(call, F):
     )[:, :, 0]
     h = 1e-7
     fd_mat = np.zeros((6, 6))
-    for j, (k, l) in enumerate(_VOIGT):
+    for j, (k, m) in enumerate(_VOIGT):
         dE = np.zeros((3, 3))
-        dE[k, l] = dE[l, k] = h
+        dE[k, m] = dE[m, k] = h
         dS = (pk2(E0 + dE) - pk2(E0 - dE)) / (2 * h)
         col = np.array([dS[0, 0], dS[1, 1], dS[2, 2], dS[0, 1], dS[0, 2], dS[1, 2]])
         fd_mat[:, j] = col if j < 3 else col / 2.0
@@ -280,6 +282,8 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
         # hypoelastic path (no _Lt_from_F): exercises the generic UL
         # box -> dS/dE -> Lie conversion
         material = fd.constitutivelaw.Simcoon("ELISO", [8.7, 0.49, 1e-5], name="law")
+    elif law == "FEDOO_ELISO":
+        material = fd.constitutivelaw.ElasticIsotrop(8.7, 0.49, name="law")
     else:  # EPICP: evolving elastoplastic box tangent, loaded beyond yield
         material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
         # FD around a converged state measures the derivative of the
@@ -287,7 +291,6 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
         # Simo-Hughes algorithmic tangent, not the continuum one.
         material.tangent_mode = 2
     wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
-    wf.geometric_stiffness = True
     if corate is not None:
         wf.corate = corate
     assembly = fd.Assembly.create(wf, mesh, name="asm")
@@ -346,6 +349,18 @@ _CASES = [
     pytest.param("NEOHC", "log", id="NEOHC-log"),
     pytest.param("ELISO", "log", marks=requires_exact_transport, id="ELISO-log"),
     pytest.param("ELISO", "log_r", marks=requires_exact_transport, id="ELISO-logR"),
+    pytest.param(
+        "FEDOO_ELISO",
+        "log",
+        marks=requires_exact_transport,
+        id="FedooELISO-log",
+    ),
+    pytest.param(
+        "FEDOO_ELISO",
+        "log_r",
+        marks=requires_exact_transport,
+        id="FedooELISO-logR",
+    ),
     pytest.param("EPICP", "log", marks=requires_exact_transport, id="EPICP-log"),
     pytest.param("EPICP", "log_r", marks=requires_exact_transport, id="EPICP-logR"),
 ]
@@ -359,6 +374,89 @@ def test_finite_strain_tangent_is_fd_consistent(nlgeom, law, corate):
         f"{law} {nlgeom} corate={corate} global tangent inconsistent with FD "
         f"(rel error {err:.3e}): check the 3D geometric stiffness operator "
         "and the UL tangent conversion (box -> dS/dE -> Lie)"
+    )
+
+
+def test_native_elastic_matches_simcoon_eliso_at_finite_volume():
+    """Native elasticity uses the same Cauchy/box convention as ELISO."""
+
+    E, nu = 8.7, 0.3
+    F = np.diag([1.10, 0.97, 1.03])
+    F_field = np.asfortranarray(F[:, :, None])
+    identity = np.asfortranarray(np.eye(3)[:, :, None])
+    strain = simcoon.Log_strain(F_field, True, False)
+    _, rotation, _ = simcoon.objective_rate("log_R", identity, F_field, 1.0, False)
+    zeros = np.zeros((6, 1), order="F")
+    simcoon_stress, _, _, simcoon_tangent = simcoon.umat(
+        "ELISO",
+        zeros,
+        np.asfortranarray(strain),
+        identity,
+        F_field,
+        zeros,
+        np.asfortranarray(rotation),
+        np.asfortranarray([[E], [nu], [1.0e-5]]),
+        np.zeros((1, 1), order="F"),
+        0.0,
+        1.0,
+        np.zeros((4, 1), order="F"),
+        np.zeros((1, 1), order="F"),
+        ndi=3,
+        tangent_mode=1,
+    )
+
+    class MaterialPointAssembly:
+        _nlgeom = "UL"
+        n_gauss_points = 1
+        space = SimpleNamespace(get_dimension=lambda: "3D")
+
+        def __init__(self):
+            self.sv = {
+                "Strain": StrainTensorList(strain),
+                "F": F_field,
+            }
+
+        @staticmethod
+        def convert_data(value):
+            return value
+
+    assembly = MaterialPointAssembly()
+    native = fd.constitutivelaw.ElasticIsotrop(E, nu)
+    native.update(assembly, None)
+
+    np.testing.assert_allclose(
+        assembly.sv["Stress"].asarray(), simcoon_stress, rtol=1.0e-12, atol=1.0e-12
+    )
+    np.testing.assert_allclose(
+        assembly.sv["TangentMatrix"],
+        simcoon_tangent[:, :, 0],
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+
+def test_convert_tangent_false_preserves_user_tangent_in_tl():
+    """The bypass keeps dS/dE untouched while still updating PK2 stress."""
+
+    fd.ModelingSpace("3D")
+    material = fd.constitutivelaw.ElasticIsotrop(8.7, 0.3)
+    weakform = fd.weakform.StressEquilibrium(
+        material, nlgeom="TL", convert_tangent=False
+    )
+    tangent = np.arange(36.0).reshape(6, 6)
+    stress = StressTensorList(np.arange(1.0, 7.0).reshape(6, 1))
+    F = np.asfortranarray(np.diag([1.1, 0.9, 1.05])[:, :, None])
+    assembly = SimpleNamespace(
+        _nlgeom="TL",
+        sv={"Stress": stress, "TangentMatrix": tangent, "F": F},
+    )
+    problem = SimpleNamespace(_line_search_update=False)
+
+    weakform.update_2(assembly, problem)
+
+    assert assembly.sv["TangentMatrix"] is tangent
+    np.testing.assert_allclose(
+        assembly.sv["PK2"].asarray(), stress.cauchy_to_pk2(F).asarray()
     )
 
 

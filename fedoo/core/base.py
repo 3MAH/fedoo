@@ -479,7 +479,7 @@ class ProblemBase:
         return self._global_dof.n_dof
 
     def set_solver(
-        self, solver: str = "direct", **kargs
+        self, solver: str = "direct", symmetric: bool = False, **kargs
     ):  # tol: float = 1e-5, precond: bool = True):
         """Define the solver for the linear system resolution.
 
@@ -511,6 +511,12 @@ class ProblemBase:
               res = solver(A,B,**kargs).
               where A is a scipy sparse matrix and B a 1d numpy array.
               kargs may contains optional parameters.
+        symmetric: bool, default=False
+            Use a symmetric-indefinite direct factorization when supported.
+            Pardiso uses ``mtype=-2`` and standalone MUMPS uses ``sym=2``.
+            SciPy/UMFPACK, PETSc and user-supplied solvers keep their usual
+            general path. The caller is responsible for ensuring that the
+            reduced system matrix is symmetric.
         kargs: optional parameters depending on the type of solver
             precond: bool
               Use precond = False to desactivate the diagonal matrix
@@ -557,7 +563,13 @@ class ProblemBase:
           >>>
           >>> # Use the MUMPS direct solver with petsc
           >>> pb.set_solver('petsc', solver_type='preonly', pc_type='lu', pc_factor_mat_solver_type='mumps')
+          >>>
+          >>> # Use the symmetric-indefinite Pardiso or standalone MUMPS path
+          >>> pb.set_solver('direct', symmetric=True)
         """
+        if not isinstance(symmetric, bool):
+            raise TypeError("bool expected for symmetric")
+
         # These options apply only to PETSc. Treat None as "not specified" so
         # callers can forward optional solver settings to any backend.
         for option in ("solver_type", "pc_type", "pc_factor_mat_solver_type"):
@@ -570,7 +582,7 @@ class ProblemBase:
             solver = solver.lower()
             if solver == "direct":
                 if USE_PYPARDISO:
-                    solver_func = spsolve
+                    solver_func = _solver_pardiso if symmetric else spsolve
                 elif USE_MUMPS:
                     solver_func = _solver_mumps
                 elif USE_PETSC:
@@ -612,7 +624,7 @@ class ProblemBase:
                 solver_func = _solver_petsc
             elif solver == "pardiso":
                 if USE_PYPARDISO:
-                    solver_func = spsolve
+                    solver_func = _solver_pardiso if symmetric else spsolve
                 else:
                     raise NameError(
                         'pypardiso not installed. Use "pip install pypardiso".'
@@ -631,7 +643,14 @@ class ProblemBase:
         else:  # assume solver is a function
             solver_func = solver
 
+        if solver_func in (_solver_pardiso, _solver_mumps):
+            kargs["symmetric"] = symmetric
+
+        rebuild_factor_context = self._factor_context is not None
+        self._solver_symmetric = symmetric
         self.__solver = [solver, solver_func, kargs, return_info, precond]
+        if rebuild_factor_context:
+            self.set_reuse_factorization(True)
 
     def _solve(self, A, B):
         if self._factor_context is not None:
@@ -688,6 +707,8 @@ class ProblemBase:
         regardless of the solver previously set with :meth:`set_solver`. The
         reuse path is direct LU only; if an iterative solver was set with
         :meth:`set_solver`, it is silently bypassed while reuse is enabled.
+        For pypardiso and python-mumps, the ``symmetric`` choice passed to
+        :meth:`set_solver` is also applied to the reused factorization.
         Disable reuse with ``set_reuse_factorization(False)`` to restore the
         normal solver dispatch.
 
@@ -703,9 +724,9 @@ class ProblemBase:
         """
         if reuse:
             if USE_PYPARDISO:
-                self._factor_context = _PypardisoFactor()
+                self._factor_context = _PypardisoFactor(self._solver_symmetric)
             elif USE_MUMPS:
-                self._factor_context = _MumpsFactor()
+                self._factor_context = _MumpsFactor(self._solver_symmetric)
             elif USE_PETSC:
                 self._factor_context = _PetscFactor()
             else:
@@ -891,14 +912,26 @@ def _solver_petsc(
     return res
 
 
-def _solver_mumps(A, B, **kargs):
+def _solver_pardiso(A, B, symmetric=False, **kargs):
+    """Solve with Pardiso using a general or symmetric-indefinite matrix."""
+    from pypardiso import PyPardisoSolver
+
+    solver = PyPardisoSolver(mtype=-2 if symmetric else 11)
+    if symmetric:
+        A = sparse.triu(A, format="csr")
+    return solver.solve(A, B)
+
+
+def _solver_mumps(A, B, symmetric=False, **kargs):
     # python-mumps exposes a Context-based API only; there is no
     # top-level spsolve. For repeated solves on the same A, use
     # `Problem.set_reuse_factorization(True)` to keep the Context alive
     # across calls (see _MumpsFactor).
     import mumps
 
-    ctx = mumps.Context()
+    ctx = mumps.Context(sym=2 if symmetric else 0)
+    if symmetric:
+        A = sparse.tril(A, format="csr")
     ctx.factor(A)
     return ctx.solve(B)
 
@@ -908,12 +941,15 @@ def _solver_mumps(A, B, **kargs):
 # All expose a uniform .factor(A) / .solve(B) interface.
 # =============================================================
 class _MumpsFactor:
-    def __init__(self):
+    def __init__(self, symmetric=False):
         import mumps
 
-        self._ctx = mumps.Context()
+        self._symmetric = symmetric
+        self._ctx = mumps.Context(sym=2 if symmetric else 0)
 
     def factor(self, A):
+        if self._symmetric:
+            A = sparse.tril(A, format="csr")
         self._ctx.factor(A)
 
     def solve(self, B):
@@ -921,13 +957,16 @@ class _MumpsFactor:
 
 
 class _PypardisoFactor:
-    def __init__(self):
+    def __init__(self, symmetric=False):
         from pypardiso import PyPardisoSolver
 
-        self._solver = PyPardisoSolver()
+        self._symmetric = symmetric
+        self._solver = PyPardisoSolver(mtype=-2 if symmetric else 11)
         self._A = None
 
     def factor(self, A):
+        if self._symmetric:
+            A = sparse.triu(A, format="csr")
         self._A = A
         self._solver.factorize(A)
 

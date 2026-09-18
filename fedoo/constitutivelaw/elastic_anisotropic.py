@@ -2,7 +2,7 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
+from fedoo.util.voigt_tensors import StressTensorList
 
 import numpy as np
 
@@ -64,7 +64,7 @@ class ElasticAnisotropic(Mechanical3D):
             assembly.sv["Stress"] = 0
             return
 
-        assembly.sv["Stress"] = StressTensorList(
+        stress = StressTensorList(
             [
                 sum(
                     [total_strain[j] * assembly.convert_data(H[i][j]) for j in range(6)]
@@ -72,6 +72,16 @@ class ElasticAnisotropic(Mechanical3D):
                 for i in range(6)
             ]
         )  # H[i][j] are converted to gauss point excepted if scalar
+
+        if assembly._nlgeom:
+            # In finite strain H acts on the corotational strain to produce
+            # Kirchhoff stress. StressEquilibrium integrates true Cauchy
+            # stress over the current configuration, hence sigma = tau / J.
+            F = np.asarray(assembly.sv["F"])
+            J = np.linalg.det(F.transpose(2, 0, 1))
+            stress = StressTensorList(stress.asarray() / J)
+
+        assembly.sv["Stress"] = stress
 
     def get_stress_from_strain(self, assembly, strain_tensor):
         H = self.get_tangent_matrix(assembly)

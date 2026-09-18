@@ -23,14 +23,17 @@ class StressEquilibriumMixed(StressEquilibrium):
     ----------
     constitutivelaw: ConstitutiveLaw
         Material constitutive law.
-    name: str, optional
-        Name of the weak form.
-    nlgeom: bool, optional
-        Non-linear geometry flag.
     bulk_modulus: float, optional
         Bulk modulus used for scaling the pressure equation. If None, it
         is estimated from the tangent matrix trace.
         Note: This is used for scaling the pressure constraint equation.
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        tangent required by the selected finite-strain formulation.
+    name: str, optional
+        Name of the weak form.
+    nlgeom: bool, optional
+        Non-linear geometry flag.
     space: ModelingSpace, optional
         Modeling space.
 
@@ -47,11 +50,18 @@ class StressEquilibriumMixed(StressEquilibrium):
         self,
         constitutivelaw,
         bulk_modulus=None,
+        convert_tangent=True,
         name="",
         nlgeom=None,
         space=None,
     ):
-        super().__init__(constitutivelaw, name, nlgeom, space)
+        super().__init__(
+            constitutivelaw,
+            convert_tangent=convert_tangent,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+        )
 
         self.space.new_variable("Pressure")
         self.bulk_modulus = bulk_modulus

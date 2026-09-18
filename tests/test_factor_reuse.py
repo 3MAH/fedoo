@@ -1,10 +1,22 @@
 """Tests for the factorization reuse mechanism."""
 
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
+import scipy.sparse as sp
 
 import fedoo as fd
-from fedoo.core.base import USE_MUMPS, USE_PETSC, USE_PYPARDISO
+from fedoo.core.base import (
+    USE_MUMPS,
+    USE_PETSC,
+    USE_PYPARDISO,
+    _MumpsFactor,
+    _PypardisoFactor,
+    _solver_mumps,
+    _solver_pardiso,
+)
 
 
 HAS_DIRECT_BACKEND = USE_PYPARDISO or USE_MUMPS or USE_PETSC
@@ -115,9 +127,6 @@ def test_solver_mumps_default_path():
     except ImportError:
         pytest.skip("python-mumps not installed")
 
-    import scipy.sparse as sp
-    from fedoo.core.base import _solver_mumps
-
     # Small symmetric positive-definite tridiagonal system: A x = b
     n = 8
     main = 2.0 * np.ones(n)
@@ -127,6 +136,87 @@ def test_solver_mumps_default_path():
 
     x = _solver_mumps(A, b)
     assert np.allclose(A @ x, b, atol=1e-10)
+
+
+@pytest.mark.parametrize("symmetric, expected_mtype", [(False, 11), (True, -2)])
+def test_pardiso_symmetry_mode(monkeypatch, symmetric, expected_mtype):
+    """Pardiso receives the requested general or symmetric matrix type."""
+    calls = []
+    matrices = []
+
+    class FakePardisoSolver:
+        def __init__(self, mtype):
+            calls.append(mtype)
+
+        def solve(self, A, B):
+            matrices.append(A)
+            return B
+
+        def factorize(self, A):
+            matrices.append(A)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pypardiso",
+        SimpleNamespace(PyPardisoSolver=FakePardisoSolver),
+    )
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    B = np.ones(2)
+    assert np.array_equal(_solver_pardiso(A, B, symmetric=symmetric), B)
+    factor = _PypardisoFactor(symmetric=symmetric)
+    factor.factor(A)
+    assert calls == [expected_mtype, expected_mtype]
+    expected_A = sp.triu(A, format="csr") if symmetric else A
+    assert all((matrix != expected_A).nnz == 0 for matrix in matrices)
+
+
+@pytest.mark.parametrize("symmetric, expected_sym", [(False, 0), (True, 2)])
+def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
+    """Standalone MUMPS receives the requested general or symmetric mode."""
+    calls = []
+    matrices = []
+
+    class FakeMumpsContext:
+        def __init__(self, sym):
+            calls.append(sym)
+
+        def factor(self, A):
+            matrices.append(A)
+
+        def solve(self, B):
+            return B
+
+    monkeypatch.setitem(sys.modules, "mumps", SimpleNamespace(Context=FakeMumpsContext))
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    B = np.ones(2)
+    assert np.array_equal(_solver_mumps(A, B, symmetric=symmetric), B)
+    factor = _MumpsFactor(symmetric=symmetric)
+    factor.factor(A)
+    assert calls == [expected_sym, expected_sym]
+    expected_A = sp.tril(A, format="csr") if symmetric else A
+    assert all((matrix != expected_A).nnz == 0 for matrix in matrices)
+
+
+def test_set_solver_symmetric_option_and_factor_reuse():
+    """The direct solver and its reuse context share the symmetry choice."""
+    pb = _build_plate_problem()
+    pb.set_solver("direct", symmetric=True)
+
+    assert pb._solver_symmetric is True
+    if USE_PYPARDISO:
+        assert pb._ProblemBase__solver[1] is _solver_pardiso
+        pb.set_reuse_factorization(True)
+        assert pb._factor_context._solver.mtype == -2
+    elif USE_MUMPS:
+        assert pb._ProblemBase__solver[1] is _solver_mumps
+
+
+def test_set_solver_symmetric_requires_bool():
+    pb = _build_plate_problem()
+    with pytest.raises(TypeError, match="bool expected"):
+        pb.set_solver("direct", symmetric=1)
 
 
 if __name__ == "__main__":
