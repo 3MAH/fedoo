@@ -56,7 +56,9 @@ def test_reduced_solid_operator_uses_center_jacobian(
         register_name=False,
     )
     material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
-    weakform = fd.weakform.StressEquilibriumBbar(material, space=space)
+    weakform = fd.weakform.StressEquilibrium(
+        material, space=space, incompressibility="sri"
+    )
     assembly = fd.Assembly.create(weakform, mesh)
     fd.problem.Linear(assembly)
     assembly.compute_elementary_operators()

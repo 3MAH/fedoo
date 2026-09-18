@@ -8,6 +8,33 @@ semantic versioning.
 
 ### Added
 
+- **`incompressibility` attribute of `StressEquilibrium`** (also a constructor
+  argument) to select the treatment of volumetric locking: `None` (default,
+  unchanged behavior), `"auto"`, `"mean_dilatation"`, `"sri"` or `"fbar"`.
+- **Mean dilatation method** (`incompressibility="mean_dilatation"`): B-bar
+  formulation based on a volume weighted projection of the dilatation,
+  equivalent to an element-wise discontinuous pressure eliminated at the
+  element level (one pressure for `quad4`, `hex8`, `wed6`, `tri6`, `tet10`;
+  linear pressure for `quad8`, `quad9`, `hex20`, `wed15`, `wed18`). Symmetric
+  tangent matrix, small strain and updated lagrangian ('3D', '2Dplane'), with
+  a consistent tangent when `geometric_stiffness` is enabled.
+- Plane-strain incompressibility methods now retain the three-dimensional
+  volumetric/deviatoric split: the assumed `zz` strain receives one third of
+  the volumetric correction, and finite-strain mean dilatation uses the cube
+  root scaling of the full assumed deformation gradient. Incompressibility
+  options are ignored for plane-stress models.
+
+### Fixed
+
+- The small-strain F-bar method now evaluates the volumetric strain at the
+  element centroid.
+- **F-bar tangent matrix.** The former F-bar implementation modified the stress
+  but its tangent matrix ignored the variation of the volume change at the
+  element center (~50% error on a nearly incompressible test). The consistent
+  term is now included for `quad4` and `hex8`, uses the 1/3 factor associated
+  with Fedoo's Lie tangent, and is no longer inadvertently symmetrized.
+- `Mesh.get_volume` and `Mesh.get_element_volumes` ignored their `n_elm_gp`
+  argument.
 - **`Modal` problem** for linear free-vibration eigenvalue analysis of
   constrained and free-free systems. Computed modes are mass-normalized, and
   their mode indices, eigenvalues, angular frequencies, and frequencies can be
@@ -18,8 +45,21 @@ semantic versioning.
 - **`Problem.clear_outputs`** for changing registered outputs between stages
   of chained analyses. FDH5 output also supports explicit `"overwrite"`,
   `"append"`, and `"error"` write policies.
+- Corrected the `Mechanical3D` symmetric-product indexing, which used
+  `H[2][j]` where `H[j][2]` was required.
+- Assembly caches now distinguish modeling spaces, preventing variable-rank
+  mappings and change-of-basis matrices from being reused incorrectly between
+  models, such as consecutive 3D and 2D beam examples.
 
 ### Changed
+
+- Removed the dedicated `StressEquilibriumBbar` and `StressEquilibriumFbar`
+  weak forms. Use `StressEquilibrium(..., incompressibility="sri")` and
+  `StressEquilibrium(..., incompressibility="fbar")`, respectively.
+- Removed the `StressEquilibrium.fbar` compatibility property. Select F-bar
+  exclusively with `incompressibility="fbar"`.
+- Updated-Lagrangian use of the legacy `incompressibility="sri"` method now
+  emits a warning because its finite-strain formulation is not consistent.
 
 - Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
   full and over-integration use a pseudo-inverse, while reduced-integration
@@ -34,14 +74,6 @@ semantic versioning.
   result writing from high-level solve methods. Modal and buckling analyses
   write one frame per mode and include tutorial-style examples with
   `DataSet` mode-shape plots.
-
-### Fixed
-
-- Corrected the `Mechanical3D` symmetric-product indexing, which used
-  `H[2][j]` where `H[j][2]` was required.
-- Assembly caches now distinguish modeling spaces, preventing variable-rank
-  mappings and change-of-basis matrices from being reused incorrectly between
-  models, such as consecutive 3D and 2D beam examples.
 
 ## [1.0.0b2] - 2026-09-11
 

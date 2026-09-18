@@ -46,7 +46,7 @@ elif mat == 1:
 
 # wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM)
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM)
-# wf.fbar = True
+# wf.incompressibility = "fbar"
 
 # alternative using element 'quad4' with reduced integration
 # ie n_elm_gp = 1 combined with hourglass control

@@ -247,7 +247,12 @@ class ImplicitDynamic(ImplicitDynamicSum):
         if isinstance(constitutivelaw, WeakFormBase):
             stiffness_weakform = constitutivelaw
         else:
-            stiffness_weakform = StressEquilibrium(constitutivelaw, "", nlgeom, space)
+            stiffness_weakform = StressEquilibrium(
+                constitutivelaw,
+                name="",
+                nlgeom=nlgeom,
+                space=space,
+            )
         parent = type(stiffness_weakform)
 
         class NewmarkStiffness(_NewmarkStiffness, parent):
@@ -297,7 +302,10 @@ class ImplicitDynamic2(WeakFormBase):
             stiffness_name = ""
 
         self.stiffness_weakform = StressEquilibrium(
-            constitutivelaw, stiffness_name, nlgeom, space
+            constitutivelaw,
+            name=stiffness_name,
+            nlgeom=nlgeom,
+            space=space,
         )
         self.constitutivelaw = self.stiffness_weakform.constitutivelaw
         warn_if_conditionally_stable(beta, gamma, context="ImplicitDynamic2")

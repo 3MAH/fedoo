@@ -62,8 +62,9 @@ elif mat == 3:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.StressEquilibriumFbar("ConstitutiveLaw", nlgeom=NLGEOM)
-wf.fbar = True
+wf = fd.weakform.StressEquilibrium(
+    "ConstitutiveLaw", nlgeom=NLGEOM, incompressibility="fbar"
+)
 wf.corate = "log"
 
 # fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 27)     #uses mesh_change=True when the mesh change during the time
