@@ -405,9 +405,8 @@ class StressEquilibrium(WeakFormBase):
                     )
 
     def _init_nl_strain_op_vir(self):
-        # initialize non linear operator for strain
-        # don't improve the convergence, but kept in case it may be usefull
-        # later.
+        # non linear (initial stress) virtual strain operator: geometric part
+        # of the consistent tangent, see the geometric_stiffness property.
 
         op_grad_du = self.space.op_grad_u()
         # grad of displacement increment in incremental problems
@@ -500,7 +499,18 @@ class StressEquilibrium(WeakFormBase):
 
         ``None`` selects the consistent default: enabled for finite-strain
         tangent conversion and disabled otherwise. Set a boolean explicitly
-        to override this behavior.
+        to override this behavior, e.g. ``True`` for a linear buckling
+        analysis about a prestressed small-strain state.
+
+        In finite strain this initial-stress term is part of the consistent
+        tangent: without it the assembled matrix underestimates the stiffness
+        of the soft modes under load (by a factor 4 to 5 for a slender
+        cylinder at 8 % tension) and Newton-Raphson diverges once those modes
+        are excited, after an apparent fast decrease of the error. With it,
+        the tangent of the simcoon laws and of the native elastic laws is
+        exact to finite-difference accuracy
+        (:class:`fedoo.constitutivelaw.ElastoPlasticity` keeps the continuum
+        tangent it documents).
         """
         return self._geometric_stiffness
 

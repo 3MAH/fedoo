@@ -16,6 +16,12 @@ Solid mechanical constitutive laws
 
 These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium`
 
+In a finite-strain analysis they all follow the same convention: the law
+returns the true Cauchy stress and an unnormalized corotational Kirchhoff
+tangent, and the weak form converts that tangent to the one required by the
+selected formulation. The convention is detailed on
+:py:class:`fedoo.core.mechanical3d.Mechanical3D`.
+
 .. autosummary::
    :toctree: generated/
    :template: custom-class-template.rst
@@ -27,6 +33,7 @@ These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium
    ElastoPlasticity
    FE2
    Simcoon
+   Heterogeneous
 
 Interface mechanical constitutive laws
 ======================================

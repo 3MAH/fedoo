@@ -171,14 +171,19 @@ def test_pardiso_symmetry_mode(monkeypatch, symmetric, expected_mtype):
     assert all((matrix != expected_A).nnz == 0 for matrix in matrices)
 
 
-@pytest.mark.parametrize("symmetric, expected_sym", [(False, 0), (True, 2)])
+@pytest.mark.parametrize("symmetric, expected_sym", [(False, None), (True, 2)])
 def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
-    """Standalone MUMPS receives the requested general or symmetric mode."""
+    """Standalone MUMPS receives the requested general or symmetric mode.
+
+    ``sym`` is only passed when a symmetric factorization is requested, so
+    that the general path keeps working with python-mumps releases whose
+    ``Context`` has no ``sym`` argument.
+    """
     calls = []
     matrices = []
 
     class FakeMumpsContext:
-        def __init__(self, sym):
+        def __init__(self, sym=None):
             calls.append(sym)
 
         def factor(self, A):

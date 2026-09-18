@@ -18,9 +18,54 @@ semantic versioning.
 - **`Problem.clear_outputs`** for changing registered outputs between stages
   of chained analyses. FDH5 output also supports explicit `"overwrite"`,
   `"append"`, and `"error"` write policies.
+- **`Problem.set_solver(..., symmetric=True)`** to request a
+  symmetric-indefinite direct factorization: Pardiso `mtype=-2` and standalone
+  MUMPS `sym=2`, with the appropriate stored triangle passed to each backend.
+  SciPy/UMFPACK, PETSc and user-supplied solvers keep their general path, and
+  the choice is propagated through factorization reuse. The caller is
+  responsible for the symmetry of the reduced matrix.
 
 ### Changed
 
+- **Solid constitutive laws now follow a single documented finite-strain
+  convention**: they return the true Cauchy stress and an unnormalized
+  corotational Kirchhoff ("box") tangent, and
+  `StressEquilibrium` converts that tangent centrally to `dS/dE` in TL or to
+  the spatial Lie tangent in UL. The per-law `_corotational_box_tangent`
+  attribute is gone; the conversion can be bypassed with the new
+  `convert_tangent=False` weak-form option when a law already supplies the
+  formulation tangent. The convention is documented on `Mechanical3D` and in
+  the user-material page.
+- **`StressEquilibrium.geometric_stiffness` now defaults to `None`, meaning
+  enabled in finite strain (`nlgeom`) and disabled in small strain**; `True`
+  and `False` keep forcing it (e.g. `True` for a linear buckling analysis).
+  The default follows the tangent conversion, so it stays off under
+  `convert_tangent=False`.
+  The initial-stress term is part of the consistent finite-strain tangent:
+  without it the assembled matrix underestimates the stiffness of the soft
+  modes under load and Newton-Raphson diverges after an apparent fast
+  convergence. Small-strain problems are unchanged.
+- **Native elastic laws (`ElasticAnisotropic`, `ElasticIsotrop`,
+  `ElasticOrthotropic`, `CompositeUD`) in finite strain** now return the
+  Cauchy stress `tau / J` and go through the same tangent conversion as the
+  simcoon laws. Their tangent is finite-difference exact and `ElasticIsotrop`
+  coincides with `Simcoon("ELISO")` to machine precision; the finite-strain
+  response differs from the previous hypoelastic one by the volume change J.
+- **`ElastoPlasticity` in finite strain** returns the Cauchy stress
+  `tau / J` (its radial return works on the logarithmic strain, conjugate to
+  the Kirchhoff stress): the response is now the one of `Simcoon("EPICP")`.
+  Its tangent remains the continuum one, as documented. The stress and strain
+  measures expected from a user `MechanicalUMAT` callback are now stated in
+  the user-material documentation.
+- **`Heterogeneous`** forwards the finite-strain setting to its phase
+  sub-assemblies, so that every phase law applies the same finite-strain
+  stress convention as it would in a homogeneous problem (identical result
+  and exact tangent for identical phases).
+- **`Assembly.assume_sym` defaults to `None`** ("not resolved yet") instead of
+  `False`. The weak form selects the formulation-dependent value during
+  initialization, and an explicit boolean set before then is preserved. The
+  F-bar tangent is now declared non-symmetric through the weak form's
+  assembly options rather than at initialization time.
 - Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
   full and over-integration use a pseudo-inverse, while reduced-integration
   elements use an independent reduced monomial basis. The mesh documentation
@@ -37,11 +82,46 @@ semantic versioning.
 
 ### Fixed
 
+- `NonLinear.to_start` re-assembles the tangent matrix after restoring the
+  state of a failed increment. The matrix of the diverged iterate could be
+  singular, and every retry then produced an infinite error down to `dt_min`
+  (IPC punch with the geometric stiffness).
 - Corrected the `Mechanical3D` symmetric-product indexing, which used
   `H[2][j]` where `H[j][2]` was required.
+- The documentation of `ElasticAnisotropic` and `ElasticIsotrop` is rendered
+  again: a class attribute declared before the docstring made Python discard
+  it, leaving both classes as empty pages in the API reference.
+  `Heterogeneous` is now listed in the constitutive-law reference as well.
+- `_solver_mumps` and the MUMPS factor-reuse context only pass `sym` to
+  `mumps.Context` when a symmetric factorization is requested, so the general
+  path still works with python-mumps releases whose `Context` has no `sym`
+  argument (0.0.6 and earlier). Asking for `symmetric=True` on such a release
+  raises an explicit `NotImplementedError`.
 - Assembly caches now distinguish modeling spaces, preventing variable-rank
   mappings and change-of-basis matrices from being reused incorrectly between
   models, such as consecutive 3D and 2D beam examples.
+
+### Migration — `convert_tangent` in the stress-equilibrium constructors
+
+`convert_tangent` is inserted before `name` in the signatures of
+`StressEquilibrium`, `StressEquilibriumBbar`, `StressEquilibriumFbar`,
+`StressEquilibriumRI`, `StressEquilibriumMixed` and `PoroMomentum`. Code that
+passed the weak-form name positionally must switch to the keyword form:
+
+```python
+# before
+wf = fd.weakform.StressEquilibrium(material, "my_weakform")
+# after
+wf = fd.weakform.StressEquilibrium(material, name="my_weakform")
+```
+
+A positional string now raises `TypeError: bool expected for convert_tangent`.
+Calls that already used keywords, or that only passed the constitutive law,
+are unaffected.
+
+A finite-strain law written against the previous behaviour must now return the
+true Cauchy stress: divide by `J = det(F1)` if it integrates in the Kirchhoff
+measure. Native fedoo laws and the simcoon UMATs already do.
 
 ## [1.0.0b2] - 2026-09-11
 

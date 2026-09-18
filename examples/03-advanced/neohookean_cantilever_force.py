@@ -84,7 +84,6 @@ material = fd.constitutivelaw.Simcoon("NEOHC", [mu, kappa], name="neohookean")
 material.set_density(rho)
 
 wf = fd.weakform.StressEquilibriumRI(material, nlgeom="UL")
-wf.list_weakform[0].geometric_stiffness = True
 assembly_fe = fd.Assembly.create(wf, mesh, name="cylinder")
 
 tie = fd.constraint.RigidTie(top)

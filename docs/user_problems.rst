@@ -138,12 +138,14 @@ Its arguments follow these conventions:
 Argument             Meaning
 ===================  =========================================================
 ``strain``           Total strain at the beginning of the increment, shape
-                     ``(6, n_points)``.
+                     ``(6, n_points)``. In a finite-strain analysis this is
+                     the logarithmic strain in the corotational material
+                     frame, and the infinitesimal strain otherwise.
 ``dstrain``          Current strain increment, shape ``(6, n_points)``.
 ``F0``, ``F1``       Beginning and current deformation gradients, shape
                      ``(3, 3, n_points)`` in a finite-strain analysis. They
                      are empty in a small-strain analysis.
-``stress``           Stress at the beginning of the increment, shape
+``stress``           Cauchy stress at the beginning of the increment, shape
                      ``(6, n_points)``.
 ``DR``               Objective incremental rotation, shape
                      ``(3, 3, n_points)``.
@@ -214,6 +216,10 @@ The low-level ``convert_tangent=False`` option disables these transformations.
 It is intended only for a custom weak-form implementation that already
 provides ``dS/dE`` in TL or the spatial Lie tangent in UL. When conversion is
 disabled, geometric stiffness is not enabled automatically.
+
+:class:`fedoo.constitutivelaw.ElastoPlasticity` is a readable Python
+reference for this convention: it integrates its radial return in the
+Kirchhoff measure and divides by ``J`` before returning the stress.
 
 See the `Simcoon UMAT documentation
 <https://3mah.github.io/simcoon-docs/simulation/umat_tutorial.html>`_ for the
