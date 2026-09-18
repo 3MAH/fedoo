@@ -398,46 +398,49 @@ For nearly incompressible materials encountered in solid mechanics (Poisson's
 ratio :math:`\nu \approx 0.5`), standard elements may suffer from 
 **volumetric locking**. Fedoo offers the following solutions:
 
-* **Element-level methods**: set the ``incompressibility`` attribute of the
-  :class:`fedoo.weakform.StressEquilibrium` weak form (default: ``None``,
-  standard displacement formulation). The problem keeps only the displacement
+* **Element-level methods**: pass ``incompressibility`` to
+  :class:`fedoo.weakform.StressEquilibrium` (default: ``None``, standard
+  displacement formulation). These methods introduce no additional global
   unknowns.
 
   .. code-block:: python
 
       wf = fd.weakform.StressEquilibrium(material, incompressibility="auto")
 
-  * ``"auto"``: most suitable method for each type of element (currently
-    ``"mean_dilatation"`` where available).
-  * ``"mean_dilatation"``: B-bar method based on the volume weighted projection
-    of the dilatation over each element. It is equivalent to a mixed
-    formulation with element-wise discontinuous pressure and dilatation,
-    eliminated at the element level, and gives a symmetric tangent matrix.
+  * ``"auto"``: select ``"mean_dilatation"`` where it is available and retain
+    the standard formulation otherwise.
+  * ``"mean_dilatation"``: recommended B-bar method, based on a
+    volume-weighted projection of the element dilatation. It gives a symmetric
+    tangent matrix and supports both low- and high-order elements.
     One pressure value per element is used for ``quad4``, ``hex8``, ``wed6``,
     ``tri6`` and ``tet10`` elements, a linear pressure for ``quad8``, ``quad9``,
-    ``hex20``, ``wed15`` and ``wed18`` elements. Available for small strain and
-    for the updated lagrangian method ('3D' and '2Dplane'). In finite strain,
-    set ``geometric_stiffness = True`` to get the consistent tangent matrix.
-  * ``"sri"``: B-bar method with the dilatation evaluated at the element
-    center (selective reduced integration), for ``quad4`` and ``hex8`` only.
-  * ``"fbar"``: F-bar method (same as ``fbar = True``), with the volume change
-    evaluated at the element center. The consistent tangent matrix is non
-    symmetric (``quad4`` and ``hex8`` elements, not available in '2Daxi' nor
-    with the total lagrangian method, for which the standard tangent is kept).
+    ``hex20``, ``wed15`` and ``wed18`` elements. It is available for small
+    strain and updated-Lagrangian analyses in ``3D`` and ``2Dplane``. In
+    finite strain, set ``geometric_stiffness = True`` to get the consistent
+    tangent matrix.
+  * ``"sri"``: legacy low-order B-bar method, with the dilatation evaluated at
+    the element center. It is available for ``quad4`` and ``hex8``. It is most
+    appropriate for small-strain analyses. Its finite-strain formulation is
+    not consistent and emits a warning with updated Lagrangian; prefer
+    ``"mean_dilatation"`` or ``"fbar"``. The total-Lagrangian formulation is
+    not supported.
+  * ``"fbar"``: F-bar method with the volume change evaluated at the element
+    center. For ``quad4`` and ``hex8`` in ``3D`` or
+    ``2Dplane``, its consistent tangent matrix is nonsymmetric. In small
+    strain, it reduces to a center-based B-bar correction. Other elements,
+    ``2Daxi``, and total-Lagrangian analyses retain the F-bar kinematic
+    correction but use the standard tangent, with a warning.
 
-  These methods require full integration: they have no effect when the number
-  of gauss points is not higher than the number of pressure values, nor for
-  constant strain elements (``tri3``, ``tet4``), for which quadratic elements
-  or the mixed formulation should be preferred. Quadratic elements with
-  reduced integration (``hex20r``, ``tet10r``) are already weakly sensitive to
-  volumetric locking. With one pressure value per ``quad4`` or ``hex8``
-  element, the displacement is accurate but the pressure field may exhibit
-  checkerboard oscillations.
+  In plane stress (``2Dstress``), these options are ignored and the standard
+  plane-stress formulation is used. They require full integration and do not
+  improve constant-strain elements such as ``tri3`` and ``tet4``; use
+  quadratic elements or the mixed formulation instead. With one pressure
+  value per ``quad4`` or ``hex8`` element, displacement results are generally
+  accurate but the recovered pressure may exhibit checkerboard oscillations.
 * **Reduced Integration**: Use the :class:`fedoo.weakform.StressEquilibriumRI`
-  weak form. This evaluates volumetric terms at fewer integration points to 
-  relax the incompressibility constraint. Reduced integration is known to be 
-  prone to **hourglass** instabilities; this weak form includes an hourglass 
-  control stiffness to mitigate this.
+  weak form for one-point integration of ``quad4`` or ``hex8`` elements. It
+  includes hourglass control to suppress the zero-energy modes introduced by
+  reduced integration.
 * **Mixed Displacement/Pressure**: For hybrid strategies introducing 
   additional "Pressure" DOFs, use the 
   :class:`fedoo.weakform.StressEquilibriumMixed` weak form. The field 

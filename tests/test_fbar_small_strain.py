@@ -1,11 +1,10 @@
+import warnings
+
 import numpy as np
 import pytest
 
 import fedoo as fd
-from fedoo.weakform.stress_equilibrium import (
-    _comp_grad_disp,
-    _comp_grad_disp_fbar,
-)
+from fedoo.weakform.stress_equilibrium import _comp_grad_disp_fbar
 
 DISTORTED_ELEMENTS = [
     (
@@ -33,7 +32,7 @@ DISTORTED_ELEMENTS = [
 
 
 @pytest.mark.parametrize("dimension,mesh_elm,nodes", DISTORTED_ELEMENTS)
-def test_small_strain_fbar_uses_volume_weighted_mean(dimension, mesh_elm, nodes):
+def test_small_strain_fbar_uses_element_centroid(dimension, mesh_elm, nodes):
     fd.Assembly.delete_memory()
     space = fd.ModelingSpace(dimension)
     mesh = fd.Mesh(
@@ -43,20 +42,75 @@ def test_small_strain_fbar_uses_volume_weighted_mean(dimension, mesh_elm, nodes)
         register_name=False,
     )
     material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
-    weakform = fd.weakform.StressEquilibrium(material, space=space)
-    weakform.fbar = True
+    weakform = fd.weakform.StressEquilibrium(
+        material, incompressibility="fbar", space=space
+    )
     assembly = fd.Assembly.create(weakform, mesh)
 
     # displacement field with a non uniform divergence
     displacement = (0.01 * nodes**2).T.ravel()
 
-    div_u = np.trace(np.array(_comp_grad_disp(assembly, displacement)))
-    weights = assembly._get_gaussian_quadrature_mat().data
-    expected = (weights @ div_u) / weights.sum()
+    grad_center = np.array(
+        [
+            [
+                assembly.get_gp_results(op, displacement, n_elm_gp=1)
+                if op != 0
+                else np.zeros(mesh.n_elements)
+                for op in line_op
+            ]
+            for line_op in space.op_grad_u()
+        ]
+    )
+    expected = np.trace(grad_center)
 
     div_u_bar = np.trace(_comp_grad_disp_fbar(assembly, displacement))
 
     assert np.allclose(div_u_bar, expected)
-    # a plain arithmetic mean over the gauss points is not the element mean
-    # volumetric strain for a distorted element
-    assert not np.isclose(div_u.mean(), expected)
+
+
+@pytest.mark.parametrize("dimension,mesh_elm,nodes", DISTORTED_ELEMENTS)
+def test_small_strain_fbar_tangent_matches_internal_force(dimension, mesh_elm, nodes):
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace(dimension)
+    mesh = fd.Mesh(
+        nodes,
+        np.array([np.arange(len(nodes))]),
+        mesh_elm,
+        register_name=False,
+    )
+    material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+    weakform = fd.weakform.StressEquilibrium(material, incompressibility="fbar")
+    assembly = fd.Assembly.create(weakform, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.print_info = 0
+    pb.initialize()
+
+    rng = np.random.default_rng(2)
+    displacement = rng.normal(scale=0.01, size=pb.n_dof)
+    pb._U = displacement
+    assembly.update(pb, "all")
+
+    matrix = assembly.current.get_global_matrix()
+    internal_force = np.asarray(assembly.current.get_global_vector()).ravel()
+    matrix_force = np.asarray(matrix @ displacement).ravel()
+    assert np.allclose(internal_force, -matrix_force)
+
+
+def test_unsupported_fbar_warns_unless_problem_is_quiet():
+    def make_problem(print_info):
+        fd.Assembly.delete_memory()
+        fd.ModelingSpace("2Dplane")
+        mesh = fd.mesh.rectangle_mesh(3, 3, elm_type="quad8")
+        material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+        weakform = fd.weakform.StressEquilibrium(material, incompressibility="fbar")
+        assembly = fd.Assembly.create(weakform, mesh)
+        pb = fd.problem.NonLinear(assembly)
+        pb.print_info = print_info
+        return pb
+
+    with pytest.warns(UserWarning, match="consistent F-bar tangent"):
+        make_problem(1).initialize()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        make_problem(0).initialize()

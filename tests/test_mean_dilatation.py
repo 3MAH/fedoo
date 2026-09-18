@@ -26,7 +26,7 @@ class _ReferenceBbar(fd.weakform.StressEquilibrium):
     def get_weak_equation(self, assembly, pb):
         eps = self.space.op_strain()
         correction = self._get_dilatation_correction_op(assembly)
-        n = self.space.ndim
+        n = 3
         for i in range(n):
             eps[i] = eps[i] + correction * (1 / n)
         H = assembly.sv["TangentMatrix"]
@@ -134,7 +134,10 @@ def test_sri_attribute_is_the_bbar_weakform(dimension, elm_type):
         dimension, elm_type, fd.weakform.StressEquilibrium, incompressibility="sri"
     )
     reference, _ = _assemble_matrix(
-        dimension, elm_type, fd.weakform.StressEquilibriumBbar
+        dimension,
+        elm_type,
+        _ReferenceBbar,
+        incompressibility="sri",
     )
     assert assembly.elm_type == elm_type + "sri"
     scale = np.abs(matrix).max()
@@ -144,9 +147,12 @@ def test_sri_attribute_is_the_bbar_weakform(dimension, elm_type):
 def test_incompressibility_attribute():
     fd.ModelingSpace("3D")
     material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+    positional = fd.weakform.StressEquilibrium(material, "sri")
+    assert positional.incompressibility == "sri"
+
     weakform = fd.weakform.StressEquilibrium(material)
     assert weakform.incompressibility is None
-    assert weakform.fbar is False
+    assert not hasattr(weakform, "fbar")
     assert weakform.assembly_options.get("elm_type", "hex8") is None
 
     weakform.incompressibility = "auto"
@@ -158,10 +164,10 @@ def test_incompressibility_attribute():
     assert weakform.assembly_options.get("elm_type", "hex8") == "hex8sri"
     assert weakform.assembly_options.get("elm_type", "hex20") is None
 
-    weakform.fbar = True
+    weakform.incompressibility = "fbar"
     assert weakform.incompressibility == "fbar"
     assert weakform.assembly_options.get("elm_type", "hex8") == "hex8sri"
-    weakform.fbar = False
+    weakform.incompressibility = None
     assert weakform.incompressibility is None
 
     with pytest.raises(ValueError):
@@ -197,6 +203,42 @@ def test_incompressibility_unavailable_elements():
     assembly = fd.Assembly.create(weakform, mesh, n_elm_gp=1)
     with pytest.raises(ValueError, match="gauss points"):
         fd.problem.Linear(assembly)
+
+
+@pytest.mark.parametrize("method", ["mean_dilatation", "sri", "fbar"])
+def test_incompressibility_is_ignored_in_plane_stress(method):
+    with pytest.warns(UserWarning, match="ignored.*2Dstress"):
+        matrix, assembly = _assemble_matrix(
+            "2Dstress",
+            "quad4",
+            fd.weakform.StressEquilibrium,
+            incompressibility=method,
+        )
+    standard, _ = _assemble_matrix("2Dstress", "quad4", fd.weakform.StressEquilibrium)
+    assert assembly.elm_type == "quad4"
+    assert np.allclose(matrix, standard)
+
+
+def test_finite_strain_sri_warns_unless_problem_is_quiet():
+    def make_problem(print_info):
+        fd.Assembly.delete_memory()
+        fd.ModelingSpace("2Dplane")
+        mesh = fd.mesh.rectangle_mesh(3, 3, elm_type="quad4")
+        material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+        weakform = fd.weakform.StressEquilibrium(
+            material, incompressibility="sri", nlgeom="UL"
+        )
+        assembly = fd.Assembly.create(weakform, mesh)
+        pb = fd.problem.NonLinear(assembly)
+        pb.print_info = print_info
+        return pb
+
+    with pytest.warns(UserWarning, match="legacy small-strain method"):
+        make_problem(1).initialize()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        make_problem(0).initialize()
 
 
 def test_default_formulation_is_unchanged():

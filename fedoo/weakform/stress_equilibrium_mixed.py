@@ -51,7 +51,12 @@ class StressEquilibriumMixed(StressEquilibrium):
         nlgeom=None,
         space=None,
     ):
-        super().__init__(constitutivelaw, name, nlgeom, space)
+        super().__init__(
+            constitutivelaw,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+        )
 
         self.space.new_variable("Pressure")
         self.bulk_modulus = bulk_modulus
@@ -306,22 +311,6 @@ class StressEquilibriumMixed(StressEquilibrium):
             raise ValueError(
                 "incompressibility can't be activated for Mixed formulation"
             )
-
-    @property
-    def fbar(self):
-        """Set to True to use the F-bar method.
-
-        The F-bar method should be used to stabilized constitutive laws with
-        nearly incompressible behavior.
-        """
-        return False
-
-    @fbar.setter
-    def fbar(self, value):
-        if not isinstance(value, bool):
-            raise TypeError("bool expeted for fbar")
-        if value:
-            raise ValueError("fbar can't be activated for Mixed formulation")
 
     def _comp_F(self, assembly, displacement):
         # compute only the isochoric part of F and volume change J

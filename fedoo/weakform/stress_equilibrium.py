@@ -36,6 +36,10 @@ class StressEquilibrium(WeakFormBase):
     ----------
     constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
         Material Constitutive Law (:mod:`fedoo.constitutivelaw`)
+    incompressibility: str, optional
+        Method used to avoid the volumetric locking of nearly incompressible
+        materials. See the :py:attr:`incompressibility` attribute.
+        By default (None), the standard displacement formulation is used.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
@@ -50,19 +54,15 @@ class StressEquilibrium(WeakFormBase):
     space: ModelingSpace
         Modeling space associated to the weakform. If None is specified,
         the active ModelingSpace is considered.
-    incompressibility: str, optional
-        Method used to avoid the volumetric locking of nearly incompressible
-        materials. See the :py:attr:`incompressibility` attribute.
-        By default (None), the standard displacement formulation is used.
     """
 
     def __init__(
         self,
         constitutivelaw,
+        incompressibility=None,
         name="",
         nlgeom=None,
         space=None,
-        incompressibility=None,
     ):
         if isinstance(constitutivelaw, str):
             constitutivelaw = ConstitutiveLaw[constitutivelaw]
@@ -182,7 +182,7 @@ class StressEquilibrium(WeakFormBase):
                 ]
             )
 
-        if self.fbar:
+        if self.incompressibility == "fbar":
             DiffOp = DiffOp + self._get_fbar_tangent_op(
                 assembly, eps, H, initial_stress
             )
@@ -247,7 +247,11 @@ class StressEquilibrium(WeakFormBase):
         # the modified strains, the tangent is pre-contracted so that every
         # couple of operators appears only once:
         # eps_bar^T H eps_bar = eps^T H eps + c (a.eps) + (b.eps) c + k c c
-        n = self.space.ndim
+        # Solid constitutive laws use a three-dimensional volumetric split,
+        # including with the plane-strain assumption. In 2D plane strain the
+        # physical eps_zz is zero, but the assumed B-bar strain receives one
+        # third of the volumetric correction in all three normal components.
+        n = 3
         # scale = theta/J: the weak form is integrated over the current volume
         # (dv = J dV0) whereas the mean dilatation form is theta dV0
         scale = assembly.sv.get("_MeanDilatation_scale", 1)
@@ -292,7 +296,11 @@ class StressEquilibrium(WeakFormBase):
                 grad = self.space.op_grad_u()
                 div = sum(grad[i][i] for i in range(n))
                 grad_grad = sum(
-                    grad[i][j].virtual * grad[j][i] for i in range(n) for j in range(n)
+                    0
+                    if grad[i][j] == 0 or grad[j][i] == 0
+                    else grad[i][j].virtual * grad[j][i]
+                    for i in range(n)
+                    for j in range(n)
                 )
                 pressure_proj = (
                     _element_projection(
@@ -326,7 +334,7 @@ class StressEquilibrium(WeakFormBase):
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
         self.corate = self._corate  # to force the setter function
-        self._initialize_incompressibility(assembly)
+        self._initialize_incompressibility(assembly, pb)
 
         # assume_sym: the UL spatial (Lie) tangent is not major-symmetric
         # (stress terms), so the default is False in UL -- but only for laws
@@ -408,21 +416,58 @@ class StressEquilibrium(WeakFormBase):
                          lagrangian instead."
                     )
 
-    def _initialize_incompressibility(self, assembly):
+    def _initialize_incompressibility(self, assembly, pb):
         method = self.incompressibility
         if method is None:
             return
+        if self.space.get_dimension() == "2Dstress":
+            # Plane stress eliminates the out-of-plane stress through the
+            # constitutive reduction and does not use the 3D incompressibility
+            # treatments implemented here.
+            assembly.elm_type = assembly.mesh.elm_type
+            self._comp_F = _comp_F
+            if method != "auto" and getattr(pb, "print_info", 1) > 0:
+                warnings.warn(
+                    f"incompressibility={method!r} is ignored with the "
+                    "'2Dstress' modeling space; the standard plane-stress "
+                    "formulation is used.",
+                    stacklevel=2,
+                )
+            return
         if method == "fbar":
-            if (
-                "_DispX" in getattr(get_element(assembly.elm_type), "dict_elm_type", {})
+            has_center_interpolation = "_DispX" in getattr(
+                get_element(assembly.elm_type), "dict_elm_type", {}
+            )
+            consistent_tangent = (
+                has_center_interpolation
                 and assembly._nlgeom != "TL"
                 and not self.space.is_axisymmetric
-            ):
+            )
+            if consistent_tangent:
                 # consistent (non symmetric) tangent matrix
                 for x in ["X", "Y", "Z"][: self.space.ndim]:
                     self.space.variable_alias("_Disp" + x, "Disp" + x)
                 self.assembly_options["assume_sym"] = False
                 assembly.assume_sym = False
+            elif getattr(pb, "print_info", 1) > 0:
+                reasons = []
+                if not has_center_interpolation:
+                    reasons.append(
+                        f"'{assembly.mesh.elm_type}' has no element-center "
+                        "displacement interpolation"
+                    )
+                if assembly._nlgeom == "TL":
+                    reasons.append("the total-Lagrangian formulation is used")
+                if self.space.is_axisymmetric:
+                    reasons.append("the modeling space is axisymmetric")
+                warnings.warn(
+                    "incompressibility='fbar': the consistent F-bar tangent "
+                    "is unavailable because "
+                    + ", and ".join(reasons)
+                    + ". The F-bar kinematic correction is kept, but the "
+                    "standard tangent is used; convergence may be degraded.",
+                    stacklevel=2,
+                )
             return
 
         has_alias = "_DispX" in getattr(
@@ -434,10 +479,6 @@ class StressEquilibrium(WeakFormBase):
         else:
             available = degree is not None
 
-        if method == "auto" and self.space.get_dimension() == "2Dstress":
-            # no volumetric locking with the plane stress assumption
-            assembly.elm_type = assembly.mesh.elm_type
-            return
         if not available:
             if method == "auto":
                 warnings.warn(
@@ -454,17 +495,26 @@ class StressEquilibrium(WeakFormBase):
                 f"'{assembly.mesh.elm_type}' elements."
             )
 
+        if (
+            method == "sri"
+            and assembly._nlgeom == "UL"
+            and getattr(pb, "print_info", 1) > 0
+        ):
+            warnings.warn(
+                "incompressibility='sri' is a legacy small-strain method. "
+                "With updated-Lagrangian finite strains, it corrects the "
+                "weak-form strain operator but not the deformation gradient "
+                "passed to the constitutive law; convergence and results may "
+                "therefore be unreliable. Prefer 'mean_dilatation' or 'fbar'.",
+                stacklevel=2,
+            )
+
         if degree is not None:
             if self.space.is_axisymmetric or assembly._nlgeom == "TL":
                 raise NotImplementedError(
                     "The mean dilatation method is not implemented for '2Daxi' "
                     "ModelingSpace or with the total lagrangian formulation. Use "
                     "updated lagrangian instead."
-                )
-            if assembly._nlgeom and self.space.get_dimension() == "2Dstress":
-                raise NotImplementedError(
-                    "The mean dilatation method is not implemented for "
-                    "'2Dstress' ModelingSpace with geometrical non linearities."
                 )
             basis = _get_dilatation_basis(assembly)
             if assembly.n_elm_gp <= basis.shape[1]:
@@ -512,7 +562,7 @@ class StressEquilibrium(WeakFormBase):
                 self._comp_F(assembly, displacement)
                 self._corate_func(self, assembly, pb)
             else:
-                if self.fbar:
+                if self.incompressibility == "fbar":
                     _comp_grad_disp_fbar(assembly, displacement)
                 elif (
                     self.incompressibility in ["auto", "mean_dilatation"]
@@ -724,20 +774,22 @@ class StressEquilibrium(WeakFormBase):
               Available in small strain and with the updated lagrangian
               method. The geometric_stiffness attribute should be set to True
               to get the consistent tangent matrix in finite strain.
-            * "sri": B-bar method where the dilatation is evaluated at the
-              element center (selective reduced integration), for "quad4"
-              and "hex8" elements only.
+            * "sri": legacy small-strain B-bar method where the dilatation is
+              evaluated at the element center, for "quad4" and "hex8"
+              elements only. Its use with updated-Lagrangian finite strains
+              emits a warning because the formulation is not consistent.
             * "fbar": F-bar method where the volume change is evaluated at the
               element center. The consistent non symmetric tangent matrix is
               used for "quad4" and "hex8" elements (not available for '2Daxi'
-              and with the total lagrangian method). The method has no effect
-              for linear problems.
+              and with the total lagrangian method). In small strain, it
+              reduces to a center-based B-bar volumetric correction.
 
         This attribute should be defined before the creation of the associated
         assembly. Elements with constant strain ("tri3", "tet4") or
         reduced integration elements are not improved by these methods: see
         :py:class:`fedoo.weakform.StressEquilibriumMixed` or
-        :py:class:`fedoo.weakform.StressEquilibriumRI`.
+        :py:class:`fedoo.weakform.StressEquilibriumRI`. Incompressibility
+        treatments are ignored with the plane-stress assumption.
         """
         return self._incompressibility
 
@@ -764,23 +816,6 @@ class StressEquilibrium(WeakFormBase):
             self._comp_F = _comp_F_mean_dilatation
         else:
             self._comp_F = _comp_F
-
-    @property
-    def fbar(self):
-        """Set to True to use the F-bar method.
-
-        Same as setting the :py:attr:`incompressibility` attribute to "fbar".
-        """
-        return self._incompressibility == "fbar"
-
-    @fbar.setter
-    def fbar(self, value):
-        if not isinstance(value, bool):
-            raise TypeError("bool expeted for fbar")
-        if value:
-            self.incompressibility = "fbar"
-        elif self._incompressibility == "fbar":
-            self.incompressibility = None
 
     @property
     def geometric_stiffness(self):
@@ -980,30 +1015,27 @@ def _comp_grad_disp(assembly, displacement):
     return grad_values
 
 
-def _element_volume_mean(assembly, gp_field):
-    # volume weighted mean over each element of a field given at gauss points
-    # return an array of shape (n_elements,)
-    weights = assembly._get_gaussian_quadrature_mat().data.reshape(
-        assembly.n_elm_gp, -1
-    )
-    if assembly.space.is_axisymmetric:
-        # dV = 2*pi*r*dA (the 2*pi factor cancels out in the mean)
-        weights = weights * assembly.sv["_R_gausspoints"].reshape(assembly.n_elm_gp, -1)
-    return (weights * gp_field.reshape(assembly.n_elm_gp, -1)).sum(
-        axis=0
-    ) / weights.sum(axis=0)
+def _get_grad_disp_center(assembly, displacement):
+    return [
+        [
+            assembly.get_gp_results(op, displacement, n_elm_gp=1)
+            if op != 0
+            else np.zeros(assembly.mesh.n_elements)
+            for op in line_op
+        ]
+        for line_op in assembly.space.op_grad_u()
+    ]
 
 
 def _comp_grad_disp_fbar(assembly, displacement):
-    # #small strain fbar. Only valid in small strain
+    # Small-strain limit of F-bar: replace the volumetric strain by its value
+    # at the element centroid, consistently with the finite-strain F-bar
+    # definition and with _get_fbar_tangent_op.
     grad_values = np.array(_comp_grad_disp(assembly, displacement))
-    # return grad_values
     dvol = np.trace(grad_values)
 
-    # mean volumetric strain of each element (volume weighted: an arithmetic
-    # mean over the gauss points is wrong for distorted elements)
-    dvol_center = _element_volume_mean(assembly, dvol)
-    # grad_values = grad_values - (dvol.reshape(assembly.n_elm_gp,-1) - dvol_center).ravel()
+    grad_values_center = np.array(_get_grad_disp_center(assembly, displacement))
+    dvol_center = np.trace(grad_values_center)
     grad_values[[0, 1, 2], [0, 1, 2]] -= (
         1 / 3 * (dvol.reshape(assembly.n_elm_gp, -1) - dvol_center).ravel()
     )
@@ -1015,7 +1047,7 @@ def _comp_grad_disp_mean_dilatation(assembly, displacement):
     # small strain mean dilatation: the dilatation is replaced by its
     # projection over each element
     grad_values = np.array(_comp_grad_disp(assembly, displacement))
-    n = assembly.space.ndim
+    n = 3
     dvol = sum(grad_values[i, i] for i in range(n)).reshape(assembly.n_elm_gp, -1)
     weights = assembly._get_gaussian_quadrature_mat().data.reshape(
         assembly.n_elm_gp, -1
@@ -1095,10 +1127,11 @@ def _comp_F_mean_dilatation(assembly, displacement):
             "trial state degenerates the kinematics: projected volume change "
             f"<= 0 (min = {theta.min():.3e}). Treated as a failed Newton iterate."
         )
-    n = assembly.space.ndim
     scale = theta / J
-    # in 2D (plane strain), only the in-plane components are modified
-    F1[:n, :n] *= scale ** (1 / n)
+    # The assumed constitutive deformation gradient uses the 3D volumetric
+    # split also in plane strain. The physical kinematics still have F_zz=1;
+    # only the assumed F-bar/mean-dilatation tensor has a modified F_zz.
+    F1 *= scale ** (1 / 3)
 
     assembly.sv["_MeanDilatation_scale"] = scale
     assembly.sv["Jbar"] = theta
@@ -1119,15 +1152,7 @@ def _comp_Fbar(assembly, displacement):
     F1 = np.add(eye_3, grad_values, order="F")
     J = _check_F_validity(F1)
 
-    grad_values_center = [
-        [
-            assembly.get_gp_results(op, displacement, n_elm_gp=1)
-            if op != 0
-            else np.zeros(assembly.mesh.n_elements)
-            for op in line_op
-        ]
-        for line_op in assembly.space.op_grad_u()
-    ]
+    grad_values_center = _get_grad_disp_center(assembly, displacement)
     # the element-center Jacobian must be validated too: a negative Jcenter
     # would silently turn the fractional power below into NaN
     Jcenter = _check_F_validity(np.add(eye_3, grad_values_center))

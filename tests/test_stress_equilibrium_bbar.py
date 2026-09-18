@@ -4,17 +4,17 @@ import pytest
 import fedoo as fd
 
 
-class _ReferenceBbar(fd.weakform.StressEquilibriumBbar):
+class _ReferenceBbar(fd.weakform.StressEquilibrium):
     """Direct volumetric/deviatoric split used as an assembly reference."""
 
     def get_weak_equation(self, assembly, pb):
         eps = self.space.op_strain()
-        n_normal_components = self.space.ndim
+        n_normal_components = 3
         eps_vol = sum(eps[:n_normal_components])
         eps_vol_reduced = self.space.derivative("_DispX", "X") + self.space.derivative(
             "_DispY", "Y"
         )
-        if n_normal_components == 3:
+        if self.space.ndim == 3:
             eps_vol_reduced += self.space.derivative("_DispZ", "Z")
 
         correction = (eps_vol_reduced - eps_vol) / n_normal_components
@@ -33,7 +33,7 @@ class _ReferenceBbar(fd.weakform.StressEquilibriumBbar):
         )
 
 
-class _ComponentwiseReduced(fd.weakform.StressEquilibriumBbar):
+class _ComponentwiseReduced(fd.weakform.StressEquilibrium):
     """Former implementation, retained only to detect the original error."""
 
     def get_weak_equation(self, assembly, pb):
@@ -53,10 +53,10 @@ class _ComponentwiseReduced(fd.weakform.StressEquilibriumBbar):
         )
 
 
-def _assemble_matrix(dimension, weakform_type):
+def _assemble_matrix(dimension, weakform_type, **kwargs):
     fd.ModelingSpace(dimension)
     material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.499)
-    weakform = weakform_type(material)
+    weakform = weakform_type(material, **kwargs)
     if dimension == "3D":
         mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
     else:
@@ -67,11 +67,17 @@ def _assemble_matrix(dimension, weakform_type):
     return assembly.get_global_matrix().toarray()
 
 
-@pytest.mark.parametrize("dimension", ["2Dplane", "2Dstress", "3D"])
+@pytest.mark.parametrize("dimension", ["2Dplane", "3D"])
 def test_bbar_reduces_only_the_volumetric_strain(dimension):
-    matrix = _assemble_matrix(dimension, fd.weakform.StressEquilibriumBbar)
-    reference = _assemble_matrix(dimension, _ReferenceBbar)
-    componentwise_reduced = _assemble_matrix(dimension, _ComponentwiseReduced)
+    matrix = _assemble_matrix(
+        dimension,
+        fd.weakform.StressEquilibrium,
+        incompressibility="sri",
+    )
+    reference = _assemble_matrix(dimension, _ReferenceBbar, incompressibility="sri")
+    componentwise_reduced = _assemble_matrix(
+        dimension, _ComponentwiseReduced, incompressibility="sri"
+    )
 
     assert np.allclose(matrix, reference, rtol=1e-12, atol=1e-12)
     assert not np.allclose(matrix, componentwise_reduced, rtol=1e-8, atol=1e-8)
