@@ -55,7 +55,9 @@ class Assembly(AssemblyBase):
     _saved_change_of_basis_mat = {}
     # _saved_node2gausspoint_mat = {}
     # _saved_gausspoint2node_mat = {}
-    _saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+    # Associated-variable ranks depend on both the element interpolation and
+    # the ModelingSpace in which those variables were declared.
+    _saved_associated_variables = {}
 
     def __init__(self, weakform, mesh="", elm_type="", name="", **kargs):
         if isinstance(weakform, str):
@@ -662,11 +664,7 @@ class Assembly(AssemblyBase):
 
         mesh = self.mesh
 
-        change_of_basis_key = (
-            mesh,
-            self._use_local_csys,
-            mesh._local_frame_cache_key(self._element_local_frame),
-        )
+        change_of_basis_key = self._change_of_basis_cache_key()
         if change_of_basis_key in Assembly._saved_change_of_basis_mat:
             return Assembly._saved_change_of_basis_mat[change_of_basis_key]
 
@@ -788,6 +786,17 @@ class Assembly(AssemblyBase):
         Assembly._saved_change_of_basis_mat[change_of_basis_key] = mat_change_of_basis
         return mat_change_of_basis
 
+    def _change_of_basis_cache_key(self):
+        """Return the cache key for the assembly change-of-basis matrix."""
+        n_global_dof = 0 if self._pb is None else self._pb.n_global_dof
+        return (
+            self.mesh,
+            self.space,
+            self._use_local_csys,
+            self.mesh._local_frame_cache_key(self._element_local_frame),
+            n_global_dof,
+        )
+
     def initialize(self, pb):
         """
         Initialize the associated weak form and assemble the global matrix
@@ -896,7 +905,7 @@ class Assembly(AssemblyBase):
         # Assembly._saved_gaussian_quadrature_mat = {}
         # Assembly._saved_node2gausspoint_mat = {}
         # Assembly._saved_gausspoint2node_mat = {}
-        Assembly._saved_associated_variables = {}  # dict containing all associated variables (rotational dof for C1 elements) for elm_type
+        Assembly._saved_associated_variables = {}
 
     def compute_elementary_operators(
         self, n_elm_gp=None
@@ -932,9 +941,9 @@ class Assembly(AssemblyBase):
                 1  # no need to translate between pg and nodes because no pg
             )
             mesh._saved_node2gausspoint_mat[n_elm_gp] = 1
-            Assembly._saved_change_of_basis_mat[
-                (mesh, self._use_local_csys, mesh._local_frame_cache_key(None))
-            ] = 1  # No change of basis: mat_change_of_basis = 1
+            Assembly._saved_change_of_basis_mat[self._change_of_basis_cache_key()] = (
+                1  # No change of basis: mat_change_of_basis = 1
+            )
             Assembly._saved_elementary_operators[
                 (
                     mesh,
@@ -1136,10 +1145,11 @@ class Assembly(AssemblyBase):
     ):  # associated variables (rotational dof for C1 elements) of elm_type
         # based on variable rank, ie dont make differences between alias
         elm_type = self.elm_type
-        if elm_type not in Assembly._saved_associated_variables:
+        cache_key = (elm_type, self.space)
+        if cache_key not in Assembly._saved_associated_variables:
             objElement = get_element(elm_type)
             if hasattr(objElement, "associated_variables"):
-                Assembly._saved_associated_variables[elm_type] = {
+                Assembly._saved_associated_variables[cache_key] = {
                     self.space.variable_rank(key): [
                         [self.space.variable_rank(v) for v in val[1::2]],
                         val[0::2],
@@ -1152,8 +1162,8 @@ class Assembly(AssemblyBase):
                 #                         val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1}
                 # val[1][0::2]] for key,val in objElement.items() if key in self.space.list_variables() and len(val)>1}
             else:
-                Assembly._saved_associated_variables[elm_type] = {}
-        return Assembly._saved_associated_variables[elm_type]
+                Assembly._saved_associated_variables[cache_key] = {}
+        return Assembly._saved_associated_variables[cache_key]
 
     def _test_if_local_csys(self):
         # determine the type of coordinate system used for vector of variables (displacement for instance). This type may be specified in element (under dict form only with elm_dict['__local_csys'] = True)

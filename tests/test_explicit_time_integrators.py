@@ -323,10 +323,15 @@ def test_solve_history_selects_fixed_or_updated_weakform():
     assert nonlinear.time == 0.2
 
 
-def test_solve_history_saves_at_exact_time_intervals():
+def test_solve_history_saves_at_exact_time_intervals(tmp_path):
     for update_weakform in (False, True):
         problem, assembly = _make_storage_problem(dt=0.03)
         saved = []
+        problem.add_output(
+            tmp_path / f"explicit_{update_weakform}.fdh5",
+            assembly,
+            ["Disp"],
+        )
         problem.save_results = lambda iteration: saved.append((iteration, problem.time))
 
         problem.solve_history(

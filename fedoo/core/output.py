@@ -361,6 +361,10 @@ def _get_assemblysum_results(
         if not found:
             continue
 
+    output_scalars = getattr(pb, "get_output_scalars", None)
+    if output_scalars is not None:
+        result.scalar_data.update(output_scalars())
+
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time
 
@@ -620,6 +624,10 @@ def _get_results(
         elif data_type == "Scalar":
             result.scalar_data[res] = data
 
+    output_scalars = getattr(pb, "get_output_scalars", None)
+    if output_scalars is not None:
+        result.scalar_data.update(output_scalars())
+
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time
 
@@ -630,6 +638,22 @@ class _ProblemOutput:
     def __init__(self):
         self.__list_output = []  # a list containint dictionnary with defined output
         self.data_sets = {}
+        self._multiframe_files = {}
+
+    @property
+    def has_outputs(self):
+        """Whether at least one output request has been registered."""
+        return bool(self.__list_output)
+
+    def clear_outputs(self):
+        """Remove every registered output request.
+
+        Previously written files and the data sets already exposed through
+        ``Problem.results`` are deliberately retained.  A caller can therefore
+        stop automatic output, register a different selection, and continue a
+        staged analysis without losing access to earlier frames.
+        """
+        self.__list_output.clear()
 
     def add_output(
         self,
@@ -643,7 +667,9 @@ class _ProblemOutput:
         element_set=None,
         save_mesh=True,
         include_static_obstacles=False,
+        write_mode="overwrite",
     ):
+        filename = os.fspath(filename)
         dirname = os.path.dirname(filename)
         # filename = os.path.basename(filename)
         extension = os.path.splitext(filename)[1]
@@ -663,6 +689,16 @@ class _ProblemOutput:
         if include_static_obstacles and file_format != "fdh5":
             raise ValueError(
                 "include_static_obstacles=True requires the 'fdh5' file format."
+            )
+
+        write_mode = str(write_mode).lower()
+        valid_write_modes = {"overwrite", "append", "error"}
+        if write_mode not in valid_write_modes:
+            raise ValueError("write_mode must be 'overwrite', 'append' or 'error'.")
+        if write_mode != "overwrite" and file_format != "fdh5":
+            raise ValueError(
+                "write_mode='append' and write_mode='error' are only "
+                "supported for 'fdh5' outputs."
             )
 
         if file_format not in _available_format:
@@ -708,6 +744,39 @@ class _ProblemOutput:
             "compressed": compressed,
             "include_static_obstacles": include_static_obstacles,
         }
+
+        existing_refs = []
+        if file_format == "fdh5":
+            full_filename = filename + ".fdh5"
+            state = self._multiframe_files.get(full_filename)
+            if state is not None:
+                if state["write_mode"] != write_mode:
+                    raise ValueError(
+                        f"Output file {full_filename!r} is already registered "
+                        f"with write_mode={state['write_mode']!r}."
+                    )
+            else:
+                file_exists = os.path.isfile(full_filename)
+                if write_mode == "error" and file_exists:
+                    raise FileExistsError(
+                        f"Output file already exists: {full_filename}"
+                    )
+
+                iterations = []
+                if write_mode == "append" and file_exists:
+                    from fedoo.util.fdh5 import FDH5Reader
+
+                    iterations = FDH5Reader(full_filename).list_iterations()
+                    existing_refs = [
+                        ("fdh5", full_filename, iteration) for iteration in iterations
+                    ]
+
+                state = {
+                    "write_mode": write_mode,
+                    "next_iteration": max(iterations, default=-1) + 1,
+                    "has_written": False,
+                }
+                self._multiframe_files[full_filename] = state
         self.__list_output.append(new_output)
 
         # if file_format in ['npz', 'npz_compressed', 'fdz', 'fdz_compressed']:
@@ -722,7 +791,7 @@ class _ProblemOutput:
             elif save_mesh and (file_format not in ["vtk", "msh", "fdh5"]):
                 mesh.save(filename)
 
-            res = MultiFrameDataSet(mesh, [])
+            res = MultiFrameDataSet(mesh, existing_refs)
             self.data_sets[filename] = res
 
         else:
@@ -808,15 +877,27 @@ class _ProblemOutput:
                 )
 
             elif list_file_format[i] == "fdh5":
-                iteration = 0 if comp_output is None else comp_output
+                state = self._multiframe_files[list_full_filename[i]]
+                iteration = state["next_iteration"]
+                first_write = not state["has_written"]
+                if (
+                    first_write
+                    and state["write_mode"] == "error"
+                    and os.path.isfile(list_full_filename[i])
+                ):
+                    raise FileExistsError(
+                        f"Output file already exists: {list_full_filename[i]}"
+                    )
                 out.to_fdh5(
                     list_full_filename[i],
                     iteration=iteration,
-                    overwrite=(comp_output is None or comp_output == 0),
+                    overwrite=(first_write and state["write_mode"] == "overwrite"),
                 )
                 self.data_sets[list_filename[i]].list_data.append(
                     ("fdh5", list_full_filename[i], iteration)
                 )
+                state["next_iteration"] += 1
+                state["has_written"] = True
 
             else:
                 out.save(list_full_filename[i], compressed=list_compressed[i])

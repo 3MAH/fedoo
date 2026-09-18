@@ -35,6 +35,37 @@ semantic versioning.
   error 6e-4 -> 3e-8), and the non symmetric matrix could be symmetrized.
 - `Mesh.get_volume` and `Mesh.get_element_volumes` ignored their `n_elm_gp`
   argument.
+- **`Modal` problem** for linear free-vibration eigenvalue analysis of
+  constrained and free-free systems. Computed modes are mass-normalized, and
+  their mode indices, eigenvalues, angular frequencies, and frequencies can be
+  written to result files.
+- **`LinearBuckling` problem** for eigenvalue buckling analysis about a
+  preloaded state, with critical load factors and buckling modes available in
+  result files.
+- **`Problem.clear_outputs`** for changing registered outputs between stages
+  of chained analyses. FDH5 output also supports explicit `"overwrite"`,
+  `"append"`, and `"error"` write policies.
+- Corrected the `Mechanical3D` symmetric-product indexing, which used
+  `H[2][j]` where `H[j][2]` was required.
+- Assembly caches now distinguish modeling spaces, preventing variable-rank
+  mappings and change-of-basis matrices from being reused incorrectly between
+  models, such as consecutive 3D and 2D beam examples.
+
+### Changed
+
+- Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
+  full and over-integration use a pseudo-inverse, while reduced-integration
+  elements use an independent reduced monomial basis. The mesh documentation
+  also clarifies the behavior of the `"mean"` conversion method, and regression
+  tests cover constant, linear, least-squares, and reduced-integration cases.
+- `Modal.set_solver` and `LinearBuckling.set_solver` now configure their
+  generalized eigensolver independently from linear-system solvers. The
+  automatic, sparse `eigsh`, and dense `eigh` strategies are available, with
+  persistent ARPACK options and per-solve mode counts and target shifts.
+- Registering an output with `Problem.add_output` now requests automatic
+  result writing from high-level solve methods. Modal and buckling analyses
+  write one frame per mode and include tutorial-style examples with
+  `DataSet` mode-shape plots.
 
 ## [1.0.0b2] - 2026-09-11
 
