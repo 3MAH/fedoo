@@ -435,6 +435,28 @@ def test_native_elastic_matches_simcoon_eliso_at_finite_volume():
     )
 
 
+def test_heterogeneous_finite_strain_initializes_F_for_all_phases():
+    """A UMAT phase must not leave a native phase with a singular initial F."""
+
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("2D")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, elm_type="quad4")
+    mesh.element_sets["umat"] = np.array([0])
+    mesh.element_sets["native"] = np.array([1])
+
+    umat = fd.constitutivelaw.Simcoon("ELISO", [8.7, 0.3, 1.0e-5])
+    native = fd.constitutivelaw.ElasticIsotrop(8.7, 0.3)
+    material = fd.constitutivelaw.Heterogeneous((umat, native), ("umat", "native"))
+    weakform = fd.weakform.StressEquilibrium(material, nlgeom="UL")
+    assembly = fd.Assembly.create(weakform, mesh)
+    problem = fd.problem.NonLinear(assembly)
+
+    problem.initialize()
+
+    expected = np.repeat(np.eye(3)[:, :, None], assembly.n_gauss_points, axis=2)
+    np.testing.assert_allclose(assembly.sv_start["F"], expected)
+
+
 def test_convert_tangent_false_preserves_user_tangent_in_tl():
     """The bypass keeps dS/dE untouched while still updating PK2 stress."""
 

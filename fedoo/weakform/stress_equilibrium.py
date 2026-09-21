@@ -402,6 +402,11 @@ class StressEquilibrium(WeakFormBase):
             assembly.sv["_R_gausspoints"] = assembly.sv["_R0_gausspoints"].copy()
 
         if assembly._nlgeom:
+            if "F" not in assembly.sv:
+                F = np.empty((3, 3, assembly.n_gauss_points), order="F")
+                F[...] = np.eye(3).reshape(3, 3, 1)
+                assembly.sv["F"] = F
+
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
                 if self.space.is_axisymmetric:

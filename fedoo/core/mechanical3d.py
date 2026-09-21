@@ -416,6 +416,10 @@ class MechanicalUMAT(Mechanical3D):
 
     Notes
     -----
+    In finite strain, the weak form owns and updates the deformation-gradient
+    field. ``MechanicalUMAT`` consumes that field as ``F0`` and ``F1`` and
+    never initializes or overwrites it.
+
     Private state variables are deliberately opaque to Fedoo. The callback is
     responsible for their objective transport, using the supplied ``DR`` when
     tensor-valued state is present.
@@ -647,9 +651,10 @@ class MechanicalUMAT(Mechanical3D):
         assembly.sv["DR"] = DR
 
         if assembly._nlgeom:
-            F = np.empty((3, 3, n_points), order="F")
-            F[...] = np.eye(3).reshape(3, 3, 1)
-            assembly.sv["F"] = F
+            # The finite-strain weak form owns the deformation gradient and
+            # initializes it over the complete assembly before constitutive
+            # laws are initialized.  The UMAT only consumes that field.
+            F = assembly.sv["F"]
         else:
             F = np.array([])
 
