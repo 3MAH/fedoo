@@ -574,9 +574,7 @@ class StressEquilibrium(WeakFormBase):
         if assembly._nlgeom == "TL":
             # PK2 feeds the TL residual and must be refreshed even when the
             # tangent conversion is disabled or during a line-search trial.
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
-                assembly.sv["F"]
-            )
+            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
 
         if not self.convert_tangent or getattr(pb, "_line_search_update", False):
             return
@@ -791,10 +789,7 @@ class StressEquilibrium(WeakFormBase):
         # remove options installed by a previous incompressibility value
         for elm_type in self._incompressibility_elm_types:
             self.assembly_options.elm_options[elm_type].pop("elm_type", None)
-        if (
-            previous == "fbar"
-            and self.assembly_options.get("assume_sym") is False
-        ):
+        if previous == "fbar" and self.assembly_options.get("assume_sym") is False:
             self.assembly_options.elm_options[None].pop("assume_sym", None)
         self._incompressibility_elm_types = list(_INCOMPRESSIBILITY_ELEMENTS[value])
         for elm_type, new_elm_type in _INCOMPRESSIBILITY_ELEMENTS[value].items():
