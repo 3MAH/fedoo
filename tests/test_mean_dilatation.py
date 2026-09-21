@@ -219,7 +219,26 @@ def test_incompressibility_is_ignored_in_plane_stress(method):
     assert np.allclose(matrix, standard)
 
 
-def test_finite_strain_sri_warns_unless_problem_is_quiet():
+@pytest.mark.parametrize("method", ["mean_dilatation", "sri", "fbar"])
+@pytest.mark.parametrize("print_info", [0, 1])
+def test_plane_stress_warning_is_independent_of_verbosity(method, print_info):
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("2Dstress")
+    mesh = fd.mesh.rectangle_mesh(3, 3, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(1000.0, 0.3)
+    weakform = fd.weakform.StressEquilibrium(
+        material, incompressibility=method, nlgeom=False
+    )
+    assembly = fd.Assembly.create(weakform, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.print_info = print_info
+
+    with pytest.warns(UserWarning, match="ignored.*2Dstress"):
+        pb.initialize()
+
+
+@pytest.mark.parametrize("print_info", [0, 1])
+def test_finite_strain_sri_warning_is_independent_of_verbosity(print_info):
     def make_problem(print_info):
         fd.Assembly.delete_memory()
         fd.ModelingSpace("2Dplane")
@@ -234,11 +253,7 @@ def test_finite_strain_sri_warns_unless_problem_is_quiet():
         return pb
 
     with pytest.warns(UserWarning, match="legacy small-strain method"):
-        make_problem(1).initialize()
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        make_problem(0).initialize()
+        make_problem(print_info).initialize()
 
 
 def test_default_formulation_is_unchanged():

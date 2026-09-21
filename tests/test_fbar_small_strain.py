@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import pytest
 
@@ -96,7 +94,8 @@ def test_small_strain_fbar_tangent_matches_internal_force(dimension, mesh_elm, n
     assert np.allclose(internal_force, -matrix_force)
 
 
-def test_unsupported_fbar_warns_unless_problem_is_quiet():
+@pytest.mark.parametrize("print_info", [0, 1])
+def test_unsupported_fbar_warning_is_independent_of_verbosity(print_info):
     def make_problem(print_info):
         fd.Assembly.delete_memory()
         fd.ModelingSpace("2Dplane")
@@ -109,8 +108,4 @@ def test_unsupported_fbar_warns_unless_problem_is_quiet():
         return pb
 
     with pytest.warns(UserWarning, match="consistent F-bar tangent"):
-        make_problem(1).initialize()
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        make_problem(0).initialize()
+        make_problem(print_info).initialize()

@@ -426,7 +426,7 @@ class StressEquilibrium(WeakFormBase):
             # treatments implemented here.
             assembly.elm_type = assembly.mesh.elm_type
             self._comp_F = _comp_F
-            if method != "auto" and getattr(pb, "print_info", 1) > 0:
+            if method != "auto":
                 warnings.warn(
                     f"incompressibility={method!r} is ignored with the "
                     "'2Dstress' modeling space; the standard plane-stress "
@@ -449,7 +449,7 @@ class StressEquilibrium(WeakFormBase):
                     self.space.variable_alias("_Disp" + x, "Disp" + x)
                 self.assembly_options["assume_sym"] = False
                 assembly.assume_sym = False
-            elif getattr(pb, "print_info", 1) > 0:
+            else:
                 reasons = []
                 if not has_center_interpolation:
                     reasons.append(
@@ -495,11 +495,7 @@ class StressEquilibrium(WeakFormBase):
                 f"'{assembly.mesh.elm_type}' elements."
             )
 
-        if (
-            method == "sri"
-            and assembly._nlgeom == "UL"
-            and getattr(pb, "print_info", 1) > 0
-        ):
+        if method == "sri" and assembly._nlgeom == "UL":
             warnings.warn(
                 "incompressibility='sri' is a legacy small-strain method. "
                 "With updated-Lagrangian finite strains, it corrects the "

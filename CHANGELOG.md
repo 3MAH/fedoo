@@ -60,6 +60,8 @@ semantic versioning.
   exclusively with `incompressibility="fbar"`.
 - Updated-Lagrangian use of the legacy `incompressibility="sri"` method now
   emits a warning because its finite-strain formulation is not consistent.
+- Incompressibility warnings are emitted independently of `Problem.print_info`
+  and can be controlled with the standard Python warnings filters.
 
 - Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
   full and over-integration use a pseudo-inverse, while reduced-integration
