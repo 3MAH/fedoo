@@ -345,16 +345,31 @@ class NonLinear(Problem):
             self._run_constraint_hook("set_start")
 
     def to_start(self):
+        """Restore the state of the last converged increment.
+
+        Called when the Newton-Raphson algorithm fails to converge: the
+        displacement increment, the minimal number of sub-iterations, the
+        load-factor increment and the initial error are reset, then the
+        assembly and the constraints are brought back to their committed
+        state. The tangent matrix is re-assembled at the restored state, so
+        that the next attempt (with a smaller time increment, see
+        :py:meth:`nlsolve`) starts its elastic prediction from the same matrix
+        as the increment that has just been cancelled.
+        """
         self._dU = 0
         self._nr_min_subiter = 0
         self._t_fact_inc = None
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
-        # NB: the problem deliberately keeps the tangent of the diverged
-        # iterate here; the retry's elastic prediction reuses it (A != 0).
-        # Refreshing it from the restored assembly was tried and reverted: it
-        # drops the IPC contact block and breaks the punch benchmarks.
         self._run_constraint_hook("to_start")
+        # The tangent of the diverged iterate can be singular (e.g. geometric
+        # stiffness at an overshooting iterate): re-assemble it at the restored
+        # state so that the retry's elastic prediction starts from a sound
+        # matrix (assemble_global_mat keeps every block of an AssemblySum,
+        # contact included).
+        if not (np.isscalar(self.get_A()) and self.get_A() == 0):
+            self.update(compute="matrix", updateWeakForm=False)
+            self._update_a()
 
     def update(self, compute="all", updateWeakForm=True):
         """

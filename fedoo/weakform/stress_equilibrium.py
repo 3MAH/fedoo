@@ -28,9 +28,9 @@ class StressEquilibrium(WeakFormBase):
         corotational formulation may be used by setting the corate attribute.
       * For nearly incompressible material, a method to avoid the volumetric
         locking should be selected with the incompressibility attribute.
-      * For problems involving geometrical instabilities, the geometrical
-        stiffness should be used by setting the geometric_stiffness attribute
-        to True.
+      * The consistent geometric stiffness is enabled automatically for
+        finite-strain tangent conversion. Set ``geometric_stiffness``
+        explicitly to override that default.
 
     Parameters
     ----------
@@ -40,6 +40,11 @@ class StressEquilibrium(WeakFormBase):
         Method used to avoid the volumetric locking of nearly incompressible
         materials. See the :py:attr:`incompressibility` attribute.
         By default (None), the standard displacement formulation is used.
+    convert_tangent: bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        formulation tangent (``dS/dE`` for TL, spatial Lie for UL). Set to
+        False only when the constitutive law already returns that final
+        formulation-dependent tangent.
     name: str
         name of the WeakForm
     nlgeom: bool, 'UL' or 'TL', optional
@@ -60,6 +65,7 @@ class StressEquilibrium(WeakFormBase):
         self,
         constitutivelaw,
         incompressibility=None,
+        convert_tangent=True,
         name="",
         nlgeom=None,
         space=None,
@@ -103,12 +109,12 @@ class StressEquilibrium(WeakFormBase):
         # by default, no treatment of the volumetric locking
         self._incompressibility_elm_types = []
         self.incompressibility = incompressibility
-        self.geometric_stiffness = False
+        self.convert_tangent = convert_tangent
+        self.geometric_stiffness = None
 
         # assume_sym is decided at initialize time: True for linear / TL
         # (symmetric tangent), False for UL where the Lie spatial tangent is
-        # not major-symmetric. A user-set value takes precedence (with a
-        # warning if True is forced in UL).
+        # not major-symmetric. A user-set value takes precedence.
 
     def get_storage(self):
         if self.storage is not None:
@@ -336,30 +342,19 @@ class StressEquilibrium(WeakFormBase):
         self.corate = self._corate  # to force the setter function
         self._initialize_incompressibility(assembly, pb)
 
-        # assume_sym: the UL spatial (Lie) tangent is not major-symmetric
-        # (stress terms), so the default is False in UL -- but only for laws
-        # that actually receive the box -> Lie conversion in update_2
-        # (native laws keep their symmetric engineering tangent).
-        # NB: the Assembly reads assume_sym at creation time, so the instance
-        # attribute must be set here as well.
-        user_sym = self.assembly_options.get("assume_sym")
-        if assembly._nlgeom == "UL" and getattr(
-            self.constitutivelaw, "_corotational_box_tangent", False
-        ):
-            if user_sym is True:
-                warnings.warn(
-                    "assume_sym=True with nlgeom='UL': the UL (Lie) tangent "
-                    "matrix is not major-symmetric; the assembled matrix "
-                    "will be symmetrized, which may degrade Newton "
-                    "convergence at large rotation.",
-                    stacklevel=2,
-                )
-            else:
-                self.assembly_options["assume_sym"] = False
-                assembly.assume_sym = False
-        elif user_sym is None:
-            self.assembly_options["assume_sym"] = True
-            assembly.assume_sym = True
+        # ``_initialize_incompressibility`` may already have selected a value
+        # (the consistent F-bar tangent is non-symmetric). Otherwise resolve
+        # the deferred assembly value here while preserving an explicit user
+        # choice made on either the weak form or the assembly.
+        if assembly.assume_sym is None:
+            assume_sym = self.assembly_options.get("assume_sym", assembly.elm_type)
+            if assume_sym is None:
+                assume_sym = not (assembly._nlgeom == "UL" and self.convert_tangent)
+            assembly.assume_sym = assume_sym
+
+        # The initial-stress term completes the consistent TL/UL tangent.
+        if self.geometric_stiffness is None:
+            self.geometric_stiffness = bool(assembly._nlgeom and self.convert_tangent)
 
         # Put the require field to zeros if they don't exist in the assembly
         if "Stress" not in assembly.sv:
@@ -407,6 +402,11 @@ class StressEquilibrium(WeakFormBase):
             assembly.sv["_R_gausspoints"] = assembly.sv["_R0_gausspoints"].copy()
 
         if assembly._nlgeom:
+            if "F" not in assembly.sv:
+                F = np.empty((3, 3, assembly.n_gauss_points), order="F")
+                F[...] = np.eye(3).reshape(3, 3, 1)
+                assembly.sv["F"] = F
+
             if assembly._nlgeom == "TL":
                 assembly.sv["PK2"] = 0
                 if self.space.is_axisymmetric:
@@ -447,8 +447,6 @@ class StressEquilibrium(WeakFormBase):
                 # consistent (non symmetric) tangent matrix
                 for x in ["X", "Y", "Z"][: self.space.ndim]:
                     self.space.variable_alias("_Disp" + x, "Disp" + x)
-                self.assembly_options["assume_sym"] = False
-                assembly.assume_sym = False
             else:
                 reasons = []
                 if not has_center_interpolation:
@@ -575,10 +573,18 @@ class StressEquilibrium(WeakFormBase):
         This method is applyed after the constutive law update (stress and
         stiffness matrix).
         """
-        if assembly._nlgeom == "TL" or (
-            assembly._nlgeom == "UL"
-            and getattr(self.constitutivelaw, "_corotational_box_tangent", False)
-        ):
+        if not assembly._nlgeom:
+            return
+
+        if assembly._nlgeom == "TL":
+            # PK2 feeds the TL residual and must be refreshed even when the
+            # tangent conversion is disabled or during a line-search trial.
+            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
+
+        if not self.convert_tangent or getattr(pb, "_line_search_update", False):
+            return
+
+        if assembly._nlgeom in ("TL", "UL"):
             # check if TangentMatrix has the consistent array shape
             if not isinstance(assembly.sv["TangentMatrix"], np.ndarray):
                 Lt = np.empty(
@@ -603,19 +609,10 @@ class StressEquilibrium(WeakFormBase):
                     order="F",
                 )
 
-            # simcoon UMATs return the "box" tangent d(tau_hat)/dD (Kirchhoff,
-            # log rate); convert it to what this configuration integrates.
+            # Solid constitutive laws return the "box" tangent
+            # d(tau_hat)/dD (Kirchhoff, corotational rate). Convert it to what
+            # this configuration integrates.
             if assembly._nlgeom == "TL":
-                # reference config: PK2 feeds the TL residual (initial-stress
-                # term), so it must be updated even on line-search trials
-                assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
-                    assembly.sv["F"]
-                )
-                if getattr(pb, "_line_search_update", False):
-                    # line-search trial: only the assembled vector is used,
-                    # skip the tangent conversion (same pattern as beam/plate)
-                    return
-
                 # material tangent dS/dE (DsigmaDe_2_DSDE)
                 assembly.sv["TangentMatrix"] = sim.Lt_convert(
                     assembly.sv["TangentMatrix"],
@@ -625,12 +622,7 @@ class StressEquilibrium(WeakFormBase):
                 )
 
             else:
-                if getattr(pb, "_line_search_update", False):
-                    # line-search trial: only the assembled vector is used,
-                    # skip the tangent conversion (same pattern as beam/plate)
-                    return
-                # current config (UL), all corates (laws with a
-                # _corotational_box_tangent, i.e. simcoon umats): the box
+                # current config (UL), all corates: the box
                 # tangent d(tau_hat)/dD must be converted to the Lie
                 # (Truesdell) spatial tangent, which is the one consistent
                 # with the Cauchy-stress residual plus the standard
@@ -798,15 +790,22 @@ class StressEquilibrium(WeakFormBase):
                 "incompressibility should be None, 'auto', 'mean_dilatation', "
                 f"'sri' or 'fbar'. Got {value!r}."
             )
-        # remove the elm_type options from a previous incompressibility value
+        previous = getattr(self, "_incompressibility", None)
+        # remove options installed by a previous incompressibility value
         for elm_type in self._incompressibility_elm_types:
             self.assembly_options.elm_options[elm_type].pop("elm_type", None)
+        if previous == "fbar" and self.assembly_options.get("assume_sym") is False:
+            self.assembly_options.elm_options[None].pop("assume_sym", None)
         self._incompressibility_elm_types = list(_INCOMPRESSIBILITY_ELEMENTS[value])
         for elm_type, new_elm_type in _INCOMPRESSIBILITY_ELEMENTS[value].items():
             self.assembly_options["elm_type", elm_type] = new_elm_type
 
         self._incompressibility = value
         if value == "fbar":
+            # Set the default before assembly creation. A user can still
+            # override it on the weak form before creation, or directly on the
+            # assembly before initialize; initialize preserves either choice.
+            self.assembly_options["assume_sym"] = False
             self._comp_F = _comp_Fbar
         elif value in ["auto", "mean_dilatation"]:
             self._comp_F = _comp_F_mean_dilatation
@@ -814,24 +813,32 @@ class StressEquilibrium(WeakFormBase):
             self._comp_F = _comp_F
 
     @property
-    def geometric_stiffness(self):
-        """Set to True to add the geometric effects to the stiffness matrix.
+    def convert_tangent(self):
+        """Whether Fedoo converts the finite-strain constitutive tangent."""
+        return self._convert_tangent
 
-        The use of a geometric stiffness matrix usually don't improve the
-        convergence and may even require smaller time step.
-        However, geometric_stiffness should be included to reach convergence
-        when the problem involve geometrical instabilities like buckling or
-        when using very large strain (with hyperelastic materials for
-        instance).
+    @convert_tangent.setter
+    def convert_tangent(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("bool expected for convert_tangent")
+        self._convert_tangent = value
+
+    @property
+    def geometric_stiffness(self):
+        """Whether to add geometric effects to the stiffness matrix.
+
+        ``None`` selects the consistent default: enabled for finite-strain
+        tangent conversion and disabled otherwise. Set a boolean explicitly
+        to override this behavior.
         """
         return self._geometric_stiffness
 
     @geometric_stiffness.setter
     def geometric_stiffness(self, value):
-        if not isinstance(value, bool):
-            raise TypeError("bool expeted for geometric_stiffness")
+        if value is not None and not isinstance(value, bool):
+            raise TypeError("bool or None expected for geometric_stiffness")
         self._geometric_stiffness = value
-        if value:
+        if value is True:
             self._init_nl_strain_op_vir()
 
     @property

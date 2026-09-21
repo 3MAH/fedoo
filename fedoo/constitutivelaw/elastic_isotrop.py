@@ -8,8 +8,6 @@ import numpy as np
 
 
 class ElasticIsotrop(ElasticAnisotropic):
-    is_isotropic = True
-
     """
     A simple linear elastic isotropic constitutive law defined from a Yound
     Modulus and a Poisson Ratio.
@@ -26,6 +24,8 @@ class ElasticIsotrop(ElasticAnisotropic):
     name: str, optional
         The name of the constitutive law
     """
+
+    is_isotropic = True
 
     def __init__(self, E, nu, name=""):
         Mechanical3D.__init__(self, name=name)  # heritage

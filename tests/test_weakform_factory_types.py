@@ -65,6 +65,22 @@ def test_public_classes_own_the_factory_documentation():
             assert f"{parameter} :" in doc
 
 
+def test_convert_tangent_precedes_generic_constructor_arguments():
+    classes = [
+        fd.weakform.StressEquilibrium,
+        fd.weakform.StressEquilibriumMixed,
+        fd.weakform.StressEquilibriumRI,
+        fd.weakform.PoroMomentum,
+        fd.weakform.PoroMomentumSimple,
+    ]
+
+    for weakform_class in classes:
+        parameters = list(inspect.signature(weakform_class).parameters)
+        convert_index = parameters.index("convert_tangent")
+        assert convert_index < parameters.index("name")
+        assert convert_index < parameters.index("space")
+
+
 def test_composite_weakforms_preserve_child_assembly_options():
     fd.ModelingSpace("2Dplane")
     material = fd.constitutivelaw.ElasticIsotrop(1.0e6, 0.3)
@@ -136,3 +152,53 @@ def test_composite_assembly_options_are_applied_by_assembly_create():
     assert isinstance(poromechanics_assembly, Assembly)
     assert poromechanics_assembly.assume_sym is False
     assert poromechanics_assembly.mat_lumping == [False, False, False]
+
+
+def test_assume_sym_changed_after_assembly_creation_is_applied_at_initialize():
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=3, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(1.0e6, 0.3)
+    weakform = fd.weakform.StressEquilibrium(material, nlgeom="UL")
+    assembly = fd.Assembly.create(weakform, mesh)
+
+    assert assembly.assume_sym is None
+    weakform.assembly_options["assume_sym"] = True
+
+    problem = fd.problem.NonLinear(assembly, nlgeom="UL")
+    problem.initialize()
+
+    assert assembly.assume_sym is True
+
+
+def test_assume_sym_set_directly_before_initialize_is_preserved():
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=3, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(1.0e6, 0.3)
+    weakform = fd.weakform.StressEquilibrium(material, nlgeom="UL")
+    assembly = fd.Assembly.create(weakform, mesh)
+
+    assert assembly.assume_sym is None
+    assembly.assume_sym = True
+
+    problem = fd.problem.NonLinear(assembly, nlgeom="UL")
+    problem.initialize()
+
+    assert assembly.assume_sym is True
+
+
+def test_fbar_assume_sym_default_can_be_overridden_before_initialize():
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=3, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(1.0e6, 0.3)
+    weakform = fd.weakform.StressEquilibrium(
+        material, incompressibility="fbar", nlgeom="UL"
+    )
+    assembly = fd.Assembly.create(weakform, mesh)
+
+    assert assembly.assume_sym is False
+    assembly.assume_sym = True
+
+    problem = fd.problem.NonLinear(assembly, nlgeom="UL")
+    problem.initialize()
+
+    assert assembly.assume_sym is True

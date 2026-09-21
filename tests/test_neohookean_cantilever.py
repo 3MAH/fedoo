@@ -107,7 +107,6 @@ def _solve_cantilever(nlgeom, uimp=1.5, n_steps=6):
     )
     mat = fd.constitutivelaw.Simcoon("NEOHC", np.array([MU, KAPPA]), name="Mc")
     wf = fd.weakform.StressEquilibrium(mat, nlgeom=nlgeom, name="Wc")
-    wf.geometric_stiffness = True
     fd.Assembly.create(wf, mesh, name="Ac")
     pb = fd.problem.NonLinear("Ac")
     pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-4, max_subiter=25)

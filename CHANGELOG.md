@@ -45,6 +45,12 @@ semantic versioning.
 - **`Problem.clear_outputs`** for changing registered outputs between stages
   of chained analyses. FDH5 output also supports explicit `"overwrite"`,
   `"append"`, and `"error"` write policies.
+- **`Problem.set_solver(..., symmetric=True)`** to request a
+  symmetric-indefinite direct factorization: Pardiso `mtype=-2` and standalone
+  MUMPS `sym=2`, with the appropriate stored triangle passed to each backend.
+  SciPy/UMFPACK, PETSc and user-supplied solvers keep their general path, and
+  the choice is propagated through factorization reuse. The caller is
+  responsible for the symmetry of the reduced matrix.
 - Corrected the `Mechanical3D` symmetric-product indexing, which used
   `H[2][j]` where `H[j][2]` was required.
 - Assembly caches now distinguish modeling spaces, preventing variable-rank
@@ -53,6 +59,23 @@ semantic versioning.
 
 ### Changed
 
+- **Solid constitutive laws now follow a single documented finite-strain
+  convention**: they return true Cauchy stress and an unnormalized
+  corotational Kirchhoff ("box") tangent. `StressEquilibrium` converts that
+  tangent centrally to `dS/dE` in TL or to the spatial Lie tangent in UL. The
+  conversion can be bypassed with `convert_tangent=False` when a law already
+  supplies the formulation tangent.
+- **`StressEquilibrium.geometric_stiffness` now defaults to `None`**, meaning
+  enabled for finite-strain tangent conversion and disabled in small strain.
+  Explicit `True` and `False` values continue to override the default.
+- **Native elastic laws in finite strain** now return Cauchy stress `tau / J`
+  and use the same documented tangent convention as solid UMATs.
+- **`ElastoPlasticity` in finite strain** now returns Cauchy stress `tau / J`.
+- **`Heterogeneous`** forwards the finite-strain setting to every phase
+  sub-assembly.
+- **`Assembly.assume_sym` defaults to `None`** until the weak form resolves its
+  formulation-dependent default during initialization. An explicit value set
+  before initialization is preserved.
 - Removed the dedicated `StressEquilibriumBbar` and `StressEquilibriumFbar`
   weak forms. Use `StressEquilibrium(..., incompressibility="sri")` and
   `StressEquilibrium(..., incompressibility="fbar")`, respectively.
@@ -76,6 +99,36 @@ semantic versioning.
   result writing from high-level solve methods. Modal and buckling analyses
   write one frame per mode and include tutorial-style examples with
   `DataSet` mode-shape plots.
+
+### Fixed
+
+- `NonLinear.to_start` re-assembles the tangent matrix after restoring a
+  failed increment, instead of retaining the diverged iterate's matrix.
+- The API documentation for `ElasticAnisotropic` and `ElasticIsotrop` is
+  rendered again, and `Heterogeneous` is listed in the constitutive-law
+  reference.
+- The general MUMPS path remains compatible with releases whose `Context`
+  constructor has no `sym` argument; requesting symmetric factorization on
+  such a release raises `NotImplementedError`.
+
+### Migration — `convert_tangent` in stress-equilibrium constructors
+
+`convert_tangent` is inserted before `name` in `StressEquilibrium`,
+`StressEquilibriumRI`, `StressEquilibriumMixed`, and the poromechanics momentum
+weak forms. For `StressEquilibrium`, it follows `incompressibility`. Code that
+passed a weak-form name positionally must use the keyword form:
+
+```python
+# before
+wf = fd.weakform.StressEquilibrium(material, None, "my_weakform")
+# after
+wf = fd.weakform.StressEquilibrium(
+    material, incompressibility=None, name="my_weakform"
+)
+```
+
+A finite-strain law written against the previous behavior must return true
+Cauchy stress. Divide by `J = det(F)` when the law integrates Kirchhoff stress.
 
 ## [1.0.0b2] - 2026-09-11
 

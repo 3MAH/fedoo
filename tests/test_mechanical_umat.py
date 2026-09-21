@@ -174,6 +174,26 @@ def test_initialize_preserves_a_valid_manual_statev_array():
     np.testing.assert_allclose(seen[0], initial)
 
 
+def test_initialize_consumes_weakform_deformation_gradient_without_overwriting_it():
+    seen = []
+
+    def umat(*args, ndi, tangent_mode):
+        seen.append((args[2].copy(), args[3].copy()))
+        return args[4], args[7].copy(), args[10].copy(), np.eye(6)
+
+    material = MechanicalUMAT(umat)
+    assembly = _assembly(n_points=2, nlgeom="UL")
+    deformation_gradient = np.repeat(np.eye(3)[:, :, None], 2, axis=2)
+    deformation_gradient[0, 0] = [1.1, 1.2]
+    assembly.sv["F"] = deformation_gradient
+
+    material.initialize(assembly, SimpleNamespace())
+
+    assert assembly.sv["F"] is deformation_gradient
+    np.testing.assert_allclose(seen[0][0], deformation_gradient)
+    np.testing.assert_allclose(seen[0][1], deformation_gradient)
+
+
 def test_initialize_rejects_an_invalid_manual_statev_shape():
     material = MechanicalUMAT(lambda *args, **kwargs: None, n_statev=2)
     assembly = _assembly(n_points=3)

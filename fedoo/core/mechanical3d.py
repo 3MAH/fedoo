@@ -21,6 +21,15 @@ class Mechanical3D(ConstitutiveLaw):
         finite-strain updates. When ``False``, Fedoo maintains the current
         orientation for anisotropic laws.
 
+    Finite-strain constitutive convention
+    --------------------------------------
+    Solid laws return true Cauchy stress in ``assembly.sv["Stress"]`` and an
+    unnormalized corotational Kirchhoff tangent in
+    ``assembly.sv["TangentMatrix"]``.  The latter relates the objective rate
+    of ``tau = J sigma`` to the corotational strain increment.  The associated
+    stress-equilibrium weak form converts this box tangent to ``dS/dE`` for TL
+    or to the spatial Lie tangent for UL.
+
     Strain / stress 6-vector slot ordering
     --------------------------------------
     Strains and stresses are stored as 6-vectors (Voigt-like) at every Gauss
@@ -125,13 +134,6 @@ class Mechanical3D(ConstitutiveLaw):
     # by this class. User-material adapters that perform this transport
     # themselves override the flag.
     manages_material_frame = False
-
-    # True when the law returns the simcoon corotational "box" tangent
-    # d(tau_hat)/dD, which the UL weakform must convert to the Lie
-    # (Truesdell) spatial tangent (see StressEquilibrium.update_2).
-    # Native fedoo laws (e.g. ElasticIsotrop) return a plain engineering
-    # tangent and are left unconverted.
-    _corotational_box_tangent = False
 
     def __init__(self, density=None, name=""):
         ConstitutiveLaw.__init__(self, name)
@@ -414,6 +416,10 @@ class MechanicalUMAT(Mechanical3D):
 
     Notes
     -----
+    In finite strain, the weak form owns and updates the deformation-gradient
+    field. ``MechanicalUMAT`` consumes that field as ``F0`` and ``F1`` and
+    never initializes or overwrites it.
+
     Private state variables are deliberately opaque to Fedoo. The callback is
     responsible for their objective transport, using the supplied ``DR`` when
     tensor-valued state is present.
@@ -425,7 +431,6 @@ class MechanicalUMAT(Mechanical3D):
     """
 
     manages_material_frame = True
-    _corotational_box_tangent = True
     required_corate = None
 
     def __init__(
@@ -646,9 +651,10 @@ class MechanicalUMAT(Mechanical3D):
         assembly.sv["DR"] = DR
 
         if assembly._nlgeom:
-            F = np.empty((3, 3, n_points), order="F")
-            F[...] = np.eye(3).reshape(3, 3, 1)
-            assembly.sv["F"] = F
+            # The finite-strain weak form owns the deformation gradient and
+            # initializes it over the complete assembly before constitutive
+            # laws are initialized.  The UMAT only consumes that field.
+            F = assembly.sv["F"]
         else:
             F = np.array([])
 

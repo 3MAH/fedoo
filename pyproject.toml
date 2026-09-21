@@ -28,7 +28,7 @@ dependencies = [
     'numpy>=2.0',
     'scipy',
     'h5py',
-    'simcoon>=2.0.0b1',
+    'simcoon>=2.0.1',
 ]
 
 [project.optional-dependencies]

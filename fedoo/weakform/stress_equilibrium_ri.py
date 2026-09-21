@@ -246,6 +246,9 @@ class StressEquilibriumRI(WeakFormSum):
         Coefficient controlling the hourglass stiffness. It should be large
         enough to suppress hourglass modes without introducing excessive
         artificial flexural stiffness.
+    convert_tangent : bool, default=True
+        Convert the constitutive corotational Kirchhoff tangent to the
+        formulation tangent.
     name : str, optional
         Name of the weak form.
     nlgeom : bool or {'UL', 'TL'}, optional
@@ -273,12 +276,18 @@ class StressEquilibriumRI(WeakFormSum):
         self,
         constitutivelaw,
         hourglass_stiffness=0.01,
+        convert_tangent=True,
         name="",
         nlgeom=None,
         nlgeom_hourglass=False,
         space=None,
     ):
-        equilibrium = StressEquilibrium(constitutivelaw, nlgeom=nlgeom, space=space)
+        equilibrium = StressEquilibrium(
+            constitutivelaw,
+            convert_tangent=convert_tangent,
+            nlgeom=nlgeom,
+            space=space,
+        )
         equilibrium.assembly_options["n_elm_gp", "quad4"] = 1
         equilibrium.assembly_options["n_elm_gp", "hex8"] = 1
         hourglass = HourglassStiffness(
