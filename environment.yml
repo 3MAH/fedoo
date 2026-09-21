@@ -15,7 +15,7 @@ dependencies:
                   # _MumpsFactor reuse adapter, regardless of platform
   - vtk>=9.2
   - pyvista>=0.42
-  - simcoon>=2.0.0b1
+  - simcoon>=2.0.1
   - pytest
   - pytest-xdist
   - sphinx_rtd_theme
