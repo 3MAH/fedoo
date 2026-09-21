@@ -24,16 +24,23 @@ def make_material():
 
 
 def make_assembly(n_points=1, nlgeom=False):
+    sv = {
+        "Strain": StrainTensorList(np.zeros((6, n_points))),
+        "Stress": StressTensorList(np.zeros((6, n_points))),
+    }
+    if nlgeom:
+        # Finite-strain kinematics, including the initial F field, are owned
+        # by the weak form. Reproduce that contract in this material-point
+        # fixture, which calls the constitutive law directly.
+        sv["F"] = np.repeat(np.eye(3)[:, :, None], n_points, axis=2)
+
     return SimpleNamespace(
         mesh=fd.mesh.rectangle_mesh(2, 2, elm_type="quad4", ndim=3),
         n_elm_gp=n_points,
         n_gauss_points=n_points,
         _nlgeom=nlgeom,
         space=SimpleNamespace(get_dimension=lambda: "3D", list_variables=lambda: []),
-        sv={
-            "Strain": StrainTensorList(np.zeros((6, n_points))),
-            "Stress": StressTensorList(np.zeros((6, n_points))),
-        },
+        sv=sv,
         sv_component={},
     )
 
