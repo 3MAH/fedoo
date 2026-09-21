@@ -477,7 +477,6 @@ def _fd_history_tangent_error(gamma1, corate, n_inc=4, dgamma=0.05):
     material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
     material.tangent_mode = 2
     wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")
-    wf.geometric_stiffness = True
     wf.corate = corate
     assembly = fd.Assembly.create(wf, mesh, name="asm")
 

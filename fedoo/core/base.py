@@ -922,14 +922,33 @@ def _solver_pardiso(A, B, symmetric=False, **kargs):
     return solver.solve(A, B)
 
 
+def _mumps_context(symmetric):
+    """Build a python-mumps ``Context``, symmetric-indefinite if requested.
+
+    The ``sym`` keyword only exists in recent python-mumps releases, so it is
+    passed exclusively when a symmetric factorization is asked for: the
+    general path keeps working with older versions.
+    """
+    import mumps
+
+    if not symmetric:
+        return mumps.Context()
+    try:
+        return mumps.Context(sym=2)
+    except TypeError as error:
+        raise NotImplementedError(
+            "the installed python-mumps does not support symmetric "
+            "factorization (no 'sym' argument). Upgrade python-mumps, use "
+            "pypardiso, or call set_solver(..., symmetric=False)."
+        ) from error
+
+
 def _solver_mumps(A, B, symmetric=False, **kargs):
     # python-mumps exposes a Context-based API only; there is no
     # top-level spsolve. For repeated solves on the same A, use
     # `Problem.set_reuse_factorization(True)` to keep the Context alive
     # across calls (see _MumpsFactor).
-    import mumps
-
-    ctx = mumps.Context(sym=2 if symmetric else 0)
+    ctx = _mumps_context(symmetric)
     if symmetric:
         A = sparse.tril(A, format="csr")
     ctx.factor(A)
@@ -942,10 +961,8 @@ def _solver_mumps(A, B, symmetric=False, **kargs):
 # =============================================================
 class _MumpsFactor:
     def __init__(self, symmetric=False):
-        import mumps
-
         self._symmetric = symmetric
-        self._ctx = mumps.Context(sym=2 if symmetric else 0)
+        self._ctx = _mumps_context(symmetric)
 
     def factor(self, A):
         if self._symmetric:

@@ -76,12 +76,10 @@ material = fd.constitutivelaw.Simcoon("NEOHC", [mu, kappa], name="neohookean")
 if mesh.elm_type == "hex8":
     # reduced integration + hourglass control avoids volumetric locking
     wf = fd.weakform.StressEquilibriumRI(material, nlgeom="UL")
-    stress_wf = wf.list_weakform[0]
 else:  # hex20: full integration
     wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")
-    stress_wf = wf
-# initial-stress stiffness, needed in the tangent under large rotations
-stress_wf.geometric_stiffness = True
+# the initial-stress stiffness is part of the tangent under large rotations;
+# it is assembled by default in finite strain (geometric_stiffness=None)
 
 assembly = fd.Assembly.create(wf, mesh, name="assembly")
 
