@@ -1867,7 +1867,7 @@ class Mesh(MeshBase):
             Number of gauss points used on each element to compute the volume.
             If None, a default value is used depending on the element type.
         """
-        return sum(self._get_gaussian_quadrature_mat().data)
+        return sum(self._get_gaussian_quadrature_mat(n_elm_gp).data)
 
     def get_element_volumes(self, n_elm_gp: int | None = None):
         """Compute the volume of each element (or surface for 2D meshes).
@@ -1885,7 +1885,7 @@ class Mesh(MeshBase):
             n_elm_gp = get_default_n_gp(self.elm_type)
 
         return np.sum(
-            self._get_gaussian_quadrature_mat().data.reshape(n_elm_gp, -1),
+            self._get_gaussian_quadrature_mat(n_elm_gp).data.reshape(n_elm_gp, -1),
             axis=0,
         )
 

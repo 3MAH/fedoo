@@ -68,8 +68,6 @@ def test_public_classes_own_the_factory_documentation():
 def test_convert_tangent_precedes_generic_constructor_arguments():
     classes = [
         fd.weakform.StressEquilibrium,
-        fd.weakform.StressEquilibriumBbar,
-        fd.weakform.StressEquilibriumFbar,
         fd.weakform.StressEquilibriumMixed,
         fd.weakform.StressEquilibriumRI,
         fd.weakform.PoroMomentum,
@@ -192,7 +190,9 @@ def test_fbar_assume_sym_default_can_be_overridden_before_initialize():
     fd.ModelingSpace("2Dplane")
     mesh = fd.mesh.rectangle_mesh(nx=3, ny=3, elm_type="quad4")
     material = fd.constitutivelaw.ElasticIsotrop(1.0e6, 0.3)
-    weakform = fd.weakform.StressEquilibriumFbar(material, nlgeom="UL")
+    weakform = fd.weakform.StressEquilibrium(
+        material, incompressibility="fbar", nlgeom="UL"
+    )
     assembly = fd.Assembly.create(weakform, mesh)
 
     assert assembly.assume_sym is False

@@ -63,7 +63,9 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="constitutivelaw")
 
-wf = fd.weakform.StressEquilibriumFbar("constitutivelaw", nlgeom=NLGEOM)
+wf = fd.weakform.StressEquilibrium(
+    "constitutivelaw", nlgeom=NLGEOM, incompressibility="fbar"
+)
 
 # or alternatively with reduced integration + hourglass stiffness :
 # wf = fd.weakform.StressEquilibriumRI("constitutivelaw", nlgeom = True)

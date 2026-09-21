@@ -248,7 +248,10 @@ class ImplicitDynamic(ImplicitDynamicSum):
             stiffness_weakform = constitutivelaw
         else:
             stiffness_weakform = StressEquilibrium(
-                constitutivelaw, name="", nlgeom=nlgeom, space=space
+                constitutivelaw,
+                name="",
+                nlgeom=nlgeom,
+                space=space,
             )
         parent = type(stiffness_weakform)
 
