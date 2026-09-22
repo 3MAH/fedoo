@@ -6,35 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-22
+
 ### Added
 
 - **`incompressibility` attribute of `StressEquilibrium`** (also a constructor
   argument) to select the treatment of volumetric locking: `None` (default,
   unchanged behavior), `"auto"`, `"mean_dilatation"`, `"sri"` or `"fbar"`.
 - **Mean dilatation method** (`incompressibility="mean_dilatation"`): B-bar
-  formulation based on a volume weighted projection of the dilatation,
+  formulation based on a volume-weighted projection of the dilatation,
   equivalent to an element-wise discontinuous pressure eliminated at the
-  element level (one pressure for `quad4`, `hex8`, `wed6`, `tri6`, `tet10`;
-  linear pressure for `quad8`, `quad9`, `hex20`, `wed15`, `wed18`). Symmetric
-  tangent matrix, small strain and updated lagrangian ('3D', '2Dplane'), with
-  a consistent tangent when `geometric_stiffness` is enabled.
-- Plane-strain incompressibility methods now retain the three-dimensional
-  volumetric/deviatoric split: the assumed `zz` strain receives one third of
-  the volumetric correction, and finite-strain mean dilatation uses the cube
-  root scaling of the full assumed deformation gradient. Incompressibility
-  options are ignored for plane-stress models.
-
-### Fixed
-
-- The small-strain F-bar method now evaluates the volumetric strain at the
-  element centroid.
-- **F-bar tangent matrix.** The former F-bar implementation modified the stress
-  but its tangent matrix ignored the variation of the volume change at the
-  element center (~50% error on a nearly incompressible test). The consistent
-  term is now included for `quad4` and `hex8`, uses the 1/3 factor associated
-  with Fedoo's Lie tangent, and is no longer inadvertently symmetrized.
-- `Mesh.get_volume` and `Mesh.get_element_volumes` ignored their `n_elm_gp`
-  argument.
+  element level. It supports small strain and updated Lagrangian formulations
+  in 3D and plane strain, with a consistent tangent when geometric stiffness
+  is enabled.
 - **`Modal` problem** for linear free-vibration eigenvalue analysis of
   constrained and free-free systems. Computed modes are mass-normalized, and
   their mode indices, eigenvalues, angular frequencies, and frequencies can be
@@ -51,14 +35,19 @@ semantic versioning.
   SciPy/UMFPACK, PETSc and user-supplied solvers keep their general path, and
   the choice is propagated through factorization reuse. The caller is
   responsible for the symmetry of the reduced matrix.
-- Corrected the `Mechanical3D` symmetric-product indexing, which used
-  `H[2][j]` where `H[j][2]` was required.
-- Assembly caches now distinguish modeling spaces, preventing variable-rank
-  mappings and change-of-basis matrices from being reused incorrectly between
-  models, such as consecutive 3D and 2D beam examples.
+- **`ignore_missing` output option** for `Problem.add_output` and
+  `Problem.get_results`. Unavailable fields can now be omitted when a common
+  output list is shared by constitutive laws with different state variables.
+- An advanced gallery example comparing standard, mean-dilatation, F-bar and
+  reduced-integration treatments of nearly incompressible plasticity.
 
 ### Changed
 
+- Plane-strain incompressibility methods now retain the three-dimensional
+  volumetric/deviatoric split: the assumed `zz` strain receives one third of
+  the volumetric correction, and finite-strain mean dilatation uses the cube
+  root scaling of the full assumed deformation gradient. Incompressibility
+  options are ignored for plane-stress models.
 - **Solid constitutive laws now follow a single documented finite-strain
   convention**: they return true Cauchy stress and an unnormalized
   corotational Kirchhoff ("box") tangent. `StressEquilibrium` converts that
@@ -85,31 +74,54 @@ semantic versioning.
   emits a warning because its finite-strain formulation is not consistent.
 - Incompressibility warnings are emitted independently of `Problem.print_info`
   and can be controlled with the standard Python warnings filters.
-
 - Gauss-point-to-node conversion now uses a dedicated extrapolation matrix:
   full and over-integration use a pseudo-inverse, while reduced-integration
   elements use an independent reduced monomial basis. The mesh documentation
-  also clarifies the behavior of the `"mean"` conversion method, and regression
-  tests cover constant, linear, least-squares, and reduced-integration cases.
+  clarifies the `"mean"` conversion method.
 - `Modal.set_solver` and `LinearBuckling.set_solver` now configure their
   generalized eigensolver independently from linear-system solvers. The
   automatic, sparse `eigsh`, and dense `eigh` strategies are available, with
   persistent ARPACK options and per-solve mode counts and target shifts.
 - Registering an output with `Problem.add_output` now requests automatic
   result writing from high-level solve methods. Modal and buckling analyses
-  write one frame per mode and include tutorial-style examples with
-  `DataSet` mode-shape plots.
+  write one frame per mode.
+- The documentation workflow no longer depends on the external `vtk-osmesa`
+  package index or installs `microgen` for excluded gallery examples.
 
 ### Fixed
 
+- The small-strain F-bar method now evaluates the volumetric strain at the
+  element centroid.
+- **F-bar tangent matrix.** The former implementation modified the stress but
+  omitted the variation of the volume change at the element center. The
+  consistent term is now included for `quad4` and `hex8`, uses the 1/3 factor
+  associated with Fedoo's Lie tangent, and is no longer inadvertently
+  symmetrized.
+- `Mesh.get_volume` and `Mesh.get_element_volumes` now honor their `n_elm_gp`
+  argument.
+- Corrected the `Mechanical3D` symmetric-product indexing, which used
+  `H[2][j]` where `H[j][2]` was required.
+- Assembly caches now distinguish modeling spaces, preventing variable-rank
+  mappings and change-of-basis matrices from being reused incorrectly between
+  models, such as consecutive 3D and 2D beam examples.
+- Bubble-enriched line and triangle elements now use their geometry element
+  when constructing Gauss-point extrapolation matrices.
+- Finite-strain weak forms now own and initialize the deformation-gradient
+  field for the complete assembly before heterogeneous constitutive laws are
+  initialized.
 - `NonLinear.to_start` re-assembles the tangent matrix after restoring a
-  failed increment, instead of retaining the diverged iterate's matrix.
-- The API documentation for `ElasticAnisotropic` and `ElasticIsotrop` is
-  rendered again, and `Heterogeneous` is listed in the constitutive-law
-  reference.
+  failed increment instead of retaining the diverged iterate's matrix.
 - The general MUMPS path remains compatible with releases whose `Context`
   constructor has no `sym` argument; requesting symmetric factorization on
   such a release raises `NotImplementedError`.
+- The API documentation for `ElasticAnisotropic` and `ElasticIsotrop` is
+  rendered again, and `Heterogeneous` is listed in the constitutive-law
+  reference.
+- Contact gallery examples now constrain initially detached indenters against
+  rigid-body rotation, select only valid penalty-contact slave nodes, and use
+  nonlinear-solver limits suitable for contact-pair changes.
+- Periodic-composite, plasticity, thermal post-processing and fluid-mechanics
+  examples were corrected and made self-contained where practical.
 
 ### Migration — `convert_tangent` in stress-equilibrium constructors
 
