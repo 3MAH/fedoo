@@ -65,7 +65,7 @@ top = mesh.node_sets["top"]
 pb.bc.add("Dirichlet", bottom, "Disp", 0)
 pb.bc.add("Dirichlet", top, "Disp", [0, -150])
 pb.add_line_search()
-pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=0, dt_min=1e-8)
+pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=1, dt_min=1e-8)
 
 ###############################################################################
 # Reduced numeric metrics — peak axial stress, peak equivalent plastic strain,
@@ -89,7 +89,7 @@ _summarise(res_ipc, "IPC (this run)")
 
 # Compare against the penalty reference if it has been run.
 penalty_path = os.path.normpath(
-    os.path.join("..", "..", "03-advanced", "results", "tube_compressoin.fdz")
+    os.path.join("..", "..", "03-advanced", "results", "tube_compression.fdh5")
 )  # original spelling kept as in ref script
 if os.path.isfile(penalty_path):
     res_penalty = fd.DataSet.read(penalty_path)

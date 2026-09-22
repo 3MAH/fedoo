@@ -82,7 +82,7 @@ pb.set_nr_criterion(
 if not (os.path.isdir("results")):
     os.mkdir("results")
 res = pb.add_output(
-    "results/tube_compressoin", assembly, ["Disp", "Stress", "Strain", "P"]
+    "results/tube_compression", assembly, ["Disp", "Stress", "Strain", "P"]
 )
 
 

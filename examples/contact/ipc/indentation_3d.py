@@ -169,9 +169,19 @@ pb = fd.problem.NonLinear(assembly)
 
 nodes_bottom = mesh.find_nodes("Z", 0)
 nodes_sphere_top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
+sphere_nodes = np.arange(mesh_plate.n_nodes, mesh.n_nodes)
+nodes_sphere_meridian = sphere_nodes[np.isclose(mesh.nodes[sphere_nodes, 1], 0.0)]
+nodes_sphere_axis = sphere_nodes[
+    np.isclose(mesh.nodes[sphere_nodes, 0], 0.0)
+    & np.isclose(mesh.nodes[sphere_nodes, 1], 0.0)
+]
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
-pb.bc.add("Dirichlet", nodes_sphere_top, "Disp", [0, 0, imposed_disp])
+# The sphere top is a single node. Symmetry constraints on a meridian and the
+# vertical axis suppress its three rigid rotations while it is out of contact.
+pb.bc.add("Dirichlet", nodes_sphere_meridian, "DispY", 0)
+pb.bc.add("Dirichlet", nodes_sphere_axis, "DispX", 0)
+pb.bc.add("Dirichlet", nodes_sphere_top, "DispZ", imposed_disp)
 pb.set_nr_criterion("Force", tol=5e-3, max_subiter=8)
 
 # =========================================================================

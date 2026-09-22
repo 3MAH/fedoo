@@ -39,7 +39,8 @@ mesh_disk.element_sets["disk"] = np.arange(mesh_disk.n_elements)
 mesh = fd.Mesh.stack(mesh_rect, mesh_disk)
 
 nodes_left = mesh.find_nodes("X", 0)
-nodes_right = mesh.find_nodes("X", 1)
+rect_nodes = np.unique(mesh.extract_elements("rect").elements)
+nodes_right = np.intersect1d(mesh.find_nodes("X", 1), rect_nodes)
 nodes_bc = mesh.find_nodes("X>1.5")
 nodes_bc = list(set(nodes_bc).intersection(mesh.node_sets["boundary"]))
 
@@ -73,14 +74,28 @@ res = pb.add_output(
 
 # --- Step 1: push ---
 pb.bc.add("Dirichlet", nodes_left, "Disp", 0)
-pb.bc.add("Dirichlet", nodes_bc, "Disp", [-0.4, 0.2])
-pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=5)
-pb.nlsolve(dt=0.005, tmax=1, update_dt=True, print_info=1, interval_output=0.01)
+pb.bc.add("Dirichlet", nodes_bc, "Disp", [-0.25, 0.125])
+pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
+pb.nlsolve(
+    dt=0.005,
+    dt_max=0.01,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.02,
+)
 
 # --- Step 2: release ---
 pb.bc.remove(-1)
 pb.bc.add("Dirichlet", nodes_bc, "Disp", [0, 0])
-pb.nlsolve(dt=0.005, tmax=1, update_dt=True, print_info=1, interval_output=0.01)
+pb.nlsolve(
+    dt=0.005,
+    dt_max=0.01,
+    tmax=1,
+    update_dt=True,
+    print_info=1,
+    interval_output=0.02,
+)
 
 # --- Static plot ---
 res.plot("Stress", "XX", "Node", show=False, scale=1)

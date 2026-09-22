@@ -143,9 +143,16 @@ pb = fd.problem.NonLinear(assembly)
 
 nodes_bottom = mesh.find_nodes("Y", 0)
 nodes_disk_top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
+disk_nodes = np.arange(mesh_plate.n_nodes, mesh.n_nodes)
+nodes_disk_axis = disk_nodes[np.isclose(mesh.nodes[disk_nodes, 0], 0.0)]
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
-pb.bc.add("Dirichlet", nodes_disk_top, "Disp", [0, imposed_disp])
+# The highest point is a single node. Prescribing it alone leaves a rigid
+# rotation mode while the disk is separated from the plate. Horizontal
+# symmetry on the disk centreline removes that mode without preventing its
+# vertical deformation.
+pb.bc.add("Dirichlet", nodes_disk_axis, "DispX", 0)
+pb.bc.add("Dirichlet", nodes_disk_top, "DispY", imposed_disp)
 pb.set_nr_criterion("Force", tol=5e-3, max_subiter=8)
 
 # =========================================================================

@@ -122,9 +122,14 @@ pb = fd.problem.NonLinear(assembly)
 
 nodes_bottom = mesh.find_nodes("Y", 0)
 nodes_disk_top = mesh.find_nodes("Y", mesh.bounding_box.ymax)
+disk_nodes = np.arange(mesh_plate.n_nodes, mesh.n_nodes)
+nodes_disk_axis = disk_nodes[np.isclose(mesh.nodes[disk_nodes, 0], 0.0)]
 
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
-pb.bc.add("Dirichlet", nodes_disk_top, "Disp", [0, imposed_disp])
+# The disk top is a single node. Horizontal symmetry on its centreline removes
+# the rigid rotation mode that otherwise remains before contact is activated.
+pb.bc.add("Dirichlet", nodes_disk_axis, "DispX", 0)
+pb.bc.add("Dirichlet", nodes_disk_top, "DispY", imposed_disp)
 pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=8)
 
 # =========================================================================
