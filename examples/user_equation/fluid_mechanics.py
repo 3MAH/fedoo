@@ -105,9 +105,10 @@ res = pb.get_results("assembling", ["V", "P"])
 # pl = res.plot("V", component = "norm", show = False)
 pl = res.plot("P", component=0, show_edges=False, show=False)
 
-# get velocity associated to physical nodes and add a dim to allow 3d treatment
+# Add a zero out-of-plane component for PyVista's 3D streamline filter.
 pl.mesh["velocity"] = np.c_[
-    res["V"][:, : mesh.n_physical_nodes].T, np.zeros(mesh.n_physical_nodes)
+    res["V"].T,
+    np.zeros(mesh.n_nodes),
 ]
 
 line_streamlines = pl.mesh.streamlines(
@@ -115,7 +116,7 @@ line_streamlines = pl.mesh.streamlines(
     pointa=(-L1 / 2 + 1e-5, -L1 / 2 + 1e-5, 0),
     pointb=(-L1 / 2 + 1e-5, L1 - 1e-5, 0),
     n_points=20,
-    max_time=1000.0,
+    max_length=1000.0,
     # compute_vorticity=False,
 )
 

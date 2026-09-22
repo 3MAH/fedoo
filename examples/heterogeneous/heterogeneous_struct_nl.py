@@ -56,7 +56,6 @@ elif method == 3:
 
 # Define a new static problem
 pb = fd.problem.NonLinear(assembly)
-pb.set_nr_criterion(max_subiter=10)
 # Definition of the set of nodes for boundary conditions
 left = mesh.find_nodes("X", mesh.bounding_box.xmin)
 right = mesh.find_nodes("X", mesh.bounding_box.xmax)

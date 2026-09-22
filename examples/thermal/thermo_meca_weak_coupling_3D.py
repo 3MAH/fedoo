@@ -1,3 +1,9 @@
+"""Run a weakly coupled thermo-mechanical analysis.
+
+After this analysis completes, run ``thermo_meca_weak_coupling_3D_post_tt.py``
+to generate a movie from the saved thermal and mechanical results.
+"""
+
 import fedoo as fd
 import numpy as np
 from time import time

@@ -37,7 +37,7 @@ mesh = fd.mesh.box_mesh(
 
 crd = mesh.nodes
 
-mat = 1
+mat = 0
 if mat == 0:
     props = np.array([E, nu, alpha])
     material = fd.constitutivelaw.Simcoon("ELISO", props, name="ConstitutiveLaw")
@@ -56,7 +56,8 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
-wf = fd.weakform.StressEquilibriumRI("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
+wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
+wf.incompressibility = "auto"
 
 assemb = fd.Assembly.create("wf", mesh, name="Assembling")
 
@@ -65,7 +66,6 @@ left = mesh.find_nodes("X", 0)
 right = mesh.find_nodes("X", 1)
 
 pb = fd.problem.NonLinear("Assembling")
-pb.set_nr_criterion(max_subiter=20)
 
 # create a 'result' folder and set the desired ouputs
 if not (os.path.isdir("results")):
@@ -74,26 +74,13 @@ if not (os.path.isdir("results")):
 results = pb.add_output(
     res_dir + filename,
     "Assembling",
-    ["Disp", "Stress", "Strain", "P", "EP", "Wm", "Fext", "RigidDisp", "RigidRot"],
+    ["Disp", "Stress", "Strain"],  # "P", "EP", "Wm", "Fext", "RigidDisp", "RigidRot"],
 )
 
 pb.bc.add(fd.constraint.RigidTie(right))
-# pb.bc.add('Dirichlet','Disp',0,nodes_bottom)
-# pb.bc.add('Dirichlet','DispY', 0,nodes_top)
-# pb.bc.add('Dirichlet','DispZ', 0,nodes_top)
-# pb.bc.add('Dirichlet','DispX', uimp,nodes_top)
 
 pb.bc.add("Dirichlet", left, "Disp", 0)
-# pb.bc.add('Dirichlet',ref_node[0], 'Disp', 0) #Displacement of the right end
-# pb.bc.add('Dirichlet',ref_node[1], ['DispX','DispY','DispZ'], [np.pi,0,0.]) #Rigid rotation of the right end
 pb.bc.add("Dirichlet", "RigidRotX", 2 * np.pi / 2)  # Rigid rotation of the right end
-
-# pb.bc.add('Dirichlet',ref_node[0], 'DispX', 0.5) #Rigid displacement of the right end
-# pb.bc.add('Neumann',ref_node[0], 'DispX', 69384) #Rigid displacement of the right end
-
-
-# pb.bc.add('Neumann',ref_node[1], 'DispX', 300) #Rigid rotation of the right end
-
 
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.025)
 
@@ -109,7 +96,7 @@ results.plot("Stress", component="vm", data_type="Node", show=True)
 # ------------------------------------
 # Write movie with default options
 # ------------------------------------
-results.write_movie(res_dir + filename, "Stress_vm", framerate=12, quality=5)
+results.write_movie(res_dir + filename, "Stress", "vm", framerate=12, quality=5)
 
 # ------------------------------------
 # Save pdf plot
@@ -120,103 +107,9 @@ results.write_movie(res_dir + filename, "Stress_vm", framerate=12, quality=5)
 # ------------------------------------
 # Plot the automatically saved mesh
 # ------------------------------------
-# pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
+# fd.read_data(res_dir+filename).plot()
 
 # ------------------------------------
 # Write movie with moving camera
 # ------------------------------------
-# results.write_movie(res_dir+filename, 'Stress', component = 0, framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)
-
-
-# filename = 'results/sheartest_ref'
-
-# filename_27 = 'results/sheartest'
-
-
-# res = np.load(filename+'_{}.npz'.format(19))
-# res_27 = np.load(filename_27+'_{}.npz'.format(19))
-# meshplot = mesh.to_pyvista()
-
-# # for item in res:
-# #     if item[-4:] == 'Node':
-# #         if len(res[item]) == len(crd):
-# #             meshplot.point_data[item[:-5]] = res[item]
-# #         else:
-# #             meshplot.point_data[item[:-5]] = res[item].T
-# #     else:
-# #         meshplot.cell_data[item] = res[item].T
-
-# meshplot.point_data['Disp'] = res['Disp_Node'].T
-
-# pl = pv.Plotter(shape=(1, 2))
-# # pl = pv.Plotter()
-# pl.set_background('White')
-
-# sargs = dict(
-#     interactive=False,
-#     title_font_size=20,
-#     label_font_size=16,
-#     color='Black',
-#     # n_colors= 10
-# )
-
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-# pl.subplot(0,0)
-# meshplot.point_data['Disp'] = res['Disp_Node'].T
-# pl.add_mesh(meshplot.warp_by_vector('Disp', factor = 1), scalars = res['Cauchy_vm_Node'], component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_axes()
-
-# pl.subplot(0,1)
-# meshplot.point_data['Disp'] = res_27['Disp_Node'].T
-# pl.add_mesh(meshplot.warp_by_vector('Disp', factor = 1), scalars = res_27['Cauchy_vm_Node'], component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_axes()
-# pl.link_views()
-# cpos = pl.show(return_cpos = True)
-# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-# meshplot = pv.read('results/bendingPlastic3D_19.vtk')
-# # meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
-
-# pl = pv.Plotter()
-# pl.set_background('White')
-
-# sargs = dict(
-#     interactive=True,
-#     title_font_size=20,
-#     label_font_size=16,
-#     color='Black',
-#     # n_colors= 10
-# )
-
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'Disp', component = 1, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-
-# cpos = pl.show(return_cpos = True)
-# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-# a = res_dir+filename
-# test = fd.core.dataset.read_data(a)
-
-# from matplotlib import pylab
-
-# Fhist = []
-# for it in range(results.n_iter):
-#     results.load(it)
-#     # Fhist.append((pb._MFext.T @ pb.get_A() @ pb.get_X() - pb._MFext.T @ pb.get_D()).reshape(3,-1)[0,-2])
-#     Fhist.append(sum(results['Fext'][0,right]))
-
-# pylab.plot(Fhist)
+# results.write_movie(res_dir+filename, 'Stress', component = 'XX', framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)

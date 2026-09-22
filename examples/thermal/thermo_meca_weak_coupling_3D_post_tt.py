@@ -1,103 +1,91 @@
-import os
-from time import time
+"""Create a movie from the weak thermo-mechanical coupling results.
 
-import numpy as np
-import pylab as plt
+Run ``thermo_meca_weak_coupling_3D.py`` first to generate the thermal and
+mechanical result files used by this post-processing script.
+"""
+
+from pathlib import Path
+
+import fedoo as fd
 import pyvista as pv
-from numpy import linalg
-
-from fedoo import Mesh
-
-start = time()
-# --------------- Pre-Treatment --------------------------------------------------------
 
 
-# -------------------- MESH ------------------------------
-# Mesh.box_mesh(Nx=3, Ny=3, Nz=3, x_min=0, x_max=1, y_min=0, y_max=1, z_min=0, z_max=1, ElementShape = 'hex8', name = meshname)
-# Mesh.import_file('octet_surf.msh', meshname = "Domain")
-# Mesh.import_file('data/octet_1.msh', meshname = "Domain")
-Mesh.import_file("data/gyroid.msh", meshname="Domain")
-meshname = "Domain"
+def write_coupled_movie(
+    result_prefix=None,
+    output_filename=None,
+    n_frames=None,
+):
+    """Plot temperature on the amplified deformed configuration."""
+    example_dir = Path(__file__).resolve().parent
+    if result_prefix is None:
+        result_prefix = example_dir / "results" / "thermo_meca_nl"
+    else:
+        result_prefix = Path(result_prefix)
 
-mesh = Mesh.get_all()[meshname]
-nb_iter = 200
-filename = "results/thermo_meca_nl"
+    if output_filename is None:
+        output_filename = result_prefix.with_suffix(".mp4")
+    else:
+        output_filename = Path(output_filename)
 
-# field_name = 'State_Variables'
-field_name = "Temp"
-component = 1
-# clim = None
-clim = [0, 100]
+    thermal_results = fd.read_data(f"{result_prefix}_th.fdh5")
+    mechanical_results = fd.read_data(f"{result_prefix}_me.fdh5")
 
-crd = mesh.nodes
+    if thermal_results.mesh.n_nodes != mechanical_results.mesh.n_nodes:
+        raise ValueError("Thermal and mechanical result meshes do not match.")
 
-# #note set for boundary conditions
-Xmin, Xmax, center = mesh.bounding_box.center
+    available_frames = min(thermal_results.n_iter, mechanical_results.n_iter)
+    if n_frames is None:
+        n_frames = available_frames
+    else:
+        n_frames = min(n_frames, available_frames)
+    if n_frames < 1:
+        raise ValueError("The result files do not contain any frame.")
 
+    plotter = pv.Plotter(window_size=(1024, 768), off_screen=True)
+    plotter.set_background("white")
+    plotter.open_movie(str(output_filename), framerate=24, quality=4)
 
-#### save a video (need imageio-ffmpeg - conda install imageio-ffmpeg -c conda-forge
-pl = pv.Plotter(window_size=[1024, 768])
-pl.set_background("White")
-sargs = dict(
-    interactive=True,
-    title_font_size=20,
-    label_font_size=16,
-    color="Black",
-    # n_colors= 10
-)
+    scalar_bar_args = {
+        "title_font_size": 20,
+        "label_font_size": 16,
+        "color": "black",
+    }
 
-factor = 5
+    for iteration in range(n_frames):
+        thermal_results.load(iteration)
+        mechanical_results.load(iteration)
 
-pl.open_movie(filename + ".mp4", framerate=24, quality=4)
-
-meshplot = mesh.to_pyvista()
-
-# pl.show(auto_close=False)  # only necessary for an off-screen movie
-pl.camera.SetFocalPoint(center)
-pl.camera.position = (-2.090457552750125, 1.7582929402632352, 1.707926514944027)
-
-for i in range(0, nb_iter):
-    # meshplot = pv.read('results/thermal3D_' +str(i)+'.vtk')
-    res_th = np.load(filename + "_th_{}.npz".format(i))
-    res_me = np.load(filename + "_me_{}.npz".format(i))
-
-    for res in [res_th, res_me]:
-        for item in res:
-            if item[-4:] == "Node":
-                if len(res[item]) == len(crd):
-                    meshplot.point_data[item[:-5]] = res[item]
-                else:
-                    meshplot.point_data[item[:-5]] = res[item].T
-            else:
-                meshplot.cell_data[item] = res[item].T
-
-    # actor = pl.add_mesh(meshplot, scalars = 'data', show_edges = True, scalar_bar_args=sargs, cmap="bwr", clim = [0,100])
-    meshplot.points = crd + factor * meshplot.point_data["Disp"]
-
-    if i == 0:
-        pl.add_mesh(
-            meshplot,
-            scalars=field_name,
-            component=component,
+        # DataSet.plot uses the nodal displacement field to update the displayed
+        # coordinates when scale is non-zero.
+        thermal_results.node_data["Disp"] = mechanical_results.node_data["Disp"]
+        thermal_results.plot(
+            "Temp",
+            data_type="Node",
+            scale=5,
+            show=False,
             show_edges=True,
-            scalar_bar_args=sargs,
-            cmap="jet",
-            clim=clim,
+            clim=(0, 100),
+            scalar_bar_args=scalar_bar_args,
+            title="",
+            name="thermo-mechanical",
+            plotter=plotter,
+            lock_view=iteration > 0,
         )
 
-    if clim is None:
-        pl.update_scalar_bar_range(
-            [
-                meshplot.point_data[field_name].min(),
-                meshplot.point_data[field_name].max(),
-            ]
-        )
+        if iteration == 0:
+            plotter.camera.SetFocalPoint(thermal_results.mesh.bounding_box.center)
+            plotter.camera.position = (
+                -2.090457552750125,
+                1.7582929402632352,
+                1.707926514944027,
+            )
 
-    # pl.camera.Azimuth(2*i/360*np.pi)
-    pl.camera.Azimuth(360 / nb_iter)
-    # Run through each frame
-    # pl.add_text(f"Iteration: {i}", name='time-label', color='Black')
-    pl.write_frame()  # write initial data
-    # pl.remove_actor(actor)
+        plotter.camera.Azimuth(360 / n_frames)
+        plotter.write_frame()
 
-pl.close()
+    plotter.close()
+    return output_filename
+
+
+if __name__ == "__main__":
+    write_coupled_movie()

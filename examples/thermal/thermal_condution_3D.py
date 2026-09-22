@@ -64,11 +64,6 @@ def timeEvolution(timeFactor):
 pb.bc.add("Dirichlet", right, "Temp", 100, time_func=timeEvolution)
 # Problem.bc.add('Dirichlet',top,'Temp',100, time_func=timeEvolution)
 
-
-# Problem.bc.add('Dirichlet','DispY', 0,nodes_bottomLeft)
-# Problem.bc.add('Dirichlet','DispY',0,nodes_bottomRight)
-# bc = Problem.bc.add('Dirichlet','DispY', uimp, nodes_topCenter)
-
 pb.nlsolve(dt=tmax / nb_iter, tmax=tmax, update_dt=True)
 
 cpos = [
@@ -82,4 +77,4 @@ pl = results.plot("Temp", show=False)
 pl.camera_position = cpos
 pl.show()
 
-# results.write_movie('toto','Temp')
+# results.write_movie('temperature_evoluation','Temp')

@@ -183,6 +183,7 @@ class Problem(ProblemBase):
         save_mesh=True,
         include_static_obstacles=False,
         write_mode="overwrite",
+        ignore_missing=False,
     ):
         """Register an output for automatic saving managed by solve methods.
 
@@ -241,6 +242,12 @@ class Problem(ProblemBase):
             its highest iteration, and ``"error"`` refuses to register an
             existing file. Other formats, including ``fdz``, accept only
             ``"overwrite"``.
+
+        ignore_missing : bool, default=False
+            If True, requested result fields that are unavailable are omitted.
+            This is useful for a common output list shared by constitutive laws
+            with different state variables. If False, an unavailable field
+            raises ``NameError`` when results are extracted.
         """
         if output_list is None and hasattr(self, "assembly"):
             output_list = assembly
@@ -258,6 +265,7 @@ class Problem(ProblemBase):
             save_mesh,
             include_static_obstacles,
             write_mode,
+            ignore_missing,
         )
 
     def clear_outputs(self):
@@ -320,6 +328,10 @@ class Problem(ProblemBase):
             set of element indices or name of an element set associated to the mesh.
             If specified, only the results restriced to the set of elements
             are extracted.
+
+        ignore_missing : bool, default=False
+            If True, requested result fields that are unavailable are omitted.
+            If False, an unavailable field raises ``NameError``.
         """
         if len(args) > 0 and (
             isinstance(args[0], AssemblyBase)

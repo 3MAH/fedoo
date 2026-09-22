@@ -379,6 +379,7 @@ def _get_results(
     position=1,
     element_set=None,
     include_mesh=True,
+    ignore_missing=False,
 ):
     if isinstance(output_list, str):
         output_list = [output_list]
@@ -470,6 +471,8 @@ def _get_results(
                         assemb.weakform, method_name
                     )
                     if law is None:
+                        if ignore_missing:
+                            continue
                         raise NameError('Field "{}" not available'.format(res))
                     try:
                         data = getattr(law, method_name)(assemb, position=position)
@@ -494,6 +497,8 @@ def _get_results(
             if res[:-3] in data_sav:
                 data = data_sav[res[:-3]]
             else:
+                if res[:-3] not in sv and ignore_missing:
+                    continue
                 data = sv[res[:-3]]
                 data_sav[res[:-3]] = data
 
@@ -533,6 +538,8 @@ def _get_results(
                 data_sav[measure_type + "_pc"] = data
 
             else:
+                if measure_type not in sv and ignore_missing:
+                    continue
                 data = sv[measure_type]
                 # if measure_type in ['PKII','PK2']:
                 #     data = material.get_pk2()
@@ -592,6 +599,8 @@ def _get_results(
             data_type = "GaussPoint"  # or 'Element' ?
 
         else:
+            if ignore_missing:
+                continue
             raise NameError(res, "' doens't match to any available output")
 
         if (
@@ -668,6 +677,7 @@ class _ProblemOutput:
         save_mesh=True,
         include_static_obstacles=False,
         write_mode="overwrite",
+        ignore_missing=False,
     ):
         filename = os.fspath(filename)
         dirname = os.path.dirname(filename)
@@ -743,6 +753,7 @@ class _ProblemOutput:
             "element_set": element_set,
             "compressed": compressed,
             "include_static_obstacles": include_static_obstacles,
+            "ignore_missing": ignore_missing,
         }
 
         existing_refs = []
@@ -815,6 +826,7 @@ class _ProblemOutput:
             element_set = output["element_set"]
             compressed = output["compressed"]
             include_static_obstacles = output["include_static_obstacles"]
+            ignore_missing = output["ignore_missing"]
 
             assemb = output["assembly"]
             # material = assemb.weakform.GetConstitutiveLaw()
@@ -856,6 +868,7 @@ class _ProblemOutput:
                     position,
                     element_set,
                     False,
+                    ignore_missing,
                 )
                 if include_static_obstacles:
                     _add_static_geometry_to_results(res, result_mesh, output_mesh)

@@ -1,12 +1,10 @@
-import time
-
 import numpy as np
 
 import fedoo as fd
 
 # ------------------------------------------------------------------------------
-# Défine inplane 2D periodic boundary conditions for a composite ply using a 3D
-# unit cell. Don't work very well because the mesh is not periodic.
+# Define in-plane 2D periodic boundary conditions for a composite ply using a
+# 3D unit cell.
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
@@ -17,8 +15,35 @@ fd.ModelingSpace("3D")
 # ------------------------------------------------------------------------------
 # Definition of the Geometry
 # ------------------------------------------------------------------------------
-# warning: this mesh is not periodic and should be replaced by a better one !
-mesh = fd.Mesh.read("cell_taffetas.inp")
+# A structured mesh guarantees matching nodes on opposite faces. Two elliptical
+# masks represent orthogonal fiber bundles at different positions through the
+# thickness, similar to the warp and weft bundles of a woven ply.
+mesh = fd.mesh.box_mesh(
+    nx=17 * 2,
+    ny=17 * 2,
+    nz=7 * 2,
+    x_min=0,
+    x_max=1,
+    y_min=0,
+    y_max=1,
+    z_min=0,
+    z_max=0.3,
+    elm_type="hex8",
+)
+
+element_centers = mesh.element_centers
+fiber_semi_width = 0.16
+fiber_semi_thickness = 0.045
+fiber_x = ((element_centers[:, 1] - 0.5) / fiber_semi_width) ** 2 + (
+    (element_centers[:, 2] - 0.1) / fiber_semi_thickness
+) ** 2 <= 1
+fiber_y = ((element_centers[:, 0] - 0.5) / fiber_semi_width) ** 2 + (
+    (element_centers[:, 2] - 0.2) / fiber_semi_thickness
+) ** 2 <= 1
+fiber_elements = np.flatnonzero(fiber_x | fiber_y)
+matrix_elements = np.flatnonzero(~(fiber_x | fiber_y))
+mesh.add_element_set(fiber_elements, "All_fibers")
+mesh.add_element_set(matrix_elements, "All_matrix")
 
 E_fiber = 250e3
 E_matrix = 4e3
@@ -28,8 +53,6 @@ nu_matrix = 0.33
 # E_fiber = E_matrix
 # nu_fiber = nu_matrix
 
-list_elm_matrix = mesh.element_sets["Alla_matrix"]
-
 # ------------------------------------------------------------------------------
 # Set of nodes for boundary conditions
 # ------------------------------------------------------------------------------
@@ -38,12 +61,16 @@ center = mesh.nearest_node(mesh.bounding_box.center)
 # ------------------------------------------------------------------------------
 # Material definition
 # ------------------------------------------------------------------------------
-E = E_fiber * np.ones(mesh.n_elements)
-nu = nu_fiber * np.ones(mesh.n_elements)
-E[list_elm_matrix] = E_matrix
-nu[list_elm_matrix] = nu_matrix
+young_modulus = E_fiber * np.ones(mesh.n_elements)
+poisson_ratio = nu_fiber * np.ones(mesh.n_elements)
+young_modulus[matrix_elements] = E_matrix
+poisson_ratio[matrix_elements] = nu_matrix
 
-fd.constitutivelaw.ElasticIsotrop(E, nu, name="ElasticLaw")
+fd.constitutivelaw.ElasticIsotrop(
+    young_modulus,
+    poisson_ratio,
+    name="ElasticLaw",
+)
 
 # ------------------------------------------------------------------------------
 # Mechanical weak formulation
@@ -63,7 +90,7 @@ pb = fd.problem.Linear(assemb)
 # ------------------------------------------------------------------------------
 # Boundary conditions
 # ------------------------------------------------------------------------------
-E = [0.1, 0, 0]  # macroscopic strain tensor [EXX, EYY, EXY]
+macro_strain = [0.1, 0, 0]  # [EXX, EYY, EXY]
 
 # Apply the periodic boundary conditions
 pb.bc.add(
@@ -75,7 +102,7 @@ pb.bc.add(
 
 # Block a node on the center to avoid rigid body motion
 pb.bc.add("Dirichlet", center, "Disp", 0)
-pb.bc.add("Dirichlet", "MeanStrain", E)  # apply specified macro strain
+pb.bc.add("Dirichlet", "MeanStrain", macro_strain)
 
 # ------------------------------------------------------------------------------
 # Solve

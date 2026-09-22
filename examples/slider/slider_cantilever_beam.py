@@ -74,7 +74,8 @@ def mesh_updater(
     return mesh
 
 
-pl = pv.Plotter()
+# pl = pv.Plotter()
+pl = pv.Plotter(notebook=False)
 
 
 class StressRoutine:
