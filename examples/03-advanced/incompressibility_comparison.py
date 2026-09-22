@@ -196,8 +196,7 @@ def solve_formulation(label, method):
 # the same object returned by :meth:`fedoo.Problem.add_output` in a normal
 # analysis.
 solutions = {
-    label: solve_formulation(label, method)
-    for label, method in FORMULATIONS.items()
+    label: solve_formulation(label, method) for label, method in FORMULATIONS.items()
 }
 
 print("\nFinal response of Cook's membrane")
