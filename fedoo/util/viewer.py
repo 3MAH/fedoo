@@ -199,6 +199,7 @@ class PlotDock(QDockWidget):
         title = f"{self._dock_index }: " + str(title)
         super().__init__(title, parent)
         self.data = data
+        self.line_points = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))
         self.element_sets = None
         self.unsaved_element_set_names = set()
         # visibility_mode to keep track on current_selection for element_sets dialog box
@@ -950,6 +951,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window_layout()
         self._update_dock_selector()
         self.update_plot(lock_view=False)
+        return dock
 
     # def _hide_dock(self, dock):
     #     dock.setFloating(True)
@@ -958,8 +960,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def copy_active_dock(self):
         dock = self.active_dock
         if dock:
-            self.add_dataset_dock(dock.data.copy(), dock.title, opts=dict(dock.opts))
-            self.active_dock.plotter.camera_position = dock.plotter.camera_position
+            copied_dock = self.add_dataset_dock(
+                dock.data.copy(), dock.title, opts=dict(dock.opts)
+            )
+            copied_dock.line_points = dock.line_points
+            if self._line_widget_enabled and self.active_dock is copied_dock:
+                self._rebuild_line_widget()
+            copied_dock.plotter.camera_position = dock.plotter.camera_position
 
     def eventFilter(self, obj, event):
         et = event.type()
@@ -2149,11 +2156,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self._plot_over_line_dialog.finished.connect(self._on_pol_dialog_closed)
             self._plot_over_line_dialog.destroyed.connect(self._on_pol_dialog_closed)
 
+        p1, p2 = self.active_dock.line_points
         self._line_widget_enabled = True
         # Line widget
-        self._line_widget = self.plotter.add_line_widget(
-            callback=self.on_line_changed, use_vertices=True
-        )
+        self._syncing_line_widget = True
+        try:
+            self._line_widget = self.plotter.add_line_widget(
+                callback=self.on_line_changed, use_vertices=True
+            )
+        finally:
+            self._syncing_line_widget = False
+        self._on_pol_dialog_changed(p1, p2)
+        self._plot_over_line_dialog.update_line(p1, p2)
         # Show dialog
         self._plot_over_line_dialog.show()
         self._plot_over_line_dialog.raise_()
@@ -2164,13 +2178,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotter.clear_line_widgets()
 
     def _on_pol_dialog_changed(self, p1, p2):
-        self._set_line_widget_points(p1, p2)
+        self.active_dock.line_points = self._set_line_widget_points(p1, p2)
 
     def on_line_changed(self, p1, p2):
         """Called interactively while moving the widget"""
         if self._syncing_line_widget:
             return
         p1, p2 = self._set_line_widget_points(p1, p2)
+        self.active_dock.line_points = (p1, p2)
         self._plot_over_line_dialog.update_line(p1, p2)
 
     def _line_points_for_active_mesh(self, p1, p2):
@@ -2191,12 +2206,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _rebuild_line_widget(self):
         if self._plot_over_line_dialog:
-            p1 = self._plot_over_line_dialog.p1
-            p2 = self._plot_over_line_dialog.p2
+            p1, p2 = self.active_dock.line_points
             self.plotter.clear_line_widgets()
-            self._line_widget = self.plotter.add_line_widget(
-                callback=self.on_line_changed, use_vertices=True
-            )
+            self._syncing_line_widget = True
+            try:
+                self._line_widget = self.plotter.add_line_widget(
+                    callback=self.on_line_changed, use_vertices=True
+                )
+            finally:
+                self._syncing_line_widget = False
             # value of p1 and p2 are changed by the callback function
             # force values to the initial ones
             self._on_pol_dialog_changed(p1, p2)
@@ -2392,7 +2410,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         res = pv_mesh.sample_over_line(p1, p2, resolution=resolution)
         x = res["Distance"]
-        y = res["Data"]  # or y = res.active_scalars
+        # PyVista gives a new name (Data-1, Data-2, ...) to scalars passed
+        # on successive plots of the same mesh. Use the array displayed by
+        # the actor instead of the first, now stale, "Data" array.
+        actors = self.active_dock.plotter.actors
+        actor = actors.get("data1")
+        if actor is None:
+            actor = next(
+                (actors[name] for name in actors if name.startswith("data_")), None
+            )
+        scalar_name = actor.mapper.array_name if actor is not None else None
+        if scalar_name is None or scalar_name not in res.array_names:
+            QtWidgets.QMessageBox.information(
+                self, "Error", "No plotted scalar data found along the line."
+            )
+            return
+        y = res[scalar_name]
         try:
             ylabel = (
                 self.active_dock.current_field + "_" + self.active_dock.current_comp

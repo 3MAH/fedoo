@@ -29,11 +29,14 @@ class CompositeUD(ElasticAnisotropic):
         Fiber Poisson Ratio
     nu_m: scalar or arrays of gauss point values.
         Matrix Poisson Ratio
-    angle: scalar or arrays of gauss point values (*default=0*)
-        The angle of the fibers relative to the X direction normal to the
-        Z direction (if defined, the local material coordinates are used).
+    angle: scalar or array of Gauss point values, optional
+        Fiber orientation (*default=0*), measured from the X direction about
+        the Z axis. The unit is set by ``degrees``. If a local material frame
+        is defined, the angle is measured in that frame.
     name: str, optional
         The name of the constitutive law
+    degrees: bool, optional
+        If True (default), ``angle`` is in degrees. If False, it is in radians.
 
     Notes
     -----
@@ -53,6 +56,7 @@ class CompositeUD(ElasticAnisotropic):
         nu_m=0.3,
         angle=0,
         name="",
+        degrees=True,
     ):
         Mechanical3D.__init__(self, name=name)  # heritage
 
@@ -63,6 +67,7 @@ class CompositeUD(ElasticAnisotropic):
             "nu_f": nu_f,
             "nu_m": nu_m,
             "angle": angle,
+            "degrees": degrees,
         }
 
     def get_engineering_constants(self):
@@ -204,7 +209,9 @@ class CompositeUD(ElasticAnisotropic):
             np.isscalar(self.__parameters["angle"]) and self.__parameters["angle"] == 0
         ):
             rot = Rotation.from_euler(
-                "Z", np.atleast_1d(self.__parameters["angle"]), degrees=True
+                "Z",
+                np.asarray(self.__parameters["angle"]).reshape(-1, 1),
+                degrees=self.__parameters["degrees"],
             )
             QS = rot.as_voigt_stress_rotation()  # (N, 6, 6)
             if H.ndim == 3:

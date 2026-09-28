@@ -6,6 +6,20 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `CompositeUD` accepts `degrees=False` to specify fiber angles in radians;
+  angles remain in degrees by default.
+
+### Fixed
+
+- `CompositeUD` now rotates its stiffness matrix for a single nonzero angle
+  as well as for arrays of Gauss point angles.
+- The viewer's Plot Over Line now samples the currently displayed field and
+  component after plot changes.
+- Plot Over Line endpoints persist per view when its dialog is reopened or the
+  active view changes. Duplicated views inherit the points independently.
+
 ## [1.0.0] - 2026-09-22
 
 ### Added
