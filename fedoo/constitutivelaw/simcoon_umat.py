@@ -1,8 +1,13 @@
 # derive de ConstitutiveLaw
 # compatible with the simcoon strain and stress notation
 
+from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.mechanical3d import MechanicalUMAT
 import simcoon as sim
+
+# simcoon >= 2.1 raises StepCut from sim.umat when a kernel asks for a smaller increment
+# (modular engine, SMA and damage laws, Python laws). Older versions have no such exception.
+_SIMCOON_STEP_CUT = getattr(sim, "StepCut", ())
 
 
 class Simcoon(MechanicalUMAT):
@@ -64,7 +69,13 @@ class Simcoon(MechanicalUMAT):
       initializing the problem. Small-strain analyses are unaffected.
     """
 
-    manages_material_frame = True
+    @property
+    def manages_material_frame(self):
+        """Hyperelastic kernels built from F (``_Lt_from_F``) are objective by construction
+        and keep the initial material basis; the other simcoon laws are run by fedoo in the
+        frame that follows the material, since ``sim.umat`` does not convect it."""
+        return self._Lt_from_F
+
     # Simcoon UMATs transport their material history through DR and return the
     # corotational box tangent d(tau_hat)/dD.
 
@@ -1166,5 +1177,17 @@ class Simcoon(MechanicalUMAT):
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
     def _call_umat(self, *args, **kwargs):
-        """Dispatch the generic MechanicalUMAT call to Simcoon."""
-        return sim.umat(self.umat_name, *args, **kwargs)
+        """Dispatch the generic MechanicalUMAT call to Simcoon.
+
+        A step-cut request from the law is routed to the solver's failed-increment path
+        (InvalidKinematicStateError), which retries the increment with a smaller time step.
+        """
+        # In the frame that follows the material (stresses in the rotating basis, DR = I) F0/F1
+        # stay in the initial basis: the log-corate work correction would contract tau and D
+        # written in different bases, so Wm is the kernel's own work there.
+        if getattr(self, "_in_material_frame", False):
+            kwargs["work_correction"] = False
+        try:
+            return sim.umat(self.umat_name, *args, **kwargs)
+        except _SIMCOON_STEP_CUT as exc:
+            raise InvalidKinematicStateError(str(exc)) from exc

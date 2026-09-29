@@ -271,13 +271,17 @@ class Mechanical3D(ConstitutiveLaw):
         return np.asarray(value, dtype=float)
 
     def _rotate_vector(self, value, assembly, kind, active, current=True):
-        value = self._as_mechanical_array(value)
-        n_points = self._data_point_count(value, tensor_order=2)
         frames = (
             self.get_current_local_frame(assembly)
             if current
             else self.get_local_frame(assembly)
         )
+        return self._rotate_vector_in(value, frames, kind, active)
+
+    def _rotate_vector_in(self, value, frames, kind, active):
+        """Change the basis of stress/strain Voigt vector(s) with explicit frames."""
+        value = self._as_mechanical_array(value)
+        n_points = self._data_point_count(value, tensor_order=2)
         if frames is None:
             return value
         frames = np.asarray(frames, dtype=float).reshape(-1, 3, 3)
@@ -700,17 +704,56 @@ class MechanicalUMAT(Mechanical3D):
             F0 = F1 = np.array([])
 
         ndi = self._get_ndi(assembly)
-        stress_local, statev, wm, tangent_local = self._call_umat(
-            self.global2local_strain(
+
+        # A law that does not manage its material frame is run, under finite strain, in the
+        # frame that follows the material: the start state in the committed frame, the
+        # increment in the trial frame (committed frame convected by DR), and DR = I -- the
+        # frame-relative increment -- so the law's tensorial state stays in that frame and is
+        # not rotated a second time. Without a material frame (isotropic, no user frame) the
+        # law keeps the lab basis and the real DR.
+        trial_frame = None
+        if assembly._nlgeom and not self.manages_material_frame:
+            trial_frame = self.get_current_local_frame(assembly)
+        if trial_frame is not None:
+            start_frame = np.asarray(
+                assembly.sv_start.get(
+                    "_MaterialFrame", self._initial_material_frame(assembly)
+                ),
+                dtype=float,
+            )
+            strain_start = self._rotate_vector_in(
+                assembly.sv_start["Strain"], start_frame, "strain", False
+            )
+            dstrain_local = self._rotate_vector_in(
+                dstrain, trial_frame, "strain", False
+            )
+            stress_start = self._rotate_vector_in(
+                assembly.sv_start["Stress"], start_frame, "stress", False
+            )
+            n_points = np.asarray(assembly.sv_start["Statev"]).shape[-1]
+            DR_local = np.repeat(np.eye(3)[:, :, None], n_points, axis=2).copy(
+                order="F"
+            )
+        else:
+            strain_start = self.global2local_strain(
                 assembly.sv_start["Strain"], assembly, current=False
-            ),
-            self.global2local_strain(dstrain, assembly, current=False),
+            )
+            dstrain_local = self.global2local_strain(dstrain, assembly, current=False)
+            stress_start = self.global2local_stress(
+                assembly.sv_start["Stress"], assembly, current=False
+            )
+            DR_local = self.global2local_rotation_increment(assembly.sv["DR"], assembly)
+
+        # Read by adapters that must know the basis of the call (SimcoonUMAT: the log-corate
+        # work correction needs F in the basis of the stresses, which this path does not give).
+        self._in_material_frame = trial_frame is not None
+        stress_local, statev, wm, tangent_local = self._call_umat(
+            strain_start,
+            dstrain_local,
             F0,
             F1,
-            self.global2local_stress(
-                assembly.sv_start["Stress"], assembly, current=False
-            ),
-            self.global2local_rotation_increment(assembly.sv["DR"], assembly),
+            stress_start,
+            DR_local,
             self.props,
             assembly.sv_start["Statev"],
             pb.time,
@@ -722,13 +765,16 @@ class MechanicalUMAT(Mechanical3D):
         )
         assembly.sv["Statev"] = statev
         assembly.sv["Wm"] = wm
+        in_trial = trial_frame is not None
         assembly.sv["TangentMatrix"] = self.local2global_H(
-            tangent_local, assembly, current=False
+            tangent_local, assembly, current=in_trial
         )
         if ndi == 2:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
         assembly.sv["Stress"] = StressTensorList(
-            self.local2global_stress(stress_local, assembly, current=False)
+            self._rotate_vector_in(stress_local, trial_frame, "stress", True)
+            if in_trial
+            else self.local2global_stress(stress_local, assembly, current=False)
         )
 
     def set_start(self, assembly, pb):

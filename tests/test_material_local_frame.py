@@ -189,6 +189,7 @@ def test_simcoon_umat_boundary_uses_material_frame(monkeypatch):
             DR=DR,
             F0=F0,
             F1=F1,
+            kwargs=kwargs,
         )
         return local_stress, statev_start.copy(), wm_start.copy(), local_tangent
 
@@ -228,25 +229,112 @@ def test_simcoon_umat_boundary_uses_material_frame(monkeypatch):
         captured["strain"],
         rotation.apply_strain(strain_start.asarray(), False).reshape(6, 1),
     )
+    # Finite strain: the law runs in the frame that follows the material. The start state is
+    # expressed in the committed frame (here the initial one), the increment in the trial
+    # frame (the committed frame convected by DR), and the law receives DR = I.
+    trial = SimcoonRotation.from_matrix(increment @ frame)
     np.testing.assert_allclose(
         captured["dstrain"],
-        rotation.apply_strain(strain_increment.asarray(), False).reshape(6, 1),
+        trial.apply_strain(strain_increment.asarray(), False).reshape(6, 1),
     )
     np.testing.assert_allclose(
         captured["stress"],
         rotation.apply_stress(stress_start.asarray(), False).reshape(6, 1),
     )
-    np.testing.assert_allclose(captured["DR"][:, :, 0], frame.T @ increment @ frame)
+    np.testing.assert_allclose(captured["DR"][:, :, 0], np.eye(3))
+    # F0/F1 stay in the initial basis while the stresses are in the rotating one: no
+    # log-corate work correction (it would contract tau and D written in different bases)
+    assert captured["kwargs"].get("work_correction") is False
     np.testing.assert_allclose(captured["F0"][:, :, 0], frame.T @ F0[:, :, 0] @ frame)
     np.testing.assert_allclose(captured["F1"][:, :, 0], frame.T @ F1[:, :, 0] @ frame)
     np.testing.assert_allclose(
         assembly.sv["Stress"].asarray(),
-        rotation.apply_stress(local_stress).reshape(6, 1),
+        trial.apply_stress(local_stress).reshape(6, 1),
     )
     np.testing.assert_allclose(
         assembly.sv["TangentMatrix"][:, :, 0],
-        rotation.apply_stiffness(local_tangent[:, :, 0].copy()),
+        trial.apply_stiffness(local_tangent[:, :, 0].copy()),
     )
+
+
+def test_simcoon_orthotropic_axes_follow_a_rigid_rotation():
+    """A real simcoon ELORT law, axes initially at 30 deg, stretched along x, the state
+    committed, then rotated rigidly by 90 deg (DStrain = 0, DR = R): the stress just rotates.
+    With the axes kept in the initial frame it did not (sim.umat does not convect them)."""
+    props = np.array(
+        [
+            [70000.0],
+            [30000.0],
+            [15000.0],
+            [0.3],
+            [0.3],
+            [0.3],
+            [8000.0],
+            [6000.0],
+            [5000.0],
+            [0.0],
+            [0.0],
+            [0.0],
+        ]
+    )
+    material = fd.constitutivelaw.Simcoon("ELORT", props)
+    material.set_local_frame(
+        ScipyRotation.from_rotvec([0.0, 0.0, np.pi / 6]).as_matrix()
+    )
+    n = 1
+    statev = np.zeros((material.n_statev, n))
+    wm = np.zeros((4, n))
+    zero = StressTensorList(np.zeros((6, n)))
+
+    def assembly(strain_start, dstrain, stress_start, DR, sv_start_extra):
+        sv_start = {
+            "Strain": strain_start,
+            "Stress": stress_start,
+            "Statev": statev.copy(),
+            "Wm": wm.copy(),
+            "F": np.eye(3)[:, :, None],
+        }
+        sv_start.update(sv_start_extra)
+        return SimpleNamespace(
+            mesh=fd.mesh.rectangle_mesh(2, 2, elm_type="quad4", ndim=3),
+            n_elm_gp=1,
+            n_gauss_points=n,
+            _nlgeom="UL",
+            space=SimpleNamespace(
+                get_dimension=lambda: "3D", list_variables=lambda: []
+            ),
+            sv={
+                "Strain": strain_start,
+                "DStrain": dstrain,
+                "DR": DR,
+                "F": np.eye(3)[:, :, None],
+                "Statev": statev.copy(),
+                "Wm": wm.copy(),
+            },
+            sv_start=sv_start,
+        )
+
+    problem = SimpleNamespace(time=1.0, dtime=0.1)
+    stretch = StrainTensorList(np.array([[0.01], [0.0], [0.0], [0.0], [0.0], [0.0]]))
+    a1 = assembly(
+        StrainTensorList(np.zeros((6, n))), stretch, zero, np.eye(3)[:, :, None], {}
+    )
+    material.update(a1, problem)
+    tau1 = a1.sv["Stress"].asarray().reshape(6)
+
+    R = ScipyRotation.from_rotvec([0.0, 0.0, np.pi / 2]).as_matrix()
+    a2 = assembly(
+        stretch,
+        StrainTensorList(np.zeros((6, n))),
+        a1.sv["Stress"],
+        R[:, :, None],
+        {"_MaterialFrame": a1.sv["_MaterialFrame"]},
+    )
+    material.update(a2, problem)
+    tau2 = a2.sv["Stress"].asarray().reshape(6)
+
+    expected = SimcoonRotation.from_matrix(R).apply_stress(tau1)
+    np.testing.assert_allclose(tau2, expected, atol=1e-9 * np.abs(tau1).max())
 
 
 def test_real_simcoon_orthotropic_update_matches_explicit_basis_change():
@@ -396,3 +484,65 @@ def test_extrude_rejects_incompatible_path_or_frame_dimensions():
     )
     with pytest.raises(ValueError, match="2D local frames.*3D extrusion path"):
         fd.mesh.extrude(profile, path, local_frame=np.eye(2))
+
+
+def test_simcoon_lab_path_keeps_the_work_correction(monkeypatch):
+    """Isotropic law without a user frame: fedoo stays in the lab basis (real DR, F in the basis
+    of the stresses), so sim.umat keeps its default log-corate work correction."""
+    module = importlib.import_module("fedoo.constitutivelaw.simcoon_umat")
+    material = fd.constitutivelaw.Simcoon("ELISO", np.array([70000.0, 0.3, 0.0]))
+    captured = {}
+
+    def fake_umat(
+        umat_name,
+        strain,
+        dstrain,
+        F0,
+        F1,
+        stress,
+        DR,
+        props,
+        statev_start,
+        time,
+        dtime,
+        wm_start,
+        temp,
+        **kwargs,
+    ):
+        captured.update(kwargs=kwargs)
+        return (
+            stress.copy(),
+            statev_start.copy(),
+            wm_start.copy(),
+            np.eye(6)[:, :, None],
+        )
+
+    monkeypatch.setattr(module.sim, "umat", fake_umat)
+    strain = StrainTensorList(np.full((6, 1), 1e-3))
+    stress = StressTensorList(np.full((6, 1), 10.0))
+    F1 = np.array([[1.1, 0.2, 0.0], [0.0, 0.9, 0.1], [0.0, 0.0, 1.05]])[:, :, None]
+    DR = ScipyRotation.from_rotvec([0.2, -0.1, 0.3]).as_matrix()[:, :, None]
+    assembly = SimpleNamespace(
+        mesh=fd.mesh.rectangle_mesh(2, 2, elm_type="quad4", ndim=3),
+        n_elm_gp=1,
+        n_gauss_points=1,
+        _nlgeom="UL",
+        space=SimpleNamespace(get_dimension=lambda: "3D", list_variables=lambda: []),
+        sv={
+            "Strain": strain,
+            "DStrain": strain,
+            "DR": DR,
+            "F": F1,
+            "Statev": np.zeros((material.n_statev, 1)),
+            "Wm": np.zeros((4, 1)),
+        },
+        sv_start={
+            "Strain": strain,
+            "Stress": stress,
+            "Statev": np.zeros((material.n_statev, 1)),
+            "Wm": np.zeros((4, 1)),
+            "F": np.eye(3)[:, :, None],
+        },
+    )
+    material.update(assembly, SimpleNamespace(time=1.0, dtime=0.1))
+    assert "work_correction" not in captured["kwargs"]
