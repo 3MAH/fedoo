@@ -744,25 +744,48 @@ class MechanicalUMAT(Mechanical3D):
             )
             DR_local = self.global2local_rotation_increment(assembly.sv["DR"], assembly)
 
-        # Read by adapters that must know the basis of the call (SimcoonUMAT: the log-corate
-        # work correction needs F in the basis of the stresses, which this path does not give).
+        # Call context read by adapters that can use it (SimcoonUMAT), reset after the call:
+        # - _in_material_frame: F is not in the basis of the stresses (no log-corate work
+        #   correction);
+        # - _corate: the weak form's objective rate, the one the box tangent must be in;
+        # - _tangent_output: the tangent this configuration integrates, when the law may return
+        #   it directly (the adapter sets _tangent_converted if it did). Not in the frame that
+        #   follows the material (F and the stresses in different bases) nor in plane stress
+        #   (the condensation acts on the box tangent).
+        wf = getattr(assembly, "weakform", None)
         self._in_material_frame = trial_frame is not None
-        stress_local, statev, wm, tangent_local = self._call_umat(
-            strain_start,
-            dstrain_local,
-            F0,
-            F1,
-            stress_start,
-            DR_local,
-            self.props,
-            assembly.sv_start["Statev"],
-            pb.time,
-            pb.dtime,
-            assembly.sv_start["Wm"],
-            self.get_temp_gp(assembly, pb),
-            ndi=ndi,
-            tangent_mode=self.tangent_mode,
+        self._corate = (
+            getattr(wf, "_simcoon_corate", None) if assembly._nlgeom else None
         )
+        fusable = (
+            assembly._nlgeom
+            and trial_frame is None
+            and ndi == 3
+            and getattr(wf, "convert_tangent", False)
+        )
+        self._tangent_output = getattr(wf, "_tangent_output", None) if fusable else None
+        self._tangent_converted = False
+        try:
+            stress_local, statev, wm, tangent_local = self._call_umat(
+                strain_start,
+                dstrain_local,
+                F0,
+                F1,
+                stress_start,
+                DR_local,
+                self.props,
+                assembly.sv_start["Statev"],
+                pb.time,
+                pb.dtime,
+                assembly.sv_start["Wm"],
+                self.get_temp_gp(assembly, pb),
+                ndi=ndi,
+                tangent_mode=self.tangent_mode,
+            )
+            assembly._tangent_converted = self._tangent_converted
+        finally:
+            self._in_material_frame = False
+            self._corate = self._tangent_output = None
         assembly.sv["Statev"] = statev
         assembly.sv["Wm"] = wm
         in_trial = trial_frame is not None

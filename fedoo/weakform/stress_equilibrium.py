@@ -584,6 +584,11 @@ class StressEquilibrium(WeakFormBase):
         if not self.convert_tangent or getattr(pb, "_line_search_update", False):
             return
 
+        if getattr(assembly, "_tangent_converted", False):
+            # the law already returned the tangent of this configuration
+            # (sim.umat tangent_output, see MechanicalUMAT.update)
+            return
+
         if assembly._nlgeom in ("TL", "UL"):
             # check if TangentMatrix has the consistent array shape
             if not isinstance(assembly.sv["TangentMatrix"], np.ndarray):
@@ -866,61 +871,20 @@ class StressEquilibrium(WeakFormBase):
     @corate.setter
     def corate(self, value):
         self._corate = value
-        if self.nlgeom == "UL":
-            # In UL, the assembled tangent is always the Lie (Truesdell)
-            # spatial tangent (see update_2); _convert_Lt_tag holds the
-            # corate-specific first-stage conversion of the umat box tangent
-            # d(tau_hat)/dD to the material tangent dS/dE.
-            value = value.lower()
-            if value == "log":
-                self._corate_func = _comp_log_strain
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "log_inc":
-                self._corate_func = _comp_log_strain_inc
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value in ["gn", "green_naghdi"]:
-                self._corate_func = _comp_gn_strain
-                self._convert_Lt_tag = "DsigmaDe_GreenNaghdiDD_2_DSDE"
-            elif value == "jaumann":
-                self._corate_func = _comp_jaumann_strain
-                self._convert_Lt_tag = "DsigmaDe_JaumannDD_2_DSDE"
-            elif value == "log_r":
-                self._corate_func = _comp_log_strain_R
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "log_r_inc":
-                self._corate_func = _comp_log_strain_R_inc
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            else:
+        if self.nlgeom in ("UL", "TL"):
+            try:
+                self._corate_func, self._simcoon_corate = _CORATES[value.lower()]
+            except KeyError:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
                     "green_naghdi" or "jaumann"'
-                )
-
-        if self.nlgeom == "TL":
-            value = value.lower()
-            if value == "log":
-                self._corate_func = _comp_log_strain
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "log_inc":
-                self._corate_func = _comp_log_strain_inc
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value in ["gn", "green_naghdi"]:
-                self._corate_func = _comp_gn_strain
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "jaumann":
-                self._corate_func = _comp_jaumann_strain
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "log_r":
-                self._corate_func = _comp_log_strain_R
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            elif value == "log_r_inc":
-                self._corate_func = _comp_log_strain_R_inc
-                self._convert_Lt_tag = "DsigmaDe_2_DSDE"
-            else:
-                raise ValueError(
-                    'corate value not understood. Choose between "log", "log_R", \
-                    "green_naghdi" or "jaumann"'
-                )
+                ) from None
+            # the law returns the box tangent d(tau_hat)/dD in this corate: the first
+            # conversion stage (box -> dS/dE) is the one of the same corate, in TL and UL
+            self._convert_Lt_tag = _BOX_TO_DSDE[self._simcoon_corate]
+            # tangent the configuration integrates, which a law may return directly
+            # (sim.umat tangent_output): dS/dE in TL, the Lie tangent in UL
+            self._tangent_output = "material" if self.nlgeom == "TL" else "spatial"
 
 
 # elements used to avoid volumetric locking
@@ -1238,3 +1202,24 @@ def _comp_gn_strain(wf, assembly, pb):
     )
     assembly.sv["DR"] = DR
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
+
+
+# fedoo corate name: (strain update, simcoon corate id: 0 Jaumann, 1 Green-Naghdi, 2 XBM log,
+# 3 log_R)
+_CORATES = {
+    "log": (_comp_log_strain, 2),
+    "log_inc": (_comp_log_strain_inc, 2),
+    "gn": (_comp_gn_strain, 1),
+    "green_naghdi": (_comp_gn_strain, 1),
+    "jaumann": (_comp_jaumann_strain, 0),
+    "log_r": (_comp_log_strain_R, 3),
+    "log_r_inc": (_comp_log_strain_R_inc, 3),
+}
+
+# box tangent of each simcoon corate -> dS/dE (sim.Lt_convert key)
+_BOX_TO_DSDE = {
+    0: "DsigmaDe_JaumannDD_2_DSDE",
+    1: "DsigmaDe_GreenNaghdiDD_2_DSDE",
+    2: "DsigmaDe_2_DSDE",
+    3: "DsigmaDe_2_DSDE",
+}
