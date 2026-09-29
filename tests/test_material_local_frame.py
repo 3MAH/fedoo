@@ -194,6 +194,10 @@ def test_simcoon_umat_boundary_uses_material_frame(monkeypatch):
         return local_stress, statev_start.copy(), wm_start.copy(), local_tangent
 
     monkeypatch.setattr(module.sim, "umat", fake_umat)
+    # the fake stands for a simcoon whose sim.umat has the optional keywords
+    monkeypatch.setattr(
+        module, "_UMAT_KWARGS", {"corate", "work_correction", "tangent_output"}
+    )
     F0 = np.eye(3)[:, :, None]
     F1 = np.array([[1.1, 0.2, 0.0], [0.0, 0.9, 0.1], [0.0, 0.0, 1.05]])[:, :, None]
     increment = ScipyRotation.from_rotvec([0.2, -0.1, 0.3]).as_matrix()
