@@ -76,6 +76,7 @@ class Linear(Problem):
         self._dynamic_displacement = self._new_vect_dof()
         self._dynamic_velocity = self._new_vect_dof()
         self._dynamic_acceleration = self._new_vect_dof()
+        self._dynamic_force = self._new_vect_dof()
         if integrator is not None:
             self.set_time_integrator(SECOND_ORDER, integrator)
 
@@ -281,6 +282,7 @@ class Linear(Problem):
             # _dynamic_initialized set) would silently run that solve on the
             # static K with carried-over velocity/acceleration.
             self._dynamic_initialized = False
+            self._dynamic_force = self._new_vect_dof()
             return
 
         self.set_A(self.__assembly.get_global_matrix())  # tangent stiffness
@@ -343,8 +345,18 @@ class Linear(Problem):
         self.initialize()
         self._dynamic_update_rhs()
         Problem.solve(self)
+        # Preserve the solved discrete balance before update prepares the
+        # next increment's history vector. Generalized-alpha forces belong
+        # to its alpha evaluation point, not necessarily the end-step state.
+        self._dynamic_force = Problem._get_force_vector(self).copy()
         self._dynamic_step_solved = True
         return self.get_X()
+
+    def _get_force_vector(self):
+        """Completed implicit-step forces, or the static linear balance."""
+        if self.is_dynamic:
+            return self._dynamic_force
+        return super()._get_force_vector()
 
     def _dynamic_update(self, compute="all", update_weakform=False):
         """Advance Newmark/generalized-alpha kinematics after ``solve``."""
@@ -394,8 +406,7 @@ class Linear(Problem):
         self._dynamic_update_rhs()
         if apply_boundary_conditions:
             self.apply_boundary_conditions(t_fact=t_fact)
-        Problem.solve(self)
-        self._dynamic_step_solved = True
+        self._dynamic_solve()
         self._dynamic_update(update_weakform=update_weakform)
         if save_results:
             if not update_weakform:

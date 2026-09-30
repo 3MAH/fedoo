@@ -167,6 +167,20 @@ class NonLinear(Problem):
         # start not used for static problem
         self.set_D(self.__assembly.current.get_global_vector())
 
+    def _get_force_vector(self):
+        """Forces from the latest evaluated nonlinear state, including inertia.
+
+        Vector updates synchronize D. Applying a correction alone does not
+        evaluate forces; custom loops must call update(compute="vector").
+        Generalized-alpha enforces equilibrium at the integrator's evaluation
+        point. The recovered balance includes inertia and damping at that
+        point and is not a separate end-step force evaluation.
+        """
+        force = self.get_D()
+        if np.isscalar(force):
+            return self._new_vect_dof() - force
+        return -force
+
     def set_time_integrator(self, evolution, integrator):
         """Attach or remove a problem-level time integrator.
 
@@ -362,6 +376,7 @@ class NonLinear(Problem):
         self._err0 = self.nr_parameters["err0"]  # initial error for NR error estimation
         self.__assembly.to_start(self)
         self._run_constraint_hook("to_start")
+        self._update_d()
         # The tangent of the diverged iterate can be singular (e.g. geometric
         # stiffness at an overshooting iterate): re-assemble it at the restored
         # state so that the retry's elastic prediction starts from a sound
@@ -378,7 +393,9 @@ class NonLinear(Problem):
             - New initial Displacement
             - Modification of the mesh
             - Change in constitutive law (internal variable)
-        Don't Update the problem with the new assembled global matrix and global vector -> use UpdateA and UpdateD method for this purpose
+        Vector updates also synchronize D for force extraction. The assembled
+        matrix is installed separately through _update_a(). Matrix-only and
+        compute="none" updates leave D at its latest evaluated vector state.
         """
         if self.bc._update_during_inc:
             for bc in self.bc:
@@ -393,6 +410,8 @@ class NonLinear(Problem):
 
         if self.bc._update_during_inc:
             self.update_boundary_conditions()
+        if compute in ("all", "vector"):
+            self._update_d()
 
     def reset(self):
         self.__assembly.reset()
@@ -637,15 +656,14 @@ class NonLinear(Problem):
             )
         elif self.nr_parameters["criterion"] == "Force":
             if self._err0 is None:
-                # Normalize by external force
+                # Reevaluate the total force scale at each Newton iteration.
                 err0 = np.linalg.norm(
                     self.get_ext_forces(include_mpc=False),
                     norm_type,
                 )
-                # err0 += 1e-8  # to avoid divizion by 0
+                # With no external force, use an absolute residual check.
                 if err0 == 0:
                     err0 = 1
-                    return 1
             else:
                 err0 = self._err0
             return np.linalg.norm(self._get_free_dof_residual(), norm_type) / err0
@@ -697,7 +715,10 @@ class NonLinear(Problem):
         Optional parameters that can be set as kargs:
             * 'err0': float or None, default = None.
               The reference error.
-              If None (default), err0 is automatically computed.
+              If None (default), err0 is automatically computed. For Force,
+              the current total force norm is recomputed at each iteration.
+              A zero norm uses one for that evaluation only,
+              making tol an absolute residual tolerance in force units.
             * 'tol': float, default is 5e-3.
               Error tolerance for convergence.
             * 'max_subiter': int, default = 16.

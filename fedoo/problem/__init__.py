@@ -306,7 +306,7 @@ You can define how the solver determines convergence via :meth:`NonLinear.set_nr
 Three criteria are available:
 
 * **Force** (default): Measures the residual (out-of-balance) forces relative to the
-  external applied forces.
+  current total force norm, recomputed at each Newton iteration.
 * **Displacement**: Measures the norm of the displacement increment relative to the
   initial increment of the step.
 * **Work**: Evaluates the energy (dot product of displacement and residual) relative to
@@ -328,7 +328,8 @@ The following parameters can be adjusted via :meth:`NonLinear.set_nr_criterion` 
   
   * **Displacement**: Calculated from the current increment norm, adjusted by 
     1% of total displacement for numerical stability.
-  * **Force**: Calculated from the norm of the current external forces.
+  * **Force**: Recalculated from the current total force norm at each iteration,
+    including reactions and imbalance.
   * **Work**: Initialized once at the start of the increment and stored.
   
   If the calculated reference is zero, it defaults to ``1`` to prevent 
