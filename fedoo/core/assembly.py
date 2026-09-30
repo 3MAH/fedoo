@@ -871,6 +871,8 @@ class Assembly(AssemblyBase):
         reset the assembly to it's initial state.
         Internal variable in the constitutive equation are reinitialized
         and stored global matrix and vector are deleted
+        Initial values set with set_initial_statev() are deleted and must be
+        reapplied before the next initialization.
         """
         self.weakform.reset()
         if self.weakform.constitutivelaw is not None:
@@ -885,6 +887,7 @@ class Assembly(AssemblyBase):
         )
 
         # remove all state variables
+        self._initial_statev_components = set()
         self.sv = {}
         self.sv_start = {}
         self.sv_type = {}

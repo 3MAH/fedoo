@@ -595,6 +595,9 @@ class MechanicalUMAT(Mechanical3D):
 
         This method must be called before the associated problem initializes.
         Repeated calls preserve components initialized previously.
+        Assembly.reset() deletes these values; reapply them before the next
+        initialization. Use this method rather than assigning Statev directly
+        so the components are preserved during material initialization.
 
         Parameters
         ----------
@@ -634,6 +637,10 @@ class MechanicalUMAT(Mechanical3D):
             raise ValueError(f"state-variable label {label!r} selects no components")
 
         statev = self._statev_array(assembly)
+        # kept over the law's own initialisation (initialize)
+        assembly._initial_statev_components = getattr(
+            assembly, "_initial_statev_components", set()
+        ) | {int(i) for i in indices}
         statev[indices, :] = self._broadcast_initial_statev(
             value,
             len(indices),
@@ -673,22 +680,37 @@ class MechanicalUMAT(Mechanical3D):
         zeros_6 = np.zeros((6, n_points), order="F")
         ndi = self._get_ndi(assembly)
 
-        _, _, _, tangent_local = self._call_umat(
-            zeros_6,
-            zeros_6,
-            F,
-            F,
-            zeros_6,
-            DR,
-            self.props,
-            statev,
-            0,
-            0,
-            assembly.sv["Wm"],
-            self.get_temp_gp(assembly, pb),
-            ndi=ndi,
-            tangent_mode=self.tangent_mode,
-        )
+        # The one call that initialises the points (adapters that support it, e.g. Simcoon,
+        # pass start=True; every update passes start=False).
+        self._start = True
+        self._start_passed = False
+        try:
+            _, statev_init, _, tangent_local = self._call_umat(
+                zeros_6,
+                zeros_6,
+                F,
+                F,
+                zeros_6,
+                DR,
+                self.props,
+                statev,
+                0,
+                0,
+                assembly.sv["Wm"],
+                self.get_temp_gp(assembly, pb),
+                ndi=ndi,
+                tangent_mode=self.tangent_mode,
+            )
+        finally:
+            self._start = None
+        if self._start_passed:
+            # Keep the state the law initialised (reference temperature, internal
+            # variables), except the components set by set_initial_statev.
+            statev_init = np.array(statev_init, dtype=float, order="F")
+            user = sorted(getattr(assembly, "_initial_statev_components", ()))
+            if user:
+                statev_init[user] = statev[user]
+            assembly.sv["Statev"] = statev_init
         assembly.sv["TangentMatrix"] = self.local2global_H(
             tangent_local, assembly, current=False
         )
@@ -772,6 +794,9 @@ class MechanicalUMAT(Mechanical3D):
         )
         self._tangent_output = getattr(wf, "_tangent_output", None) if fusable else None
         self._tangent_converted = False
+        # - _start: an increment never re-initialises the points, even at time 0 (the
+        #   Newton corrections of the first increment).
+        self._start = False
         try:
             stress_local, statev, wm, tangent_local = self._call_umat(
                 strain_start,
@@ -792,7 +817,7 @@ class MechanicalUMAT(Mechanical3D):
             assembly._tangent_converted = self._tangent_converted
         finally:
             self._in_material_frame = False
-            self._corate = self._tangent_output = None
+            self._corate = self._tangent_output = self._start = None
         assembly.sv["Statev"] = statev
         assembly.sv["Wm"] = wm
         in_trial = trial_frame is not None
