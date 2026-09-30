@@ -13,7 +13,7 @@ _SIMCOON_STEP_CUT = getattr(sim, "StepCut", ())
 _UMAT_SIGNATURE = (sim.umat.__doc__ or "").split("\n", 1)[0]
 _UMAT_KWARGS = {
     k
-    for k in ("corate", "work_correction", "tangent_output")
+    for k in ("corate", "work_correction", "tangent_output", "start")
     if f"{k}:" in _UMAT_SIGNATURE
 }
 
@@ -1205,6 +1205,13 @@ class Simcoon(MechanicalUMAT):
         tangent_output = getattr(self, "_tangent_output", None)
         if tangent_output is not None and "tangent_output" in _UMAT_KWARGS:
             kwargs["tangent_output"] = tangent_output
+        # Whether this call initialises the points (MechanicalUMAT.initialize) or integrates
+        # an increment (update): passed explicitly, otherwise simcoon infers it from time 0 and
+        # re-initialises the points (reference temperature included) at every time-0 call.
+        start = getattr(self, "_start", None)
+        self._start_passed = start is not None and "start" in _UMAT_KWARGS
+        if self._start_passed:
+            kwargs["start"] = start
         try:
             result = sim.umat(self.umat_name, *args, **kwargs)
         except _SIMCOON_STEP_CUT as exc:
