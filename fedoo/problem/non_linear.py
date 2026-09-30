@@ -656,12 +656,11 @@ class NonLinear(Problem):
             )
         elif self.nr_parameters["criterion"] == "Force":
             if self._err0 is None:
-                # Reevaluate the total force scale at each Newton iteration.
+                # Reevaluate the current force scale at each Newton iteration.
                 err0 = np.linalg.norm(
                     self.get_ext_forces(include_mpc=False),
                     norm_type,
                 )
-                # With no external force, use an absolute residual check.
                 if err0 == 0:
                     err0 = 1
             else:

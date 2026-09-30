@@ -24,6 +24,10 @@ semantic versioning.
   without storing force snapshots. Consistent
   mass central difference includes prescribed accelerations in the free equations.
 - The Newton force criterion evaluates residuals even with a zero force reference.
+- Rigid-body forces and torques are applied through constant Neumann conditions,
+  keeping them separate from contact and inertia in the assembled residual.
+  This preserves a nonzero current force reference in free-body dynamics,
+  without retaining normalization from earlier Newton iterates.
 - Finite-strain Simcoon laws that do not convect their own material axes now
   follow the rotating material frame, and tangent conversion uses the selected
   corotational rate in both TL and UL formulations.
