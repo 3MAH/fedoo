@@ -387,6 +387,9 @@ subclass with a strict requirement can set, for example:
        required_corate = ("log_r", "log_r_inc")
 
 Fedoo then validates the selected formulation when the material is initialized.
+The comparison is case-insensitive and applies only in finite strain. The
+default ``required_corate = None`` accepts any formulation. This attribute
+does not change ``weakform.corate`` or add an argument to the UMAT callback.
 
 
 Advanced: derive directly from ``Mechanical3D``

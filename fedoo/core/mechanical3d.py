@@ -130,9 +130,8 @@ class Mechanical3D(ConstitutiveLaw):
     # subject to their normal objective update.
     is_isotropic = False
 
-    # Fedoo-native anisotropic laws use the current material frame maintained
-    # by this class. User-material adapters that perform this transport
-    # themselves override the flag.
+    # False means this class convects the material frame for the law. Set True
+    # when a law handles its own material-frame transport.
     manages_material_frame = False
 
     def __init__(self, density=None, name=""):
@@ -193,7 +192,7 @@ class Mechanical3D(ConstitutiveLaw):
         return Rotation.from_matrix(frames)
 
     def _initial_material_frame(self, assembly):
-        """Return the initial material frame at every integration point."""
+        """Return the supplied, unconvected frame at every integration point."""
         frame = self.get_local_frame(assembly)
         if frame is None:
             frame = np.eye(3)[None, ...]
@@ -228,13 +227,13 @@ class Mechanical3D(ConstitutiveLaw):
         if self.is_isotropic and not has_user_frame:
             return None
 
-        initial = self._initial_material_frame(assembly)
+        base_frame = self._initial_material_frame(assembly)
         if self.manages_material_frame:
-            return initial
+            return base_frame
 
         start_values = getattr(assembly, "sv_start", {})
         start_frame = np.asarray(
-            start_values.get("_MaterialFrame", initial), dtype=float
+            start_values.get("_MaterialFrame", base_frame), dtype=float
         ).reshape(-1, 3, 3)
         if "DR" not in assembly.sv:
             current = start_frame
@@ -271,13 +270,17 @@ class Mechanical3D(ConstitutiveLaw):
         return np.asarray(value, dtype=float)
 
     def _rotate_vector(self, value, assembly, kind, active, current=True):
-        value = self._as_mechanical_array(value)
-        n_points = self._data_point_count(value, tensor_order=2)
         frames = (
             self.get_current_local_frame(assembly)
             if current
             else self.get_local_frame(assembly)
         )
+        return self._rotate_vector_in(value, frames, kind, active)
+
+    def _rotate_vector_in(self, value, frames, kind, active):
+        """Change the basis of stress/strain Voigt vector(s) with explicit frames."""
+        value = self._as_mechanical_array(value)
+        n_points = self._data_point_count(value, tensor_order=2)
         if frames is None:
             return value
         frames = np.asarray(frames, dtype=float).reshape(-1, 3, 3)
@@ -413,6 +416,14 @@ class MechanicalUMAT(Mechanical3D):
         Material mass density.
     name : str, optional
         Fedoo constitutive-law registration name.
+
+    Attributes
+    ----------
+    required_corate : str, tuple of str, or None
+        Accepted ``weakform.corate`` values for finite-strain use. Set this on
+        a subclass or instance when the law requires a particular objective
+        rate. The default ``None`` accepts any rate. Fedoo checks the value at
+        initialization; it does not select the rate or pass it to the callback.
 
     Notes
     -----
@@ -700,35 +711,100 @@ class MechanicalUMAT(Mechanical3D):
             F0 = F1 = np.array([])
 
         ndi = self._get_ndi(assembly)
-        stress_local, statev, wm, tangent_local = self._call_umat(
-            self.global2local_strain(
+
+        # A law that does not manage its material frame is run, under finite strain, in the
+        # frame that follows the material: the start state in the committed frame, the
+        # increment in the trial frame (committed frame convected by DR), and DR = I -- the
+        # frame-relative increment -- so the law's tensorial state stays in that frame and is
+        # not rotated a second time. Without a material frame (isotropic, no user frame) the
+        # law keeps the lab basis and the real DR.
+        trial_frame = None
+        if assembly._nlgeom and not self.manages_material_frame:
+            trial_frame = self.get_current_local_frame(assembly)
+        if trial_frame is not None:
+            start_frame = np.asarray(
+                assembly.sv_start.get(
+                    "_MaterialFrame", self._initial_material_frame(assembly)
+                ),
+                dtype=float,
+            )
+            strain_start = self._rotate_vector_in(
+                assembly.sv_start["Strain"], start_frame, "strain", False
+            )
+            dstrain_local = self._rotate_vector_in(
+                dstrain, trial_frame, "strain", False
+            )
+            stress_start = self._rotate_vector_in(
+                assembly.sv_start["Stress"], start_frame, "stress", False
+            )
+            n_points = np.asarray(assembly.sv_start["Statev"]).shape[-1]
+            DR_local = np.repeat(np.eye(3)[:, :, None], n_points, axis=2).copy(
+                order="F"
+            )
+        else:
+            strain_start = self.global2local_strain(
                 assembly.sv_start["Strain"], assembly, current=False
-            ),
-            self.global2local_strain(dstrain, assembly, current=False),
-            F0,
-            F1,
-            self.global2local_stress(
+            )
+            dstrain_local = self.global2local_strain(dstrain, assembly, current=False)
+            stress_start = self.global2local_stress(
                 assembly.sv_start["Stress"], assembly, current=False
-            ),
-            self.global2local_rotation_increment(assembly.sv["DR"], assembly),
-            self.props,
-            assembly.sv_start["Statev"],
-            pb.time,
-            pb.dtime,
-            assembly.sv_start["Wm"],
-            self.get_temp_gp(assembly, pb),
-            ndi=ndi,
-            tangent_mode=self.tangent_mode,
+            )
+            DR_local = self.global2local_rotation_increment(assembly.sv["DR"], assembly)
+
+        # Call context read by adapters that can use it (SimcoonUMAT), reset after the call:
+        # - _in_material_frame: F is not in the basis of the stresses (no log-corate work
+        #   correction);
+        # - _corate: the weak form's objective rate, the one the box tangent must be in;
+        # - _tangent_output: the tangent this configuration integrates, when the law may return
+        #   it directly (the adapter sets _tangent_converted if it did). Not in the frame that
+        #   follows the material (F and the stresses in different bases) nor in plane stress
+        #   (the condensation acts on the box tangent).
+        wf = getattr(assembly, "weakform", None)
+        self._in_material_frame = trial_frame is not None
+        self._corate = (
+            getattr(wf, "_simcoon_corate", None) if assembly._nlgeom else None
         )
+        fusable = (
+            assembly._nlgeom
+            and trial_frame is None
+            and ndi == 3
+            and getattr(wf, "convert_tangent", False)
+        )
+        self._tangent_output = getattr(wf, "_tangent_output", None) if fusable else None
+        self._tangent_converted = False
+        try:
+            stress_local, statev, wm, tangent_local = self._call_umat(
+                strain_start,
+                dstrain_local,
+                F0,
+                F1,
+                stress_start,
+                DR_local,
+                self.props,
+                assembly.sv_start["Statev"],
+                pb.time,
+                pb.dtime,
+                assembly.sv_start["Wm"],
+                self.get_temp_gp(assembly, pb),
+                ndi=ndi,
+                tangent_mode=self.tangent_mode,
+            )
+            assembly._tangent_converted = self._tangent_converted
+        finally:
+            self._in_material_frame = False
+            self._corate = self._tangent_output = None
         assembly.sv["Statev"] = statev
         assembly.sv["Wm"] = wm
+        in_trial = trial_frame is not None
         assembly.sv["TangentMatrix"] = self.local2global_H(
-            tangent_local, assembly, current=False
+            tangent_local, assembly, current=in_trial
         )
         if ndi == 2:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
         assembly.sv["Stress"] = StressTensorList(
-            self.local2global_stress(stress_local, assembly, current=False)
+            self._rotate_vector_in(stress_local, trial_frame, "stress", True)
+            if in_trial
+            else self.local2global_stress(stress_local, assembly, current=False)
         )
 
     def set_start(self, assembly, pb):

@@ -1,8 +1,21 @@
 # derive de ConstitutiveLaw
 # compatible with the simcoon strain and stress notation
 
+from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.mechanical3d import MechanicalUMAT
 import simcoon as sim
+
+# simcoon >= 2.1 raises StepCut from sim.umat when a kernel asks for a smaller increment
+# (modular engine, SMA and damage laws, Python laws). Older versions have no such exception.
+_SIMCOON_STEP_CUT = getattr(sim, "StepCut", ())
+
+# optional sim.umat keywords this simcoon has (read from the pybind signature line)
+_UMAT_SIGNATURE = (sim.umat.__doc__ or "").split("\n", 1)[0]
+_UMAT_KWARGS = {
+    k
+    for k in ("corate", "work_correction", "tangent_output")
+    if f"{k}:" in _UMAT_SIGNATURE
+}
 
 
 class Simcoon(MechanicalUMAT):
@@ -64,9 +77,15 @@ class Simcoon(MechanicalUMAT):
       initializing the problem. Small-strain analyses are unaffected.
     """
 
-    manages_material_frame = True
-    # Simcoon UMATs transport their material history through DR and return the
-    # corotational box tangent d(tau_hat)/dD.
+    @property
+    def manages_material_frame(self):
+        """Hyperelastic kernels built from F (``_Lt_from_F``) are objective by construction
+        and keep the initial material basis. Other Simcoon UMATs transport material history
+        through DR and return the corotational box tangent d(tau_hat)/dD, but ``sim.umat``
+        does not convect their material axes. Fedoo runs them in the frame that follows the
+        material.
+        """
+        return self._Lt_from_F
 
     _ISOTROPIC_UMATS = {
         "ELISO",
@@ -1166,5 +1185,29 @@ class Simcoon(MechanicalUMAT):
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
     def _call_umat(self, *args, **kwargs):
-        """Dispatch the generic MechanicalUMAT call to Simcoon."""
-        return sim.umat(self.umat_name, *args, **kwargs)
+        """Dispatch the generic MechanicalUMAT call to Simcoon.
+
+        A step-cut request from the law is routed to the solver's failed-increment path
+        (InvalidKinematicStateError), which retries the increment with a smaller time step.
+        """
+        # Call context set by MechanicalUMAT.update (absent at initialization).
+        # In the frame that follows the material (stresses in the rotating basis, DR = I) F0/F1
+        # stay in the initial basis: the log-corate work correction would contract tau and D
+        # written in different bases, so Wm is the kernel's own work there.
+        if (
+            getattr(self, "_in_material_frame", False)
+            and "work_correction" in _UMAT_KWARGS
+        ):
+            kwargs["work_correction"] = False
+        corate = getattr(self, "_corate", None)
+        if corate is not None and "corate" in _UMAT_KWARGS:
+            kwargs["corate"] = corate
+        tangent_output = getattr(self, "_tangent_output", None)
+        if tangent_output is not None and "tangent_output" in _UMAT_KWARGS:
+            kwargs["tangent_output"] = tangent_output
+        try:
+            result = sim.umat(self.umat_name, *args, **kwargs)
+        except _SIMCOON_STEP_CUT as exc:
+            raise InvalidKinematicStateError(str(exc)) from exc
+        self._tangent_converted = "tangent_output" in kwargs
+        return result

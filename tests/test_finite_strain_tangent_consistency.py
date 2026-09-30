@@ -57,6 +57,7 @@ simcoon = pytest.importorskip("simcoon")
 
 import fedoo as fd  # noqa: E402
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList  # noqa: E402
+from fedoo.constitutivelaw import simcoon_umat  # noqa: E402
 
 MU, KAPPA = 3.0, 150.0
 STRETCH = 0.10
@@ -343,10 +344,22 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
     return _directional_fd_error(pb, assembly, free)
 
 
+requires_umat_corate = pytest.mark.skipif(
+    "corate" not in simcoon_umat._UMAT_KWARGS, reason="sim.umat has no corate keyword"
+)
+requires_tangent_output = pytest.mark.skipif(
+    "tangent_output" not in simcoon_umat._UMAT_KWARGS,
+    reason="sim.umat has no tangent_output keyword",
+)
+
 _CASES = [
     # (law, corate). NEOHC's Lt is baked by inverting the transport, so it is
     # exact with any simcoon and needs no capability gate.
     pytest.param("NEOHC", "log", id="NEOHC-log"),
+    # the hyperelastic box is built in the corate sim.umat is given: fedoo must pass its own
+    # (before, it got log_R's box and converted it with the Jaumann/GN map: 1e-4 in UL)
+    pytest.param("NEOHC", "jaumann", marks=requires_umat_corate, id="NEOHC-jaumann"),
+    pytest.param("NEOHC", "gn", marks=requires_umat_corate, id="NEOHC-gn"),
     pytest.param("ELISO", "log", marks=requires_exact_transport, id="ELISO-log"),
     pytest.param("ELISO", "log_r", marks=requires_exact_transport, id="ELISO-logR"),
     pytest.param(
@@ -555,3 +568,49 @@ def test_finite_strain_tangent_with_plastic_history():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def _solved_stretch(nlgeom, corate):
+    """EPICP box stretched past yield in one increment; return its assembly."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+    material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
+    material.tangent_mode = 2
+    wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
+    wf.corate = corate
+    assembly = fd.Assembly.create(wf, mesh, name="asm")
+    pb = fd.problem.NonLinear("asm")
+    pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
+    bottom = mesh.find_nodes("Z", mesh.bounding_box.zmin)
+    top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
+    pb.bc.add("Dirichlet", bottom, "Disp", 0)
+    pb.bc.add("Dirichlet", top, "DispZ", STRETCH)
+    pb.nlsolve(dt=0.5, tmax=1.0, update_dt=False, print_info=0)
+    return assembly
+
+
+@requires_tangent_output
+@pytest.mark.parametrize("corate", ["log_r", "jaumann"])
+@pytest.mark.parametrize("nlgeom", ["TL", "UL"])
+def test_tangent_returned_by_the_law_matches_the_weakform_conversion(
+    nlgeom, corate, monkeypatch
+):
+    """sim.umat(tangent_output=...) gives what update_2 computed from the box tangent."""
+    fused = _solved_stretch(nlgeom, corate)
+    assert fused._tangent_converted
+    monkeypatch.setattr(
+        simcoon_umat, "_UMAT_KWARGS", simcoon_umat._UMAT_KWARGS - {"tangent_output"}
+    )
+    chained = _solved_stretch(nlgeom, corate)
+    assert not chained._tangent_converted
+    np.testing.assert_allclose(
+        fused.sv["Stress"].asarray(),
+        chained.sv["Stress"].asarray(),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    Lt = chained.sv["TangentMatrix"]
+    np.testing.assert_allclose(
+        fused.sv["TangentMatrix"], Lt, rtol=0, atol=1e-10 * np.abs(Lt).max()
+    )
