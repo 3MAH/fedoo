@@ -595,6 +595,9 @@ class MechanicalUMAT(Mechanical3D):
 
         This method must be called before the associated problem initializes.
         Repeated calls preserve components initialized previously.
+        Assembly.reset() deletes these values; reapply them before the next
+        initialization. Use this method rather than assigning Statev directly
+        so the components are preserved during material initialization.
 
         Parameters
         ----------

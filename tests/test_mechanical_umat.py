@@ -156,6 +156,39 @@ def test_initial_statev_is_stored_on_the_assembly_and_broadcast_by_label():
     np.testing.assert_allclose(initial_calls[1], second_assembly.sv["Statev"])
 
 
+def test_reset_discards_initial_statev_and_allows_reapplication():
+    class InitializingUMAT(MechanicalUMAT):
+        def _call_umat(self, *args, **kwargs):
+            # Model an adapter that supports explicit point initialization.
+            self._start_passed = True
+            statev = args[7].copy()
+            statev[0] = args[11]
+            return args[4], statev, args[10].copy(), np.eye(6)
+
+    space = fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2)
+    material = InitializingUMAT(n_statev=1, statev_label={"T": 0})
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material, space=space), mesh
+    )
+    problem = fd.problem.NonLinear(assembly)
+    assembly.sv["Temp"] = np.full(assembly.n_gauss_points, 300.0)
+    material.set_initial_statev(assembly, "T", 280.0)
+    assembly.initialize(problem)
+    np.testing.assert_array_equal(assembly.sv["Statev"][0], 280.0)
+
+    assembly.reset()
+    assembly.sv["Temp"] = np.full(assembly.n_gauss_points, 350.0)
+    assembly.initialize(problem)
+    np.testing.assert_array_equal(assembly.sv["Statev"][0], 350.0)
+
+    assembly.reset()
+    assembly.sv["Temp"] = np.full(assembly.n_gauss_points, 350.0)
+    material.set_initial_statev(assembly, "T", 290.0)
+    assembly.initialize(problem)
+    np.testing.assert_array_equal(assembly.sv["Statev"][0], 290.0)
+
+
 def test_initialize_preserves_a_valid_manual_statev_array():
     seen = []
 
