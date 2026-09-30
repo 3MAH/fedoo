@@ -80,12 +80,12 @@ class Simcoon(MechanicalUMAT):
     @property
     def manages_material_frame(self):
         """Hyperelastic kernels built from F (``_Lt_from_F``) are objective by construction
-        and keep the initial material basis; the other simcoon laws are run by fedoo in the
-        frame that follows the material, since ``sim.umat`` does not convect it."""
+        and keep the initial material basis. Other Simcoon UMATs transport material history
+        through DR and return the corotational box tangent d(tau_hat)/dD, but ``sim.umat``
+        does not convect their material axes. Fedoo runs them in the frame that follows the
+        material.
+        """
         return self._Lt_from_F
-
-    # Simcoon UMATs transport their material history through DR and return the
-    # corotational box tangent d(tau_hat)/dD.
 
     _ISOTROPIC_UMATS = {
         "ELISO",

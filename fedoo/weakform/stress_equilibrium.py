@@ -581,12 +581,13 @@ class StressEquilibrium(WeakFormBase):
             # tangent conversion is disabled or during a line-search trial.
             assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
 
-        if not self.convert_tangent or getattr(pb, "_line_search_update", False):
-            return
-
-        if getattr(assembly, "_tangent_converted", False):
-            # the law already returned the tangent of this configuration
-            # (sim.umat tangent_output, see MechanicalUMAT.update)
+        # A law using sim.umat tangent_output already returned the tangent of
+        # this configuration (see MechanicalUMAT.update).
+        if (
+            not self.convert_tangent
+            or getattr(pb, "_line_search_update", False)
+            or getattr(assembly, "_tangent_converted", False)
+        ):
             return
 
         if assembly._nlgeom in ("TL", "UL"):

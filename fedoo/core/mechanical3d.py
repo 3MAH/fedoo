@@ -130,9 +130,8 @@ class Mechanical3D(ConstitutiveLaw):
     # subject to their normal objective update.
     is_isotropic = False
 
-    # Fedoo-native anisotropic laws use the current material frame maintained
-    # by this class. User-material adapters that perform this transport
-    # themselves override the flag.
+    # False means this class convects the material frame for the law. Set True
+    # when a law handles its own material-frame transport.
     manages_material_frame = False
 
     def __init__(self, density=None, name=""):
@@ -193,7 +192,7 @@ class Mechanical3D(ConstitutiveLaw):
         return Rotation.from_matrix(frames)
 
     def _initial_material_frame(self, assembly):
-        """Return the initial material frame at every integration point."""
+        """Return the supplied, unconvected frame at every integration point."""
         frame = self.get_local_frame(assembly)
         if frame is None:
             frame = np.eye(3)[None, ...]
@@ -228,13 +227,13 @@ class Mechanical3D(ConstitutiveLaw):
         if self.is_isotropic and not has_user_frame:
             return None
 
-        initial = self._initial_material_frame(assembly)
+        base_frame = self._initial_material_frame(assembly)
         if self.manages_material_frame:
-            return initial
+            return base_frame
 
         start_values = getattr(assembly, "sv_start", {})
         start_frame = np.asarray(
-            start_values.get("_MaterialFrame", initial), dtype=float
+            start_values.get("_MaterialFrame", base_frame), dtype=float
         ).reshape(-1, 3, 3)
         if "DR" not in assembly.sv:
             current = start_frame
@@ -417,6 +416,14 @@ class MechanicalUMAT(Mechanical3D):
         Material mass density.
     name : str, optional
         Fedoo constitutive-law registration name.
+
+    Attributes
+    ----------
+    required_corate : str, tuple of str, or None
+        Accepted ``weakform.corate`` values for finite-strain use. Set this on
+        a subclass or instance when the law requires a particular objective
+        rate. The default ``None`` accepts any rate. Fedoo checks the value at
+        initialization; it does not select the rate or pass it to the callback.
 
     Notes
     -----
