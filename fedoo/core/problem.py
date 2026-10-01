@@ -604,6 +604,18 @@ class Problem(ProblemBase):
                     if not (np.isscalar(F) and F == 0):
                         e.start_value = F[e.variable * n_nodes + e.node_set]
 
+    def _get_force_vector(self):
+        """Recover the force vector of the current linear system."""
+        operator = self.get_A()
+        solution = self.get_X()
+        if np.isscalar(operator):
+            force = self._new_vect_dof()
+        elif operator.ndim == 1:
+            force = operator * solution
+        else:
+            force = operator @ solution
+        return force - self.get_D()
+
     def get_ext_forces(self, name="all", include_mpc=True):
         """Return the nodal Forces in global coordinates system.
 
@@ -637,15 +649,20 @@ class Problem(ProblemBase):
         The true physical meanings of the "external forces" depends
         on the problem and the nature of the dof (for instance moment for rotational dof or
         heat flux for temperature).
+
+        NonLinear returns the latest evaluated residual balance: custom loops
+        must update the vector after applying a correction. Linear implicit
+        dynamics retain the completed integrator balance. ExplicitDynamic
+        evaluates A @ X - D on demand (A * X - D for a diagonal operator);
+        extract its forces after solve or update, before the next preparation.
+        Explicit rollback does not restore the previous solved system's forces.
+        Generalized-alpha enforces equilibrium at its evaluation point, so the
+        recovered balance need not represent the end-step state. This getter does not
+        update constitutive history. The returned vector contains both nodal
+        loads and reactions, rather than constraint reactions alone.
         """
-        if self._MFext is None or not (include_mpc):
-            if np.isscalar(self.get_D()) and self.get_D() == 0:
-                return self._get_vect_component(self.get_A() @ self.get_X(), name)
-            else:
-                return self._get_vect_component(
-                    self.get_A() @ self.get_X() - self.get_D(), name
-                )
-        else:
+        force = self._get_force_vector()
+        if self._MFext is not None and include_mpc:
             M = self._MFext
             # adding identity for all dof execpted slave dof in mpc
             dof_idt = list(self._dof_free) + list(self._dof_blocked)
@@ -653,13 +670,8 @@ class Problem(ProblemBase):
             row = np.hstack((M.row, dof_idt))
             data = np.hstack((M.data, np.ones(len(dof_idt))))
             M = sparse.coo_matrix((data, (row, col)), shape=M.shape).tocsr().T
-            # M = M.tocsr().T
-            if np.isscalar(self.get_D()) and self.get_D() == 0:
-                return self._get_vect_component(M @ self.get_A() @ self.get_X(), name)
-            else:
-                return self._get_vect_component(
-                    M @ self.get_A() @ self.get_X() - M @ self.get_D(), name
-                )
+            force = M @ force
+        return self._get_vect_component(force, name)
 
     @property
     def results(self):

@@ -69,6 +69,13 @@ class ExplicitDynamic(Problem):
     describes the internal force, for example linear elasticity with fixed
     geometry. Use ``update_weakform=True`` for nonlinear constitutive laws,
     changing geometry, contact, or other state-dependent contributions.
+
+    ``get_ext_forces()`` evaluates the solved effective-system balance on
+    demand, without storing a force snapshot. Extract it after ``solve()`` or
+    ``update()``, before the next ``prepare_time_increment()``. It represents
+    the integrator's solve evaluation point, which is often the end of the
+    step but can differ, for example with generalized-alpha. Rollback restores kinematics,
+    but does not restore the previous solved effective system or its forces.
     """
 
     def __init__(
@@ -229,7 +236,7 @@ class ExplicitDynamic(Problem):
     def _mass_action(self, vector):
         return np.asarray(self._mass_matrix @ vector).ravel()
 
-    def _end_step_acceleration(self, velocity):
+    def _end_step_acceleration(self, velocity, prescribed_acceleration=None):
         """Return the complete acceleration at the current displacement.
 
         This closes the symplectic central-difference velocity update. The
@@ -247,7 +254,13 @@ class ExplicitDynamic(Problem):
             force = force + np.asarray(external_force).ravel()
         force = force - self._assembly_inertia_bias(velocity)
         force = force - self._damping_force(velocity)
-        acceleration = self._new_vect_dof()
+        acceleration = (
+            self._new_vect_dof()
+            if prescribed_acceleration is None
+            else prescribed_acceleration.copy()
+        )
+        # Consistent mass couples prescribed acceleration into free equations.
+        force = force - self._mass_action(acceleration)
         free = self._dof_free
         if len(free) == 0:
             return acceleration
@@ -260,7 +273,7 @@ class ExplicitDynamic(Problem):
         else:
             reduced_mass = self._MatCB.T @ self._mass_matrix @ self._MatCB
             reduced_force = self._MatCB.T @ force
-            acceleration = np.asarray(
+            acceleration += np.asarray(
                 self._MatCB @ self._solve(reduced_mass, reduced_force)
             ).ravel()
         return acceleration
@@ -602,10 +615,6 @@ class ExplicitDynamic(Problem):
             predicted_end_velocity = previous_state.velocity + (
                 dt * previous_state.acceleration
             )
-            end_acceleration = self._end_step_acceleration(predicted_end_velocity)
-            velocity = previous_state.velocity + 0.5 * dt * (
-                previous_state.acceleration + end_acceleration
-            )
             if self._MFext is None:
                 # Without MPCs, _dof_slave contains only Dirichlet DOFs and is
                 # already stored by the generic boundary-condition machinery.
@@ -615,6 +624,21 @@ class ExplicitDynamic(Problem):
                 # eliminated slaves before enforcing their kinematics.
                 dirichlet = getattr(self, "_dof_blocked", set())
                 blocked = np.fromiter(dirichlet, dtype=int, count=len(dirichlet))
+            prescribed_acceleration = self._new_vect_dof()
+            if len(blocked):
+                prescribed_velocity = (
+                    self._state.displacement[blocked]
+                    - previous_state.displacement[blocked]
+                ) / dt
+                prescribed_acceleration[blocked] = (
+                    prescribed_velocity - previous_state.velocity[blocked]
+                ) / dt
+            end_acceleration = self._end_step_acceleration(
+                predicted_end_velocity, prescribed_acceleration
+            )
+            velocity = previous_state.velocity + 0.5 * dt * (
+                previous_state.acceleration + end_acceleration
+            )
             if len(blocked):
                 displacement = self._state.displacement
                 velocity[blocked] = (

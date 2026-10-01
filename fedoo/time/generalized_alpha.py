@@ -65,6 +65,11 @@ class GeneralizedAlphaAssemblyAdapter:
         if initial_force is not None:
             force = np.asarray(initial_force(pb), dtype=float)
             self.force_start = force.copy()
+            # Applied Neumann loads initialize acceleration, but must not
+            # enter the static-force history: the problem adds them via B.
+            initial_load = getattr(assembly, "get_time_initial_load", None)
+            if initial_load is not None:
+                force = force + np.asarray(initial_load(pb), dtype=float)
             mass = np.asarray(assembly.get_storage_matrix(pb), dtype=float)
             try:
                 assembly.sv["Acceleration"] = np.linalg.solve(mass, force)

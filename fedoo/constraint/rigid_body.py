@@ -22,6 +22,7 @@ infinitesimal skew-symmetric approximation.
 import numpy as np
 
 from fedoo.core.base import AssemblyBase
+from fedoo.core.boundary_conditions import BCBase
 from fedoo.core.mesh import Mesh
 from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.time_evolution import SECOND_ORDER
@@ -30,6 +31,25 @@ from fedoo.time.common import RayleighDamping
 
 # Rigid-body dynamics is formulated in 3D: 3 translational + 3 rotational DOFs.
 _N_RIGID_DOF = 6
+
+
+class _RigidBodyNeumann(BCBase):
+    """Constant applied loads with indices resolved after all DOFs register."""
+
+    bc_type = "Neumann"
+
+    def __init__(self, assembly):
+        super().__init__()
+        self.assembly = assembly
+        self._start_value_default = assembly.force
+
+    def initialize(self, pb):
+        pass
+
+    def generate(self, pb, t_fact=1, t_fact_old=None):
+        self._dof_index = np.asarray(self.assembly.rigid_tie._get_dof_ref(pb)[1])
+        self._current_value = self.assembly.force
+        return [self]
 
 
 class RigidBodyAssembly(AssemblyBase):
@@ -45,6 +65,10 @@ class RigidBodyAssembly(AssemblyBase):
 
     where ``J_global = R @ J_body @ R.T`` is the inertia tensor rotated
     to the current trial configuration.
+
+    Applied forces and torques are registered as constant Neumann conditions
+    on the rigid DOFs. The assembly vector contains contact and inertia terms,
+    keeping the applied load in the problem's B vector.
 
     Parameters
     ----------
@@ -122,9 +146,10 @@ class RigidBodyAssembly(AssemblyBase):
         self._contact_stiffness = np.zeros((_N_RIGID_DOF, _N_RIGID_DOF))
 
     def _register_global_dofs(self, pb):
-        """Register the rigid kinematic constraint and its global DOFs."""
+        """Register rigid DOFs and their constant applied Neumann loads."""
         if self.rigid_tie not in pb.bc:
             pb.bc.add(self.rigid_tie)
+        pb.bc.add(_RigidBodyNeumann(self))
 
     def initialize(self, pb):
         """Extract global DOF indices from the problem."""
@@ -320,7 +345,12 @@ class RigidBodyAssembly(AssemblyBase):
         return self._get_mass_matrix(pb)
 
     def get_time_initial_force(self, pb=None):
-        return self.force + self._contact_force
+        """Static assembly force, excluding separately applied Neumann loads."""
+        return self._contact_force
+
+    def get_time_initial_load(self, pb=None):
+        """Initial Neumann load for consistent acceleration initialization."""
+        return self.force
 
     def get_time_stiffness_matrix(self, pb=None):
         """Return the static/contact tangent before time integration."""
@@ -350,7 +380,7 @@ class RigidBodyAssembly(AssemblyBase):
             self.global_matrix = scatter_dense_block(stiffness, idx, (n, n))
         if compute in ("all", "vector"):
             self.global_vector = np.zeros(n)
-            self.global_vector[idx] = self.force + self._contact_force
+            self.global_vector[idx] = self._contact_force
 
         if self._time_integrator is not None:
             self._time_integrator.integrate(self, self._pb_ref, compute)
@@ -525,11 +555,11 @@ class RigidBody:
         )
 
     def set_force(self, force):
-        """Set external force [Fx, Fy, Fz] on translational DOFs."""
+        """Set constant Neumann force [Fx, Fy, Fz] on translational DOFs."""
         self.assembly.force[:3] = force
 
     def set_torque(self, torque):
-        """Set external torque [Mx, My, Mz] on rotational DOFs."""
+        """Set constant Neumann torque [Mx, My, Mz] on rotational DOFs."""
         self.assembly.force[3:] = torque
 
     def set_generalized_force(self, f):
@@ -627,7 +657,7 @@ class RigidBody:
         asm._ipc_obstacle_source_id = id(obstacle_mesh)
 
     def add_to_problem(self, pb):
-        """Register the rigid body's kinematic tie with a Fedoo problem.
+        """Register the rigid body's kinematic tie and applied Neumann loads.
 
         Usually unnecessary — :class:`NonLinear` auto-registers ties from
         any :class:`RigidBodyAssembly` it discovers in its assembly sum.
@@ -635,8 +665,7 @@ class RigidBody:
         classes, late attachment) and made idempotent so calling it
         after auto-registration is a no-op.
         """
-        if self.constraint not in pb.bc:
-            pb.bc.add(self.constraint)
+        self.assembly.register_global_dofs(pb)
 
     def solve(self, dt, tmax, t0=0, print_info=1, solver=None):
         """Solve rigid body dynamics using Fedoo's NonLinear solver.

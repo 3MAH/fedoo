@@ -1,6 +1,7 @@
 """Rotational inertia tests for dynamic rigid bodies."""
 
 import numpy as np
+import pytest
 
 import fedoo as fd
 from fedoo.constraint.rigid_body import RigidBodyAssembly
@@ -139,3 +140,77 @@ def test_principal_axis_torque_matches_constant_angular_acceleration():
     expected_angle = 0.5 * torque / inertia[0, 0] * end_time**2
     rotation_vector = body.constraint.Q_total.as_rotvec()
     np.testing.assert_allclose(rotation_vector, [expected_angle, 0.0, 0.0], atol=1e-10)
+
+
+@pytest.mark.parametrize("scheme", ["newmark", "generalized_alpha"])
+def test_rigid_body_neumann_loads_in_assembly_sum(scheme):
+    """Each body's load enters B once and remains visible in recovered forces."""
+    space = fd.ModelingSpace("3D")
+    space.new_variable("DispX")
+    space.new_variable("DispY")
+    space.new_variable("DispZ")
+    space.new_vector("Disp", ("DispX", "DispY", "DispZ"))
+    square = np.array([[-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0], [-0.5, 0.5, 0]])
+    mesh = fd.Mesh(
+        np.vstack([square, square + [3, 0, 0]]),
+        np.array([[0, 1, 2, 3], [4, 5, 6, 7]]),
+        "quad4",
+    )
+    bodies = [
+        fd.constraint.RigidBody(
+            mesh.extract_elements([i]),
+            mass=i + 1,
+            inertia_tensor=np.eye(3),
+            name=f"body_{i}",
+        )
+        for i in range(2)
+    ]
+    assembly = fd.Assembly.sum(*(body.assembly for body in bodies))
+    dt, end_time = 0.01, 0.02
+    pb = fd.problem.NonLinear(assembly)
+    integrator = (
+        fd.time.Newmark()
+        if scheme == "newmark"
+        else fd.time.GeneralizedAlpha(alpha_m=0.1, alpha_f=0.1)
+    )
+    pb.set_time_integrator(fd.time.SECOND_ORDER, integrator)
+    pb.set_nr_criterion("Force", tol=1e-10)
+    pb.set_solver("direct_scipy")
+    original_bc_count = len(pb.bc)
+    for body in bodies:
+        body.add_to_problem(pb)
+    assert len(pb.bc) == original_bc_count
+
+    # These setters run after registration: the generated loads must stay live.
+    bodies[0].set_force([0, 0, -3])
+    bodies[0].set_torque([0.5, 0, 0])
+    bodies[1].set_generalized_force([4, 0, 0, 0, 0, 0])
+    pb.apply_boundary_conditions(t_fact=0)
+    pb.initialize()
+    for body in bodies:
+        indices = body.assembly.dof_indices
+        np.testing.assert_array_equal(pb.get_B()[indices], body.assembly.force)
+        np.testing.assert_array_equal(
+            body.assembly.get_time_initial_force(), np.zeros(6)
+        )
+        np.testing.assert_array_equal(
+            body.assembly._time_integrator.force_start, np.zeros(6)
+        )
+        expected_acceleration = body.assembly.force.copy()
+        expected_acceleration[:3] /= body.mass
+        np.testing.assert_allclose(
+            body.assembly.sv["Acceleration"], expected_acceleration
+        )
+
+    pb.nlsolve(dt=dt, tmax=end_time, update_dt=False, print_info=0)
+    for body in bodies:
+        indices = body.assembly.dof_indices
+        np.testing.assert_allclose(
+            pb.get_ext_forces(include_mpc=False)[indices],
+            body.assembly.force,
+            atol=1e-10,
+        )
+        expected_displacement = 0.5 * end_time**2 * body.assembly.force[:3] / body.mass
+        np.testing.assert_allclose(
+            pb.get_dof_solution()[indices[:3]], expected_displacement, atol=1e-12
+        )

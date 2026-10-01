@@ -10,9 +10,27 @@ semantic versioning.
 
 - `CompositeUD` accepts `degrees=False` to specify fiber angles in radians;
   angles remain in degrees by default.
+- The Simcoon UMAT adapter uses `corate` and direct `tangent_output` when the
+  installed Simcoon supports them, while retaining Fedoo's box-tangent
+  conversion for older versions. Simcoon step-cut requests now enter Fedoo's
+  failed-increment handling.
 
 ### Fixed
 
+- Nonlinear force recovery uses the evaluated residual, including inertia and
+  damping, and refreshes it after vector updates and rollback. Linear implicit
+  dynamics retain the completed step's force balance. Explicit dynamics recover
+  the solved system's balance on demand, including diagonal mass operators,
+  without storing force snapshots. Consistent
+  mass central difference includes prescribed accelerations in the free equations.
+- The Newton force criterion evaluates residuals even with a zero force reference.
+- Rigid-body forces and torques are applied through constant Neumann conditions,
+  keeping them separate from contact and inertia in the assembled residual.
+  This preserves a nonzero current force reference in free-body dynamics,
+  without retaining normalization from earlier Newton iterates.
+- Finite-strain Simcoon laws that do not convect their own material axes now
+  follow the rotating material frame, and tangent conversion uses the selected
+  corotational rate in both TL and UL formulations.
 - `CompositeUD` now rotates its stiffness matrix for a single nonzero angle
   as well as for arrays of Gauss point angles.
 - The viewer's Plot Over Line now samples the currently displayed field and

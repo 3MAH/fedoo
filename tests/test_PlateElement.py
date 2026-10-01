@@ -15,7 +15,7 @@ TEST_CONFIGURATIONS = [
         "quad4",
         "pquad4sri",
         True,
-        -18.779474568978365,
+        -18.823011758557584,
     ),  # Testing nlgeom=True on this one for performance
     ("quad4", "pquad4mitc", False, -19.619460304260063),
     ("quad8", "pquad8", False, -19.629203972874315),
@@ -131,7 +131,10 @@ def test_plate_element(geom_elm_type, fedoo_elm_type, nlgeom, ref_sol, angles):
 
     # 8. Solve
     if nlgeom:
-        pb.nlsolve(dt=0.25)
+        # The reference was refined with dt=0.0625 and force tolerance 1e-4.
+        # One increment at tolerance 1e-3 keeps this element test fast while
+        # staying within 4e-4 of that reference in both orientations.
+        pb.nlsolve(dt=1.0, update_dt=False, tol_nr=1e-3)
     else:
         pb.solve()
 
