@@ -194,10 +194,6 @@ def test_simcoon_umat_boundary_uses_material_frame(monkeypatch):
         return local_stress, statev_start.copy(), wm_start.copy(), local_tangent
 
     monkeypatch.setattr(module.sim, "umat", fake_umat)
-    # the fake stands for a simcoon whose sim.umat has the optional keywords
-    monkeypatch.setattr(
-        module, "_UMAT_KWARGS", {"corate", "work_correction", "tangent_output"}
-    )
     F0 = np.eye(3)[:, :, None]
     F1 = np.array([[1.1, 0.2, 0.0], [0.0, 0.9, 0.1], [0.0, 0.0, 1.05]])[:, :, None]
     increment = ScipyRotation.from_rotvec([0.2, -0.1, 0.3]).as_matrix()
@@ -249,6 +245,8 @@ def test_simcoon_umat_boundary_uses_material_frame(monkeypatch):
     # F0/F1 stay in the initial basis while the stresses are in the rotating one: no
     # log-corate work correction (it would contract tau and D written in different bases)
     assert captured["kwargs"].get("work_correction") is False
+    assert captured["kwargs"]["start"] is False
+    assert captured["kwargs"]["tangent_output"] == "box"
     np.testing.assert_allclose(captured["F0"][:, :, 0], frame.T @ F0[:, :, 0] @ frame)
     np.testing.assert_allclose(captured["F1"][:, :, 0], frame.T @ F1[:, :, 0] @ frame)
     np.testing.assert_allclose(
@@ -549,4 +547,4 @@ def test_simcoon_lab_path_keeps_the_work_correction(monkeypatch):
         },
     )
     material.update(assembly, SimpleNamespace(time=1.0, dtime=0.1))
-    assert "work_correction" not in captured["kwargs"]
+    assert captured["kwargs"]["work_correction"] is True

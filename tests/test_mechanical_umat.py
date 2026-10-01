@@ -39,6 +39,8 @@ def test_generic_mechanical_umat_callback_and_metadata():
         *,
         ndi,
         tangent_mode,
+        start,
+        corate,
     ):
         calls.append(
             {
@@ -49,10 +51,13 @@ def test_generic_mechanical_umat_callback_and_metadata():
                 "dtime": dtime,
                 "ndi": ndi,
                 "tangent_mode": tangent_mode,
+                "start": start,
+                "corate": corate,
             }
         )
         statev = statev_start.copy()
-        statev[0] += 1.0
+        if not start:
+            statev[0] += 1.0
         wm = wm_start.copy()
         wm[0] += 2.0
         return stress + dstrain, statev, wm, tangent
@@ -78,6 +83,8 @@ def test_generic_mechanical_umat_callback_and_metadata():
     assert calls[0]["dtime"] == 0
     assert calls[0]["ndi"] == 3
     assert calls[0]["tangent_mode"] == 2
+    assert calls[0]["start"] is True
+    assert calls[0]["corate"] == "log_r"
     np.testing.assert_allclose(calls[0]["props"], [[10.0], [20.0]])
 
     strain_start = StrainTensorList(np.zeros((6, 1)))
@@ -93,6 +100,8 @@ def test_generic_mechanical_umat_callback_and_metadata():
 
     assert calls[1]["time"] == 1.5
     assert calls[1]["dtime"] == 0.25
+    assert calls[1]["start"] is False
+    assert calls[1]["corate"] == "log_r"
     np.testing.assert_allclose(calls[1]["dstrain"], dstrain.asarray())
     np.testing.assert_allclose(assembly.sv["Stress"].asarray(), dstrain.asarray())
     np.testing.assert_allclose(assembly.sv["Statev"], [[1.0], [0.0]])
@@ -119,6 +128,8 @@ def test_initial_statev_is_stored_on_the_assembly_and_broadcast_by_label():
         *,
         ndi,
         tangent_mode,
+        start,
+        corate,
     ):
         initial_calls.append(statev_start.copy())
         return stress, statev_start.copy(), wm_start.copy(), np.eye(6)
@@ -159,8 +170,7 @@ def test_initial_statev_is_stored_on_the_assembly_and_broadcast_by_label():
 def test_reset_discards_initial_statev_and_allows_reapplication():
     class InitializingUMAT(MechanicalUMAT):
         def _call_umat(self, *args, **kwargs):
-            # Model an adapter that supports explicit point initialization.
-            self._start_passed = True
+            assert kwargs["start"] is True
             statev = args[7].copy()
             statev[0] = args[11]
             return args[4], statev, args[10].copy(), np.eye(6)
@@ -189,10 +199,57 @@ def test_reset_discards_initial_statev_and_allows_reapplication():
     np.testing.assert_array_equal(assembly.sv["Statev"][0], 290.0)
 
 
+def test_shared_material_keeps_nested_call_options_local(monkeypatch):
+    import simcoon
+
+    material = fd.constitutivelaw.Simcoon("ELISO", [70000.0, 0.3, 0.0])
+    outer = _assembly(nlgeom="UL")
+    outer.weakform = SimpleNamespace(
+        corate="jaumann", convert_tangent=True, _tangent_output="spatial"
+    )
+    inner = _assembly()
+    problem = SimpleNamespace(time=0.0, dtime=0.1)
+    calls = []
+
+    def umat(name, *args, **kwargs):
+        calls.append(kwargs.copy())
+        if not kwargs["start"] and kwargs["tangent_output"] == "spatial":
+            material.update(inner, problem)
+        return args[4], args[7].copy(), args[10].copy(), np.eye(6)
+
+    monkeypatch.setattr(simcoon, "umat", umat)
+    outer.sv["F"] = np.eye(3)[:, :, None]
+    for assembly in (outer, inner):
+        material.initialize(assembly, problem)
+        assembly.sv["Strain"] = StrainTensorList(np.zeros((6, 1)))
+        assembly.sv["Stress"] = StressTensorList(np.zeros((6, 1)))
+        assembly.sv_start = dict(assembly.sv)
+    material.update(outer, problem)
+
+    assert [call["start"] for call in calls] == [True, True, False, False]
+    assert [call["corate"] for call in calls] == [0, 3, 0, 3]
+    assert [call.get("tangent_output", "box") for call in calls] == [
+        "box",
+        "box",
+        "spatial",
+        "box",
+    ]
+    assert outer._tangent_converted
+    assert not inner._tangent_converted
+    assert not {
+        "_start",
+        "_start_passed",
+        "_corate",
+        "_in_material_frame",
+        "_tangent_output",
+        "_tangent_converted",
+    }.intersection(vars(material))
+
+
 def test_initialize_preserves_a_valid_manual_statev_array():
     seen = []
 
-    def umat(*args, ndi, tangent_mode):
+    def umat(*args, **kwargs):
         seen.append(args[7].copy())
         return args[4], args[7].copy(), args[10].copy(), np.eye(6)
 
@@ -210,7 +267,7 @@ def test_initialize_preserves_a_valid_manual_statev_array():
 def test_initialize_consumes_weakform_deformation_gradient_without_overwriting_it():
     seen = []
 
-    def umat(*args, ndi, tangent_mode):
+    def umat(*args, **kwargs):
         seen.append((args[2].copy(), args[3].copy()))
         return args[4], args[7].copy(), args[10].copy(), np.eye(6)
 
