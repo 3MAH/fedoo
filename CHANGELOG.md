@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-01
+
 ### Added
 
 - `CompositeUD` accepts `degrees=False` to specify fiber angles in radians;
