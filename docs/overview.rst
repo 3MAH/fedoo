@@ -36,8 +36,8 @@ Main features
 * **Homogenization:** tools for periodic and non-periodic boundary conditions
   and extraction of homogenized quantities.
 * **Input and output:** many standard mesh formats can be imported and exported
-  through MeshIO. Results can be stored in Fedoo's FDH5 format, which is based
-  on HDF5 and designed for fast reading and writing from Fedoo.
+  through meshlane (or MeshIO). Results can be stored in Fedoo's FDH5 format,
+  which is based on HDF5 and designed for fast reading and writing from Fedoo.
 * **Graphical results viewer:** an integrated graphical interface based on
   PyVista provides interactive visualization and inspection of computed
   fields.

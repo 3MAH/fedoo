@@ -6,6 +6,13 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
+  [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
+  meshio, when it is installed, and falls back to meshio otherwise. The `io`
+  extra now installs `meshlane>=5.5.0` instead of `meshio`.
+
 ## [1.0.1] - 2026-10-01
 
 ### Added
