@@ -8,15 +8,7 @@ reference temperature must stay the one of the initialization.
 """
 
 import numpy as np
-import pytest
-import simcoon as sim
-
 import fedoo as fd
-from fedoo.constitutivelaw.simcoon_umat import _UMAT_KWARGS
-
-pytestmark = pytest.mark.skipif(
-    "start" not in _UMAT_KWARGS, reason="this simcoon has no sim.umat(start=...)"
-)
 
 EPICP = np.array([200e3, 0.3, 1e-5, 300.0, 1000.0, 0.5])
 

@@ -12,6 +12,13 @@ semantic versioning.
   [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
   meshio, when it is installed, and falls back to meshio otherwise. The `io`
   extra now installs `meshlane>=5.5.0` instead of `meshio`.
+- Require Simcoon >= 2.1. UMAT callbacks receive `start` and a string `corate`
+  explicitly. The Simcoon adapter handles `work_correction`, `tangent_output`,
+  and conversion of the rate name to Simcoon's numeric code, without temporary
+  call attributes or compatibility checks for older versions.
+- Keep the state returned by UMAT initialization, with values assigned through
+  `set_initial_statev()` taking precedence. Custom callbacks must accept the
+  new keywords and handle `start=True` during initialization.
 
 ## [1.0.1] - 2026-10-01
 
