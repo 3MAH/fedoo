@@ -19,11 +19,8 @@ central finite difference of the assembled global vector to ~1e-6 in relative
 directional norm. With defect (1) the error is ~3e-3; machine-accurate
 assembly gives ~1e-8.
 
-The ELISO / EPICP cases (and the log_R corate) additionally require simcoon's
-EXACT spectral log-box tangent transport (Daleckii-Krein maps in Lt_convert,
-shipped after 2.0.0b1): with the earlier first-order (frozen-spin) transport
-they sit at ~2e-3. They are gated by a runtime capability probe rather than a
-version compare (see _simcoon_exact_log_transport).
+The ELISO / EPICP cases (and the log_R corate) use Simcoon 2.1's exact
+spectral log-box tangent transport (Daleckii-Krein maps in Lt_convert).
 
 HISTORY TRANSPORT (resolved 2026-09-01): the missing term at large rotation
 was NOT the kernel's rotated-history sensitivity but the FRAME of the box
@@ -36,7 +33,7 @@ increment DR = R1 R0^T in simcoon's log_R kinematics, the multi-increment
 assembled tangent is FD-exact (~2e-8 through gamma = 0.3 committed shear)
 and EPICP Newton stays flat at 4 iters/increment through gamma = 0.4
 (before: 5 -> 18 over 0 -> 0.2, subiter exhaustion ~0.3).  The
-multi-increment case is gated by _simcoon_exact_history_transport.
+multi-increment case checks this transport with committed plastic history.
 
 KNOWN LIMIT: with corate "log" (XBM) the frame increment is the XBM spin
 integral, which is not exactly equivariant under superposed rotation; with
@@ -46,7 +43,6 @@ iteration counts stay flat).  The multi-increment test therefore locks
 corate log_R only.
 """
 
-import functools
 from types import SimpleNamespace
 
 import numpy as np
@@ -57,7 +53,6 @@ simcoon = pytest.importorskip("simcoon")
 
 import fedoo as fd  # noqa: E402
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList  # noqa: E402
-from fedoo.constitutivelaw import simcoon_umat  # noqa: E402
 
 MU, KAPPA = 3.0, 150.0
 STRETCH = 0.10
@@ -140,17 +135,13 @@ def _directional_fd_error(pb, assembly, free, n_dir=3, eps=1e-8):
     return max(errors)
 
 
-@functools.lru_cache(maxsize=1)
-def _simcoon_exact_log_transport():
-    """True when simcoon ships the exact log-box tangent transport.
+def test_simcoon_exact_log_transport():
+    """Check the exact log-box tangent transport required from Simcoon 2.1.
 
-    Capability probe (material point): one-shot ELISO at a rotation-free
+    Material-point check: one-shot ELISO at a rotation-free
     stretched state; the chain umat-box -> Lt_convert("DsigmaDe_2_DSDE") must
     match the FD of S(E) to ~1e-9. The first-order (frozen-spin) transport of
-    simcoon <= 2.0.0b1 gives ~2e-3 here. A version compare is not usable:
-    the installed metadata may lag the fix (dev builds report 0+unknown).
-    TODO: once the simcoon release containing the fix has a number (TBD),
-    bump the pyproject pin to it and replace this probe by that requirement.
+    earlier Simcoon versions gives ~2e-3 here.
     """
     props = np.asfortranarray(np.array([[8.7], [0.49], [1e-5]]))
 
@@ -192,22 +183,11 @@ def _simcoon_exact_log_transport():
 
     Fb = np.array([[1.08, 0.04, 0.0], [0.0, 0.96, 0.0], [0.0, 0.0, 0.99]])
     Fb = np.real(sqrtm(Fb @ Fb.T))
-    return _box_tangent_pk2_fd_error(call, Fb) < 1e-6
+    assert _box_tangent_pk2_fd_error(call, Fb) < 1e-6
 
 
-requires_exact_transport = pytest.mark.skipif(
-    not _simcoon_exact_log_transport(),
-    reason=(
-        "installed simcoon lacks the exact log-box tangent transport "
-        "(first-order transport <= 2.0.0b1); bump the simcoon pin to the "
-        "release containing it (number TBD) and drop this guard"
-    ),
-)
-
-
-@functools.lru_cache(maxsize=1)
-def _simcoon_exact_history_transport():
-    """True when the exact transport also carries the rotation of the box.
+def test_simcoon_exact_history_transport():
+    """Check that the exact transport carries the rotation of the box.
 
     Discriminating probe (material point): ONE virgin EPICP increment of
     simple shear gamma = 0.3 (rotation-carrying, plastified, so the box
@@ -215,7 +195,7 @@ def _simcoon_exact_history_transport():
     umat-box -> Lt_convert("DsigmaDe_2_DSDE") must match the FD of S(E) to
     ~1e-8.  Without the polar conjugation of the box inside the exact map
     (simcoon <= the 2026-09-01 fix) this sits at ~5e-3 even though
-    _simcoon_exact_log_transport passes (its probe is rotation-free).
+    the rotation-free log transport check passes.
     """
     props = np.asfortranarray(np.c_[EPICP_PROPS].astype(float))
 
@@ -258,18 +238,7 @@ def _simcoon_exact_history_transport():
 
     F1 = np.eye(3)
     F1[0, 1] = 0.3
-    return _box_tangent_pk2_fd_error(call, F1) < 1e-6
-
-
-requires_exact_history_transport = pytest.mark.skipif(
-    not _simcoon_exact_history_transport(),
-    reason=(
-        "installed simcoon lacks the rotation-conjugated exact transport + "
-        "exact polar log_R frame increment (2026-09-01 fix); bump the "
-        "simcoon pin to the release containing it (number TBD) and drop "
-        "this guard"
-    ),
-)
+    assert _box_tangent_pk2_fd_error(call, F1) < 1e-6
 
 
 def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
@@ -344,38 +313,27 @@ def _fd_tangent_error(nlgeom, law="NEOHC", corate=None):
     return _directional_fd_error(pb, assembly, free)
 
 
-requires_umat_corate = pytest.mark.skipif(
-    "corate" not in simcoon_umat._UMAT_KWARGS, reason="sim.umat has no corate keyword"
-)
-requires_tangent_output = pytest.mark.skipif(
-    "tangent_output" not in simcoon_umat._UMAT_KWARGS,
-    reason="sim.umat has no tangent_output keyword",
-)
-
 _CASES = [
-    # (law, corate). NEOHC's Lt is baked by inverting the transport, so it is
-    # exact with any simcoon and needs no capability gate.
+    # (law, corate).
     pytest.param("NEOHC", "log", id="NEOHC-log"),
     # the hyperelastic box is built in the corate sim.umat is given: fedoo must pass its own
     # (before, it got log_R's box and converted it with the Jaumann/GN map: 1e-4 in UL)
-    pytest.param("NEOHC", "jaumann", marks=requires_umat_corate, id="NEOHC-jaumann"),
-    pytest.param("NEOHC", "gn", marks=requires_umat_corate, id="NEOHC-gn"),
-    pytest.param("ELISO", "log", marks=requires_exact_transport, id="ELISO-log"),
-    pytest.param("ELISO", "log_r", marks=requires_exact_transport, id="ELISO-logR"),
+    pytest.param("NEOHC", "jaumann", id="NEOHC-jaumann"),
+    pytest.param("NEOHC", "gn", id="NEOHC-gn"),
+    pytest.param("ELISO", "log", id="ELISO-log"),
+    pytest.param("ELISO", "log_r", id="ELISO-logR"),
     pytest.param(
         "FEDOO_ELISO",
         "log",
-        marks=requires_exact_transport,
         id="FedooELISO-log",
     ),
     pytest.param(
         "FEDOO_ELISO",
         "log_r",
-        marks=requires_exact_transport,
         id="FedooELISO-logR",
     ),
-    pytest.param("EPICP", "log", marks=requires_exact_transport, id="EPICP-log"),
-    pytest.param("EPICP", "log_r", marks=requires_exact_transport, id="EPICP-logR"),
+    pytest.param("EPICP", "log", id="EPICP-log"),
+    pytest.param("EPICP", "log_r", id="EPICP-logR"),
 ]
 
 
@@ -552,7 +510,6 @@ def _fd_history_tangent_error(gamma1, corate, n_inc=4, dgamma=0.05):
     return _directional_fd_error(pb, assembly, free)
 
 
-@requires_exact_history_transport
 def test_finite_strain_tangent_with_plastic_history():
     # corate log_R only: the XBM ("log") frame increment is not exactly
     # equivariant, leaving a documented O(||EP|| * dtheta) residual (see the
@@ -590,7 +547,6 @@ def _solved_stretch(nlgeom, corate):
     return assembly
 
 
-@requires_tangent_output
 @pytest.mark.parametrize("corate", ["log_r", "jaumann"])
 @pytest.mark.parametrize("nlgeom", ["TL", "UL"])
 def test_tangent_returned_by_the_law_matches_the_weakform_conversion(
@@ -599,9 +555,7 @@ def test_tangent_returned_by_the_law_matches_the_weakform_conversion(
     """sim.umat(tangent_output=...) gives what update_2 computed from the box tangent."""
     fused = _solved_stretch(nlgeom, corate)
     assert fused._tangent_converted
-    monkeypatch.setattr(
-        simcoon_umat, "_UMAT_KWARGS", simcoon_umat._UMAT_KWARGS - {"tangent_output"}
-    )
+    monkeypatch.setattr(fd.constitutivelaw.Simcoon, "supports_tangent_output", False)
     chained = _solved_stretch(nlgeom, corate)
     assert not chained._tangent_converted
     np.testing.assert_allclose(

@@ -390,11 +390,14 @@ class MechanicalUMAT(Mechanical3D):
 
             umat(strain, dstrain, F0, F1, stress, DR, props,
                  statev_start, time, dtime, wm_start, temperature,
-                 *, ndi, tangent_mode)
+                 *, ndi, tangent_mode, start, corate)
 
         It must return ``(stress, statev, wm, tangent)``. Subclasses may omit
         this argument and override :meth:`_call_umat`, as the Simcoon adapter
         does.
+        ``start`` is True only during initialization. ``corate`` is the
+        weak form's objective-rate name as a string (e.g. "log_r", "log",
+        "jaumann", or "green_naghdi"). In small strain it defaults to "log_r".
     props : array_like, optional
         Material properties. One-dimensional input is stored as a Fortran
         contiguous column, matching the historical Simcoon wrapper behavior.
@@ -423,7 +426,7 @@ class MechanicalUMAT(Mechanical3D):
         Accepted ``weakform.corate`` values for finite-strain use. Set this on
         a subclass or instance when the law requires a particular objective
         rate. The default ``None`` accepts any rate. Fedoo checks the value at
-        initialization; it does not select the rate or pass it to the callback.
+        initialization; the selected rate is passed to the callback.
 
     Notes
     -----
@@ -515,6 +518,8 @@ class MechanicalUMAT(Mechanical3D):
         *,
         ndi,
         tangent_mode,
+        start,
+        corate,
     ):
         """Invoke the configured user-material function."""
         if self.umat is None:
@@ -536,7 +541,13 @@ class MechanicalUMAT(Mechanical3D):
             temperature,
             ndi=ndi,
             tangent_mode=tangent_mode,
+            start=start,
+            corate=corate,
         )
+
+    def _umat_options(self, assembly, *, in_material_frame, ndi):
+        """Return adapter-specific options and whether its tangent is converted."""
+        return {}, False
 
     def _get_ndi(self, assembly):
         if assembly.space.get_dimension() != "2Dstress":
@@ -679,38 +690,33 @@ class MechanicalUMAT(Mechanical3D):
         assembly.sv["Wm"] = np.zeros((4, n_points), order="F")
         zeros_6 = np.zeros((6, n_points), order="F")
         ndi = self._get_ndi(assembly)
+        wf = getattr(assembly, "weakform", None)
+        corate = getattr(wf, "corate", "log_r") if assembly._nlgeom else "log_r"
 
-        # The one call that initialises the points (adapters that support it, e.g. Simcoon,
-        # pass start=True; every update passes start=False).
-        self._start = True
-        self._start_passed = False
-        try:
-            _, statev_init, _, tangent_local = self._call_umat(
-                zeros_6,
-                zeros_6,
-                F,
-                F,
-                zeros_6,
-                DR,
-                self.props,
-                statev,
-                0,
-                0,
-                assembly.sv["Wm"],
-                self.get_temp_gp(assembly, pb),
-                ndi=ndi,
-                tangent_mode=self.tangent_mode,
-            )
-        finally:
-            self._start = None
-        if self._start_passed:
-            # Keep the state the law initialised (reference temperature, internal
-            # variables), except the components set by set_initial_statev.
-            statev_init = np.array(statev_init, dtype=float, order="F")
-            user = sorted(getattr(assembly, "_initial_statev_components", ()))
-            if user:
-                statev_init[user] = statev[user]
-            assembly.sv["Statev"] = statev_init
+        _, statev_init, _, tangent_local = self._call_umat(
+            zeros_6,
+            zeros_6,
+            F,
+            F,
+            zeros_6,
+            DR,
+            self.props,
+            statev,
+            0,
+            0,
+            assembly.sv["Wm"],
+            self.get_temp_gp(assembly, pb),
+            ndi=ndi,
+            tangent_mode=self.tangent_mode,
+            start=True,
+            corate=corate,
+        )
+        # Keep the law's initialized state, except user-defined components.
+        statev_init = np.array(statev_init, dtype=float, order="F")
+        user = sorted(getattr(assembly, "_initial_statev_components", ()))
+        if user:
+            statev_init[user] = statev[user]
+        assembly.sv["Statev"] = statev_init
         assembly.sv["TangentMatrix"] = self.local2global_H(
             tangent_local, assembly, current=False
         )
@@ -773,51 +779,31 @@ class MechanicalUMAT(Mechanical3D):
             )
             DR_local = self.global2local_rotation_increment(assembly.sv["DR"], assembly)
 
-        # Call context read by adapters that can use it (SimcoonUMAT), reset after the call:
-        # - _in_material_frame: F is not in the basis of the stresses (no log-corate work
-        #   correction);
-        # - _corate: the weak form's objective rate, the one the box tangent must be in;
-        # - _tangent_output: the tangent this configuration integrates, when the law may return
-        #   it directly (the adapter sets _tangent_converted if it did). Not in the frame that
-        #   follows the material (F and the stresses in different bases) nor in plane stress
-        #   (the condensation acts on the box tangent).
         wf = getattr(assembly, "weakform", None)
-        self._in_material_frame = trial_frame is not None
-        self._corate = (
-            getattr(wf, "_simcoon_corate", None) if assembly._nlgeom else None
+        corate = getattr(wf, "corate", "log_r") if assembly._nlgeom else "log_r"
+        options, tangent_converted = self._umat_options(
+            assembly, in_material_frame=trial_frame is not None, ndi=ndi
         )
-        fusable = (
-            assembly._nlgeom
-            and trial_frame is None
-            and ndi == 3
-            and getattr(wf, "convert_tangent", False)
+        stress_local, statev, wm, tangent_local = self._call_umat(
+            strain_start,
+            dstrain_local,
+            F0,
+            F1,
+            stress_start,
+            DR_local,
+            self.props,
+            assembly.sv_start["Statev"],
+            pb.time,
+            pb.dtime,
+            assembly.sv_start["Wm"],
+            self.get_temp_gp(assembly, pb),
+            ndi=ndi,
+            tangent_mode=self.tangent_mode,
+            start=False,
+            corate=corate,
+            **options,
         )
-        self._tangent_output = getattr(wf, "_tangent_output", None) if fusable else None
-        self._tangent_converted = False
-        # - _start: an increment never re-initialises the points, even at time 0 (the
-        #   Newton corrections of the first increment).
-        self._start = False
-        try:
-            stress_local, statev, wm, tangent_local = self._call_umat(
-                strain_start,
-                dstrain_local,
-                F0,
-                F1,
-                stress_start,
-                DR_local,
-                self.props,
-                assembly.sv_start["Statev"],
-                pb.time,
-                pb.dtime,
-                assembly.sv_start["Wm"],
-                self.get_temp_gp(assembly, pb),
-                ndi=ndi,
-                tangent_mode=self.tangent_mode,
-            )
-            assembly._tangent_converted = self._tangent_converted
-        finally:
-            self._in_material_frame = False
-            self._corate = self._tangent_output = self._start = None
+        assembly._tangent_converted = tangent_converted
         assembly.sv["Statev"] = statev
         assembly.sv["Wm"] = wm
         in_trial = trial_frame is not None

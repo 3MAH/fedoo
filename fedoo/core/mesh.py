@@ -28,15 +28,22 @@ try:
 except ImportError:
     USE_PYVISTA_QT = False
 
+# meshlane is a maintained fork of meshio exposing the same API. It is
+# preferred when available; meshio is kept as a fallback.
 try:
-    import meshio
+    import meshlane as meshio
 
     USE_MESHIO = True
 except ImportError:
-    USE_MESHIO = False
+    try:
+        import meshio
+
+        USE_MESHIO = True
+    except ImportError:
+        USE_MESHIO = False
 
 
-# Mapping from meshio cell type names to fedoo element types.
+# Mapping from meshlane/meshio cell type names to fedoo element types.
 # A value of None means the cell is recognized but intentionally ignored
 # (e.g. isolated vertices). Missing keys are reported as unavailable.
 _MESHIO_TO_FEDOO = {
@@ -57,7 +64,7 @@ _MESHIO_TO_FEDOO = {
     "wedge18": "wed18",
 }
 
-# File extensions read through meshio rather than pyvista. These are FEA
+# File extensions read through meshlane/meshio rather than pyvista. These are FEA
 # solver decks that the VTK readers behind pyvista cannot load reliably.
 _MESHIO_READ_EXTENSIONS = {".inp"}
 
@@ -302,7 +309,7 @@ class Mesh(MeshBase):
 
     @staticmethod
     def from_meshio(io_mesh, name: str = "") -> "Mesh":
-        """Build a Mesh from a meshio mesh object.
+        """Build a Mesh from a meshlane or meshio mesh object.
 
         Node coordinates, element connectivity, node sets (``point_sets``,
         e.g. Abaqus ``*NSET``) and element sets (``cell_sets``, e.g. Abaqus
@@ -312,8 +319,8 @@ class Mesh(MeshBase):
 
         Parameters
         ----------
-        io_mesh: meshio.Mesh
-            Mesh object returned by ``meshio.read``.
+        io_mesh: meshlane.Mesh or meshio.Mesh
+            Mesh object returned by ``meshlane.read`` or ``meshio.read``.
         name : str
             name of the new created Mesh. If specified, this Mesh is added to
             the dict containing all the loaded Mesh (Mesh.get_all()).
@@ -399,7 +406,8 @@ class Mesh(MeshBase):
         """Build a Mesh from a file.
 
         The file type is inferred from the file name. Abaqus decks (``.inp``)
-        are read with the meshio library; this supports second-order
+        are read with the meshlane library (or meshio if meshlane is not
+        installed); this supports second-order
         (quadratic) elements, multiple element types (returned as a
         :py:class:`MultiMesh`) and node/element sets (``*NSET``/``*ELSET``).
         Other formats are read with pyvista, which relies on the native VTK
@@ -419,8 +427,8 @@ class Mesh(MeshBase):
         if ext in _MESHIO_READ_EXTENSIONS:
             if not USE_MESHIO:
                 raise ModuleNotFoundError(
-                    f"Reading '{ext}' files requires the 'meshio' library. "
-                    "Install it with `pip install meshio`."
+                    f"Reading '{ext}' files requires the 'meshlane' library "
+                    "(or 'meshio'). Install it with `pip install meshlane`."
                 )
             return Mesh.from_meshio(meshio.read(filename), name=name)
 
@@ -428,7 +436,7 @@ class Mesh(MeshBase):
             return Mesh.from_pyvista(pv.read(filename), name=name)
         if USE_MESHIO:
             return Mesh.from_meshio(meshio.read(filename), name=name)
-        raise NameError("Neither pyvista nor meshio is installed.")
+        raise NameError("Neither pyvista nor meshlane/meshio is installed.")
 
     def add_node_set(
         self, node_indices: list[int] | np.ndarray[int], name: str

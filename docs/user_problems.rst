@@ -128,6 +128,8 @@ The callback has the following signature:
        *,
        ndi,
        tangent_mode,
+       start,
+       corate,
    ):
        ...
        return stress_new, statev_new, wm_new, tangent
@@ -162,6 +164,12 @@ Argument             Meaning
                      plane-stress interface.
 ``tangent_mode``     User-defined tangent selector forwarded unchanged by
                      Fedoo.
+``start``            True during initialization; False for every material
+                     increment, including corrections at time zero.
+``corate``           Objective-rate name as a string, as selected by
+                     ``weakform.corate`` in finite strain (e.g. ``"log_r"``,
+                     ``"log"``, ``"jaumann"``, or ``"green_naghdi"``).
+                     In small strain it is ``"log_r"``.
 ===================  =========================================================
 
 Stress and strain use engineering Voigt notation. The component ordering,
@@ -231,6 +239,7 @@ Initialization call
 
 Fedoo calls the UMAT once during initialization with:
 
+* ``start=True``;
 * ``time == 0`` and ``dtime == 0``;
 * zero strain, strain increment, stress, and work arrays;
 * the assembly's initial state-variable values, or zeros when none were
@@ -244,6 +253,12 @@ the initial elastic tangent without advancing irreversible state, accumulating
 work, or evaluating expressions that divide by ``dtime``. This tangent is
 stored as ``ElasticMatrix`` when ``use_elastic_tangent=True`` and is restored
 at the beginning of each increment for the elastic predictor.
+
+Use ``start`` to distinguish initialization from integration. All subsequent
+calls pass ``start=False``, including Newton corrections of the first
+increment at ``time == 0``. Return the material's initialized state in
+``statev_new``; Fedoo stores it, with components set through
+``set_initial_statev()`` taking precedence.
 
 Initial state variables
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -275,11 +290,10 @@ has shape ``(n_components, assembly.n_gauss_points)``. For a scalar label, a
 one-dimensional array of length ``assembly.n_gauss_points`` supplies spatially
 varying values. Node and element fields are not converted implicitly.
 
-Advanced users may instead assign the complete
-``assembly.sv["Statev"]`` array manually before initialization. Its shape must
-be exactly ``(material.n_statev, assembly.n_gauss_points)``. In either case,
-the initial state is passed to the ``dtime == 0`` UMAT call, so it may affect
-the initial tangent.
+Use ``set_initial_statev()`` rather than assigning ``assembly.sv["Statev"]``
+directly: it records which components must be preserved during material
+initialization. The initial state is passed to the ``start=True`` UMAT call,
+so it may affect the initial tangent.
 
 Calling ``assembly.reset()`` clears runtime state, including these initial
 values. Call ``set_initial_statev`` again before reinitializing a reset
@@ -301,7 +315,7 @@ should also validate their parameters and supported dimensional assumptions.
    def elastic_umat(
        strain, dstrain, F0, F1, stress, DR, props,
        statev_start, time, dtime, wm_start, temperature,
-       *, ndi, tangent_mode,
+       *, ndi, tangent_mode, start, corate,
    ):
        E, nu = props[:, 0]
        shear = E / (2 * (1 + nu))
@@ -389,7 +403,8 @@ subclass with a strict requirement can set, for example:
 Fedoo then validates the selected formulation when the material is initialized.
 The comparison is case-insensitive and applies only in finite strain. The
 default ``required_corate = None`` accepts any formulation. This attribute
-does not change ``weakform.corate`` or add an argument to the UMAT callback.
+does not change ``weakform.corate``; the selected name is passed as the
+callback's ``corate`` argument regardless of this validation setting.
 
 
 Advanced: derive directly from ``Mechanical3D``
