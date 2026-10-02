@@ -6,6 +6,36 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
+  convergent (area-weighted) IPC formulation of ipctk.
+- `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
+  Unlike a flat meshed obstacle, the contact force does not depend on which
+  obstacle node, edge or face is the closest.
+
+### Changed
+
+- The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
+  of the penalty self-contact.
+
+### Fixed
+
+- IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
+  collisions, so the residual, tangent matrix, energy line search and
+  automatic barrier stiffness are consistent (the tangent was previously
+  weighted twice and the energy / barrier stiffness not at all).
+- IPC friction produced no force: the friction potential was evaluated with
+  absolute positions instead of the slip. Friction is now lagged over the
+  time increment. With ipctk 1.6, the barrier stiffness was also passed as
+  the static friction coefficient and missing from the normal force.
+- `IPCContact(use_ogc=True)` raises in `2Daxi` (not supported).
+- `RigidBody.set_static_obstacle` registers a CCD line search (`use_ccd=True`
+  by default), so a time step that moves the body further than `dhat` no
+  longer carries it through the obstacle and fails with a NaN barrier. The
+  search follows the curved vertex paths of a rotating body (conservative
+  piecewise linear CCD).
+
 ## [1.0.1] - 2026-10-01
 
 ### Added

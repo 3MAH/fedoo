@@ -32,18 +32,6 @@ space.new_vector("Disp", ("DispX", "DispY", "DispZ"))
 ball_mesh = fd.Mesh.from_pyvista(
     pv.Sphere(radius=radius, center=(0, 0, z0), theta_resolution=10, phi_resolution=10)
 )
-plane_mesh = fd.Mesh.from_pyvista(
-    pv.Plane(
-        center=(0, 0, 0),
-        direction=(0, 0, 1),
-        i_size=1.5,
-        j_size=1.5,
-        i_resolution=6,
-        j_resolution=6,
-    ).triangulate(),
-    name="Floor",
-)
-
 body = fd.constraint.RigidBody(
     ball_mesh,
     mass=mass,
@@ -52,17 +40,15 @@ body = fd.constraint.RigidBody(
 )
 body.set_force([0, 0, -mass * g])
 body.set_rayleigh_damping(1.0)
-body.set_static_obstacle(plane_mesh, dhat=0.01, kappa=1e8)
+# The floor is an analytic plane: the contact force only depends on the
+# distance to the floor, not on the layout of a floor mesh.
+body.set_static_plane(normal=(0, 0, 1), point=(0, 0, 0), dhat=0.01, kappa=1e8)
 
 # Solve with NonLinear and save the trajectory through Fedoo's output system.
 pb = fd.problem.NonLinear(body.assembly)
 pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
 
-results = pb.add_output(
-    "rigid_body_bounce",
-    ["Disp", "RigidDisp", "RigidRot"],
-    include_static_obstacles=True,  # include the plane_mesh in the results field
-)
+results = pb.add_output("rigid_body_bounce", ["Disp", "RigidDisp", "RigidRot"])
 
 t0 = time.time()
 pb.nlsolve(
