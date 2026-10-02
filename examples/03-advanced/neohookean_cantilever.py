@@ -33,10 +33,17 @@ cross-check plotted at the end.
 Force control is the demanding one: the transverse stiffness of the cap is tiny
 (~40 N/m at the origin) and the response stiffens strongly as the cylinder
 aligns with the load, so each Newton step is a large move along a soft bending
-mode. The consistent finite-strain tangent (including the initial-stress
-stiffness) is what makes these steps converge in a plain static analysis, without
-any inertial or viscous regularization. Two solver settings matter:
+mode. The equilibrium path is nevertheless monotonic (no limit point), so a plain
+static analysis follows it without any inertial or viscous regularization,
+provided that:
 
+* the force increments are small while the structure is soft. From the
+  undeformed state, the linear prediction of a 2 N increment is already a
+  transverse translation of 0.9 L, far outside the convergence basin of
+  Newton's method. The force is therefore ramped quadratically in time (gentle
+  start, larger increments once the cylinder has stiffened); the automatic
+  time stepping (``update_dt=True``) remains as a safety net and would cut an
+  increment that fails;
 * the ``"Force"`` convergence criterion (residual relative to the applied
   load), which measures equilibrium directly. On a soft mode the norm of the
   displacement correction says little about the remaining out-of-balance
@@ -123,7 +130,8 @@ def solve(control, value, output=None):
     pb.bc.add(fd.constraint.RigidTie(top))  # rigid cap on the top face
     pb.bc.add("Dirichlet", bottom, "Disp", 0)  # clamp the base
     if control == "force":
-        pb.bc.add("Neumann", "RigidDispX", value)
+        # quadratic ramp: small force increments while the structure is soft
+        pb.bc.add("Neumann", "RigidDispX", value, time_func=lambda t: t**2)
     else:
         pb.bc.add("Dirichlet", "RigidDispX", value)
 
@@ -134,12 +142,18 @@ def solve(control, value, output=None):
         fx = float(np.ravel(problem.get_ext_forces("RigidDispX"))[0])
         history.append((ux, fx))
 
-    pb.nlsolve(dt=0.1, tmax=1.0, update_dt=True, print_info=1, callback=record)
+    pb.nlsolve(
+        dt=0.02,
+        tmax=1.0,
+        update_dt=True,
+        dt_max=0.02,
+        print_info=1,
+        interval_output=0.02,
+        callback=record,
+    )
     return pb, results, np.array(history)
 
 
-# force control: the automatic time stepping cuts the first increments (the
-# origin is the softest state), then grows back to the nominal step
 pb, results, curve_force = solve("force", F_CAP, output="neohookean_cantilever")
 ux_final = curve_force[-1, 0]
 rot_y = float(np.ravel(pb.get_dof_solution("RigidRotY"))[0])
