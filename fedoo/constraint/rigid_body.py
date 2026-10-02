@@ -143,6 +143,7 @@ class RigidBodyAssembly(AssemblyBase):
         self._ipc_barrier = None
         self._ipc_kappa = None
         self._ipc_dhat = None
+        self._ipc_dmin = 0.0
         self._ipc_build_dhat = None
         self._ipc_broad_phase = None
         self._ipc_rest_positions = None
@@ -247,6 +248,7 @@ class RigidBodyAssembly(AssemblyBase):
             Step size in [0, 1].
         """
         import ipctk
+        from fedoo.constraint.ipc_contact import _plane_collision_free_stepsize
 
         rt = self.rigid_tie
         dof_solution = pb.get_dof_solution()
@@ -259,18 +261,17 @@ class RigidBodyAssembly(AssemblyBase):
 
         start = self._ipc_vertices(q, rt)
         end = self._ipc_vertices(q + dq, rt)
-        middle = self._ipc_vertices(q + 0.5 * dq, rt)
-        # Largest distance between the curved path and its chord. It vanishes
-        # for a pure translation and decreases as 1 / n_segments**2.
-        deviation = (
-            _CCD_DEVIATION_SAFETY
-            * np.linalg.norm(middle - 0.5 * (start + end), axis=1).max()
-        )
+        # A midpoint estimate can miss complete revolutions. For an affine
+        # rotation-vector path, the second derivative of exp(skew(q(t))) has
+        # norm at most ||dq_rot||**2. The chord error is therefore bounded by
+        # radius * ||dq_rot||**2 / 8, even for non-collinear rotation vectors.
+        radius = np.linalg.norm(self._ipc_rest_positions - rt.center, axis=1).max()
+        deviation = _CCD_DEVIATION_SAFETY * radius * np.dot(dq[3:], dq[3:]) / 8
         tol = _CCD_PATH_TOL * self._ipc_dhat
         n_segments = int(
             min(_CCD_MAX_SEGMENTS, max(1, np.ceil(np.sqrt(deviation / tol))))
         )
-        min_distance = deviation / n_segments**2
+        min_distance = self._ipc_dmin + deviation / n_segments**2
 
         previous = start
         for i in range(n_segments):
@@ -286,15 +287,15 @@ class RigidBodyAssembly(AssemblyBase):
                 min_distance=min_distance,
                 broad_phase=self._ipc_broad_phase,
             )
-            if alpha <= 0 and min_distance > 0:
-                # Already closer than the path tolerance: plain linear CCD.
-                alpha = ipctk.compute_collision_free_stepsize(
-                    self._ipc_collision_mesh,
-                    previous,
-                    current,
-                    min_distance=0.0,
-                    broad_phase=self._ipc_broad_phase,
-                )
+            alpha = min(
+                alpha,
+                _plane_collision_free_stepsize(
+                    self._ipc_collision_mesh, previous, current, min_distance
+                ),
+            )
+            # Never drop either the physical offset or the curvature margin.
+            # If no step is feasible, return the already checked fraction;
+            # the nonlinear solver can reduce the increment and retry.
             if alpha < 1.0:
                 # Keep a margin from the exact time of impact, as IPCContact
                 # does.
@@ -326,12 +327,28 @@ class RigidBodyAssembly(AssemblyBase):
             return self._contact_force, self._contact_stiffness
 
         vertices = self._ipc_vertices(q, rt)
+        if self._ipc_dmin > 0:
+            for plane in self._ipc_collision_mesh.planes:
+                gap = (vertices - plane.origin()) @ np.asarray(plane.normal())
+                if np.any(gap <= self._ipc_dmin):
+                    from fedoo.core.base import InvalidKinematicStateError
+
+                    raise InvalidKinematicStateError("IPC plane gap must exceed dmin.")
         self._ipc_collisions.build(
             self._ipc_collision_mesh,
             vertices,
             self._ipc_build_dhat,
+            dmin=self._ipc_dmin,
             broad_phase=self._ipc_broad_phase,
         )
+        if self._ipc_dmin > 0 and len(self._ipc_collisions) > 0:
+            distance_squared = self._ipc_collisions.compute_minimum_distance(
+                self._ipc_collision_mesh, vertices
+            )
+            if distance_squared <= self._ipc_dmin**2:
+                from fedoo.core.base import InvalidKinematicStateError
+
+                raise InvalidKinematicStateError("IPC separation must exceed dmin.")
 
         if len(self._ipc_collisions) == 0:
             self._contact_force[:] = 0
@@ -677,7 +694,9 @@ class RigidBody:
             alpha=float(alpha), beta=float(beta)
         )
 
-    def set_static_obstacle(self, obstacle_mesh, dhat=0.01, kappa=None, use_ccd=True):
+    def set_static_obstacle(
+        self, obstacle_mesh, dhat=0.01, kappa=None, use_ccd=True, dmin=0.0
+    ):
         """Enable IPC barrier contact with a STATIC obstacle surface.
 
         Builds a private collision mesh and barrier on this rigid body's
@@ -706,10 +725,15 @@ class RigidBody:
             Limit each Newton-Raphson step to the largest collision-free
             fraction (continuous collision detection), so that the body
             cannot pass through the obstacle when a step exceeds ``dhat``.
+        dmin : float, default=0.0
+            Minimum body-obstacle separation in absolute model length units.
+            The barrier activates below ``dmin + dhat``. The initial gap
+            must exceed ``dmin``; CCD preserves this offset along the step.
         """
-        from fedoo.constraint.ipc_contact import _import_ipctk
+        from fedoo.constraint.ipc_contact import _import_ipctk, _validate_dmin
 
         ipctk = _import_ipctk()
+        dmin = _validate_dmin(dmin)
 
         body_nodes = self.mesh.nodes
         obst_nodes = obstacle_mesh.nodes
@@ -741,6 +765,7 @@ class RigidBody:
             kappa = 1e9
         asm._ipc_kappa = kappa
         asm._ipc_dhat = dhat
+        asm._ipc_dmin = dmin
         asm._ipc_build_dhat = dhat
         asm._ipc_broad_phase = ipctk.LBVH()
         asm._ipc_use_ccd = bool(use_ccd)
@@ -762,7 +787,13 @@ class RigidBody:
         asm._ipc_obstacle_source_id = id(obstacle_mesh)
 
     def set_static_plane(
-        self, normal=(0, 0, 1), point=(0, 0, 0), dhat=0.01, kappa=None, use_ccd=True
+        self,
+        normal=(0, 0, 1),
+        point=(0, 0, 0),
+        dhat=0.01,
+        kappa=None,
+        use_ccd=True,
+        dmin=0.0,
     ):
         """Enable IPC barrier contact with a STATIC infinite plane.
 
@@ -775,7 +806,7 @@ class RigidBody:
         floors and walls.
 
         Can be called several times to add planes (e.g. a floor and walls);
-        ``dhat`` and ``kappa`` must then be the same for all of them.
+        ``dhat``, ``kappa`` and ``dmin`` must then be the same for all of them.
 
         Parameters
         ----------
@@ -790,10 +821,15 @@ class RigidBody:
         use_ccd : bool, default=True
             Limit each Newton-Raphson step to the largest collision-free
             fraction (continuous collision detection).
+        dmin : float, default=0.0
+            Minimum body-plane separation in absolute model length units.
+            The barrier activates below ``dmin + dhat``. All planes must
+            share the same offset, and the initial gap must exceed it.
         """
-        from fedoo.constraint.ipc_contact import _import_ipctk
+        from fedoo.constraint.ipc_contact import _import_ipctk, _validate_dmin
 
         ipctk = _import_ipctk()
+        dmin = _validate_dmin(dmin)
 
         normal = np.asarray(normal, dtype=float)
         point = np.asarray(point, dtype=float)
@@ -812,8 +848,14 @@ class RigidBody:
                 raise ValueError(
                     "set_static_plane cannot be combined with set_static_obstacle."
                 )
-            if asm._ipc_dhat != dhat or asm._ipc_kappa != kappa:
-                raise ValueError("All static planes must use the same dhat and kappa.")
+            if (
+                asm._ipc_dhat != dhat
+                or asm._ipc_kappa != kappa
+                or asm._ipc_dmin != dmin
+            ):
+                raise ValueError(
+                    "All static planes must use the same dhat and kappa, and dmin."
+                )
             asm._ipc_collision_mesh.planes = list(asm._ipc_collision_mesh.planes) + [
                 plane
             ]
@@ -839,11 +881,11 @@ class RigidBody:
         asm._ipc_barrier = ipctk.BarrierPotential(dhat, 1.0)
         asm._ipc_kappa = kappa
         asm._ipc_dhat = dhat
-        # ipctk 1.6 only activates plane-vertex pairs below half the distance
-        # given to ``build``, which would switch the barrier on with a finite
-        # force. Building with 2 * dhat activates them at dhat, where the
-        # barrier (still defined with dhat) vanishes.
-        asm._ipc_build_dhat = 2 * dhat
+        asm._ipc_dmin = dmin
+        # ipctk 1.6 activates plane-vertex pairs below (build_dhat+dmin)/2.
+        # Build with 2*dhat+dmin to activate at dmin+dhat, where the barrier
+        # (defined with dhat) vanishes continuously.
+        asm._ipc_build_dhat = 2 * dhat + dmin
         asm._ipc_broad_phase = ipctk.LBVH()
         asm._ipc_use_ccd = bool(use_ccd)
         asm._ipc_rest_positions = body_nodes.copy()

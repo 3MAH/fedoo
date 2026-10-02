@@ -8,6 +8,12 @@ semantic versioning.
 
 ### Added
 
+- IPC contact thickness through an absolute `dmin` minimum separation on
+  `IPCContact`, `IPCSelfContact`, `RigidBody.set_static_obstacle` and
+  `RigidBody.set_static_plane`. Collision detection, barrier-stiffness
+  tuning, friction and CCD use the same offset; zero remains the default.
+  Nonzero offsets are rejected with OGC, whose trust region does not expose
+  a minimum-separation parameter.
 - `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
   convergent (area-weighted) IPC formulation of ipctk.
 - `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
@@ -32,6 +38,15 @@ semantic versioning.
 
 ### Fixed
 
+- Rigid-body CCD bounds rotation-path curvature without relying on a single
+  midpoint, preventing complete revolutions from bypassing collision checks.
+  The line search never drops its curvature margin or physical offset.
+- Analytic-plane CCD explicitly enforces the requested minimum distance,
+  which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
+- IPC proximity safeguards compare the remaining linear gap above `dmin`
+  with `dhat`, rather than comparing a squared distance with a length.
+- IPC constructor options retain the positional locations of `name` and
+  `space` when adding area weighting and minimum separation.
 - IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
   collisions, so the residual, tangent matrix, energy line search and
   automatic barrier stiffness are consistent (the tangent was previously

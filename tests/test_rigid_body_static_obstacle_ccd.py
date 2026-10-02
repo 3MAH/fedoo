@@ -14,7 +14,7 @@ Z0 = 0.5
 DHAT = 0.01
 
 
-def _bounce_problem(use_ccd):
+def _bounce_problem(use_ccd, dmin=0.0):
     space = fd.ModelingSpace("3D")
     space.new_variable("DispX")
     space.new_variable("DispY")
@@ -44,7 +44,7 @@ def _bounce_problem(use_ccd):
     )
     body.set_force([0.0, 0.0, -G])
     body.set_rayleigh_damping(1.0)
-    body.set_static_obstacle(floor, dhat=DHAT, kappa=1e8, use_ccd=use_ccd)
+    body.set_static_obstacle(floor, dhat=DHAT, kappa=1e8, use_ccd=use_ccd, dmin=dmin)
 
     pb = fd.problem.NonLinear(body.assembly)
     pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
@@ -145,3 +145,56 @@ def test_ccd_accounts_for_curved_paths_of_a_rotating_body():
         for fraction in np.linspace(0.0, 1.0, 21):
             vertices = asm._ipc_vertices(q + fraction * alpha * dq, asm.rigid_tie)
             assert vertices[:, 2].min() > 0.0
+
+
+def test_static_obstacle_bounce_preserves_thickness():
+    dmin = 0.02
+    pb, _, z_min = _bounce_problem(use_ccd=True, dmin=dmin)
+    pb.nlsolve(dt=0.02, dt_max=0.02, tmax=0.6, update_dt=True, print_info=0)
+    assert pb.time == pytest.approx(0.6)
+    assert dmin < min(z_min) < dmin + DHAT
+
+
+@pytest.mark.parametrize("turns", [1, 2, 3])
+def test_ccd_does_not_alias_complete_revolutions(turns):
+    space = fd.ModelingSpace("3D")
+    for variable in ["DispX", "DispY", "DispZ"]:
+        space.new_variable(variable)
+    space.new_vector("Disp", ("DispX", "DispY", "DispZ"))
+    height = 0.15
+    mesh = fd.Mesh.from_pyvista(
+        pv.Cube(center=(0, 0, height), x_length=0.4, y_length=0.05, z_length=0.05)
+        .triangulate()
+        .clean()
+    )
+    body = fd.constraint.RigidBody(
+        mesh, mass=1, inertia_tensor=np.eye(3), center_of_mass=np.array([0, 0, height])
+    )
+    body.set_static_plane(dhat=DHAT, kappa=1e8, dmin=0.02)
+    asm = body.assembly
+    asm._dof_indices = np.arange(6)
+    q, dq = np.zeros(6), np.zeros(6)
+    dq[4] = turns * 2 * np.pi
+    alpha = asm._ccd_line_search(_FixedStateProblem(q), dq)
+    assert 0 < alpha < 1
+    for fraction in np.linspace(0, 1, 201):
+        assert (
+            asm._ipc_vertices(q + fraction * alpha * dq, asm.rigid_tie)[:, 2].min()
+            > 0.02
+        )
+
+
+def test_rigid_ccd_never_falls_back_below_offset(monkeypatch):
+    _, body, _ = _bounce_problem(use_ccd=True, dmin=0.02)
+    asm = body.assembly
+    asm._dof_indices = np.arange(6)
+    calls = []
+
+    def fake_ccd(*args, min_distance, **kwargs):
+        calls.append(min_distance)
+        return 0
+
+    monkeypatch.setattr(ipctk, "compute_collision_free_stepsize", fake_ccd)
+    dq = np.array([0, 0, -1, 0, 0, 0])
+    assert asm._ccd_line_search(_FixedStateProblem(np.zeros(6)), dq) == 0
+    assert calls == [0.02]

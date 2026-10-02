@@ -111,3 +111,22 @@ def test_several_planes_and_argument_checks():
     other.set_static_obstacle(floor, dhat=DHAT, kappa=1e8)
     with pytest.raises(ValueError, match="set_static_obstacle"):
         other.set_static_plane(dhat=DHAT, kappa=1e8)
+
+
+def test_plane_offset_activation_and_parameter_consistency():
+    body = _ball()
+    dmin = 0.04
+    body.set_static_plane(dhat=DHAT, kappa=1e8, dmin=dmin)
+    assert _contact_force(body, dmin + 1.01 * DHAT)[2] == 0
+    just_inside = _contact_force(body, dmin + 0.99 * DHAT)[2]
+    assert just_inside > 0
+    assert _contact_force(body, dmin + 0.9999 * DHAT)[2] < just_inside / 100
+    assert _contact_force(body, dmin + 0.3 * DHAT)[2] > just_inside
+    with pytest.raises(ValueError, match="dmin"):
+        body.set_static_plane(normal=(1, 0, 0), dhat=DHAT, kappa=1e8, dmin=0.03)
+
+
+@pytest.mark.parametrize("dmin", [-0.01, np.nan, np.inf])
+def test_plane_invalid_offset(dmin):
+    with pytest.raises(ValueError, match="dmin"):
+        _ball().set_static_plane(dmin=dmin)

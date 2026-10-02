@@ -4,6 +4,30 @@ import numpy as np
 from scipy import sparse
 from fedoo.core.base import AssemblyBase
 from fedoo.core.modelingspace import ModelingSpace
+from fedoo.core.base import InvalidKinematicStateError
+
+
+def _validate_dmin(dmin):
+    """Validate an absolute IPC collision offset in model length units."""
+    dmin = float(dmin)
+    if not np.isfinite(dmin) or dmin < 0:
+        raise ValueError("dmin must be finite and non-negative.")
+    return dmin
+
+
+def _plane_collision_free_stepsize(collision_mesh, start, end, min_distance):
+    """Analytic plane CCD, including the offset ignored by ipctk 1.6."""
+    alpha = 1.0
+    for plane in collision_mesh.planes:
+        normal = np.asarray(plane.normal())
+        gap = (start - plane.origin()) @ normal - min_distance
+        if np.any(gap <= 0):
+            return 0.0
+        velocity = (end - start) @ normal
+        closing = velocity < 0
+        if np.any(closing):
+            alpha = min(alpha, float(np.min(-gap[closing] / velocity[closing])))
+    return max(0.0, alpha)
 
 
 def _import_ipctk():
@@ -156,6 +180,14 @@ class IPCContact(AssemblyBase):
     dhat_is_relative : bool, default=True
         If ``True``, ``dhat`` is interpreted as a fraction of the bounding
         box diagonal of the surface mesh.
+    dmin : float, default=0.0
+        Minimum separation between collision primitives, in absolute model
+        length units, independently of ``dhat_is_relative``. The barrier
+        activates below ``dmin + dhat`` and diverges at ``dmin``. For two
+        equal-radius beam centerlines, use their diameter (``2 * radius``).
+        The initial configuration must have separation strictly above
+        ``dmin``. Connected joints may require a collision filter.
+        Nonzero offsets are not supported with ``use_ogc=True``.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  If ``None`` (default), it is
         automatically computed and adaptively updated — **this is the
@@ -243,10 +275,14 @@ class IPCContact(AssemblyBase):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        use_area_weighting=False,
         name="IPC Contact",
         space=None,
+        use_area_weighting=False,
+        dmin=0.0,
     ):
+        self._dmin = _validate_dmin(dmin)
+        if use_ogc and self._dmin > 0:
+            raise NotImplementedError("dmin > 0 is not supported with use_ogc=True.")
         if use_ccd is None:
             use_ccd = not use_ogc
         if use_ccd and use_ogc:
@@ -557,8 +593,18 @@ class IPCContact(AssemblyBase):
             self._collision_mesh,
             vertices,
             self._actual_dhat,
+            dmin=self._dmin,
             broad_phase=self._broad_phase,
         )
+        if self._dmin > 0 and len(collisions) > 0:
+            distance_squared = collisions.compute_minimum_distance(
+                self._collision_mesh, vertices
+            )
+            if distance_squared <= self._dmin**2:
+                raise InvalidKinematicStateError(
+                    "IPC separation must be strictly greater than dmin. "
+                    "Check the initial gap and exclude connected joint neighborhoods."
+                )
         if self._axi_radius is not None:
             edges = self._collision_mesh.edges
             faces = self._collision_mesh.faces
@@ -708,6 +754,7 @@ class IPCContact(AssemblyBase):
             1.0,  # average_mass (1.0 for quasi-static)
             grad_energy,
             grad_barrier,
+            dmin=self._dmin,
         )
         # MAX guard: kappa can only increase to prevent oscillations
         if self._kappa is None or new_kappa > self._kappa:
@@ -846,12 +893,12 @@ class IPCContact(AssemblyBase):
         # --- Phase 1: CCD (collision-free step size) ---
         # When no contacts at step start, use conservative min_distance
         # to prevent jumping deep into the barrier zone.
-        # When contacts already exist, use min_distance=0 to avoid
-        # ipctk "initial distance <= d_min" warnings and double CCD.
+        # With existing contacts, retain only the physical offset, without
+        # the extra activation-zone margin.
         if self._n_collisions_at_start == 0:
-            min_distance = 0.1 * self._actual_dhat
+            min_distance = self._dmin + 0.1 * self._actual_dhat
         else:
-            min_distance = 0.0
+            min_distance = self._dmin
 
         alpha = ipctk.compute_collision_free_stepsize(
             self._collision_mesh,
@@ -861,18 +908,24 @@ class IPCContact(AssemblyBase):
             broad_phase=self._broad_phase,
         )
 
-        # Fallback: if min_distance caused alpha=0 (due to pre-existing
-        # zero-distance pairs from shared mesh edges), recompute with
-        # standard CCD (min_distance=0).
-        if alpha <= 0 and min_distance > 0:
+        # If the extra margin prevents a step, retry with the physical
+        # offset alone. Never fall back below dmin.
+        if alpha <= 0 and min_distance > self._dmin:
+            min_distance = self._dmin
             alpha = ipctk.compute_collision_free_stepsize(
                 self._collision_mesh,
                 vertices_current,
                 vertices_next,
-                min_distance=0.0,
+                min_distance=min_distance,
                 broad_phase=self._broad_phase,
             )
 
+        alpha = min(
+            alpha,
+            _plane_collision_free_stepsize(
+                self._collision_mesh, vertices_current, vertices_next, min_distance
+            ),
+        )
         if alpha < 1.0:
             alpha *= 0.9
 
@@ -1240,6 +1293,7 @@ class IPCContact(AssemblyBase):
             self._kappa,
             bbox_diag,
             dhat_epsilon_scale=eps_scale,
+            dmin=self._dmin,
         )
         if new_kappa > self._kappa:
             self._kappa = new_kappa
@@ -1349,14 +1403,24 @@ class IPCContact(AssemblyBase):
         need_sdi = n_collisions_now != self._n_collisions_at_start
         min_d_val = None
         if not need_sdi and n_collisions_now > 0:
-            min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
+            min_d_val = (
+                np.sqrt(
+                    self._collisions.compute_minimum_distance(
+                        self._collision_mesh, vertices
+                    )
+                )
+                - self._dmin
             )
             if min_d_val < 0.1 * self._actual_dhat:
                 need_sdi = True
         elif n_collisions_now > 0:
-            min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
+            min_d_val = (
+                np.sqrt(
+                    self._collisions.compute_minimum_distance(
+                        self._collision_mesh, vertices
+                    )
+                )
+                - self._dmin
             )
         if need_sdi:
             # Scale min_subiter by proximity: more iterations when closer
@@ -1436,6 +1500,10 @@ class IPCSelfContact(IPCContact):
         default, see ``dhat_is_relative``).
     dhat_is_relative : bool, default=True
         If ``True``, ``dhat`` is a fraction of the bounding box diagonal.
+    dmin : float, default=0.0
+        Absolute minimum primitive separation. The barrier activates at
+        ``dmin + dhat``; see :class:`IPCContact` for thickness and joint
+        filtering requirements. Nonzero offsets are not supported with OGC.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  ``None`` (default) for automatic
         computation and adaptive update — **recommended**.
@@ -1503,9 +1571,10 @@ class IPCSelfContact(IPCContact):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        use_area_weighting=False,
         name="IPC Self Contact",
         space=None,
+        use_area_weighting=False,
+        dmin=0.0,
     ):
         super().__init__(
             mesh=mesh,
@@ -1524,4 +1593,5 @@ class IPCSelfContact(IPCContact):
             use_area_weighting=use_area_weighting,
             name=name,
             space=space,
+            dmin=dmin,
         )
