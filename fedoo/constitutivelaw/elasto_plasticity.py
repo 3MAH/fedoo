@@ -436,6 +436,8 @@ class ElastoPlasticity(MechanicalUMAT):
         *,
         ndi,
         tangent_mode,
+        start,
+        corate,
     ):
         """Adapt the readable radial return to ``MechanicalUMAT``.
 
@@ -452,6 +454,7 @@ class ElastoPlasticity(MechanicalUMAT):
         back to the assembly is the Cauchy stress ``tau / J1``.
         """
         del props, time, dtime, temperature, tangent_mode
+        del start, corate
         F0 = np.asarray(F0)
         F1 = np.asarray(F1)
         finite_strain = F1.size > 0

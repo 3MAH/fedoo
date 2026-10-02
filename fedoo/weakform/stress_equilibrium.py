@@ -871,10 +871,11 @@ class StressEquilibrium(WeakFormBase):
 
     @corate.setter
     def corate(self, value):
+        value = value.lower()
         self._corate = value
         if self.nlgeom in ("UL", "TL"):
             try:
-                self._corate_func, self._simcoon_corate = _CORATES[value.lower()]
+                self._corate_func, self._simcoon_corate = _CORATES[value]
             except KeyError:
                 raise ValueError(
                     'corate value not understood. Choose between "log", "log_R", \
