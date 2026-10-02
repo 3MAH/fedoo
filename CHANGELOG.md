@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Changed
 
+- Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
+  [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
+  meshio, when it is installed, and falls back to meshio otherwise. The `io`
+  extra now installs `meshlane>=5.5.0` instead of `meshio`.
 - Require Simcoon >= 2.1. UMAT callbacks receive `start` and a string `corate`
   explicitly. The Simcoon adapter handles `work_correction`, `tangent_output`,
   and conversion of the rate name to Simcoon's numeric code, without temporary

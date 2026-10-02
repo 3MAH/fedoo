@@ -15,7 +15,6 @@ dependencies:
   - vtk>=9.2
   - pypandoc
   - pyvista>=0.42
-  - meshio
   - simcoon>=2.1
   - pytest
   - sphinx
@@ -30,3 +29,4 @@ dependencies:
   - ipywidgets
   - pip:
     - ipctk
+    - meshlane>=5.5.0
