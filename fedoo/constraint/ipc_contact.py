@@ -275,10 +275,10 @@ class IPCContact(AssemblyBase):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        name="IPC Contact",
-        space=None,
         use_area_weighting=False,
         dmin=0.0,
+        name="IPC Contact",
+        space=None,
     ):
         self._dmin = _validate_dmin(dmin)
         if use_ogc and self._dmin > 0:
@@ -1571,10 +1571,10 @@ class IPCSelfContact(IPCContact):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
-        name="IPC Self Contact",
-        space=None,
         use_area_weighting=False,
         dmin=0.0,
+        name="IPC Self Contact",
+        space=None,
     ):
         super().__init__(
             mesh=mesh,

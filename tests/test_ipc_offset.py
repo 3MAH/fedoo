@@ -142,7 +142,7 @@ def test_ogc_rejects_offset():
         fd.constraint.IPCContact(None, dmin=0.4, use_ogc=True)
 
 
-def test_new_options_preserve_legacy_positional_name_and_space():
+def test_constructor_name_and_space_are_last():
     space = fd.ModelingSpace("2D")
     contact = fd.constraint.IPCContact(
         None,
@@ -158,6 +158,8 @@ def test_new_options_preserve_legacy_positional_name_and_space():
         False,
         None,
         False,
+        False,
+        0.0,
         "LegacyContact",
         space,
     )
@@ -173,6 +175,8 @@ def test_new_options_preserve_legacy_positional_name_and_space():
         False,
         None,
         False,
+        False,
+        0.0,
         "LegacySelfContact",
         space,
     )

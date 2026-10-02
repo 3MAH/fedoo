@@ -45,8 +45,6 @@ semantic versioning.
   which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
 - IPC proximity safeguards compare the remaining linear gap above `dmin`
   with `dhat`, rather than comparing a squared distance with a length.
-- IPC constructor options retain the positional locations of `name` and
-  `space` when adding area weighting and minimum separation.
 - IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
   collisions, so the residual, tangent matrix, energy line search and
   automatic barrier stiffness are consistent (the tangent was previously
