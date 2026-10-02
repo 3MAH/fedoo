@@ -6,8 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
-### Changed
+### Added
 
+- IPC contact thickness through an absolute `dmin` minimum separation on
+  `IPCContact`, `IPCSelfContact`, `RigidBody.set_static_obstacle` and
+  `RigidBody.set_static_plane`. Collision detection, barrier-stiffness
+  tuning, friction and CCD use the same offset; zero remains the default.
+  Nonzero offsets are rejected with OGC, whose trust region does not expose
+  a minimum-separation parameter.
+- `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
+  convergent (area-weighted) IPC formulation of ipctk.
+- `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
+  Unlike a flat meshed obstacle, the contact force does not depend on which
+  obstacle node, edge or face is the closest.
 - Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
   [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
   meshio, when it is installed, and falls back to meshio otherwise. The `io`
@@ -19,6 +30,35 @@ semantic versioning.
 - Keep the state returned by UMAT initialization, with values assigned through
   `set_initial_statev()` taking precedence. Custom callbacks must accept the
   new keywords and handle `start=True` during initialization.
+
+### Changed
+
+- The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
+  of the penalty self-contact.
+
+### Fixed
+
+- Rigid-body CCD bounds rotation-path curvature without relying on a single
+  midpoint, preventing complete revolutions from bypassing collision checks.
+  The line search never drops its curvature margin or physical offset.
+- Analytic-plane CCD explicitly enforces the requested minimum distance,
+  which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
+- IPC proximity safeguards compare the remaining linear gap above `dmin`
+  with `dhat`, rather than comparing a squared distance with a length.
+- IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
+  collisions, so the residual, tangent matrix, energy line search and
+  automatic barrier stiffness are consistent (the tangent was previously
+  weighted twice and the energy / barrier stiffness not at all).
+- IPC friction produced no force: the friction potential was evaluated with
+  absolute positions instead of the slip. Friction is now lagged over the
+  time increment. With ipctk 1.6, the barrier stiffness was also passed as
+  the static friction coefficient and missing from the normal force.
+- `IPCContact(use_ogc=True)` raises in `2Daxi` (not supported).
+- `RigidBody.set_static_obstacle` registers a CCD line search (`use_ccd=True`
+  by default), so a time step that moves the body further than `dhat` no
+  longer carries it through the obstacle and fails with a NaN barrier. The
+  search follows the curved vertex paths of a rotating body (conservative
+  piecewise linear CCD).
 
 ## [1.0.1] - 2026-10-01
 

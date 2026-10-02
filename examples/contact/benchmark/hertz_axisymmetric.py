@@ -22,8 +22,8 @@ Analytical solution (rigid indenter on elastic body):
   - Max pressure: ``p0 = 2*E*/(pi) * sqrt(delta/R)``
 
 .. note::
-   This benchmark is penalty-only.  IPCContact does not support ``2Daxi``
-   (no radial ``2*pi*r`` weighting in the IPC barrier formulation).
+   This benchmark uses the penalty method.  ``IPCContact`` also supports
+   ``2Daxi`` (collisions weighted by ``2*pi*r``) and can be used instead.
 """
 
 import fedoo as fd

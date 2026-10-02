@@ -4,6 +4,30 @@ import numpy as np
 from scipy import sparse
 from fedoo.core.base import AssemblyBase
 from fedoo.core.modelingspace import ModelingSpace
+from fedoo.core.base import InvalidKinematicStateError
+
+
+def _validate_dmin(dmin):
+    """Validate an absolute IPC collision offset in model length units."""
+    dmin = float(dmin)
+    if not np.isfinite(dmin) or dmin < 0:
+        raise ValueError("dmin must be finite and non-negative.")
+    return dmin
+
+
+def _plane_collision_free_stepsize(collision_mesh, start, end, min_distance):
+    """Analytic plane CCD, including the offset ignored by ipctk 1.6."""
+    alpha = 1.0
+    for plane in collision_mesh.planes:
+        normal = np.asarray(plane.normal())
+        gap = (start - plane.origin()) @ normal - min_distance
+        if np.any(gap <= 0):
+            return 0.0
+        velocity = (end - start) @ normal
+        closing = velocity < 0
+        if np.any(closing):
+            alpha = min(alpha, float(np.min(-gap[closing] / velocity[closing])))
+    return max(0.0, alpha)
 
 
 def _import_ipctk():
@@ -117,25 +141,28 @@ class IPCContact(AssemblyBase):
        nodes must use ``use_ccd=True`` instead.  An error is raised at
        initialization if ``use_ogc=True`` is used with a solid mesh.
 
-    **Axisymmetric (2Daxi)** — Under a ``"2Daxi"`` ModelingSpace the
-    barrier gradient and hessian returned by ipctk are scaled by the
-    circumferential integration weight ``2*pi*r`` per surface vertex
-    before being scattered into the global system.  This is the IPC
-    analogue of fedoo's per-Gauss-point ``axi_volume_weight`` for weak
-    forms.  The scaling is applied per vertex (using the reference
-    radius ``R₀``); it is exact when both endpoints of a contact pair
-    sit at similar radii, and slightly asymmetric otherwise.  Vertices
+    **Axisymmetric (2Daxi)** — ipctk has no axisymmetric mode: it sees a
+    planar curve in the (r, z) plane.  Under a ``"2Daxi"`` ModelingSpace
+    each planar collision stands for a ring of contact, so its weight in
+    the barrier potential is multiplied by the circumference
+    ``2*pi*R`` at the contact point (``R`` is the reference radius of the
+    colliding vertex, consistent with ipctk's rest-configuration
+    weights).  The potential then reads
+    :math:`\kappa \sum_k 2\pi R_k\, w_k\, b(d_k)` and ipctk returns
+    the matching energy, gradient and hessian, so that the residual, the
+    tangent matrix, the energy line search, the barrier stiffness
+    auto-tuning and friction all use the same weighting.  In particular
+    the axial contact forces of a collision pair sum to zero.  Vertices
     on the symmetry axis (r = 0) get weight 0, which is geometrically
-    correct (a "ring" of zero radius collapses to a point).  In the
-    current implementation, the axisymmetric residual uses a single
-    integration weight ``W = diag(2*pi*r)`` while the tangent uses the
-    two-sided product ``W @ H @ W``.  This intentionally increases the
-    tangent stiffness for 2Daxi IPC as a numerical stabilization; a
-    strictly single-weighted tangent should be reconsidered together
-    with a consistently weighted IPC energy and line search.  In 2Daxi
-    the planar (r, z) distance equals the true 3D minimum distance
-    between the corresponding circles (closest points share the
-    azimuth), so the barrier distance and PSD projection are unchanged.
+    correct (a ring of zero radius collapses to a point).  The planar
+    (r, z) distance equals the true 3D minimum distance between the
+    corresponding circles (closest points share the azimuth), so the
+    barrier distance and CCD are unchanged.  The symmetry axis itself is
+    not a contact surface: a bore closing onto the axis is not detected.
+    ``use_ogc`` is not available in 2Daxi.  Combined with
+    ``use_area_weighting=True`` the weight of a collision is the actual
+    area ``2*pi*R*ds`` of the ring, i.e. the axisymmetric reduction of
+    the 3D convergent formulation.
 
     Parameters
     ----------
@@ -153,6 +180,14 @@ class IPCContact(AssemblyBase):
     dhat_is_relative : bool, default=True
         If ``True``, ``dhat`` is interpreted as a fraction of the bounding
         box diagonal of the surface mesh.
+    dmin : float, default=0.0
+        Minimum separation between collision primitives, in absolute model
+        length units, independently of ``dhat_is_relative``. The barrier
+        activates below ``dmin + dhat`` and diverges at ``dmin``. For two
+        equal-radius beam centerlines, use their diameter (``2 * radius``).
+        The initial configuration must have separation strictly above
+        ``dmin``. Connected joints may require a collision filter.
+        Nonzero offsets are not supported with ``use_ogc=True``.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  If ``None`` (default), it is
         automatically computed and adaptively updated — **this is the
@@ -163,8 +198,11 @@ class IPCContact(AssemblyBase):
         Coulomb friction coefficient :math:`\mu`.  Set to ``0`` for
         frictionless contact.
     eps_v : float, default=1e-3
-        Friction smoothing velocity (only relevant when
-        ``friction_coefficient > 0``).
+        Friction smoothing threshold (only relevant when
+        ``friction_coefficient > 0``): slip over a time increment below
+        which the friction force is regularized.  Friction is lagged: the
+        normal forces and sliding directions are those of the start of
+        the increment.
     broad_phase : str, default="lbvh"
         Broad-phase collision detection method.  One of ``"lbvh"``,
         ``"hash_grid"``, ``"brute_force"`` or ``"spatial_hash"``.
@@ -191,6 +229,12 @@ class IPCContact(AssemblyBase):
         ``use_ccd``.  **Only supported for shell / surface meshes**
         where all nodes are on the surface; raises ``ValueError``
         for solid meshes with interior nodes.
+    use_area_weighting : bool, default=False
+        Use the convergent IPC formulation [Li et al. 2023]: each
+        collision is weighted by the rest area (length in 2D, ring area
+        ``2*pi*R*ds`` in 2Daxi) of the surface it represents, together
+        with the improved max approximation.  The contact response then
+        no longer depends on the surface mesh density.
     name : str, default="IPC Contact"
         Name of the contact assembly.
     space : ModelingSpace, optional
@@ -231,9 +275,14 @@ class IPCContact(AssemblyBase):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
+        use_area_weighting=False,
+        dmin=0.0,
         name="IPC Contact",
         space=None,
     ):
+        self._dmin = _validate_dmin(dmin)
+        if use_ogc and self._dmin > 0:
+            raise NotImplementedError("dmin > 0 is not supported with use_ogc=True.")
         if use_ccd is None:
             use_ccd = not use_ogc
         if use_ccd and use_ogc:
@@ -264,6 +313,7 @@ class IPCContact(AssemblyBase):
         else:
             self._line_search_energy = line_search_energy
         self._use_ogc = use_ogc
+        self._use_area_weighting = use_area_weighting
 
         self.current = self
 
@@ -273,6 +323,7 @@ class IPCContact(AssemblyBase):
         self._friction_potential = None
         self._collisions = None
         self._friction_collisions = None
+        self._friction_lagged_vertices = None  # vertices at increment start
         self._kappa = barrier_stiffness
         self._max_kappa = None
         self._max_kappa_set = False
@@ -294,9 +345,9 @@ class IPCContact(AssemblyBase):
         self._ogc_trust_region = None
         self._ogc_vertices_at_start = None
 
-        # Axisymmetric (2Daxi) integration weights — built in initialize()
-        self._axi_weight = None  # 1D array (n_surf*ndim,) interleaved 2*pi*r
-        self._axi_diag = None  # sparse diag(_axi_weight) for hessian scaling
+        # Axisymmetric (2Daxi): reference radius of the surface vertices,
+        # used to weight each collision by 2*pi*R — built in initialize()
+        self._axi_radius = None
 
         self.sv = {}
         self.sv_start = {}
@@ -512,6 +563,82 @@ class IPCContact(AssemblyBase):
         )
         return P
 
+    def _build_collisions(self, vertices, collisions=None):
+        """Build the normal collision set at the given vertex positions.
+
+        Under a 2Daxi ModelingSpace, the weight of each collision is
+        multiplied by ``2*pi*R`` so that the ipctk potential (and hence its
+        gradient and hessian) is integrated around the symmetry axis.
+
+        Parameters
+        ----------
+        vertices : ndarray, shape (n_surf_verts, ndim)
+            Current positions of surface vertices.
+        collisions : ipctk.NormalCollisions, optional
+            Collision set to rebuild in place. A new one is created if None.
+
+        Returns
+        -------
+        collisions : ipctk.NormalCollisions
+        """
+        if collisions is None:
+            ipctk = _import_ipctk()
+            collisions = ipctk.NormalCollisions()
+            if self._use_area_weighting:
+                collisions.use_area_weighting = True
+                collisions.collision_set_type = (
+                    ipctk.NormalCollisions.IMPROVED_MAX_APPROX
+                )
+        collisions.build(
+            self._collision_mesh,
+            vertices,
+            self._actual_dhat,
+            dmin=self._dmin,
+            broad_phase=self._broad_phase,
+        )
+        if self._dmin > 0 and len(collisions) > 0:
+            distance_squared = collisions.compute_minimum_distance(
+                self._collision_mesh, vertices
+            )
+            if distance_squared <= self._dmin**2:
+                raise InvalidKinematicStateError(
+                    "IPC separation must be strictly greater than dmin. "
+                    "Check the initial gap and exclude connected joint neighborhoods."
+                )
+        if self._axi_radius is not None:
+            edges = self._collision_mesh.edges
+            faces = self._collision_mesh.faces
+            for i in range(len(collisions)):
+                collision = collisions[i]
+                n = collision.num_vertices()
+                ids = collision.vertex_ids(edges, faces)
+                if n == 3:
+                    # edge-vertex: the contact point is at the vertex
+                    radius = self._axi_radius[ids[0]]
+                else:
+                    radius = self._axi_radius[ids[:n]].mean()
+                collision.weight *= 2.0 * np.pi * radius
+        return collisions
+
+    def _build_friction_collisions(self, vertices):
+        """Rebuild the tangential collision set from the normal collisions.
+
+        The normal force magnitudes are evaluated with a barrier potential
+        carrying the current barrier stiffness. The contact set, normal
+        forces and tangent bases are lagged: they are frozen at the given
+        configuration, and the friction potential is then a function of the
+        slip measured from it.
+        """
+        ipctk = _import_ipctk()
+        self._friction_collisions.build(
+            self._collision_mesh,
+            vertices,
+            self._collisions,
+            ipctk.BarrierPotential(self._actual_dhat, self._kappa),
+            self.friction_coefficient,
+        )
+        self._friction_lagged_vertices = vertices.copy()
+
     def _get_current_vertices(self, pb):
         """Extract current surface vertex positions from problem displacement.
 
@@ -627,6 +754,7 @@ class IPCContact(AssemblyBase):
             1.0,  # average_mass (1.0 for quasi-static)
             grad_energy,
             grad_barrier,
+            dmin=self._dmin,
         )
         # MAX guard: kappa can only increase to prevent oscillations
         if self._kappa is None or new_kappa > self._kappa:
@@ -648,11 +776,11 @@ class IPCContact(AssemblyBase):
             global_vector = P @ ipctk_gradient
             global_matrix = P @ ipctk_hessian @ P.T
 
-        Under a 2Daxi ModelingSpace, the per-surface-DOF gradient/hessian
-        are first scaled by ``2*pi*r`` (per surface vertex, broadcast over
-        coordinates) so that the planar barrier energy is integrated
-        around the symmetry axis — the IPC analogue of fedoo's
-        ``axi_volume_weight`` for weak forms.
+        Under a 2Daxi ModelingSpace, the collisions already carry the
+        ``2*pi*R`` weight (see :meth:`_build_collisions`), so the gradient
+        and hessian returned by ipctk are integrated around the symmetry
+        axis — the IPC analogue of fedoo's ``axi_volume_weight`` for weak
+        forms.
 
         Sets self.global_matrix and self.global_vector.
         """
@@ -665,16 +793,12 @@ class IPCContact(AssemblyBase):
 
         ipctk = _import_ipctk()
         P = self._scatter_matrix
-        axi_w = self._axi_weight  # None outside 2Daxi
-        axi_D = self._axi_diag  # None outside 2Daxi
 
         # Barrier contributions
         if compute != "matrix":
             grad_surf = self._barrier_potential.gradient(
                 self._collisions, self._collision_mesh, vertices
             )
-            if axi_w is not None:
-                grad_surf = axi_w * grad_surf
             # ipctk gradient points toward increasing barrier (toward contact).
             # The repulsive force is -gradient. In fedoo, global_vector is
             # added to RHS: K*dX = B + D, so D = -kappa * gradient.
@@ -687,15 +811,6 @@ class IPCContact(AssemblyBase):
                 self._collision_mesh,
                 vertices,
             )
-            if axi_D is not None:
-                # Axisymmetric IPC uses a single 2*pi*r weight on the residual.
-                # The physically closer single-weight tangent would be:
-                # hess_surf = 0.5 * (axi_D @ hess_surf + hess_surf @ axi_D)
-                # The two-sided product below preserves symmetry/PSD and
-                # intentionally increases the contact tangent stiffness for
-                # numerical stabilization of the current post-weighted
-                # axisymmetric IPC formulation.
-                hess_surf = axi_D @ hess_surf @ axi_D
             self.global_matrix = self._kappa * (P @ hess_surf @ P.T)
 
         # Friction contributions
@@ -703,31 +818,24 @@ class IPCContact(AssemblyBase):
             if len(self._friction_collisions) > 0:
                 # Friction gradient/hessian from ipctk already include
                 # the effect of kappa and mu through the TangentialCollisions
-                # that were built with normal_stiffness and mu.
+                # (see _build_friction_collisions). The friction potential
+                # is a function of the slip since the start of the increment.
+                slip = vertices - self._friction_lagged_vertices
                 if compute != "matrix":
                     fric_grad_surf = self._friction_potential.gradient(
                         self._friction_collisions,
                         self._collision_mesh,
-                        vertices,
+                        slip,
                     )
-                    if axi_w is not None:
-                        fric_grad_surf = axi_w * fric_grad_surf
                     self.global_vector += -(P @ fric_grad_surf)
 
                 if compute != "vector":
                     fric_hess_surf = self._friction_potential.hessian(
                         self._friction_collisions,
                         self._collision_mesh,
-                        vertices,
+                        slip,
                         project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
                     )
-                    if axi_D is not None:
-                        # Single-weight tangent to revisit with a fully
-                        # weighted axisymmetric IPC energy:
-                        # fric_hess_surf = 0.5 * (
-                        #     axi_D @ fric_hess_surf + fric_hess_surf @ axi_D
-                        # )
-                        fric_hess_surf = axi_D @ fric_hess_surf @ axi_D
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
         # P already has n_dof rows (mesh DOFs + global DOFs) — see
@@ -785,12 +893,12 @@ class IPCContact(AssemblyBase):
         # --- Phase 1: CCD (collision-free step size) ---
         # When no contacts at step start, use conservative min_distance
         # to prevent jumping deep into the barrier zone.
-        # When contacts already exist, use min_distance=0 to avoid
-        # ipctk "initial distance <= d_min" warnings and double CCD.
+        # With existing contacts, retain only the physical offset, without
+        # the extra activation-zone margin.
         if self._n_collisions_at_start == 0:
-            min_distance = 0.1 * self._actual_dhat
+            min_distance = self._dmin + 0.1 * self._actual_dhat
         else:
-            min_distance = 0.0
+            min_distance = self._dmin
 
         alpha = ipctk.compute_collision_free_stepsize(
             self._collision_mesh,
@@ -800,18 +908,24 @@ class IPCContact(AssemblyBase):
             broad_phase=self._broad_phase,
         )
 
-        # Fallback: if min_distance caused alpha=0 (due to pre-existing
-        # zero-distance pairs from shared mesh edges), recompute with
-        # standard CCD (min_distance=0).
-        if alpha <= 0 and min_distance > 0:
+        # If the extra margin prevents a step, retry with the physical
+        # offset alone. Never fall back below dmin.
+        if alpha <= 0 and min_distance > self._dmin:
+            min_distance = self._dmin
             alpha = ipctk.compute_collision_free_stepsize(
                 self._collision_mesh,
                 vertices_current,
                 vertices_next,
-                min_distance=0.0,
+                min_distance=min_distance,
                 broad_phase=self._broad_phase,
             )
 
+        alpha = min(
+            alpha,
+            _plane_collision_free_stepsize(
+                self._collision_mesh, vertices_current, vertices_next, min_distance
+            ),
+        )
         if alpha < 1.0:
             alpha *= 0.9
 
@@ -861,13 +975,7 @@ class IPCContact(AssemblyBase):
             vertices_trial = vertices_current + alpha * surf_disp
 
             # Rebuild collisions at trial position
-            trial_collisions = ipctk.NormalCollisions()
-            trial_collisions.build(
-                self._collision_mesh,
-                vertices_trial,
-                self._actual_dhat,
-                broad_phase=self._broad_phase,
-            )
+            trial_collisions = self._build_collisions(vertices_trial)
             E_barrier_trial = self._kappa * self._barrier_potential(
                 trial_collisions, self._collision_mesh, vertices_trial
             )
@@ -1094,14 +1202,16 @@ class IPCContact(AssemblyBase):
             self._rest_positions.max(axis=0) - self._rest_positions.min(axis=0)
         )
 
-        # Build axisymmetric (2π·r) integration weight on surface DOFs.
-        # Applied per surface vertex, broadcast over the ipctk interleaved
-        # layout [x0, y0, x1, y1, ...]. Reference radius R₀ is used,
-        # consistent with the rest of the 2Daxi pipeline.
+        # Axisymmetric: reference radius R₀ of the surface vertices, used
+        # to weight each collision by 2π·R₀ (see _build_collisions).
         if self.space.is_axisymmetric:
-            r_surf = self._rest_positions[:, 0]
-            self._axi_weight = np.repeat(2.0 * np.pi * r_surf, ndim)
-            self._axi_diag = sparse.diags(self._axi_weight)
+            if self._use_ogc:
+                # the OGC trust region rebuilds the collisions inside ipctk,
+                # which would drop the 2π·R₀ weights
+                raise NotImplementedError(
+                    "use_ogc=True is not supported in '2Daxi'. Use use_ccd=True."
+                )
+            self._axi_radius = self._rest_positions[:, 0].copy()
 
         # Compute actual dhat
         if self._dhat_is_relative:
@@ -1118,14 +1228,8 @@ class IPCContact(AssemblyBase):
             self._friction_potential = ipctk.FrictionPotential(self._eps_v)
 
         # Build initial collisions
-        self._collisions = ipctk.NormalCollisions()
         vertices = self._get_current_vertices(pb)
-        self._collisions.build(
-            self._collision_mesh,
-            vertices,
-            self._actual_dhat,
-            broad_phase=self._broad_phase,
-        )
+        self._collisions = self._build_collisions(vertices)
 
         # Auto-compute or set barrier stiffness
         if self._kappa is None:
@@ -1136,14 +1240,7 @@ class IPCContact(AssemblyBase):
         # Build friction collisions if needed
         if self.friction_coefficient > 0:
             self._friction_collisions = ipctk.TangentialCollisions()
-            self._friction_collisions.build(
-                self._collision_mesh,
-                vertices,
-                self._collisions,
-                self._barrier_potential,
-                self._kappa,
-                self.friction_coefficient,
-            )
+            self._build_friction_collisions(vertices)
 
         # Store minimum distance
         if len(self._collisions) > 0:
@@ -1196,6 +1293,7 @@ class IPCContact(AssemblyBase):
             self._kappa,
             bbox_diag,
             dhat_epsilon_scale=eps_scale,
+            dmin=self._dmin,
         )
         if new_kappa > self._kappa:
             self._kappa = new_kappa
@@ -1224,12 +1322,7 @@ class IPCContact(AssemblyBase):
         vertices = self._get_current_vertices(pb)
 
         # Rebuild collisions
-        self._collisions.build(
-            self._collision_mesh,
-            vertices,
-            self._actual_dhat,
-            broad_phase=self._broad_phase,
-        )
+        self._build_collisions(vertices, self._collisions)
 
         # Re-initialize kappa from gradient balance each time step
         # when contacts exist.  The MAX guard in _initialize_kappa
@@ -1244,6 +1337,10 @@ class IPCContact(AssemblyBase):
         # Adaptive doubling when gap is small and decreasing
         if self._adaptive_barrier_stiffness and self._max_kappa is not None:
             self._update_kappa_adaptive(vertices)
+
+        # Lagged friction: rebuilt once per increment, from its start
+        if self.friction_coefficient > 0:
+            self._build_friction_collisions(vertices)
 
         # Track collision count for detecting new contacts during NR
         self._n_collisions_at_start = len(self._collisions)
@@ -1283,12 +1380,7 @@ class IPCContact(AssemblyBase):
         self._refresh_rigid_scatter(pb)
 
         # Rebuild collision set
-        self._collisions.build(
-            self._collision_mesh,
-            vertices,
-            self._actual_dhat,
-            broad_phase=self._broad_phase,
-        )
+        self._build_collisions(vertices, self._collisions)
 
         # Initialize kappa when contacts first appear during an
         # increment that started with zero contacts.  MAX guard in
@@ -1311,14 +1403,24 @@ class IPCContact(AssemblyBase):
         need_sdi = n_collisions_now != self._n_collisions_at_start
         min_d_val = None
         if not need_sdi and n_collisions_now > 0:
-            min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
+            min_d_val = (
+                np.sqrt(
+                    self._collisions.compute_minimum_distance(
+                        self._collision_mesh, vertices
+                    )
+                )
+                - self._dmin
             )
             if min_d_val < 0.1 * self._actual_dhat:
                 need_sdi = True
         elif n_collisions_now > 0:
-            min_d_val = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
+            min_d_val = (
+                np.sqrt(
+                    self._collisions.compute_minimum_distance(
+                        self._collision_mesh, vertices
+                    )
+                )
+                - self._dmin
             )
         if need_sdi:
             # Scale min_subiter by proximity: more iterations when closer
@@ -1332,17 +1434,6 @@ class IPCContact(AssemblyBase):
         # iter 0 (elastic prediction only), accumulating equilibrium
         # errors that cause stress oscillations.
         self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 1)
-
-        # Build friction collisions if enabled
-        if self.friction_coefficient > 0:
-            self._friction_collisions.build(
-                self._collision_mesh,
-                vertices,
-                self._collisions,
-                self._barrier_potential,
-                self._kappa,
-                self.friction_coefficient,
-            )
 
         # Update OGC trust regions after rebuilding collisions
         if self._use_ogc and self._ogc_trust_region is not None:
@@ -1376,22 +1467,10 @@ class IPCContact(AssemblyBase):
         vertices = self._get_current_vertices(pb)
         self._last_vertices = vertices
 
-        self._collisions.build(
-            self._collision_mesh,
-            vertices,
-            self._actual_dhat,
-            broad_phase=self._broad_phase,
-        )
+        self._build_collisions(vertices, self._collisions)
 
         if self.friction_coefficient > 0:
-            self._friction_collisions.build(
-                self._collision_mesh,
-                vertices,
-                self._collisions,
-                self._barrier_potential,
-                self._kappa,
-                self.friction_coefficient,
-            )
+            self._build_friction_collisions(vertices)
 
         self._compute_ipc_contributions(vertices)
 
@@ -1421,6 +1500,10 @@ class IPCSelfContact(IPCContact):
         default, see ``dhat_is_relative``).
     dhat_is_relative : bool, default=True
         If ``True``, ``dhat`` is a fraction of the bounding box diagonal.
+    dmin : float, default=0.0
+        Absolute minimum primitive separation. The barrier activates at
+        ``dmin + dhat``; see :class:`IPCContact` for thickness and joint
+        filtering requirements. Nonzero offsets are not supported with OGC.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  ``None`` (default) for automatic
         computation and adaptive update — **recommended**.
@@ -1442,6 +1525,9 @@ class IPCSelfContact(IPCContact):
         Enable OGC trust-region step filtering.  Mutually exclusive
         with ``use_ccd``.  **Only supported for shell / surface
         meshes**; raises ``ValueError`` for solid meshes.
+    use_area_weighting : bool, default=False
+        Use the convergent (area-weighted) IPC formulation
+        (see :py:class:`IPCContact`).
     name : str, default="IPC Self Contact"
         Name of the contact assembly.
     space : ModelingSpace, optional
@@ -1485,6 +1571,8 @@ class IPCSelfContact(IPCContact):
         use_ccd=None,
         line_search_energy=None,
         use_ogc=False,
+        use_area_weighting=False,
+        dmin=0.0,
         name="IPC Self Contact",
         space=None,
     ):
@@ -1502,6 +1590,8 @@ class IPCSelfContact(IPCContact):
             use_ccd=use_ccd,
             line_search_energy=line_search_energy,
             use_ogc=use_ogc,
+            use_area_weighting=use_area_weighting,
             name=name,
             space=space,
+            dmin=dmin,
         )
