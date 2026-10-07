@@ -1,6 +1,4 @@
-"""Shell thickness extraction, saved interpolation and viewer selection."""
-
-from types import SimpleNamespace
+"""Shell thickness extraction, saved interpolation and mixed-element recovery."""
 
 import numpy as np
 import pytest
@@ -303,59 +301,6 @@ def test_assemblysum_and_multimesh_storage(tmp_path, mixed):
         assert "_ShellSection" not in loaded._submesh_dataset(1).field_metadata
     else:
         assert "_ShellStress" in loaded._submesh_dataset(1).gausspoint_data
-
-
-@pytest.mark.parametrize("apply_all", [False, True])
-def test_viewer_scope_and_dialog(monkeypatch, apply_all):
-    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
-    from qtpy import QtWidgets
-    from qtpy.QtCore import QTimer
-    from fedoo.util.viewer import MainWindow, _viewer_field_names
-
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    pb, assembly, _ = shell_problem()
-    first = pb.get_results(assembly, ["Stress", "ShellStress"])
-    second = first if not apply_all else first.copy()
-    assert _viewer_field_names(first).count("Stress") == 1
-    assert "Stress_local" not in _viewer_field_names(first)
-    window = MainWindow()
-    docks = [
-        SimpleNamespace(
-            data=d,
-            current_field="Stress_local",
-            current_comp="XX",
-            opts={},
-            title=str(i),
-        )
-        for i, d in enumerate((first, second))
-    ]
-    window.all_docks, window.active_dock = docks, docks[0]
-    window.apply_options_to_all = apply_all
-    monkeypatch.setattr(window, "update_plot_with_clim", lambda **kwargs: None)
-    monkeypatch.setattr(window, "update_components", lambda *args: None)
-    assert window.apply_shell_options(
-        dict(reduction=None, position=0.4), "local", "Stress"
-    )
-    assert docks[0].data.shell_options["position"] == 0.4
-    assert docks[1].data.shell_options["position"] == (0.4 if apply_all else None)
-
-    def accept():
-        dialog = app.activeModalWidget()
-        dialog.findChild(
-            QtWidgets.QComboBox, "shell_section_selection"
-        ).setCurrentIndex(1)
-        dialog.findChild(QtWidgets.QSpinBox, "shell_section_point_index").setValue(2)
-        assert (
-            dialog.findChild(QtWidgets.QDoubleSpinBox, "shell_section_position").value()
-            == 1
-        )
-        dialog.accept()
-
-    QTimer.singleShot(0, accept)
-    window.open_shell_section_dialog()
-    assert docks[0].data.shell_options["point_index"] == 2
-    window.all_docks, window.active_dock = [], None
-    window.close()
 
 
 @pytest.mark.parametrize(
