@@ -30,7 +30,6 @@ semantic versioning.
   ignores point selection. Without reduction, normalized position or point index
   selects one point. Stored point coordinates are retained in FDH5; sampling
   resolution affects recomputed distributions only.
-
 - Consistent UL corotational tangents for standard two-node `beam` elements
   in 2D and 3D, including length-dependent interpolation, frame rotation and
   local SO(3) rotation derivatives. `BeamEquilibrium(consistent_tangent=False)`
@@ -69,11 +68,9 @@ semantic versioning.
 - Respect Apply options to for beam viewer settings, validating every target
   pane before applying changes. Show indexed section-point physical coordinates
   at a selected beam Gauss point and highlight the point in the section preview.
-
 - Replace the viewer's normalized local-y beam position with normalized (y,z)
   coordinates. Scale each signed direction using its centroid-relative
   bounding-box extent, supporting asymmetric and varying sections.
-
 - Store beam section definitions once per submesh/frame as native HDF5
   metadata, replacing JSON for new files while reading legacy descriptions.
   Keep constant properties as scalars and varying properties in private
@@ -81,22 +78,29 @@ semantic versioning.
   normalized sampling and optional section meshing interfaces. Add custom
   output points, a viewer section preview, Show internal fields, and
   `add_output(..., private=True)`.
-
 - Recover section Strain directly from BeamStrain using beam kinematics,
   without elastic constants, Poisson contraction or a shear correction factor.
   Native FDH5 recovery no longer stores or requires E, G and nu in section
   descriptions. Noncircular torsional strain still requires a warping model.
-
 - Show one Stress and Strain field in the viewer for recovered beam tensors.
   Options → Beam… groups the section point/envelope and local/global coordinate
   controls. An optional Beam toolbar is hidden by default.
 - Interpret beam envelope sampling resolution as an approximate total section
   point budget for every geometry. Circular and pipe sections refine angular
   and radial sampling together; label the control "Approximate sample points".
-
 - Correct the `Iyy` and `Izz` axis assignments for non-square
   `BeamRectangular` sections (`a` along local y, `b` along local z).
-
+- IPC contact thickness through an absolute `dmin` minimum separation on
+  `IPCContact`, `IPCSelfContact`, `RigidBody.set_static_obstacle` and
+  `RigidBody.set_static_plane`. Collision detection, barrier-stiffness
+  tuning, friction and CCD use the same offset; zero remains the default.
+  Nonzero offsets are rejected with OGC, whose trust region does not expose
+  a minimum-separation parameter.
+- `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
+  convergent (area-weighted) IPC formulation of ipctk.
+- `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
+  Unlike a flat meshed obstacle, the contact force does not depend on which
+  obstacle node, edge or face is the closest.
 - Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
   [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
   meshio, when it is installed, and falls back to meshio otherwise. The `io`
@@ -108,6 +112,32 @@ semantic versioning.
 - Keep the state returned by UMAT initialization, with values assigned through
   `set_initial_statev()` taking precedence. Custom callbacks must accept the
   new keywords and handle `start=True` during initialization.
+- The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
+  of the penalty self-contact.
+
+### Fixed
+
+- Rigid-body CCD bounds rotation-path curvature without relying on a single
+  midpoint, preventing complete revolutions from bypassing collision checks.
+  The line search never drops its curvature margin or physical offset.
+- Analytic-plane CCD explicitly enforces the requested minimum distance,
+  which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
+- IPC proximity safeguards compare the remaining linear gap above `dmin`
+  with `dhat`, rather than comparing a squared distance with a length.
+- IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
+  collisions, so the residual, tangent matrix, energy line search and
+  automatic barrier stiffness are consistent (the tangent was previously
+  weighted twice and the energy / barrier stiffness not at all).
+- IPC friction produced no force: the friction potential was evaluated with
+  absolute positions instead of the slip. Friction is now lagged over the
+  time increment. With ipctk 1.6, the barrier stiffness was also passed as
+  the static friction coefficient and missing from the normal force.
+- `IPCContact(use_ogc=True)` raises in `2Daxi` (not supported).
+- `RigidBody.set_static_obstacle` registers a CCD line search (`use_ccd=True`
+  by default), so a time step that moves the body further than `dhat` no
+  longer carries it through the obstacle and fails with a NaN barrier. The
+  search follows the curved vertex paths of a rotating body (conservative
+  piecewise linear CCD).
 
 ## [1.0.1] - 2026-10-01
 
