@@ -176,6 +176,7 @@ class WeakFormBase:
                 raise ValueError(
                     "Pass either a dissipation object or keyword parameters, not both."
                 )
+            # Time providers depend on WeakFormBase; defer to avoid a cycle.
             from fedoo.time import RayleighDamping
 
             allowed = {"alpha", "beta"}
@@ -203,6 +204,7 @@ class WeakFormBase:
         Tags the weakform as a second-order evolution unless it already
         declares one (an existing first-order tag is preserved).
         """
+        # Inertia derives from this module's WeakFormBase.
         from fedoo.weakform.inertia import Inertia
 
         if isinstance(density_or_storage, WeakFormBase):

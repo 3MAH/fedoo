@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from fedoo.util.localframe import as_local_frame
+
+
 import numpy as np
 from fedoo.core.mesh import Mesh
 from fedoo.mesh.simple import line_mesh_1D
@@ -435,8 +438,6 @@ def extrude(
     n_nodes_extruded = mesh1.n_nodes * mesh.n_nodes
     path_frames = None
     if local_frame is not None:
-        from fedoo.util.localframe import as_local_frame
-
         path_frames = as_local_frame(local_frame)
         path_frames = path_frames.reshape(
             -1, path_frames.shape[-2], path_frames.shape[-1]

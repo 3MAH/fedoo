@@ -9,6 +9,9 @@ a handful of sparse matvecs; no per-vertex Python loop.
 
 from __future__ import annotations
 
+from fedoo.lib_elements.element_list import get_default_n_gp
+
+
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -23,8 +26,6 @@ def _physical_shape_derivatives(mesh: Mesh, n_elm_gp: int | None = None):
     dNdx[el, gp, n, i] is dN_n/dx_i at gauss point gp of element el.
     """
     if n_elm_gp is None:
-        from fedoo.lib_elements.element_list import get_default_n_gp
-
         n_elm_gp = get_default_n_gp(mesh.elm_type)
 
     # Triggers init_interpolation + compute_jacobian_with_inverse, populating

@@ -19,6 +19,14 @@ rotation derivatives from ``RigidTie.rotation_jacobian()``, not the
 infinitesimal skew-symmetric approximation.
 """
 
+from fedoo.problem.non_linear import NonLinear
+from fedoo.time import Newmark
+
+
+from fedoo.core.modelingspace import ModelingSpace
+from fedoo.constraint.ipc_contact import _barrier_hessian_psd, _import_ipctk
+
+
 import numpy as np
 
 from fedoo.core.base import AssemblyBase
@@ -99,8 +107,6 @@ class RigidBodyAssembly(AssemblyBase):
         space=None,
     ):
         if space is None:
-            from fedoo.core.modelingspace import ModelingSpace
-
             space = ModelingSpace.get_active()
         AssemblyBase.__init__(self, name, space)
         if self.space.ndim != 3:
@@ -238,8 +244,6 @@ class RigidBodyAssembly(AssemblyBase):
             self._contact_force[:] = 0
             self._contact_stiffness[:] = 0
             return self._contact_force, self._contact_stiffness
-
-        from fedoo.constraint.ipc_contact import _barrier_hessian_psd
 
         J = self._build_ipc_jacobian(rt, q[3:])
 
@@ -604,7 +608,6 @@ class RigidBody:
             Barrier stiffness. If None (default), automatically tuned at
             first contact to balance external forces and barrier gradient.
         """
-        from fedoo.constraint.ipc_contact import _import_ipctk
 
         ipctk = _import_ipctk()
 
@@ -693,12 +696,9 @@ class RigidBody:
         pb : NonLinear
             The solved problem (access DOFs via ``pb.get_dof_solution()``).
         """
-        from fedoo.problem.non_linear import NonLinear
 
         pb = NonLinear(self.assembly)
         if self.dynamic:
-            from fedoo.time import Newmark
-
             pb.set_time_integrator(SECOND_ORDER, Newmark())
         if solver is not None:
             pb.set_solver(solver)

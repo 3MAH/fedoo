@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from importlib.metadata import version, PackageNotFoundError
 
 
@@ -6,8 +8,6 @@ def _version_from_pyproject():
         import tomllib  # Python 3.11+
     except ImportError:  # Python <3.11
         import tomli as tomllib
-
-    from pathlib import Path
 
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
