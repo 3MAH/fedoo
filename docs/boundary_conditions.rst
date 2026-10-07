@@ -358,10 +358,9 @@ CCD (Continuous Collision Detection) line search.
 
 Unlike the penalty method, IPC does **not** require tuning a penalty
 parameter.  The barrier stiffness :math:`\kappa` is automatically computed
-and adaptively updated to balance the elastic and contact forces.  The only
-physical parameter is ``dhat`` — the barrier activation distance that
-controls the minimum gap between surfaces (default: 0.1% of the bounding
-box diagonal).
+and adaptively updated to balance the elastic and contact forces. ``dhat``
+sets the barrier activation range (default: 0.1% of the bounding-box
+diagonal); ``dmin`` optionally sets a physical minimum separation.
 
 **Choosing dhat** --- The default ``dhat=1e-3`` (relative) means the
 barrier activates when surfaces are within 0.1 % of the bounding-box
@@ -370,9 +369,41 @@ diagonal.  For problems with a very small initial gap, increase ``dhat``
 assemblies where a visible gap is unacceptable, decrease it (e.g.
 ``1e-4``), but expect more Newton–Raphson iterations.
 
+**Contact thickness / offset** --- ``dmin=0`` preserves zero-thickness
+contact. A positive ``dmin`` sets the minimum distance between collision
+primitives: the barrier activates when the distance is below
+``dmin + dhat`` and diverges as it approaches ``dmin``. ``dmin`` is always
+in absolute model length units, even with ``dhat_is_relative=True``.
+Increasing ``dhat`` alone does not impose a physical thickness.
+
+For 2D beam centerlines with a common radius of 0.2 mm, use a minimum
+centerline separation of 0.4 mm::
+
+    contact = fd.constraint.IPCContact(
+        mesh, surface_mesh=mesh,
+        dmin=0.4, dhat=0.05, dhat_is_relative=False,
+        use_ccd=True,
+    )
+    assembly = fd.Assembly.sum(beam_assembly, contact)
+
+The initial geometry must have separation strictly greater than ``dmin``
+for every eligible collision pair. IPC excludes primitives sharing a
+vertex, but nearby segments around connected joints can still require
+additional collision exclusions. The offset is uniform across the mesh;
+it does not model section deformation or automatically add periodic-image
+contact. ``IPCSelfContact`` accepts the same ``dmin`` argument.
+Nonzero offsets are not supported with ``use_ogc=True``.
+
+Rigid-body contact also accepts ``dmin`` through
+``RigidBody.set_static_obstacle(..., dmin=...)`` and
+``RigidBody.set_static_plane(..., dmin=...)``. All analytic planes attached
+to one body must use the same ``dmin``, ``dhat`` and ``kappa``.
+
 **CCD line search** --- Enabling ``use_ccd=True`` is recommended for
 problems where first contact occurs suddenly (e.g. a punch hitting a
 plate) or where self-contact can cause rapid topology changes.
+CCD uses the same ``dmin`` as the barrier so Newton corrections preserve
+the minimum separation. Disabling CCD removes this swept-path protection.
 
 **Energy-based backtracking** --- When ``use_ccd=True``, an
 energy-based backtracking phase is automatically enabled after CCD

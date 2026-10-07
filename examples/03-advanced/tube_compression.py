@@ -2,8 +2,8 @@
 Compression of a tube using 2D axisymmetric model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This model uses self-contact, elasto-plastic material law with finite strain
-assumption in a 2D axisymetric modeling space.
+This model uses IPC self-contact (requires ``ipctk >= 1.6``), elasto-plastic
+material law with finite strain assumption in a 2D axisymetric modeling space.
 The full 3D result is ploted during the post processing phase.
 """
 
@@ -45,18 +45,29 @@ material = fd.constitutivelaw.Simcoon("EPICP", props)
 # We build two assemblies for:
 #   - the mechanical static equilibrium
 #   - the self contact
+#
+# The self contact is treated with the IPC (Incremental Potential Contact)
+# method from the ipctk library: a barrier potential is activated when two
+# parts of the surface get closer than ``dhat`` (here relative to the size of
+# the model), and a continuous collision detection (CCD) line search
+# guarantees that the folds never interpenetrate. The barrier stiffness is
+# tuned automatically.
+#
+# ipctk works on the planar (r, z) outline of the tube. In the "2Daxi" space,
+# fedoo weights each collision by the circumference :math:`2 \pi r` of the
+# ring it represents. The option ``use_area_weighting=True`` (convergent
+# formulation) can be added to weight each collision by the area of the ring,
+# so that the contact response does not depend on the mesh density, at the
+# price of a few more increments.
 
 wf = fd.weakform.StressEquilibrium(material)
-assembly = fd.Assembly.create(wf, mesh)
+solid_assembly = fd.Assembly.create(wf, mesh)
 
-# Add self contact....
-surf = fd.mesh.extract_surface(mesh)
-contact = fd.constraint.contact.SelfContact(surf)
-
-# contact parameters
-contact.contact_search_once = True
-contact.eps_n = 1e4  # contact penalty
-contact.max_dist = 1.0  # max distance for the contact search
+contact = fd.constraint.IPCSelfContact(
+    mesh,
+    dhat=1e-3,  # barrier activation distance / bounding box diagonal
+)
+assembly = fd.Assembly.sum(solid_assembly, contact)
 
 ###############################################################################
 # We define a non-linear problem including geometric nonlinearities using the
@@ -70,7 +81,7 @@ contact.max_dist = 1.0  # max distance for the contact search
 # convergence during sharp elastic-to-plastic transitions.
 
 NLGEOM = "UL"
-pb = fd.problem.NonLinear(assembly + contact, nlgeom=NLGEOM)
+pb = fd.problem.NonLinear(assembly, nlgeom=NLGEOM)
 pb.set_nr_criterion(
     "Displacement",
     tol=1e-2,
@@ -82,7 +93,7 @@ pb.set_nr_criterion(
 if not (os.path.isdir("results")):
     os.mkdir("results")
 res = pb.add_output(
-    "results/tube_compression", assembly, ["Disp", "Stress", "Strain", "P"]
+    "results/tube_compression", solid_assembly, ["Disp", "Stress", "Strain", "P"]
 )
 
 
@@ -147,7 +158,7 @@ pl.close()
 # renderic availbale through pyvista.
 
 pl = pv.Plotter(window_size=[608, 800])
-data_3d.load(62)  # load iteration 62
+data_3d.load(int(0.6 * data_3d.n_iter))  # load an intermediate iteration
 data_3d.plot(
     "Disp",
     "Z",
