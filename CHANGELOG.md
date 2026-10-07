@@ -6,7 +6,96 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Beam output points configured by normalized coordinate pairs or an approximate
+  `n_points` budget. `add_output(position=None)` saves all configured beam points
+  on a separate section-point axis; scalar beam positions are rejected.
+- Preserve ordinary continuum Stress/Strain blocks when evaluating section fields
+  on meshes mixing beam, shell and solid elements. Stress-only files support
+  sampled min/max and signed extrema without requesting generalized resultants.
+- Shell output extraction at one or several normalized thickness coordinates.
+  `position=None` saves configured output points; homogeneous linear shells
+  default to bottom/middle/top, nonlinear shells to thickness integration points,
+  and linear laminates to both sides of each interface. FDH5 retains numeric
+  thickness metadata and local frames. Nonlinear/laminate outputs also save
+  private thickness stresses for later layerwise interpolation.
+- `shell_options` and a viewer **Options → Shell…** dialog for stored or recovered
+  tensors, local/global components, individual thickness points and signed extrema.
+  Generalized stress recovery is restricted to homogeneous linear shells;
+  other shells interpolate saved material-point stresses, retaining the nearest
+  value at faces and preserving laminate interface jumps.
+- Shared beam result and viewer selection for stored or recomputed Stress/Strain.
+  The default prefers stored tensors and uses signed `abs_max`; a reduction
+  ignores point selection. Without reduction, normalized position or point index
+  selects one point. Stored point coordinates are retained in FDH5; sampling
+  resolution affects recomputed distributions only.
+
+- Consistent UL corotational tangents for standard two-node `beam` elements
+  in 2D and 3D, including length-dependent interpolation, frame rotation and
+  local SO(3) rotation derivatives. `BeamEquilibrium(consistent_tangent=False)`
+  retains the historical tangent. The correction differentiates the existing
+  force residual and can be nonsymmetric; it does not introduce a new beam
+  energy or finite-strain material model.
+- Batch beam tangent derivatives across elements and columns, evaluate SO(3)
+  Jacobians once per node, and bound dense temporary storage for large meshes.
+- Assemble the consistent beam tangent entirely through strain, length and
+  frame-spin weak operators with independent midpoint/chord interpolation.
+  Remove the shared `get_matrix_correction` interface and sparse correction
+  scatter; no extra nodal unknowns are introduced.
+- Write the four consistent-tangent contributions explicitly in the beam
+  weak form. Reuse cached strain interpolation and the current assembly frame,
+  and differentiate local increments without rebuilding a dense nodal
+  change-of-basis matrix.
+- Beam section stress/strain recovery through `get_results` and `add_output`
+  with physical `(y, z)` or normalized local-y section positions. Public
+  `BeamStressList` and `BeamStrainList` support offline recovery, including
+  optional rotation into global coordinates using the new `BeamLocalFrame`
+  output. Section-specific shear recovery uses parabolic approximations for
+  rectangles and solid disks, with average Q/A for other sections. Pointwise
+  torsion supports circular/pipe sections and the rectangular Saint-Venant
+  series. Rectangular torsional stiffness now uses the consistent series-based
+  torsion constant instead of the previous polynomial approximation.
+- A shared predefined component dictionary for datasets and the viewer,
+  including named beam forces, moments, generalized strains, and frames.
+- Numeric beam section descriptions saved with generalized Gauss-point fields
+  in FDH5. Reloaded results expose lazy local and, when frames are available,
+  global stress/strain fields. The viewer's section selector supports point
+  recovery and sampled scalar extrema for circular, pipe and rectangular
+  sections. Legacy files can attach properties with `set_beam_section`.
+
 ### Changed
+
+- Respect Apply options to for beam viewer settings, validating every target
+  pane before applying changes. Show indexed section-point physical coordinates
+  at a selected beam Gauss point and highlight the point in the section preview.
+
+- Replace the viewer's normalized local-y beam position with normalized (y,z)
+  coordinates. Scale each signed direction using its centroid-relative
+  bounding-box extent, supporting asymmetric and varying sections.
+
+- Store beam section definitions once per submesh/frame as native HDF5
+  metadata, replacing JSON for new files while reading legacy descriptions.
+  Keep constant properties as scalars and varying properties in private
+  Node/Element/GaussPoint fields. Section classes own their portable schema,
+  normalized sampling and optional section meshing interfaces. Add custom
+  output points, a viewer section preview, Show internal fields, and
+  `add_output(..., private=True)`.
+
+- Recover section Strain directly from BeamStrain using beam kinematics,
+  without elastic constants, Poisson contraction or a shear correction factor.
+  Native FDH5 recovery no longer stores or requires E, G and nu in section
+  descriptions. Noncircular torsional strain still requires a warping model.
+
+- Show one Stress and Strain field in the viewer for recovered beam tensors.
+  Options → Beam… groups the section point/envelope and local/global coordinate
+  controls. An optional Beam toolbar is hidden by default.
+- Interpret beam envelope sampling resolution as an approximate total section
+  point budget for every geometry. Circular and pipe sections refine angular
+  and radial sampling together; label the control "Approximate sample points".
+
+- Correct the `Iyy` and `Izz` axis assignments for non-square
+  `BeamRectangular` sections (`a` along local y, `b` along local z).
 
 - Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
   [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of

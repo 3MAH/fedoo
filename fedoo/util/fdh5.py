@@ -45,14 +45,43 @@ results/
 
 from __future__ import annotations
 
+import h5py
+from fedoo.core.mesh import Mesh, MultiMesh
+
+
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Union, Any, Literal, List, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import contextlib
+import json
 
 import numpy as np
-import h5py
+
+
+def _write_metadata_tree(group, values):
+    """Store portable metadata using HDF5 groups and typed datasets."""
+
+    for key, value in values.items():
+        if isinstance(value, Mapping):
+            _write_metadata_tree(group.create_group(str(key)), value)
+        elif isinstance(value, str):
+            group.create_dataset(str(key), data=value, dtype=h5py.string_dtype("utf-8"))
+        else:
+            group.create_dataset(str(key), data=np.asarray(value))
+
+
+def _read_metadata_tree(group):
+    result = {}
+    for key, item in group.items():
+        if isinstance(item, h5py.Group):
+            result[key] = _read_metadata_tree(item)
+        elif h5py.check_string_dtype(item.dtype) is not None:
+            result[key] = item.asstr()[()]
+        else:
+            result[key] = item[()].tolist()
+    return result
+
 
 PathLike = Union[str, Path]
 NDArray = np.ndarray
@@ -289,6 +318,7 @@ class FDH5Writer:
         element_data: Optional[Mapping[str, Mapping[str, NDArray]]] = None,
         gausspoint_data: Optional[Mapping[str, Mapping[str, NDArray]]] = None,
         scalars: Optional[Mapping[str, Union[int, float, NDArray]]] = None,
+        field_metadata: Optional[Mapping[str, Any]] = None,
         time: Optional[float] = None,
         dt: Optional[float] = None,
         overwrite: bool = False,
@@ -309,6 +339,9 @@ class FDH5Writer:
             ``(n_elements * n_gauss_points, n_components)``.
         scalars : mapping of str to (int, float or numpy.ndarray), optional
             Scalar quantities stored under the iteration ``scalars`` group.
+        field_metadata : mapping, optional
+            Portable numeric/string field descriptions, stored in native HDF5
+            groups. Beam descriptions are shared per submesh.
         time : float, optional
             Physical time of the iteration, stored in the metadata.
         dt : float, optional
@@ -371,11 +404,73 @@ class FDH5Writer:
                             ds.attrs["n_components"] = 1
                         else:
                             ds.attrs["n_components"] = arr.shape[1]
+                        if arr.ndim == 3 and fname in (
+                            "Stress",
+                            "Strain",
+                            "_ShellStress",
+                        ):
+                            ds.attrs["axis_order"] = (
+                                "component-section_point-gauss_point"
+                            )
+                            ds.attrs["n_components"] = arr.shape[0]
+                            ds.attrs["n_section_points"] = arr.shape[1]
+                            ds.attrs["n_gauss_points"] = arr.shape[-1] // n_elements
 
             if scalars:
                 sc = it.create_group("scalars")
                 for name, val in scalars.items():
                     self._create_dataset(sc, name, np.asarray(val))
+
+            if field_metadata:
+                # One definition per submesh, shared by all generalized fields.
+                section = field_metadata.get("_BeamSection")
+                if section is None:
+                    section = field_metadata.get(
+                        "BeamStress", field_metadata.get("BeamStrain")
+                    )
+                if section is not None:
+                    sections = section.get("submeshes", {"0": section})
+                    root = it.create_group("section_metadata")
+                    for index, description in sections.items():
+                        sid = submesh_id(int(index))
+                        group = root.create_group(sid)
+                        header = {
+                            k: v for k, v in description.items() if k != "properties"
+                        }
+                        _write_metadata_tree(group, header)
+                        properties = group.create_group("properties")
+                        for name, value in description.get("properties", {}).items():
+                            array = np.asarray(value)
+                            if array.ndim == 0:
+                                properties.create_dataset(name, data=array)
+                            else:
+                                field = "_Section_" + name
+                                association = description.get("associations", {}).get(
+                                    name, "GaussPoint"
+                                )
+                                if association == "Node" and len(sections) > 1:
+                                    field += "_" + sid
+                                category = {
+                                    "Node": "node_data",
+                                    "Element": "element_data",
+                                    "GaussPoint": "gausspoint_data",
+                                }[association]
+                                fields = it.require_group(category)
+                                if association != "Node":
+                                    fields = fields.require_group(sid)
+                                if field in fields:
+                                    del fields[field]
+                                self._create_dataset(fields, field, array.reshape(-1))
+                                reference = properties.create_group(name)
+                                reference.attrs["field"] = field
+                                reference.attrs["association"] = association
+                other = {
+                    k: v
+                    for k, v in field_metadata.items()
+                    if k not in ("BeamStress", "BeamStrain", "_BeamSection")
+                }
+                if other:
+                    _write_metadata_tree(it.create_group("field_metadata"), other)
 
             return it.name
 
@@ -625,6 +720,46 @@ class FDH5Reader:
             md = f[f"results/{iteration_name(iteration)}/metadata"]
             return {k: self._decode(v) for k, v in md.attrs.items()}
 
+    def read_field_metadata(self, iteration: int) -> Dict[str, Any]:
+        """Read optional numeric field descriptions; empty for legacy files."""
+        with self._open() as file:
+            group = file[f"results/{iteration_name(iteration)}"]
+            metadata = {}
+            if "field_metadata" in group:
+                item = group["field_metadata"]
+                metadata = (
+                    _read_metadata_tree(item)
+                    if isinstance(item, h5py.Group)
+                    else json.loads(item.asstr()[()])
+                )
+            if "section_metadata" in group:
+                sections = {}
+                for sid, section in group["section_metadata"].items():
+                    description = _read_metadata_tree(section)
+                    for name, item in section["properties"].items():
+                        if isinstance(item, h5py.Group):
+                            association = self._decode(item.attrs["association"])
+                            field = self._decode(item.attrs["field"])
+                            category = {
+                                "Node": "node_data",
+                                "Element": "element_data",
+                                "GaussPoint": "gausspoint_data",
+                            }[association]
+                            path = (
+                                f"{category}/{field}"
+                                if association == "Node"
+                                else f"{category}/{sid}/{field}"
+                            )
+                            description["properties"][name] = group[path][()].tolist()
+                    sections[str(int(sid.split("_")[-1]))] = description
+                mesh_count = sum(key.startswith("submesh_") for key in file["mesh"])
+                section = sections["0"] if mesh_count == 1 else {"submeshes": sections}
+                metadata["_BeamSection"] = section
+                # In-memory aliases keep old callers compatible; disk data is shared.
+                for name in ("BeamStress", "BeamStrain"):
+                    metadata[name] = section
+            return metadata
+
     def read_iteration(
         self,
         iteration: int,
@@ -638,6 +773,7 @@ class FDH5Reader:
 
         return {
             "metadata": self.read_iteration_metadata(iteration),
+            "field_metadata": self.read_field_metadata(iteration),
             "node_data": self.read_node_data(iteration, lazy=lazy, file=file),
             "element_data": self.read_element_data(iteration, lazy=lazy, file=file),
             "gausspoint_data": self.read_gausspoint_data(
@@ -816,7 +952,6 @@ class FDH5Reader:
 
 def mesh_to_fedoo(mesh_data: dict):
     """Build a Fedoo Mesh or MultiMesh from FDH5 reader mesh data."""
-    from fedoo.core.mesh import Mesh, MultiMesh
 
     nodes = mesh_data["nodes"]
     node_sets = mesh_data.get("node_sets", {})
@@ -883,7 +1018,6 @@ def fields_to_submesh_dict(dataset, fields: dict) -> dict:
 
 def fields_from_submesh_dict(mesh, fields: dict) -> dict:
     """Convert FDH5 submesh-first data to Fedoo field dictionaries."""
-    from fedoo.core.mesh import MultiMesh
 
     if not isinstance(mesh, MultiMesh):
         if "submesh_0" in fields:
@@ -930,11 +1064,18 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
     dataset.scalar_data = {
         key: scalar_value(value) for key, value in iter_data["scalars"].items()
     }
+    dataset.field_metadata = iter_data["field_metadata"]
+    dataset.field_metadata.update(
+        {
+            field: description
+            for field, description in dataset._beam_section_overrides.items()
+            if field in dataset.gausspoint_data
+        }
+    )
 
 
 def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = False):
     """Write a Fedoo DataSet iteration to a FDH5 file."""
-    from fedoo.core.mesh import MultiMesh
 
     if dataset.mesh is None:
         raise TypeError("Mesh should be defined before writing a FDH5 file.")
@@ -978,6 +1119,7 @@ def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = 
         element_data=fields_to_submesh_dict(dataset, dataset.element_data),
         gausspoint_data=fields_to_submesh_dict(dataset, dataset.gausspoint_data),
         scalars=dataset.scalar_data,
+        field_metadata=dataset.field_metadata,
         time=time,
         overwrite=True,
     )
@@ -985,6 +1127,7 @@ def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = 
 
 def read_fdh5(filename: str):
     """Read a FDH5 file as a DataSet or MultiFrameDataSet."""
+    # dataset imports this module to provide its FDH5 read/write methods.
     from fedoo.core.dataset import DataSet, MultiFrameDataSet
 
     path = Path(filename)
