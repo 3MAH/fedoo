@@ -35,6 +35,10 @@ semantic versioning.
 
 - The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
   of the penalty self-contact.
+- `IPCContact` stores true minimum distances between contact primitives
+  (ipctk returns squared distances). The adaptive barrier-stiffness update
+  and the proximity safeguards act on the gap above `dmin`, compared with
+  `dhat` as documented.
 
 ### Fixed
 

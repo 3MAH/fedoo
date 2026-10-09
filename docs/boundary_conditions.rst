@@ -389,7 +389,9 @@ centerline separation of 0.4 mm::
 The initial geometry must have separation strictly greater than ``dmin``
 for every eligible collision pair. IPC excludes primitives sharing a
 vertex, but nearby segments around connected joints can still require
-additional collision exclusions. The offset is uniform across the mesh;
+additional collision exclusions: a vertex and the edges two rings away on
+the same surface are about one edge length apart, so ``dmin + dhat``
+must stay below the edge length of the surface mesh. The offset is uniform across the mesh;
 it does not model section deformation or automatically add periodic-image
 contact. ``IPCSelfContact`` accepts the same ``dmin`` argument.
 Nonzero offsets are not supported with ``use_ogc=True``.

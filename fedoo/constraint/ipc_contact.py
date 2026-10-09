@@ -1242,13 +1242,8 @@ class IPCContact(AssemblyBase):
             self._friction_collisions = ipctk.TangentialCollisions()
             self._build_friction_collisions(vertices)
 
-        # Store minimum distance
-        if len(self._collisions) > 0:
-            self._prev_min_distance = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
-            )
-        else:
-            self._prev_min_distance = np.inf
+        # Store minimum distance (true distance, see _minimum_distance)
+        self._prev_min_distance = self._minimum_distance(vertices)
 
         # Compute initial contributions
         self._compute_ipc_contributions(vertices)
@@ -1267,28 +1262,40 @@ class IPCContact(AssemblyBase):
             self._ogc_trust_region = ipctk.ogc.TrustRegion(self._actual_dhat)
             pb._step_filter_callback = self._ogc_step_filter_callback
 
+    def _minimum_distance(self, vertices):
+        """Minimum distance between non-adjacent contact primitives.
+
+        ``ipctk.NormalCollisions.compute_minimum_distance`` returns a
+        *squared* distance; this helper returns the true distance (not
+        the gap above ``dmin``), or ``inf`` when the collision set is
+        empty.
+        """
+        if len(self._collisions) == 0:
+            return np.inf
+        return np.sqrt(
+            self._collisions.compute_minimum_distance(self._collision_mesh, vertices)
+        )
+
     def _update_kappa_adaptive(self, vertices):
         """Double kappa when the gap is small and decreasing.
 
         Uses ``ipctk.update_barrier_stiffness`` with
         ``dhat_epsilon_scale = dhat / bbox_diag`` so the doubling
-        triggers within the barrier zone.  Only called between time
-        steps (in ``set_start``), never inside the NR loop.
+        triggers within the barrier zone.  The distances passed to
+        ipctk are the gaps above the offset ``dmin`` (true distances
+        minus ``dmin``), so that the ``dhat`` threshold keeps its
+        meaning whatever the offset.  Only called between time steps
+        (in ``set_start``), never inside the NR loop.
         """
         ipctk = _import_ipctk()
         bbox_diag = self._bbox_diag
 
-        if len(self._collisions) > 0:
-            min_dist = self._collisions.compute_minimum_distance(
-                self._collision_mesh, vertices
-            )
-        else:
-            min_dist = np.inf
+        min_dist = self._minimum_distance(vertices)
 
         eps_scale = self._actual_dhat / bbox_diag
         new_kappa = ipctk.update_barrier_stiffness(
-            self._prev_min_distance,
-            min_dist,
+            self._prev_min_distance - self._dmin,
+            min_dist - self._dmin,
             self._max_kappa,
             self._kappa,
             bbox_diag,
@@ -1398,33 +1405,17 @@ class IPCContact(AssemblyBase):
 
         # SDI: force at least one NR correction when contact state
         # changed (collision count differs from start) or when surfaces
-        # are dangerously close (min_d/dhat < 0.1).
+        # are dangerously close (gap above dmin smaller than 0.1 * dhat).
         n_collisions_now = len(self._collisions)
         need_sdi = n_collisions_now != self._n_collisions_at_start
-        min_d_val = None
-        if not need_sdi and n_collisions_now > 0:
-            min_d_val = (
-                np.sqrt(
-                    self._collisions.compute_minimum_distance(
-                        self._collision_mesh, vertices
-                    )
-                )
-                - self._dmin
-            )
-            if min_d_val < 0.1 * self._actual_dhat:
+        gap = None
+        if n_collisions_now > 0:
+            gap = self._minimum_distance(vertices) - self._dmin
+            if gap < 0.1 * self._actual_dhat:
                 need_sdi = True
-        elif n_collisions_now > 0:
-            min_d_val = (
-                np.sqrt(
-                    self._collisions.compute_minimum_distance(
-                        self._collision_mesh, vertices
-                    )
-                )
-                - self._dmin
-            )
         if need_sdi:
             # Scale min_subiter by proximity: more iterations when closer
-            if min_d_val is not None and min_d_val < 0.01 * self._actual_dhat:
+            if gap is not None and gap < 0.01 * self._actual_dhat:
                 self._pb._nr_min_subiter = max(self._pb._nr_min_subiter, 3)
 
         # Always force at least 1 NR iteration when IPC is active.

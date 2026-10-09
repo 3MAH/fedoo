@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from scipy import sparse
 from itertools import chain
@@ -68,15 +70,109 @@ class BCBase:
         pass
 
 
+class BoundaryConditionWarning(UserWarning):
+    """Warning emitted when boundary conditions overlap on some dof."""
+
+
+class BoundaryConditionConflict(ValueError):
+    """Error raised when incompatible boundary conditions share some dof."""
+
+
+def _sampled_values(bc, n_dof):
+    """Return the values prescribed by a bc at mid-step and at the end of the step.
+
+    The returned array has the shape (n_dof, 2), or None if the values can't
+    be associated to the dof of the bc.
+    """
+    if hasattr(bc, "get_true_value"):
+        values = [bc.get_true_value(t_fact) for t_fact in (0.5, 1.0)]
+    else:
+        values = [bc._current_value] * 2
+
+    res = np.empty((n_dof, 2))
+    for i, value in enumerate(values):
+        value = np.asarray(value, dtype=float).ravel()
+        if value.size not in (1, n_dof):
+            return None
+        res[:, i] = value
+    return res
+
+
+def _conflict_record(problem, kind, severity, dof, list_bc):
+    n_nodes = problem.mesh.n_nodes
+    n_node_dof = problem.n_node_dof
+    nvar = problem.space.nvar
+    names = np.array(
+        [problem.space.variable_name(rank) for rank in range(nvar)] + ["global dof"]
+    )
+    is_node_dof = dof < n_node_dof
+    return {
+        "kind": kind,
+        "severity": severity,
+        "dof": dof,
+        "node": np.where(is_node_dof, dof % n_nodes, dof - n_node_dof),
+        "variable": names[np.where(is_node_dof, dof // n_nodes, nvar)],
+        "bc": list_bc,
+    }
+
+
+_CONFLICT_DESCRIPTION = {
+    "dirichlet_conflict": "Dirichlet bc with different values on the same dof",
+    "neumann_on_dirichlet": "Neumann bc without effect, applied on a dof with a "
+    "Dirichlet bc",
+    "mpc_slave_dirichlet": "Dirichlet bc on a dof eliminated by a mpc",
+    "mpc_slave_duplicate": "dof eliminated by several mpc",
+}
+
+
+def _format_conflicts(records, n_max=5):
+    lines = []
+    for record in records:
+        n_dof = len(record["dof"])
+        examples = ", ".join(
+            "node {} {}".format(node, variable)
+            for node, variable in zip(
+                record["node"][:n_max], record["variable"][:n_max]
+            )
+        )
+        if n_dof > n_max:
+            examples += ", ..."
+        lines.append(
+            "{} ({} dof: {}). Involved bc: {}.".format(
+                _CONFLICT_DESCRIPTION[record["kind"]],
+                n_dof,
+                examples,
+                "; ".join(bc.str_condensed() for bc in record["bc"]),
+            )
+        )
+    return "\n".join(lines)
+
+
 class ListBC(BCBase):
     """List of boundary conditions.
 
     Class that define a list of ordered elementary boundary conditions (the bc are applied in the list order).
-    Derived from the python list object."""
+    Derived from the python list object.
+
+    Notes
+    -----
+    Several boundary conditions may share some dof:
+
+      * The generalized forces of the Neumann bc are summed.
+      * For Dirichlet bc, the last one in the list is applied. This is
+        reported if the prescribed values are different (see :py:meth:`check`).
+
+    The attribute ``check_mode`` defines what is done when incompatible
+    boundary conditions are found the first time the list is applied to a
+    problem: ``"warn"`` (default) emits a :py:class:`BoundaryConditionWarning`,
+    ``"raise"`` raises a :py:class:`BoundaryConditionConflict` error and
+    ``"ignore"`` disables the check."""
 
     def __init__(self, l=None, name=""):
         BCBase.__init__(self, name)
         self._problem = None
+        self._check_mode = "warn"
+        self._checked_signature = None
         self.bc_type = "ListBC"
         if l is None:
             self.data = []
@@ -309,6 +405,179 @@ class ListBC(BCBase):
     def _register_global_dofs(self, problem):
         for bc in self:
             bc.register_global_dofs(problem)
+
+    @property
+    def check_mode(self):
+        """Action if incompatible bc are found: "warn", "raise" or "ignore"."""
+        return self._check_mode
+
+    @check_mode.setter
+    def check_mode(self, value):
+        if value not in ("warn", "raise", "ignore"):
+            raise ValueError("check_mode should be 'warn', 'raise' or 'ignore'")
+        self._check_mode = value
+        self._checked_signature = None
+
+    def _signature(self):
+        return tuple(id(bc) for bc in self.list_all())
+
+    def _check_required(self):
+        # True if the list of bc has changed since the last check
+        if self._check_mode == "ignore":
+            return False
+        return self._signature() != self._checked_signature
+
+    def _check_entries(self, problem, entries):
+        records = self._find_conflicts(problem, entries)
+        if records:
+            conflicts = [r for r in records if r["severity"] == "conflict"]
+            if self._check_mode == "raise" and conflicts:
+                raise BoundaryConditionConflict(_format_conflicts(conflicts))
+            warnings.warn(
+                _format_conflicts(records), BoundaryConditionWarning, stacklevel=3
+            )
+        self._checked_signature = self._signature()
+
+    def check(self, problem=None, t_fact=1):
+        """Look for boundary conditions applied twice on the same dof.
+
+        A displacement and a generalized force may be prescribed on the same
+        node as long as the dof are different. The following cases are
+        reported:
+
+          * ``"dirichlet_conflict"``: Dirichlet bc with different values on
+            the same dof. The same value prescribed twice (for instance on
+            the nodes shared by two sets) is accepted.
+          * ``"mpc_slave_dirichlet"``: Dirichlet bc on a dof eliminated
+            by a mpc.
+          * ``"mpc_slave_duplicate"``: dof eliminated by several mpc.
+          * ``"neumann_on_dirichlet"``: non zero nodal Neumann bc on a dof
+            with a Dirichlet bc. The force has no effect. This case has the
+            severity ``"warning"``, the other ones ``"conflict"``.
+
+        The generalized forces prescribed by several Neumann bc on the same
+        dof are summed and are not reported. The distributed loads (e.g.
+        :py:class:`fedoo.constraint.Pressure`) are not reported either: their
+        nodal contribution on a dof with a Dirichlet bc is part of the
+        reaction.
+
+        Parameters
+        ----------
+        problem : Problem, optional
+            Problem used to generate the boundary conditions. By default, the
+            problem associated to the list.
+        t_fact : float, default = 1
+            Time factor used to generate the boundary conditions.
+
+        Returns
+        -------
+        list of dict
+            One dict per kind of reported case, with the keys ``"kind"``,
+            ``"severity"``, ``"dof"``, ``"node"``, ``"variable"`` (arrays with
+            one item per dof) and ``"bc"`` (list of the involved bc).
+            The list is empty if nothing is reported.
+
+        Notes
+        -----
+        This check is automatically launched the first time the boundary
+        conditions are applied after a modification of the list, according
+        to the ``check_mode`` attribute.
+        """
+        if problem is None:
+            problem = self._problem
+        return self._find_conflicts(problem, list(self.generate(problem, t_fact)))
+
+    def _find_conflicts(self, problem, entries):
+        # entries: elementary bc as given by the generate method
+        dirichlet = []  # (bc, dof, values)
+        neumann = []  # (bc, dof)
+        mpc = []  # (bc, slave dof)
+        for e in entries:
+            bc_type = getattr(e, "bc_type", None)
+            if bc_type == "Dirichlet":
+                dof = np.ravel(e._dof_index).astype(int)
+                values = _sampled_values(e, len(dof))
+                if len(dof) and values is not None:
+                    dirichlet.append((e, dof, values))
+            elif bc_type == "Neumann":
+                if not isinstance(e, BoundaryCondition):
+                    continue  # distributed load
+                dof = np.ravel(e._dof_index).astype(int)
+                values = _sampled_values(e, len(dof))
+                if values is not None:
+                    dof = dof[np.any(values != 0, axis=1)]
+                    if len(dof):
+                        neumann.append((e, dof))
+            elif bc_type == "MPC":
+                dof = np.ravel(e._dof_index[0]).astype(int)
+                if len(dof):
+                    mpc.append((e, dof))
+
+        def involved(list_bc, dof):
+            return [item[0] for item in list_bc if np.isin(item[1], dof).any()]
+
+        records = []
+        dof_blocked = np.array([], dtype=int)
+        if dirichlet:
+            dof = np.concatenate([item[1] for item in dirichlet])
+            values = np.concatenate([item[2] for item in dirichlet])
+            order = np.argsort(dof, kind="stable")
+            dof_blocked, start, count = np.unique(
+                dof[order], return_index=True, return_counts=True
+            )
+            if np.any(count > 1):
+                values = values[order]
+                gap = np.maximum.reduceat(values, start) - np.minimum.reduceat(
+                    values, start
+                )
+                scale = np.maximum.reduceat(np.abs(values), start)
+                tol = 1e-9 * np.maximum(scale, 1e-3 * np.abs(values).max())
+                dof = dof_blocked[np.any(gap > tol, axis=1)]
+                if len(dof):
+                    records.append(
+                        _conflict_record(
+                            problem,
+                            "dirichlet_conflict",
+                            "conflict",
+                            dof,
+                            involved(dirichlet, dof),
+                        )
+                    )
+
+        if mpc:
+            dof, count = np.unique(
+                np.concatenate([item[1] for item in mpc]), return_counts=True
+            )
+            for kind, dof_kind, list_bc in (
+                ("mpc_slave_dirichlet", dof[np.isin(dof, dof_blocked)], dirichlet),
+                ("mpc_slave_duplicate", dof[count > 1], []),
+            ):
+                if len(dof_kind):
+                    records.append(
+                        _conflict_record(
+                            problem,
+                            kind,
+                            "conflict",
+                            dof_kind,
+                            involved(list_bc, dof_kind) + involved(mpc, dof_kind),
+                        )
+                    )
+
+        if neumann and len(dof_blocked):
+            dof = np.unique(np.concatenate([item[1] for item in neumann]))
+            dof = dof[np.isin(dof, dof_blocked)]
+            if len(dof):
+                records.append(
+                    _conflict_record(
+                        problem,
+                        "neumann_on_dirichlet",
+                        "warning",
+                        dof,
+                        involved(neumann, dof) + involved(dirichlet, dof),
+                    )
+                )
+
+        return records
 
     def generate(self, problem, t_fact=1, t_fact_old=None):
         # return a generator function (the generate method will be called only when required)
@@ -648,12 +917,13 @@ class MPC(BCBase):
         name="",
     ):
         """
-        Create a linear multi-point constraint object
+        Create a linear multi-point constraint object.
+        The constraint equation is: sum(factor * dof) + constant = 0.
         To create a MPC of the equation
-        4*Ux_12 - 2*Uz_15 = 7 (Ux_12 is the displacement along x of the 12th node)
+        4*Ux_12 - 2*Uz_15 + 7 = 0 (Ux_12 is the displacement along x of the 12th node)
         use the following MPC:
 
-          >>> MPC([12,15], ['Disp_X', 'Disp_Z'], [4, -2], 7)
+          >>> MPC([12,15], ['DispX', 'DispZ'], [4, -2], 7)
 
         Parameters
         ----------
@@ -666,7 +936,8 @@ class MPC(BCBase):
             To define several mpc at once, it is possible to give an array of factors, where
             each line is associated to a signe mpc.
         constant : scalar, optional
-            constant value on the MPC equation
+            constant value added to the left hand side of the MPC equation
+            (sum(factor * dof) + constant = 0).
             if not specified, no constant value.
         time_func : function
             Function that gives the temporal evolution of the constant value.
