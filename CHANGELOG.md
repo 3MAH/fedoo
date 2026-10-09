@@ -16,6 +16,16 @@ semantic versioning.
   a minimum-separation parameter.
 - `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
   convergent (area-weighted) IPC formulation of ipctk.
+- `IPCContact` / `IPCSelfContact`: `excluded_rings` blocks self-collision
+  between primitives fewer than `excluded_rings` rings apart on the contact
+  surface, so that `dmin` may exceed the edge length (shell thickness larger
+  than the element size).
+- `IPCContact` / `IPCSelfContact`: `psd_projection=False` assembles the exact
+  contact hessian instead of ipctk's per-collision PSD projection. The
+  projection is inexact (finite-difference mismatch of order one) and makes
+  Newton converge linearly, about 0.7 per iteration, whenever the contact
+  carries a large share of the load; with the exact hessian and a direct solver
+  the shell lattice compression converges in 4-7 iterations.
 - `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
   Unlike a flat meshed obstacle, the contact force does not depend on which
   obstacle node, edge or face is the closest.
@@ -27,17 +37,38 @@ semantic versioning.
   explicitly. The Simcoon adapter handles `work_correction`, `tangent_output`,
   and conversion of the rate name to Simcoon's numeric code, without temporary
   call attributes or compatibility checks for older versions.
+- `ListBC.check` and `Problem.check_boundary_conditions` report the boundary
+  conditions that can't be applied together on a dof: Dirichlet bc with
+  different values, Dirichlet bc on a dof eliminated by a mpc, dof eliminated
+  by several mpc and nodal force ignored on a blocked dof. The check runs the
+  first time the bc are applied after the list is modified, according to
+  `pb.bc.check_mode` (`"warn"` by default, `"raise"` or `"ignore"`).
 - Keep the state returned by UMAT initialization, with values assigned through
   `set_initial_statev()` taking precedence. Custom callbacks must accept the
   new keywords and handle `start=True` during initialization.
 
 ### Changed
 
+- Boundary conditions sharing some dof: the generalized forces of several
+  Neumann bc are summed. A node repeated inside a single bc is still counted
+  once. For Dirichlet bc, the last one in the list is still applied, and a
+  Dirichlet bc prevails over a Neumann bc on the same dof.
 - The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
   of the penalty self-contact.
+- `IPCContact` stores true minimum distances between contact primitives
+  (ipctk returns squared distances). The adaptive barrier-stiffness update
+  and the proximity safeguards act on the gap above `dmin`, compared with
+  `dhat` as documented.
 
 ### Fixed
 
+- A distributed load added with `pb.bc.add` (`Pressure`, `SurfaceForce`,
+  `DistributedForce`) no longer erases the Neumann bc defined before it, and
+  two Neumann bc on the same dof no longer overwrite each other.
+- In multi-step problems, the start value of a nodal Neumann bc no longer
+  includes the forces applied by the other bc on the same dof.
+- `MPC` docstring: the constraint equation is
+  `sum(factor * dof) + constant = 0`.
 - Rigid-body CCD bounds rotation-path curvature without relying on a single
   midpoint, preventing complete revolutions from bypassing collision checks.
   The line search never drops its curvature margin or physical offset.

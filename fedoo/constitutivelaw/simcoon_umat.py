@@ -90,6 +90,7 @@ class Simcoon(MechanicalUMAT):
     _ISOTROPIC_UMATS = {
         "ELISO",
         "EPICP",
+        "EPJCK",
         "EPKCP",
         "EPCHA",
         "ZENER",
@@ -433,6 +434,22 @@ class Simcoon(MechanicalUMAT):
                 "m": 5,
             }  # powerlaw sigma_e = sigmaY + k * eps_p^m
             self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8)}
+        elif umat_name == "EPJCK":
+            self.n_statev = 9
+            self.props_label = {
+                "E": 0,
+                "nu": 1,
+                "alpha": 2,
+                "A": 3,
+                "B": 4,
+                "n": 5,
+                "C": 6,
+                "edot0": 7,
+                "m": 8,
+                "T_ref": 9,
+                "T_melt": 10,
+            }  # Johnson-Cook: (A + B p^n)(1 + C ln(pdot/edot0))(1 - T*^m)
+            self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8), "PDOT": 8}
         elif umat_name == "EPKCP":
             self.n_statev = 14
             self.props_label = {
