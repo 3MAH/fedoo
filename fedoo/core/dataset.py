@@ -6,8 +6,14 @@ from fedoo.util.beam_recovery import (
     BeamOptions,
     recover_beam_field,
     section_description,
+    use_stored_beam_field,
 )
-from fedoo.util.shell_recovery import ShellOptions, recover_shell_field
+from fedoo.util.shell_recovery import (
+    ShellOptions,
+    recover_shell_field,
+    can_recompute_shell,
+    reconstructs_stored_shell,
+)
 from fedoo.util.fdh5 import load_dataset_iteration, write_dataset, read_fdh5
 from fedoo.util.mesh_writer import write_vtk, write_msh
 
@@ -1075,7 +1081,17 @@ class DataSet:
                     submesh_id,
                     submesh.n_elements * get_default_n_gp(submesh.elm_type, submesh),
                     fill_missing=field
-                    not in ("BeamLocalFrame", "ShellLocalFrame", "_ShellStress"),
+                    not in (
+                        "BeamLocalFrame",
+                        "ShellLocalFrame",
+                        "_ShellStress",
+                        "BeamStress",
+                        "BeamStrain",
+                        "ShellStress",
+                        "ShellStrain",
+                        "Stress",
+                        "Strain",
+                    ),
                 )
             )
             is not None
@@ -1576,6 +1592,12 @@ class DataSet:
                 )
             )
             if (
+                self.field_metadata.get(source, {}).get("recovery", "linear")
+                == "stored_only"
+                and not stored
+            ):
+                continue
+            if (
                 source not in self.field_metadata or source not in self.gausspoint_data
             ) and not stored:
                 continue
@@ -1641,6 +1663,27 @@ class DataSet:
             ).shell_section_description()
         return deepcopy(self.field_metadata["_ShellSection"])
 
+    def shell_sources(self, kind):
+        """Available stored and reconstructed thickness distributions."""
+        if self._is_multimesh():
+            return self._submesh_dataset(self.active_submesh).shell_sources(kind)
+        metadata = self.field_metadata.get(kind, {})
+        stored = (
+            metadata.get("family") == "shell"
+            and "stored_points" in metadata
+            and any(
+                kind in values
+                for values in (self.node_data, self.element_data, self.gausspoint_data)
+            )
+        )
+        return stored, can_recompute_shell(
+            kind,
+            self.shell_section_description(),
+            f"Shell{kind}" in self.gausspoint_data,
+            "_ShellStress" in self.gausspoint_data,
+            metadata if stored else None,
+        )
+
     def _get_section_multimesh_data(
         self, field, component, data_type, return_data_type, **kwargs
     ):
@@ -1655,6 +1698,33 @@ class DataSet:
                     if field in subset.section_derived_fields()
                     else field.removesuffix("_local").removesuffix("_global")
                 )
+                if subset_field in subset.beam_derived_fields():
+                    selection = BeamOptions(self.beam_options)
+                    reference = selection.get("reference_submesh")
+                    if reference is None:
+                        reference = self.active_submesh
+                    selection["source_fallback"] = (
+                        selection["source_fallback"] and index != reference
+                    )
+                    subset.beam_options = selection
+                elif subset_field in subset.shell_derived_fields():
+                    selection = ShellOptions(self.shell_options)
+                    reference = selection.get("reference_submesh")
+                    if reference is None:
+                        reference = self.active_submesh
+                    selection["source_fallback"] = (
+                        selection["source_fallback"] and index != reference
+                    )
+                    if (
+                        index == reference
+                        and selection.get("reference_point_index") is not None
+                    ):
+                        selection.update(
+                            position=None,
+                            point_index=selection["reference_point_index"],
+                        )
+                    selection["reference_point_index"] = None
+                    subset.shell_options = selection
                 value, category = subset.get_data(
                     subset_field, component, block_type, return_data_type=True
                 )
@@ -1695,11 +1765,25 @@ class DataSet:
                 if kind in values:
                     stored, stored_type = values[kind], category
                     break
-        use_stored = self.shell_options["source"] == "stored" or (
-            self.shell_options["source"] == "auto" and stored is not None
+        description = self.shell_section_description()
+        selection = ShellOptions(self.shell_options)
+        if selection.get("reference_point_index") is not None:
+            selection.update(
+                position=None, point_index=selection["reference_point_index"]
+            )
+        use_stored = use_stored_beam_field(selection, *self.shell_sources(kind))
+        from_stored = (
+            not use_stored
+            and source not in self.gausspoint_data
+            and stored is not None
+            and reconstructs_stored_shell(kind, description, metadata)
         )
         frame = self.gausspoint_data.get("ShellLocalFrame") if global_frame else None
-        if use_stored and frame is not None and stored_type != "GaussPoint":
+        if (
+            (use_stored or from_stored)
+            and frame is not None
+            and stored_type != "GaussPoint"
+        ):
             if stored_type == "Node":
                 raise ValueError(
                     "Global recovery from stored nodal shell tensors is ambiguous; use GaussPoint/Element storage or source='recomputed'"
@@ -1714,17 +1798,19 @@ class DataSet:
             frame = element_frames[:, 0, :]
         value = recover_shell_field(
             self.gausspoint_data.get(source),
-            self.shell_section_description(),
+            description,
             kind,
             component,
-            self.shell_options,
+            selection,
             frame,
             stored=stored,
             stored_description=metadata,
             integration_values=self.gausspoint_data.get("_ShellStress"),
         )
         temporary = DataSet(self.mesh)
-        storage = temporary.dict_data[stored_type if use_stored else "GaussPoint"]
+        storage = temporary.dict_data[
+            stored_type if use_stored or from_stored else "GaussPoint"
+        ]
         storage["_ShellRecovered"] = value
         return temporary.get_data(
             "_ShellRecovered",
@@ -1822,8 +1908,15 @@ class DataSet:
                     stored = values[kind]
                     stored_type = category
                     break
-            use_stored = self.beam_options["source"] == "stored" or (
-                self.beam_options["source"] == "auto" and stored is not None
+            use_stored = use_stored_beam_field(
+                self.beam_options,
+                stored is not None,
+                source in self.gausspoint_data
+                and description.get("recovery", "linear") != "stored_only",
+            )
+            resolved_options = BeamOptions(self.beam_options)
+            resolved_options.update(
+                source="stored" if use_stored else "recomputed", source_fallback=False
             )
             if use_stored and frame is not None and stored_type != "GaussPoint":
                 if stored_type == "Node":
@@ -1843,7 +1936,7 @@ class DataSet:
                 description,
                 kind,
                 component,
-                self.beam_options,
+                resolved_options,
                 frame,
                 stored=stored,
                 stored_points=self.field_metadata.get(kind, {}).get("stored_points"),

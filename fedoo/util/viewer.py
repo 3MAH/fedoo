@@ -1,6 +1,10 @@
 import vtk
-from fedoo.util.beam_recovery import BeamOptions, SavedBeamSection
-from fedoo.util.shell_recovery import ShellOptions, sample_positions
+from fedoo.util.beam_recovery import BeamOptions, SavedBeamSection, stored_point_indices
+from fedoo.util.shell_recovery import (
+    ShellOptions,
+    sample_positions,
+    stored_shell_point_index,
+)
 
 import fedoo as fd
 import numpy as np
@@ -56,7 +60,7 @@ def _viewer_field_names(data):
     )
 
 
-def _viewer_tensor_field(data, field, coordinates="local"):
+def _viewer_tensor_field(data, field, coordinates="global"):
     """Resolve a displayed field and coordinate choice to its dataset field."""
     field = _viewer_field_name(data, field)
     candidate = f"{field}_{coordinates}"
@@ -317,7 +321,7 @@ class PlotDock(QDockWidget):
             self.current_iter = 0
 
         field_names = _viewer_field_names(data)
-        self.beam_csys = "local"
+        self.beam_csys = "global"
         if "Stress" in field_names:
             self.current_field = "Stress"
             self.current_comp = "vm"
@@ -389,7 +393,7 @@ class PlotDock(QDockWidget):
         if field == "":
             return [""]
         data = self.data
-        if field in data.beam_derived_fields():
+        if field in data.section_derived_fields():
             return get_field_components(field, 6)
         if np.isscalar(data[field]):
             return []
@@ -1546,8 +1550,25 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         layout.addRow(help_label)
         section_data = dock.data
+        submesh_choice = None
         if section_data._is_multimesh():
-            section_data = section_data._submesh_dataset(section_data.active_submesh)
+            submesh_choice = QtWidgets.QComboBox()
+            submesh_choice.setObjectName("beam_submesh")
+            for index, mesh in enumerate(dock.data.mesh.submeshes):
+                candidate = dock.data._submesh_dataset(index)
+                if candidate.beam_derived_fields():
+                    label = mesh.name or mesh.elm_type
+                    submesh_choice.addItem(f"{index}: {label}", index)
+            if not submesh_choice.count():
+                return
+            current = submesh_choice.findData(dock.data.active_submesh)
+            submesh_choice.setCurrentIndex(max(0, current))
+            section_data = dock.data._submesh_dataset(submesh_choice.currentData())
+            submesh_choice.setToolTip(
+                "Choose the beam section used for sampling and preview. "
+                "Its selected normalized coordinates apply to all beam submeshes."
+            )
+            layout.addRow("Beam submesh:", submesh_choice)
         displayed = _viewer_field_name(dock.data, dock.current_field)
         kind = (
             displayed
@@ -1558,25 +1579,40 @@ class MainWindow(QtWidgets.QMainWindow):
                 else "Strain"
             )
         )
+        if f"{kind}_local" not in section_data.beam_derived_fields():
+            kind = (
+                "Stress"
+                if "Stress_local" in section_data.beam_derived_fields()
+                else "Strain"
+            )
         source_choice = QtWidgets.QComboBox()
         source_choice.setObjectName("beam_field_source")
         source_choice.addItem("Stored", "stored")
         source_choice.addItem("Recomputed", "recomputed")
+        source_choice.setToolTip(
+            "Required on the selected beam submesh. Other beam submeshes use this "
+            "source when available, otherwise the other source. Stored positions "
+            "use the nearest saved point."
+        )
         has_stored = "stored_points" in section_data.field_metadata.get(kind, {})
         has_recomputed = (
-            "BeamStress" if kind == "Stress" else "BeamStrain"
-        ) in section_data.gausspoint_data
+            ("BeamStress" if kind == "Stress" else "BeamStrain")
+            in section_data.gausspoint_data
+            and section_data.beam_section_description().get("recovery", "linear")
+            != "stored_only"
+        )
         source_choice.model().item(0).setEnabled(has_stored)
         source_choice.model().item(1).setEnabled(has_recomputed)
         requested = options.get("source", "auto")
         source_choice.setCurrentIndex(
-            0 if requested == "stored" or (requested == "auto" and has_stored) else 1
+            0 if has_stored and (requested != "recomputed" or not has_recomputed) else 1
         )
         layout.addRow("Source:", source_choice)
         reduction = QtWidgets.QComboBox()
         reduction.setObjectName("beam_section_reduction")
         modes = [
-            ("Section point", None),
+            ("Section point index", "point_index"),
+            ("Normalized coordinates (y, z)", "position"),
             ("Maximum", "max"),
             ("Minimum", "min"),
             ("Largest magnitude (signed)", "abs_max"),
@@ -1584,43 +1620,44 @@ class MainWindow(QtWidgets.QMainWindow):
         for label, value in modes:
             reduction.addItem(label, value)
         reduction.setCurrentIndex(
-            reduction.findData(options.get("reduction", "abs_max"))
+            reduction.findData(
+                options.get("reduction")
+                or (
+                    "point_index"
+                    if options.get("point_index") is not None
+                    else "position"
+                )
+            )
         )
         layout.addRow("Value:", reduction)
-        coordinates = QtWidgets.QComboBox()
-        coordinates.setObjectName("beam_section_selection")
-        coordinates.addItems(["Normalized (y, z)", "Section point index"])
         position = options.get("position")
         if position is None:
             position = (0.0, 0.0)
-        coordinates.setCurrentIndex(0)
-        if options.get("point_index") is not None:
-            coordinates.setCurrentIndex(1)
         y, z = QDoubleSpinBox(), QDoubleSpinBox()
         for spin in (y, z):
             spin.setDecimals(10)
             spin.setRange(-1e12, 1e12)
         y.setValue(float(position) if np.isscalar(position) else position[0])
         z.setValue(0.0 if np.isscalar(position) else position[1])
-        layout.addRow("Coordinates:", coordinates)
-        layout.addRow("Local y:", y)
-        layout.addRow("Local z:", z)
+        layout.addRow("Normalized y:", y)
+        layout.addRow("Normalized z:", z)
         point_index = QSpinBox()
         point_index.setRange(0, 100000)
         point_index.setValue(options.get("point_index") or 0)
         layout.addRow("Section point index (from 0):", point_index)
         samples = QSpinBox()
-        samples.setRange(8, 100000)
+        samples.setObjectName("beam_sample_points_number")
+        samples.setRange(1, 1000000)
+        samples.setKeyboardTracking(False)
         samples.setValue(options.get("samples", 32))
         samples.setToolTip(
-            "Approximate total point count. Higher values refine generated sampling; supplied custom points stay fixed."
+            "Snaps to the closest supported total point count when editing finishes. "
+            "Stored and supplied custom point sets have a fixed count."
         )
-        layout.addRow("Approximate sample points:", samples)
-        beam_location = QSpinBox()
-        beam_location.setObjectName("beam_point_location")
-        section_data = dock.data
-        if section_data._is_multimesh():
-            section_data = section_data._submesh_dataset(section_data.active_submesh)
+        layout.addRow("Sample points number:", samples)
+        # The longitudinal location only affects the section preview and the
+        # displayed coordinates of indexed samples, not stress extraction.
+        beam_location = 0
         source = next(
             (
                 name
@@ -1630,8 +1667,6 @@ class MainWindow(QtWidgets.QMainWindow):
             None,
         )
         count = section_data.gausspoint_data[source].shape[-1] if source else 1
-        beam_location.setRange(0, count - 1)
-        layout.addRow("Coordinates at beam Gauss point:", beam_location)
         point_coordinates_label = QLabel()
         point_coordinates_label.setWordWrap(True)
         layout.addRow(point_coordinates_label)
@@ -1644,20 +1679,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         def show_point_coordinates():
             nonlocal was_indexed
-            indexed = coordinates.currentIndex() == 1
+            indexed = reduction.currentData() == "point_index"
             if indexed and not was_indexed:
                 manual_position[:] = [y.value(), z.value()]
             elif not indexed and was_indexed:
                 y.setValue(manual_position[0])
                 z.setValue(manual_position[1])
             was_indexed = indexed
-            beam_location.setEnabled(indexed)
             if not indexed:
                 point_coordinates_label.clear()
                 return
             try:
                 budget = samples.value()
-                location = beam_location.value()
+                location = beam_location
                 key = (source_choice.currentData(), budget, location)
                 if key not in cached_points:
                     description = section_data.beam_section_description()
@@ -1687,10 +1721,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 values = [np.asarray(value).reshape(-1) for value in physical]
                 y.setValue(float(values[0][0]))
                 z.setValue(float(values[1][0]))
-                point_coordinates_label.setText(
-                    "Normalized coordinates at the selected beam Gauss point.\n"
-                    "The sample index follows the section along the beam."
-                )
+                point_coordinates_label.clear()
             except (ValueError, NotImplementedError, IndexError) as error:
                 point_coordinates_label.setText(
                     f"Point coordinates unavailable: {error}"
@@ -1700,30 +1731,46 @@ class MainWindow(QtWidgets.QMainWindow):
 
         point_index.valueChanged.connect(show_point_coordinates)
         samples.valueChanged.connect(show_point_coordinates)
-        beam_location.valueChanged.connect(show_point_coordinates)
-        coordinates.currentIndexChanged.connect(show_point_coordinates)
+        reduction.currentIndexChanged.connect(show_point_coordinates)
         source_choice.currentIndexChanged.connect(show_point_coordinates)
         show_point_coordinates()
         preview_button = QPushButton("Section geometry and sampling…")
         layout.addRow(preview_button)
 
         def preview_section():
-            data = dock.data
-            if data._is_multimesh():
-                data = data._submesh_dataset(data.active_submesh)
+            data = section_data
             description = data.beam_section_description()
             preview = QtWidgets.QDialog(dialog)
-            preview.setWindowTitle("Beam section (centroid-relative local coordinates)")
+            preview_title = f"Beam section: {description['geometry']}"
+            if submesh_choice is not None:
+                preview_title += f" — submesh {submesh_choice.currentData()}"
+            preview.setWindowTitle(preview_title)
             box = QVBoxLayout(preview)
             selector = QSpinBox()
-            count = max(
-                (np.asarray(v).size for v in description["properties"].values()),
-                default=1,
+            selector.setObjectName("beam_preview_location")
+            preview_count = max(
+                count,
+                max(
+                    (np.asarray(v).size for v in description["properties"].values()),
+                    default=1,
+                ),
             )
-            selector.setRange(0, count - 1)
+            selector.setRange(0, preview_count - 1)
             selector.setPrefix("Longitudinal Gauss-point index: ")
-            selector.setValue(min(beam_location.value(), count - 1))
+            selector.setValue(min(beam_location, preview_count - 1))
+            selector.setToolTip(
+                "Preview the section properties and output points at this beam location."
+            )
             box.addWidget(selector)
+            preview_coordinates = QtWidgets.QComboBox()
+            preview_coordinates.setObjectName("beam_preview_coordinates")
+            preview_coordinates.addItem("Physical coordinates (y, z)", "physical")
+            preview_coordinates.addItem("Normalized coordinates (y, z)", "normalized")
+            preview_coordinates.setToolTip(
+                "Physical coordinates use the section dimensions at the selected "
+                "Gauss point. Normalized coordinates use the section bounds."
+            )
+            box.addWidget(preview_coordinates)
             property_label = QLabel()
             property_label.setWordWrap(True)
             box.addWidget(property_label)
@@ -1732,10 +1779,13 @@ class MainWindow(QtWidgets.QMainWindow):
             box.addWidget(canvas)
 
             def draw():
+                nonlocal beam_location
                 figure.clear()
                 axes = figure.add_subplot(111)
                 try:
                     index = selector.value()
+                    beam_location = index
+                    show_point_coordinates()
                     local_description = dict(description)
                     local_description["properties"] = {
                         name: np.asarray(value).reshape(-1)[
@@ -1751,13 +1801,23 @@ class MainWindow(QtWidgets.QMainWindow):
                         if normalized.ndim == 3:
                             normalized = normalized[:, :, index]
                     else:
-                        normalized = section.section.normalized_output_points(
-                            samples.value()
-                        )
-                    points = [
-                        section.normalized_section_coordinates(tuple(point))
-                        for point in normalized
-                    ]
+                        try:
+                            normalized = section.section.normalized_output_points(
+                                samples.value()
+                            )
+                        except (ValueError, NotImplementedError):
+                            if reduction.currentData() != "position":
+                                raise
+                            normalized = np.empty((0, 2))
+                    use_normalized = preview_coordinates.currentData() == "normalized"
+                    points = (
+                        normalized
+                        if use_normalized
+                        else [
+                            section.normalized_section_coordinates(tuple(point))
+                            for point in normalized
+                        ]
+                    )
                     xy = np.asarray(
                         [
                             [
@@ -1770,24 +1830,46 @@ class MainWindow(QtWidgets.QMainWindow):
                             ]
                             for y, z in points
                         ]
-                    )
+                    ).reshape(-1, 2)
                     axes.scatter(xy[:, 0], xy[:, 1], s=10, label="Output points")
-                    if (
-                        reduction.currentData() is None
-                        and coordinates.currentIndex() == 1
-                    ):
+                    if reduction.currentData() == "point_index":
                         selected = min(point_index.value(), len(xy) - 1)
+                        current_point = xy[selected]
+                    elif reduction.currentData() == "position":
+                        current_point = (y.value(), z.value())
+                        if source_choice.currentData() == "stored":
+                            nearest = int(
+                                stored_point_indices(normalized, current_point)
+                            )
+                            current_point = xy[nearest]
+                        elif not use_normalized:
+                            current_point = section.normalized_section_coordinates(
+                                current_point
+                            )
+                            current_point = [
+                                np.asarray(value).reshape(-1)[
+                                    min(index, np.asarray(value).size - 1)
+                                ]
+                                for value in current_point
+                            ]
+                    else:
+                        current_point = None
+                    if current_point is not None:
                         axes.scatter(
-                            *xy[selected],
+                            *current_point,
                             s=75,
                             facecolors="none",
                             edgecolors="red",
-                            label=f"Selected sample {selected}",
+                            label="Nearest stored point"
+                            if source_choice.currentData() == "stored"
+                            and reduction.currentData() == "position"
+                            else "Current point",
                         )
                     axes.plot(0, 0, "+", color="red", label="Centroid / beam axis")
                     axes.set_aspect("equal")
-                    axes.set_xlabel("Local y")
-                    axes.set_ylabel("Local z")
+                    label = "Normalized" if use_normalized else "Physical local"
+                    axes.set_xlabel(f"{label} y")
+                    axes.set_ylabel(f"{label} z")
                     axes.set_title(description["geometry"])
                     axes.legend()
                     property_label.setText(
@@ -1803,18 +1885,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 canvas.draw()
 
             selector.valueChanged.connect(draw)
+            preview_coordinates.currentIndexChanged.connect(draw)
             draw()
             preview.resize(600, 600)
             preview.exec()
 
         preview_button.clicked.connect(preview_section)
-        displayed = _viewer_field_name(dock.data, dock.current_field)
-        derived = dock.data.beam_derived_fields()
-        kind = (
-            displayed
-            if f"{displayed}_local" in derived
-            else ("Stress" if "Stress_local" in derived else "Strain")
-        )
+        derived = section_data.beam_derived_fields()
         frame_choice = QtWidgets.QComboBox()
         frame_choice.setObjectName("beam_coordinate_system")
         frame_choice.addItem("Local", "local")
@@ -1823,7 +1900,7 @@ class MainWindow(QtWidgets.QMainWindow):
         previous_csys = getattr(
             dock,
             "beam_csys",
-            "global" if str(dock.current_field).endswith("_global") else "local",
+            "global",
         )
         frame_choice.setCurrentIndex(max(0, frame_choice.findData(previous_csys)))
         frame_choice.setEnabled(frame_choice.count() > 1)
@@ -1837,6 +1914,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         def enable_controls():
             stored = source_choice.currentData() == "stored"
+            for spin in (y, z):
+                spin.setToolTip(
+                    "Stored results use the nearest saved point in normalized (y, z) "
+                    "at each beam location. The preview highlights that point."
+                    if stored
+                    else "Requested normalized section coordinate."
+                )
             try:
                 available = (
                     len(section_data.field_metadata[kind]["stored_points"])
@@ -1844,30 +1928,93 @@ class MainWindow(QtWidgets.QMainWindow):
                     else len(
                         SavedBeamSection(
                             section_data.beam_section_description()
-                        ).section.normalized_output_points(samples.value())
+                        ).section.normalized_output_points(max(8, samples.value()))
                     )
                 )
             except (ValueError, NotImplementedError, KeyError):
                 available = 0
-            for index in range(1, reduction.count()):
-                reduction.model().item(index).setEnabled(bool(available))
-            coordinates.model().item(1).setEnabled(bool(available))
-            if not available:
-                reduction.setCurrentIndex(0)
-                coordinates.setCurrentIndex(0)
-            point = reduction.currentData() is None
-            coordinates.setEnabled(point)
+            for index in range(reduction.count()):
+                reduction.model().item(index).setEnabled(
+                    bool(available) or reduction.itemData(index) == "position"
+                )
+            if not available and reduction.currentData() != "position":
+                reduction.setCurrentIndex(reduction.findData("position"))
+            point = reduction.currentData() in ("point_index", "position")
             y.setEnabled(point)
             z.setEnabled(point)
-            y.setReadOnly(coordinates.currentIndex() == 1)
-            z.setReadOnly(coordinates.currentIndex() == 1)
-            point_index.setEnabled(point and coordinates.currentIndex() == 1)
-            samples.setEnabled(not stored and bool(available))
+            y.setReadOnly(reduction.currentData() == "point_index")
+            z.setReadOnly(reduction.currentData() == "point_index")
+            point_index.setEnabled(reduction.currentData() == "point_index")
+            fixed = stored or (
+                section_data.beam_section_description().get("output_points") is not None
+                or "section_points" in section_data.beam_section_description()
+            )
+            samples.setEnabled(not fixed and bool(available))
+            if available:
+                blocker = QSignalBlocker(samples)
+                samples.setMaximum(max(samples.maximum(), available))
+                samples.setValue(available)
+                del blocker
+
+        def snap_samples():
+            enable_controls()
+            cached_points.clear()
+            show_point_coordinates()
+
+        samples.editingFinished.connect(snap_samples)
 
         reduction.currentIndexChanged.connect(enable_controls)
-        coordinates.currentIndexChanged.connect(enable_controls)
         source_choice.currentIndexChanged.connect(enable_controls)
         enable_controls()
+        show_point_coordinates()
+        if submesh_choice is not None:
+
+            def select_submesh():
+                nonlocal section_data, count, beam_location, kind
+                section_data = dock.data._submesh_dataset(submesh_choice.currentData())
+                available_fields = section_data.beam_derived_fields()
+                if f"{kind}_local" not in available_fields:
+                    kind = "Stress" if "Stress_local" in available_fields else "Strain"
+                stored = "stored_points" in section_data.field_metadata.get(kind, {})
+                recomputed = (
+                    ("BeamStress" if kind == "Stress" else "BeamStrain")
+                    in section_data.gausspoint_data
+                    and section_data.beam_section_description().get(
+                        "recovery", "linear"
+                    )
+                    != "stored_only"
+                )
+                blocker = QSignalBlocker(source_choice)
+                source_choice.model().item(0).setEnabled(stored)
+                source_choice.model().item(1).setEnabled(recomputed)
+                if source_choice.currentData() == "stored" and not stored:
+                    source_choice.setCurrentIndex(1)
+                elif source_choice.currentData() == "recomputed" and not recomputed:
+                    source_choice.setCurrentIndex(0)
+                del blocker
+                count = max(
+                    (
+                        np.asarray(values).shape[-1]
+                        for name, values in section_data.gausspoint_data.items()
+                        if name in ("BeamStress", "BeamStrain", "Stress", "Strain")
+                    ),
+                    default=1,
+                )
+                beam_location = 0
+                cached_points.clear()
+                previous = frame_choice.currentData()
+                blocker = QSignalBlocker(frame_choice)
+                frame_choice.clear()
+                frame_choice.addItem("Local", "local")
+                if f"{kind}_global" in available_fields:
+                    frame_choice.addItem("Global", "global")
+                frame_choice.setCurrentIndex(max(0, frame_choice.findData(previous)))
+                frame_choice.setEnabled(frame_choice.count() > 1)
+                del blocker
+                enable_controls()
+                show_point_coordinates()
+
+            submesh_choice.currentIndexChanged.connect(select_submesh)
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
         )
@@ -1876,19 +2023,33 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addRow(buttons)
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
+        if reduction.currentData() == "point_index":
+            show_point_coordinates()
+            if point_coordinates_label.text():
+                QtWidgets.QMessageBox.warning(
+                    self, "Beam section point", point_coordinates_label.text()
+                )
+                return
         updated = dict(
             source=source_choice.currentData(),
             position=(y.value(), z.value())
-            if coordinates.currentIndex() == 0
+            if reduction.currentData() in ("point_index", "position")
             else None,
-            reduction=reduction.currentData(),
+            reduction=None
+            if reduction.currentData() in ("point_index", "position")
+            else reduction.currentData(),
             samples=samples.value(),
-            point_index=point_index.value()
-            if coordinates.currentIndex() == 1
-            else None,
+            point_index=None,
+            stored_position="nearest",
+            source_fallback=submesh_choice is not None,
+            reference_submesh=submesh_choice.currentData()
+            if submesh_choice is not None
+            else 0,
         )
         if not self.apply_beam_options(updated, frame_choice.currentData(), kind):
             return
+        if submesh_choice is not None:
+            dock.data.active_submesh = submesh_choice.currentData()
         blocker = QSignalBlocker(self.field_combo)
         self.field_combo.setCurrentText(kind)
         del blocker
@@ -1918,6 +2079,10 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 selection = BeamOptions(old_options)
                 selection.update(updated)
+                if target is not active and selection.get("source_fallback"):
+                    selection["reference_submesh"] = target.data.active_submesh
+                if not target.data._is_multimesh():
+                    selection["source_fallback"] = False
                 target.data.beam_options = selection
                 if coordinates == "global" and f"{target_kind}_global" not in derived:
                     raise ValueError("Global coordinates require BeamLocalFrame")
@@ -1934,14 +2099,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 return False
             finally:
                 target.data.beam_options = old_options
-            prepared.append((target, field, component, displayed))
-        for target, field, component, displayed in prepared:
+            prepared.append((target, field, component, displayed, selection))
+        for target, field, component, displayed, selection in prepared:
             if any(
                 other is not target and other.data is target.data
                 for other in self.all_docks
             ):
                 target.data = target.data.copy()
-            target.data.beam_options.update(updated)
+            target.data.beam_options = selection
             target.opts["clim"] = None
             target.beam_csys = coordinates
             if target is active or displayed in ("Stress", "Strain"):
@@ -1955,8 +2120,21 @@ class MainWindow(QtWidgets.QMainWindow):
         if dock is None or not dock.data.shell_derived_fields():
             return
         data = dock.data
+        submesh_choice = None
         if data._is_multimesh():
-            data = data._submesh_dataset(data.active_submesh)
+            submesh_choice = QtWidgets.QComboBox()
+            submesh_choice.setObjectName("shell_submesh")
+            for mesh_index, mesh in enumerate(dock.data.mesh.submeshes):
+                if dock.data._submesh_dataset(mesh_index).shell_derived_fields():
+                    submesh_choice.addItem(
+                        f"{mesh_index}: {mesh.name or mesh.elm_type}", mesh_index
+                    )
+            if not submesh_choice.count():
+                return
+            submesh_choice.setCurrentIndex(
+                max(0, submesh_choice.findData(data.active_submesh))
+            )
+            data = dock.data._submesh_dataset(submesh_choice.currentData())
         if not data.shell_derived_fields():
             return
         options = data.shell_options
@@ -1968,6 +2146,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Stress" if "Stress_local" in data.shell_derived_fields() else "Strain"
             )
         )
+        if f"{kind}_local" not in data.shell_derived_fields():
+            kind = (
+                "Stress" if "Stress_local" in data.shell_derived_fields() else "Strain"
+            )
         description = data.shell_section_description()
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle("Shell options")
@@ -1977,24 +2159,21 @@ class MainWindow(QtWidgets.QMainWindow):
             "Only homogeneous linear shell stresses are recovered from resultants. Other stresses are interpolated within each layer from saved material-point values. At interfaces, a coordinate selects the lower layer; use a point index to select a particular side."
         )
         layout.addRow(help_label)
+        if submesh_choice is not None:
+            layout.addRow("Shell submesh:", submesh_choice)
         source = QtWidgets.QComboBox()
         source.setObjectName("shell_field_source")
         source.addItem("Stored", "stored")
-        source.addItem("Recomputed / interpolated", "recomputed")
-        has_stored = data.field_metadata.get(kind, {}).get("family") == "shell" and any(
-            kind in values
-            for values in (data.node_data, data.element_data, data.gausspoint_data)
+        source.addItem("Recomputed", "recomputed")
+        source.setToolTip(
+            "Required on the selected shell submesh. Other shell submeshes use this source when available, otherwise the other source."
         )
-        has_recomputed = (
-            f"Shell{kind}" in data.gausspoint_data
-            and (kind == "Strain" or description["model"] == "homogeneous_linear")
-        ) or (kind == "Stress" and "_ShellStress" in data.gausspoint_data)
+        has_stored, has_recomputed = data.shell_sources(kind)
         source.model().item(0).setEnabled(has_stored)
         source.model().item(1).setEnabled(has_recomputed)
         source.setCurrentIndex(
             0
-            if options["source"] == "stored"
-            or (options["source"] == "auto" and has_stored)
+            if has_stored and (options["source"] != "recomputed" or not has_recomputed)
             else 1
         )
         layout.addRow("Source:", source)
@@ -2004,25 +2183,30 @@ class MainWindow(QtWidgets.QMainWindow):
         if f"{kind}_global" in data.shell_derived_fields():
             frame.addItem("Global", "global")
         frame.setCurrentIndex(
-            max(0, frame.findData(getattr(dock, "beam_csys", "local")))
+            max(0, frame.findData(getattr(dock, "beam_csys", "global")))
         )
-        layout.addRow("Components:", frame)
         reduction = QtWidgets.QComboBox()
         reduction.setObjectName("shell_section_reduction")
         for label, mode in (
-            ("Thickness point", None),
+            ("Normalized position", "position"),
+            ("Point index", "point_index"),
             ("Maximum", "max"),
             ("Minimum", "min"),
             ("Largest magnitude (signed)", "abs_max"),
         ):
             reduction.addItem(label, mode)
-        reduction.setCurrentIndex(reduction.findData(options["reduction"]))
+        reduction.setCurrentIndex(
+            reduction.findData(
+                options["reduction"]
+                or (
+                    "point_index"
+                    if options["point_index"] is not None
+                    or options.get("reference_point_index") is not None
+                    else "position"
+                )
+            )
+        )
         layout.addRow("Value:", reduction)
-        selection = QtWidgets.QComboBox()
-        selection.setObjectName("shell_section_selection")
-        selection.addItems(["Normalized thickness", "Thickness point index"])
-        selection.setCurrentIndex(1 if options["point_index"] is not None else 0)
-        layout.addRow("Select by:", selection)
         position = QDoubleSpinBox()
         position.setObjectName("shell_section_position")
         position.setDecimals(10)
@@ -2033,7 +2217,11 @@ class MainWindow(QtWidgets.QMainWindow):
         index = QSpinBox()
         index.setObjectName("shell_section_point_index")
         index.setRange(0, 100000)
-        index.setValue(options["point_index"] or 0)
+        index.setValue(
+            options.get("reference_point_index")
+            if options.get("reference_point_index") is not None
+            else options["point_index"] or 0
+        )
         layout.addRow("Point index (from 0):", index)
         samples = QSpinBox()
         samples.setObjectName("shell_section_samples")
@@ -2043,12 +2231,14 @@ class MainWindow(QtWidgets.QMainWindow):
         note = QLabel()
         note.setWordWrap(True)
         layout.addRow(note)
+        frame.setEnabled(frame.count() > 1)
+        layout.addRow("Coordinate system:", frame)
         manual_position = [position.value()]
         was_indexed = [False]
 
         def refresh(*args):
             stored = source.currentData() == "stored"
-            indexed = selection.currentIndex() == 1
+            indexed = reduction.currentData() == "point_index"
             if indexed and not was_indexed[0]:
                 manual_position[0] = position.value()
             if not indexed and was_indexed[0]:
@@ -2063,8 +2253,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 index.setMaximum(len(points) - 1)
             if indexed:
                 position.setValue(float(points[index.value()]))
-            point = reduction.currentData() is None
-            selection.setEnabled(point)
+            point = reduction.currentData() in ("position", "point_index")
             position.setEnabled(point)
             position.setReadOnly(indexed)
             index.setEnabled(point and indexed)
@@ -2077,12 +2266,53 @@ class MainWindow(QtWidgets.QMainWindow):
                     else "Sampling includes both faces of each layer."
                 )
             )
+            if stored and reduction.currentData() == "position":
+                nearest = stored_shell_point_index(
+                    points, position.value(), data.field_metadata[kind]
+                )
+                note.setText(
+                    f"{len(points)} stored thickness points. Nearest stored position: {points[nearest]:.6g}."
+                )
 
-        for control in (source, reduction, selection):
+        for control in (source, reduction):
             control.currentIndexChanged.connect(refresh)
         index.valueChanged.connect(refresh)
         samples.valueChanged.connect(refresh)
+        position.valueChanged.connect(
+            lambda: refresh() if reduction.currentData() == "position" else None
+        )
         refresh()
+        if submesh_choice is not None:
+
+            def select_submesh():
+                nonlocal data, description, kind
+                data = dock.data._submesh_dataset(submesh_choice.currentData())
+                if f"{kind}_local" not in data.shell_derived_fields():
+                    kind = (
+                        "Stress"
+                        if "Stress_local" in data.shell_derived_fields()
+                        else "Strain"
+                    )
+                description = data.shell_section_description()
+                stored, recomputed = data.shell_sources(kind)
+                with QSignalBlocker(source):
+                    source.model().item(0).setEnabled(stored)
+                    source.model().item(1).setEnabled(recomputed)
+                    if source.currentData() == "stored" and not stored:
+                        source.setCurrentIndex(1)
+                    elif source.currentData() == "recomputed" and not recomputed:
+                        source.setCurrentIndex(0)
+                previous = frame.currentData()
+                with QSignalBlocker(frame):
+                    frame.clear()
+                    frame.addItem("Local", "local")
+                    if f"{kind}_global" in data.shell_derived_fields():
+                        frame.addItem("Global", "global")
+                    frame.setCurrentIndex(max(0, frame.findData(previous)))
+                frame.setEnabled(frame.count() > 1)
+                refresh()
+
+            submesh_choice.currentIndexChanged.connect(select_submesh)
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
         )
@@ -2093,13 +2323,27 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         updated = dict(
             source=source.currentData(),
-            reduction=reduction.currentData(),
+            reduction=None
+            if reduction.currentData() in ("position", "point_index")
+            else reduction.currentData(),
             samples=samples.value(),
-            position=position.value() if selection.currentIndex() == 0 else None,
-            point_index=index.value() if selection.currentIndex() == 1 else None,
+            position=position.value()
+            if reduction.currentData() in ("position", "point_index")
+            else None,
+            point_index=None,
+            stored_position="nearest",
+            source_fallback=submesh_choice is not None,
+            reference_submesh=submesh_choice.currentData()
+            if submesh_choice is not None
+            else 0,
+            reference_point_index=index.value()
+            if reduction.currentData() == "point_index"
+            else None,
         )
         if not self.apply_shell_options(updated, frame.currentData(), kind):
             return
+        if submesh_choice is not None:
+            dock.data.active_submesh = submesh_choice.currentData()
         with QSignalBlocker(self.field_combo):
             self.field_combo.setCurrentText(kind)
         self.update_coordinate_choices(kind)
@@ -2129,6 +2373,10 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 selection = ShellOptions(old)
                 selection.update(updated)
+                if target is not active and selection.get("source_fallback"):
+                    selection["reference_submesh"] = target.data.active_submesh
+                if not target.data._is_multimesh():
+                    selection["source_fallback"] = False
                 target.data.shell_options = selection
                 if coordinates == "global" and f"{target_kind}_global" not in derived:
                     raise ValueError("Global coordinates require ShellLocalFrame")
@@ -2144,14 +2392,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 return False
             finally:
                 target.data.shell_options = old
-            prepared.append((target, field, component, displayed))
-        for target, field, component, displayed in prepared:
+            prepared.append((target, field, component, displayed, selection))
+        for target, field, component, displayed, selection in prepared:
             if any(
                 other is not target and other.data is target.data
                 for other in self.all_docks
             ):
                 target.data = target.data.copy()
-            target.data.shell_options.update(updated)
+            target.data.shell_options = selection
             target.opts["clim"] = None
             target.beam_csys = coordinates
             if target is active or displayed in ("Stress", "Strain"):

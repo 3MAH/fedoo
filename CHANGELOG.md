@@ -6,8 +6,54 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Prepare shell tangent fields once in the existing post-constitutive update
+  and reuse them during residual/matrix assembly. State snapshots preserve the
+  fields for rollback; the assembly and weak-form interfaces are unchanged.
+- Differentiate FI/SRI/MITC interpolation in local in-plane coordinates before
+  mapping to nodal increments, preserving all four weak-form corrections.
+- Default beam/shell viewer components to global coordinates when local-frame
+  data is available, with local coordinates as the fallback.
+- Align shell viewer options with beam options: combine position/index/extrema
+  in Value, move Coordinate system to the end, and add shell-only submesh
+  selection with source preferences and fallback on other submeshes.
+- Allow linear shell Stress/Strain-only files to reconstruct their thickness
+  distribution from two distinct saved points without generalized outputs.
+  Shell viewer stored selections use the nearest point within the requested
+  layer; API interpolation remains the default. Reference point indices retain
+  the selected side of a laminate interface.
+- Beam viewer sampling shows the actual point count and snaps entered values
+  to the nearest supported grid; fixed stored/custom counts are read-only.
+  Rectangular grids select the closest odd square count, and count ties select
+  the smaller grid.
+- Beam viewer source choices require the selected source on the reference
+  submesh and fall back between stored/recomputed data on other beam submeshes.
+  Missing section fields remain absent instead of being treated as zero data.
+- Select the nearest stored beam section point in normalized coordinates,
+  independently for each submesh and saved location, with an optional exact-match
+  policy. Section metadata supports `recovery="stored_only"` to disable analytical
+  recomputation. The beam preview highlights the nearest stored point.
+- Reduce optional shell tangent overhead by combining weak-form coefficients
+  before operator expansion and contracting interpolation derivatives directly
+  with local displacements/resultants, without storing the full derivative tensor.
+- Vectorize shell tangent nodal increments, force rotations and coefficient
+  selection; reuse invariant nodal operators without caching trial-state data.
+- Reuse current shell interpolation operators and projected Jacobian inverses
+  across tangent batches. Differentiate geometry from local nodal variations
+  and compute the area gradient directly, reducing temporary array storage.
+
 ### Added
 
+- Optional analytical UL corotational shell tangents with
+  `PlateEquilibrium(consistent_tangent=True)` and `PlateEquilibriumFI`.
+  Four explicit weak-form corrections include local finite rotations,
+  changing surface geometry/area, FI/SRI/MITC interpolation and drilling.
+  The default remains the historical material plus membrane-force geometric
+  tangent. The optional tangent can be nonsymmetric and uses a fixed initial
+  stiffness scale for the drilling penalty, including nonlinear section laws.
+  Trial residuals use the trial frame; the existing force law and small local
+  strain model are retained. Manually split shell weak forms are excluded.
 - Beam output points configured by normalized coordinate pairs or an approximate
   `n_points` budget. `add_output(position=None)` saves all configured beam points
   on a separate section-point axis; scalar beam positions are rejected.

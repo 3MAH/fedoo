@@ -108,7 +108,9 @@ von Mises and principal components.
 
 These are extrema over the saved sampling, not guaranteed continuous section
 extrema. Restricting the saved output to one point restricts stored reductions to
-that point. Refining elastic beam/shell sampling later requires the generalized
+that point. Refining elastic beam sampling later requires the generalized
+resultants. Homogeneous linear shell tensors at two distinct thickness points
+determine their linear distribution and allow later resampling without saved
 resultants; nonlinear/laminate shell files already retain the underlying thickness
 stresses for interpolation.
 
@@ -150,6 +152,12 @@ and the thickness/shear factor. Transverse shear uses the existing constant
 distribution, ``Q/(k*h)``. ``ShellStrain`` recovers the Reissner--Mindlin strain
 kinematics for all supported shell laws, including the existing zero normal
 strain component.
+If the respective generalized field is absent, two distinct saved thickness
+points reconstruct the homogeneous linear stress distribution or linear strain
+kinematics. The linear reconstruction can also evaluate positions beyond the
+saved thickness interval, within [-1,1]. One saved point is insufficient.
+Stored nodal tensors remain unsuitable for global rotation, including when
+resampling their linear distribution.
 
 Nonlinear shells and laminates save private ``_ShellStress`` tensors at their
 actual material points whenever ``Stress`` or ``ShellStress`` is requested.
@@ -165,8 +173,20 @@ selects the lower layer; point indices can select either saved side.
 ``samples`` sets the generated point count per layer for recomputed reductions
 and index selection. Actual integration points are also retained to capture
 extrema. Stored sampling is fixed, so ``samples`` is ignored for that source.
-The viewer's **Options → Shell…** dialog provides the same controls, including
-local/global components, and respects **Apply options to**.
+The viewer's **Options → Shell…** dialog combines normalized position, point
+index and extrema in **Value**, with **Coordinate system** at the end. A shell
+submesh selector lists only compatible submeshes. Stored/Recomputed is required
+on the reference submesh and is a preference, with fallback, on other submeshes.
+A reference point index supplies its normalized position to other submeshes;
+on the reference it retains the exact index, including either side of a laminate
+interface. Stored coordinates in the viewer use the nearest point within the
+requested layer. The API keeps interpolation as the default stored selection;
+``stored_position="nearest"`` or ``"exact"`` selects other policies. Source
+fallback is opt-in through ``source_fallback=True`` and ``reference_submesh``.
+The dialog respects **Apply options to**.
+Beam and shell viewer components default to global coordinates when the local
+frame is available; otherwise the viewer uses local coordinates. Section tensors
+remain stored locally and the results API retains its existing local defaults.
 
 Beam ``BeamStress`` and ``BeamStrain`` fields are generalized quantities in
 the local element frame, not continuum tensors. Their component orders are::
@@ -255,7 +275,7 @@ retain numerical component labels.
 Automatic recovery from FDH5 beam results
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-New Gauss-point outputs of ``BeamStress`` or ``BeamStrain`` automatically
+Gauss-point outputs of ``BeamStress`` or ``BeamStrain`` automatically
 include section metadata shared by both fields, associated with their submesh.
 FDH5 writes typed HDF5 datasets under
 ``results/iter_N/section_metadata/submesh_I`` instead of JSON. Uniform properties
@@ -286,20 +306,42 @@ shows one Stress and one Strain entry. **Options → Beam…** selects the sourc
 coordinate system, section position/index and reduction. Its optional Beam
 toolbar is hidden by default.
 
+For mixed meshes, Beam options lists compatible beam submeshes as sampling
+references. Choosing an index resolves its normalized coordinates on that
+reference section; the same coordinate request applies to every beam submesh.
+The preview highlights the nearest stored point when stored data is selected.
+The viewer requires Stored/Recomputed on the selected reference submesh. On
+other beam submeshes it uses that source when available and falls back to the
+other source otherwise. Stored fallback uses the nearest normalized point;
+recomputed fallback evaluates the requested normalized coordinates. These
+preferences remain active when changing result frames.
+
 ``results.beam_options.update(...)`` validates updates atomically:
 
 * ``source="auto"`` (default) prefers stored tensors when available, otherwise
   recomputes from the respective generalized field. Explicit ``"stored"`` or
   ``"recomputed"`` raises an error if the required data is unavailable.
+  The viewer enables ``source_fallback=True`` for mixed meshes and sets
+  ``reference_submesh`` to its sampling reference. The reference remains strict;
+  other submeshes use the preferred source when available, otherwise the other
+  source. API selections remain strict by default (``source_fallback=False``).
 * ``reduction="abs_max"`` (default) returns the value with the largest absolute
   magnitude, retaining its sign. Equal-magnitude ties select the first output
   point. ``"max"`` and ``"min"`` use algebraic extrema.
 * ``reduction=None`` selects one point using normalized ``position=(y,z)`` or
   zero-based ``point_index``. Supplying both non-None in one update is rejected.
   Selecting either clears the other. A reduction ignores both selectors.
-* Stored positions must match a saved point; no spatial interpolation is
-  implied. Recomputed positions can be any coordinates supported by the
+* ``stored_position="nearest"`` (default) chooses the closest saved point in
+  normalized (y,z), independently on each submesh and at each saved beam
+  location. Equal-distance ties choose the first point. This selects a saved
+  value without interpolation. ``stored_position="exact"`` requires a matching
+  point at every location. Recomputed positions can be any coordinates supported by the
   recovery model, including coordinates beyond the bounding box.
+* Section metadata declares ``recovery="linear"`` (the default for existing
+  sections and legacy files) or ``"stored_only"``. Set ``section.recovery`` or
+  override it in a section subclass. ``stored_only`` disables recovery from
+  generalized fields even when those fields are saved; stored tensors remain
+  available for point selection and reductions.
 * ``samples`` changes generated recomputed sampling only. Stored points and
   explicitly supplied output points remain fixed.
 
@@ -307,6 +349,8 @@ For example::
 
     results.beam_options.update(source="stored", reduction=None, point_index=2)
     stress_at_point = results["Stress", "XX"]
+    results.beam_options.update(position=(0.4, -0.2), stored_position="nearest")
+    stress_at_nearest_saved_point = results["Stress", "XX"]
     results.beam_options.update(source="recomputed", position=(0.5, -0.25))
     stress_at_position = results["Stress", "XX"]
     results.beam_options.update(reduction="abs_max", samples=128)
@@ -328,6 +372,10 @@ not be combined into a synthetic tensor. Extrema are sampled estimates.
 Standard sections generate output points using ``n_points=32`` by default,
 an approximate total point budget including boundaries and interiors. Pipes
 exclude the hole. Increasing ``samples`` refines recomputed grids. A custom
+section's fixed point set is not resampled. In the viewer, **Sample points number**
+snaps to the closest supported count when editing finishes; fixed point counts
+are displayed without allowing edits. For equal distances, the lower count wins.
+An unsampled custom
 section without supplied points or a sampling method requires a direct
 position with ``reduction=None``; the viewer disables indices and reductions.
 Recomputation still requires the recovery model for the requested stresses.

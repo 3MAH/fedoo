@@ -86,6 +86,145 @@ def test_signed_extrema_and_atomic_selection():
 
 
 @pytest.mark.parametrize("association", ["GaussPoint", "Element", "Node"])
+def test_linear_stress_only_reconstruction_and_nearest_selection(tmp_path, association):
+    pb, assembly, law = shell_problem()
+    result = pb.get_results(
+        assembly, ["Stress", "Strain"], position=[-0.6, 0.4], output_type=association
+    )
+    result.save(str(tmp_path / "linear_tensors.fdh5"))
+    loaded = fd.read_data(str(tmp_path / "linear_tensors.fdh5"))
+    assert "ShellStress" not in loaded.gausspoint_data
+    assert loaded.shell_sources("Stress") == (True, True)
+    assert loaded.shell_sources("Strain") == (True, True)
+    for z in (-1, -0.23, 0.7, 1):
+        expected = pb.get_results(
+            assembly, ["Stress", "Strain"], position=z, output_type=association
+        )
+        expected.shell_options.update(reduction=None, point_index=0)
+        loaded.shell_options.update(source="recomputed", reduction=None, position=z)
+        for kind in ("Stress", "Strain"):
+            np.testing.assert_allclose(loaded[kind], expected[kind], atol=1e-12)
+    loaded.shell_options.update(
+        source="stored", stored_position="nearest", position=0.8
+    )
+    np.testing.assert_allclose(
+        loaded["Stress"], loaded.dict_data[association]["Stress"][:, 1]
+    )
+    loaded.shell_options.update(stored_position="exact")
+    with pytest.raises(ValueError, match="does not match"):
+        loaded["Stress"]
+    single = pb.get_results(assembly, ["Stress"], position=0)
+    assert single.shell_sources("Stress") == (True, False)
+    single.shell_options.update(source="recomputed", reduction=None, position=0.2)
+    with pytest.raises(ValueError, match="ShellStress"):
+        single["Stress"]
+
+
+@pytest.mark.parametrize("preferred", ["stored", "recomputed"])
+def test_shell_source_preferences_require_reference_only(preferred):
+    pb, assembly, _ = shell_problem()
+    both = pb.get_results(assembly, ["Stress", "ShellStress"])
+    stored_only = pb.get_results(assembly, ["Stress"], position=0)
+    recomputed_only = pb.get_results(assembly, ["ShellStress"])
+    meshes = [assembly.mesh.copy() for _ in range(3)]
+    mixed = fd.DataSet(fd.MultiMesh.from_mesh_list(meshes))
+    sections = (both, stored_only, recomputed_only)
+    fields = set().union(*(data.gausspoint_data for data in sections))
+    mixed.gausspoint_data = {
+        name: {
+            i: data.gausspoint_data[name]
+            for i, data in enumerate(sections)
+            if name in data.gausspoint_data
+        }
+        for name in fields
+    }
+    metadata = set().union(*(data.field_metadata for data in sections))
+    mixed.field_metadata = {
+        name: {
+            "submeshes": {
+                str(i): data.field_metadata[name]
+                for i, data in enumerate(sections)
+                if name in data.field_metadata
+            }
+        }
+        for name in metadata
+    }
+    mixed.shell_options.update(
+        source=preferred,
+        source_fallback=True,
+        reference_submesh=0,
+        reduction=None,
+        position=0.4,
+        stored_position="nearest",
+    )
+    value = mixed["Stress", "XX"]
+    both.shell_options.update(
+        source=preferred, reduction=None, position=0.4, stored_position="nearest"
+    )
+    stored_only.shell_options.update(source="stored", reduction=None, point_index=0)
+    recomputed_only.shell_options.update(
+        source="recomputed", reduction=None, position=0.4
+    )
+    for i, data in enumerate(sections):
+        np.testing.assert_allclose(value.submesh(i), data["Stress", "XX"])
+    mixed.shell_options.update(reference_submesh=1 if preferred == "recomputed" else 2)
+    with pytest.raises(ValueError, match="ShellStress|No stored"):
+        mixed["Stress", "XX"]
+
+
+def test_reference_point_keeps_laminate_interface_side():
+    materials = [fd.constitutivelaw.ElasticIsotrop(e, 0.25) for e in (1000, 4000)]
+    pb, assembly, _ = shell_problem(
+        fd.constitutivelaw.ShellLaminate(materials, [1.0, 1.0])
+    )
+    data = pb.get_results(assembly, ["Stress"])
+    mixed = fd.DataSet(
+        fd.MultiMesh.from_mesh_list([assembly.mesh, assembly.mesh.copy()])
+    )
+    mixed.gausspoint_data = {
+        name: {0: value, 1: value} for name, value in data.gausspoint_data.items()
+    }
+    mixed.field_metadata = {
+        name: {"submeshes": {"0": value, "1": value}}
+        for name, value in data.field_metadata.items()
+    }
+    mixed.shell_options.update(
+        source="stored",
+        reduction=None,
+        position=0,
+        stored_position="nearest",
+        source_fallback=True,
+        reference_submesh=0,
+        reference_point_index=2,
+    )
+    raw = data.gausspoint_data["Stress"]
+    value = mixed["Stress", "XX"]
+    np.testing.assert_allclose(value.submesh(0), raw[0, 2])
+    np.testing.assert_allclose(value.submesh(1), raw[0, 1])
+    assert not np.allclose(value.submesh(0), value.submesh(1))
+    mixed.shell_options.update(position=0.3)
+    assert mixed.shell_options["reference_point_index"] is None
+
+
+def test_viewer_lists_shell_components_with_default_thickness_reduction():
+    from types import SimpleNamespace
+
+    viewer = pytest.importorskip("fedoo.util.viewer")
+    pb, assembly, _ = shell_problem()
+    result = pb.get_results(assembly, ["Stress", "Strain"])
+    dock = SimpleNamespace(data=result)
+    # Component discovery must not request a full tensor under a scalar
+    # thickness reduction. Call the method without creating a Qt window.
+    for field in ("Stress", "Stress_local", "Stress_global", "Strain"):
+        components = viewer.PlotDock.get_components(dock, field)
+        assert "XX" in components
+        assert "XY" in components
+        if field.startswith("Stress"):
+            assert "vm" in components
+    assert result.shell_options["reduction"] == "abs_max"
+
+
+@pytest.mark.parametrize("association", ["GaussPoint", "Element", "Node"])
 def test_stored_associations_and_rotation(association):
     pb, assembly, _ = shell_problem()
     result = pb.get_results(

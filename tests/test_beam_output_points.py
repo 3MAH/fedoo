@@ -74,6 +74,8 @@ def test_stored_selection_matches_coordinates_and_ignores_samples(tmp_path):
         restored["Stress", "XX"], data.gausspoint_data["Stress"][0, 2]
     )
     restored.beam_options.update(position=(0.3, 0))
+    np.testing.assert_allclose(restored["Stress", "XX"], 0)
+    restored.beam_options.update(stored_position="exact")
     with pytest.raises(ValueError, match="does not match"):
         restored["Stress", "XX"]
     restored.beam_options.update(source="recomputed")
@@ -113,6 +115,118 @@ def test_custom_identity_bounds_and_explicit_bounds():
     )
     np.testing.assert_allclose(custom.section_coordinates((-0.5, 0.5)), [-1, 0.5])
     assert custom.output_points.shape == (1, 2)
+
+
+@pytest.mark.parametrize("kind", ["Stress", "Strain"])
+def test_nearest_stored_point_varies_at_each_location(kind):
+    data, _, _ = beam_data(generalized=False)
+    points = np.array(
+        [[[-0.75, 0.8], [0, 0]], [[0.25, -0.4], [0, 0]], [[0.9, 0.2], [0, 0]]]
+    )
+    tensors = np.arange(36.0).reshape(6, 3, 2)
+    data.gausspoint_data = {kind: tensors}
+    data.field_metadata[kind] = dict(
+        data.field_metadata["_BeamSection"], stored_points=points.tolist()
+    )
+    data.beam_options.update(reduction=None, position=(0.15, 0))
+    expected = tensors[:, [1, 2], [0, 1]]
+    np.testing.assert_array_equal(data[kind], expected)
+    # Equal normalized distances select the first point deterministically.
+    data.beam_options.update(position=(-0.25, 0))
+    np.testing.assert_array_equal(data[kind][:, 0], tensors[:, 0, 0])
+    data.beam_options.update(stored_position="exact", position=(0.25, 0))
+    with pytest.raises(ValueError, match="every location"):
+        data[kind]
+    before = dict(data.beam_options)
+    with pytest.raises(ValueError, match="stored_position"):
+        data.beam_options.update(stored_position="interpolated")
+    assert data.beam_options == before
+
+
+def test_stored_only_capability_survives_fdh5(tmp_path):
+    data, section, _ = beam_data()
+    section.recovery = "stored_only"
+    description = section.section_description()
+    data.field_metadata["_BeamSection"] = description
+    data.field_metadata["Stress"]["recovery"] = "stored_only"
+    path = tmp_path / "stored_only.fdh5"
+    data.save(str(path))
+    restored = fd.read_data(str(path))
+    assert restored.beam_section_description()["recovery"] == "stored_only"
+    assert type(section).from_section_description(description).recovery == "stored_only"
+    restored.beam_options.update(reduction=None, position=(0.7, 0))
+    np.testing.assert_allclose(
+        restored["Stress", "XX"], data.gausspoint_data["Stress"][0, 2]
+    )
+    restored.beam_options.update(source="recomputed")
+    with pytest.raises(ValueError, match="stored_only"):
+        restored["Stress", "XX"]
+    del restored.gausspoint_data["Stress"]
+    assert "Stress" not in restored.beam_derived_fields()
+    assert "Stress_local" not in restored.beam_derived_fields()
+    section.recovery = "invalid"
+    with pytest.raises(ValueError, match="recovery"):
+        section.section_description()
+
+
+@pytest.mark.parametrize("preferred", ["stored", "recomputed"])
+def test_source_preference_falls_back_only_outside_reference(preferred):
+    reference, _, _ = beam_data()
+    stored_only, _, _ = beam_data()
+    recomputed_only, _, _ = beam_data(stored=False)
+    stored_only.field_metadata["_BeamSection"]["recovery"] = "stored_only"
+    for index, data in enumerate((reference, stored_only)):
+        data.gausspoint_data["Stress"][:] = 100 + index
+    nodes = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+    combined = fd.DataSet(
+        fd.MultiMesh.from_mesh_list(
+            [fd.Mesh(nodes, np.array([[i, i + 1]]), "lin2") for i in range(3)]
+        )
+    )
+    sections = (reference, stored_only, recomputed_only)
+    combined.gausspoint_data = {
+        "BeamStress": {
+            i: data.gausspoint_data["BeamStress"] for i, data in enumerate(sections)
+        },
+        "Stress": {
+            i: data.gausspoint_data["Stress"] for i, data in enumerate(sections[:2])
+        },
+    }
+    combined.field_metadata = {
+        name: {
+            "submeshes": {
+                str(i): data.field_metadata[name]
+                for i, data in enumerate(sections)
+                if name in data.field_metadata
+            }
+        }
+        for name in ("_BeamSection", "Stress")
+    }
+    combined.beam_options.update(
+        source=preferred,
+        source_fallback=True,
+        reference_submesh=0,
+        reduction=None,
+        position=(0.7, 0),
+    )
+    result = combined.get_data("Stress", "XX")
+    reference.beam_options.update(source=preferred, reduction=None, position=(0.7, 0))
+    np.testing.assert_allclose(result.submesh(0), reference["Stress", "XX"])
+    np.testing.assert_allclose(result.submesh(1), 101)
+    recomputed_only.beam_options.update(
+        source="recomputed", reduction=None, position=(0.7, 0)
+    )
+    np.testing.assert_allclose(result.submesh(2), recomputed_only["Stress", "XX"])
+    # Choosing an incompatible reference must still reject the explicit source.
+    combined.beam_options.update(
+        reference_submesh=1 if preferred == "recomputed" else 2
+    )
+    with pytest.raises(ValueError, match="stored_only|unavailable"):
+        combined.get_data("Stress", "XX")
+    # API explicit sources remain strict unless fallback is enabled.
+    combined.beam_options.update(source_fallback=False, reference_submesh=0)
+    with pytest.raises(ValueError, match="stored_only|unavailable"):
+        combined.get_data("Stress", "XX")
 
 
 def test_solver_output_default_and_shell_default(tmp_path):
@@ -213,6 +327,7 @@ def test_stored_element_recovery_and_ambiguous_nodal_frames():
 def test_stored_points_on_multiple_submeshes(tmp_path, association):
     first, _, _ = beam_data(generalized=False)
     second, _, _ = beam_data(generalized=False)
+    second.field_metadata["Stress"]["stored_points"] = [[-1, 0], [1, 0], [0, 0]]
     nodes = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
     meshes = [
         fd.Mesh(nodes, np.array([[0, 1]]), "lin2"),
@@ -244,3 +359,7 @@ def test_stored_points_on_multiple_submeshes(tmp_path, association):
     assert category == association
     np.testing.assert_allclose(value.submesh(0), raw[0, 0])
     np.testing.assert_allclose(value.submesh(1), 2 * raw[0, 0])
+    restored.beam_options.update(position=(0.8, 0))
+    nearest = restored.get_data("Stress", "XX")
+    np.testing.assert_allclose(nearest.submesh(0), raw[0, 2])
+    np.testing.assert_allclose(nearest.submesh(1), 2 * raw[0, 1])

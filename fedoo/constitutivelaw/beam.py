@@ -12,6 +12,7 @@ import numpy as np
 
 class BeamProperties(ConstitutiveLaw):
     section_type = "generic"
+    recovery = "linear"
     section_dimensions = ()
     section_registry = {}
 
@@ -28,9 +29,12 @@ class BeamProperties(ConstitutiveLaw):
         Coordinates are centroid-relative, never bounding-box-centred.
         """
         names = ("A", "Jx", "Iyy", "Izz", "k") + self.section_dimensions
+        if self.recovery not in ("linear", "stored_only"):
+            raise ValueError("Beam recovery must be 'linear' or 'stored_only'")
         description = {
             "version": 3,
             "geometry": self.section_type,
+            "recovery": self.recovery,
             "properties": {
                 name: np.asarray(getattr(self, name)).tolist() for name in names
             },
@@ -69,6 +73,7 @@ class BeamProperties(ConstitutiveLaw):
         if section_class is None:
             raise ValueError(f"Beam section type {kind!r} is not registered")
         section = section_class.__new__(section_class)
+        section.recovery = description.get("recovery", "linear")
         for name, value in description["properties"].items():
             setattr(section, name, np.asarray(value))
         # Version 1 called the circular radius r_ext.
@@ -666,6 +671,10 @@ class BeamRectangular(BeamProperties):
 
     def section_mesh(self, n_points=32, **kwargs):
         count = max(3, 2 * int(np.sqrt(n_points) / 2) + 1)
+        count = min(
+            (max(3, count - 2), count, count + 2),
+            key=lambda size: abs(size**2 - n_points),
+        )
         return rectangle_mesh(
             **(
                 {

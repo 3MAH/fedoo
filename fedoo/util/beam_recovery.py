@@ -35,6 +35,9 @@ class BeamOptions(dict):
             samples=32,
             position=None,
             point_index=None,
+            stored_position="nearest",
+            source_fallback=False,
+            reference_submesh=None,
         )
         if values:
             self.update(values)
@@ -70,15 +73,75 @@ class BeamOptions(dict):
             "abs_max",
         ):
             raise ValueError("reduction must be None, 'max', 'min' or 'abs_max'")
+        if "stored_position" in changed and changed["stored_position"] not in (
+            "nearest",
+            "exact",
+        ):
+            raise ValueError("stored_position must be 'nearest' or 'exact'")
         if (
             "position_coordinates" in changed
             and changed["position_coordinates"] != "normalized"
         ):
             raise ValueError("Beam positions are always normalized")
+        if "source_fallback" in changed and not isinstance(
+            changed["source_fallback"], bool
+        ):
+            raise ValueError("source_fallback must be a boolean")
+        if changed.get("reference_submesh") is not None:
+            reference = changed["reference_submesh"]
+            if not isinstance(reference, (int, np.integer)) or reference < 0:
+                raise ValueError(
+                    "reference_submesh must be a nonnegative integer or None"
+                )
         super().update(changed)
 
     def __setitem__(self, key, value):
         self.update({key: value})
+
+
+def stored_point_indices(points, position, mode="nearest"):
+    """Select by normalized distance, independently at every saved location.
+
+    Return a scalar for shared points or one index per location for varying
+    points. Equal distances select the first saved point.
+    """
+    points = np.asarray(points, dtype=float)
+    if (
+        points.ndim not in (2, 3)
+        or points.shape[1] != 2
+        or len(points) == 0
+        or not np.all(np.isfinite(points))
+    ):
+        raise ValueError(
+            "Stored beam coordinates must be finite (points, 2[, locations])"
+        )
+    target = validate_positions(position)[0]
+    if points.ndim == 3:
+        target = target[:, None]
+    if mode == "nearest":
+        return np.argmin(np.sum((points - target) ** 2, axis=1), axis=0)
+    if mode != "exact":
+        raise ValueError("stored_position must be 'nearest' or 'exact'")
+    matches = np.all(np.isclose(points, target, rtol=0, atol=1e-12), axis=1)
+    if not np.all(np.any(matches, axis=0)):
+        raise ValueError(
+            "Position does not match a stored section point at every location"
+        )
+    return np.argmax(matches, axis=0)
+
+
+def use_stored_beam_field(options, has_stored, can_recompute):
+    """Resolve a preference by capability, without masking recovery errors."""
+    source = options.get("source", "auto")
+    if source == "auto":
+        return has_stored
+    if source == "stored":
+        return not (
+            options.get("source_fallback", False) and not has_stored and can_recompute
+        )
+    return bool(
+        options.get("source_fallback", False) and not can_recompute and has_stored
+    )
 
 
 def reduce_section_tensors(tensors, kind, component, reduction):
@@ -113,7 +176,7 @@ def _polar_sampling_grid(samples, pipe):
     while True:
         count = (intervals + 1) * angles if pipe else intervals * angles + 1
         if count >= samples:
-            if previous is not None and samples - previous[2] < count - samples:
+            if previous is not None and samples - previous[2] <= count - samples:
                 return previous[:2]
             return intervals, angles
         previous = intervals, angles, count
@@ -223,11 +286,12 @@ def recover_beam_field(
     stored_points=None,
 ):
     """Apply the same section selection to saved tensors and recomputed tensors."""
-    section = SavedBeamSection(description)
     options = BeamOptions(options)
     reduction = options["reduction"]
-    use_stored = options["source"] == "stored" or (
-        options["source"] == "auto" and stored is not None
+    use_stored = use_stored_beam_field(
+        options,
+        stored is not None and stored_points is not None,
+        values is not None and description.get("recovery", "linear") != "stored_only",
     )
     if use_stored:
         if stored is None or stored_points is None:
@@ -239,10 +303,15 @@ def recover_beam_field(
             tensors = tensors[:, None, :]
         points = np.asarray(stored_points)
     else:
+        if description.get("recovery", "linear") == "stored_only":
+            raise ValueError(
+                f"Beam {kind} recovery is stored_only; use stored section tensors"
+            )
         if values is None:
             raise ValueError(
                 f"Recomputed {kind} requires {'BeamStress' if kind == 'Stress' else 'BeamStrain'}"
             )
+        section = SavedBeamSection(description)
         if reduction is None and options["position"] is not None:
             points = validate_positions(options["position"])
         else:
@@ -251,6 +320,7 @@ def recover_beam_field(
         method = field.get_stress if kind == "Stress" else field.get_strain
         tensors = None
     if reduction is None:
+        location_indices = None
         index = options["point_index"]
         if index is not None:
             if index >= len(points):
@@ -260,25 +330,25 @@ def recover_beam_field(
             indices = [index]
         elif options["position"] is not None:
             if use_stored:
-                target = np.asarray(options["position"])
-                if points.ndim == 3:
-                    target = target[:, None]
-                matches = np.all(
-                    np.isclose(points, target, rtol=0, atol=1e-12),
-                    axis=tuple(range(1, points.ndim)),
+                selected = stored_point_indices(
+                    points, options["position"], options["stored_position"]
                 )
-                if not np.any(matches):
-                    raise ValueError(
-                        "Position does not match a stored section point; select recomputed data"
-                    )
-                indices = [int(np.flatnonzero(matches)[0])]
+                if np.ndim(selected):
+                    location_indices = np.broadcast_to(selected, (tensors.shape[-1],))
+                else:
+                    indices = [int(selected)]
             else:
                 indices = [0]
         else:
             raise ValueError("With reduction=None, provide position or point_index")
-        points = points[indices]
-        if use_stored:
+        if location_indices is not None:
+            tensors = tensors[:, location_indices, np.arange(tensors.shape[-1])][
+                :, None, :
+            ]
+        elif use_stored:
             tensors = tensors[:, indices, :]
+        else:
+            points = points[indices]
     if not use_stored:
         tensors = np.stack(
             [method(section, tuple(point), local_frame).asarray() for point in points],

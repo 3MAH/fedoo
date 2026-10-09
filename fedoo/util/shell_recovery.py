@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .beam_recovery import BeamOptions, reduce_section_tensors
+from .beam_recovery import BeamOptions, reduce_section_tensors, use_stored_beam_field
 from .beam_tensors import _to_global
 from .voigt_tensors import StressTensorList, StrainTensorList
 
@@ -26,13 +26,25 @@ class ShellOptions(BeamOptions):
     def __init__(self, values=None):
         super().__init__()
         dict.update(self, samples=3)
+        dict.update(self, stored_position="interpolated", reference_point_index=None)
         if values:
             self.update(values)
 
     def update(self, *args, **kwargs):
         changed = dict(*args, **kwargs)
+        stored_position = changed.pop(
+            "stored_position", self.get("stored_position", "interpolated")
+        )
+        if stored_position not in ("nearest", "exact", "interpolated"):
+            raise ValueError(
+                "Shell stored_position must be 'nearest', 'exact' or 'interpolated'"
+            )
         has_position = "position" in changed
         position = changed.pop("position", None)
+        if (
+            has_position or "point_index" in changed
+        ) and "reference_point_index" not in changed:
+            changed["reference_point_index"] = None
         if position is not None:
             if changed.get("point_index") is not None:
                 raise ValueError("Provide position or point_index, not both")
@@ -44,11 +56,63 @@ class ShellOptions(BeamOptions):
             count = changed["samples"]
             if not isinstance(count, (int, np.integer)) or count < 2:
                 raise ValueError("Shell samples must be an integer of at least two")
+        if changed.get("reference_point_index") is not None:
+            index = changed["reference_point_index"]
+            if not isinstance(index, (int, np.integer)) or index < 0:
+                raise ValueError(
+                    "reference_point_index must be a nonnegative integer or None"
+                )
         super().update(changed)
+        dict.__setitem__(self, "stored_position", stored_position)
         if has_position:
             dict.__setitem__(
                 self, "position", None if position is None else float(points[0])
             )
+
+
+def reconstructs_stored_shell(kind, description, stored_description):
+    """Two distinct saved points determine a linear thickness distribution."""
+    return bool(
+        stored_description is not None
+        and (kind == "Strain" or description["model"] == "homogeneous_linear")
+        and len(np.unique(stored_description.get("stored_points", []))) >= 2
+    )
+
+
+def can_recompute_shell(
+    kind, description, has_generalized, has_integration, stored_description=None
+):
+    return bool(
+        has_generalized
+        and (kind == "Strain" or description["model"] == "homogeneous_linear")
+        or kind == "Stress"
+        and has_integration
+        or reconstructs_stored_shell(kind, description, stored_description)
+    )
+
+
+def stored_shell_point_index(points, position, description, mode="nearest"):
+    """Select a saved thickness point on the requested side of an interface."""
+    points = validate_positions(points)
+    candidates = np.arange(len(points))
+    if "point_layers" in description:
+        interfaces = np.asarray(description.get("interfaces", [-1, 1]))
+        layer = np.clip(
+            np.searchsorted(interfaces, position, side="left") - 1,
+            0,
+            len(interfaces) - 2,
+        )
+        candidates = candidates[np.asarray(description["point_layers"]) == layer]
+    if not len(candidates):
+        raise ValueError("No stored thickness points in the requested layer")
+    if mode == "exact":
+        matches = candidates[
+            np.isclose(points[candidates], position, rtol=0, atol=1e-12)
+        ]
+        if not len(matches):
+            raise ValueError("Position does not match a stored thickness point")
+        return int(matches[0])
+    return int(candidates[np.argmin(np.abs(points[candidates] - position))])
 
 
 def generalized_tensors(values, description, kind, points):
@@ -99,6 +163,7 @@ def interpolate_tensors(
     target_layers=None,
     *,
     allow_constant=False,
+    extrapolate=False,
 ):
     """Piecewise linear interpolation, independently within each material layer.
 
@@ -137,7 +202,9 @@ def interpolate_tensors(
             continue
         right = np.clip(np.searchsorted(xp, x, side="right"), 1, len(xp) - 1)
         left = right - 1
-        weight = np.clip((x - xp[left]) / (xp[right] - xp[left]), 0, 1)
+        weight = (x - xp[left]) / (xp[right] - xp[left])
+        if not extrapolate:
+            weight = np.clip(weight, 0, 1)
         result[:, output] = (
             values[:, selected[left]] * (1 - weight)[None, :, None]
             + values[:, selected[right]] * weight[None, :, None]
@@ -158,8 +225,17 @@ def recover_shell_field(
     integration_values=None,
 ):
     """Select stored tensors or recover/interpolate through the thickness."""
-    source = options["source"]
-    use_stored = source == "stored" or (source == "auto" and stored is not None)
+    use_stored = use_stored_beam_field(
+        options,
+        stored is not None,
+        can_recompute_shell(
+            kind,
+            description,
+            values is not None,
+            integration_values is not None,
+            stored_description if stored is not None else None,
+        ),
+    )
     reduction = options["reduction"]
     index = options["point_index"]
     if use_stored:
@@ -174,10 +250,24 @@ def recover_shell_field(
     else:
         points, layers = sample_positions(description, options["samples"])
         analytic = kind == "Strain" or description["model"] == "homogeneous_linear"
+        from_stored = (
+            analytic
+            and values is None
+            and stored is not None
+            and reconstructs_stored_shell(kind, description, stored_description)
+        )
         if analytic:
-            if values is None:
+            if from_stored:
+                raw = np.asarray(stored)
+                if raw.ndim == 2:
+                    raw = raw[:, None, :]
+                tensors = interpolate_tensors(
+                    raw, stored_description["stored_points"], points, extrapolate=True
+                )
+            elif values is None:
                 raise ValueError(f"Recomputed {kind} requires Shell{kind}")
-            tensors = None
+            else:
+                tensors = None
         else:
             if integration_values is None:
                 raise ValueError(
@@ -204,13 +294,24 @@ def recover_shell_field(
         elif options["position"] is not None:
             target = [options["position"]]
             if use_stored:
+                mode = options.get("stored_position", "interpolated")
+                if mode in ("nearest", "exact"):
+                    selected = stored_shell_point_index(
+                        points, target[0], sampling, mode
+                    )
+                    tensors = tensors[:, selected : selected + 1]
+                else:
+                    tensors = interpolate_tensors(
+                        tensors,
+                        points,
+                        target,
+                        layers,
+                        description.get("interfaces"),
+                        allow_constant=sampling.get("sampling") == "integration",
+                    )
+            elif from_stored:
                 tensors = interpolate_tensors(
-                    tensors,
-                    points,
-                    target,
-                    layers,
-                    description.get("interfaces"),
-                    allow_constant=sampling.get("sampling") == "integration",
+                    raw, stored_description["stored_points"], target, extrapolate=True
                 )
             elif not analytic:
                 tensors = interpolate_tensors(
@@ -224,7 +325,7 @@ def recover_shell_field(
             points = target
         else:
             raise ValueError("With reduction=None, provide position or point_index")
-    if not use_stored and analytic:
+    if not use_stored and analytic and not from_stored:
         tensors = generalized_tensors(values, description, kind, points)
     if frame is not None:
         cls = StressTensorList if kind == "Stress" else StrainTensorList
