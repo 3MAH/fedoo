@@ -10,7 +10,6 @@ import warnings
 
 import numpy as np
 import pytest
-from scipy import sparse
 
 import fedoo as fd
 from fedoo.core.boundary_conditions import (
@@ -108,12 +107,9 @@ def test_distributed_load_does_not_erase_nodal_force(nodal_first):
 
 
 def _set_converged_state(pb):
-    # external forces = A @ X - D = load vector
-    load = pb.get_B().copy()
+    # for non linear problems, the external forces are given by -D
     pb._U = np.ones(pb.n_dof)
-    pb.set_A(sparse.identity(pb.n_dof, format="csr"))
-    pb.set_X(load)
-    pb.set_D(0)
+    pb.set_D(-pb.get_B())
 
 
 def test_start_value_of_summed_nodal_forces_is_not_doubled():
@@ -188,7 +184,7 @@ def test_different_dirichlet_values_are_reported():
     assert record["severity"] == "conflict"
     assert np.array_equal(record["node"], np.intersect1d(bottom, right))
     assert set(record["variable"]) == {"DispX"}
-    assert record["bc"] == [bc1, bc2]
+    assert record["bc"] == [bc1[0], bc2]  # bc1 is the list of the 3 components
 
 
 def test_check_mode_raise_and_ignore():
