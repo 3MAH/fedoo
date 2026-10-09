@@ -94,6 +94,39 @@ factor to the prescribed value and should be between 0 and 1.
 >>> pb.bc.add('Dirichlet', 'nodeset', 'Disp', 1, time_func = step_function)])
 
 
+Boundary conditions sharing some dof
+____________________________________________
+
+A displacement and a generalized force may be prescribed on the same node as
+long as the dof are different. When several boundary conditions are defined
+on the same dof:
+
+* The generalized forces of the Neumann boundary conditions are summed. This
+  includes the distributed loads (e.g. :py:class:`fedoo.constraint.Pressure`),
+  whose equivalent nodal forces are computed over the whole surface as if no
+  dof was blocked.
+* A Dirichlet boundary condition prevails over a Neumann one: the prescribed
+  force is ignored and the nodal force is the reaction.
+* For several Dirichlet boundary conditions, the last one in the list is
+  applied.
+
+The boundary conditions that can't be applied together are reported the
+first time they are applied to the problem: Dirichlet boundary conditions
+with different values on a dof, Dirichlet boundary condition on a dof
+eliminated by a multi point constraint, or dof eliminated by several multi
+point constraints. A non zero nodal force ignored on a blocked dof is also
+reported. By default a warning is emitted. The attribute ``check_mode``
+allows to raise an error for the incompatible boundary conditions, or to
+disable the check:
+
+>>> pb.bc.check_mode = "raise"  # or "warn" (default), "ignore"
+
+The report is also available as a list with
+:py:meth:`fedoo.ListBC.check`:
+
+>>> for record in pb.check_boundary_conditions():
+>>>     print(record["kind"], record["node"], record["variable"])
+
 
 Multi Point Constraints
 ____________________________________________
