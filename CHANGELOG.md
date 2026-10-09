@@ -16,6 +16,16 @@ semantic versioning.
   a minimum-separation parameter.
 - `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
   convergent (area-weighted) IPC formulation of ipctk.
+- `IPCContact` / `IPCSelfContact`: `excluded_rings` blocks self-collision
+  between primitives fewer than `excluded_rings` rings apart on the contact
+  surface, so that `dmin` may exceed the edge length (shell thickness larger
+  than the element size).
+- `IPCContact` / `IPCSelfContact`: `psd_projection=False` assembles the exact
+  contact hessian instead of ipctk's per-collision PSD projection. The
+  projection is inexact (finite-difference mismatch of order one) and makes
+  Newton converge linearly, about 0.7 per iteration, whenever the contact
+  carries a large share of the load; with the exact hessian and a direct solver
+  the shell lattice compression converges in 4-7 iterations.
 - `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
   Unlike a flat meshed obstacle, the contact force does not depend on which
   obstacle node, edge or face is the closest.

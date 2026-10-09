@@ -15,6 +15,41 @@ def _validate_dmin(dmin):
     return dmin
 
 
+def _validate_excluded_rings(excluded_rings):
+    """Validate the number of topological rings excluded from self-collision."""
+    rings = int(excluded_rings)
+    if rings != excluded_rings or rings < 1:
+        raise ValueError("excluded_rings must be an integer >= 1.")
+    return rings
+
+
+def _ring_exclusion_filter(ipctk, elements, n_vertices, n_rings):
+    """Collision filter blocking vertex pairs at most ``n_rings`` edges apart.
+
+    ipctk only skips the primitives sharing a vertex (one ring). With a
+    thickness offset ``dmin`` larger than the edge length, the next rings
+    lie below ``dmin + dhat`` and would be repelled. ``elements`` is the
+    local connectivity of the collision mesh (edges in 2D, faces in 3D).
+    """
+    from scipy import sparse
+
+    elements = np.asarray(elements)
+    n_per_elm = elements.shape[1]
+    rows = np.concatenate([elements[:, i] for i in range(n_per_elm)])
+    cols = np.concatenate([elements[:, (i + 1) % n_per_elm] for i in range(n_per_elm)])
+    adjacency = sparse.coo_matrix(
+        (np.ones(len(rows), dtype=np.int8), (rows, cols)),
+        shape=(n_vertices, n_vertices),
+    ).tocsr()
+    adjacency = ((adjacency + adjacency.T) > 0).astype(np.int8)
+    reach = adjacency.copy()
+    for _ in range(n_rings - 1):
+        reach = ((reach + reach @ adjacency) > 0).astype(np.int8)
+    reach = sparse.triu(reach, k=1).tocoo()
+    blocked = dict.fromkeys(zip(reach.row.tolist(), reach.col.tolist()), False)
+    return ipctk.make_sparse_filter(blocked, True)
+
+
 def _plane_collision_free_stepsize(collision_mesh, start, end, min_distance):
     """Analytic plane CCD, including the offset ignored by ipctk 1.6."""
     alpha = 1.0
@@ -57,17 +92,25 @@ def _import_ipctk():
     return ipctk
 
 
-def _barrier_hessian_psd(barrier, collisions, collision_mesh, vertices):
+def _barrier_hessian_psd(barrier, collisions, collision_mesh, vertices, project=True):
     """ipctk barrier hessian with PSD projection and a degenerate fallback.
 
     CLAMP/ABS PSD projection can raise on degenerate (zero-distance) contact
     pairs; retry without projection so assembly still proceeds. Shared by
     :class:`IPCContact` and ``RigidBodyAssembly`` so both use the same policy.
+    ``project=False`` returns the exact (possibly indefinite) hessian.
     """
     # ipctk is already validated/imported by the callers; a plain cached import
     # avoids re-running the version check on the contact hot path.
     import ipctk
 
+    if not project:
+        return barrier.hessian(
+            collisions,
+            collision_mesh,
+            vertices,
+            project_hessian_to_psd=ipctk.PSDProjectionMethod.NONE,
+        )
     try:
         return barrier.hessian(
             collisions,
@@ -188,6 +231,22 @@ class IPCContact(AssemblyBase):
         The initial configuration must have separation strictly above
         ``dmin``. Connected joints may require a collision filter.
         Nonzero offsets are not supported with ``use_ogc=True``.
+    excluded_rings : int, default=1
+        Number of topological rings around each vertex of the contact
+        surface whose primitives never collide with it. ipctk excludes the
+        first ring (primitives sharing a vertex). When ``dmin`` exceeds the
+        edge length, the second ring lies below ``dmin + dhat`` and would be
+        repelled. A primitive pair is skipped only when all its vertex pairs
+        lie within the excluded rings, so the nearest allowed pair is about
+        ``excluded_rings - 1`` edge lengths away: raise ``excluded_rings``
+        until that distance exceeds ``dmin + dhat``.
+    psd_projection : bool, default=True
+        Project the barrier and friction hessians of each collision onto the
+        positive semi-definite cone (ipctk ``CLAMP``), which guarantees a
+        descent direction for the energy line search but makes the tangent
+        inexact: Newton then converges linearly (about 0.7 per iteration).
+        ``False`` assembles the exact hessian; with a direct solver this
+        restores quadratic convergence in the compliant-contact regime.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  If ``None`` (default), it is
         automatically computed and adaptively updated — **this is the
@@ -277,10 +336,14 @@ class IPCContact(AssemblyBase):
         use_ogc=False,
         use_area_weighting=False,
         dmin=0.0,
+        excluded_rings=1,
+        psd_projection=True,
         name="IPC Contact",
         space=None,
     ):
         self._dmin = _validate_dmin(dmin)
+        self._excluded_rings = _validate_excluded_rings(excluded_rings)
+        self._psd_projection = bool(psd_projection)
         if use_ogc and self._dmin > 0:
             raise NotImplementedError("dmin > 0 is not supported with use_ogc=True.")
         if use_ccd is None:
@@ -810,6 +873,7 @@ class IPCContact(AssemblyBase):
                 self._collisions,
                 self._collision_mesh,
                 vertices,
+                project=self._psd_projection,
             )
             self.global_matrix = self._kappa * (P @ hess_surf @ P.T)
 
@@ -834,7 +898,11 @@ class IPCContact(AssemblyBase):
                         self._friction_collisions,
                         self._collision_mesh,
                         slip,
-                        project_hessian_to_psd=ipctk.PSDProjectionMethod.CLAMP,
+                        project_hessian_to_psd=(
+                            ipctk.PSDProjectionMethod.CLAMP
+                            if self._psd_projection
+                            else ipctk.PSDProjectionMethod.NONE
+                        ),
                     )
                     self.global_matrix += P @ fric_hess_surf @ P.T
 
@@ -1196,6 +1264,10 @@ class IPCContact(AssemblyBase):
             edges,
             faces,
         )
+        if self._excluded_rings > 1:
+            self._collision_mesh.can_collide = _ring_exclusion_filter(
+                ipctk, local_elements, len(self._rest_positions), self._excluded_rings
+            )
 
         # Cache bounding-box diagonal (used for dhat, kappa, energy line search)
         self._bbox_diag = np.linalg.norm(
@@ -1495,6 +1567,11 @@ class IPCSelfContact(IPCContact):
         Absolute minimum primitive separation. The barrier activates at
         ``dmin + dhat``; see :class:`IPCContact` for thickness and joint
         filtering requirements. Nonzero offsets are not supported with OGC.
+    excluded_rings : int, default=1
+        Topological rings around each vertex excluded from self-collision;
+        see :class:`IPCContact`.
+    psd_projection : bool, default=True
+        PSD projection of the contact hessians; see :class:`IPCContact`.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  ``None`` (default) for automatic
         computation and adaptive update — **recommended**.
@@ -1564,6 +1641,8 @@ class IPCSelfContact(IPCContact):
         use_ogc=False,
         use_area_weighting=False,
         dmin=0.0,
+        excluded_rings=1,
+        psd_projection=True,
         name="IPC Self Contact",
         space=None,
     ):
@@ -1585,4 +1664,6 @@ class IPCSelfContact(IPCContact):
             name=name,
             space=space,
             dmin=dmin,
+            excluded_rings=excluded_rings,
+            psd_projection=psd_projection,
         )

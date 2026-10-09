@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import fedoo as fd
+from fedoo.core.base import InvalidKinematicStateError
 
 ipctk = pytest.importorskip("ipctk")
 
@@ -80,3 +81,61 @@ def test_dmin_keeps_surfaces_apart(fresh_2d_space):
     disp = pb.get_disp()
     contact_face = mesh.find_nodes("Y", 0.5)
     assert disp[1, contact_face].min() < -0.005
+
+
+def _strip_mesh(n_cols=8, h=0.1):
+    """Flat tri3 strip, two rows of nodes spaced by ``h``."""
+    x = np.arange(n_cols) * h
+    nodes = np.vstack(
+        [
+            np.c_[x, np.zeros(n_cols), np.zeros(n_cols)],
+            np.c_[x, np.full(n_cols, h), np.zeros(n_cols)],
+        ]
+    )
+    elements = []
+    for i in range(n_cols - 1):
+        elements += [[i, i + 1, n_cols + i + 1], [i, n_cols + i + 1, n_cols + i]]
+    return fd.Mesh(nodes, np.array(elements), "tri3")
+
+
+def _shell_contact(mesh, dmin, dhat, **kwargs):
+    space = fd.ModelingSpace("3D")
+    for variable in ["DispX", "DispY", "DispZ"]:
+        space.new_variable(variable)
+    space.new_vector("Disp", ["DispX", "DispY", "DispZ"])
+    contact = fd.constraint.IPCContact(
+        mesh,
+        surface_mesh=mesh,
+        dhat=dhat,
+        dhat_is_relative=False,
+        dmin=dmin,
+        barrier_stiffness=10,
+        adaptive_barrier_stiffness=False,
+        line_search_energy=False,
+        **kwargs,
+    )
+    pb = fd.problem.NonLinear(contact)
+    pb.initialize()
+    return contact
+
+
+def test_excluded_rings_allows_offset_above_edge_length():
+    # Second-ring vertices of the strip are 0.2 apart, below dmin: the
+    # default one-ring exclusion leaves an infeasible initial state.
+    dmin, dhat = 0.25, 0.02
+    with pytest.raises(InvalidKinematicStateError, match="dmin"):
+        _shell_contact(_strip_mesh(), dmin, dhat)
+    # A primitive pair is skipped only when all its vertex pairs lie within
+    # the excluded rings, so the nearest allowed pair is about
+    # (excluded_rings - 1) edge lengths away: five rings leave nothing
+    # closer than dmin + dhat (the nearest allowed edge pair is 0.316 apart).
+    contact = _shell_contact(_strip_mesh(), dmin, dhat, excluded_rings=5)
+    assert contact._minimum_distance(contact._rest_positions) > dmin + dhat
+    can_collide = contact._collision_mesh.can_collide
+    assert can_collide(0, 6) and not can_collide(0, 5)
+
+
+@pytest.mark.parametrize("rings", [0, 1.5, -2])
+def test_invalid_excluded_rings(rings):
+    with pytest.raises(ValueError, match="excluded_rings"):
+        fd.constraint.IPCContact(None, excluded_rings=rings)

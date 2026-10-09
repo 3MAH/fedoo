@@ -160,6 +160,8 @@ def test_constructor_name_and_space_are_last():
         False,
         False,
         0.0,
+        1,
+        True,
         "LegacyContact",
         space,
     )
@@ -177,6 +179,8 @@ def test_constructor_name_and_space_are_last():
         False,
         False,
         0.0,
+        1,
+        True,
         "LegacySelfContact",
         space,
     )

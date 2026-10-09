@@ -424,10 +424,21 @@ for every eligible collision pair. IPC excludes primitives sharing a
 vertex, but nearby segments around connected joints can still require
 additional collision exclusions: a vertex and the edges two rings away on
 the same surface are about one edge length apart, so ``dmin + dhat``
-must stay below the edge length of the surface mesh. The offset is uniform across the mesh;
-it does not model section deformation or automatically add periodic-image
-contact. ``IPCSelfContact`` accepts the same ``dmin`` argument.
+must stay below the edge length of the surface mesh, unless
+``excluded_rings`` is raised: the nearest primitive pair allowed to collide is
+then about ``excluded_rings - 1`` edge lengths away, which lets the shell
+thickness exceed the element size.
+The offset is uniform across the mesh; it does not model section deformation
+or automatically add periodic-image contact. ``IPCSelfContact`` accepts the same ``dmin`` argument.
 Nonzero offsets are not supported with ``use_ogc=True``.
+
+**Exact or projected contact hessian** --- by default each collision hessian
+is projected onto the positive semi-definite cone (``psd_projection=True``),
+which guarantees a descent direction for the energy line search but makes
+the Newton tangent inexact: the iterations then converge linearly, about 0.7
+per iteration, as soon as the contact carries a large share of the load.
+``psd_projection=False`` assembles the exact hessian; with a direct solver
+this restores the quadratic convergence of Newton-Raphson.
 
 Rigid-body contact also accepts ``dmin`` through
 ``RigidBody.set_static_obstacle(..., dmin=...)`` and
