@@ -118,8 +118,8 @@ def _conflict_record(problem, kind, severity, dof, list_bc):
 
 _CONFLICT_DESCRIPTION = {
     "dirichlet_conflict": "Dirichlet bc with different values on the same dof",
-    "neumann_on_dirichlet": "Neumann bc without effect, applied on a dof with a "
-    "Dirichlet bc",
+    "neumann_on_dirichlet": "nodal Neumann bc ignored on a dof with a Dirichlet "
+    "bc (the Dirichlet bc prevails)",
     "mpc_slave_dirichlet": "Dirichlet bc on a dof eliminated by a mpc",
     "mpc_slave_duplicate": "dof eliminated by several mpc",
 }
@@ -452,14 +452,16 @@ class ListBC(BCBase):
             by a mpc.
           * ``"mpc_slave_duplicate"``: dof eliminated by several mpc.
           * ``"neumann_on_dirichlet"``: non zero nodal Neumann bc on a dof
-            with a Dirichlet bc. The force has no effect. This case has the
-            severity ``"warning"``, the other ones ``"conflict"``.
+            with a Dirichlet bc. The Dirichlet bc prevails: the prescribed
+            force is ignored and the nodal force is the reaction. This case
+            has the severity ``"warning"`` and never raises an error, the
+            other ones have the severity ``"conflict"``.
 
         The generalized forces prescribed by several Neumann bc on the same
         dof are summed and are not reported. The distributed loads (e.g.
-        :py:class:`fedoo.constraint.Pressure`) are not reported either: their
-        nodal contribution on a dof with a Dirichlet bc is part of the
-        reaction.
+        :py:class:`fedoo.constraint.Pressure`) are not reported either: the
+        equivalent nodal forces are computed over the whole surface as if no
+        dof was blocked, then the Dirichlet bc prevails on the blocked dof.
 
         Parameters
         ----------

@@ -232,14 +232,14 @@ def test_displacement_and_force_on_different_dof_of_a_node():
     assert pb.check_boundary_conditions() == []
 
 
-def test_nodal_force_on_a_blocked_dof_is_a_warning():
+def test_dirichlet_prevails_over_nodal_force_with_a_warning():
     pb, mesh = _build_problem()
     top = _face(mesh, "top")
     pb.bc.add("Dirichlet", top, "DispX", 0)
     pb.bc.add("Neumann", top, "DispX", 2.0)
     pb.bc.check_mode = "raise"  # only the conflicts are raised
 
-    with pytest.warns(BoundaryConditionWarning, match="without effect"):
+    with pytest.warns(BoundaryConditionWarning, match="Dirichlet bc prevails"):
         pb.apply_boundary_conditions(t_fact=1.0, t_fact_old=0.0)
 
     (record,) = pb.check_boundary_conditions()
