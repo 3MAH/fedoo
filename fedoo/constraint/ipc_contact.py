@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from fedoo.mesh import extract_surface as extract_surface_mesh
+
+
 import numpy as np
 from scipy import sparse
 from fedoo.core.base import AssemblyBase
@@ -1121,8 +1124,6 @@ class IPCContact(AssemblyBase):
 
         # Extract surface mesh if needed
         if self._extract_surface and self._surface_mesh is None:
-            from fedoo.mesh import extract_surface as extract_surface_mesh
-
             self._surface_mesh = extract_surface_mesh(self.mesh, reduce_order=True)
 
         if self._surface_mesh is None:

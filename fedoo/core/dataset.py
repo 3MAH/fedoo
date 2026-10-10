@@ -2,14 +2,32 @@
 
 from __future__ import annotations
 
+from fedoo.util.beam_recovery import (
+    BeamOptions,
+    recover_beam_field,
+    section_description,
+    use_stored_beam_field,
+)
+from fedoo.util.shell_recovery import (
+    ShellOptions,
+    recover_shell_field,
+    can_recompute_shell,
+    reconstructs_stored_shell,
+)
+from fedoo.util.fdh5 import load_dataset_iteration, write_dataset, read_fdh5
+from fedoo.util.mesh_writer import write_vtk, write_msh
+
+
 import numpy as np
 import os
 import sys
+from copy import deepcopy
 from zipfile import ZipFile, Path as ZipPath
 from fedoo.core.mesh import Mesh, MultiMesh
 from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
 from fedoo.lib_elements.element_list import get_default_n_gp
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
+from fedoo.util.field_components import stored_component_index
 
 try:
     from matplotlib import pylab as plt
@@ -35,6 +53,14 @@ except (ImportError, RuntimeError):
     USE_PYVISTA_QT = False
 
 
+try:
+    import pandas
+
+    USE_PANDAS = True
+except ImportError:
+    USE_PANDAS = False
+
+
 def _has_interactor(plotter):
     """True when the plotter owns a render window interactor.
 
@@ -58,14 +84,6 @@ def _in_interactive_session():
     return ipython_mod is not None and ipython_mod.get_ipython() is not None
 
 
-try:
-    import pandas
-
-    USE_PANDAS = True
-except ImportError:
-    USE_PANDAS = False
-
-
 def _as_3d_points(points: np.ndarray) -> np.ndarray:
     """Return point coordinates padded or truncated to 3D."""
     if points.shape[1] == 3:
@@ -87,6 +105,8 @@ def _array_to_pyvista_data(data: np.ndarray) -> np.ndarray:
 
 def _component_from_array(field: str, data: np.ndarray, component=None):
     """Extract one component from a Fedoo data array."""
+    if component == "norm" and field in ("Disp", "Rot") and np.ndim(data) == 1:
+        return np.abs(data)
     if (
         component is None
         or np.isscalar(data)
@@ -95,6 +115,8 @@ def _component_from_array(field: str, data: np.ndarray, component=None):
     ):
         return data
 
+    if isinstance(component, str):
+        component = stored_component_index(field, component, data.shape[0])
     if isinstance(component, str):
         component = {
             "X": 0,
@@ -112,7 +134,7 @@ def _component_from_array(field: str, data: np.ndarray, component=None):
         return np.linalg.norm(data, axis=0)
 
     if isinstance(component, str):
-        if field == "Stress":
+        if field in ("Stress", "PK2", "PKII", "Kirchhoff", "Cauchy"):
             data = StressTensorList(data)
         elif field == "Strain":
             data = StrainTensorList(data)
@@ -139,6 +161,18 @@ class DataSet:
         Dictionnary of data fields defined at gauss points.
     res.scalar_data : dict
         Dictionnary of scalar data.
+    field_metadata : dict
+        Numeric field descriptions persisted in FDH5, including beam sections.
+    beam_options : dict
+        Section ``position`` (normalized (y, z)) or ``point_index``, mutually
+        exclusive. ``source`` is 'auto', 'stored' or 'recomputed'. ``reduction``
+        is None, 'max', 'min' or 'abs_max' (default, retaining the selected sign).
+        ``samples`` affects recomputed sampling only. Extrema are estimates.
+    shell_options : dict
+        Normalized thickness ``position`` in [-1, 1], or ``point_index``.
+        Sources and reductions follow ``beam_options``. Nonlinear stresses
+        are interpolated layerwise from saved material points; ``samples``
+        sets the generated count per layer and is ignored for stored tensors.
 
     Notes
     -----
@@ -178,6 +212,10 @@ class DataSet:
         self.element_data = {}
         self.gausspoint_data = {}
         self.scalar_data = {}
+        self.field_metadata = {}
+        self._beam_section_overrides = {}
+        self.beam_options = {}
+        self.shell_options = {}
         self.active_submesh = 0
         """Active submesh used by MultiMesh data access.
 
@@ -413,6 +451,7 @@ class DataSet:
         self.element_data.update(data_set.element_data)
         self.gausspoint_data.update(data_set.gausspoint_data)
         self.scalar_data.update(data_set.scalar_data)
+        self.field_metadata.update(data_set.field_metadata)
 
     def _build_mesh_gp(self):
         # define a new mesh for the plot to gauss point (duplicate nodes between element)
@@ -1014,6 +1053,13 @@ class DataSet:
         dataset = DataSet(submesh)
         dataset.node_data = self.node_data
         dataset.scalar_data = self.scalar_data
+        dataset.beam_options = self.beam_options
+        dataset.shell_options = self.shell_options
+        dataset.field_metadata = {
+            field: metadata.get("submeshes", {}).get(str(submesh_id), metadata)
+            for field, metadata in self.field_metadata.items()
+            if "submeshes" not in metadata or str(submesh_id) in metadata["submeshes"]
+        }
         dataset.element_data = {
             field: block
             for field, value in self.element_data.items()
@@ -1034,6 +1080,18 @@ class DataSet:
                     value,
                     submesh_id,
                     submesh.n_elements * get_default_n_gp(submesh.elm_type, submesh),
+                    fill_missing=field
+                    not in (
+                        "BeamLocalFrame",
+                        "ShellLocalFrame",
+                        "_ShellStress",
+                        "BeamStress",
+                        "BeamStrain",
+                        "ShellStress",
+                        "ShellStrain",
+                        "Stress",
+                        "Strain",
+                    ),
                 )
             )
             is not None
@@ -1042,6 +1100,15 @@ class DataSet:
 
     def _submesh_has_field(self, field, submesh_id: int) -> bool:
         """Return whether a field has data on one MultiMesh submesh."""
+        if field in self.section_derived_fields():
+            derived = self._submesh_dataset(submesh_id).section_derived_fields()
+            if field in derived:
+                return True
+            ordinary = field.removesuffix("_local").removesuffix("_global")
+            if ordinary != field and f"{ordinary}_local" in derived:
+                # A section cannot supply global components without its frame.
+                return False
+            field = ordinary
         if field in self.node_data:
             used_nodes = np.unique(self.mesh[submesh_id].elements)
             values = np.asarray(self.node_data[field])[..., used_nodes]
@@ -1385,6 +1452,23 @@ class DataSet:
         the active submesh.
         """
 
+        if field in self.beam_derived_fields():
+            return self._get_beam_data(
+                field,
+                component,
+                data_type,
+                return_data_type,
+                fill_unused_nodes=fill_unused_nodes,
+            )
+        if field in self.shell_derived_fields():
+            return self._get_shell_data(
+                field,
+                component,
+                data_type,
+                return_data_type,
+                fill_unused_nodes=fill_unused_nodes,
+            )
+
         if data_type is None:  # search if field exist somewhere
             if field in self.node_data:
                 data_type = "Node"
@@ -1452,13 +1536,423 @@ class DataSet:
         else:
             return data
 
+    @property
+    def beam_options(self):
+        return self._beam_options
+
+    @beam_options.setter
+    def beam_options(self, values):
+        self._beam_options = (
+            values if isinstance(values, BeamOptions) else BeamOptions(values)
+        )
+
     def field_names(self):
         return list(
             set(
                 list(self.gausspoint_data.keys())
                 + list(self.node_data.keys())
                 + list(self.element_data.keys())
+                + list(self.section_derived_fields())
             )
+        )
+
+    def beam_derived_fields(self):
+        """Lazy section tensors, available when generalized fields have metadata.
+
+        ``beam_options`` applies the same selection to stored and recomputed
+        tensors. Legacy tensors without section-point metadata remain ordinary
+        fields. Raw stored tensors remain available in their data dictionary.
+        """
+        fields = {}
+        if self._is_multimesh():
+            for index in range(len(self.mesh.submeshes)):
+                fields.update(self._submesh_dataset(index).beam_derived_fields())
+            return fields
+        if "_BeamSection" in self._beam_section_overrides:
+            self.field_metadata["_BeamSection"] = self._beam_section_overrides[
+                "_BeamSection"
+            ]
+        for source, description in self._beam_section_overrides.items():
+            if source in self.gausspoint_data:
+                self.field_metadata[source] = description
+        for kind, source in (("Stress", "BeamStress"), ("Strain", "BeamStrain")):
+            if "_BeamSection" in self.field_metadata:
+                self.field_metadata[source] = self.field_metadata["_BeamSection"]
+            stored = (
+                kind in self.field_metadata
+                and "stored_points" in self.field_metadata[kind]
+                and self.field_metadata[kind].get("family") != "shell"
+                and any(
+                    kind in values
+                    for values in (
+                        self.node_data,
+                        self.element_data,
+                        self.gausspoint_data,
+                    )
+                )
+            )
+            if (
+                self.field_metadata.get(source, {}).get("recovery", "linear")
+                == "stored_only"
+                and not stored
+            ):
+                continue
+            if (
+                source not in self.field_metadata or source not in self.gausspoint_data
+            ) and not stored:
+                continue
+            fields[kind + "_local"] = (kind, source, False)
+            if stored or not any(
+                kind in values
+                for values in (self.node_data, self.element_data, self.gausspoint_data)
+            ):
+                fields[kind] = (kind, source, False)
+            if "BeamLocalFrame" in self.gausspoint_data:
+                fields[kind + "_global"] = (kind, source, True)
+        return fields
+
+    @property
+    def shell_options(self):
+        return self._shell_options
+
+    @shell_options.setter
+    def shell_options(self, values):
+        self._shell_options = (
+            values if isinstance(values, ShellOptions) else ShellOptions(values)
+        )
+
+    def section_derived_fields(self):
+        """Unified beam and shell tensor aliases for plotting."""
+        return self.beam_derived_fields() | self.shell_derived_fields()
+
+    def shell_derived_fields(self):
+        """Shell tensors selectable through the thickness after saving."""
+        fields = {}
+        if self._is_multimesh():
+            for index in range(len(self.mesh.submeshes)):
+                fields.update(self._submesh_dataset(index).shell_derived_fields())
+            return fields
+        description = self.field_metadata.get("_ShellSection")
+        if description is None:
+            return fields
+        for kind in ("Stress", "Strain"):
+            stored = self.field_metadata.get(kind, {}).get("family") == "shell" and any(
+                kind in values
+                for values in (self.gausspoint_data, self.element_data, self.node_data)
+            )
+            recomputed = f"Shell{kind}" in self.gausspoint_data and (
+                kind == "Strain" or description["model"] == "homogeneous_linear"
+            )
+            recomputed |= kind == "Stress" and "_ShellStress" in self.gausspoint_data
+            if not stored and not recomputed:
+                continue
+            fields[kind + "_local"] = (kind, f"Shell{kind}", False)
+            if stored or not any(
+                kind in values
+                for values in (self.gausspoint_data, self.element_data, self.node_data)
+            ):
+                fields[kind] = (kind, f"Shell{kind}", False)
+            if "ShellLocalFrame" in self.gausspoint_data:
+                fields[kind + "_global"] = (kind, f"Shell{kind}", True)
+        return fields
+
+    def shell_section_description(self):
+        if self._is_multimesh():
+            return self._submesh_dataset(
+                self.active_submesh
+            ).shell_section_description()
+        return deepcopy(self.field_metadata["_ShellSection"])
+
+    def shell_sources(self, kind):
+        """Available stored and reconstructed thickness distributions."""
+        if self._is_multimesh():
+            return self._submesh_dataset(self.active_submesh).shell_sources(kind)
+        metadata = self.field_metadata.get(kind, {})
+        stored = (
+            metadata.get("family") == "shell"
+            and "stored_points" in metadata
+            and any(
+                kind in values
+                for values in (self.node_data, self.element_data, self.gausspoint_data)
+            )
+        )
+        return stored, can_recompute_shell(
+            kind,
+            self.shell_section_description(),
+            f"Shell{kind}" in self.gausspoint_data,
+            "_ShellStress" in self.gausspoint_data,
+            metadata if stored else None,
+        )
+
+    def _get_section_multimesh_data(
+        self, field, component, data_type, return_data_type, **kwargs
+    ):
+        temporary = DataSet(self.mesh)
+        blocks = {}
+        block_type = None
+        for index in range(len(self.mesh.submeshes)):
+            subset = self._submesh_dataset(index)
+            if self._submesh_has_field(field, index):
+                subset_field = (
+                    field
+                    if field in subset.section_derived_fields()
+                    else field.removesuffix("_local").removesuffix("_global")
+                )
+                if subset_field in subset.beam_derived_fields():
+                    selection = BeamOptions(self.beam_options)
+                    reference = selection.get("reference_submesh")
+                    if reference is None:
+                        reference = self.active_submesh
+                    selection["source_fallback"] = (
+                        selection["source_fallback"] and index != reference
+                    )
+                    subset.beam_options = selection
+                elif subset_field in subset.shell_derived_fields():
+                    selection = ShellOptions(self.shell_options)
+                    reference = selection.get("reference_submesh")
+                    if reference is None:
+                        reference = self.active_submesh
+                    selection["source_fallback"] = (
+                        selection["source_fallback"] and index != reference
+                    )
+                    if (
+                        index == reference
+                        and selection.get("reference_point_index") is not None
+                    ):
+                        selection.update(
+                            position=None,
+                            point_index=selection["reference_point_index"],
+                        )
+                    selection["reference_point_index"] = None
+                    subset.shell_options = selection
+                value, category = subset.get_data(
+                    subset_field, component, block_type, return_data_type=True
+                )
+                if category == "Node":
+                    category = "GaussPoint"
+                    value = subset.mesh.convert_data(value, "Node", category)
+                block_type = category
+                blocks[index] = value
+        storage = (
+            temporary.element_data
+            if block_type == "Element"
+            else temporary.gausspoint_data
+        )
+        storage["_SectionRecovered"] = blocks
+        temporary.active_submesh = self.active_submesh
+        return temporary.get_data(
+            "_SectionRecovered",
+            data_type=data_type,
+            return_data_type=return_data_type,
+            **kwargs,
+        )
+
+    def _get_shell_data(self, field, component, data_type, return_data_type, **kwargs):
+        if self._is_multimesh():
+            return self._get_section_multimesh_data(
+                field, component, data_type, return_data_type, **kwargs
+            )
+        kind, source, global_frame = self.shell_derived_fields()[field]
+        stored = None
+        stored_type = "GaussPoint"
+        metadata = self.field_metadata.get(kind, {})
+        if metadata.get("family") == "shell":
+            for category, values in (
+                ("GaussPoint", self.gausspoint_data),
+                ("Element", self.element_data),
+                ("Node", self.node_data),
+            ):
+                if kind in values:
+                    stored, stored_type = values[kind], category
+                    break
+        description = self.shell_section_description()
+        selection = ShellOptions(self.shell_options)
+        if selection.get("reference_point_index") is not None:
+            selection.update(
+                position=None, point_index=selection["reference_point_index"]
+            )
+        use_stored = use_stored_beam_field(selection, *self.shell_sources(kind))
+        from_stored = (
+            not use_stored
+            and source not in self.gausspoint_data
+            and stored is not None
+            and reconstructs_stored_shell(kind, description, metadata)
+        )
+        frame = self.gausspoint_data.get("ShellLocalFrame") if global_frame else None
+        if (
+            (use_stored or from_stored)
+            and frame is not None
+            and stored_type != "GaussPoint"
+        ):
+            if stored_type == "Node":
+                raise ValueError(
+                    "Global recovery from stored nodal shell tensors is ambiguous; use GaussPoint/Element storage or source='recomputed'"
+                )
+            element_frames = frame.reshape(9, -1, self.mesh.n_elements)
+            if not np.allclose(
+                element_frames, element_frames[:, :1, :], rtol=0, atol=1e-12
+            ):
+                raise ValueError(
+                    "Stored element tensors have varying local frames; use GaussPoint storage or source='recomputed'"
+                )
+            frame = element_frames[:, 0, :]
+        value = recover_shell_field(
+            self.gausspoint_data.get(source),
+            description,
+            kind,
+            component,
+            selection,
+            frame,
+            stored=stored,
+            stored_description=metadata,
+            integration_values=self.gausspoint_data.get("_ShellStress"),
+        )
+        temporary = DataSet(self.mesh)
+        storage = temporary.dict_data[
+            stored_type if use_stored or from_stored else "GaussPoint"
+        ]
+        storage["_ShellRecovered"] = value
+        return temporary.get_data(
+            "_ShellRecovered",
+            data_type=data_type,
+            return_data_type=return_data_type,
+            **kwargs,
+        )
+
+    def set_beam_section(self, section):
+        """Attach section properties to old generalized fields on a single mesh.
+
+        New solver outputs attach these automatically. Nonuniform properties
+        use their declared association (GaussPoint by default). Save as FDH5 to retain
+        the description. Mixed meshes require a description per submesh.
+        """
+
+        if isinstance(self, MultiFrameDataSet) and self.loaded_iter is None:
+            self.load(-1)
+
+        if self._is_multimesh():
+            raise ValueError("Attach beam section descriptions per submesh")
+        fields = [
+            name
+            for name in ("BeamStress", "BeamStrain")
+            if name in self.gausspoint_data
+        ]
+        if not fields:
+            raise ValueError("No generalized beam fields at Gauss points")
+        description = section_description(section)
+        self.field_metadata["_BeamSection"] = deepcopy(description)
+        if isinstance(self, MultiFrameDataSet):
+            self._beam_section_overrides["_BeamSection"] = deepcopy(description)
+        for name in fields:
+            self.field_metadata[name] = deepcopy(description)
+            if isinstance(self, MultiFrameDataSet):
+                self._beam_section_overrides[name] = deepcopy(description)
+
+    def beam_section_description(self):
+        """Section metadata with varying properties evaluated at beam Gauss points."""
+        if self._is_multimesh():
+            return self._submesh_dataset(self.active_submesh).beam_section_description()
+        description = self.field_metadata.get("_BeamSection")
+        if description is None:
+            description = self.field_metadata.get(
+                "BeamStress", self.field_metadata.get("BeamStrain")
+            )
+        if description is None:
+            raise ValueError("No beam section metadata is available")
+        description = deepcopy(description)
+        source = next(
+            (
+                name
+                for name in ("BeamStress", "BeamStrain", "Stress", "Strain")
+                if name in self.gausspoint_data
+            ),
+            None,
+        )
+        for name, association in description.get("associations", {}).items():
+            values = np.asarray(description["properties"][name])
+            if values.ndim and association != "GaussPoint":
+                if source is None and "n_elm_gp" not in description:
+                    raise ValueError(
+                        "Generalized beam fields are required to locate section properties"
+                    )
+                description["properties"][name] = self.mesh.convert_data(
+                    values,
+                    convert_from=association,
+                    convert_to="GaussPoint",
+                    n_elm_gp=description.get("n_elm_gp")
+                    if source is None
+                    else self.gausspoint_data[source].shape[-1] // self.mesh.n_elements,
+                )
+        return description
+
+    def _get_beam_data(self, field, component, data_type, return_data_type, **kwargs):
+        kind, source, global_frame = self.beam_derived_fields()[field]
+        temporary = DataSet(self.mesh)
+        if self._is_multimesh():
+            return self._get_section_multimesh_data(
+                field, component, data_type, return_data_type, **kwargs
+            )
+        else:
+            frame = self.gausspoint_data.get("BeamLocalFrame") if global_frame else None
+            description = self.beam_section_description()
+            stored = None
+            stored_type = "GaussPoint"
+            for category, values in (
+                ("GaussPoint", self.gausspoint_data),
+                ("Element", self.element_data),
+                ("Node", self.node_data),
+            ):
+                if kind in values and "stored_points" in self.field_metadata.get(
+                    kind, {}
+                ):
+                    stored = values[kind]
+                    stored_type = category
+                    break
+            use_stored = use_stored_beam_field(
+                self.beam_options,
+                stored is not None,
+                source in self.gausspoint_data
+                and description.get("recovery", "linear") != "stored_only",
+            )
+            resolved_options = BeamOptions(self.beam_options)
+            resolved_options.update(
+                source="stored" if use_stored else "recomputed", source_fallback=False
+            )
+            if use_stored and frame is not None and stored_type != "GaussPoint":
+                if stored_type == "Node":
+                    raise ValueError(
+                        "Global recovery from stored nodal beam tensors is ambiguous; use GaussPoint/Element storage or source='recomputed'"
+                    )
+                element_frames = frame.reshape(9, -1, self.mesh.n_elements)
+                if not np.allclose(
+                    element_frames, element_frames[:, :1, :], rtol=0, atol=1e-12
+                ):
+                    raise ValueError(
+                        "Stored element tensors have varying local frames; use GaussPoint storage or source='recomputed'"
+                    )
+                frame = element_frames[:, 0, :]
+            value = recover_beam_field(
+                self.gausspoint_data.get(source),
+                description,
+                kind,
+                component,
+                resolved_options,
+                frame,
+                stored=stored,
+                stored_points=self.field_metadata.get(kind, {}).get("stored_points"),
+            )
+            storage = {
+                "GaussPoint": temporary.gausspoint_data,
+                "Node": temporary.node_data,
+                "Element": temporary.element_data,
+            }[stored_type if use_stored else "GaussPoint"]
+            storage["_BeamRecovered"] = value
+        temporary.active_submesh = self.active_submesh
+        return temporary.get_data(
+            "_BeamRecovered",
+            data_type=data_type,
+            return_data_type=return_data_type,
+            **kwargs,
         )
 
     def save(
@@ -1559,6 +2053,7 @@ class DataSet:
         iteration : int, optional
             Iteration index to load when ``data`` refers to an ``fdz`` file.
         """
+        self.field_metadata = {}
         if isinstance(data, dict):
             self.load_dict(data)
         elif isinstance(data, DataSet):
@@ -1566,6 +2061,7 @@ class DataSet:
             self.element_data = data.element_data
             self.gausspoint_data = data.gausspoint_data
             self.scalar_data = data.scalar_data
+            self.field_metadata = deepcopy(data.field_metadata)
             if load_mesh:
                 self.mesh = data.mesh
         elif USE_PYVISTA and isinstance(data, pv.UnstructuredGrid):
@@ -1593,8 +2089,6 @@ class DataSet:
             elif ext == ".msh":
                 return NotImplemented
             elif ext == ".fdh5":
-                from fedoo.util.fdh5 import load_dataset_iteration
-
                 load_dataset_iteration(self, filename, iteration)
             elif ext in [".npz", ".fdz"]:
                 if ext == ".fdz":
@@ -1630,6 +2124,7 @@ class DataSet:
         """Load data from a dict generated with the to_dict method.
 
         The old data are erased."""
+        self.field_metadata = {}
         self.node_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "nd"}
         self.element_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "el"}
         self.gausspoint_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "gp"}
@@ -1746,8 +2241,6 @@ class DataSet:
                 filename = filename + ".vtk"
             self.to_pyvista(gp_data_to_node).save(filename, binary=binary)
         else:
-            from fedoo.util.mesh_writer import write_vtk
-
             write_vtk(self, filename, gp_data_to_node)
 
     def to_pyvista(self, gp_data_to_node: bool = True, selected_submeshes=None):
@@ -1806,7 +2299,6 @@ class DataSet:
         filename : str
             Name of the file including the path.
         """
-        from fedoo.util.mesh_writer import write_msh
 
         write_msh(self, filename)
 
@@ -1878,7 +2370,6 @@ class DataSet:
         under their matching ``submesh_X`` groups. Single ``Mesh`` datasets are
         written under ``submesh_0``.
         """
-        from fedoo.util.fdh5 import write_dataset
 
         write_dataset(self, filename, iteration=iteration, overwrite=overwrite)
 
@@ -1946,6 +2437,10 @@ class DataSet:
         copy.element_data = dict(self.element_data)
         copy.gausspoint_data = dict(self.gausspoint_data)
         copy.scalar_data = dict(self.scalar_data)
+        copy.field_metadata = deepcopy(self.field_metadata)
+        copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
+        copy.beam_options = dict(self.beam_options)
+        copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
         return copy
 
@@ -1974,6 +2469,10 @@ class DataSet:
             key: value if np.isscalar(value) else np.array(value).copy()
             for key, value in self.scalar_data.items()
         }
+        copy.field_metadata = deepcopy(self.field_metadata)
+        copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
+        copy.beam_options = dict(self.beam_options)
+        copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
         return copy
 
@@ -2448,6 +2947,9 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.copy(), list(self.list_data))
+        copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
+        copy.beam_options = dict(self.beam_options)
+        copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
         if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
@@ -2464,6 +2966,9 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.deepcopy(), list(self.list_data))
+        copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
+        copy.beam_options = dict(self.beam_options)
+        copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
         if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
@@ -2507,8 +3012,6 @@ def read_data(filename: str, file_format: str = "fdh5"):
     if file_format == "fdz":
         return read_fdz(filename)
     if file_format == "fdh5":
-        from fedoo.util.fdh5 import read_fdh5
-
         return read_fdh5(filename)
 
     dirname = os.path.dirname(filename)

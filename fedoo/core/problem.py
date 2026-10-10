@@ -178,12 +178,13 @@ class Problem(ProblemBase):
         output_type=None,
         file_format="fdh5",
         compressed=False,
-        position=1,
+        position=None,
         element_set=None,
         save_mesh=True,
         include_static_obstacles=False,
         write_mode="overwrite",
         ignore_missing=False,
+        private=False,
     ):
         """Register an output for automatic saving managed by solve methods.
 
@@ -216,10 +217,12 @@ class Problem(ProblemBase):
         compressed : bool, default = False
             if True, the fdz data are compressed.
 
-        position : float in [-1, 1], optional
-            Normalized position in the section for shell output.
-            For instance, 1 is top face define by the local z direction,
-            -1 is the bottom face and 0 is the midplane
+        position : None, scalar, coordinate pair or array, optional
+            For beams, normalized (y, z) coordinates, either one pair or an
+            array with shape (n_section_points, 2). None extracts all configured
+            output_points; scalar beam positions are rejected. Shell positions
+            are scalars or a vector in [-1, 1] (bottom to top); None saves all
+            configured thickness output points.
 
         element_set : str or list[int], optional
             set of element indices or name of an element set associated to the mesh.
@@ -248,6 +251,9 @@ class Problem(ProblemBase):
             This is useful for a common output list shared by constitutive laws
             with different state variables. If False, an unavailable field
             raises ``NameError`` when results are extracted.
+        private : bool, default=False
+            Prefix requested mesh-associated fields with ``_`` so the viewer
+            hides them until Show internal fields is enabled.
         """
         if output_list is None and hasattr(self, "assembly"):
             output_list = assembly
@@ -266,6 +272,7 @@ class Problem(ProblemBase):
             include_static_obstacles,
             write_mode,
             ignore_missing,
+            private,
         )
 
     def clear_outputs(self):
@@ -319,10 +326,10 @@ class Problem(ProblemBase):
             Type of results. If None, the type of output is not converted.
             Scalar results are not concerned by this parameter.
 
-        position : float in [-1, 1], optional
-            Normalized position in the section for shell output.
-            For instance, 1 is top face define by the local z direction,
-            -1 is the bottom face and 0 is the midplane
+        position : None, scalar, coordinate pair or array, optional
+            Normalized section coordinates: (y, z) pairs for beams, scalar or
+            vector in [-1, 1] for shells. Shell -1/0/1 means bottom/middle/top.
+            None extracts all configured section output points.
 
         element_set : str or list[int], optional
             set of element indices or name of an element set associated to the mesh.

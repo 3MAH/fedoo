@@ -1,3 +1,11 @@
+import vtk
+from fedoo.util.beam_recovery import BeamOptions, SavedBeamSection, stored_point_indices
+from fedoo.util.shell_recovery import (
+    ShellOptions,
+    sample_positions,
+    stored_shell_point_index,
+)
+
 import fedoo as fd
 import numpy as np
 import sys
@@ -29,9 +37,39 @@ import re
 
 from fedoo.core.multimeshdata import MultiMeshData
 from fedoo.core.mesh import MultiMesh
+from fedoo.util.field_components import get_field_components
 
 USE_PYVISTA_QT = True
 SOLID_COLOR_FIELD = "Solid color"
+
+
+def _viewer_field_name(data, field):
+    """Present recovered tensor aliases as a single field in the UI."""
+    if field in data.section_derived_fields():
+        return data.section_derived_fields()[field][0]
+    return field
+
+
+def _viewer_field_names(data):
+    return sorted(
+        {
+            _viewer_field_name(data, field)
+            for field in data.field_names()
+            if getattr(data, "show_internal_fields", False) or not field.startswith("_")
+        }
+    )
+
+
+def _viewer_tensor_field(data, field, coordinates="global"):
+    """Resolve a displayed field and coordinate choice to its dataset field."""
+    field = _viewer_field_name(data, field)
+    candidate = f"{field}_{coordinates}"
+    derived = data.section_derived_fields()
+    if candidate in derived:
+        return candidate
+    if f"{field}_local" in derived:
+        return f"{field}_local"
+    return field
 
 
 def _is_multimesh(mesh):
@@ -282,7 +320,8 @@ class PlotDock(QDockWidget):
         else:
             self.current_iter = 0
 
-        field_names = data.field_names()
+        field_names = _viewer_field_names(data)
+        self.beam_csys = "global"
         if "Stress" in field_names:
             self.current_field = "Stress"
             self.current_comp = "vm"
@@ -296,6 +335,9 @@ class PlotDock(QDockWidget):
                 self.current_field = None
             self.current_comp = None
         self.current_data_type = "Node"
+        self.current_field = _viewer_tensor_field(
+            data, self.current_field, self.beam_csys
+        )
 
         titlebar = DockTitleBar(self)
         titlebar.clicked.connect(lambda d=self: parent._set_active(d))
@@ -351,35 +393,15 @@ class PlotDock(QDockWidget):
         if field == "":
             return [""]
         data = self.data
+        if field in data.section_derived_fields():
+            return get_field_components(field, 6)
         if np.isscalar(data[field]):
             return []
 
         if data[field].ndim == 1:
-            comps = ["0"]
+            comps = get_field_components(field, 1)
         else:
-            if field == "Stress":
-                comps = [
-                    "XX",
-                    "YY",
-                    "ZZ",
-                    "XY",
-                    "XZ",
-                    "YZ",
-                    "vm",
-                    "pressure",
-                    "I",
-                    "II",
-                    "III",
-                ]
-            elif field == "Strain":
-                comps = ["XX", "YY", "ZZ", "XY", "XZ", "YZ", "I", "II", "III"]
-            elif field == "Disp":
-                if len(data["Disp"]) == 2:
-                    comps = ["X", "Y", "norm"]
-                else:
-                    comps = ["X", "Y", "Z", "norm"]
-            else:
-                comps = [str(i) for i in range(data[field].shape[0])]
+            comps = get_field_components(field, data[field].shape[0])
 
         return comps
 
@@ -521,6 +543,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.comp_combo = QtWidgets.QComboBox()
         toolbar_fields.addWidget(self.comp_combo)
 
+        self.beam_toolbar = QToolBar("Beam")
+        self.beam_toolbar.addWidget(QLabel("Coordinates: "))
+        self.csys_combo = QtWidgets.QComboBox()
+        self.csys_combo.addItem("Stored", "stored")
+        self.csys_combo.setEnabled(False)
+        self.csys_combo.setToolTip(
+            "Coordinate system for recovered beam Stress and Strain"
+        )
+        self.csys_combo.currentIndexChanged.connect(self.on_coordinates_changed)
+        self.beam_toolbar.addWidget(self.csys_combo)
+
         toolbar_fields.addSeparator()  # <-- adds a small gap
 
         toolbar_fields.addWidget(QLabel("Data type: "))
@@ -528,7 +561,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.avg_combo.addItems(["Node", "GaussPoint", "Element"])
         toolbar_fields.addWidget(self.avg_combo)
 
+        self.beam_toolbar.addSeparator()
+        self.beam_section_button = QPushButton("Beam…")
+        self.beam_section_button.setToolTip(
+            "Select the section point or a sampled envelope for derived beam tensors"
+        )
+        self.beam_section_button.clicked.connect(self.open_beam_section_dialog)
+        self.beam_section_button.setEnabled(False)
+        self.beam_toolbar.addWidget(self.beam_section_button)
+
         self.addToolBar(Qt.TopToolBarArea, toolbar_fields)
+        self.addToolBar(Qt.TopToolBarArea, self.beam_toolbar)
+        self.beam_toolbar.hide()
 
         # ------------------------------------------------
         # Toolbar 2: Iteration controls
@@ -744,6 +788,20 @@ class MainWindow(QtWidgets.QMainWindow):
         renderer_options_action.triggered.connect(self.open_renderer_dialog)
         options_menu.addAction(renderer_options_action)
 
+        self.beam_options_action = QtWidgets.QAction("Beam…", self)
+        self.beam_options_action.triggered.connect(self.open_beam_section_dialog)
+        self.beam_options_action.setEnabled(False)
+        options_menu.addAction(self.beam_options_action)
+        self.shell_options_action = QtWidgets.QAction("Shell…", self)
+        self.shell_options_action.triggered.connect(self.open_shell_section_dialog)
+        self.shell_options_action.setEnabled(False)
+        options_menu.addAction(self.shell_options_action)
+        internal_fields_action = QtWidgets.QAction(
+            "Show internal fields", self, checkable=True
+        )
+        internal_fields_action.toggled.connect(self.show_internal_fields)
+        options_menu.addAction(internal_fields_action)
+
         apply_opt_to_menu = options_menu.addMenu("Apply options to")
         group = QtWidgets.QActionGroup(self)
         group.setExclusive(True)
@@ -772,6 +830,8 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(view_right_action)
         view_menu.addAction(view_isometric_action)
         view_menu.addAction(reset_camera_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.beam_toolbar.toggleViewAction())
 
         # --- Menu Tools ---
         tools_menu = menubar.addMenu("Tools")
@@ -880,6 +940,8 @@ class MainWindow(QtWidgets.QMainWindow):
             plot_options_action,
             clim_action,
             renderer_options_action,
+            self.beam_options_action,
+            self.shell_options_action,
             copy_action,
             save_action,
             save_as_action,
@@ -1138,9 +1200,15 @@ class MainWindow(QtWidgets.QMainWindow):
             # Synchronize all docks to active dock's current state
             for dock in self.all_docks:
                 if dock is not self.active_dock:
-                    if self.active_dock.current_field in dock.data.field_names():
-                        dock.current_field = self.active_dock.current_field
-                        comps = dock.get_components(self.active_dock.current_field)
+                    field = _viewer_field_name(
+                        self.active_dock.data, self.active_dock.current_field
+                    )
+                    if field in _viewer_field_names(dock.data):
+                        dock.beam_csys = getattr(self.active_dock, "beam_csys", "local")
+                        dock.current_field = _viewer_tensor_field(
+                            dock.data, field, dock.beam_csys
+                        )
+                        comps = dock.get_components(dock.current_field)
                         if self.active_dock.current_comp in comps:
                             dock.current_comp = self.active_dock.current_comp
                     dock.current_data_type = self.active_dock.current_data_type
@@ -1240,13 +1308,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # update_field_combo
         dock = self.active_dock
         current_field = dock.current_field
+        self.beam_section_button.setEnabled(bool(dock.data.beam_derived_fields()))
         field_blocker = QSignalBlocker(self.field_combo)
         self.field_combo.clear()
         self.field_combo.addItem(SOLID_COLOR_FIELD)
         if self.data is not None:
-            self.field_combo.addItems(self.data.field_names())
+            self.field_combo.addItems(_viewer_field_names(self.data))
         if dock.current_field is not None:
-            self.field_combo.setCurrentText(dock.current_field)
+            self.field_combo.setCurrentText(
+                _viewer_field_name(dock.data, dock.current_field)
+            )
         else:
             self.field_combo.setCurrentText(SOLID_COLOR_FIELD)
         del field_blocker
@@ -1257,7 +1328,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.avg_combo.setCurrentText(dock.current_data_type)
 
         # update component combo
-        self.update_components(current_field)
+        self.update_coordinate_choices(current_field)
+        self.update_components(_viewer_field_name(dock.data, current_field))
 
         # self.avg_combo.blockSignals(old_state)
         if self._plot_dialog:  # if plot dialog exist
@@ -1397,11 +1469,950 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_field_changed(self, field):
         field = None if field == SOLID_COLOR_FIELD else field
+        self.update_coordinate_choices(field)
         self.update_components(field)
         if self.active_dock:
             self.update_plot_with_clim(lock_view=True)
 
+    def update_coordinate_choices(self, field):
+        blocker = QSignalBlocker(self.csys_combo)
+        self.csys_combo.clear()
+        dock = self.active_dock
+        if dock is not None:
+            field = _viewer_field_name(dock.data, field)
+        derived = dock.data.section_derived_fields() if dock is not None else {}
+        beams = dock.data.beam_derived_fields() if dock is not None else {}
+        shells = dock.data.shell_derived_fields() if dock is not None else {}
+        self.beam_options_action.setEnabled(bool(beams))
+        self.beam_section_button.setEnabled(bool(beams))
+        self.shell_options_action.setEnabled(bool(shells))
+        if f"{field}_local" in derived:
+            self.csys_combo.addItem("Local", "local")
+            if f"{field}_global" in derived:
+                self.csys_combo.addItem("Global", "global")
+            selected = self.csys_combo.findData(getattr(dock, "beam_csys", "local"))
+            self.csys_combo.setCurrentIndex(max(0, selected))
+            dock.beam_csys = self.csys_combo.currentData()
+            self.csys_combo.setEnabled(self.csys_combo.count() > 1)
+        else:
+            self.csys_combo.addItem("Stored", "stored")
+            self.csys_combo.setEnabled(False)
+        del blocker
+
+    def on_coordinates_changed(self, index):
+        if self.active_dock is None:
+            return
+        field = self.field_combo.currentText()
+        coordinates = self.csys_combo.currentData()
+        if coordinates not in ("local", "global"):
+            return
+        apply = (
+            self.apply_shell_options
+            if self.active_dock.data.shell_derived_fields()
+            and not self.active_dock.data.beam_derived_fields()
+            else self.apply_beam_options
+        )
+        if not apply({}, coordinates, field):
+            self.update_coordinate_choices(field)
+            return
+        self.update_components(field)
+
+    def show_internal_fields(self, enabled):
+        for dock in self.all_docks:
+            if dock.data is not None:
+                dock.data.show_internal_fields = enabled
+        if self.active_dock is not None:
+            field = self.field_combo.currentText()
+            blocker = QSignalBlocker(self.field_combo)
+            self.field_combo.clear()
+            self.field_combo.addItem(SOLID_COLOR_FIELD)
+            self.field_combo.addItems(_viewer_field_names(self.active_dock.data))
+            if self.field_combo.findText(field) >= 0:
+                self.field_combo.setCurrentText(field)
+            del blocker
+            if field.startswith("_") and not enabled:
+                self.on_field_changed(SOLID_COLOR_FIELD)
+
+    def open_beam_section_dialog(self):
+        dock = self.active_dock
+        if dock is None or not dock.data.beam_derived_fields():
+            return
+        options = dock.data.beam_options
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Beam options")
+        layout = QtWidgets.QFormLayout(dialog)
+        help_label = QLabel(
+            "Recover Stress/Strain at a section point or compute sampled extrema."
+        )
+        help_label.setToolTip(
+            "Shear uses parabolic approximations for rectangles/disks, otherwise Q/A. "
+            "Torsion recovery supports circles, pipes and rectangles."
+        )
+        layout.addRow(help_label)
+        section_data = dock.data
+        submesh_choice = None
+        if section_data._is_multimesh():
+            submesh_choice = QtWidgets.QComboBox()
+            submesh_choice.setObjectName("beam_submesh")
+            for index, mesh in enumerate(dock.data.mesh.submeshes):
+                candidate = dock.data._submesh_dataset(index)
+                if candidate.beam_derived_fields():
+                    label = mesh.name or mesh.elm_type
+                    submesh_choice.addItem(f"{index}: {label}", index)
+            if not submesh_choice.count():
+                return
+            current = submesh_choice.findData(dock.data.active_submesh)
+            submesh_choice.setCurrentIndex(max(0, current))
+            section_data = dock.data._submesh_dataset(submesh_choice.currentData())
+            submesh_choice.setToolTip(
+                "Choose the beam section used for sampling and preview. "
+                "Its selected normalized coordinates apply to all beam submeshes."
+            )
+            layout.addRow("Beam submesh:", submesh_choice)
+        displayed = _viewer_field_name(dock.data, dock.current_field)
+        kind = (
+            displayed
+            if displayed in ("Stress", "Strain")
+            else (
+                "Stress"
+                if "Stress_local" in dock.data.beam_derived_fields()
+                else "Strain"
+            )
+        )
+        if f"{kind}_local" not in section_data.beam_derived_fields():
+            kind = (
+                "Stress"
+                if "Stress_local" in section_data.beam_derived_fields()
+                else "Strain"
+            )
+        source_choice = QtWidgets.QComboBox()
+        source_choice.setObjectName("beam_field_source")
+        source_choice.addItem("Stored", "stored")
+        source_choice.addItem("Recomputed", "recomputed")
+        source_choice.setToolTip(
+            "Required on the selected beam submesh. Other beam submeshes use this "
+            "source when available, otherwise the other source. Stored positions "
+            "use the nearest saved point."
+        )
+        has_stored = "stored_points" in section_data.field_metadata.get(kind, {})
+        has_recomputed = (
+            ("BeamStress" if kind == "Stress" else "BeamStrain")
+            in section_data.gausspoint_data
+            and section_data.beam_section_description().get("recovery", "linear")
+            != "stored_only"
+        )
+        source_choice.model().item(0).setEnabled(has_stored)
+        source_choice.model().item(1).setEnabled(has_recomputed)
+        requested = options.get("source", "auto")
+        source_choice.setCurrentIndex(
+            0 if has_stored and (requested != "recomputed" or not has_recomputed) else 1
+        )
+        layout.addRow("Source:", source_choice)
+        reduction = QtWidgets.QComboBox()
+        reduction.setObjectName("beam_section_reduction")
+        modes = [
+            ("Section point index", "point_index"),
+            ("Normalized coordinates (y, z)", "position"),
+            ("Maximum", "max"),
+            ("Minimum", "min"),
+            ("Largest magnitude (signed)", "abs_max"),
+        ]
+        for label, value in modes:
+            reduction.addItem(label, value)
+        reduction.setCurrentIndex(
+            reduction.findData(
+                options.get("reduction")
+                or (
+                    "point_index"
+                    if options.get("point_index") is not None
+                    else "position"
+                )
+            )
+        )
+        layout.addRow("Value:", reduction)
+        position = options.get("position")
+        if position is None:
+            position = (0.0, 0.0)
+        y, z = QDoubleSpinBox(), QDoubleSpinBox()
+        for spin in (y, z):
+            spin.setDecimals(10)
+            spin.setRange(-1e12, 1e12)
+        y.setValue(float(position) if np.isscalar(position) else position[0])
+        z.setValue(0.0 if np.isscalar(position) else position[1])
+        layout.addRow("Normalized y:", y)
+        layout.addRow("Normalized z:", z)
+        point_index = QSpinBox()
+        point_index.setRange(0, 100000)
+        point_index.setValue(options.get("point_index") or 0)
+        layout.addRow("Section point index (from 0):", point_index)
+        samples = QSpinBox()
+        samples.setObjectName("beam_sample_points_number")
+        samples.setRange(1, 1000000)
+        samples.setKeyboardTracking(False)
+        samples.setValue(options.get("samples", 32))
+        samples.setToolTip(
+            "Snaps to the closest supported total point count when editing finishes. "
+            "Stored and supplied custom point sets have a fixed count."
+        )
+        layout.addRow("Sample points number:", samples)
+        # The longitudinal location only affects the section preview and the
+        # displayed coordinates of indexed samples, not stress extraction.
+        beam_location = 0
+        source = next(
+            (
+                name
+                for name in ("BeamStress", "BeamStrain", "Stress", "Strain")
+                if name in section_data.gausspoint_data
+            ),
+            None,
+        )
+        count = section_data.gausspoint_data[source].shape[-1] if source else 1
+        point_coordinates_label = QLabel()
+        point_coordinates_label.setWordWrap(True)
+        layout.addRow(point_coordinates_label)
+        y.setObjectName("beam_section_y")
+        z.setObjectName("beam_section_z")
+        point_index.setObjectName("beam_section_point_index")
+        manual_position = [y.value(), z.value()]
+        was_indexed = False
+        cached_points = {}
+
+        def show_point_coordinates():
+            nonlocal was_indexed
+            indexed = reduction.currentData() == "point_index"
+            if indexed and not was_indexed:
+                manual_position[:] = [y.value(), z.value()]
+            elif not indexed and was_indexed:
+                y.setValue(manual_position[0])
+                z.setValue(manual_position[1])
+            was_indexed = indexed
+            if not indexed:
+                point_coordinates_label.clear()
+                return
+            try:
+                budget = samples.value()
+                location = beam_location
+                key = (source_choice.currentData(), budget, location)
+                if key not in cached_points:
+                    description = section_data.beam_section_description()
+                    for name, value in description["properties"].items():
+                        values = np.asarray(value).reshape(-1)
+                        description["properties"][name] = values[
+                            0 if values.size == 1 else location
+                        ]
+                    section = SavedBeamSection(description)
+                    cached_points.clear()
+                    if source_choice.currentData() == "stored":
+                        points = np.asarray(
+                            section_data.field_metadata[kind]["stored_points"]
+                        )
+                        cached_points[key] = (
+                            points if points.ndim == 2 else points[:, :, location]
+                        )
+                    else:
+                        cached_points[key] = section.section.normalized_output_points(
+                            budget
+                        )
+                points = cached_points[key]
+                blocker = QSignalBlocker(point_index)
+                point_index.setMaximum(len(points) - 1)
+                del blocker
+                physical = points[point_index.value()]
+                values = [np.asarray(value).reshape(-1) for value in physical]
+                y.setValue(float(values[0][0]))
+                z.setValue(float(values[1][0]))
+                point_coordinates_label.clear()
+            except (ValueError, NotImplementedError, IndexError) as error:
+                point_coordinates_label.setText(
+                    f"Point coordinates unavailable: {error}"
+                )
+                y.clear()
+                z.clear()
+
+        point_index.valueChanged.connect(show_point_coordinates)
+        samples.valueChanged.connect(show_point_coordinates)
+        reduction.currentIndexChanged.connect(show_point_coordinates)
+        source_choice.currentIndexChanged.connect(show_point_coordinates)
+        show_point_coordinates()
+        preview_button = QPushButton("Section geometry and sampling…")
+        layout.addRow(preview_button)
+
+        def preview_section():
+            data = section_data
+            description = data.beam_section_description()
+            preview = QtWidgets.QDialog(dialog)
+            preview_title = f"Beam section: {description['geometry']}"
+            if submesh_choice is not None:
+                preview_title += f" — submesh {submesh_choice.currentData()}"
+            preview.setWindowTitle(preview_title)
+            box = QVBoxLayout(preview)
+            selector = QSpinBox()
+            selector.setObjectName("beam_preview_location")
+            preview_count = max(
+                count,
+                max(
+                    (np.asarray(v).size for v in description["properties"].values()),
+                    default=1,
+                ),
+            )
+            selector.setRange(0, preview_count - 1)
+            selector.setPrefix("Longitudinal Gauss-point index: ")
+            selector.setValue(min(beam_location, preview_count - 1))
+            selector.setToolTip(
+                "Preview the section properties and output points at this beam location."
+            )
+            box.addWidget(selector)
+            preview_coordinates = QtWidgets.QComboBox()
+            preview_coordinates.setObjectName("beam_preview_coordinates")
+            preview_coordinates.addItem("Physical coordinates (y, z)", "physical")
+            preview_coordinates.addItem("Normalized coordinates (y, z)", "normalized")
+            preview_coordinates.setToolTip(
+                "Physical coordinates use the section dimensions at the selected "
+                "Gauss point. Normalized coordinates use the section bounds."
+            )
+            box.addWidget(preview_coordinates)
+            property_label = QLabel()
+            property_label.setWordWrap(True)
+            box.addWidget(property_label)
+            figure = Figure(figsize=(5, 5))
+            canvas = FigureCanvas(figure)
+            box.addWidget(canvas)
+
+            def draw():
+                nonlocal beam_location
+                figure.clear()
+                axes = figure.add_subplot(111)
+                try:
+                    index = selector.value()
+                    beam_location = index
+                    show_point_coordinates()
+                    local_description = dict(description)
+                    local_description["properties"] = {
+                        name: np.asarray(value).reshape(-1)[
+                            min(index, np.asarray(value).size - 1)
+                        ]
+                        for name, value in description["properties"].items()
+                    }
+                    section = SavedBeamSection(local_description)
+                    if source_choice.currentData() == "stored":
+                        normalized = np.asarray(
+                            data.field_metadata[kind]["stored_points"]
+                        )
+                        if normalized.ndim == 3:
+                            normalized = normalized[:, :, index]
+                    else:
+                        try:
+                            normalized = section.section.normalized_output_points(
+                                samples.value()
+                            )
+                        except (ValueError, NotImplementedError):
+                            if reduction.currentData() != "position":
+                                raise
+                            normalized = np.empty((0, 2))
+                    use_normalized = preview_coordinates.currentData() == "normalized"
+                    points = (
+                        normalized
+                        if use_normalized
+                        else [
+                            section.normalized_section_coordinates(tuple(point))
+                            for point in normalized
+                        ]
+                    )
+                    xy = np.asarray(
+                        [
+                            [
+                                np.asarray(y).reshape(-1)[
+                                    min(index, np.asarray(y).size - 1)
+                                ],
+                                np.asarray(z).reshape(-1)[
+                                    min(index, np.asarray(z).size - 1)
+                                ],
+                            ]
+                            for y, z in points
+                        ]
+                    ).reshape(-1, 2)
+                    axes.scatter(xy[:, 0], xy[:, 1], s=10, label="Output points")
+                    if reduction.currentData() == "point_index":
+                        selected = min(point_index.value(), len(xy) - 1)
+                        current_point = xy[selected]
+                    elif reduction.currentData() == "position":
+                        current_point = (y.value(), z.value())
+                        if source_choice.currentData() == "stored":
+                            nearest = int(
+                                stored_point_indices(normalized, current_point)
+                            )
+                            current_point = xy[nearest]
+                        elif not use_normalized:
+                            current_point = section.normalized_section_coordinates(
+                                current_point
+                            )
+                            current_point = [
+                                np.asarray(value).reshape(-1)[
+                                    min(index, np.asarray(value).size - 1)
+                                ]
+                                for value in current_point
+                            ]
+                    else:
+                        current_point = None
+                    if current_point is not None:
+                        axes.scatter(
+                            *current_point,
+                            s=75,
+                            facecolors="none",
+                            edgecolors="red",
+                            label="Nearest stored point"
+                            if source_choice.currentData() == "stored"
+                            and reduction.currentData() == "position"
+                            else "Current point",
+                        )
+                    axes.plot(0, 0, "+", color="red", label="Centroid / beam axis")
+                    axes.set_aspect("equal")
+                    label = "Normalized" if use_normalized else "Physical local"
+                    axes.set_xlabel(f"{label} y")
+                    axes.set_ylabel(f"{label} z")
+                    axes.set_title(description["geometry"])
+                    axes.legend()
+                    property_label.setText(
+                        "; ".join(
+                            f"{name} = {np.asarray(value).reshape(-1)[min(index, np.asarray(value).size - 1)]:.6g}"
+                            for name, value in description["properties"].items()
+                        )
+                    )
+                except (ValueError, NotImplementedError) as error:
+                    axes.text(
+                        0.05, 0.5, str(error), transform=axes.transAxes, wrap=True
+                    )
+                canvas.draw()
+
+            selector.valueChanged.connect(draw)
+            preview_coordinates.currentIndexChanged.connect(draw)
+            draw()
+            preview.resize(600, 600)
+            preview.exec()
+
+        preview_button.clicked.connect(preview_section)
+        derived = section_data.beam_derived_fields()
+        frame_choice = QtWidgets.QComboBox()
+        frame_choice.setObjectName("beam_coordinate_system")
+        frame_choice.addItem("Local", "local")
+        if f"{kind}_global" in derived:
+            frame_choice.addItem("Global", "global")
+        previous_csys = getattr(
+            dock,
+            "beam_csys",
+            "global",
+        )
+        frame_choice.setCurrentIndex(max(0, frame_choice.findData(previous_csys)))
+        frame_choice.setEnabled(frame_choice.count() > 1)
+        layout.addRow("Coordinate system:", frame_choice)
+        layout.addRow(
+            QLabel(
+                "Normalized (y, z): 0 is the centroid; ±1 selects each bounding-box face.\n"
+                "Extrema depend on the available section samples."
+            )
+        )
+
+        def enable_controls():
+            stored = source_choice.currentData() == "stored"
+            for spin in (y, z):
+                spin.setToolTip(
+                    "Stored results use the nearest saved point in normalized (y, z) "
+                    "at each beam location. The preview highlights that point."
+                    if stored
+                    else "Requested normalized section coordinate."
+                )
+            try:
+                available = (
+                    len(section_data.field_metadata[kind]["stored_points"])
+                    if stored
+                    else len(
+                        SavedBeamSection(
+                            section_data.beam_section_description()
+                        ).section.normalized_output_points(max(8, samples.value()))
+                    )
+                )
+            except (ValueError, NotImplementedError, KeyError):
+                available = 0
+            for index in range(reduction.count()):
+                reduction.model().item(index).setEnabled(
+                    bool(available) or reduction.itemData(index) == "position"
+                )
+            if not available and reduction.currentData() != "position":
+                reduction.setCurrentIndex(reduction.findData("position"))
+            point = reduction.currentData() in ("point_index", "position")
+            y.setEnabled(point)
+            z.setEnabled(point)
+            y.setReadOnly(reduction.currentData() == "point_index")
+            z.setReadOnly(reduction.currentData() == "point_index")
+            point_index.setEnabled(reduction.currentData() == "point_index")
+            fixed = stored or (
+                section_data.beam_section_description().get("output_points") is not None
+                or "section_points" in section_data.beam_section_description()
+            )
+            samples.setEnabled(not fixed and bool(available))
+            if available:
+                blocker = QSignalBlocker(samples)
+                samples.setMaximum(max(samples.maximum(), available))
+                samples.setValue(available)
+                del blocker
+
+        def snap_samples():
+            enable_controls()
+            cached_points.clear()
+            show_point_coordinates()
+
+        samples.editingFinished.connect(snap_samples)
+
+        reduction.currentIndexChanged.connect(enable_controls)
+        source_choice.currentIndexChanged.connect(enable_controls)
+        enable_controls()
+        show_point_coordinates()
+        if submesh_choice is not None:
+
+            def select_submesh():
+                nonlocal section_data, count, beam_location, kind
+                section_data = dock.data._submesh_dataset(submesh_choice.currentData())
+                available_fields = section_data.beam_derived_fields()
+                if f"{kind}_local" not in available_fields:
+                    kind = "Stress" if "Stress_local" in available_fields else "Strain"
+                stored = "stored_points" in section_data.field_metadata.get(kind, {})
+                recomputed = (
+                    ("BeamStress" if kind == "Stress" else "BeamStrain")
+                    in section_data.gausspoint_data
+                    and section_data.beam_section_description().get(
+                        "recovery", "linear"
+                    )
+                    != "stored_only"
+                )
+                blocker = QSignalBlocker(source_choice)
+                source_choice.model().item(0).setEnabled(stored)
+                source_choice.model().item(1).setEnabled(recomputed)
+                if source_choice.currentData() == "stored" and not stored:
+                    source_choice.setCurrentIndex(1)
+                elif source_choice.currentData() == "recomputed" and not recomputed:
+                    source_choice.setCurrentIndex(0)
+                del blocker
+                count = max(
+                    (
+                        np.asarray(values).shape[-1]
+                        for name, values in section_data.gausspoint_data.items()
+                        if name in ("BeamStress", "BeamStrain", "Stress", "Strain")
+                    ),
+                    default=1,
+                )
+                beam_location = 0
+                cached_points.clear()
+                previous = frame_choice.currentData()
+                blocker = QSignalBlocker(frame_choice)
+                frame_choice.clear()
+                frame_choice.addItem("Local", "local")
+                if f"{kind}_global" in available_fields:
+                    frame_choice.addItem("Global", "global")
+                frame_choice.setCurrentIndex(max(0, frame_choice.findData(previous)))
+                frame_choice.setEnabled(frame_choice.count() > 1)
+                del blocker
+                enable_controls()
+                show_point_coordinates()
+
+            submesh_choice.currentIndexChanged.connect(select_submesh)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        if reduction.currentData() == "point_index":
+            show_point_coordinates()
+            if point_coordinates_label.text():
+                QtWidgets.QMessageBox.warning(
+                    self, "Beam section point", point_coordinates_label.text()
+                )
+                return
+        updated = dict(
+            source=source_choice.currentData(),
+            position=(y.value(), z.value())
+            if reduction.currentData() in ("point_index", "position")
+            else None,
+            reduction=None
+            if reduction.currentData() in ("point_index", "position")
+            else reduction.currentData(),
+            samples=samples.value(),
+            point_index=None,
+            stored_position="nearest",
+            source_fallback=submesh_choice is not None,
+            reference_submesh=submesh_choice.currentData()
+            if submesh_choice is not None
+            else 0,
+        )
+        if not self.apply_beam_options(updated, frame_choice.currentData(), kind):
+            return
+        if submesh_choice is not None:
+            dock.data.active_submesh = submesh_choice.currentData()
+        blocker = QSignalBlocker(self.field_combo)
+        self.field_combo.setCurrentText(kind)
+        del blocker
+        self.update_coordinate_choices(kind)
+        self.update_components(kind)
+
+    def apply_beam_options(self, updated, coordinates, kind):
+        """Apply settings to the selected scope after validating every beam pane."""
+        active = self.active_dock
+        targets = [active]
+        if self.apply_options_to_all:
+            targets += [
+                target
+                for target in self.all_docks
+                if target is not active
+                and target.data is not None
+                and target.data.beam_derived_fields()
+            ]
+        prepared = []
+        for target in targets:
+            displayed = _viewer_field_name(target.data, target.current_field)
+            derived = target.data.beam_derived_fields()
+            target_kind = displayed if displayed in ("Stress", "Strain") else kind
+            if f"{target_kind}_local" not in derived:
+                target_kind = "Stress" if "Stress_local" in derived else "Strain"
+            old_options = target.data.beam_options
+            try:
+                selection = BeamOptions(old_options)
+                selection.update(updated)
+                if target is not active and selection.get("source_fallback"):
+                    selection["reference_submesh"] = target.data.active_submesh
+                if not target.data._is_multimesh():
+                    selection["source_fallback"] = False
+                target.data.beam_options = selection
+                if coordinates == "global" and f"{target_kind}_global" not in derived:
+                    raise ValueError("Global coordinates require BeamLocalFrame")
+                field = _viewer_tensor_field(target.data, target_kind, coordinates)
+                component = target.current_comp if displayed == target_kind else "XX"
+                target.data.get_data(field, component or "XX")
+            except (ValueError, NotImplementedError) as error:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Beam section recovery",
+                    f"Cannot apply beam options to {getattr(target, 'title', 'this pane')}: {error}\n"
+                    "No panes were changed. Use Apply options to → Active window to limit the scope.",
+                )
+                return False
+            finally:
+                target.data.beam_options = old_options
+            prepared.append((target, field, component, displayed, selection))
+        for target, field, component, displayed, selection in prepared:
+            if any(
+                other is not target and other.data is target.data
+                for other in self.all_docks
+            ):
+                target.data = target.data.copy()
+            target.data.beam_options = selection
+            target.opts["clim"] = None
+            target.beam_csys = coordinates
+            if target is active or displayed in ("Stress", "Strain"):
+                target.current_field = field
+                target.current_comp = component or "XX"
+            self.update_plot_with_clim(dock=target)
+        return True
+
+    def open_shell_section_dialog(self):
+        dock = self.active_dock
+        if dock is None or not dock.data.shell_derived_fields():
+            return
+        data = dock.data
+        submesh_choice = None
+        if data._is_multimesh():
+            submesh_choice = QtWidgets.QComboBox()
+            submesh_choice.setObjectName("shell_submesh")
+            for mesh_index, mesh in enumerate(dock.data.mesh.submeshes):
+                if dock.data._submesh_dataset(mesh_index).shell_derived_fields():
+                    submesh_choice.addItem(
+                        f"{mesh_index}: {mesh.name or mesh.elm_type}", mesh_index
+                    )
+            if not submesh_choice.count():
+                return
+            submesh_choice.setCurrentIndex(
+                max(0, submesh_choice.findData(data.active_submesh))
+            )
+            data = dock.data._submesh_dataset(submesh_choice.currentData())
+        if not data.shell_derived_fields():
+            return
+        options = data.shell_options
+        displayed = _viewer_field_name(data, dock.current_field)
+        kind = (
+            displayed
+            if displayed in ("Stress", "Strain")
+            else (
+                "Stress" if "Stress_local" in data.shell_derived_fields() else "Strain"
+            )
+        )
+        if f"{kind}_local" not in data.shell_derived_fields():
+            kind = (
+                "Stress" if "Stress_local" in data.shell_derived_fields() else "Strain"
+            )
+        description = data.shell_section_description()
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Shell options")
+        layout = QtWidgets.QFormLayout(dialog)
+        help_label = QLabel("Thickness position: −1 bottom, 0 midsurface, +1 top.")
+        help_label.setToolTip(
+            "Only homogeneous linear shell stresses are recovered from resultants. Other stresses are interpolated within each layer from saved material-point values. At interfaces, a coordinate selects the lower layer; use a point index to select a particular side."
+        )
+        layout.addRow(help_label)
+        if submesh_choice is not None:
+            layout.addRow("Shell submesh:", submesh_choice)
+        source = QtWidgets.QComboBox()
+        source.setObjectName("shell_field_source")
+        source.addItem("Stored", "stored")
+        source.addItem("Recomputed", "recomputed")
+        source.setToolTip(
+            "Required on the selected shell submesh. Other shell submeshes use this source when available, otherwise the other source."
+        )
+        has_stored, has_recomputed = data.shell_sources(kind)
+        source.model().item(0).setEnabled(has_stored)
+        source.model().item(1).setEnabled(has_recomputed)
+        source.setCurrentIndex(
+            0
+            if has_stored and (options["source"] != "recomputed" or not has_recomputed)
+            else 1
+        )
+        layout.addRow("Source:", source)
+        frame = QtWidgets.QComboBox()
+        frame.setObjectName("shell_coordinates")
+        frame.addItem("Local", "local")
+        if f"{kind}_global" in data.shell_derived_fields():
+            frame.addItem("Global", "global")
+        frame.setCurrentIndex(
+            max(0, frame.findData(getattr(dock, "beam_csys", "global")))
+        )
+        reduction = QtWidgets.QComboBox()
+        reduction.setObjectName("shell_section_reduction")
+        for label, mode in (
+            ("Normalized position", "position"),
+            ("Point index", "point_index"),
+            ("Maximum", "max"),
+            ("Minimum", "min"),
+            ("Largest magnitude (signed)", "abs_max"),
+        ):
+            reduction.addItem(label, mode)
+        reduction.setCurrentIndex(
+            reduction.findData(
+                options["reduction"]
+                or (
+                    "point_index"
+                    if options["point_index"] is not None
+                    or options.get("reference_point_index") is not None
+                    else "position"
+                )
+            )
+        )
+        layout.addRow("Value:", reduction)
+        position = QDoubleSpinBox()
+        position.setObjectName("shell_section_position")
+        position.setDecimals(10)
+        position.setRange(-1, 1)
+        position.setSingleStep(0.1)
+        position.setValue(options["position"] or 0.0)
+        layout.addRow("Normalized position:", position)
+        index = QSpinBox()
+        index.setObjectName("shell_section_point_index")
+        index.setRange(0, 100000)
+        index.setValue(
+            options.get("reference_point_index")
+            if options.get("reference_point_index") is not None
+            else options["point_index"] or 0
+        )
+        layout.addRow("Point index (from 0):", index)
+        samples = QSpinBox()
+        samples.setObjectName("shell_section_samples")
+        samples.setRange(2, 100000)
+        samples.setValue(options["samples"])
+        layout.addRow("Samples per layer:", samples)
+        note = QLabel()
+        note.setWordWrap(True)
+        layout.addRow(note)
+        frame.setEnabled(frame.count() > 1)
+        layout.addRow("Coordinate system:", frame)
+        manual_position = [position.value()]
+        was_indexed = [False]
+
+        def refresh(*args):
+            stored = source.currentData() == "stored"
+            indexed = reduction.currentData() == "point_index"
+            if indexed and not was_indexed[0]:
+                manual_position[0] = position.value()
+            if not indexed and was_indexed[0]:
+                position.setValue(manual_position[0])
+            was_indexed[0] = indexed
+            points = (
+                np.asarray(data.field_metadata[kind]["stored_points"])
+                if stored
+                else sample_positions(description, samples.value())[0]
+            )
+            with QSignalBlocker(index):
+                index.setMaximum(len(points) - 1)
+            if indexed:
+                position.setValue(float(points[index.value()]))
+            point = reduction.currentData() in ("position", "point_index")
+            position.setEnabled(point)
+            position.setReadOnly(indexed)
+            index.setEnabled(point and indexed)
+            samples.setEnabled(not stored)
+            note.setText(
+                f"{len(points)} thickness points. "
+                + (
+                    "Stored sampling is fixed."
+                    if stored
+                    else "Sampling includes both faces of each layer."
+                )
+            )
+            if stored and reduction.currentData() == "position":
+                nearest = stored_shell_point_index(
+                    points, position.value(), data.field_metadata[kind]
+                )
+                note.setText(
+                    f"{len(points)} stored thickness points. Nearest stored position: {points[nearest]:.6g}."
+                )
+
+        for control in (source, reduction):
+            control.currentIndexChanged.connect(refresh)
+        index.valueChanged.connect(refresh)
+        samples.valueChanged.connect(refresh)
+        position.valueChanged.connect(
+            lambda: refresh() if reduction.currentData() == "position" else None
+        )
+        refresh()
+        if submesh_choice is not None:
+
+            def select_submesh():
+                nonlocal data, description, kind
+                data = dock.data._submesh_dataset(submesh_choice.currentData())
+                if f"{kind}_local" not in data.shell_derived_fields():
+                    kind = (
+                        "Stress"
+                        if "Stress_local" in data.shell_derived_fields()
+                        else "Strain"
+                    )
+                description = data.shell_section_description()
+                stored, recomputed = data.shell_sources(kind)
+                with QSignalBlocker(source):
+                    source.model().item(0).setEnabled(stored)
+                    source.model().item(1).setEnabled(recomputed)
+                    if source.currentData() == "stored" and not stored:
+                        source.setCurrentIndex(1)
+                    elif source.currentData() == "recomputed" and not recomputed:
+                        source.setCurrentIndex(0)
+                previous = frame.currentData()
+                with QSignalBlocker(frame):
+                    frame.clear()
+                    frame.addItem("Local", "local")
+                    if f"{kind}_global" in data.shell_derived_fields():
+                        frame.addItem("Global", "global")
+                    frame.setCurrentIndex(max(0, frame.findData(previous)))
+                frame.setEnabled(frame.count() > 1)
+                refresh()
+
+            submesh_choice.currentIndexChanged.connect(select_submesh)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        updated = dict(
+            source=source.currentData(),
+            reduction=None
+            if reduction.currentData() in ("position", "point_index")
+            else reduction.currentData(),
+            samples=samples.value(),
+            position=position.value()
+            if reduction.currentData() in ("position", "point_index")
+            else None,
+            point_index=None,
+            stored_position="nearest",
+            source_fallback=submesh_choice is not None,
+            reference_submesh=submesh_choice.currentData()
+            if submesh_choice is not None
+            else 0,
+            reference_point_index=index.value()
+            if reduction.currentData() == "point_index"
+            else None,
+        )
+        if not self.apply_shell_options(updated, frame.currentData(), kind):
+            return
+        if submesh_choice is not None:
+            dock.data.active_submesh = submesh_choice.currentData()
+        with QSignalBlocker(self.field_combo):
+            self.field_combo.setCurrentText(kind)
+        self.update_coordinate_choices(kind)
+        self.update_components(kind)
+
+    def apply_shell_options(self, updated, coordinates, kind):
+        """Validate all eligible panes before applying thickness settings."""
+
+        active = self.active_dock
+        targets = [active]
+        if self.apply_options_to_all:
+            targets += [
+                target
+                for target in self.all_docks
+                if target is not active
+                and target.data is not None
+                and target.data.shell_derived_fields()
+            ]
+        prepared = []
+        for target in targets:
+            derived = target.data.shell_derived_fields()
+            displayed = _viewer_field_name(target.data, target.current_field)
+            target_kind = displayed if displayed in ("Stress", "Strain") else kind
+            if f"{target_kind}_local" not in derived:
+                target_kind = "Stress" if "Stress_local" in derived else "Strain"
+            old = target.data.shell_options
+            try:
+                selection = ShellOptions(old)
+                selection.update(updated)
+                if target is not active and selection.get("source_fallback"):
+                    selection["reference_submesh"] = target.data.active_submesh
+                if not target.data._is_multimesh():
+                    selection["source_fallback"] = False
+                target.data.shell_options = selection
+                if coordinates == "global" and f"{target_kind}_global" not in derived:
+                    raise ValueError("Global coordinates require ShellLocalFrame")
+                field = _viewer_tensor_field(target.data, target_kind, coordinates)
+                component = target.current_comp if displayed == target_kind else "XX"
+                target.data.get_data(field, component or "XX")
+            except (ValueError, NotImplementedError) as error:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Shell thickness recovery",
+                    f"Cannot apply shell options to {getattr(target, 'title', 'this pane')}: {error}\nNo panes were changed. Use Apply options to → Active window to limit the scope.",
+                )
+                return False
+            finally:
+                target.data.shell_options = old
+            prepared.append((target, field, component, displayed, selection))
+        for target, field, component, displayed, selection in prepared:
+            if any(
+                other is not target and other.data is target.data
+                for other in self.all_docks
+            ):
+                target.data = target.data.copy()
+            target.data.shell_options = selection
+            target.opts["clim"] = None
+            target.beam_csys = coordinates
+            if target is active or displayed in ("Stress", "Strain"):
+                target.current_field, target.current_comp = field, component or "XX"
+            self.update_plot_with_clim(dock=target)
+        return True
+
     def get_components(self, field):
+        field = _viewer_tensor_field(
+            self.active_dock.data,
+            field,
+            getattr(self.active_dock, "beam_csys", "local"),
+        )
         return self.active_dock.get_components(field)
 
     def update_components(self, field):
@@ -1410,6 +2421,11 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.active_dock:
                 self.active_dock.current_field = None
         else:
+            field = _viewer_tensor_field(
+                self.active_dock.data,
+                field,
+                getattr(self.active_dock, "beam_csys", "local"),
+            )
             comps = self.get_components(field)
             self.active_dock.current_field = field
 
@@ -1427,7 +2443,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if field in ("", SOLID_COLOR_FIELD):
             return None
         else:
-            return self.field_combo.currentText()
+            return _viewer_tensor_field(
+                self.data, field, getattr(self.active_dock, "beam_csys", "local")
+            )
 
     @property
     def current_component(self):
@@ -1717,10 +2735,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 for d in self.all_docks:
                     if self.current_field is None:
                         d.current_field = None
-                    elif self.current_field in d.data.field_names():
-                        d.current_field = self.current_field
+                    elif self.field_combo.currentText() in _viewer_field_names(d.data):
+                        d.beam_csys = getattr(self.active_dock, "beam_csys", "local")
+                        d.current_field = _viewer_tensor_field(
+                            d.data, self.field_combo.currentText(), d.beam_csys
+                        )
                         # Only set component if field exists in this dock
-                        comps = d.get_components(self.current_field)
+                        comps = d.get_components(d.current_field)
                         if self.current_component in comps:
                             d.current_comp = self.current_component
                     self.update_plot_with_clim(val, iteration, lock_view, dock=d)
@@ -2323,8 +3344,6 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
     def _pick_element(self):
-        import vtk
-
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.0005)
 
@@ -4002,7 +5021,9 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             idx = selected[0].row()
             entry = self.y_data_list[idx]
             # Update controls
-            self.field_combo.setCurrentText(entry["field"])
+            self.field_combo.setCurrentText(
+                _viewer_field_name(self.parent.data, entry["field"])
+            )
             self.comp_combo.setCurrentText(str(entry["comp"]))
             self.data_type_combo.setCurrentText(entry["data_type"])
             self.id_spin.setValue(entry["id"])
@@ -4077,8 +5098,6 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         )
 
     def _start_pick_element(self, mainwin):
-        import vtk
-
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.0005)
 
@@ -4122,7 +5141,7 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         data = getattr(self.parent, "data", None)
         if data is not None:
             self.field_combo.clear()
-            self.field_combo.addItems(data.field_names())
+            self.field_combo.addItems(_viewer_field_names(data))
             self.field_combo.addItems(data.scalar_data.keys())
             self.update_components(self.field_combo.currentText())
             self.update_completer()
@@ -4157,7 +5176,7 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         data = getattr(self.parent, "data", None)
         items = []
         if data is not None:
-            for field in data.field_names():
+            for field in _viewer_field_names(data):
                 items.append(field)  # for 'All components'
                 comps = []
                 if hasattr(self.parent, "get_components"):
@@ -4227,7 +5246,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
                 self.x_info.setText(f"{field} ({data_type}, ID={indice})")
             else:
                 self.x_info.setText(f"{field}_{comp} ({data_type}, ID={indice})")
-        self.x_data_info = (field, comp, data_type, indice)
+        resolved = _viewer_tensor_field(
+            data, field, getattr(self.parent.active_dock, "beam_csys", "local")
+        )
+        self.x_data_info = (resolved, comp, data_type, indice)
 
     def check_valide(self, field, comp, data_type, indice):
         data = getattr(self.parent, "data", None)
@@ -4282,20 +5304,23 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         data = getattr(self.parent, "data", None)
         if data is None:
             return
+        resolved = _viewer_tensor_field(
+            data, field, getattr(self.parent.active_dock, "beam_csys", "local")
+        )
         if field in data.scalar_data:
             label = f"{field}_{comp}"
         else:
             if indice is None and dtype == "GaussPoint":
                 # add all gauss points values
                 for gp_id in _gausspoint_global_indices_for_element(
-                    data, field, comp, idx
+                    data, resolved, comp, idx
                 ):
                     self.add_y_data(indice=gp_id)
                 return
             label = f"{field}_{comp} ({dtype}, ID={idx})"
         # Add to list and table
         entry = {
-            "field": field,
+            "field": resolved,
             "comp": comp,
             "data_type": dtype,
             "id": idx,

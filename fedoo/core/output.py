@@ -1,3 +1,7 @@
+import warnings
+from fedoo.util.beam_recovery import section_description, validate_positions
+from fedoo.util.fdh5 import FDH5Reader
+
 import numpy as np
 
 # from fedoo.core.mesh import *
@@ -6,6 +10,7 @@ from fedoo.core.mesh import MultiMesh
 
 # from fedoo.util.ExportData import ExportData
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import os
 from zipfile import ZipFile, Path
 
@@ -57,6 +62,7 @@ _available_output = [
     "Fint_global",
     "BeamStrain",
     "BeamStress",
+    "BeamLocalFrame",
     "DispGradient",
 ]
 
@@ -235,6 +241,9 @@ def _find_constitutivelaw_with_method(weakform, method_name):
     law = getattr(weakform, "constitutivelaw", None)
     if law is not None and hasattr(law, method_name):
         return law
+    law = getattr(weakform, "properties", None)
+    if law is not None and hasattr(law, method_name):
+        return law
 
     for child in getattr(weakform, "list_weakform", []):
         law = _find_constitutivelaw_with_method(child, method_name)
@@ -291,7 +300,7 @@ def _get_assemblysum_results(
     assemb,
     output_list,
     output_type=None,
-    position=1,
+    position=None,
     element_set=None,
     include_mesh=True,
 ):
@@ -355,6 +364,48 @@ def _get_assemblysum_results(
                     submesh_id,
                     multimesh,
                 )
+                if res in sub_result.field_metadata:
+                    metadata = sub_result.field_metadata[res]
+                    if multimesh:
+                        result.field_metadata.setdefault(res, {"submeshes": {}})[
+                            "submeshes"
+                        ][str(submesh_id)] = metadata
+                    else:
+                        result.field_metadata[res] = metadata
+                    section_key = (
+                        "_ShellSection"
+                        if metadata.get("family") == "shell"
+                        else "_BeamSection"
+                    )
+                    section_metadata = sub_result.field_metadata.get(
+                        section_key, metadata
+                    )
+                    if multimesh:
+                        result.field_metadata.setdefault(
+                            section_key, {"submeshes": {}}
+                        )["submeshes"][str(submesh_id)] = section_metadata
+                    else:
+                        result.field_metadata[section_key] = section_metadata
+                    for storage, association in (
+                        (sub_result.node_data, "Node"),
+                        (sub_result.element_data, "Element"),
+                        (sub_result.gausspoint_data, "GaussPoint"),
+                    ):
+                        for name, value in storage.items():
+                            if (
+                                name.startswith(("_Section_", "_Shell"))
+                                or name == "ShellLocalFrame"
+                            ):
+                                if association == "Node" and multimesh:
+                                    name += f"_submesh_{submesh_id}"
+                                _store_assemblysum_field(
+                                    result,
+                                    name,
+                                    value,
+                                    association,
+                                    submesh_id,
+                                    multimesh,
+                                )
                 found = True
                 break
 
@@ -376,7 +427,7 @@ def _get_results(
     assemb,
     output_list,
     output_type=None,
-    position=1,
+    position=None,
     element_set=None,
     include_mesh=True,
     ignore_missing=False,
@@ -427,6 +478,83 @@ def _get_results(
 
     sv = assemb.sv  # state variables associated to the assembly
 
+    def tensor_field(name):
+        if name in data_sav:
+            return data_sav[name]
+        if name in sv:
+            value = sv[name]
+        else:
+            method_name = "get_strain" if name == "Strain" else "get_stress"
+            law = _find_constitutivelaw_with_method(assemb.weakform, method_name)
+            if law is None:
+                if ignore_missing:
+                    return None
+                raise NameError(f'Field "{name}" not available')
+            try:
+                beam = hasattr(law, "section_description") and hasattr(
+                    law, "get_beam_rigidity"
+                )
+                shell = hasattr(law, "get_output_tensors") and hasattr(
+                    law, "get_shell_stiffness_matrix"
+                )
+                if shell:
+                    value, description = law.get_output_tensors(assemb, name, position)
+                    if element_set is not None and np.ndim(description["thickness"]):
+                        description["thickness"] = (
+                            np.asarray(description["thickness"])
+                            .reshape(-1, assemb.mesh.n_elements)[:, element_set]
+                            .ravel()
+                        )
+                    data_sav[name + "_metadata"] = description
+                elif not beam:
+                    value = getattr(law, method_name)(
+                        assemb, position=1 if position is None else position
+                    )
+                if beam:
+                    description = section_description(law, assemb, element_set)
+                    # Generate points from GP-converted properties so varying
+                    # dimensions use the same order as the recovered fields.
+                    recovery_description = section_description(law, assemb)
+                    for property_name, association in recovery_description.get(
+                        "associations", {}
+                    ).items():
+                        values = np.asarray(
+                            recovery_description["properties"][property_name]
+                        )
+                        if values.ndim and association != "GaussPoint":
+                            recovery_description["properties"][property_name] = (
+                                assemb.convert_data(values, association, "GaussPoint")
+                            )
+                    saved_law = type(law).from_section_description(recovery_description)
+                    saved_law.material = law.material
+                    value = getattr(saved_law, method_name)(assemb, position=position)
+                    points = (
+                        saved_law.normalized_output_points()
+                        if position is None
+                        else validate_positions(position)
+                    )
+                    if (
+                        points.ndim == 3
+                        and element_set is not None
+                        and (output_type is None or output_type == "GaussPoint")
+                    ):
+                        points = points.reshape(
+                            *points.shape[:2], -1, assemb.mesh.n_elements
+                        )[..., element_set].reshape(*points.shape[:2], -1)
+                    description["stored_points"] = points.tolist()
+                    data_sav[name + "_metadata"] = description
+            except ValueError:
+                raise
+            except Exception as exc:
+                raise NameError(f'Field "{name}" not available') from exc
+        if np.isscalar(value) and value == 0:
+            value = np.zeros((6, assemb.n_gauss_points))
+        if not hasattr(value, "von_mises"):
+            cls = StrainTensorList if name == "Strain" else StressTensorList
+            value = cls(value)
+        data_sav[name] = value
+        return value
+
     if include_mesh:
         result = DataSet(_output_mesh_for_assembly(assemb, element_set))
         if element_set is not None and isinstance(element_set, str):
@@ -458,50 +586,73 @@ def _get_results(
             else:
                 data_type = "Scalar"  # if var is global_dof variable
 
+        elif res == "ShellLocalFrame":
+            law = _find_constitutivelaw_with_method(
+                assemb.weakform, "get_shell_stiffness_matrix"
+            )
+            if law is None:
+                if ignore_missing:
+                    continue
+                raise NameError('Field "ShellLocalFrame" not available')
+            frames = assemb.current.get_element_local_frame()
+            data = np.tile(frames.reshape(-1, 9).T, (1, assemb.n_elm_gp))
+            data_type = "GaussPoint"
+
+        elif res == "BeamLocalFrame":
+            law = _find_constitutivelaw_with_method(assemb.weakform, "get_local_frame")
+            if law is None:
+                if ignore_missing:
+                    continue
+                raise NameError('Field "BeamLocalFrame" not available')
+            data = law.get_local_frame(assemb).reshape(-1, 9).T
+            data_type = "GaussPoint"
+
         elif res in ["PK2", "Kirchhoff", "Strain", "Stress"]:
-            if res in data_sav:
-                data = data_sav[res]  # avoid a new data conversion
-            else:
-                if res in sv:
-                    data = sv[res]
+            data = tensor_field(res)
+            if data is None:
+                continue
+            if output_type is not None and output_type != "GaussPoint":
+                array = data.asarray()
+                if array.ndim == 3:
+                    shape = array.shape
+                    data = assemb.convert_data(
+                        array.reshape(-1, shape[-1]), "GaussPoint", output_type
+                    ).reshape(*shape[:-1], -1)
                 else:
-                    # attent to compute
-                    method_name = "get_strain" if res == "Strain" else "get_stress"
-                    law = _find_constitutivelaw_with_method(
-                        assemb.weakform, method_name
-                    )
-                    if law is None:
-                        if ignore_missing:
-                            continue
-                        raise NameError('Field "{}" not available'.format(res))
-                    try:
-                        data = getattr(law, method_name)(assemb, position=position)
-                    except Exception as exc:
-                        raise NameError('Field "{}" not available'.format(res)) from exc
-
-                # keep data in memory in case it may be used later for vm, pc or pdir stress computation
-                data_sav[res] = data
-
-                if output_type is not None and output_type != "GaussPoint":
                     data = data.convert(assemb, None, output_type)
-                    data_type = output_type
-                else:
-                    data_type = "GaussPoint"
-
-            if hasattr(data, "asarray"):
-                data = data.asarray()
+                data_type = output_type
             else:
-                data = np.array(data)
+                data_type = "GaussPoint"
+            data = data.asarray() if hasattr(data, "asarray") else data
+            if res + "_metadata" in data_sav:
+                metadata = data_sav[res + "_metadata"]
+                points = np.asarray(metadata["stored_points"])
+                if points.ndim == 3 and data_type != "GaussPoint":
+                    metadata["stored_points"] = (
+                        assemb.convert_data(
+                            points.reshape(-1, points.shape[-1]),
+                            "GaussPoint",
+                            data_type,
+                        )
+                        .reshape(*points.shape[:-1], -1)
+                        .tolist()
+                    )
+                    if data_type == "Element" and element_set is not None:
+                        metadata["stored_points"] = np.asarray(
+                            metadata["stored_points"]
+                        )[..., element_set].tolist()
+                result.field_metadata[res] = metadata
+                key = (
+                    "_ShellSection"
+                    if metadata.get("family") == "shell"
+                    else "_BeamSection"
+                )
+                result.field_metadata[key] = result.field_metadata[res]
 
         elif res in ["PK2_vm", "Kirchhoff_vm", "Stress_vm"]:
-            if res[:-3] in data_sav:
-                data = data_sav[res[:-3]]
-            else:
-                if res[:-3] not in sv and ignore_missing:
-                    continue
-                data = sv[res[:-3]]
-                data_sav[res[:-3]] = data
-
+            data = tensor_field(res[:-3])
+            if data is None:
+                continue
             data = data.von_mises()
             data_type = "GaussPoint"
 
@@ -538,9 +689,9 @@ def _get_results(
                 data_sav[measure_type + "_pc"] = data
 
             else:
-                if measure_type not in sv and ignore_missing:
+                data = tensor_field(measure_type)
+                if data is None:
                     continue
-                data = sv[measure_type]
                 # if measure_type in ['PKII','PK2']:
                 #     data = material.get_pk2()
                 # elif measure_type == 'Stress':
@@ -550,7 +701,6 @@ def _get_results(
                 # elif measure_type == 'Cauchy':
                 #     data = material.get_cauchy()
 
-                data_sav[measure_type] = data
                 data = data.diagonalize()
                 data_sav[measure_type + "_pc"] = data
 
@@ -568,6 +718,15 @@ def _get_results(
         elif res in sv:
             data = sv[res]
             data_type = assemb.sv_type.get(res, "GaussPoint")
+            if res in ("BeamStress", "BeamStrain") and np.isscalar(data) and data == 0:
+                data = np.zeros((6, assemb.n_gauss_points))
+            if res in ("ShellStress", "ShellStrain"):
+                data = np.array(
+                    [
+                        np.broadcast_to(c, (assemb.n_gauss_points,))
+                        for c in ([0] * 8 if np.isscalar(data) else data)
+                    ]
+                )
             if isinstance(data, list):
                 # try to convert into array
                 try:
@@ -576,8 +735,6 @@ def _get_results(
                     else:
                         data = np.array(data)
                 except ValueError:
-                    import warnings
-
                     warnings.warn(
                         (
                             f"{res} can't be converted into array "
@@ -626,12 +783,73 @@ def _get_results(
                     data = data.reshape(-1, assemb.mesh.n_elements)
                     result.gausspoint_data[res] = data[:, element_set].ravel()
                 else:  # data.ndim ==2
-                    data = data.reshape(data.shape[0], -1, assemb.mesh.n_elements)
-                    result.gausspoint_data[res] = data[:, :, element_set].reshape(
-                        data.shape[0], -1
+                    leading = data.shape[:-1]
+                    data = data.reshape(*leading, -1, assemb.mesh.n_elements)
+                    result.gausspoint_data[res] = data[..., element_set].reshape(
+                        *leading, -1
                     )
         elif data_type == "Scalar":
             result.scalar_data[res] = data
+
+        if res in ("BeamStress", "BeamStrain") and data_type == "GaussPoint":
+            law = _find_constitutivelaw_with_method(
+                assemb.weakform, "get_beam_rigidity"
+            )
+            if law is not None:
+                result.field_metadata[res] = section_description(
+                    law, assemb, element_set
+                )
+                result.field_metadata["_BeamSection"] = result.field_metadata[res]
+                for name, value in result.field_metadata[res]["properties"].items():
+                    if np.asarray(value).ndim:
+                        association = (
+                            result.field_metadata[res]
+                            .get("associations", {})
+                            .get(name, "GaussPoint")
+                        )
+                        storage = {
+                            "Node": result.node_data,
+                            "Element": result.element_data,
+                            "GaussPoint": result.gausspoint_data,
+                        }[association]
+                        storage["_Section_" + name] = np.asarray(value)
+
+    shell_fields = {"ShellStress", "ShellStrain", "ShellLocalFrame", "Stress", "Strain"}
+    if shell_fields.intersection(output_list):
+        law = _find_constitutivelaw_with_method(
+            assemb.weakform, "get_shell_stiffness_matrix"
+        )
+        if law is not None and hasattr(law, "get_output_tensors"):
+            description = law.section_description(assemb)
+            if element_set is not None and np.ndim(description["thickness"]):
+                description["thickness"] = (
+                    np.asarray(description["thickness"])
+                    .reshape(-1, assemb.mesh.n_elements)[:, element_set]
+                    .ravel()
+                )
+            result.field_metadata["_ShellSection"] = description
+            for name in ("ShellStress", "ShellStrain"):
+                if name in output_list:
+                    result.field_metadata[name] = description
+            frames = np.tile(
+                assemb.current.get_element_local_frame().reshape(-1, 9).T,
+                (1, assemb.n_elm_gp),
+            )
+            if element_set is not None:
+                frames = frames.reshape(9, -1, assemb.mesh.n_elements)[
+                    ..., element_set
+                ].reshape(9, -1)
+            result.gausspoint_data["ShellLocalFrame"] = frames
+            if law._recovery_model != "homogeneous_linear" and {
+                "Stress",
+                "ShellStress",
+            }.intersection(output_list):
+                raw = law.integration_stresses(assemb)
+                if element_set is not None:
+                    raw = raw.reshape(*raw.shape[:2], -1, assemb.mesh.n_elements)[
+                        ..., element_set
+                    ].reshape(*raw.shape[:2], -1)
+                result.gausspoint_data["_ShellStress"] = raw
 
     output_scalars = getattr(pb, "get_output_scalars", None)
     if output_scalars is not None:
@@ -672,12 +890,13 @@ class _ProblemOutput:
         output_type=None,
         file_format="fdh5",
         compressed=False,
-        position=1,
+        position=None,
         element_set=None,
         save_mesh=True,
         include_static_obstacles=False,
         write_mode="overwrite",
         ignore_missing=False,
+        private=False,
     ):
         filename = os.fspath(filename)
         dirname = os.path.dirname(filename)
@@ -754,6 +973,7 @@ class _ProblemOutput:
             "compressed": compressed,
             "include_static_obstacles": include_static_obstacles,
             "ignore_missing": ignore_missing,
+            "private": private,
         }
 
         existing_refs = []
@@ -775,8 +995,6 @@ class _ProblemOutput:
 
                 iterations = []
                 if write_mode == "append" and file_exists:
-                    from fedoo.util.fdh5 import FDH5Reader
-
                     iterations = FDH5Reader(full_filename).list_iterations()
                     existing_refs = [
                         ("fdh5", full_filename, iteration) for iteration in iterations
@@ -872,6 +1090,15 @@ class _ProblemOutput:
                 )
                 if include_static_obstacles:
                     _add_static_geometry_to_results(res, result_mesh, output_mesh)
+                if output["private"]:
+                    for values in (
+                        res.node_data,
+                        res.element_data,
+                        res.gausspoint_data,
+                    ):
+                        for name in list(values):
+                            if not name.startswith("_"):
+                                values["_" + name] = values.pop(name)
                 out.add_data(res)
 
         for i, out in enumerate(list_data):

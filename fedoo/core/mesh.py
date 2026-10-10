@@ -1,6 +1,10 @@
 """Fedoo Mesh object."""
 
 from __future__ import annotations
+
+from scipy.spatial import cKDTree
+from scipy.sparse import linalg
+
 import numpy as np
 
 from fedoo.core.base import MeshBase
@@ -13,6 +17,8 @@ import re
 
 from os.path import splitext
 from pathlib import Path
+
+# FDH5Writer stays in the save methods: fdh5 imports the mesh classes.
 
 try:
     import pyvista as pv
@@ -681,7 +687,6 @@ class Mesh(MeshBase):
         find_coincident_nodes : lighter round-to-tolerance detector returning
             pairs for a single-pass ``merge_nodes`` call.
         """
-        from scipy.spatial import cKDTree
 
         total_merged = 0
         while True:
@@ -1591,8 +1596,6 @@ class Mesh(MeshBase):
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
         if n_elm_gp not in self._saved_gausspoint2node_l2:
-            from scipy.sparse import linalg
-
             node2gp = self._get_node2gausspoint_mat(n_elm_gp)
             quadrature = self._get_gaussian_quadrature_mat(n_elm_gp)
             mass = node2gp.T @ quadrature @ node2gp

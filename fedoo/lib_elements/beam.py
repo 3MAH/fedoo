@@ -1,4 +1,5 @@
 import numpy as np
+from fedoo.lib_elements.line import Lin2
 from fedoo.lib_elements.element_base import Element1D, Element1DGeom2
 from fedoo.lib_elements.element_list import CombinedElement
 
@@ -473,6 +474,25 @@ Beam.associated_variables = {
     "RotY": (-1, "DispZ"),
     "RotZ": (1, "DispY"),
 }
+
+
+class _BeamMean(Lin2):
+    """Value at the chord midpoint and derivative along the chord.
+
+    Both are element-constant operators of the independent linear nodal
+    field, rather than the coupled bending interpolation used by ``beam``.
+    """
+
+    name = "beam_mean"
+
+    def shape_function(self, xi):
+        return np.full((len(xi), 2), 0.5)
+
+
+for _name in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
+    # A single interpolation block addresses only the primary field, even
+    # when the ordinary beam interpolation has an associated bending field.
+    Beam.set_variable_interpolation("_BeamMean" + _name, _BeamMean)
 
 
 # def SetProperties_Beam(Iyy, Izz, A, nu=None, k=1, E= None, G=None):
