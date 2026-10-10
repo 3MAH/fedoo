@@ -59,10 +59,11 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         plate_properties,
         true_drilling_rotation=True,
         drill_stiffness_coefficient=1e-2,
-        consistent_tangent=False,
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=False,
     ):
         if isinstance(plate_properties, str):
             plate_properties = ConstitutiveLaw.get_all()[plate_properties]
@@ -374,7 +375,10 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
     def update_2(self, assembly, pb):
         """Prepare tangent fields once, after the constitutive state update."""
-        if self._use_consistent_tangent(assembly):
+        # A line-search trial only evaluates the residual: skip the tangent.
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
             self._prepare_consistent_tangent(assembly.current)
 
     def set_start(self, assembly, pb):
@@ -502,7 +506,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 * penalty
             )
 
-        if self._use_consistent_tangent(assembly):
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
             diffop += self._get_consistent_tangent(assembly)
         return diffop
 
@@ -644,10 +650,11 @@ class PlateEquilibrium(
         plate_properties,
         true_drilling_rotation=True,
         drill_stiffness_coefficient=1e-2,
-        consistent_tangent=False,
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=False,
     ):
         super().__init__(
             plate_properties,

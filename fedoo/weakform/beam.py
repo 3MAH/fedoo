@@ -59,10 +59,11 @@ class BeamEquilibrium(WeakFormBase):
         Iyy=None,
         Izz=None,
         k=0,
-        consistent_tangent=True,
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=True,
     ):
         # k: shear shape factor
 
@@ -141,6 +142,7 @@ class BeamEquilibrium(WeakFormBase):
         self.nlgeom = assembly._nlgeom
 
     def update(self, assembly, pb):
+        assembly.sv.pop("_BeamTangentOperators", None)
         # function called when the problem is updated (NR loop or time increment)
         # Nlgeom implemented only for updated lagragian formulation
         if self.nlgeom == "UL":
@@ -508,7 +510,10 @@ class BeamEquilibrium(WeakFormBase):
                 # uncomment the following line to activate
                 # diff_op = diff_op + eps[0].virtual * eps[0] * N
 
-        if self._use_consistent_tangent(assembly):
+        # A line-search trial only evaluates the residual: skip the tangent.
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
             data = assembly.sv.get("_BeamTangentData")
             if data is not None:
                 diff_op += self._get_consistent_tangent(assembly, data)
@@ -522,7 +527,13 @@ class BeamEquilibrium(WeakFormBase):
         Only its correction and the three stress-dependent terms follow.
         """
 
-        tangent = beam_tangent_operators(self, assembly, data)
+        # Built once per update and reused by the residual and matrix
+        # assemblies. The entry is replaced, never mutated, so the sv_start
+        # snapshot keeps the operators of the state it was taken from.
+        tangent = assembly.sv.get("_BeamTangentOperators")
+        if tangent is None:
+            tangent = beam_tangent_operators(self, assembly, data)
+            assembly.sv["_BeamTangentOperators"] = tangent
         eps = self.space.op_beam_strain()
         Ke = self.properties.get_beam_rigidity()
         stress = assembly.sv["BeamStress"]
