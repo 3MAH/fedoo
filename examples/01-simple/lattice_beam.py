@@ -33,7 +33,7 @@ else:
 nodes_left = mesh.find_nodes("X", mesh.bounding_box.xmin)
 nodes_right = mesh.find_nodes("X", mesh.bounding_box.xmax)
 
-wf = fd.weakform.BeamEquilibrium(beam_props)
+wf = fd.weakform.BeamEquilibrium(beam_props, consistent_tangent=True)
 
 assembly = fd.Assembly.create(wf, mesh)
 

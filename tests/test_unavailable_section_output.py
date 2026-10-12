@@ -48,7 +48,8 @@ def test_unavailable_beam_tensor_obeys_ignore_missing(torsion):
     with pytest.raises(NameError, match='Field "Stress" not available'):
         problem.get_results(assembly, ["Stress"])
     result = problem.get_results(
-        assembly, ["Stress", "Stress_vm", "Stress_pc", "BeamStress"],
+        assembly,
+        ["Stress", "Stress_vm", "Stress_pc", "BeamStress"],
         ignore_missing=True,
     )
     assert set(result.gausspoint_data) == {"BeamStress"}
@@ -102,8 +103,12 @@ def test_mixed_beam_shell_position_has_explicit_error(position):
     shell.sv["Stress"] = StressTensorList(np.zeros((6, shell.n_gauss_points)))
     shell.sv["ShellStress"] = np.zeros((8, shell.n_gauss_points))
     assembly = fd.Assembly.sum(beam, shell)
-    with pytest.raises(ValueError, match="Mixed beam/shell output requires position=None"):
-        problem.get_results(assembly, ["Stress_vm"], position=position, ignore_missing=True)
+    with pytest.raises(
+        ValueError, match="Mixed beam/shell output requires position=None"
+    ):
+        problem.get_results(
+            assembly, ["Stress_vm"], position=position, ignore_missing=True
+        )
     result = problem.get_results(assembly, ["Stress"], position=None)
     assert set(result.gausspoint_data["Stress"]) == {0, 1}
     # A position is irrelevant to resultants and valid for a single family.
