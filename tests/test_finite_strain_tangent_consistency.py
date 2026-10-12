@@ -882,6 +882,67 @@ def test_a_modular_material_runs_the_total_formulation_in_tl():
     np.testing.assert_allclose(stress, reference, atol=1e-6 * np.abs(reference).max())
 
 
+@_needs_total_formulation
+def test_total_formulation_with_a_local_material_frame_matches_the_simcoon_solver():
+    """Orthotropic elasticity with rotated material axes, in simple shear under nlgeom="TL".
+    The axes are directions of the reference configuration: the law sees ln U in that frame
+    and nothing is convected. Same stress as the simcoon solver given the same orientation,
+    in any number of increments."""
+    from simcoon.solver import Block, StepMeca
+
+    props = [
+        150000.0,
+        10000.0,
+        10000.0,
+        0.3,
+        0.3,
+        0.45,
+        5000.0,
+        5000.0,
+        3500.0,
+        0,
+        0,
+        0,
+    ]
+    gamma = 0.6
+    orientation = simcoon.Rotation.from_euler("zxz", [30.0, 50.0, 20.0], degrees=True)
+    step = StepMeca(
+        control="F", value=[1.0, 0.0, gamma, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], ninc=2
+    )
+    reference = simcoon.solver.solve(
+        Block(steps=[step], control_type="F"),
+        "ELORT",
+        np.array(props),
+        1,
+        orientation=orientation,
+        kinematic_form="total",
+        record_tangent=False,
+    )["Kirchhoff"][:, -1]  # det F = 1: Kirchhoff is Cauchy
+
+    for n_inc in (1, 4):
+        fd.Assembly.delete_memory()
+        fd.ModelingSpace("3D")
+        mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+        material = fd.constitutivelaw.Simcoon("ELORT", props, name="law")
+        material.local_frame = orientation.as_matrix()
+        wf = fd.weakform.StressEquilibrium(material, nlgeom="TL")
+        assembly = fd.Assembly.create(wf, mesh, name="asm")
+        pb = fd.problem.NonLinear("asm")
+        pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
+        nodes = np.arange(mesh.n_nodes)
+        pb.bc.add("Dirichlet", nodes, "DispX", gamma * mesh.nodes[:, 2])
+        pb.bc.add("Dirichlet", nodes, "DispY", 0)
+        pb.bc.add("Dirichlet", nodes, "DispZ", 0)
+        pb.nlsolve(dt=1.0 / n_inc, tmax=1.0, update_dt=False, print_info=0)
+        assert wf.kinematic_form == "total"
+        stress = assembly.sv["Stress"].asarray()
+        np.testing.assert_allclose(
+            stress,
+            reference[:, None] * np.ones((1, stress.shape[1])),
+            atol=1e-9 * np.abs(reference).max(),
+        )
+
+
 def _polar_rotation(F):
     c, N = np.linalg.eigh(F.T @ F)
     return F @ N @ np.diag(1.0 / np.sqrt(c)) @ N.T
