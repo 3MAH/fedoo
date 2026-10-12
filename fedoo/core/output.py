@@ -52,7 +52,7 @@ _available_output = [
     "Strain",
     "LogStrainU",
     "LogStrainV",
-    "HenckyStress",
+    "LogStressU",
     "Statev",
     "Stress",
     "Stress_vm",
@@ -66,7 +66,7 @@ _available_output = [
 ]
 
 # ln U (material) and ln V (spatial) logarithmic strains, and the stress T dual to ln U
-_LOG_MEASURES = ("LogStrainU", "LogStrainV", "HenckyStress")
+_LOG_MEASURES = ("LogStrainU", "LogStrainV", "LogStressU")
 
 
 def _has_state_function_strain(assemb):
@@ -519,8 +519,7 @@ def _get_results(
                 not _has_state_function_strain(assemb)
                 or "F" not in sv
                 or (
-                    res == "HenckyStress"
-                    and not hasattr(sim, "total_formulation_serves")
+                    res == "LogStressU" and not hasattr(sim, "total_formulation_serves")
                 )
             ):
                 if ignore_missing:
@@ -528,12 +527,12 @@ def _get_results(
                 raise NameError(
                     'Field "{}" is available in finite strain when the strain is a '
                     'state function of F: nlgeom="TL", or corate "log_r" or "log" '
-                    "(HenckyStress needs a simcoon with the total formulation)".format(
+                    "(LogStressU needs a simcoon with the total formulation)".format(
                         res
                     )
                 )
-            if res == "HenckyStress":
-                data = sv["Stress"].cauchy_to_hencky(sv["F"])
+            if res == "LogStressU":
+                data = sv["Stress"].cauchy_to_log_stress_u(sv["F"])
             else:
                 F = sv["F"] if res == "LogStrainV" else sv["F"].transpose(1, 0, 2)
                 data = StrainTensorList(

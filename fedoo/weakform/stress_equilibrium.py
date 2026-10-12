@@ -945,7 +945,7 @@ class StressEquilibrium(WeakFormBase):
                     'Use nlgeom="UL" to choose a corate.'
                 )
         if self._total:
-            self._corate_func = _comp_hencky_strain
+            self._corate_func = _comp_log_strain_u
             self._convert_Lt_tag = (
                 "DTDH_2_DSDE"  # box of the total formulation, dT/d(ln U)
             )
@@ -1259,7 +1259,7 @@ def _comp_log_strain_R_inc(wf, assembly, pb):
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
 
 
-def _comp_hencky_strain(wf, assembly, pb):
+def _comp_log_strain_u(wf, assembly, pb):
     # total formulation: the material logarithmic strain ln U = 1/2 ln C, a state
     # function of F in reference components. ln U is the ln V of F^T, and the frame never
     # rotates: DR = I.

@@ -15,8 +15,8 @@ semantic versioning.
   simcoon that provides `sim.umat(kinematic_form="total")` (after 2.1); with
   simcoon 2.1 the previous update is kept. `weakform.kinematic_form` tells which
   one runs.
-- Result fields `LogStrainU`, `LogStrainV` and `HenckyStress`, and
-  `StressTensorList.cauchy_to_hencky` / `hencky_to_cauchy`, to compare a TL
+- Result fields `LogStrainU`, `LogStrainV` and `LogStressU`, and
+  `StressTensorList.cauchy_to_log_stress_u` / `log_stress_u_to_cauchy`, to compare a TL
   run and a UL run with `corate="log_r"` on the same measures.
 
 - IPC contact thickness through an absolute `dmin` minimum separation on

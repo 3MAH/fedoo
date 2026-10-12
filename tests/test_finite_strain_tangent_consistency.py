@@ -902,9 +902,11 @@ def test_the_two_formulations_read_one_box_differently():
         assert (
             total.weakform.kinematic_form == "total" and total.weakform.corate is None
         )
-        T = s_total.cauchy_to_hencky(total.sv["F"])
+        T = s_total.cauchy_to_log_stress_u(total.sv["F"])
         np.testing.assert_allclose(
-            T.hencky_to_cauchy(total.sv["F"]).asarray(), s_total.asarray(), atol=1e-9
+            T.log_stress_u_to_cauchy(total.sv["F"]).asarray(),
+            s_total.asarray(),
+            atol=1e-9,
         )
         T = T.asarray()
         s_total = s_total.asarray().copy()
@@ -956,12 +958,12 @@ def test_a_law_without_the_total_formulation_keeps_the_rate_update_in_tl():
 
 @_needs_total_formulation
 def test_log_measures_are_results_of_either_formulation():
-    """LogStrainU, LogStrainV and HenckyStress express a run in the measures of the other
+    """LogStrainU, LogStrainV and LogStressU express a run in the measures of the other
     formulation: ln V = R ln U R^T, and T is the stress dual to ln U."""
     gamma = 0.6
     R = _polar_rotation(np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
     eng = np.array([1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
-    fields = ["Strain", "LogStrainU", "LogStrainV", "HenckyStress"]
+    fields = ["Strain", "LogStrainU", "LogStrainV", "LogStressU"]
     for nlgeom, corate in (("TL", None), ("UL", "log_r")):
         assembly = _homogeneous_shear(nlgeom, corate, gamma, 4)
         data = (
@@ -978,8 +980,8 @@ def test_log_measures_are_results_of_either_formulation():
             R @ _sig_to_mat(lnU * eng) @ R.T, _sig_to_mat(lnV * eng), atol=1e-12
         )
         np.testing.assert_allclose(
-            data["HenckyStress"],
-            assembly.sv["Stress"].cauchy_to_hencky(assembly.sv["F"]).asarray(),
+            data["LogStressU"],
+            assembly.sv["Stress"].cauchy_to_log_stress_u(assembly.sv["F"]).asarray(),
             atol=1e-12,
         )
     # a strain accumulated by a rate that does not integrate to a function of F

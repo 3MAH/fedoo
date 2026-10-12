@@ -303,7 +303,7 @@ class StressTensorList(_SymetricTensorList):
             sim.stress_convert(self.asarray(), F, "PKI2Cauchy", copy=False)
         )
 
-    def cauchy_to_hencky(self, F):
+    def cauchy_to_log_stress_u(self, F):
         """Convert Cauchy stress tensors to the stress T dual to the logarithmic strain ln U.
 
         T is the stress of the total formulation: T : d(ln U) = tau : D, with tau = J sigma
@@ -322,13 +322,13 @@ class StressTensorList(_SymetricTensorList):
         """
         tau = sim.stress_convert(self.asarray(), F, "Cauchy2Kirchoff")
         return StressTensorList(
-            sim.stress_convert(tau, F, "Kirchoff2Hencky", copy=False)
+            sim.stress_convert(tau, F, "Kirchoff2LogStressU", copy=False)
         )
 
-    def hencky_to_cauchy(self, F):
+    def log_stress_u_to_cauchy(self, F):
         """Convert the stress tensors T dual to ln U to Cauchy stress tensors.
 
-        Inverse of :meth:`cauchy_to_hencky`: T is the stress of the total
+        Inverse of :meth:`cauchy_to_log_stress_u`: T is the stress of the total
         formulation, expressed in the reference frame.
 
         Parameters
@@ -341,7 +341,7 @@ class StressTensorList(_SymetricTensorList):
         StressTensorList
             The converted stress tensors in Cauchy formulation.
         """
-        tau = sim.stress_convert(self.asarray(), F, "Hencky2Kirchoff")
+        tau = sim.stress_convert(self.asarray(), F, "LogStressU2Kirchoff")
         return StressTensorList(
             sim.stress_convert(tau, F, "Kirchoff2Cauchy", copy=False)
         )

@@ -423,7 +423,7 @@ plane-stress assumption. :class:`fedoo.constitutivelaw.Simcoon` supports it for
 the log-strain and hyperelastic laws of simcoon. ``weakform.kinematic_form`` tells
 which one runs (``"total"`` or ``"rate"``).
 
-The result fields ``LogStrainU``, ``LogStrainV`` and ``HenckyStress`` give
+The result fields ``LogStrainU``, ``LogStrainV`` and ``LogStressU`` give
 :math:`\ln\mathbf{U}`, :math:`\ln\mathbf{V}` and the stress conjugate to
 :math:`\ln\mathbf{U}` in either formulation, so that a ``"TL"`` run and a
 ``"UL"`` run with ``corate="log_r"`` compare on the same measures.

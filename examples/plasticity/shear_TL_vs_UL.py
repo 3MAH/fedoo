@@ -11,7 +11,7 @@ Both run the same simcoon law (EPICP, J2 plasticity) on the logarithmic strain.
 The two coincide when the stress is coaxial with the stretch. In shear it is not: the yield
 criterion holds on the Kirchhoff stress in one case and on T in the other, so the stresses
 differ, and the difference does not vanish with the time step. The result fields
-"LogStrainU", "LogStrainV" and "HenckyStress" give either run in the measures of the other.
+"LogStrainU", "LogStrainV" and "LogStressU" give either run in the measures of the other.
 """
 
 from time import perf_counter
