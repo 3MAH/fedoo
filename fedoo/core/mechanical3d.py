@@ -817,7 +817,7 @@ class MechanicalUMAT(Mechanical3D):
             # under the total formulation nothing is transported: DR = I
             if (
                 assembly._nlgeom
-                and getattr(assembly, "_formulation", "rate") != "total"
+                and getattr(assembly, "_kinematic_form", "rate") != "total"
             ):
                 rot = Rotation.from_matrix(np.asarray(DR_local).transpose(2, 0, 1))
                 strain_start = rot.apply_strain(strain_start)

@@ -57,7 +57,7 @@ class StressEquilibrium(WeakFormBase):
         If nlgeom == 'TL' the total lagrangian method is used.
         If not defined, the problem.nlgeom parameter is used instead.
         nlgeom also selects the formulation of the constitutive update (see
-        the ``formulation`` property): 'TL' is the total formulation, where
+        the ``kinematic_form`` property): 'TL' is the total formulation, where
         the law works on ln U and on its dual stress T; 'UL' is the rate
         formulation, where it works on ln V and on the Kirchhoff stress,
         integrated with the objective rate ``corate``.
@@ -856,7 +856,7 @@ class StressEquilibrium(WeakFormBase):
             self._init_nl_strain_op_vir()
 
     @property
-    def formulation(self):
+    def kinematic_form(self):
         """Finite-strain formulation of the constitutive update, set by ``nlgeom``.
 
         * "rate" (``nlgeom="UL"``): the law is integrated with the objective
@@ -901,7 +901,7 @@ class StressEquilibrium(WeakFormBase):
             * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative
               (strain is incremented)
         The total formulation (``nlgeom="TL"`` with a law that supports it,
-        see ``formulation``) is not a rate formulation: it takes no corate
+        see ``kinematic_form``) is not a rate formulation: it takes no corate
         (setting one raises at initialization) and this property is then None.
         if nlgeom is False, this property has no effect.
         """
@@ -928,7 +928,7 @@ class StressEquilibrium(WeakFormBase):
         self._total = False
         # The constitutive law reads the formulation on the assembly: its weak form may be
         # a sum this one was merged into.
-        assembly._formulation = "rate"
+        assembly._kinematic_form = "rate"
         assembly._corate = "log_r"
         if not nlgeom:
             return
@@ -954,7 +954,7 @@ class StressEquilibrium(WeakFormBase):
             # the law returns the box tangent d(tau_hat)/dD in this corate: the first
             # conversion stage (box -> dS/dE) is the one of the same corate
             self._convert_Lt_tag = _BOX_TO_DSDE[simcoon_corate]
-        assembly._formulation = self.formulation
+        assembly._kinematic_form = self.kinematic_form
         assembly._corate = self.corate
         # tangent the configuration integrates, which a law may return directly
         # (sim.umat tangent_output): dS/dE in TL, the Lie tangent in UL

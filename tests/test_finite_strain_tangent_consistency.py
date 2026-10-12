@@ -784,6 +784,15 @@ def _homogeneous_shear(nlgeom, corate, gamma=0.6, n_inc=12, law="EPICP"):
         material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
     elif law == "NEOHC":
         material = fd.constitutivelaw.Simcoon("NEOHC", [1000.0, 5000.0], name="law")
+    elif law == "MODUL":
+        from simcoon.modular import elastoplastic_model
+
+        E, nu, alpha, sigma_Y, k, m = EPICP_PROPS
+        material = fd.constitutivelaw.Simcoon.from_modular(
+            elastoplastic_model(E=E, nu=nu, sigma_Y=sigma_Y, k=k, m=m, alpha=alpha),
+            tangent_mode=2,
+            name="law",
+        )
     else:
         material = fd.constitutivelaw.Simcoon("ELISO", [70000.0, 0.3, 1e-5], name="law")
     material.tangent_mode = 2
@@ -822,7 +831,7 @@ def test_total_formulation_reproduces_the_simcoon_solver():
         np.array(EPICP_PROPS),
         8,
         T_init=0.0,
-        formulation="total",
+        kinematic_form="total",
     )["Stress"][:, -1]
     stress = assembly.sv["Stress"].asarray()
     expected = np.array([ref[0], ref[2], ref[1], ref[4], ref[3], ref[5]])
@@ -862,6 +871,17 @@ def test_total_formulation_elastic_shear_is_exact_at_any_step():
         )
 
 
+@_needs_total_formulation
+def test_a_modular_material_runs_the_total_formulation_in_tl():
+    """A modular J2 material is the EPICP box: in TL it runs the total formulation and gives
+    the same stress."""
+    modular = _homogeneous_shear("TL", None, law="MODUL")
+    assert modular.weakform.kinematic_form == "total"
+    stress = modular.sv["Stress"].asarray().copy()
+    reference = _homogeneous_shear("TL", None, law="EPICP").sv["Stress"].asarray()
+    np.testing.assert_allclose(stress, reference, atol=1e-6 * np.abs(reference).max())
+
+
 def _polar_rotation(F):
     c, N = np.linalg.eigh(F.T @ F)
     return F @ N @ np.diag(1.0 / np.sqrt(c)) @ N.T
@@ -879,7 +899,9 @@ def test_the_two_formulations_read_one_box_differently():
     for n_inc in (12, 48):
         total = _homogeneous_shear("TL", None, gamma, n_inc)
         s_total = total.sv["Stress"]
-        assert total.weakform.formulation == "total" and total.weakform.corate is None
+        assert (
+            total.weakform.kinematic_form == "total" and total.weakform.corate is None
+        )
         T = s_total.cauchy_to_hencky(total.sv["F"])
         np.testing.assert_allclose(
             T.hencky_to_cauchy(total.sv["F"]).asarray(), s_total.asarray(), atol=1e-9
@@ -887,7 +909,7 @@ def test_the_two_formulations_read_one_box_differently():
         T = T.asarray()
         s_total = s_total.asarray().copy()
         rate = _homogeneous_shear("UL", "log_r", gamma, n_inc)
-        assert rate.weakform.formulation == "rate"
+        assert rate.weakform.kinematic_form == "rate"
         s_rate = rate.sv["Stress"].asarray()
         box_rate = R.T @ _sig_to_mat(s_rate[:, 0]) @ R  # J = 1 in simple shear
         np.testing.assert_allclose(
@@ -902,7 +924,7 @@ def test_the_two_formulations_read_one_box_differently():
 def test_a_law_built_on_F_is_the_same_in_both_formulations():
     """NEOHC is a function of F alone: TL (total) and UL (rate) give the same stress."""
     total = _homogeneous_shear("TL", None, 0.6, 4, law="NEOHC")
-    assert total.weakform.formulation == "total"
+    assert total.weakform.kinematic_form == "total"
     s_total = total.sv["Stress"].asarray().copy()
     s_rate = (
         _homogeneous_shear("UL", "log_r", 0.6, 4, law="NEOHC").sv["Stress"].asarray()
@@ -929,7 +951,7 @@ def test_a_law_without_the_total_formulation_keeps_the_rate_update_in_tl():
     pb.bc.add("Dirichlet", nodes, "Disp", 0)
     pb.bc.add("Dirichlet", nodes, "DispX", 0.1 * mesh.nodes[:, 2])
     pb.nlsolve(dt=1.0, tmax=1.0, update_dt=False, print_info=0)
-    assert wf.formulation == "rate" and wf.corate == "log_r"
+    assert wf.kinematic_form == "rate" and wf.corate == "log_r"
 
 
 @_needs_total_formulation
@@ -991,6 +1013,6 @@ def test_corate_can_be_unset_and_is_refused_only_with_the_total_formulation():
     pb = fd.problem.NonLinear("asm")
     pb.bc.add("Dirichlet", np.arange(mesh.n_nodes), "Disp", 0)
     pb.nlsolve(dt=1.0, tmax=1.0, update_dt=False, print_info=0)
-    assert wf.formulation == "rate" and wf.corate == "log"
+    assert wf.kinematic_form == "rate" and wf.corate == "log"
     wf.corate = None
     assert wf.corate == "log_r"

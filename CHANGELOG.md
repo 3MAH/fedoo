@@ -12,8 +12,8 @@ semantic versioning.
   Apel and Lambrecht (2002). A Simcoon law is fed the material logarithmic
   strain ln U, a state function of F, and works on the stress T dual to it;
   nothing is transported and the strain is exact at any step size. It needs a
-  simcoon that provides `sim.umat(formulation="total")` (after 2.1); with
-  simcoon 2.1 the previous update is kept. `weakform.formulation` tells which
+  simcoon that provides `sim.umat(kinematic_form="total")` (after 2.1); with
+  simcoon 2.1 the previous update is kept. `weakform.kinematic_form` tells which
   one runs.
 - Result fields `LogStrainU`, `LogStrainV` and `HenckyStress`, and
   `StressTensorList.cauchy_to_hencky` / `hencky_to_cauchy`, to compare a TL
@@ -51,8 +51,8 @@ semantic versioning.
   raises at initialization. Results of a TL analysis with a Simcoon law change
   when the stress is not coaxial with the stretch (plastic shear, off-axis
   anisotropy); they are unchanged for isotropic elasticity and proportional
-  loading. Native laws, modular Simcoon materials and plane-stress problems
-  keep the previous `"log_r"` update in TL.
+  loading. Native laws and plane-stress problems keep the previous `"log_r"`
+  update in TL.
 
 - The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
   of the penalty self-contact.

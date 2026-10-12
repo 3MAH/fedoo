@@ -54,14 +54,16 @@ def run(nlgeom, nx=8):
     pb.nlsolve(dt=1.0 / n_inc, tmax=1.0, update_dt=False, print_info=0)
     elapsed = perf_counter() - start
     stress = assembly.sv["Stress"].asarray()
-    return wf.formulation, elapsed, stress.mean(axis=1)
+    return wf.kinematic_form, elapsed, stress.mean(axis=1)
 
 
 if __name__ == "__main__":
     print(f"EPICP, simple shear gamma = {gamma}, {n_inc} increments")
-    print("  nlgeom  formulation   time (s)   mean s_xx   mean s_yy   mean s_xy  (MPa)")
+    print(
+        "  nlgeom  kinematic form  time (s)   mean s_xx   mean s_yy   mean s_xy  (MPa)"
+    )
     for nlgeom in ("UL", "TL"):
-        formulation, elapsed, s = run(nlgeom)
+        kinematic_form, elapsed, s = run(nlgeom)
         print(
-            f"  {nlgeom}      {formulation:11s}   {elapsed:8.2f}   {s[0]:9.2f}   {s[1]:9.2f}   {s[3]:9.2f}"
+            f"  {nlgeom}      {kinematic_form:14s}   {elapsed:8.2f}   {s[0]:9.2f}   {s[1]:9.2f}   {s[3]:9.2f}"
         )

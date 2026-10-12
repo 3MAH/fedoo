@@ -74,7 +74,7 @@ def _has_state_function_strain(assemb):
     formulation, or the rates whose strain is recomputed from F."""
     if not getattr(assemb, "_nlgeom", False):
         return False
-    return getattr(assemb, "_formulation", "rate") == "total" or getattr(
+    return getattr(assemb, "_kinematic_form", "rate") == "total" or getattr(
         assemb, "_corate", None
     ) in ("log_r", "log")
 

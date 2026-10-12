@@ -420,7 +420,7 @@ conjugate to :math:`\ln\mathbf{U}`. A law opts in with the class attribute
 ``supports_total_formulation = True``; with the default ``False`` it keeps the
 ``"log_r"`` rate update under ``nlgeom="TL"``, as do all laws under the 2D
 plane-stress assumption. :class:`fedoo.constitutivelaw.Simcoon` supports it for
-the log-strain and hyperelastic laws of simcoon. ``weakform.formulation`` tells
+the log-strain and hyperelastic laws of simcoon. ``weakform.kinematic_form`` tells
 which one runs (``"total"`` or ``"rate"``).
 
 The result fields ``LogStrainU``, ``LogStrainV`` and ``HenckyStress`` give
