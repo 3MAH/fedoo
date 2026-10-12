@@ -146,6 +146,11 @@ value, retaining its sign; ``"max"`` and ``"min"`` are also supported. Invariant
 and principal values are evaluated at each point before reduction. A reduction
 ignores point selection; without a reduction, give ``position`` or
 ``point_index``, not both. Updating either selector clears the other.
+Full-tensor reads reduce each of the six components independently and return
+``(6, n_locations)``. These components may come from different thickness points;
+the envelope is not a tensor at one physical point. Invariants computed from
+this envelope differ from pointwise invariant extrema and are not guaranteed
+conservative.
 
 Only homogeneous **linear** shell stresses can be recovered from ``ShellStress``
 and the thickness/shear factor. Transverse shear uses the existing constant
@@ -159,14 +164,27 @@ saved thickness interval, within [-1,1]. One saved point is insufficient.
 Stored nodal tensors remain unsuitable for global rotation, including when
 resampling their linear distribution.
 
+Shell thickness recovery and material-point kinematics use
+``epsilon(z) = epsilon0 - z*kappa``, with ``kappa_xx = -d(RotY)/dx``.
+Positive thickness is along the local shell normal. Generalized bending
+moments are ``M = -integral(z*sigma)``.
+Previously computed asymmetric-laminate and nonlinear responses may need to
+be recomputed with the corrected kinematics.
+
 Nonlinear shells and laminates save private ``_ShellStress`` tensors at their
 actual material points whenever ``Stress`` or ``ShellStress`` is requested.
 Linear laminates instead save the exact stress limits at both faces of each
 layer. This permits later piecewise linear interpolation independently within
 each layer, preserving stress jumps. Interpolation also works for stored tensors
 with multiple thickness points. At positions outside the layer's integration
-points, the nearest value is retained, matching existing distribution plots;
-this is an approximation at the faces. One thickness integration point gives
+points, nonlinear stresses are linearly extrapolated by default from the two
+outermost points in the same layer to its boundary. Set
+``shell_options.update(extrapolate=False)`` to retain the nearest-IP value.
+Extrapolated plastic stresses are estimates and may exceed the yield surface;
+material states and equilibrium are unchanged. Stored-point reductions still
+use only the saved values; recomputed reductions include recovered boundary
+values. Exact/nearest stored selection remains unchanged, and positions outside
+[-1, 1] are rejected. One thickness integration point gives
 a constant approximation within that layer. A coordinate exactly on an interface
 selects the lower layer; point indices can select either saved side.
 
@@ -366,8 +384,14 @@ in the material, for example inside a pipe hole.
 
 Section reductions evaluate the requested scalar (including invariants) at
 each point before selecting an extremum, and before nodal/element averaging.
-An envelope therefore requires a scalar component; component extrema must
-not be combined into a synthetic tensor. Extrema are sampled estimates.
+With no scalar component requested, each tensor component is reduced
+independently, returning ``(6, n_locations)``. Components may originate at
+different section points; the result is an envelope, not a tensor at one
+physical location. Computing Mises or principal values from that envelope is
+not equivalent to reducing pointwise invariants and is not guaranteed
+conservative. Use ``reduction=None`` with a position or index for a physical
+point tensor. Extrema are sampled estimates; saving and viewer defaults are
+unchanged.
 
 Standard sections generate output points using ``n_points=32`` by default,
 an approximate total point budget including boundaries and interiors. Pipes

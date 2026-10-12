@@ -34,13 +34,15 @@ class BeamEquilibrium(WeakFormBase):
     k: scalar or arrays of gauss point values, optional
         Shear coefficient. If k=0 (*default*) the beam use the bernoulli
         hypothesis.
-    consistent_tangent: bool, default=True
+    consistent_tangent: bool, default=False
         For standard two-node ``beam`` elements with ``nlgeom=True`` or
         ``'UL'``, differentiate the complete existing internal-force residual.
         Includes the changing length, frame and local finite rotations. The
         resulting tangent may be nonsymmetric. Set False for the historical
         material plus axial-force geometric tangent. Alternative beam
         interpolations retain that historical tangent.
+        This option is read-only after construction. Create a new weak form
+        to select a different tangent, including when sharing forms across assemblies.
     name: str
         name of the WeakForm.
 
@@ -63,7 +65,7 @@ class BeamEquilibrium(WeakFormBase):
         nlgeom=None,
         space=None,
         *,
-        consistent_tangent=True,
+        consistent_tangent=False,
     ):
         # k: shear shape factor
 
@@ -109,18 +111,24 @@ class BeamEquilibrium(WeakFormBase):
         ``None`` preserves the historical behavior, in which the term follows
         ``nlgeom``. A boolean value explicitly enables or disables it.
         """
-        self.consistent_tangent = consistent_tangent
-        """Differentiate the current corotational residual for two-node ``beam``
-        elements in UL. Includes length, frame and finite-rotation derivatives.
-        This tangent can be nonsymmetric; it preserves the existing force law.
-        Setting geometric_stiffness=False retains the material-only tangent.
-        Other element interpolations retain their historical tangent.
-        """
+        self._consistent_tangent = consistent_tangent
         if consistent_tangent:
-            self.assembly_options["assume_sym"] = False
             for variable in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
                 if variable in self.space.list_variables():
                     self.space.variable_alias("_BeamMean" + variable, variable)
+
+    @property
+    def consistent_tangent(self):
+        """Read-only tangent selection, set through the constructor.
+
+        False (default) retains the historical tangent. True differentiates the
+        UL corotational residual for standard two-node beams, including length,
+        frame and finite-rotation derivatives; the tangent may be nonsymmetric.
+        geometric_stiffness=False retains the material-only tangent. Other beam
+        interpolations use the historical tangent. Create a new weak form to
+        change this option; a form may be shared by multiple assemblies.
+        """
+        return self._consistent_tangent
 
     def get_storage(self):
         if self.storage is not None:
@@ -140,6 +148,19 @@ class BeamEquilibrium(WeakFormBase):
 
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
+        # Resolve the formulation default here, as in StressEquilibrium,
+        # while preserving explicit weak-form or assembly settings.
+        if assembly.assume_sym is None:
+            assume_sym = self.assembly_options.get("assume_sym", assembly.elm_type)
+            if assume_sym is None:
+                # Coupled interpolations expand a weak operator onto several
+                # variables. The symmetric assembly shortcut filters terms
+                # before that expansion and can omit required contributions.
+                assume_sym = not (
+                    self._use_consistent_tangent(assembly)
+                    or assembly._get_associated_variables()
+                )
+            assembly.assume_sym = assume_sym
 
     def update(self, assembly, pb):
         assembly.sv.pop("_BeamTangentOperators", None)
@@ -267,10 +288,11 @@ class BeamEquilibrium(WeakFormBase):
                     # get element mean rotvec increment
                     delta_rotvec = 0.5 * delta_rotvec_nodes.T[mesh.elements].sum(axis=1)
 
-                    # update rigid rotation local_frame (rotmatrix from global frame)
-                    rigid_rotmat_trial = (
-                        assembly.sv["RigidRotationMat"]
-                        @ Rotation.from_rotvec(delta_rotvec).as_matrix()
+                    # Local axes are rows: a spatial rotation Q updates R to R Q.T.
+                    rigid_rotmat_trial = assembly.sv[
+                        "RigidRotationMat"
+                    ] @ Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(
+                        0, 2, 1
                     )
 
                     # get rigid rotation by projection (X axis is the poutre normal)

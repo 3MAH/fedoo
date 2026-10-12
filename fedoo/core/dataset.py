@@ -19,6 +19,7 @@ from fedoo.util.mesh_writer import write_vtk, write_msh
 
 
 import numpy as np
+import json
 import os
 import sys
 from copy import deepcopy
@@ -1538,6 +1539,13 @@ class DataSet:
 
     @property
     def beam_options(self):
+        """Beam selection options; see :class:`fedoo.util.beam_recovery.BeamOptions`.
+
+        Default full-tensor reads return signed componentwise absolute extrema,
+        potentially from different section points. Scalar invariants are computed
+        before reduction. Set reduction=None with position or point_index to
+        obtain a tensor at one physical point instead.
+        """
         return self._beam_options
 
     @beam_options.setter
@@ -1613,6 +1621,17 @@ class DataSet:
 
     @property
     def shell_options(self):
+        """Thickness options; see :class:`fedoo.util.shell_recovery.ShellOptions`.
+
+        Default full-tensor reads return signed componentwise absolute extrema,
+        potentially from different thickness points. Scalar invariants are computed
+        before reduction. Set reduction=None with position or point_index to
+        obtain a tensor at one physical point instead.
+        For nonlinear stress recovery, extrapolate=True (default) extends the
+        outermost linear segments to layer boundaries. False retains nearest-IP
+        values. Stored-point reductions are unaffected; see ShellOptions for
+        the limitations of extrapolated stress estimates.
+        """
         return self._shell_options
 
     @shell_options.setter
@@ -2124,7 +2143,11 @@ class DataSet:
         """Load data from a dict generated with the to_dict method.
 
         The old data are erased."""
-        self.field_metadata = {}
+        self.field_metadata = (
+            json.loads(np.asarray(data["_fedoo_metadata"]).item())
+            if "_fedoo_metadata" in data
+            else {}
+        )
         self.node_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "nd"}
         self.element_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "el"}
         self.gausspoint_data = {k[:-3]: v for k, v in data.items() if k[-2:] == "gp"}
@@ -2303,11 +2326,15 @@ class DataSet:
         write_msh(self, filename)
 
     def to_dict(self) -> dict:
-        """Return a dict with all the node, element and gausspoint data."""
+        """Return fields and optional JSON metadata for NPZ/FDZ storage."""
         out = {k + "_nd": v for k, v in self.node_data.items()}
         out.update({k + "_el": v for k, v in self.element_data.items()})
         out.update({k + "_gp": v for k, v in self.gausspoint_data.items()})
         out.update({k + "_sc": np.array(v) for k, v in self.scalar_data.items()})
+        if self.field_metadata:
+            out["_fedoo_metadata"] = np.array(
+                json.dumps(self.field_metadata, default=lambda value: value.tolist())
+            )
 
         return out
 

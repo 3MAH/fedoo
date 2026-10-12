@@ -757,7 +757,8 @@ class FDH5Reader:
                 metadata["_BeamSection"] = section
                 # In-memory aliases keep old callers compatible; disk data is shared.
                 for name in ("BeamStress", "BeamStrain"):
-                    metadata[name] = section
+                    if "_" + name not in metadata:
+                        metadata[name] = section
             return metadata
 
     def read_iteration(

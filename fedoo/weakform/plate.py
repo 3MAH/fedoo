@@ -38,15 +38,16 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
           membrane deformation.
     drill_stiffness_coefficient : float, default=1e-2
         The penalty coefficient used for the drilling rotation constraint scaled by the
-        membrane shear stiffness.
+        initial membrane shear stiffness, held fixed during the solve for both
+        tangent options and both drilling modes.
         Increasing this value enforces the constraint more strictly but
         may introduce drilling locking in fully integrated elements.
     consistent_tangent : bool, default=False
         For UL, analytically differentiate the complete corotational residual,
         including current geometry, frame, FI/SRI/MITC interpolation and drilling.
         The tangent can be nonsymmetric. False retains the historical material
-        plus membrane-force geometric stiffness. With True the drilling penalty
-        is scaled by the initial section stiffness, held fixed during the solve.
+        plus membrane-force geometric stiffness. Both options use the same
+        fixed initial stiffness scale for the drilling penalty.
     name : str, optional
         Name of the WeakForm.
     nlgeom : bool or str, optional
@@ -329,6 +330,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         return dof_local
 
     def update(self, assembly, pb):
+        # Capture the scale after initialization, before the material update.
+        if self.drill_stiffness_coefficient != 0:
+            self._drill_reference(assembly)
         assembly.sv.pop("_ShellTangentOperators", None)
         if self.nlgeom == "UL":
             assembly.set_disp(pb.get_disp())
@@ -493,11 +497,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         if self.drill_stiffness_coefficient != 0:
             # penalty for RotZ (drilling DOF stabilization)
-            representative_stiffness = (
-                self._drill_reference(assembly)
-                if self._use_consistent_tangent(assembly)
-                else H[2][2]
-            )
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -531,7 +531,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         return None
 
     def _drill_reference(self, assembly):
-        """Fixed drilling-penalty scale of the consistent tangent.
+        """Initial drilling-penalty scale shared by both tangent options.
 
         A fixed scale avoids differentiating H (a material third derivative).
         It is taken from the section stiffness on first use rather than in
@@ -665,13 +665,14 @@ class PlateEquilibrium(
           deformation.
     drill_stiffness_coefficient : float, default=1e-2
         The penalty coefficient used for the drilling rotation constraint.
-        Typically scaled by the membrane shear stiffness. Increasing this value
+        Scaled by the initial membrane shear stiffness, held fixed during the
+        solve for both tangent options and both drilling modes. Increasing this value
         enforces the constraint more strictly but may introduce drilling locking
         in fully integrated elements.
     consistent_tangent : bool, default=False
         Use the complete analytical UL residual derivative, including MITC,
         drilling and current geometry. False retains the historical tangent.
-        With True, the drilling penalty uses a fixed initial stiffness scale.
+        Both options use the same fixed initial drilling stiffness scale.
     name : str, optional
         Name of the WeakForm instance.
     nlgeom : bool or str, optional
@@ -854,7 +855,7 @@ class PlateShearEquilibrium(PlateEquilibriumFI):
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
-            representative_stiffness = H[2][2]
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -951,7 +952,7 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
-            representative_stiffness = H[2][2]
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -978,12 +979,10 @@ class PlateDrillingPenalty(PlateEquilibriumFI):
             assembly.sv["_ShellStiffnessMatrix"] = (
                 self.constitutivelaw.get_shell_stiffness_matrix()
             )
-        H = assembly.sv["_ShellStiffnessMatrix"]
-
         # penalty for RotZ
         # use full integration if simple stiffness to avoid singularity
         op_drill_constraint = self.drill_constraint_operator()
-        representative_stiffness = H[2][2]
+        representative_stiffness = self._drill_reference(assembly)
         penalty = representative_stiffness * self.drill_stiffness_coefficient
 
         diffop = (

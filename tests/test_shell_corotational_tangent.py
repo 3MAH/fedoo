@@ -276,6 +276,32 @@ def test_consistent_tangent_accepts_time_integrator_and_rejects_split_forms():
     assert split._plate_weak_equation_owner() is fd.weakform.PlateShearEquilibrium
 
 
+@pytest.mark.parametrize("drilling", [False, True])
+def test_drilling_penalty_is_fixed_and_independent_of_tangent_option(drilling):
+    forces = []
+    for consistent in (False, True):
+        law = fd.constitutivelaw.ShellHomogeneousNonLinear(
+            fd.constitutivelaw.ElasticIsotrop(1200, 0.25),
+            0.15,
+            n_thickness_points=2,
+        )
+        wf, assembly, pb = _shell(drilling=drilling, consistent=consistent, section=law)
+        current = assembly.current
+        initial_scale = wf._drill_reference(current).copy()
+        force = current.global_vector.copy()
+        assert np.linalg.norm(current.sv["_DrillConstraint"]) > 0
+        # Change the section tangent without changing stress or kinematics:
+        # the stabilization force must retain its initial scale.
+        current.sv["_ShellStiffnessMatrix"] = (
+            np.asarray(current.sv["_ShellStiffnessMatrix"]) * 0.1
+        )
+        current.assemble_global_mat("vector")
+        np.testing.assert_allclose(current.global_vector, force, atol=1e-10)
+        np.testing.assert_array_equal(wf._drill_reference(current), initial_scale)
+        forces.append(force)
+    np.testing.assert_allclose(forces[0], forces[1], atol=1e-10)
+
+
 def test_consistent_tangent_with_law_defined_at_initialization():
     # A Simcoon law only provides its elastic matrix once initialized, which
     # the assembly does after the weak form: the drilling scale is deferred.

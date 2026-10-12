@@ -1,7 +1,11 @@
 """Beam constitutive laws."""
 
 from types import SimpleNamespace
-from fedoo.util.beam_recovery import validate_positions, _polar_sampling_grid
+from fedoo.util.beam_recovery import (
+    validate_positions,
+    _polar_sampling_grid,
+    SectionRecoveryUnavailable,
+)
 from fedoo.mesh import disk_mesh, hollow_disk_mesh, rectangle_mesh
 
 
@@ -15,6 +19,17 @@ class BeamProperties(ConstitutiveLaw):
     recovery = "linear"
     section_dimensions = ()
     section_registry = {}
+
+    @property
+    def n_points(self):
+        """Approximate section sampling budget, an integer of at least eight."""
+        return self._n_points
+
+    @n_points.setter
+    def n_points(self, value):
+        if not isinstance(value, (int, np.integer)) or value < 8:
+            raise ValueError("Beam n_points must be an integer of at least eight")
+        self._n_points = value
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -157,7 +172,7 @@ class BeamProperties(ConstitutiveLaw):
         try:
             return self.section_mesh(n_points).nodes[:, :2]
         except NotImplementedError as error:
-            raise ValueError(
+            raise SectionRecoveryUnavailable(
                 "A section envelope requires saved section geometry"
             ) from error
 
@@ -167,7 +182,9 @@ class BeamProperties(ConstitutiveLaw):
             for y, z in points:
                 yield y * self.scale_y, z * self.scale_z
             return
-        raise ValueError("A section envelope requires saved section geometry")
+        raise SectionRecoveryUnavailable(
+            "A section envelope requires saved section geometry"
+        )
 
     def section_bounds(self):
         """Physical bounding-box bounds relative to the section centroid."""
@@ -326,8 +343,13 @@ class BeamProperties(ConstitutiveLaw):
         return density * self.A
 
     def compute_rotary_density(self):
+        """Mass moments per unit length, using polar area inertia about x."""
         density = self._material_density()
-        return [density * self.Jx, density * self.Iyy, density * self.Izz]
+        return [
+            density * (self.Iyy + self.Izz),
+            density * self.Iyy,
+            density * self.Izz,
+        ]
 
     def _material_density(self):
         density = getattr(self.material, "density", None)
@@ -411,6 +433,11 @@ class BeamProperties(ConstitutiveLaw):
         """Recover local stress at normalized points, defaulting to output_points.
 
         Returns a tensor with shape (6, n_section_points, n_beam_gauss_points).
+        This method does not reduce section points. Dataset reads use
+        ``beam_options`` and default to signed componentwise absolute extrema
+        for a full tensor. Its components may come from different section points.
+        Requested scalar invariants are computed before reduction; invariants
+        of an already reduced tensor are not guaranteed conservative.
         """
 
         points = (
@@ -429,7 +456,12 @@ class BeamProperties(ConstitutiveLaw):
         return BeamStressList(beamstress).get_stress(self, coordinates)
 
     def get_strain(self, assembly, position=None):
-        """Recover local kinematic section strain without elastic properties."""
+        """Recover local kinematic section strain without elastic properties.
+
+        Returns all requested points without reduction, as in ``get_stress``.
+        Dataset ``beam_options`` instead default to componentwise signed
+        absolute extrema; these need not describe strain at a single point.
+        """
 
         points = (
             self.normalized_output_points()

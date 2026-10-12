@@ -1,5 +1,9 @@
 import warnings
-from fedoo.util.beam_recovery import section_description, validate_positions
+from fedoo.util.beam_recovery import (
+    section_description,
+    validate_positions,
+    SectionRecoveryUnavailable,
+)
 from fedoo.util.fdh5 import FDH5Reader
 
 import numpy as np
@@ -303,6 +307,7 @@ def _get_assemblysum_results(
     position=None,
     element_set=None,
     include_mesh=True,
+    ignore_missing=False,
 ):
     """Collect output data from an AssemblySum.
 
@@ -311,7 +316,7 @@ def _get_assemblysum_results(
     tried in their ``list_assembly`` order and the first assembly providing
     the field is used. If no assembly provides a field for a mesh, that mesh is
     simply left without data for the field. If no assembly provides the field
-    at all, the field is omitted from the returned dataset.
+    at all, NameError is raised unless ignore_missing=True.
 
     When several unique meshes are present, the returned ``DataSet`` is
     associated with a ``MultiMesh`` and element/Gauss point fields are stored
@@ -319,6 +324,28 @@ def _get_assemblysum_results(
     """
     entries = _unique_assembly_mesh_entries(assemb, element_set)
     multimesh = len(entries) > 1
+
+    if position is not None:
+        methods = {
+            "get_strain" if res == "Strain" else "get_stress"
+            for res in output_list
+            if res == "Strain" or res.split("_")[0] == "Stress"
+        }
+        for method in methods:
+            families = set()
+            for entry in entries:
+                for sub_assemb in entry["assemblies"]:
+                    law = _find_constitutivelaw_with_method(sub_assemb.weakform, method)
+                    if hasattr(law, "get_beam_rigidity"):
+                        families.add("beam")
+                    elif hasattr(law, "get_shell_stiffness_matrix"):
+                        families.add("shell")
+            if families == {"beam", "shell"}:
+                raise ValueError(
+                    "Mixed beam/shell output requires position=None. "
+                    "Configure each section's output_points for saving, and use "
+                    "beam_options/shell_options for post-processing selection."
+                )
 
     if include_mesh:
         mesh = _output_mesh_for_assembly(assemb, element_set)
@@ -410,6 +437,8 @@ def _get_assemblysum_results(
                 break
 
         if not found:
+            if not ignore_missing:
+                raise NameError(f'Field "{res}" not available on any assembly')
             continue
 
     output_scalars = getattr(pb, "get_output_scalars", None)
@@ -459,6 +488,7 @@ def _get_results(
             position,
             element_set,
             include_mesh,
+            ignore_missing,
         )
 
     # for i, res in enumerate(output_list):
@@ -543,9 +573,15 @@ def _get_results(
                         )[..., element_set].reshape(*points.shape[:2], -1)
                     description["stored_points"] = points.tolist()
                     data_sav[name + "_metadata"] = description
+            except (SectionRecoveryUnavailable, NotImplementedError) as exc:
+                if ignore_missing:
+                    return None
+                raise NameError(f'Field "{name}" not available: {exc}') from exc
             except ValueError:
                 raise
             except Exception as exc:
+                if ignore_missing:
+                    return None
                 raise NameError(f'Field "{name}" not available') from exc
         if np.isscalar(value) and value == 0:
             value = np.zeros((6, assemb.n_gauss_points))
@@ -819,7 +855,11 @@ def _get_results(
         law = _find_constitutivelaw_with_method(
             assemb.weakform, "get_shell_stiffness_matrix"
         )
-        if law is not None and hasattr(law, "get_output_tensors"):
+        if (
+            law is not None
+            and hasattr(law, "get_output_tensors")
+            and getattr(law, "_recovery_model", None) is not None
+        ):
             description = law.section_description(assemb)
             if element_set is not None and np.ndim(description["thickness"]):
                 description["thickness"] = (
@@ -1099,6 +1139,10 @@ class _ProblemOutput:
                         for name in list(values):
                             if not name.startswith("_"):
                                 values["_" + name] = values.pop(name)
+                                if name in res.field_metadata:
+                                    res.field_metadata["_" + name] = (
+                                        res.field_metadata.pop(name)
+                                    )
                 out.add_data(res)
 
         for i, out in enumerate(list_data):

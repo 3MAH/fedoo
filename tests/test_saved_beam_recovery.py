@@ -26,6 +26,28 @@ def test_native_section_storage_is_shared_and_typed(tmp_path):
         np.testing.assert_allclose(metadata["reference_bounds"], [-1, 1, -1, 1])
 
 
+@pytest.mark.parametrize("extension", ["npz", "fdz"])
+def test_legacy_formats_preserve_section_metadata(tmp_path, monkeypatch, extension):
+    monkeypatch.chdir(tmp_path)
+    data, _ = dataset()
+    data.beam_options.update(reduction="abs_max")
+    expected = data.get_data("Stress", "vm")
+    path = tmp_path / ("beam." + extension)
+    data.save(str(path))
+    restored = fd.DataSet(data.mesh)
+    restored.load(str(path))
+    np.testing.assert_allclose(restored.get_data("Stress", "vm"), expected)
+    assert restored.field_metadata.keys() == data.field_metadata.keys()
+    # Older files have no metadata entry and remain readable.
+    old = data.to_dict()
+    old.pop("_fedoo_metadata")
+    restored.load_dict(old)
+    assert restored.field_metadata == {}
+    np.testing.assert_array_equal(
+        restored.gausspoint_data["BeamStress"], data.gausspoint_data["BeamStress"]
+    )
+
+
 @pytest.mark.parametrize("association", ["Node", "Element", "GaussPoint"])
 def test_varying_section_properties_keep_association(tmp_path, association):
     data, section = dataset()
@@ -284,8 +306,10 @@ def test_circle_envelopes_evaluate_vm_before_reduction():
     assert np.all(data["Stress", "vm"] < np.sqrt(3 * ((10 / 3) ** 2 + 2**2)))
     data.beam_options["reduction"] = "min"
     np.testing.assert_allclose(data["Stress", "III"], -10 / 3)
-    with pytest.raises(ValueError, match="scalar component"):
-        data.get_data("Stress")
+    envelope = data.get_data("Stress")
+    assert envelope.shape == data.gausspoint_data["BeamStress"].shape
+    for component in range(6):
+        np.testing.assert_allclose(envelope[component], data["Stress", component])
 
 
 def test_compression_maximum_and_maximum_absolute_are_distinct():

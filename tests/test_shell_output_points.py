@@ -37,6 +37,20 @@ def test_linear_output_positions_and_resultant_recovery(tmp_path):
     assert result.gausspoint_data["Stress"].shape == (6, 3, assembly.n_gauss_points)
     assert "Stress" not in result.beam_derived_fields()
     assert "ShellLocalFrame" in result.gausspoint_data
+    for kind in ("Stress", "Strain"):
+        for reduction in ("abs_max", "min", "max"):
+            result.shell_options.update(reduction=reduction)
+            envelope = result[kind]
+            assert envelope.shape == (6, assembly.n_gauss_points)
+            for component in range(6):
+                np.testing.assert_allclose(envelope[component], result[kind, component])
+            raw = result.gausspoint_data[kind]
+            if reduction == "abs_max":
+                index = np.argmax(np.abs(raw), axis=1, keepdims=True)
+                expected = np.take_along_axis(raw, index, axis=1)[:, 0]
+            else:
+                expected = getattr(np, reduction)(raw, axis=1)
+            np.testing.assert_allclose(envelope, expected)
     for z in (-1, 0, 0.23, 1):
         expected = law.get_stress(assembly, position=z).asarray()
         result.shell_options.update(reduction=None, position=z)
@@ -62,6 +76,20 @@ def test_linear_output_positions_and_resultant_recovery(tmp_path):
     assert explicit.gausspoint_data["Stress"].shape[1] == 4
     with pytest.raises(ValueError, match="Shell position"):
         pb.get_results(assembly, ["Stress"], position=2)
+
+
+@pytest.mark.parametrize("extension", ["npz", "fdz"])
+def test_legacy_formats_preserve_thickness_metadata(tmp_path, monkeypatch, extension):
+    monkeypatch.chdir(tmp_path)
+    pb, assembly, _ = shell_problem()
+    result = pb.get_results(assembly, ["Stress", "ShellStress"])
+    expected = result.get_data("Stress", "vm")
+    path = tmp_path / ("shell." + extension)
+    result.save(str(path))
+    loaded = fd.DataSet(result.mesh)
+    loaded.load(str(path))
+    np.testing.assert_allclose(loaded.get_data("Stress", "vm"), expected)
+    assert loaded.field_metadata.keys() == result.field_metadata.keys()
 
 
 def test_signed_extrema_and_atomic_selection():
@@ -263,6 +291,11 @@ def test_nonlinear_saves_native_points_and_interpolates(tmp_path):
     expected = np.interp(0.15, points, values[0, :, 0])
     np.testing.assert_allclose(loaded["Stress", "XX"], expected)
     loaded.shell_options.update(position=1)
+    face = values[0, -1, 0] + (1 - points[-1]) * (
+        (values[0, -1, 0] - values[0, -2, 0]) / (points[-1] - points[-2])
+    )
+    np.testing.assert_allclose(loaded["Stress", "XX"], face)
+    loaded.shell_options.update(extrapolate=False)
     np.testing.assert_allclose(loaded["Stress", "XX"], 1)
     loaded.shell_options.update(reduction="abs_max", samples=2)
     np.testing.assert_allclose(loaded["Stress", "XX"], -30)
@@ -273,6 +306,42 @@ def test_nonlinear_saves_native_points_and_interpolates(tmp_path):
     del loaded.gausspoint_data["_ShellStress"]
     # A nonlinear resultant does not invent an elastic stress distribution.
     assert "Stress" not in loaded.shell_derived_fields()
+
+
+@pytest.mark.parametrize("source", ["stored", "recomputed"])
+def test_nonlinear_face_recovery_extrapolation_is_optional(source):
+    material = fd.constitutivelaw.ElasticIsotrop(1000, 0.25)
+    law = fd.constitutivelaw.ShellHomogeneousNonLinear(
+        material, 2, n_thickness_points=3
+    )
+    pb, assembly, _ = shell_problem(law)
+    result = pb.get_results(assembly, ["Stress", "ShellStress", "ShellStrain"])
+    reference = fd.constitutivelaw.ShellHomogeneous(material, 2, k=1)
+    for face in (-1, 1):
+        result.shell_options.update(source=source, reduction=None, position=face)
+        np.testing.assert_allclose(
+            result["Stress"], reference.get_stress(assembly, position=face).asarray()
+        )
+        result.shell_options.update(extrapolate=False)
+        outer = law._z[0 if face < 0 else -1]
+        np.testing.assert_allclose(
+            result["Stress"], reference.get_stress(assembly, position=outer).asarray()
+        )
+        result.shell_options.update(extrapolate=True)
+    result.shell_options.update(reduction="abs_max")
+    with_extrapolation = result["Stress", "XX"]
+    result.shell_options.update(extrapolate=False)
+    if source == "stored":
+        np.testing.assert_allclose(result["Stress", "XX"], with_extrapolation)
+    else:
+        assert np.all(result["Stress", "XX"] < with_extrapolation)
+    before = dict(result.shell_options)
+    for invalid in (-1.1, 1.1):
+        with pytest.raises(ValueError, match="Shell position"):
+            result.shell_options.update(position=invalid)
+    with pytest.raises(ValueError, match="boolean"):
+        result.shell_options.update(extrapolate="yes")
+    assert dict(result.shell_options) == before
 
 
 @pytest.mark.parametrize("nonlinear", [False, True])
@@ -301,6 +370,13 @@ def test_laminate_interfaces_remain_discontinuous(tmp_path, nonlinear):
         np.testing.assert_allclose(result["Stress", "XX"], upper, rtol=1e-7)
     else:
         assert np.max(upper / lower) > 3
+        reference = fd.constitutivelaw.ShellLaminate(materials, [1.0, 1.0])
+        np.testing.assert_allclose(
+            lower, reference.get_stress(assembly, position=-1e-9)["XX"]
+        )
+        np.testing.assert_allclose(
+            upper, reference.get_stress(assembly, position=1e-9)["XX"]
+        )
     result.save(str(tmp_path / "laminate.fdh5"))
     loaded = fd.read_data(str(tmp_path / "laminate.fdh5"))
     loaded.shell_options.update(source="recomputed", reduction=None, position=1e-9)
@@ -374,7 +450,7 @@ def test_varying_thickness_and_element_subset(tmp_path):
         np.concatenate(
             (
                 middle[[0, 1, 3]] * h,
-                (top - middle)[[0, 1, 3]] * h**2 / 6,
+                -(top - middle)[[0, 1, 3]] * h**2 / 6,
                 middle[4:6] * h * law.k,
             )
         )

@@ -16,7 +16,18 @@ import numpy as np
 
 
 class ShellBase(ConstitutiveLaw):
-    # base model class that should derive any other shell constitutive laws
+    """Base shell law; section recovery is opt-in for custom subclasses.
+
+    Built-in recovery models are homogeneous_linear, homogeneous_nonlinear,
+    laminate_linear and laminate_nonlinear. Subclasses using these models must
+    provide their corresponding material and thickness-integration information.
+    Linear laminates expose layer_materials. Without a declared _recovery_model,
+    generalized section outputs remain available but tensor recovery raises
+    NotImplementedError, handled as an unavailable output field.
+    """
+
+    _recovery_model = None
+
     def __init__(self, thickness, k=1, name="", *, output_points=None, n_points=3):
         ConstitutiveLaw.__init__(self, name)  # heritage
 
@@ -28,12 +39,35 @@ class ShellBase(ConstitutiveLaw):
         self.output_points = output_points
 
     @property
+    def n_points(self):
+        """Output sampling count per layer, an integer of at least two."""
+        return self._n_points
+
+    @n_points.setter
+    def n_points(self, value):
+        if not isinstance(value, (int, np.integer)) or value < 2:
+            raise ValueError("Shell n_points must be an integer of at least two")
+        self._n_points = value
+
+    def _require_recovery(self):
+        if self._recovery_model is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not define shell section recovery"
+            )
+
+    @property
+    def layer_materials(self):
+        """Layer materials in stacking order; required for linear laminate recovery."""
+        raise NotImplementedError("This shell law does not expose layer materials")
+
+    @property
     def output_points(self):
         """Normalized thickness positions saved when output position is None.
 
         Nonlinear shells default to their actual material integration points;
         linear laminates include both sides of every layer interface.
         """
+        self._require_recovery()
         if self._output_points is not None:
             return self._output_points.copy()
         if self._recovery_model != "homogeneous_linear":
@@ -71,6 +105,7 @@ class ShellBase(ConstitutiveLaw):
 
     def section_description(self, assembly=None):
         """Numeric, material-independent information for saved shell recovery."""
+        self._require_recovery()
         thickness = np.asarray(self.thickness)
         if assembly is not None and thickness.ndim:
             thickness = assembly.convert_data(thickness)
@@ -95,13 +130,14 @@ class ShellBase(ConstitutiveLaw):
 
     def integration_stresses(self, assembly):
         """Actual thickness stresses, including elastic transverse shear."""
+        self._require_recovery()
         if self._recovery_model == "laminate_linear":
             points, layers, _ = self._integration_sampling()
             tensors = []
             for point, layer in zip(points, layers):
                 # Use each layer's own material, including at shared interfaces.
                 strain = self.get_strain(assembly, position=float(point)).asarray()
-                material = self._ShellLaminate__list_mat[layer]
+                material = self.layer_materials[layer]
                 tensors.append(_elastic_shell_stress(material, assembly, strain))
             return np.stack(tensors, axis=1)
         if hasattr(self, "_material_assemblies"):
@@ -263,6 +299,8 @@ class ShellBase(ConstitutiveLaw):
         Returns
         -------
         StrainTensorList object containing the strain at integration point
+        The in-plane strain is epsilon0 - z*kappa, with z positive along
+        the local shell normal and kappa_xx = -d(RotY)/dx.
         """
 
         position = kargs.get("position", 1)
@@ -281,6 +319,16 @@ class ShellBase(ConstitutiveLaw):
         return StrainTensorList(tensors[:, 0] if np.isscalar(position) else tensors)
 
     def get_stress(self, assembly, **kargs):
+        """Recover local stress at normalized thickness position(s).
+
+        The default position is +1 (top face); position=None uses configured
+        output points. This method does not reduce points. Dataset reads use
+        ``shell_options`` and default to signed componentwise absolute extrema
+        for full tensors. Components can come from different thickness points.
+        Scalar invariants are evaluated before reduction; computing invariants
+        from an envelope instead is not guaranteed conservative. These selection
+        rules also apply to dataset Strain fields.
+        """
         position = kargs.get("position", 1)
         tensors, _ = self.get_output_tensors(assembly, "Stress", position)
         return (
@@ -358,13 +406,13 @@ class ShellHomogeneous(ShellBase):
         Strain = StrainTensorList([0 for i in range(6)])
         ShellStrain = assembly.sv["ShellStrain"]
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[3][pg]
+            ShellStrain[0][pg] - z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] + z * ShellStrain[4][pg]
+            ShellStrain[1][pg] - z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
         Strain[3] = (
-            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+            ShellStrain[2][pg] - z * ShellStrain[5][pg]
         )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear
@@ -458,14 +506,17 @@ def _tangent_array(tangent, n_points):
 
 
 def _strain_matrix(z):
-    """Membrane+bending strain-interpolation matrix at through-thickness ``z``."""
+    """Map generalized strains to epsilon0 - z*kappa at thickness ``z``.
+
+    Its transpose integrates energy-conjugate moments as -integral(z*sigma).
+    """
     matrix = np.zeros((6, 8))
     matrix[0, 0] = 1
-    matrix[0, 3] = z
+    matrix[0, 3] = -z
     matrix[1, 1] = 1
-    matrix[1, 4] = z
+    matrix[1, 4] = -z
     matrix[3, 2] = 1
-    matrix[3, 5] = z
+    matrix[3, 5] = -z
     return matrix
 
 
@@ -1040,7 +1091,19 @@ class ShellLaminateNonLinear(ShellBase):
 
 
 class ShellLaminate(ShellBase):
+    """Elastic layers ordered bottom to top along the local shell normal.
+
+    In-plane strain is epsilon0 - z*kappa. The coupling blocks are therefore
+    -B, where B = integral(z*C) through the thickness. Generalized moments
+    are -integral(z*sigma), conjugate to the existing curvature convention.
+    """
+
     _recovery_model = "laminate_linear"
+
+    @property
+    def layer_materials(self):
+        """Layer materials from bottom to top, without exposing private storage."""
+        return tuple(self.__list_mat)
 
     def __init__(
         self, list_mat, list_thickness, k=1, name="", *, output_points=None, n_points=3
@@ -1092,10 +1155,10 @@ class ShellLaminate(ShellBase):
 
             H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 0:3] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 3:6] += (
                 (1 / 3) * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3) * Hplane
@@ -1129,10 +1192,10 @@ class ShellLaminate(ShellBase):
 
             H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 0:3] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 3:6] += (
                 (1 / 3) * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3) * Hplane
@@ -1151,13 +1214,13 @@ class ShellLaminate(ShellBase):
         ShellStrain = assembly.sv["ShellStrain"]
 
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[3][pg]
+            ShellStrain[0][pg] - z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] + z * ShellStrain[4][pg]
+            ShellStrain[1][pg] - z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
         Strain[3] = (
-            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+            ShellStrain[2][pg] - z * ShellStrain[5][pg]
         )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear

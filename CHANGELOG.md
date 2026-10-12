@@ -6,8 +6,37 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Rotate the 3D beam's row-based local frame with the transpose of the spatial
+  increment, and correct its consistent tangent derivative. Rigid axial rotation
+  no longer produces spurious local nodal rotations or misorients bending axes.
+- Use the polar area moment Iyy + Izz for beam axial rotary inertia, rather
+  than the Saint-Venant torsion constant Jx. Torsional stiffness remains G*Jx.
+- Make shell thickness strain epsilon0 - z*kappa consistent with the existing
+  curvature definition. Correct face stress signs, nonlinear material-point
+  kinematics and linear laminate coupling (-B), including distribution plots.
+  Asymmetric laminate and nonlinear simulations may require recomputation.
+
 ### Changed
 
+- Resolve beam assembly symmetry at initialization, following StressEquilibrium:
+  preserve explicit weak-form or assembly settings. Default to full assembly
+  for consistent UL tangents and coupled displacement/rotation interpolations,
+  whose terms cannot safely use the symmetric assembly shortcut.
+- Default nonlinear shell stress recovery to layerwise linear extrapolation
+  from outermost material points to physical layer boundaries. ShellOptions
+  extrapolate=False retains nearest-IP values; stored-point reductions and
+  constitutive integration are unchanged.
+- Treat unavailable beam section recovery as a missing output field. Mixed
+  assemblies retain fields supplied by any submesh; ignore_missing controls
+  fields unavailable everywhere, without suppressing invalid section positions.
+- Preserve section field metadata in legacy NPZ/FDZ files using an optional JSON
+  entry. Files without metadata retain their existing loading behavior.
+- Allow full beam and shell tensor reads with section reduction: each component
+  is reduced independently (signed absolute maximum by default). Requested
+  scalar invariants are still evaluated at each point before reduction;
+  invariants of the componentwise envelope are not guaranteed conservative.
 - Prepare shell tangent fields once in the existing post-constitutive update
   and reuse them during residual/matrix assembly. State snapshots preserve the
   fields for rollback; the assembly and weak-form interfaces are unchanged.

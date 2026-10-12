@@ -21,17 +21,46 @@ def validate_positions(position):
 
 
 class ShellOptions(BeamOptions):
-    """Atomic thickness selection with the same sources and reductions as beams."""
+    """Shell thickness selection for dataset stress and strain reads.
+
+    Reductions follow :class:`BeamOptions`: signed ``'abs_max'`` is the default,
+    with ``'max'`` and ``'min'`` also available. Full tensors are reduced
+    componentwise; their components may come from different thickness points.
+    Requested invariants are evaluated at each point before reduction, whereas
+    invariants computed from the envelope are not guaranteed conservative.
+
+    A reduction ignores point selection. To read one point, set
+    ``reduction=None`` with normalized thickness ``position`` in [-1, 1] or a
+    zero-based ``point_index``. Both selectors default to None. Sources follow
+    :class:`BeamOptions`; ``samples=3`` controls recomputed sampling per layer.
+    ``stored_position`` is ``'interpolated'`` (default), ``'nearest'`` or
+    ``'exact'``. Nonlinear stresses are interpolated within each material layer.
+    ``extrapolate=True`` (default) extends the line through the two outermost
+    material points to each layer boundary for nonlinear stresses. False retains
+    the nearest point's value. One material point gives a constant approximation.
+    Extrapolated stresses can exceed the yield surface and are recovery estimates,
+    not updated material states. Stored-point reductions and exact/nearest point
+    selection are unaffected. Positions outside [-1, 1] remain invalid.
+    These options affect reads, not which thickness points are saved.
+    """
 
     def __init__(self, values=None):
         super().__init__()
-        dict.update(self, samples=3)
+        dict.update(self, samples=3, extrapolate=True)
         dict.update(self, stored_position="interpolated", reference_point_index=None)
         if values:
             self.update(values)
 
     def update(self, *args, **kwargs):
+        """Validate and apply thickness selection options atomically.
+
+        Position and index are mutually exclusive; setting either does not
+        disable reduction. For example, ``update(reduction=None, position=1)``
+        selects the top face. See the class docstring for envelope semantics.
+        """
         changed = dict(*args, **kwargs)
+        if "extrapolate" in changed and not isinstance(changed["extrapolate"], bool):
+            raise ValueError("Shell extrapolate must be a boolean")
         stored_position = changed.pop(
             "stored_position", self.get("stored_position", "interpolated")
         )
@@ -128,11 +157,11 @@ def generalized_tensors(values, description, kind, points):
                 "Only homogeneous linear shells recover Stress from ShellStress"
             )
         result[[0, 1, 3]] = (
-            values[:3, None, :] / h + 12 * z * values[3:6, None, :] / h**3
+            values[:3, None, :] / h - 12 * z * values[3:6, None, :] / h**3
         )
         result[4:6] = values[6:8, None, :] / (h * description["k"])
     else:
-        result[[0, 1, 3]] = values[:3, None, :] + z * values[3:6, None, :]
+        result[[0, 1, 3]] = values[:3, None, :] - z * values[3:6, None, :]
         result[4:6] = values[6:8, None, :]
     return result
 
@@ -167,9 +196,9 @@ def interpolate_tensors(
 ):
     """Piecewise linear interpolation, independently within each material layer.
 
-    Outside a layer's integration points the nearest value is retained, as in
-    the shell laws' existing distribution plots. Exact interfaces select the
-    lower layer unless target_layers explicitly selects the other side.
+    Outside a layer's integration points the nearest value is retained unless
+    extrapolate=True extends the outermost linear segments. Exact interfaces
+    select the lower layer unless target_layers explicitly selects the other side.
     """
     values = np.asarray(values)
     points = validate_positions(points)
@@ -238,6 +267,11 @@ def recover_shell_field(
     )
     reduction = options["reduction"]
     index = options["point_index"]
+    extrapolate = (
+        kind == "Stress"
+        and description["model"].endswith("nonlinear")
+        and options.get("extrapolate", True)
+    )
     if use_stored:
         if stored is None:
             raise ValueError(f"No stored {kind} thickness field is available")
@@ -281,6 +315,7 @@ def recover_shell_field(
                 description.get("interfaces"),
                 layers,
                 allow_constant=True,
+                extrapolate=extrapolate,
             )
     if reduction is None:
         if index is not None:
@@ -308,6 +343,7 @@ def recover_shell_field(
                         layers,
                         description.get("interfaces"),
                         allow_constant=sampling.get("sampling") == "integration",
+                        extrapolate=extrapolate,
                     )
             elif from_stored:
                 tensors = interpolate_tensors(
@@ -321,6 +357,7 @@ def recover_shell_field(
                     description.get("integration_layers"),
                     description.get("interfaces"),
                     allow_constant=True,
+                    extrapolate=extrapolate,
                 )
             points = target
         else:

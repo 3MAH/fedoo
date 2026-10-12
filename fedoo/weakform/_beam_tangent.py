@@ -176,8 +176,8 @@ def _kinematic_derivatives(wf, length, frame, q):
         dframe[:, :, 0] = (dx.swapaxes(-1, -2) - x * dl[..., None]) / length[
             :, None, None
         ]
-        # Exactly the trial-frame convention used in BeamEquilibrium.update.
-        dz_trial = np.einsum("ei,ecij->ecj", frame[:, 2], _skew(0.5 * angle))
+        # Differentiate R Q.T: dQ.T = -skew(delta spatial rotation).
+        dz_trial = -np.einsum("ei,ecij->ecj", frame[:, 2], _skew(0.5 * angle))
         dy_trial = np.cross(dz_trial, x) + np.cross(z, dframe[:, :, 0])
         dframe[:, :, 1] = dy_trial - y * np.sum(y * dy_trial, axis=-1, keepdims=True)
         dframe[:, :, 2] = np.cross(dframe[:, :, 0], y) + np.cross(x, dframe[:, :, 1])

@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 
 import fedoo as fd
 
@@ -91,14 +92,123 @@ def test_tangent_matches_assembled_internal_force(dim, shear, multiple):
         np.testing.assert_allclose(tangent @ translation, 0, atol=1e-10)
 
 
+def test_rigid_axial_rotation_has_zero_local_deformation():
+    space = fd.ModelingSpace("3D")
+    nodes = np.array([[0.0, 0, 0], [2.0, 0.3, 0.2]])
+    mesh = fd.Mesh(nodes, np.array([[0, 1]]), "lin2")
+    material = fd.constitutivelaw.ElasticIsotrop(1200, 0.25)
+    section = fd.constitutivelaw.BeamRectangular(material, 0.2, 0.4)
+    axis = nodes[1] / np.linalg.norm(nodes[1])
+    final_frames = []
+    for steps in (1, 3):
+        wf = fd.weakform.BeamEquilibrium(
+            section, space=space, nlgeom=True, consistent_tangent=True
+        )
+        assembly = fd.Assembly.create(wf, mesh)
+        pb = fd.problem.NonLinear(assembly)
+        assembly.initialize(pb)
+        pb._dU = np.zeros(space.nvar * mesh.n_nodes)
+        for _ in range(steps):
+            delta = np.zeros((space.nvar, mesh.n_nodes))
+            delta[space.get_rank_vector("Rot")] = (2.1 / steps * axis)[:, None]
+            pb._dU += delta.ravel()
+            pb.set_X(delta.ravel())
+            assembly.update(pb)
+            np.testing.assert_allclose(
+                assembly.sv["_BeamTangentData"][0], 0, atol=1e-12
+            )
+            np.testing.assert_allclose(assembly.sv["BeamStrain"], 0, atol=1e-12)
+            np.testing.assert_allclose(assembly.current.global_vector, 0, atol=1e-10)
+        final_frames.append(assembly.sv["RigidRotationMat"].copy())
+    np.testing.assert_allclose(final_frames[0], final_frames[1], atol=1e-12)
+
+
+@pytest.mark.parametrize("consistent", [False, True])
+def test_rotating_deformed_beam_rotates_internal_forces(consistent):
+    wf, assembly, pb = _beam(3, shear=0.8, consistent=consistent)
+    n = assembly.mesh.n_nodes
+    original_force = assembly.current.global_vector.reshape(wf.space.nvar, n).copy()
+    original_strain = np.asarray(assembly.sv["BeamStrain"]).copy()
+    initial = assembly.mesh.nodes
+    current = assembly.current.mesh.nodes.copy()
+    rotvec = np.array([0.7, -0.4, 0.5])
+    rotation = Rotation.from_rotvec(rotvec).as_matrix()
+    total = pb._dU.reshape(wf.space.nvar, n).copy()
+    delta = np.zeros_like(total)
+    disp = wf.space.get_rank_vector("Disp")
+    rot = wf.space.get_rank_vector("Rot")
+    total[disp] = (current @ rotation.T - initial).T
+    delta[disp] = total[disp] - pb._dU.reshape(wf.space.nvar, n)[disp]
+    delta[rot] = rotvec[:, None]
+    total[rot] += delta[rot]
+    pb._dU = total.ravel()
+    pb.set_X(delta.ravel())
+    assembly.update(pb)
+    np.testing.assert_allclose(assembly.sv["BeamStrain"], original_strain, atol=1e-12)
+    expected = original_force.copy()
+    expected[disp] = rotation @ original_force[disp]
+    expected[rot] = rotation @ original_force[rot]
+    np.testing.assert_allclose(
+        assembly.current.global_vector.reshape(wf.space.nvar, n), expected, atol=1e-10
+    )
+
+
+def test_symmetry_default_and_explicit_settings():
+    space = fd.ModelingSpace("3D")
+    mesh = fd.Mesh(np.array([[0.0, 0, 0], [1, 0, 0]]), np.array([[0, 1]]), "lin2")
+    material = fd.constitutivelaw.ElasticIsotrop(1200, 0.25)
+    for nlgeom, consistent, geometric, override, expected in (
+        (False, True, None, None, False),
+        (True, True, None, None, False),
+        (True, False, None, None, False),
+        (True, True, False, None, False),
+        (False, True, None, "weakform", False),
+        (True, True, None, "assembly", True),
+    ):
+        wf = fd.weakform.BeamEquilibrium(
+            material,
+            A=0.4,
+            Jx=0.03,
+            Iyy=0.02,
+            Izz=0.05,
+            nlgeom=nlgeom,
+            space=space,
+            consistent_tangent=consistent,
+        )
+        wf.geometric_stiffness = geometric
+        if override == "weakform":
+            wf.assembly_options["assume_sym"] = False
+        assembly = fd.Assembly.create(wf, mesh)
+        if override == "assembly":
+            assembly.assume_sym = True
+        pb = fd.problem.NonLinear(assembly)
+        assembly.initialize(pb)
+        assert assembly.assume_sym is expected
+
+
 def test_opt_out_retains_legacy_tangent():
-    wf, assembly, _ = _beam(3)
+    _, assembly, _ = _beam(3)
     consistent = assembly.current.global_matrix.toarray()
-    wf.consistent_tangent = False
-    assembly.current.assemble_global_mat("matrix")
+    _, assembly, _ = _beam(3, consistent=False)
     legacy = assembly.current.global_matrix.toarray()
     np.testing.assert_allclose(legacy, legacy.T, atol=1e-10)
     assert not np.allclose(legacy, consistent)
+
+
+def test_tangent_option_defaults_to_historical_and_is_read_only():
+    space = fd.ModelingSpace("3D")
+    material = fd.constitutivelaw.ElasticIsotrop(1200, 0.25)
+    section = fd.constitutivelaw.BeamCircular(material, 0.1)
+    wf = fd.weakform.BeamEquilibrium(section, space=space)
+    assert wf.consistent_tangent is False
+    with pytest.raises(AttributeError):
+        wf.consistent_tangent = True
+    consistent = fd.weakform.BeamEquilibrium(
+        section, consistent_tangent=True, space=space
+    )
+    with pytest.raises(AttributeError):
+        consistent.consistent_tangent = False
+    assert consistent.consistent_tangent is True
 
 
 @pytest.mark.parametrize("dim", [2, 3])
@@ -156,6 +266,7 @@ def test_large_deflection_cantilever_converges(dim, shear):
         k=shear,
         nlgeom=True,
         space=space,
+        consistent_tangent=True,
     )
     assembly = fd.Assembly.create(wf, mesh)
     pb = fd.problem.NonLinear(assembly)

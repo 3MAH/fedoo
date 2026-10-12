@@ -330,6 +330,9 @@ class Problem(ProblemBase):
             Normalized section coordinates: (y, z) pairs for beams, scalar or
             vector in [-1, 1] for shells. Shell -1/0/1 means bottom/middle/top.
             None extracts all configured section output points.
+            Mixed beam/shell tensor output requires None. Configure each
+            section's output_points for saving, then use beam_options and
+            shell_options on the resulting dataset for point selection.
 
         element_set : str or list[int], optional
             set of element indices or name of an element set associated to the mesh.
@@ -339,6 +342,10 @@ class Problem(ProblemBase):
         ignore_missing : bool, default=False
             If True, requested result fields that are unavailable are omitted.
             If False, an unavailable field raises ``NameError``.
+            For an assembly sum, a field is available if any submesh provides
+            it; other submeshes are left without that field. Missing beam
+            section geometry or unsupported recovery counts as unavailable,
+            while invalid section positions still raise ``ValueError``.
         """
         if len(args) > 0 and (
             isinstance(args[0], AssemblyBase)

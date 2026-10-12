@@ -8,6 +8,10 @@ from types import SimpleNamespace
 import numpy as np
 
 
+class SectionRecoveryUnavailable(ValueError):
+    """Section information needed to recover a tensor field is unavailable."""
+
+
 def validate_positions(position):
     """Normalize an explicit position argument to an (n_points, 2) array."""
     values = np.asarray(position, dtype=float)
@@ -26,7 +30,27 @@ def validate_positions(position):
 
 
 class BeamOptions(dict):
-    """Atomic selection updates; coordinates and point indices are exclusive."""
+    """Beam section selection for dataset stress and strain reads.
+
+    ``reduction='abs_max'`` is the default: each requested component retains
+    the signed value of largest magnitude across section points. ``'max'``
+    and ``'min'`` select algebraic extrema. With no component requested, all
+    six tensor components are reduced independently, returning shape
+    ``(6, n_locations)``. These extrema can come from different points and
+    do not represent a stress or strain tensor at one physical location.
+
+    Requested invariants such as ``'vm'`` and principal values are computed
+    at each point before reduction. Computing invariants from a componentwise
+    envelope instead gives a different result and is not guaranteed conservative.
+
+    A reduction ignores ``position`` and ``point_index``. Set ``reduction=None``
+    and select either normalized ``position=(y, z)`` or zero-based ``point_index``
+    to read one point; the selectors are mutually exclusive. Both default to
+    None. ``source`` is ``'auto'`` (default), ``'stored'`` or ``'recomputed'``;
+    ``samples=32`` controls recomputed sampling only. ``stored_position`` is
+    ``'nearest'`` (default) or ``'exact'`` for stored coordinate selection.
+    These options affect reads, not which points are saved.
+    """
 
     def __init__(self, values=None):
         super().__init__(
@@ -43,6 +67,12 @@ class BeamOptions(dict):
             self.update(values)
 
     def update(self, *args, **kwargs):
+        """Validate and apply selection options atomically.
+
+        Selecting a position clears the index, and vice versa, but does not
+        disable reduction. For example, ``update(reduction=None, point_index=0)``
+        selects the first point. See the class docstring for envelope semantics.
+        """
         changed = dict(*args, **kwargs)
         if (
             changed.get("position") is not None
@@ -145,13 +175,11 @@ def use_stored_beam_field(options, has_stored, can_recompute):
 
 
 def reduce_section_tensors(tensors, kind, component, reduction):
-    """Compute each point's invariant before reducing, preserving abs_max signs."""
+    """Reduce tensor components independently, or a pointwise scalar invariant."""
 
     tensor = (StressTensorList if kind == "Stress" else StrainTensorList)(tensors)
     if isinstance(component, str) and component.isdigit():
         component = int(component)
-    if reduction is not None and component is None:
-        raise ValueError("Select a scalar component for a section reduction")
     # Principal-value routines expect one point axis. Flatten then restore it.
     if component is None:
         value = tensors
@@ -160,12 +188,13 @@ def reduce_section_tensors(tensors, kind, component, reduction):
         value = np.asarray(flat[component]).reshape(tensors.shape[1:])
     if reduction is None:
         return value[:, 0] if component is None else value[0]
+    point_axis = 1 if component is None else 0
     if reduction == "max":
-        return np.max(value, axis=0)
+        return np.max(value, axis=point_axis)
     if reduction == "min":
-        return np.min(value, axis=0)
-    indices = np.argmax(np.abs(value), axis=0)
-    return np.take_along_axis(value, indices[None, :], axis=0)[0]
+        return np.min(value, axis=point_axis)
+    indices = np.argmax(np.abs(value), axis=point_axis, keepdims=True)
+    return np.take_along_axis(value, indices, axis=point_axis).squeeze(point_axis)
 
 
 def _polar_sampling_grid(samples, pipe):
