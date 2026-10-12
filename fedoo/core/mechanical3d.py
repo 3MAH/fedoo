@@ -20,6 +20,12 @@ class Mechanical3D(ConstitutiveLaw):
         Whether the constitutive law transports its own material frame during
         finite-strain updates. When ``False``, Fedoo maintains the current
         orientation for anisotropic laws.
+    supports_total_formulation : bool
+        Whether the law can run under the total formulation, which the weak
+        form selects with ``nlgeom="TL"``: it is then fed the material
+        logarithmic strain ``ln U`` and must return the Cauchy stress together
+        with the tangent of the stress conjugate to ``ln U``. Default ``False``:
+        the law keeps the "log_r" rate update under ``nlgeom="TL"``.
 
     Finite-strain constitutive convention
     --------------------------------------
@@ -133,6 +139,11 @@ class Mechanical3D(ConstitutiveLaw):
     # False means this class convects the material frame for the law. Set True
     # when a law handles its own material-frame transport.
     manages_material_frame = False
+
+    # True when the law can run under the total formulation (nlgeom="TL"): fed ln U in
+    # reference components, it returns the Cauchy stress and the box tangent of the
+    # stress T conjugate to ln U, dT/d(ln U).
+    supports_total_formulation = False
 
     def __init__(self, density=None, name=""):
         ConstitutiveLaw.__init__(self, name)
@@ -371,6 +382,20 @@ class Mechanical3D(ConstitutiveLaw):
     def global2local_tensor(self, tensor, assembly=None):
         """Change both axes of 3x3 tensor fields to the initial material basis."""
         return self._global2local_matrix_field(tensor, assembly)
+
+
+def _constitutive_corate(assembly):
+    """Objective rate the law of an assembly is run with; None under the total formulation.
+
+    The stress-equilibrium weak form records it on the assembly at initialization. An
+    assembly it did not initialize (a sub-assembly, a custom weak form) falls back on the
+    ``corate`` of its weak form, then on "log_r".
+    """
+    if not assembly._nlgeom:
+        return "log_r"
+    if hasattr(assembly, "_corate"):
+        return assembly._corate
+    return getattr(getattr(assembly, "weakform", None), "corate", "log_r")
 
 
 class MechanicalUMAT(Mechanical3D):
@@ -691,7 +716,7 @@ class MechanicalUMAT(Mechanical3D):
         zeros_6 = np.zeros((6, n_points), order="F")
         ndi = self._get_ndi(assembly)
         wf = getattr(assembly, "weakform", None)
-        corate = getattr(wf, "corate", "log_r") if assembly._nlgeom else "log_r"
+        corate = _constitutive_corate(assembly)
 
         _, statev_init, _, tangent_local = self._call_umat(
             zeros_6,
@@ -727,10 +752,12 @@ class MechanicalUMAT(Mechanical3D):
         self.is_initialized = True
 
     def update(self, assembly, pb):
-        if "DStrain" in assembly.sv:
-            dstrain = assembly.sv["DStrain"]
-        else:
-            dstrain = assembly.sv["Strain"] - assembly.sv_start["Strain"]
+        # The committed strain and stress live in the configuration at the start of the
+        # increment. The law integrates in the end configuration, so both are transported
+        # here, at every iteration, with the rotation of the increment being solved. A
+        # strain accumulated by increments (DStrain) is handed over as it is; a strain
+        # recomputed from F is differenced against the transported start value.
+        incremental_strain = "DStrain" in assembly.sv
 
         if assembly._nlgeom:
             F0 = self.global2local_tensor(assembly.sv_start["F"], assembly)
@@ -756,12 +783,22 @@ class MechanicalUMAT(Mechanical3D):
                 ),
                 dtype=float,
             )
+            # the frame follows the material: components in the committed frame are the
+            # transported start state, components in the trial frame the end state
             strain_start = self._rotate_vector_in(
                 assembly.sv_start["Strain"], start_frame, "strain", False
             )
-            dstrain_local = self._rotate_vector_in(
-                dstrain, trial_frame, "strain", False
-            )
+            if incremental_strain:
+                dstrain_local = self._rotate_vector_in(
+                    assembly.sv["DStrain"], trial_frame, "strain", False
+                )
+            else:
+                dstrain_local = (
+                    self._rotate_vector_in(
+                        assembly.sv["Strain"], trial_frame, "strain", False
+                    )
+                    - strain_start
+                )
             stress_start = self._rotate_vector_in(
                 assembly.sv_start["Stress"], start_frame, "stress", False
             )
@@ -773,14 +810,32 @@ class MechanicalUMAT(Mechanical3D):
             strain_start = self.global2local_strain(
                 assembly.sv_start["Strain"], assembly, current=False
             )
-            dstrain_local = self.global2local_strain(dstrain, assembly, current=False)
             stress_start = self.global2local_stress(
                 assembly.sv_start["Stress"], assembly, current=False
             )
             DR_local = self.global2local_rotation_increment(assembly.sv["DR"], assembly)
+            # under the total formulation nothing is transported: DR = I
+            if (
+                assembly._nlgeom
+                and getattr(assembly, "_formulation", "rate") != "total"
+            ):
+                rot = Rotation.from_matrix(np.asarray(DR_local).transpose(2, 0, 1))
+                strain_start = rot.apply_strain(strain_start)
+                stress_start = rot.apply_stress(stress_start)
+            if incremental_strain:
+                dstrain_local = self.global2local_strain(
+                    assembly.sv["DStrain"], assembly, current=False
+                )
+            else:
+                dstrain_local = (
+                    self.global2local_strain(
+                        assembly.sv["Strain"], assembly, current=False
+                    )
+                    - strain_start
+                )
 
         wf = getattr(assembly, "weakform", None)
-        corate = getattr(wf, "corate", "log_r") if assembly._nlgeom else "log_r"
+        corate = _constitutive_corate(assembly)
         options, tangent_converted = self._umat_options(
             assembly, in_material_frame=trial_frame is not None, ndi=ndi
         )

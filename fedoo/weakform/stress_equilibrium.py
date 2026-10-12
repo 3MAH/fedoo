@@ -56,6 +56,11 @@ class StressEquilibrium(WeakFormBase):
         If nlgeom == 'UL' the updated lagrangian method is used (same as True).
         If nlgeom == 'TL' the total lagrangian method is used.
         If not defined, the problem.nlgeom parameter is used instead.
+        nlgeom also selects the formulation of the constitutive update (see
+        the ``formulation`` property): 'TL' is the total formulation, where
+        the law works on ln U and on its dual stress T; 'UL' is the rate
+        formulation, where it works on ln V and on the Kirchhoff stress,
+        integrated with the objective rate ``corate``.
     space: ModelingSpace
         Modeling space associated to the weakform. If None is specified,
         the active ModelingSpace is considered.
@@ -99,12 +104,14 @@ class StressEquilibrium(WeakFormBase):
               initial mesh with initial displacement effet)
         """
 
-        self.corate = "log_r"
+        # Objective rate of the updated-Lagrangian method (see the corate property).
         # 'log_r' (default): logarithmic strain with the exact polar frame
         # increment DR = R1 R0^T — the corate whose tangent transport is
         # exact in simcoon, including with rotated internal-variable history.
         # Other options: 'log' (XBM), 'jaumann', 'green_naghdi'/'gn',
-        # 'log_inc', 'log_r_inc'...
+        # 'log_inc', 'log_r_inc'. The total-Lagrangian method has no rate.
+        self._corate = None  # unset: "log_r"
+        self._total = False
 
         # by default, no treatment of the volumetric locking
         self._incompressibility_elm_types = []
@@ -339,7 +346,7 @@ class StressEquilibrium(WeakFormBase):
         # initialize nlgeom value in assembly._nlgeom
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
-        self.corate = self._corate  # to force the setter function
+        self._initialize_formulation(assembly)
         self._initialize_incompressibility(assembly, pb)
 
         # ``_initialize_incompressibility`` may already have selected a value
@@ -663,8 +670,8 @@ class StressEquilibrium(WeakFormBase):
         if assembly._nlgeom:
             if not (np.array_equal(assembly.sv["DispGradient"], 0)):
                 # True when the problem have been updated once
-                rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
                 if "DStrain" in assembly.sv:
+                    rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
                     # rotate strain
                     assembly.sv["Strain"] = StrainTensorList(
                         rot.apply_strain(
@@ -676,9 +683,10 @@ class StressEquilibrium(WeakFormBase):
                         np.zeros((6, assembly.n_gauss_points), order="F")
                     )
 
-                # update cauchy stress
-                stress = assembly.sv["Stress"].asarray()
-                assembly.sv["Stress"] = StressTensorList(rot.apply_stress(stress))
+                # The converged Cauchy stress already lives in the end configuration:
+                # it is committed as it is. The start state a law integrates from is
+                # transported with the rotation of the increment being solved, by the
+                # law itself (see MechanicalUMAT.update).
                 if assembly._nlgeom == "TL":
                     assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
                         assembly.sv["F"]
@@ -848,11 +856,38 @@ class StressEquilibrium(WeakFormBase):
             self._init_nl_strain_op_vir()
 
     @property
-    def corate(self):
-        """Corotational strain mesure for strain.
+    def formulation(self):
+        """Finite-strain formulation of the constitutive update, set by ``nlgeom``.
 
-        Properties defining the way strain is treated in finite strain problem
-        (using a weakform with nlgeom = True)
+        * "rate" (``nlgeom="UL"``): the law is integrated with the objective
+          rate ``corate``. It works on the spatial logarithmic strain ln V and
+          on the Kirchhoff stress.
+        * "total" (``nlgeom="TL"``): the strain-space framework of Miehe, Apel
+          and Lambrecht (2002). The law works on the material logarithmic
+          strain ln U = 1/2 ln C, a state function of F on the reference frame
+          (nothing is rotated: DR = I), and on the stress T dual to ln U. No
+          rate is involved, and the stored "Strain" is ln U.
+
+        The two run the same law on the same strain under ``corate="log_r"``
+        and coincide whenever the stress is coaxial with the stretch;
+        otherwise they are different constitutive statements (a yield
+        criterion holds on T under "total", on the Kirchhoff stress under
+        "rate").
+
+        A law that does not declare ``supports_total_formulation`` (the native
+        laws, a modular Simcoon material...), and any law under the 2D
+        plane-stress assumption, keep the "log_r" rate update under
+        ``nlgeom="TL"``.
+
+        Before the problem is initialized, and without nlgeom, the value is
+        "rate".
+        """
+        return "total" if self._total else "rate"
+
+    @property
+    def corate(self):
+        """Objective rate of the updated-Lagrangian method (``nlgeom="UL"``).
+
         corate can take the following str values:
             * "log_r" (default): exact logarithmic strain transported by the
               exact polar rotation increment (strain is recomputed at each
@@ -865,28 +900,65 @@ class StressEquilibrium(WeakFormBase):
               incremented)
             * "green_nagdhi" or "gn": Strain using the Green_Nagdhi derivative
               (strain is incremented)
+        The total formulation (``nlgeom="TL"`` with a law that supports it,
+        see ``formulation``) is not a rate formulation: it takes no corate
+        (setting one raises at initialization) and this property is then None.
         if nlgeom is False, this property has no effect.
         """
-        return self._corate
+        if self._total:
+            return None
+        return "log_r" if self._corate is None else self._corate
 
     @corate.setter
     def corate(self, value):
-        value = value.lower()
-        self._corate = value
-        if self.nlgeom in ("UL", "TL"):
-            try:
-                self._corate_func, self._simcoon_corate = _CORATES[value]
-            except KeyError:
+        # None unsets the choice. A value set after the problem is initialized takes
+        # effect at the next initialization.
+        if value is not None:
+            value = value.lower()
+            if value not in _CORATES:
                 raise ValueError(
-                    'corate value not understood. Choose between "log", "log_R", \
-                    "green_naghdi" or "jaumann"'
-                ) from None
+                    'corate value not understood. Choose between "log", "log_R", '
+                    '"green_naghdi" or "jaumann"'
+                )
+        self._corate = value
+
+    def _initialize_formulation(self, assembly):
+        """Select the strain update and the tangent conversion of the formulation."""
+        nlgeom = assembly._nlgeom
+        self._total = False
+        # The constitutive law reads the formulation on the assembly: its weak form may be
+        # a sum this one was merged into.
+        assembly._formulation = "rate"
+        assembly._corate = "log_r"
+        if not nlgeom:
+            return
+        if nlgeom == "TL":
+            self._total = bool(
+                getattr(self.constitutivelaw, "supports_total_formulation", False)
+                and assembly.space.get_dimension() != "2Dstress"
+            )
+            if self._total and self._corate is not None:
+                self._total = False
+                raise ValueError(
+                    "corate is the objective rate of the updated-Lagrangian method: "
+                    'nlgeom="TL" runs the total formulation, which has no rate. '
+                    'Use nlgeom="UL" to choose a corate.'
+                )
+        if self._total:
+            self._corate_func = _comp_hencky_strain
+            self._convert_Lt_tag = (
+                "DTDH_2_DSDE"  # box of the total formulation, dT/d(ln U)
+            )
+        else:
+            self._corate_func, simcoon_corate = _CORATES[self.corate]
             # the law returns the box tangent d(tau_hat)/dD in this corate: the first
-            # conversion stage (box -> dS/dE) is the one of the same corate, in TL and UL
-            self._convert_Lt_tag = _BOX_TO_DSDE[self._simcoon_corate]
-            # tangent the configuration integrates, which a law may return directly
-            # (sim.umat tangent_output): dS/dE in TL, the Lie tangent in UL
-            self._tangent_output = "material" if self.nlgeom == "TL" else "spatial"
+            # conversion stage (box -> dS/dE) is the one of the same corate
+            self._convert_Lt_tag = _BOX_TO_DSDE[simcoon_corate]
+        assembly._formulation = self.formulation
+        assembly._corate = self.corate
+        # tangent the configuration integrates, which a law may return directly
+        # (sim.umat tangent_output): dS/dE in TL, the Lie tangent in UL
+        self._tangent_output = "material" if nlgeom == "TL" else "spatial"
 
 
 # elements used to avoid volumetric locking
@@ -1185,6 +1257,19 @@ def _comp_log_strain_R_inc(wf, assembly, pb):
     )
     assembly.sv["DR"] = DR
     assembly.sv["DStrain"] = StrainTensorList(DStrain)
+
+
+def _comp_hencky_strain(wf, assembly, pb):
+    # total formulation: the material logarithmic strain ln U = 1/2 ln C, a state
+    # function of F in reference components. ln U is the ln V of F^T, and the frame never
+    # rotates: DR = I.
+    F1 = assembly.sv["F"]
+    assembly.sv["DR"] = np.repeat(np.eye(3)[:, :, None], F1.shape[2], axis=2).copy(
+        order="F"
+    )
+    assembly.sv["Strain"] = StrainTensorList(
+        sim.Log_strain(np.asfortranarray(F1.transpose(1, 0, 2)), True, False)
+    )
 
 
 def _comp_jaumann_strain(wf, assembly, pb):
