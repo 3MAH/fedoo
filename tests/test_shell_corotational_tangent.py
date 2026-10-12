@@ -250,3 +250,50 @@ def test_mitc_shell_large_deflection_equilibrium():
     np.testing.assert_allclose(
         assembly.current.global_vector[pb._dof_free], 0, atol=1e-6
     )
+
+
+def test_consistent_tangent_accepts_time_integrator_and_rejects_split_forms():
+    # A time integrator derives a subclass whose mixin wraps get_weak_equation:
+    # the plate equation is unchanged and the consistent tangent stays valid.
+    space = fd.ModelingSpace("3D")
+    mesh = fd.mesh.rectangle_mesh(3, 3, 0, 1, 0, 1, "quad4", ndim=3)
+    material = fd.constitutivelaw.ElasticIsotrop(1200, 0.25)
+    material.set_density(1e-3)
+    law = fd.constitutivelaw.ShellHomogeneous(material, 0.05)
+    wf = fd.weakform.PlateEquilibrium(
+        law, nlgeom="UL", consistent_tangent=True, space=space
+    )
+    assembly = fd.Assembly.create(wf, mesh)
+    pb = fd.problem.NonLinear(assembly, nlgeom="UL")
+    pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 0), ["Disp", "Rot"], 0)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispZ", 0.05)
+    pb.nlsolve(dt=0.5, tmax=1, update_dt=False, print_info=0)
+    assert np.abs(pb.get_disp()).max() == pytest.approx(0.05, rel=0.2)
+
+    assert wf._plate_weak_equation_owner() is fd.weakform.PlateEquilibriumFI
+    split = fd.weakform.PlateShearEquilibrium.__new__(fd.weakform.PlateShearEquilibrium)
+    assert split._plate_weak_equation_owner() is fd.weakform.PlateShearEquilibrium
+
+
+def test_consistent_tangent_with_law_defined_at_initialization():
+    # A Simcoon law only provides its elastic matrix once initialized, which
+    # the assembly does after the weak form: the drilling scale is deferred.
+    pytest.importorskip("simcoon")
+    material = fd.constitutivelaw.Simcoon("EPICP", [1200, 0.25, 0, 1e6, 100, 0.3])
+    reference = fd.constitutivelaw.ShellHomogeneousNonLinear(
+        fd.constitutivelaw.ElasticIsotrop(1200, 0.25), 0.15, n_thickness_points=2
+    )
+    law = fd.constitutivelaw.ShellHomogeneousNonLinear(
+        material, 0.15, n_thickness_points=2
+    )
+    wf, assembly, pb = _shell(section=law)
+    _assert_force_derivative(assembly, pb)
+    wf_ref, assembly_ref, _ = _shell(section=reference)
+    np.testing.assert_allclose(
+        wf._drill_reference(assembly), wf_ref._drill_reference(assembly_ref)
+    )
+    # The scale is fixed: a rollback before any accepted increment keeps it.
+    scale = wf._drill_reference(assembly).copy()
+    assembly.to_start(pb)
+    np.testing.assert_allclose(wf._drill_reference(assembly), scale)

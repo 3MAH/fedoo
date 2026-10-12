@@ -156,7 +156,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 raise NotImplementedError(
                     "The consistent shell tangent requires nlgeom='UL'."
                 )
-            if type(self).get_weak_equation is not PlateEquilibriumFI.get_weak_equation:
+            if self._plate_weak_equation_owner() is not PlateEquilibriumFI:
                 raise NotImplementedError(
                     "Use PlateEquilibrium or PlateEquilibriumFI for the consistent shell tangent; "
                     "manually split shell weak forms are not supported."
@@ -494,7 +494,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         if self.drill_stiffness_coefficient != 0:
             # penalty for RotZ (drilling DOF stabilization)
             representative_stiffness = (
-                assembly.sv["_ShellDrillReference"]
+                self._drill_reference(assembly)
                 if self._use_consistent_tangent(assembly)
                 else H[2][2]
             )
@@ -515,13 +515,47 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
     def _use_consistent_tangent(self, assembly):
         return self.consistent_tangent and assembly._nlgeom == "UL"
 
+    def _plate_weak_equation_owner(self):
+        """Plate class whose ``get_weak_equation`` builds this weak form.
+
+        Classes of the method resolution order that are not plate weak forms
+        are skipped: a time integrator derives a subclass whose mixin only
+        rescales the equation returned by ``super()``, which leaves the plate
+        equation, hence its consistent tangent, unchanged. A plate subclass
+        overriding ``get_weak_equation`` (manually split shell weak forms) is
+        returned as the owner.
+        """
+        for cls in type(self).__mro__:
+            if issubclass(cls, PlateEquilibriumFI) and "get_weak_equation" in vars(cls):
+                return cls
+        return None
+
+    def _drill_reference(self, assembly):
+        """Fixed drilling-penalty scale of the consistent tangent.
+
+        A fixed scale avoids differentiating H (a material third derivative).
+        It is taken from the section stiffness on first use rather than in
+        ``initialize``: the assembly initializes the constitutive law after
+        the weak form, and a section built on a law that only provides its
+        elastic matrix once initialized (Simcoon) has no stiffness before.
+        The first use precedes any constitutive update, and a rollback that
+        discards the entry also restores the section state it is read from,
+        so the value is always the one of the initial state.
+        """
+        reference = assembly.sv.get("_ShellDrillReference")
+        if reference is None:
+            stiffness = self.constitutivelaw.get_shell_stiffness_matrix()[2][2]
+            reference = np.array(assembly.convert_data(stiffness), copy=True)
+            assembly.sv["_ShellDrillReference"] = reference
+        return reference
+
     def _prepare_consistent_tangent(self, assembly):
         """Cache numerical fields in the state; never cache material stiffness."""
         from fedoo.weakform._shell_tangent import shell_tangent_operators
 
         stress = assembly.sv["ShellStress"]
         stress = [0] * 8 if np.array_equal(stress, 0) else list(stress)
-        penalty = self.drill_stiffness_coefficient * assembly.sv["_ShellDrillReference"]
+        penalty = self.drill_stiffness_coefficient * self._drill_reference(assembly)
         stress.append(penalty * assembly.sv["_DrillConstraint"])
         tangent = shell_tangent_operators(self, assembly, stress)
         # Replace the entry rather than mutate its arrays: sv_start snapshots
@@ -537,7 +571,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         """
         eps = self.generalized_strain_operator() + [self.drill_constraint_operator()]
         H = assembly.sv["_ShellStiffnessMatrix"]
-        penalty = self.drill_stiffness_coefficient * assembly.sv["_ShellDrillReference"]
+        penalty = self.drill_stiffness_coefficient * self._drill_reference(assembly)
         tangent = assembly.sv.get("_ShellTangentOperators")
         if tangent is None:
             # Initialization and set_start can assemble before update_2.

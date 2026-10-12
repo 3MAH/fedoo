@@ -72,11 +72,6 @@ def initialize_shell_tangent(wf, assembly):
     assembly.assume_sym = False
     ne, nn = assembly.mesh.n_elements, assembly.mesh.n_elm_nodes
     assembly.sv["_ShellTangentDof"] = np.zeros((ne, nn * wf.space.nvar))
-    # A fixed penalty scale avoids differentiating H (a material third derivative).
-    stiffness = wf.constitutivelaw.get_shell_stiffness_matrix()[2][2]
-    assembly.sv["_ShellDrillReference"] = np.array(
-        assembly.convert_data(stiffness), copy=True
-    )
 
 
 def _nodal_fields(wf, n_nodes):
