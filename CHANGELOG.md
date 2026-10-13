@@ -11,6 +11,14 @@ semantic versioning.
 - Rotate the 3D beam's row-based local frame with the transpose of the spatial
   increment, and correct its consistent tangent derivative. Rigid axial rotation
   no longer produces spurious local nodal rotations or misorients bending axes.
+- Rotate the shell's row-based trial frame with the transpose of the spatial
+  increment, as for the 3D beam, and correct its consistent tangent derivative.
+  With `true_drilling_rotation=False`, a rigid rotation about the shell normal
+  no longer produces spurious membrane strains and drilling reactions. The
+  default `true_drilling_rotation=True` is unaffected.
+- Skip private section-recovery arrays (names starting with `_`) when
+  converting Gauss-point data to nodes in `DataSet.to_pyvista`/`to_vtk`.
+  Nonlinear and laminate shell results export again.
 - Use the polar area moment Iyy + Izz for beam axial rotary inertia, rather
   than the Saint-Venant torsion constant Jx. Torsional stiffness remains G*Jx.
 - Make shell thickness strain epsilon0 - z*kappa consistent with the existing
@@ -24,6 +32,13 @@ semantic versioning.
   preserve explicit weak-form or assembly settings. Default to full assembly
   for consistent UL tangents and coupled displacement/rotation interpolations,
   whose terms cannot safely use the symmetric assembly shortcut.
+- Shell dataset reads default to the top face (`reduction=None`, `position=1`),
+  as before multi-point outputs; `abs_max` remains available through
+  `shell_options`. Shell `Stress`/`Strain` saved with `position=None` are
+  stored as `(6, n_thickness_points, n_gp)`.
+- Signed `abs_max` reductions treat magnitudes equal within round-off as ties
+  and select the first section point, so that the sign of a symmetric
+  distribution no longer depends on floating-point noise.
 - Default nonlinear shell stress recovery to layerwise linear extrapolation
   from outermost material points to physical layer boundaries. ShellOptions
   extrapolate=False retains nearest-IP values; stored-point reductions and

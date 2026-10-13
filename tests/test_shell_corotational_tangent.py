@@ -230,6 +230,38 @@ def test_shell_trial_and_rollback_restore_frame_force_and_tangent():
     )
 
 
+@pytest.mark.parametrize("drilling", [True, False])
+@pytest.mark.parametrize("rotvec", [[0, 0, 0.3], [0.2, -0.1, 0.25]])
+def test_rigid_rotation_has_zero_internal_force(drilling, rotvec):
+    space = fd.ModelingSpace("3D")
+    nodes = np.array([[0.0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]])
+    mesh = fd.Mesh(nodes, np.array([[0, 1, 2, 3]]), "quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(1200, 0.25)
+    law = fd.constitutivelaw.ShellHomogeneous(material, 0.15)
+    wf = fd.weakform.PlateEquilibrium(
+        law, nlgeom=True, true_drilling_rotation=drilling, space=space
+    )
+    assembly = fd.Assembly.create(wf, mesh, elm_type="pquad4mitc")
+    pb = fd.problem.NonLinear(assembly)
+    assembly.initialize(pb)
+    pb._dU = np.zeros(space.nvar * mesh.n_nodes)
+    disp = space.get_rank_vector("Disp")
+    rot = space.get_rank_vector("Rot")
+    steps = 3
+    for step in range(1, steps + 1):
+        # Fixed rotation axis: nodal rotation vectors are additive.
+        increment = step / steps * np.asarray(rotvec, dtype=float)
+        rotation = Rotation.from_rotvec(increment).as_matrix()
+        total = np.zeros((space.nvar, mesh.n_nodes))
+        total[disp] = (nodes @ rotation.T - nodes).T
+        total[rot] = increment[:, None]
+        delta = total.ravel() - pb._dU
+        pb._dU = total.ravel()
+        pb.set_X(delta)
+        assembly.update(pb)
+        np.testing.assert_allclose(assembly.current.global_vector, 0, atol=1e-10)
+
+
 def test_mitc_shell_large_deflection_equilibrium():
     space = fd.ModelingSpace("3D")
     mesh = fd.mesh.rectangle_mesh(3, 2, 0, 2, 0, 1, "quad4", ndim=3)

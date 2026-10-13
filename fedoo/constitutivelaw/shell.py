@@ -323,11 +323,11 @@ class ShellBase(ConstitutiveLaw):
 
         The default position is +1 (top face); position=None uses configured
         output points. This method does not reduce points. Dataset reads use
-        ``shell_options`` and default to signed componentwise absolute extrema
-        for full tensors. Components can come from different thickness points.
-        Scalar invariants are evaluated before reduction; computing invariants
-        from an envelope instead is not guaranteed conservative. These selection
-        rules also apply to dataset Strain fields.
+        ``shell_options`` and default to the top face. With a reduction, full
+        tensors are reduced componentwise and components can come from different
+        thickness points. Scalar invariants are evaluated before reduction;
+        computing invariants from an envelope instead is not guaranteed
+        conservative. These selection rules also apply to dataset Strain fields.
         """
         position = kargs.get("position", 1)
         tensors, _ = self.get_output_tensors(assembly, "Stress", position)

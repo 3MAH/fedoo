@@ -97,7 +97,15 @@ def test_signed_extrema_and_atomic_selection():
     result = pb.get_results(assembly, ["Stress"])
     tensor = result.gausspoint_data["Stress"]
     tensor[0] = np.array([-12.0, 4.0, 12.0])[:, None]
+    # The default reads the top face.
+    assert result.shell_options["reduction"] is None
+    np.testing.assert_allclose(result["Stress", "XX"], 12)
+    # Equal magnitudes select the first point, also within round-off.
+    result.shell_options.update(reduction="abs_max")
     np.testing.assert_allclose(result["Stress", "XX"], -12)
+    tensor[0, 2] = 12.0 * (1 + 1e-13)
+    np.testing.assert_allclose(result["Stress", "XX"], -12)
+    tensor[0, 2] = 12.0
     result.shell_options.update(reduction="max", point_index=999)
     np.testing.assert_allclose(result["Stress", "XX"], 12)
     result.shell_options.update(reduction=None, point_index=1)
@@ -234,12 +242,13 @@ def test_reference_point_keeps_laminate_interface_side():
     assert mixed.shell_options["reference_point_index"] is None
 
 
-def test_viewer_lists_shell_components_with_default_thickness_reduction():
+def test_viewer_lists_shell_components_with_thickness_reduction():
     from types import SimpleNamespace
 
     viewer = pytest.importorskip("fedoo.util.viewer")
     pb, assembly, _ = shell_problem()
     result = pb.get_results(assembly, ["Stress", "Strain"])
+    result.shell_options.update(reduction="abs_max")
     dock = SimpleNamespace(data=result)
     # Component discovery must not request a full tensor under a scalar
     # thickness reduction. Call the method without creating a Qt window.
@@ -306,6 +315,20 @@ def test_nonlinear_saves_native_points_and_interpolates(tmp_path):
     del loaded.gausspoint_data["_ShellStress"]
     # A nonlinear resultant does not invent an elastic stress distribution.
     assert "Stress" not in loaded.shell_derived_fields()
+
+
+def test_nonlinear_shell_exports_to_pyvista():
+    pytest.importorskip("pyvista")
+    law = fd.constitutivelaw.ShellHomogeneousNonLinear(
+        fd.constitutivelaw.ElasticIsotrop(1000, 0.25), 2
+    )
+    pb, assembly, law = shell_problem(law)
+    result = pb.get_results(assembly, ["Stress"])
+    assert result.gausspoint_data["_ShellStress"].ndim == 3
+    grid = result.to_pyvista()
+    # Private thickness storage is not a nodal field.
+    assert "_ShellStress" not in grid.point_data
+    assert "Stress" in grid.point_data
 
 
 @pytest.mark.parametrize("source", ["stored", "recomputed"])

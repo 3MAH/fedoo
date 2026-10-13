@@ -171,6 +171,7 @@ class DataSet:
         ``samples`` affects recomputed sampling only. Extrema are estimates.
     shell_options : dict
         Normalized thickness ``position`` in [-1, 1], or ``point_index``.
+        The default reads the top face (``reduction=None``, ``position=1``).
         Sources and reductions follow ``beam_options``. Nonlinear stresses
         are interpolated layerwise from saved material points; ``samples``
         sets the generated count per layer and is ignored for stored tensors.
@@ -1623,10 +1624,10 @@ class DataSet:
     def shell_options(self):
         """Thickness options; see :class:`fedoo.util.shell_recovery.ShellOptions`.
 
-        Default full-tensor reads return signed componentwise absolute extrema,
-        potentially from different thickness points. Scalar invariants are computed
-        before reduction. Set reduction=None with position or point_index to
-        obtain a tensor at one physical point instead.
+        Default reads return the tensor at the top face (reduction=None,
+        position=1). With a reduction, full-tensor reads return componentwise
+        extrema, potentially from different thickness points, and scalar
+        invariants are computed before reduction.
         For nonlinear stress recovery, extrapolate=True (default) extends the
         outermost linear segments to layer boundaries. False retains nearest-IP
         values. Stored-point reductions are unaffected; see ShellOptions for
@@ -2306,6 +2307,8 @@ class DataSet:
 
             if gp_data_to_node and not self._is_multimesh():
                 for key in self.gausspoint_data:
+                    if key.startswith("_"):
+                        continue  # private section-recovery storage
                     pv_data.point_data[key] = self.get_data(key, data_type="Node").T
 
             return pv_data

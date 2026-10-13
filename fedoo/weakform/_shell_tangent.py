@@ -156,7 +156,7 @@ def _kinematics(wf, assembly, selected, q):
     )
     z, dz = _normalize(normal, dnormal)
     guide = frame[:, 0]
-    dguide = np.einsum("ei,ecij->ecj", guide, _skew(theta.mean(axis=2)))
+    dguide = -np.einsum("ei,ecij->ecj", guide, _skew(theta.mean(axis=2)))
     dot = np.sum(guide * z, axis=-1)
     ddot = np.sum(dguide * z[:, None] + guide[:, None] * dz, axis=-1)
     projected = guide - dot[:, None] * z

@@ -193,7 +193,11 @@ def reduce_section_tensors(tensors, kind, component, reduction):
         return np.max(value, axis=point_axis)
     if reduction == "min":
         return np.min(value, axis=point_axis)
-    indices = np.argmax(np.abs(value), axis=point_axis, keepdims=True)
+    # Equal magnitudes within round-off select the first point, so that the
+    # sign of a symmetric distribution (pure bending) is not decided by noise.
+    magnitude = np.abs(value)
+    peak = np.max(magnitude, axis=point_axis, keepdims=True)
+    indices = np.argmax(magnitude >= peak * (1 - 1e-9), axis=point_axis, keepdims=True)
     return np.take_along_axis(value, indices, axis=point_axis).squeeze(point_axis)
 
 

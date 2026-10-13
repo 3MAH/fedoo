@@ -141,8 +141,10 @@ Use ``res.shell_options`` to select the source and thickness value::
 
 The default source is ``"auto"``: prefer stored tensors, otherwise recover or
 interpolate. ``"stored"`` and ``"recomputed"`` explicitly require that source.
-The default ``"abs_max"`` reduction selects the largest absolute component
-value, retaining its sign; ``"max"`` and ``"min"`` are also supported. Invariants
+The default reads the top face (``reduction=None``, ``position=1``). The
+``"abs_max"`` reduction selects the largest absolute component value, retaining
+its sign, the first thickness point winning equal magnitudes; ``"max"`` and
+``"min"`` are also supported. Invariants
 and principal values are evaluated at each point before reduction. A reduction
 ignores point selection; without a reduction, give ``position`` or
 ``point_index``, not both. Updating either selector clears the other.

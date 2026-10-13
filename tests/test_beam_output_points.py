@@ -280,7 +280,7 @@ def test_pipe_sampling_follows_both_varying_radii(tmp_path):
     np.testing.assert_allclose(restored["Stress"], expected)
 
 
-def test_shell_default_reduction_selects_largest_face_stress():
+def test_shell_default_read_selects_top_face_stress():
     fd.ModelingSpace("3D")
     material = fd.constitutivelaw.ElasticIsotrop(1000, 0.25)
     section = fd.constitutivelaw.ShellHomogeneous(material, thickness=2)
@@ -300,8 +300,10 @@ def test_shell_default_reduction_selects_largest_face_stress():
     top = pb.get_results(assembly, ["Stress"], position=1)
     default = pb.get_results(assembly, ["Stress"])
     bottom = pb.get_results(assembly, ["Stress"], position=-1)
+    np.testing.assert_allclose(default["Stress", "XX"], top["Stress", "XX"])
+    assert np.all(default["Stress", "XX"] < bottom["Stress", "XX"])
+    default.shell_options.update(reduction="abs_max")
     np.testing.assert_allclose(default["Stress", "XX"], bottom["Stress", "XX"])
-    assert np.all(default["Stress", "XX"] > top["Stress", "XX"])
 
 
 def test_stored_element_recovery_and_ambiguous_nodal_frames():

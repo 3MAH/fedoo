@@ -181,8 +181,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         delta_rotvec_nodes = pb._get_vect_component(pb.get_X(), "Rot")
         delta_rotvec = delta_rotvec_nodes.T[mesh.elements].mean(axis=1)
 
+        # Local axes are rows: a spatial rotation Q updates R to R Q.T.
         rigid_rotmat_trial = assembly.sv["RigidRotationMat"] @ (
-            Rotation.from_rotvec(delta_rotvec).as_matrix()
+            Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(0, 2, 1)
         )
 
         current_local_frame = mesh.get_element_local_frame()

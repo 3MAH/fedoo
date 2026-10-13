@@ -23,15 +23,16 @@ def validate_positions(position):
 class ShellOptions(BeamOptions):
     """Shell thickness selection for dataset stress and strain reads.
 
-    Reductions follow :class:`BeamOptions`: signed ``'abs_max'`` is the default,
-    with ``'max'`` and ``'min'`` also available. Full tensors are reduced
-    componentwise; their components may come from different thickness points.
-    Requested invariants are evaluated at each point before reduction, whereas
-    invariants computed from the envelope are not guaranteed conservative.
+    The default reads the top face: ``reduction=None`` with ``position=1``.
+    Reductions follow :class:`BeamOptions`: signed ``'abs_max'``, ``'max'`` and
+    ``'min'``. Full tensors are reduced componentwise; their components may
+    come from different thickness points. Requested invariants are evaluated
+    at each point before reduction, whereas invariants computed from the
+    envelope are not guaranteed conservative.
 
     A reduction ignores point selection. To read one point, set
     ``reduction=None`` with normalized thickness ``position`` in [-1, 1] or a
-    zero-based ``point_index``. Both selectors default to None. Sources follow
+    zero-based ``point_index``; ``point_index`` defaults to None. Sources follow
     :class:`BeamOptions`; ``samples=3`` controls recomputed sampling per layer.
     ``stored_position`` is ``'interpolated'`` (default), ``'nearest'`` or
     ``'exact'``. Nonlinear stresses are interpolated within each material layer.
@@ -48,6 +49,8 @@ class ShellOptions(BeamOptions):
         super().__init__()
         dict.update(self, samples=3, extrapolate=True)
         dict.update(self, stored_position="interpolated", reference_point_index=None)
+        # Top face by default, as before multi-point outputs.
+        dict.update(self, reduction=None, position=1.0)
         if values:
             self.update(values)
 
