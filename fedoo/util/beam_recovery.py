@@ -32,11 +32,10 @@ def validate_positions(position):
 class BeamOptions(dict):
     """Beam section selection for dataset stress and strain reads.
 
-    ``reduction='signed_abs_max'`` is the default: each requested component retains
-    the signed value of largest magnitude across section points. ``'max'``
-    and ``'min'`` select algebraic extrema; ``'abs_max'`` returns the nonnegative
-    maximum absolute value. NaNs propagate for both absolute reductions.
-    With no component requested, all
+    ``reduction='abs_max'`` is the default: each requested component returns
+    its largest magnitude across section points, as a nonnegative value; NaNs
+    propagate. ``'max'`` and ``'min'`` select algebraic extrema and retain the
+    sign. With no component requested, all
     six tensor components are reduced independently, returning shape
     ``(6, n_locations)``. These extrema can come from different points and
     do not represent a stress or strain tensor at one physical location.
@@ -57,7 +56,7 @@ class BeamOptions(dict):
     def __init__(self, values=None):
         super().__init__(
             source="auto",
-            reduction="signed_abs_max",
+            reduction="abs_max",
             samples=32,
             position=None,
             point_index=None,
@@ -103,11 +102,8 @@ class BeamOptions(dict):
             "max",
             "min",
             "abs_max",
-            "signed_abs_max",
         ):
-            raise ValueError(
-                "reduction must be None, 'max', 'min', 'abs_max' or 'signed_abs_max'"
-            )
+            raise ValueError("reduction must be None, 'max', 'min' or 'abs_max'")
         if "stored_position" in changed and changed["stored_position"] not in (
             "nearest",
             "exact",
@@ -198,18 +194,8 @@ def reduce_section_tensors(tensors, kind, component, reduction):
         return np.max(value, axis=point_axis)
     if reduction == "min":
         return np.min(value, axis=point_axis)
-    # Equal magnitudes within round-off select the first point, so that the
-    # sign of a symmetric distribution (pure bending) is not decided by noise.
-    magnitude = np.abs(value)
-    peak = np.max(magnitude, axis=point_axis, keepdims=True)
-    if reduction == "abs_max":
-        return peak.squeeze(point_axis)
-    indices = np.argmax(magnitude >= peak * (1 - 1e-9), axis=point_axis, keepdims=True)
-    result = np.take_along_axis(value, indices, axis=point_axis).squeeze(point_axis)
-    # Selected signed values cannot exceed peak. This propagates NaNs without
-    # another scan of the section points or allocating another output array.
-    np.minimum(result, peak.squeeze(point_axis), out=result)
-    return result
+    # Unsigned: a sign would be arbitrary for symmetric distributions (bending).
+    return np.max(np.abs(value), axis=point_axis)
 
 
 def _polar_sampling_grid(samples, pipe):

@@ -167,8 +167,8 @@ class DataSet:
     beam_options : dict
         Section ``position`` (normalized (y, z)) or ``point_index``, mutually
         exclusive. ``source`` is 'auto', 'stored' or 'recomputed'. ``reduction``
-        is None, 'max', 'min', 'abs_max' (nonnegative), or 'signed_abs_max'
-        (default, retaining the selected sign).
+        is None, 'max', 'min' or 'abs_max' (default, nonnegative largest
+        magnitude).
         ``samples`` affects recomputed sampling only. Extrema are estimates.
     shell_options : dict
         Normalized thickness ``position`` in [-1, 1], or ``point_index``.
@@ -1544,7 +1544,7 @@ class DataSet:
     def beam_options(self):
         """Beam selection options; see :class:`fedoo.util.beam_recovery.BeamOptions`.
 
-        Default full-tensor reads return signed componentwise absolute extrema,
+        Default full-tensor reads return componentwise largest magnitudes,
         potentially from different section points. Scalar invariants are computed
         before reduction. Set reduction=None with position or point_index to
         obtain a tensor at one physical point instead.

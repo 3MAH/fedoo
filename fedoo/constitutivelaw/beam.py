@@ -434,7 +434,7 @@ class BeamProperties(ConstitutiveLaw):
 
         Returns a tensor with shape (6, n_section_points, n_beam_gauss_points).
         This method does not reduce section points. Dataset reads use
-        ``beam_options`` and default to signed componentwise absolute extrema
+        ``beam_options`` and default to componentwise largest magnitudes
         for a full tensor. Its components may come from different section points.
         Requested scalar invariants are computed before reduction; invariants
         of an already reduced tensor are not guaranteed conservative.
@@ -459,8 +459,8 @@ class BeamProperties(ConstitutiveLaw):
         """Recover local kinematic section strain without elastic properties.
 
         Returns all requested points without reduction, as in ``get_stress``.
-        Dataset ``beam_options`` instead default to componentwise signed
-        absolute extrema; these need not describe strain at a single point.
+        Dataset ``beam_options`` instead default to componentwise largest
+        magnitudes; these need not describe strain at a single point.
         """
 
         points = (

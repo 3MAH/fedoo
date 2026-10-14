@@ -41,11 +41,11 @@ def test_normalized_multi_point_output_and_scalar_rejection():
 
 
 @pytest.mark.parametrize("source", ["stored", "recomputed", "auto"])
-def test_signed_reduction_and_unambiguous_updates(source):
+def test_default_reduction_and_unambiguous_updates(source):
     data, _, _ = beam_data()
     data.beam_options.update(source=source)
     raw = data.gausspoint_data["Stress"][0]
-    expected = raw[0]  # first point wins equal-magnitude ties
+    expected = np.max(np.abs(raw), axis=0)  # default: unsigned magnitude
     np.testing.assert_allclose(data["Stress", "XX"], expected)
     data.beam_options.update(reduction=None, point_index=2)
     np.testing.assert_allclose(data["Stress", "XX"], raw[2])
@@ -302,7 +302,7 @@ def test_shell_default_read_selects_top_face_stress():
     bottom = pb.get_results(assembly, ["Stress"], position=-1)
     np.testing.assert_allclose(default["Stress", "XX"], top["Stress", "XX"])
     assert np.all(default["Stress", "XX"] < bottom["Stress", "XX"])
-    default.shell_options.update(reduction="signed_abs_max")
+    default.shell_options.update(reduction="abs_max")
     np.testing.assert_allclose(default["Stress", "XX"], bottom["Stress", "XX"])
 
 

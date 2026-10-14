@@ -35,7 +35,7 @@ def test_native_section_storage_is_shared_and_typed(tmp_path):
 def test_legacy_formats_preserve_section_metadata(tmp_path, monkeypatch, extension):
     monkeypatch.chdir(tmp_path)
     data, _ = dataset()
-    data.beam_options.update(reduction="signed_abs_max")
+    data.beam_options.update(reduction="abs_max")
     expected = data.get_data("Stress", "vm")
     path = tmp_path / ("beam." + extension)
     data.save(str(path))
@@ -324,14 +324,12 @@ def test_compression_maximum_and_maximum_absolute_are_distinct():
     np.testing.assert_allclose(data["Stress", "XX"], -1)
     data.beam_options["reduction"] = "min"
     np.testing.assert_allclose(data["Stress", "XX"], -9)
-    data.beam_options["reduction"] = "signed_abs_max"
-    np.testing.assert_allclose(data["Stress", "XX"], -9)
     data.beam_options.update(reduction="abs_max")
     np.testing.assert_allclose(data["Stress", "XX"], 9)
 
 
 @pytest.mark.parametrize("component", [None, 0])
-def test_absolute_reductions_preserve_nan_and_distinguish_sign(component):
+def test_abs_max_is_unsigned_and_preserves_nan(component):
     tensors = np.zeros((6, 2, 6))
     tensors[0] = np.array(
         [
@@ -343,18 +341,13 @@ def test_absolute_reductions_preserve_nan_and_distinguish_sign(component):
             [0, 0],
         ]
     ).T
-    for reduction, expected in (
-        ("signed_abs_max", [-12, -5, np.nan, np.inf, -np.inf, 0]),
-        ("abs_max", [12, 5, np.nan, np.inf, np.inf, 0]),
-    ):
-        options = BeamOptions({"reduction": reduction})
-        result = reduce_section_tensors(
-            tensors, "Stress", component, options["reduction"]
-        )
-        if component is None:
-            result = result[0]
-        np.testing.assert_allclose(result, expected)
-    assert BeamOptions()["reduction"] == "signed_abs_max"
+    result = reduce_section_tensors(tensors, "Stress", component, "abs_max")
+    if component is None:
+        result = result[0]
+    np.testing.assert_allclose(result, [12, 5, np.nan, np.inf, np.inf, 0])
+    assert BeamOptions()["reduction"] == "abs_max"
+    with pytest.raises(ValueError, match="reduction must be"):
+        BeamOptions({"reduction": "signed_abs_max"})
 
 
 def test_oblique_circle_maximum_converges_with_sampling():
@@ -487,7 +480,7 @@ def test_multiframe_metadata_and_selection_survive_reload(tmp_path):
     history = fd.read_data(path)
     history.beam_options.update(reduction=None, position=(1, 0))
     history.load(0)
-    history.beam_options.update(position=(0.0, 0.0), reduction="signed_abs_max")
+    history.beam_options.update(position=(0.0, 0.0), reduction="abs_max")
     np.testing.assert_allclose(history["Stress_global", "YY"], 9)
     history.load(1)
     np.testing.assert_allclose(history["Stress_global", "YY"], 18)

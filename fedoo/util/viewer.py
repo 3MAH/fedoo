@@ -1616,7 +1616,6 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Normalized coordinates (y, z)", "position"),
             ("Maximum", "max"),
             ("Minimum", "min"),
-            ("Largest magnitude (signed)", "signed_abs_max"),
             ("Largest magnitude", "abs_max"),
         ]
         for label, value in modes:
@@ -2194,7 +2193,6 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Point index", "point_index"),
             ("Maximum", "max"),
             ("Minimum", "min"),
-            ("Largest magnitude (signed)", "signed_abs_max"),
             ("Largest magnitude", "abs_max"),
         ):
             reduction.addItem(label, mode)

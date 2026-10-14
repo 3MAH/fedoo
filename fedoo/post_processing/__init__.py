@@ -101,7 +101,7 @@ Beam and shell section fields
 -----------------------------
 
 Requesting only ``Stress`` with ``position=None`` is sufficient for min/max and
-signed extrema over the saved section points. Generalized ``BeamStress`` and
+largest-magnitude reductions over the saved section points. Generalized ``BeamStress`` and
 ``ShellStress`` are not required for these stored reductions. Mixed meshes retain
 ordinary continuum stress fields alongside recovered beam/shell fields, including
 von Mises and principal components.
@@ -136,7 +136,7 @@ Use ``res.shell_options`` to select the source and thickness value::
     res.shell_options.update(reduction=None, position=0.25)
     stress = res.get_data("Stress", "XX")
     res.shell_options.update(reduction=None, point_index=0)
-    res.shell_options.update(source="recomputed", reduction="signed_abs_max", samples=11)
+    res.shell_options.update(source="recomputed", reduction="abs_max", samples=11)
     von_mises = res.get_data("Stress_global", "vm")
 
 The default source is ``"auto"``: prefer stored tensors, otherwise recover or
@@ -144,10 +144,9 @@ interpolate. ``"stored"`` and ``"recomputed"`` explicitly require that source.
 With ``reduction=None`` and no position/index, the default reads the sole saved
 thickness point, or the top face if multiple points or only generalized fields
 are available. Explicit positions are respected. The
-``"signed_abs_max"`` reduction selects the largest absolute component value, retaining
-its sign, the first thickness point winning equal magnitudes; ``"max"`` and
-``"min"`` select algebraic extrema. ``"abs_max"`` returns the nonnegative
-maximum magnitude. Both absolute reductions propagate NaNs. Invariants
+``"abs_max"`` reduction returns the largest absolute component value, without
+its sign, and propagates NaNs; ``"max"`` and ``"min"`` select algebraic
+extrema. Invariants
 and principal values are evaluated at each point before reduction. A reduction
 ignores point selection; without a reduction, an explicit ``position`` or
 ``point_index`` overrides automatic selection. Updating either clears the other.
@@ -348,10 +347,10 @@ preferences remain active when changing result frames.
   ``reference_submesh`` to its sampling reference. The reference remains strict;
   other submeshes use the preferred source when available, otherwise the other
   source. API selections remain strict by default (``source_fallback=False``).
-* ``reduction="signed_abs_max"`` (default) returns the value with the largest absolute
-  magnitude, retaining its sign. Equal-magnitude ties select the first output
-  point. ``"abs_max"`` returns the nonnegative maximum magnitude. Both propagate
-  NaNs. ``"max"`` and ``"min"`` use algebraic extrema.
+* ``reduction="abs_max"`` (default) returns the largest absolute magnitude as a
+  nonnegative value and propagates NaNs. ``"max"`` and ``"min"`` use algebraic
+  extrema and retain the sign (largest tension and largest compression for a
+  normal stress).
 * ``reduction=None`` selects one point using normalized ``position=(y,z)`` or
   zero-based ``point_index``. Supplying both non-None in one update is rejected.
   Selecting either clears the other. A reduction ignores both selectors.
@@ -377,8 +376,8 @@ For example::
     stress_at_nearest_saved_point = results["Stress", "XX"]
     results.beam_options.update(source="recomputed", position=(0.5, -0.25))
     stress_at_position = results["Stress", "XX"]
-    results.beam_options.update(reduction="signed_abs_max", samples=128)
-    signed_extreme = results["Stress", "XX"]
+    results.beam_options.update(reduction="abs_max", samples=128)
+    largest_magnitude = results["Stress", "XX"]
     maximum_vm = results["Stress", "vm"]
 
 Zero is the section origin; -1 and +1 select the respective negative and
