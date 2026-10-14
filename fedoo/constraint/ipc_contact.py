@@ -1358,12 +1358,15 @@ class IPCContact(AssemblyBase):
         that the ``dhat`` threshold keeps its meaning whatever the offset.
         Like ``compute_minimum_distance``, ipctk works with *squared*
         distances here: it compares its arguments to
-        ``(dhat_epsilon_scale * (bbox_diag + dmin))**2``.  The gaps are
-        therefore squared (they are positive: ``_build_collisions`` rejects
-        any separation not above ``dmin``) and ``dmin=0`` is passed, the
-        offset being already removed, so that the test reads
-        ``gap < dhat``.  Only called between time steps (in
-        ``set_start``), never inside the NR loop.
+        ``(dhat_epsilon_scale * (bbox_diag + dmin))**2``.  The ipctk
+        documentation calls these arguments minimum distances, but its
+        implementation (``adaptive_stiffness.cpp``, checked up to v1.6.0)
+        squares only the threshold, so squared distances are expected.
+        The gaps are therefore squared (they are positive:
+        ``_build_collisions`` rejects any separation not above ``dmin``)
+        and ``dmin=0`` is passed, the offset being already removed, so
+        that the test reads ``gap < dhat``.  Only called between time
+        steps (in ``set_start``), never inside the NR loop.
         """
         ipctk = _import_ipctk()
         bbox_diag = self._bbox_diag
