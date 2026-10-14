@@ -537,6 +537,15 @@ The :doc:`FDH5 file layout <fdh5>` describes the HDF5 groups and array
 conventions. That page is generated from the :mod:`fedoo.util.fdh5` module
 docstring, keeping the detailed format description alongside its implementation.
 
+The file structure below is illustrative: optional field and metadata groups
+are present only when the corresponding outputs have been saved.
+
+.. literalinclude:: /../fedoo/util/fdh5.py
+   :language: text
+   :start-after: .. code-block:: text
+   :end-before: Field arrays retain their Fedoo shapes.
+   :dedent: 4
+
 FDH5 section tensors retain their point axis: stored Stress/Strain arrays
 have shape ``(6, n_section_points, n_locations)`` when multiple section points
 are saved. Use ``results.get_data`` with ``beam_options`` or ``shell_options``
@@ -691,6 +700,10 @@ The viewer includes the following tools and features:
   through the display thickness; this does not recover distinct face stresses
   or change the simulation mesh. Save shell stress/strain or generalized
   shell fields to include the section metadata needed for this display.
+  Clicking a top/bottom display node reports its original node ID and the
+  displayed field under the current section selection. Gauss-point displays
+  retain element discontinuities; Element displays report adjacent element
+  values at a shared node.
 * Show or hide elements from predefined sets, rectangular selections,
   or arbitrary expressions.
 * Plot results along an interactively defined line.

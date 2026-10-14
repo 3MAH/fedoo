@@ -146,6 +146,10 @@ semantic versioning.
 
 ### Fixed
 
+- Viewer node picking on thickened shells maps top/bottom display points to
+  original node ids and reads the displayed field under the current section
+  selection. Gauss-point values retain discontinuities; Element displays
+  report adjacent element values at shared nodes.
 - FDH5 output retries temporary file-lock conflicts with a live viewer instead
   of failing immediately. Eager mesh/frame reads use one short-lived handle;
   HDF5 locking remains enabled. Retries are bounded, and unrelated I/O errors

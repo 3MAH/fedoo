@@ -157,22 +157,35 @@ __________________________________
 Analyse and export results
 ________________________________
 
-Retrieve the fields from the solved problem and open them in the Fedoo viewer:
+Install the viewer dependencies once with ``pip install "fedoo[plot,gui]"``.
+After solving, retrieve the fields, save them if needed, and launch the viewer
+directly from Python:
 
 .. code-block:: python
 
     results = pb.get_results(my_assembly, ["Disp", "Stress", "Strain"])
+    results.save("cantilever.fdh5")  # optional: save before launching the GUI
     fd.viewer(results)
 
-Install the viewer dependencies with ``pip install "fedoo[plot,gui]"``.
 The viewer provides field/component selection, deformation scaling and
-image export. It can also open saved results:
+image export. In a later Python session, open the saved file directly:
 
 .. code-block:: python
 
-    results.save("cantilever.fdh5")
-    # In a later session:
+    import fedoo as fd
+
     fd.viewer("cantilever.fdh5")
+
+To launch the viewer independently from a terminal, run:
+
+.. code-block:: console
+
+    python -m fedoo.viewer
+
+Then use **File > Open** to select ``cantilever.fdh5``. Calling ``fd.viewer()``
+from Python also opens an empty viewer. In a standalone script, the viewer
+runs until its window is closed; perform saving or other computations before
+launching it.
 
 For external tools such as ParaView, export a VTK file with
 ``results.save("cantilever.vtk")``. See

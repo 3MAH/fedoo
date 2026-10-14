@@ -88,6 +88,36 @@ def _data_n_iter(data):
     return getattr(data, "n_iter", 1)
 
 
+def _picked_node_value(dock, point, picker):
+    """Read the clicked actor's displayed value and original physical node id."""
+    mesh = pv.wrap(picker.GetDataSet())
+    displayed_id = picker.GetPointId()
+    if mesh is None or displayed_id < 0:
+        return None, None, None
+    if dock.opts.get("clip_args") or "_fedoo_node_ids" not in mesh.point_data:
+        coordinates = dock.data.mesh.nodes.astype(float, copy=True)
+        if "Disp" in dock.data.node_data:
+            coordinates += dock.opts["scale"] * dock.data.node_data["Disp"].T
+        coordinates = np.pad(coordinates, ((0, 0), (0, 3 - coordinates.shape[1])))
+        node_id = int(np.linalg.norm(coordinates - point, axis=1).argmin())
+    else:
+        node_id = int(mesh.point_data["_fedoo_node_ids"][displayed_id])
+    if dock.current_field is None:
+        return node_id, None, None
+    if dock.current_data_type == "Element":
+        if "Data" not in mesh.cell_data:
+            return node_id, None, None
+        cells = vtk.vtkIdList()
+        mesh.GetPointCells(displayed_id, cells)
+        values = mesh.cell_data["Data"][
+            [cells.GetId(i) for i in range(cells.GetNumberOfIds())]
+        ]
+        return node_id, values, "adjacent elements"
+    if "Data" in mesh.point_data:
+        return node_id, mesh.point_data["Data"][displayed_id], None
+    return node_id, None, None
+
+
 def _refresh_result_frames(data, reload_current=False):
     """Discover FDH5 frames without reading their fields or computing histories.
 
@@ -3455,43 +3485,31 @@ class MainWindow(QtWidgets.QMainWindow):
     def _pick_node(self):
         """Start one-shot picking to select node"""
 
-        def _picked(point):
-            mesh = self.active_dock.pv_mesh
-            try:
-                if self.opts["clip_args"]:
-                    # the mesh have been reconstructed, have to find nodes
-                    # in the original mesh
-                    if "Disp" in self.data.node_data:
-                        crd = self.data.mesh.nodes + self.data["Disp"].T
-                        pid = np.linalg.norm(crd - point, axis=1).argmin()
-                    else:
-                        pid = self.data.mesh.nearest_node(point)
-                else:
-                    pid = mesh.find_closest_point(point)
-                    if self.current_data_type == "GaussPoint" and not _is_multimesh(
-                        self.data.mesh
-                    ):
-                        pid = self.data.mesh.elements.ravel()[pid]
-            except Exception:
-                pid = None
-
-            if mesh is not None and pid is not None and pid >= 0:
+        def _picked(point, picker):
+            pid, value, association = _picked_node_value(
+                self.active_dock, point, picker
+            )
+            if pid is not None:
                 msg = f"Node id={pid} | "
             else:
                 msg = ""
             msg += f"x={point[0]:.3g}, y={point[1]:.3g}, z={point[2]:.3g}"
             name = self.current_field
-            if name and pid is not None:
-                msg += (
-                    f" | {name}={self.data[name, self.current_component, 'Node'][pid]}"
-                )
+            if name and value is not None:
+                msg += f" | {name}={value}"
+                if association:
+                    msg += f" ({association})"
 
             self.statusBar().showMessage(msg)
 
         # Enable one-shot point picking (left click)
         self.plotter.disable_picking()
         self.plotter.enable_point_picking(
-            callback=_picked, left_clicking=True, show_message=False, picker="point"
+            callback=_picked,
+            left_clicking=True,
+            show_message=False,
+            picker="point",
+            use_picker=True,
         )
 
     def _pick_element(self):

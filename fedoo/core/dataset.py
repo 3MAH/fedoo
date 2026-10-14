@@ -808,6 +808,18 @@ class DataSet:
 
             center = 0.5 * (meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
 
+        # Carry physical node ids through duplicated GP nodes, thickening,
+        # element extraction and mixed-mesh rendering.
+        meshplot.point_data["_fedoo_node_ids"] = (
+            self.mesh.elements.ravel()
+            if data_type == "GaussPoint"
+            else np.arange(self.mesh.n_nodes)
+        )
+        if data_type == "Element":
+            meshplot.cell_data["Data"] = data
+        elif data_type:
+            meshplot.point_data["Data"] = data
+
         if extra_cell_data:
             for key, value in extra_cell_data.items():
                 meshplot.cell_data[key] = np.asarray(value)
