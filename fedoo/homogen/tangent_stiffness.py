@@ -156,6 +156,9 @@ def get_tangent_stiffness(pb=None, meshperio=True, **kargs):
         pass  # no direct backend available, fall back to per-iteration solves
 
     for i in range(len(BC_perturb)):
+        # the generalized forces of several Neumann bc are summed: the
+        # previous perturbation should be removed
+        pb_post_tt.bc.remove("_Strain")
         pb_post_tt.bc.add(
             typeBC,
             "E_xx",

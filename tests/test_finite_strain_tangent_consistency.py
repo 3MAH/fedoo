@@ -337,8 +337,17 @@ _CASES = [
 ]
 
 
-@pytest.mark.parametrize("law, corate", _CASES)
-@pytest.mark.parametrize("nlgeom", ["TL", "UL"])
+# UL runs the rate formulation, with a corate; TL runs the total one, which has none (the
+# native law keeps the log_r rate update there)
+_FORMULATION_CASES = [
+    pytest.param("UL", *c.values, id=f"UL-{c.id}") for c in _CASES
+] + [
+    pytest.param("TL", law, None, id=f"TL-{law}")
+    for law in ("NEOHC", "ELISO", "FEDOO_ELISO", "EPICP")
+]
+
+
+@pytest.mark.parametrize("nlgeom, law, corate", _FORMULATION_CASES)
 def test_finite_strain_tangent_is_fd_consistent(nlgeom, law, corate):
     err = _fd_tangent_error(nlgeom, law, corate)
     assert err < 1e-6, (
@@ -406,6 +415,44 @@ def test_native_elastic_matches_simcoon_eliso_at_finite_volume():
     )
 
 
+def test_native_elastic_matches_simcoon_after_incremental_rigid_rotation():
+    """A rigid rotation after a stretch must rotate trial and committed stresses alike."""
+    space = fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    stretch = np.diag([1.1, 1.0, 1.0])
+    rotation = simcoon.Rotation.from_euler("z", 90.0, degrees=True).as_matrix()
+    stresses = []
+    for material in (
+        fd.constitutivelaw.ElasticIsotrop(8.7, 0.3),
+        fd.constitutivelaw.Simcoon("ELISO", [8.7, 0.3, 0.0]),
+    ):
+        wf = fd.weakform.StressEquilibrium(material, nlgeom="UL", space=space)
+        wf.corate = "log_r_inc"
+        assembly = fd.Assembly.create(wf, mesh)
+        pb = fd.problem.NonLinear(assembly)
+        pb.initialize()
+        pb.dtime = 1.0
+        pb.set_start()
+        n = assembly.n_gauss_points
+        for F, DR, increment in (
+            (stretch, np.eye(3), np.log(1.1)),
+            (rotation @ stretch, rotation, 0.0),
+        ):
+            assembly.sv["F"] = np.repeat(F[:, :, None], n, axis=2)
+            assembly.sv["DR"] = np.repeat(DR[:, :, None], n, axis=2)
+            assembly.sv["DispGradient"] = assembly.sv["F"] - np.eye(3)[:, :, None]
+            dstrain = np.zeros((6, n))
+            dstrain[0] = increment
+            assembly.sv["DStrain"] = StrainTensorList(dstrain)
+            material.update(assembly, pb)
+            trial = assembly.sv["Stress"].asarray().copy()
+            wf.set_start(assembly, pb)
+            assembly.sv_start = dict(assembly.sv)
+        stresses.append((trial, assembly.sv["Stress"].asarray().copy()))
+
+    np.testing.assert_allclose(stresses[0], stresses[1], rtol=1e-12, atol=1e-12)
+
+
 def test_heterogeneous_finite_strain_initializes_F_for_all_phases():
     """A UMAT phase must not leave a native phase with a singular initial F."""
 
@@ -453,10 +500,10 @@ def test_convert_tangent_false_preserves_user_tangent_in_tl():
     )
 
 
-def _fd_history_tangent_error(gamma1, corate, n_inc=4, dgamma=0.05):
+def _fd_history_tangent_error(gamma1, corate, n_inc=4, dgamma=0.05, nlgeom="UL"):
     """FD consistency WITH committed plastic history (rotating simple shear).
 
-    EPICP cube, UL: n_inc committed increments to gamma1 (set_start after
+    EPICP cube: n_inc committed increments to gamma1 (set_start after
     each: stress rotated, statev stored), then ONE more increment solved
     WITHOUT set_start; central FD of the assembled vector around its
     converged endpoint, exactly like _fd_tangent_error.
@@ -469,8 +516,11 @@ def _fd_history_tangent_error(gamma1, corate, n_inc=4, dgamma=0.05):
 
     material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
     material.tangent_mode = 2
-    wf = fd.weakform.StressEquilibrium(material, nlgeom="UL")
-    wf.corate = corate
+    wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
+    if (
+        corate is not None
+    ):  # None: nlgeom="TL", the total formulation, which has no rate
+        wf.corate = corate
     assembly = fd.Assembly.create(wf, mesh, name="asm")
 
     pb = fd.problem.NonLinear("asm")
@@ -535,7 +585,10 @@ def _solved_stretch(nlgeom, corate):
     material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
     material.tangent_mode = 2
     wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
-    wf.corate = corate
+    if (
+        corate is not None
+    ):  # None: nlgeom="TL", the total formulation, which has no rate
+        wf.corate = corate
     assembly = fd.Assembly.create(wf, mesh, name="asm")
     pb = fd.problem.NonLinear("asm")
     pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
@@ -547,8 +600,9 @@ def _solved_stretch(nlgeom, corate):
     return assembly
 
 
-@pytest.mark.parametrize("corate", ["log_r", "jaumann"])
-@pytest.mark.parametrize("nlgeom", ["TL", "UL"])
+@pytest.mark.parametrize(
+    "nlgeom, corate", [("UL", "log_r"), ("UL", "jaumann"), ("TL", None)]
+)
 def test_tangent_returned_by_the_law_matches_the_weakform_conversion(
     nlgeom, corate, monkeypatch
 ):
@@ -568,3 +622,498 @@ def test_tangent_returned_by_the_law_matches_the_weakform_conversion(
     np.testing.assert_allclose(
         fused.sv["TangentMatrix"], Lt, rtol=0, atol=1e-10 * np.abs(Lt).max()
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# The committed state. A converged Cauchy stress lives in the end configuration and is
+# committed (and written to the results) as it is; the start state of the next increment is
+# transported with THAT increment's rotation, when the law is called.
+# ---------------------------------------------------------------------------------------------
+
+
+def _homogeneous_shear_states(nlgeom, corate, gamma, n_inc, law="ELISO", history=None):
+    """Every node driven in simple shear, n_inc increments solved one by one. Returns the
+    stress of the last increment as converged, then as committed by set_start. ``history``
+    collects the converged stress of every increment."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+    if law == "ELISO":
+        material = fd.constitutivelaw.Simcoon("ELISO", [70000.0, 0.3, 1e-5], name="law")
+    else:
+        material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
+        material.tangent_mode = 2
+    wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
+    if (
+        corate is not None
+    ):  # None: nlgeom="TL", the total formulation, which has no rate
+        wf.corate = corate
+    assembly = fd.Assembly.create(wf, mesh, name="asm")
+    pb = fd.problem.NonLinear("asm")
+    pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
+    nodes = np.arange(mesh.n_nodes)
+    pb.bc.add("Dirichlet", nodes, "DispX", gamma * mesh.nodes[:, 2])
+    pb.bc.add("Dirichlet", nodes, "DispY", 0)
+    pb.bc.add("Dirichlet", nodes, "DispZ", 0)
+    pb.initialize()
+    pb.tmax = 1.0
+    pb.dtime = 1.0 / n_inc
+    pb.set_start()
+    pb.time = 0.0
+    for i in range(n_inc):
+        conv, _, _ = pb.solve_time_increment()
+        assert conv
+        converged = assembly.sv["Stress"].asarray().copy()
+        if history is not None:
+            history.append(converged)
+        work = np.asarray(assembly.sv["Wm"]).copy()
+        pb.set_start()
+        pb.time = (i + 1) * pb.dtime
+    return converged, assembly.sv["Stress"].asarray().copy(), work, assembly
+
+
+def _elastic_shear_reference(gamma):
+    F = np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    b, N = np.linalg.eigh(F @ F.T)
+    lnV = N @ np.diag(0.5 * np.log(b)) @ N.T
+    strain = np.array(
+        [lnV[0, 0], lnV[1, 1], lnV[2, 2], 2 * lnV[0, 1], 2 * lnV[0, 2], 2 * lnV[1, 2]]
+    )
+    return simcoon.L_iso([70000.0, 0.3], "Enu") @ strain, strain
+
+
+@pytest.mark.parametrize(
+    "nlgeom, corate",
+    [("UL", c) for c in ("log_r", "log", "log_r_inc", "log_inc", "jaumann", "gn")]
+    + [("TL", None)],
+)
+def test_committed_stress_is_the_converged_stress(nlgeom, corate):
+    """set_start used to rotate the converged stress once more by the increment's rotation:
+    7 % on s_xx here, and that was the stress written to the result files."""
+    converged, committed, _, assembly = _homogeneous_shear_states(
+        nlgeom, corate, 0.6, 12
+    )
+    np.testing.assert_array_equal(committed, converged)
+    if nlgeom == "TL":
+        np.testing.assert_allclose(
+            np.asarray(assembly.sv["PK2"].asarray()),
+            np.asarray(assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"]).asarray()),
+            atol=1e-9,
+        )
+
+
+@pytest.mark.parametrize("corate", ["log_r", "log"])
+def test_elastic_shear_is_exact_with_the_total_log_strain(corate):
+    """Isotropic elasticity on ln V recomputed from F: tau = L : ln V at any step, as
+    converged and as committed, with a work equal to the stored energy at second order."""
+    exact, strain = _elastic_shear_reference(0.6)
+    scale = np.abs(exact).max()
+    errors = []
+    for n_inc in (12, 48):
+        _, committed, work, _ = _homogeneous_shear_states("UL", corate, 0.6, n_inc)
+        np.testing.assert_allclose(committed[:, 0], exact, atol=1e-10 * scale)
+        errors.append(abs(work[0, 0] - 0.5 * exact @ strain))
+    assert errors[1] < errors[0] / 8.0
+
+
+def test_incremental_log_strain_converges_to_the_total_one():
+    """ "log_inc" accumulates the logarithmic strain increment by increment. The start strain
+    must be carried by the rotation of the increment being solved; left in the start
+    configuration it gave 4 % of error on this stress at 12 increments instead of 0.1 %.
+    The increment is first order or closed form depending on the simcoon version."""
+    exact, _ = _elastic_shear_reference(0.6)
+    scale = np.abs(exact).max()
+    err = [
+        np.abs(
+            _homogeneous_shear_states("UL", "log_inc", 0.6, n)[0][:, 0] - exact
+        ).max()
+        for n in (12, 48)
+    ]
+    assert err[0] < 2e-3 * scale
+    assert err[1] < max(err[0] / 3.0, 1e-9 * scale)
+
+
+def _objective_rate_returns_the_solver_increment():
+    """simcoon's objective_rate used to return its own strain increment, which did not
+    accumulate to ln V under "log_R". The corrected one is closed form under "log": one
+    increment from the identity gives ln V exactly."""
+    F = np.array([[1.0, 0.0, 0.6], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    de = np.asarray(simcoon.objective_rate("log", np.eye(3), F, 1.0, True)[0]).ravel()
+    return np.allclose(de, _elastic_shear_reference(0.6)[1], rtol=0.0, atol=1e-10)
+
+
+def test_incremental_log_r_follows_the_total_one_through_plasticity():
+    """ "log_r_inc" and "log_r" are the same law integrated from an increment or from the total
+    strain: through a plastic simple shear their stresses converge to each other."""
+    if not _objective_rate_returns_the_solver_increment():
+        pytest.skip(
+            "this simcoon returns a log_R increment that does not accumulate to ln V"
+        )
+    reference = _homogeneous_shear_states("UL", "log_r", 0.6, 192, law="EPICP")[0][:, 0]
+    err = [
+        np.abs(
+            _homogeneous_shear_states("UL", "log_r_inc", 0.6, n, law="EPICP")[0][:, 0]
+            - reference
+        ).max()
+        for n in (12, 48)
+    ]
+    assert err[1] < err[0] / 3.0
+    assert err[1] < 6e-3 * np.abs(reference).max()
+
+
+def test_start_stress_is_transported_with_the_current_rotation():
+    """The law receives the committed stress carried by the rotation of the increment being
+    solved. It used to receive it carried by the rotation of the previous increment."""
+    from simcoon import Rotation
+
+    calls = []
+    original = fd.constitutivelaw.Simcoon._call_umat
+
+    def spy(self, etot, detot, F0, F1, stress, DR, *args, **kwargs):
+        calls.append((np.array(stress), np.array(DR)))
+        return original(self, etot, detot, F0, F1, stress, DR, *args, **kwargs)
+
+    history = []
+    fd.constitutivelaw.Simcoon._call_umat = spy
+    try:
+        _homogeneous_shear_states("UL", "log_r", 0.6, 6, law="EPICP", history=history)
+    finally:
+        fd.constitutivelaw.Simcoon._call_umat = original
+    # last call = last iteration of the last increment, started from the 5th converged state
+    stress, DR = calls[-1]
+    expected = Rotation.from_matrix(DR.transpose(2, 0, 1)).apply_stress(history[-2])
+    assert np.abs(history[-2]).max() > 100.0
+    assert np.abs(expected - history[-2]).max() > 1.0  # the rotation is not negligible
+    np.testing.assert_allclose(stress, expected, atol=1e-9)
+
+
+# ---------------------------------------------------------------------------------------------
+# nlgeom="TL": the total formulation, the strain-space framework of Miehe, Apel and Lambrecht
+# (2002). The law works on ln U on the reference frame and on the stress T dual to it, where
+# nlgeom="UL" (the rate formulation) works on ln V and the Kirchhoff stress. The tangent is
+# P^T (dT/dH) P + T:L, whose geometric term has no counterpart in the log_r map.
+# ---------------------------------------------------------------------------------------------
+
+
+# The total formulation needs a simcoon that provides it (after 2.1); with an older one
+# nlgeom="TL" keeps the log_r rate update.
+_needs_total_formulation = pytest.mark.skipif(
+    not hasattr(simcoon, "total_formulation_serves"),
+    reason="the installed simcoon has no total formulation",
+)
+
+
+@_needs_total_formulation
+def test_total_formulation_tangent_with_plastic_history():
+    """Committed plastic shear increments, then the tangent of one more: T is not coaxial
+    with U here, so the geometric term T:L and the dual-stress recovery are both loaded.
+    (The log_r rate update that TL keeps with simcoon 2.1 does not pass this check: its dS/dE
+    is not symmetric in a non-coaxial state, which the TL assembly assumes.)"""
+    err = _fd_history_tangent_error(0.2, None, nlgeom="TL")
+    assert err < 1e-6, f"TL EPICP with plastic history: FD error {err:.3e}"
+
+
+def _homogeneous_shear(nlgeom, corate, gamma=0.6, n_inc=12, law="EPICP"):
+    """Every node driven in simple shear: one homogeneous F, n_inc equal increments."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+    if law == "EPICP":
+        material = fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS, name="law")
+    elif law == "NEOHC":
+        material = fd.constitutivelaw.Simcoon("NEOHC", [1000.0, 5000.0], name="law")
+    elif law == "MODUL":
+        from simcoon.modular import elastoplastic_model
+
+        E, nu, alpha, sigma_Y, k, m = EPICP_PROPS
+        material = fd.constitutivelaw.Simcoon.from_modular(
+            elastoplastic_model(E=E, nu=nu, sigma_Y=sigma_Y, k=k, m=m, alpha=alpha),
+            tangent_mode=2,
+            name="law",
+        )
+    else:
+        material = fd.constitutivelaw.Simcoon("ELISO", [70000.0, 0.3, 1e-5], name="law")
+    material.tangent_mode = 2
+    wf = fd.weakform.StressEquilibrium(material, nlgeom=nlgeom)
+    if (
+        corate is not None
+    ):  # None: nlgeom="TL", the total formulation, which has no rate
+        wf.corate = corate
+    assembly = fd.Assembly.create(wf, mesh, name="asm")
+    pb = fd.problem.NonLinear("asm")
+    pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
+    nodes = np.arange(mesh.n_nodes)
+    pb.bc.add("Dirichlet", nodes, "DispX", gamma * mesh.nodes[:, 2])
+    pb.bc.add("Dirichlet", nodes, "DispY", 0)
+    pb.bc.add("Dirichlet", nodes, "DispZ", 0)
+    pb.nlsolve(dt=1.0 / n_inc, tmax=1.0, update_dt=False, print_info=0)
+    return assembly
+
+
+@_needs_total_formulation
+def test_total_formulation_reproduces_the_simcoon_solver():
+    """Homogeneous plastic simple shear in TL: the Gauss-point state is the one simcoon's own
+    solver integrates under its total formulation, with the same increments."""
+    from simcoon.solver import Block, StepMeca
+
+    gamma, n_inc = 0.6, 12
+    assembly = _homogeneous_shear("TL", None, gamma, n_inc)
+    F = [1.0, gamma, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    step = StepMeca(
+        control="F", value=F, time=1.0, ninc=n_inc, Dn_init=1.0, Dn_mini=1e-6
+    )
+    # fedoo shears x along z: simcoon's 1-2 plane is fedoo's 1-3 plane
+    ref = simcoon.solver.solve(
+        Block(steps=[step], control_type="F"),
+        "EPICP",
+        np.array(EPICP_PROPS),
+        8,
+        T_init=0.0,
+        kinematic_form="total",
+    )["Stress"][:, -1]
+    stress = assembly.sv["Stress"].asarray()
+    expected = np.array([ref[0], ref[2], ref[1], ref[4], ref[3], ref[5]])
+    np.testing.assert_allclose(
+        stress, expected[:, None] * np.ones((1, stress.shape[1])), atol=1e-6
+    )
+    # ln U, not ln V, is what the law was fed
+    U = np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    c, N = np.linalg.eigh(U.T @ U)
+    H = N @ np.diag(0.5 * np.log(c)) @ N.T
+    np.testing.assert_allclose(
+        assembly.sv["Strain"].asarray()[:, 0],
+        [H[0, 0], H[1, 1], H[2, 2], 2 * H[0, 1], 2 * H[0, 2], 2 * H[1, 2]],
+        atol=1e-12,
+    )
+
+
+def test_total_formulation_elastic_shear_is_exact_at_any_step():
+    """Isotropic elasticity in simple shear: tau = L : ln V. The strain is a state function of
+    F, so one increment gives it to round-off."""
+    gamma = 0.6
+    F = np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    b, N = np.linalg.eigh(F @ F.T)
+    lnV = N @ np.diag(0.5 * np.log(b)) @ N.T
+    exact = simcoon.L_iso([70000.0, 0.3], "Enu") @ np.array(
+        [lnV[0, 0], lnV[1, 1], lnV[2, 2], 2 * lnV[0, 1], 2 * lnV[0, 2], 2 * lnV[1, 2]]
+    )
+    scale = np.abs(exact).max()
+    for n_inc in (1, 12):
+        stress = (
+            _homogeneous_shear("TL", None, gamma, n_inc, law="ELISO")
+            .sv["Stress"]
+            .asarray()
+        )
+        np.testing.assert_allclose(
+            stress, exact[:, None] * np.ones((1, stress.shape[1])), atol=1e-10 * scale
+        )
+
+
+@_needs_total_formulation
+def test_a_modular_material_runs_the_total_formulation_in_tl():
+    """A modular J2 material is the EPICP box: in TL it runs the total formulation and gives
+    the same stress."""
+    modular = _homogeneous_shear("TL", None, law="MODUL")
+    assert modular.weakform.kinematic_form == "total"
+    stress = modular.sv["Stress"].asarray().copy()
+    reference = _homogeneous_shear("TL", None, law="EPICP").sv["Stress"].asarray()
+    np.testing.assert_allclose(stress, reference, atol=1e-6 * np.abs(reference).max())
+
+
+@_needs_total_formulation
+def test_total_formulation_with_a_local_material_frame_matches_the_simcoon_solver():
+    """Orthotropic elasticity with rotated material axes, in simple shear under nlgeom="TL".
+    The axes are directions of the reference configuration: the law sees ln U in that frame
+    and nothing is convected. Same stress as the simcoon solver given the same orientation,
+    in any number of increments."""
+    from simcoon.solver import Block, StepMeca
+
+    props = [
+        150000.0,
+        10000.0,
+        10000.0,
+        0.3,
+        0.3,
+        0.45,
+        5000.0,
+        5000.0,
+        3500.0,
+        0,
+        0,
+        0,
+    ]
+    gamma = 0.6
+    orientation = simcoon.Rotation.from_euler("zxz", [30.0, 50.0, 20.0], degrees=True)
+    step = StepMeca(
+        control="F", value=[1.0, 0.0, gamma, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], ninc=2
+    )
+    reference = simcoon.solver.solve(
+        Block(steps=[step], control_type="F"),
+        "ELORT",
+        np.array(props),
+        1,
+        orientation=orientation,
+        kinematic_form="total",
+        record_tangent=False,
+    )["Kirchhoff"][:, -1]  # det F = 1: Kirchhoff is Cauchy
+
+    for n_inc in (1, 4):
+        fd.Assembly.delete_memory()
+        fd.ModelingSpace("3D")
+        mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+        material = fd.constitutivelaw.Simcoon("ELORT", props, name="law")
+        material.local_frame = orientation.as_matrix()
+        wf = fd.weakform.StressEquilibrium(material, nlgeom="TL")
+        assembly = fd.Assembly.create(wf, mesh, name="asm")
+        pb = fd.problem.NonLinear("asm")
+        pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-10, max_subiter=30)
+        nodes = np.arange(mesh.n_nodes)
+        pb.bc.add("Dirichlet", nodes, "DispX", gamma * mesh.nodes[:, 2])
+        pb.bc.add("Dirichlet", nodes, "DispY", 0)
+        pb.bc.add("Dirichlet", nodes, "DispZ", 0)
+        pb.nlsolve(dt=1.0 / n_inc, tmax=1.0, update_dt=False, print_info=0)
+        assert wf.kinematic_form == "total"
+        stress = assembly.sv["Stress"].asarray()
+        np.testing.assert_allclose(
+            stress,
+            reference[:, None] * np.ones((1, stress.shape[1])),
+            atol=1e-9 * np.abs(reference).max(),
+        )
+
+
+def _polar_rotation(F):
+    c, N = np.linalg.eigh(F.T @ F)
+    return F @ N @ np.diag(1.0 / np.sqrt(c)) @ N.T
+
+
+@_needs_total_formulation
+def test_the_two_formulations_read_one_box_differently():
+    """Plastic simple shear, where the stress is not coaxial with the stretch. The box and its
+    strain are the same in TL (total) and in UL with log_r (rate): its output is T in one and
+    the rotated Kirchhoff stress in the other, R^T tau_rate R = T_total, whatever the step.
+    The two Cauchy stresses therefore differ, and the gap does not close with the step."""
+    gamma = 0.6
+    R = _polar_rotation(np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
+    gap = []
+    for n_inc in (12, 48):
+        total = _homogeneous_shear("TL", None, gamma, n_inc)
+        s_total = total.sv["Stress"]
+        assert (
+            total.weakform.kinematic_form == "total" and total.weakform.corate is None
+        )
+        T = s_total.cauchy_to_log_stress_u(total.sv["F"])
+        np.testing.assert_allclose(
+            T.log_stress_u_to_cauchy(total.sv["F"]).asarray(),
+            s_total.asarray(),
+            atol=1e-9,
+        )
+        T = T.asarray()
+        s_total = s_total.asarray().copy()
+        rate = _homogeneous_shear("UL", "log_r", gamma, n_inc)
+        assert rate.weakform.kinematic_form == "rate"
+        s_rate = rate.sv["Stress"].asarray()
+        box_rate = R.T @ _sig_to_mat(s_rate[:, 0]) @ R  # J = 1 in simple shear
+        np.testing.assert_allclose(
+            _sig_to_mat(T[:, 0]), box_rate, atol=1e-6 * np.abs(s_rate).max()
+        )
+        gap.append(np.abs(s_total - s_rate).max())
+        assert gap[-1] > 1e-3 * np.abs(s_rate).max()
+    assert gap[1] > 0.8 * gap[0]
+
+
+@_needs_total_formulation
+def test_a_law_built_on_F_is_the_same_in_both_formulations():
+    """NEOHC is a function of F alone: TL (total) and UL (rate) give the same stress."""
+    total = _homogeneous_shear("TL", None, 0.6, 4, law="NEOHC")
+    assert total.weakform.kinematic_form == "total"
+    s_total = total.sv["Stress"].asarray().copy()
+    s_rate = (
+        _homogeneous_shear("UL", "log_r", 0.6, 4, law="NEOHC").sv["Stress"].asarray()
+    )
+    np.testing.assert_allclose(s_total, s_rate, atol=1e-8 * np.abs(s_rate).max())
+
+
+@_needs_total_formulation
+def test_the_total_lagrangian_method_takes_no_corate():
+    with pytest.raises(ValueError, match="no rate"):
+        _homogeneous_shear("TL", "log_r", n_inc=1)
+
+
+def test_a_law_without_the_total_formulation_keeps_the_rate_update_in_tl():
+    """A native law does not declare the total formulation: TL runs it as before."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+    material = fd.constitutivelaw.ElasticIsotrop(8.7, 0.3, name="law")
+    wf = fd.weakform.StressEquilibrium(material, nlgeom="TL")
+    fd.Assembly.create(wf, mesh, name="asm")
+    pb = fd.problem.NonLinear("asm")
+    nodes = np.arange(mesh.n_nodes)
+    pb.bc.add("Dirichlet", nodes, "Disp", 0)
+    pb.bc.add("Dirichlet", nodes, "DispX", 0.1 * mesh.nodes[:, 2])
+    pb.nlsolve(dt=1.0, tmax=1.0, update_dt=False, print_info=0)
+    assert wf.kinematic_form == "rate" and wf.corate == "log_r"
+
+
+@_needs_total_formulation
+def test_log_measures_are_results_of_either_formulation():
+    """LogStrainU, LogStrainV and LogStressU express a run in the measures of the other
+    formulation: ln V = R ln U R^T, and T is the stress dual to ln U."""
+    gamma = 0.6
+    R = _polar_rotation(np.array([[1.0, 0.0, gamma], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
+    eng = np.array([1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
+    fields = ["Strain", "LogStrainU", "LogStrainV", "LogStressU"]
+    for nlgeom, corate in (("TL", None), ("UL", "log_r")):
+        assembly = _homogeneous_shear(nlgeom, corate, gamma, 4)
+        data = (
+            fd.Problem.get_active()
+            .get_results("asm", fields, "GaussPoint")
+            .gausspoint_data
+        )
+        lnU, lnV = data["LogStrainU"][:, 0], data["LogStrainV"][:, 0]
+        # the strain of the law: ln U under the total formulation, ln V under the rate one
+        np.testing.assert_allclose(
+            data["Strain"][:, 0], lnU if nlgeom == "TL" else lnV, atol=1e-12
+        )
+        np.testing.assert_allclose(
+            R @ _sig_to_mat(lnU * eng) @ R.T, _sig_to_mat(lnV * eng), atol=1e-12
+        )
+        np.testing.assert_allclose(
+            data["LogStressU"],
+            assembly.sv["Stress"].cauchy_to_log_stress_u(assembly.sv["F"]).asarray(),
+            atol=1e-12,
+        )
+    # a strain accumulated by a rate that does not integrate to a function of F
+    _homogeneous_shear("UL", "jaumann", gamma, 2)
+    with pytest.raises(NameError, match="state function"):
+        fd.Problem.get_active().get_results("asm", ["LogStrainU"], "GaussPoint")
+
+
+@_needs_total_formulation
+def test_a_law_simcoon_does_not_serve_keeps_the_rate_update_in_tl():
+    """simcoon decides which of its laws run under the total formulation: a small-strain-only
+    law (here the SMA model) keeps the log_r rate update in TL instead of being refused."""
+    assert fd.constitutivelaw.Simcoon("EPICP", EPICP_PROPS).supports_total_formulation
+    assert fd.constitutivelaw.Simcoon(
+        "NEOHC", [1000.0, 5000.0]
+    ).supports_total_formulation
+    for name in ("SMADI", "ZENER", "HYPOO"):
+        assert not simcoon.total_formulation_serves(name)
+
+
+def test_corate_can_be_unset_and_is_refused_only_with_the_total_formulation():
+    """The corate belongs to the rate formulation. In TL it is refused when the law runs the
+    total formulation, and accepted when the law keeps the rate update (a native law)."""
+    fd.Assembly.delete_memory()
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8", name="box")
+    native = fd.constitutivelaw.ElasticIsotrop(8.7, 0.3, name="law")
+    wf = fd.weakform.StressEquilibrium(native, nlgeom="TL")
+    wf.corate = "log"
+    fd.Assembly.create(wf, mesh, name="asm")
+    pb = fd.problem.NonLinear("asm")
+    pb.bc.add("Dirichlet", np.arange(mesh.n_nodes), "Disp", 0)
+    pb.nlsolve(dt=1.0, tmax=1.0, update_dt=False, print_info=0)
+    assert wf.kinematic_form == "rate" and wf.corate == "log"
+    wf.corate = None
+    assert wf.corate == "log_r"

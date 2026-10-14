@@ -8,6 +8,33 @@ semantic versioning.
 
 ### Added
 
+- Total formulation for `nlgeom="TL"`: the strain-space framework of Miehe,
+  Apel and Lambrecht (2002). A Simcoon law is fed the material logarithmic
+  strain ln U, a state function of F, and works on the stress T dual to it;
+  nothing is transported and the strain is exact at any step size. It needs a
+  simcoon that provides `sim.umat(kinematic_form="total")` (after 2.1); with
+  simcoon 2.1 the previous update is kept. `weakform.kinematic_form` tells which
+  one runs.
+- Result fields `LogStrainU`, `LogStrainV` and `LogStressU`, and
+  `StressTensorList.cauchy_to_log_stress_u` / `log_stress_u_to_cauchy`, to compare a TL
+  run and a UL run with `corate="log_r"` on the same measures.
+- `IPCContact` / `IPCSelfContact`: `excluded_rings` blocks self-collision
+  between primitives fewer than `excluded_rings` rings apart on the contact
+  surface, so that `dmin` may exceed the edge length (shell thickness larger
+  than the element size).
+- `IPCContact` / `IPCSelfContact`: `psd_projection=False` assembles the exact
+  contact hessian instead of ipctk's per-collision PSD projection. The
+  projection is inexact (finite-difference mismatch of order one) and makes
+  Newton converge linearly, about 0.7 per iteration, whenever the contact
+  carries a large share of the load; with the exact hessian and a direct solver
+  the shell lattice compression converges in 4-7 iterations.
+- `ListBC.check` and `Problem.check_boundary_conditions` report the boundary
+  conditions that can't be applied together on a dof: Dirichlet bc with
+  different values, Dirichlet bc on a dof eliminated by a mpc, dof eliminated
+  by several mpc and nodal force ignored on a blocked dof. The check runs the
+  first time the bc are applied after the list is modified, according to
+  `pb.bc.check_mode` (`"warn"` by default, `"raise"` or `"ignore"`).
+
 - Optional analytical corotational tangents for standard two-node beams in
   2D/3D and FI/SRI/MITC shells in updated Lagrangian geometry. Enable the
   keyword-only `consistent_tangent=True` constructor option on
@@ -63,6 +90,24 @@ semantic versioning.
 
 ### Changed
 
+- Boundary conditions sharing some dof: the generalized forces of several
+  Neumann bc are summed. A node repeated inside a single bc is still counted
+  once. For Dirichlet bc, the last one in the list is still applied, and a
+  Dirichlet bc prevails over a Neumann bc on the same dof.
+- `nlgeom="TL"` and `nlgeom="UL"` now select the constitutive formulation as
+  well as the configuration: TL is the total formulation (ln U and its dual
+  stress), UL the rate formulation (ln V and the Kirchhoff stress, with
+  `weakform.corate`). `corate` belongs to UL: setting it with `nlgeom="TL"`
+  raises at initialization. Results of a TL analysis with a Simcoon law change
+  when the stress is not coaxial with the stretch (plastic shear, off-axis
+  anisotropy); they are unchanged for isotropic elasticity and proportional
+  loading. Native laws and plane-stress problems keep the previous `"log_r"`
+  update in TL.
+- `IPCContact` stores true minimum distances between contact primitives
+  (ipctk returns squared distances). The adaptive barrier-stiffness update
+  and the proximity safeguards act on the gap above `dmin`, compared with
+  `dhat` as documented.
+
 - `Problem.get_results` and `add_output` now default to `position=None`
   instead of 1, saving all configured beam/shell points. Shell Stress/Strain
   storage has shape `(6, n_thickness_points, n_locations)`. Mixed beam/shell
@@ -81,12 +126,26 @@ semantic versioning.
   `meshlane>=5.5.0` instead of meshio.
 - Require Simcoon >= 2.1. UMAT callbacks receive `start` and the selected string
   `corate` explicitly. Initialization retains the returned state, with
-  `set_initial_statev()` values taking precedence.
+  `set_initial_statev()` values taking precedence. The adapter handles
+  `work_correction`, `tangent_output` and conversion of the rate name to
+  Simcoon's numeric code.
 - The lattice beam example explicitly enables its consistent tangent for
   large-deformation convergence. The `tube_compression` example uses
   `IPCSelfContact` (ipctk >= 1.6) instead of penalty self-contact.
 
 ### Fixed
+
+- A distributed load added with `pb.bc.add` (`Pressure`, `SurfaceForce`,
+  `DistributedForce`) no longer erases the Neumann bc defined before it, and
+  two Neumann bc on the same dof no longer overwrite each other.
+- In multi-step problems, the start value of a nodal Neumann bc no longer
+  includes the forces applied by the other bc on the same dof.
+- `MPC` docstring: the constraint equation is
+  `sum(factor * dof) + constant = 0`.
+- Analytic-plane CCD explicitly enforces the requested minimum distance,
+  which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
+- IPC proximity safeguards compare the remaining linear gap above `dmin`
+  with `dhat`, rather than comparing a squared distance with a length.
 
 - Correct the `Iyy`/`Izz` assignments of non-square `BeamRectangular` sections:
   `a` is along local y and `b` along local z.
@@ -99,8 +158,10 @@ semantic versioning.
 - Make shell thickness strain `epsilon0 - z*kappa` consistent with the existing
   curvature definition. Correct face stress signs, nonlinear material-point
   kinematics, laminate membrane/bending coupling (`-B`) and distribution plots.
+- Correct finite-strain strain rotation for native anisotropic elastic laws.
 - Rigid-body CCD accounts for curved rotation paths, preventing complete
-  revolutions from bypassing collision checks.
+  revolutions from bypassing collision checks. The line search retains its
+  curvature margin and physical offset.
 - IPC contact in `2Daxi` consistently weights residual, tangent, energy and
   automatic barrier stiffness by `2*pi*r`. Unsupported OGC use raises an error.
 - IPC friction uses incremental slip rather than absolute positions and is

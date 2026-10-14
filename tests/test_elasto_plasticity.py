@@ -182,7 +182,9 @@ def test_corotational_update_transports_plastic_strain_with_dr():
 
     assembly.sv["Statev"][0, 0] = 0.02
     assembly.sv["Statev"][1:7] = plastic_strain
-    assembly.sv["Strain"] = StrainTensorList(expected)
+    # the committed state lives in the start configuration: the total strain equals the
+    # plastic strain there, and both are carried to the end configuration by DR
+    assembly.sv["Strain"] = StrainTensorList(plastic_strain)
     assembly.sv_start = deepcopy(assembly.sv)
     assembly.sv["DR"] = rotation_matrix[:, :, None]
     assembly.sv["DStrain"] = StrainTensorList(np.zeros((6, 1)))
