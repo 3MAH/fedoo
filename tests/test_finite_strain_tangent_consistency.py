@@ -415,6 +415,44 @@ def test_native_elastic_matches_simcoon_eliso_at_finite_volume():
     )
 
 
+def test_native_elastic_matches_simcoon_after_incremental_rigid_rotation():
+    """A rigid rotation after a stretch must rotate trial and committed stresses alike."""
+    space = fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    stretch = np.diag([1.1, 1.0, 1.0])
+    rotation = simcoon.Rotation.from_euler("z", 90.0, degrees=True).as_matrix()
+    stresses = []
+    for material in (
+        fd.constitutivelaw.ElasticIsotrop(8.7, 0.3),
+        fd.constitutivelaw.Simcoon("ELISO", [8.7, 0.3, 0.0]),
+    ):
+        wf = fd.weakform.StressEquilibrium(material, nlgeom="UL", space=space)
+        wf.corate = "log_r_inc"
+        assembly = fd.Assembly.create(wf, mesh)
+        pb = fd.problem.NonLinear(assembly)
+        pb.initialize()
+        pb.dtime = 1.0
+        pb.set_start()
+        n = assembly.n_gauss_points
+        for F, DR, increment in (
+            (stretch, np.eye(3), np.log(1.1)),
+            (rotation @ stretch, rotation, 0.0),
+        ):
+            assembly.sv["F"] = np.repeat(F[:, :, None], n, axis=2)
+            assembly.sv["DR"] = np.repeat(DR[:, :, None], n, axis=2)
+            assembly.sv["DispGradient"] = assembly.sv["F"] - np.eye(3)[:, :, None]
+            dstrain = np.zeros((6, n))
+            dstrain[0] = increment
+            assembly.sv["DStrain"] = StrainTensorList(dstrain)
+            material.update(assembly, pb)
+            trial = assembly.sv["Stress"].asarray().copy()
+            wf.set_start(assembly, pb)
+            assembly.sv_start = dict(assembly.sv)
+        stresses.append((trial, assembly.sv["Stress"].asarray().copy()))
+
+    np.testing.assert_allclose(stresses[0], stresses[1], rtol=1e-12, atol=1e-12)
+
+
 def test_heterogeneous_finite_strain_initializes_F_for_all_phases():
     """A UMAT phase must not leave a native phase with a singular initial F."""
 
