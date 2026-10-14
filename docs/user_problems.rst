@@ -169,7 +169,9 @@ Argument             Meaning
 ``corate``           Objective-rate name as a string, as selected by
                      ``weakform.corate`` in finite strain (e.g. ``"log_r"``,
                      ``"log"``, ``"jaumann"``, or ``"green_naghdi"``).
-                     In small strain it is ``"log_r"``.
+                     In small strain it is ``"log_r"``. ``None`` under the
+                     total formulation (``nlgeom="TL"``), for a law that
+                     declares ``supports_total_formulation``.
 ===================  =========================================================
 
 Stress and strain use engineering Voigt notation. The component ordering,
@@ -405,6 +407,26 @@ The comparison is case-insensitive and applies only in finite strain. The
 default ``required_corate = None`` accepts any formulation. This attribute
 does not change ``weakform.corate``; the selected name is passed as the
 callback's ``corate`` argument regardless of this validation setting.
+
+The objective rate belongs to the updated-Lagrangian method, ``nlgeom="UL"``:
+the rate formulation, where a law works on the spatial logarithmic strain
+:math:`\ln\mathbf{V}` and on the Kirchhoff stress. The total-Lagrangian method,
+``nlgeom="TL"``, runs the total formulation instead, the strain-space framework
+of Miehe, Apel and Lambrecht (2002). It has no rate: setting ``weakform.corate``
+raises at initialization. The law is then called with the material logarithmic
+strain :math:`\ln\mathbf{U}` on the reference frame, ``DR`` equal to the
+identity and ``corate=None``, and its tangent must be the one of the stress
+conjugate to :math:`\ln\mathbf{U}`. A law opts in with the class attribute
+``supports_total_formulation = True``; with the default ``False`` it keeps the
+``"log_r"`` rate update under ``nlgeom="TL"``, as do all laws under the 2D
+plane-stress assumption. :class:`fedoo.constitutivelaw.Simcoon` supports it for
+the log-strain and hyperelastic laws of simcoon. ``weakform.kinematic_form`` tells
+which one runs (``"total"`` or ``"rate"``).
+
+The result fields ``LogStrainU``, ``LogStrainV`` and ``LogStressU`` give
+:math:`\ln\mathbf{U}`, :math:`\ln\mathbf{V}` and the stress conjugate to
+:math:`\ln\mathbf{U}` in either formulation, so that a ``"TL"`` run and a
+``"UL"`` run with ``corate="log_r"`` compare on the same measures.
 
 
 Advanced: derive directly from ``Mechanical3D``

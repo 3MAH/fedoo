@@ -6,6 +6,8 @@ from fedoo.core.mesh import MultiMesh
 
 # from fedoo.util.ExportData import ExportData
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
+from fedoo.util.voigt_tensors import StrainTensorList
+import simcoon as sim
 import os
 from zipfile import ZipFile, Path
 
@@ -48,6 +50,9 @@ _available_output = [
     "Rot",
     "Temp",
     "Strain",
+    "LogStrainU",
+    "LogStrainV",
+    "LogStressU",
     "Statev",
     "Stress",
     "Stress_vm",
@@ -59,6 +64,20 @@ _available_output = [
     "BeamStress",
     "DispGradient",
 ]
+
+# ln U (material) and ln V (spatial) logarithmic strains, and the stress T dual to ln U
+_LOG_MEASURES = ("LogStrainU", "LogStrainV", "LogStressU")
+
+
+def _has_state_function_strain(assemb):
+    """Whether the strain of a finite-strain run is a state function of F: the total
+    formulation, or the rates whose strain is recomputed from F."""
+    if not getattr(assemb, "_nlgeom", False):
+        return False
+    return getattr(assemb, "_kinematic_form", "rate") == "total" or getattr(
+        assemb, "_corate", None
+    ) in ("log_r", "log")
+
 
 _available_format = [
     "fdz",
@@ -492,6 +511,39 @@ def _get_results(
                 data = data.asarray()
             else:
                 data = np.array(data)
+
+        elif res in _LOG_MEASURES:
+            # The measures of one finite-strain formulation read in a run of the other:
+            # ln U and ln V from F, and the stress T dual to ln U from the Cauchy stress.
+            if (
+                not _has_state_function_strain(assemb)
+                or "F" not in sv
+                or (
+                    res == "LogStressU" and not hasattr(sim, "total_formulation_serves")
+                )
+            ):
+                if ignore_missing:
+                    continue
+                raise NameError(
+                    'Field "{}" is available in finite strain when the strain is a '
+                    'state function of F: nlgeom="TL", or corate "log_r" or "log" '
+                    "(LogStressU needs a simcoon with the total formulation)".format(
+                        res
+                    )
+                )
+            if res == "LogStressU":
+                data = sv["Stress"].cauchy_to_log_stress_u(sv["F"])
+            else:
+                F = sv["F"] if res == "LogStrainV" else sv["F"].transpose(1, 0, 2)
+                data = StrainTensorList(
+                    sim.Log_strain(np.asfortranarray(F), True, False)
+                )
+            if output_type is not None and output_type != "GaussPoint":
+                data = data.convert(assemb, None, output_type)
+                data_type = output_type
+            else:
+                data_type = "GaussPoint"
+            data = data.asarray()
 
         elif res in ["PK2_vm", "Kirchhoff_vm", "Stress_vm"]:
             if res[:-3] in data_sav:

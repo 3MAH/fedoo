@@ -2,9 +2,10 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.mechanical3d import Mechanical3D
-from fedoo.util.voigt_tensors import StressTensorList
+from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 import numpy as np
+from simcoon import Rotation
 
 
 class ElasticAnisotropic(Mechanical3D):
@@ -51,7 +52,17 @@ class ElasticAnisotropic(Mechanical3D):
             assembly.sv["TangentMatrix"] = H
 
         if "DStrain" in assembly.sv:
-            total_strain = assembly.sv["Strain"] + assembly.sv["DStrain"]
+            strain_start = assembly.sv["Strain"]
+            if assembly._nlgeom:
+                # Evaluate stress in the trial configuration without changing the
+                # committed strain, which the weak form transports at set_start.
+                rotation = Rotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
+                strain_start = StrainTensorList(
+                    rotation.apply_strain(
+                        self._as_mechanical_array(assembly.sv_start["Strain"])
+                    )
+                )
+            total_strain = strain_start + assembly.sv["DStrain"]
         else:
             total_strain = assembly.sv["Strain"]
 

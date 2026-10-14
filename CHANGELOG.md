@@ -8,6 +8,16 @@ semantic versioning.
 
 ### Added
 
+- Total formulation for `nlgeom="TL"`: the strain-space framework of Miehe,
+  Apel and Lambrecht (2002). A Simcoon law is fed the material logarithmic
+  strain ln U, a state function of F, and works on the stress T dual to it;
+  nothing is transported and the strain is exact at any step size. It needs a
+  simcoon that provides `sim.umat(kinematic_form="total")` (after 2.1); with
+  simcoon 2.1 the previous update is kept. `weakform.kinematic_form` tells which
+  one runs.
+- Result fields `LogStrainU`, `LogStrainV` and `LogStressU`, and
+  `StressTensorList.cauchy_to_log_stress_u` / `log_stress_u_to_cauchy`, to compare a TL
+  run and a UL run with `corate="log_r"` on the same measures.
 - IPC contact thickness through an absolute `dmin` minimum separation on
   `IPCContact`, `IPCSelfContact`, `RigidBody.set_static_obstacle` and
   `RigidBody.set_static_plane`. Collision detection, barrier-stiffness
@@ -53,6 +63,15 @@ semantic versioning.
   Neumann bc are summed. A node repeated inside a single bc is still counted
   once. For Dirichlet bc, the last one in the list is still applied, and a
   Dirichlet bc prevails over a Neumann bc on the same dof.
+- `nlgeom="TL"` and `nlgeom="UL"` now select the constitutive formulation as
+  well as the configuration: TL is the total formulation (ln U and its dual
+  stress), UL the rate formulation (ln V and the Kirchhoff stress, with
+  `weakform.corate`). `corate` belongs to UL: setting it with `nlgeom="TL"`
+  raises at initialization. Results of a TL analysis with a Simcoon law change
+  when the stress is not coaxial with the stretch (plastic shear, off-axis
+  anisotropy); they are unchanged for isotropic elasticity and proportional
+  loading. Native laws and plane-stress problems keep the previous `"log_r"`
+  update in TL.
 - The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
   of the penalty self-contact.
 - `IPCContact` stores true minimum distances between contact primitives
