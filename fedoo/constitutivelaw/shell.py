@@ -323,7 +323,8 @@ class ShellBase(ConstitutiveLaw):
 
         The default position is +1 (top face); position=None uses configured
         output points. This method does not reduce points. Dataset reads use
-        ``shell_options`` and default to the top face. With a reduction, full
+        ``shell_options`` and default to the sole saved point, or the top face
+        when multiple points or only generalized fields exist. With a reduction, full
         tensors are reduced componentwise and components can come from different
         thickness points. Scalar invariants are evaluated before reduction;
         computing invariants from an envelope instead is not guaranteed

@@ -6,228 +6,123 @@ semantic versioning.
 
 ## [Unreleased]
 
-### Fixed
-
-- Rotate the 3D beam's row-based local frame with the transpose of the spatial
-  increment, and correct its consistent tangent derivative. Rigid axial rotation
-  no longer produces spurious local nodal rotations or misorients bending axes.
-- Rotate the shell's row-based trial frame with the transpose of the spatial
-  increment, as for the 3D beam, and correct its consistent tangent derivative.
-  With `true_drilling_rotation=False`, a rigid rotation about the shell normal
-  no longer produces spurious membrane strains and drilling reactions. The
-  default `true_drilling_rotation=True` is unaffected.
-- Skip private section-recovery arrays (names starting with `_`) when
-  converting Gauss-point data to nodes in `DataSet.to_pyvista`/`to_vtk`.
-  Nonlinear and laminate shell results export again.
-- Use the polar area moment Iyy + Izz for beam axial rotary inertia, rather
-  than the Saint-Venant torsion constant Jx. Torsional stiffness remains G*Jx.
-- Make shell thickness strain epsilon0 - z*kappa consistent with the existing
-  curvature definition. Correct face stress signs, nonlinear material-point
-  kinematics and linear laminate coupling (-B), including distribution plots.
-  Asymmetric laminate and nonlinear simulations may require recomputation.
-
-### Changed
-
-- Resolve beam assembly symmetry at initialization, following StressEquilibrium:
-  preserve explicit weak-form or assembly settings. Default to full assembly
-  for consistent UL tangents and coupled displacement/rotation interpolations,
-  whose terms cannot safely use the symmetric assembly shortcut.
-- Shell dataset reads default to the top face (`reduction=None`, `position=1`),
-  as before multi-point outputs; `abs_max` remains available through
-  `shell_options`. Shell `Stress`/`Strain` saved with `position=None` are
-  stored as `(6, n_thickness_points, n_gp)`.
-- Signed `abs_max` reductions treat magnitudes equal within round-off as ties
-  and select the first section point, so that the sign of a symmetric
-  distribution no longer depends on floating-point noise.
-- Default nonlinear shell stress recovery to layerwise linear extrapolation
-  from outermost material points to physical layer boundaries. ShellOptions
-  extrapolate=False retains nearest-IP values; stored-point reductions and
-  constitutive integration are unchanged.
-- Treat unavailable beam section recovery as a missing output field. Mixed
-  assemblies retain fields supplied by any submesh; ignore_missing controls
-  fields unavailable everywhere, without suppressing invalid section positions.
-- Preserve section field metadata in legacy NPZ/FDZ files using an optional JSON
-  entry. Files without metadata retain their existing loading behavior.
-- Allow full beam and shell tensor reads with section reduction: each component
-  is reduced independently (signed absolute maximum by default). Requested
-  scalar invariants are still evaluated at each point before reduction;
-  invariants of the componentwise envelope are not guaranteed conservative.
-- Prepare shell tangent fields once in the existing post-constitutive update
-  and reuse them during residual/matrix assembly. State snapshots preserve the
-  fields for rollback; the assembly and weak-form interfaces are unchanged.
-- Differentiate FI/SRI/MITC interpolation in local in-plane coordinates before
-  mapping to nodal increments, preserving all four weak-form corrections.
-- Default beam/shell viewer components to global coordinates when local-frame
-  data is available, with local coordinates as the fallback.
-- Align shell viewer options with beam options: combine position/index/extrema
-  in Value, move Coordinate system to the end, and add shell-only submesh
-  selection with source preferences and fallback on other submeshes.
-- Allow linear shell Stress/Strain-only files to reconstruct their thickness
-  distribution from two distinct saved points without generalized outputs.
-  Shell viewer stored selections use the nearest point within the requested
-  layer; API interpolation remains the default. Reference point indices retain
-  the selected side of a laminate interface.
-- Beam viewer sampling shows the actual point count and snaps entered values
-  to the nearest supported grid; fixed stored/custom counts are read-only.
-  Rectangular grids select the closest odd square count, and count ties select
-  the smaller grid.
-- Beam viewer source choices require the selected source on the reference
-  submesh and fall back between stored/recomputed data on other beam submeshes.
-  Missing section fields remain absent instead of being treated as zero data.
-- Select the nearest stored beam section point in normalized coordinates,
-  independently for each submesh and saved location, with an optional exact-match
-  policy. Section metadata supports `recovery="stored_only"` to disable analytical
-  recomputation. The beam preview highlights the nearest stored point.
-- Reduce optional shell tangent overhead by combining weak-form coefficients
-  before operator expansion and contracting interpolation derivatives directly
-  with local displacements/resultants, without storing the full derivative tensor.
-- Vectorize shell tangent nodal increments, force rotations and coefficient
-  selection; reuse invariant nodal operators without caching trial-state data.
-- Reuse current shell interpolation operators and projected Jacobian inverses
-  across tangent batches. Differentiate geometry from local nodal variations
-  and compute the area gradient directly, reducing temporary array storage.
-
 ### Added
 
-- Optional analytical UL corotational shell tangents with
-  `PlateEquilibrium(consistent_tangent=True)` and `PlateEquilibriumFI`.
-  Four explicit weak-form corrections include local finite rotations,
-  changing surface geometry/area, FI/SRI/MITC interpolation and drilling.
-  The default remains the historical material plus membrane-force geometric
-  tangent. The optional tangent can be nonsymmetric and uses a fixed initial
-  stiffness scale for the drilling penalty, including nonlinear section laws.
-  Trial residuals use the trial frame; the existing force law and small local
-  strain model are retained. Manually split shell weak forms are excluded.
-- Beam output points configured by normalized coordinate pairs or an approximate
-  `n_points` budget. `add_output(position=None)` saves all configured beam points
-  on a separate section-point axis; scalar beam positions are rejected.
-- Preserve ordinary continuum Stress/Strain blocks when evaluating section fields
-  on meshes mixing beam, shell and solid elements. Stress-only files support
-  sampled min/max and signed extrema without requesting generalized resultants.
-- Shell output extraction at one or several normalized thickness coordinates.
-  `position=None` saves configured output points; homogeneous linear shells
-  default to bottom/middle/top, nonlinear shells to thickness integration points,
-  and linear laminates to both sides of each interface. FDH5 retains numeric
-  thickness metadata and local frames. Nonlinear/laminate outputs also save
-  private thickness stresses for later layerwise interpolation.
-- `shell_options` and a viewer **Options → Shell…** dialog for stored or recovered
-  tensors, local/global components, individual thickness points and signed extrema.
-  Generalized stress recovery is restricted to homogeneous linear shells;
-  other shells interpolate saved material-point stresses, retaining the nearest
-  value at faces and preserving laminate interface jumps.
-- Shared beam result and viewer selection for stored or recomputed Stress/Strain.
-  The default prefers stored tensors and uses signed `abs_max`; a reduction
-  ignores point selection. Without reduction, normalized position or point index
-  selects one point. Stored point coordinates are retained in FDH5; sampling
-  resolution affects recomputed distributions only.
-- Consistent UL corotational tangents for standard two-node `beam` elements
-  in 2D and 3D, including length-dependent interpolation, frame rotation and
-  local SO(3) rotation derivatives. `BeamEquilibrium(consistent_tangent=False)`
-  retains the historical tangent. The correction differentiates the existing
-  force residual and can be nonsymmetric; it does not introduce a new beam
-  energy or finite-strain material model.
-- Batch beam tangent derivatives across elements and columns, evaluate SO(3)
-  Jacobians once per node, and bound dense temporary storage for large meshes.
-- Assemble the consistent beam tangent entirely through strain, length and
-  frame-spin weak operators with independent midpoint/chord interpolation.
-  Remove the shared `get_matrix_correction` interface and sparse correction
-  scatter; no extra nodal unknowns are introduced.
-- Write the four consistent-tangent contributions explicitly in the beam
-  weak form. Reuse cached strain interpolation and the current assembly frame,
-  and differentiate local increments without rebuilding a dense nodal
-  change-of-basis matrix.
-- Beam section stress/strain recovery through `get_results` and `add_output`
-  with physical `(y, z)` or normalized local-y section positions. Public
-  `BeamStressList` and `BeamStrainList` support offline recovery, including
-  optional rotation into global coordinates using the new `BeamLocalFrame`
-  output. Section-specific shear recovery uses parabolic approximations for
-  rectangles and solid disks, with average Q/A for other sections. Pointwise
-  torsion supports circular/pipe sections and the rectangular Saint-Venant
-  series. Rectangular torsional stiffness now uses the consistent series-based
-  torsion constant instead of the previous polynomial approximation.
-- A shared predefined component dictionary for datasets and the viewer,
-  including named beam forces, moments, generalized strains, and frames.
-- Numeric beam section descriptions saved with generalized Gauss-point fields
-  in FDH5. Reloaded results expose lazy local and, when frames are available,
-  global stress/strain fields. The viewer's section selector supports point
-  recovery and sampled scalar extrema for circular, pipe and rectangular
-  sections. Legacy files can attach properties with `set_beam_section`.
+- Optional analytical corotational tangents for standard two-node beams in
+  2D/3D and FI/SRI/MITC shells in updated Lagrangian geometry. Enable the
+  keyword-only `consistent_tangent=True` constructor option on
+  `BeamEquilibrium`, `PlateEquilibrium` or `PlateEquilibriumFI`. The
+  historical tangent remains the default. Consistent tangents include changing
+  geometry, interpolation and frame rotations, and may be nonsymmetric.
+  The shell option excludes TL and manually split weak forms; alternative beam
+  interpolations retain their historical tangent.
+- Beam section stress/strain recovery at normalized `(y, z)` coordinates.
+  `BeamStressList` and `BeamStrainList` support offline recovery; strain from
+  `BeamStrain` uses beam kinematics without Poisson contraction. Standard
+  sections provide transverse shear distributions and torsion recovery,
+  including the rectangular Saint-Venant solution. Generic sections require
+  suitable geometry/warping information for recovery.
+- Configurable beam and shell `output_points` and `n_points`, with a separate
+  section-point axis in saved tensors. Homogeneous linear shells sample
+  bottom/middle/top by default, nonlinear shells use thickness integration
+  points, and linear laminates include both sides of each interface.
+- Dataset `beam_options` and `shell_options` for stored/recomputed fields,
+  local/global coordinates, individual section points and reductions.
+  `signed_abs_max` retains the sign of the largest magnitude and is the beam
+  default; equal magnitudes within tolerance select the first point.
+  `abs_max` returns a nonnegative magnitude; `max` and `min` select algebraic
+  extrema. Both absolute reductions propagate NaNs. Full tensors are reduced
+  componentwise; scalar invariants are evaluated at each point before reduction.
+- Automatic shell read selection: with no reduction or explicit point/index,
+  use the sole saved thickness point, otherwise the top face. This also applies
+  after reloading. Nonlinear stresses are interpolated within each layer and
+  linearly extrapolated to its boundaries by default; set
+  `shell_options.update(extrapolate=False)` for nearest-IP boundary values.
+  Extrapolated stresses are estimates, and stored-point reductions use the
+  actual saved values.
+- Numeric section metadata and local-frame outputs for saved recovery. FDH5
+  stores section descriptions and varying properties per submesh/frame;
+  legacy NPZ/FDZ files preserve field metadata in an optional JSON entry.
+  `set_beam_section` attaches section information to existing datasets.
+  Linear shell distributions can be reconstructed from two saved points.
+  Mixed beam/shell/solid results preserve ordinary continuum fields.
+- Viewer Beam and Shell options dialogs with section previews, point/index/
+  extrema selection, source preferences, submesh selection and local/global
+  coordinates. Recovered tensors use global components when frames are
+  available. Sampling controls respect fixed/custom point sets. Add
+  `add_output(..., private=True)` and Show internal fields; private recovery
+  arrays are excluded from PyVista mesh export.
+- IPC minimum separation through `dmin` on `IPCContact`, `IPCSelfContact`,
+  `RigidBody.set_static_obstacle` and `RigidBody.set_static_plane`. The default
+  is zero; nonzero offsets are not supported with OGC.
+- `IPCContact` / `IPCSelfContact` support `use_area_weighting` for the
+  convergent area-weighted IPC formulation.
+- `RigidBody.set_static_plane` provides IPC contact with an analytic plane,
+  including minimum separation and conservative CCD, without dependence on a
+  meshed obstacle's discretization.
 
 ### Changed
 
-- Respect Apply options to for beam viewer settings, validating every target
-  pane before applying changes. Show indexed section-point physical coordinates
-  at a selected beam Gauss point and highlight the point in the section preview.
-- Replace the viewer's normalized local-y beam position with normalized (y,z)
-  coordinates. Scale each signed direction using its centroid-relative
-  bounding-box extent, supporting asymmetric and varying sections.
-- Store beam section definitions once per submesh/frame as native HDF5
-  metadata, replacing JSON for new files while reading legacy descriptions.
-  Keep constant properties as scalars and varying properties in private
-  Node/Element/GaussPoint fields. Section classes own their portable schema,
-  normalized sampling and optional section meshing interfaces. Add custom
-  output points, a viewer section preview, Show internal fields, and
-  `add_output(..., private=True)`.
-- Recover section Strain directly from BeamStrain using beam kinematics,
-  without elastic constants, Poisson contraction or a shear correction factor.
-  Native FDH5 recovery no longer stores or requires E, G and nu in section
-  descriptions. Noncircular torsional strain still requires a warping model.
-- Show one Stress and Strain field in the viewer for recovered beam tensors.
-  Options → Beam… groups the section point/envelope and local/global coordinate
-  controls. An optional Beam toolbar is hidden by default.
-- Interpret beam envelope sampling resolution as an approximate total section
-  point budget for every geometry. Circular and pipe sections refine angular
-  and radial sampling together; label the control "Approximate sample points".
-- Correct the `Iyy` and `Izz` axis assignments for non-square
-  `BeamRectangular` sections (`a` along local y, `b` along local z).
-- IPC contact thickness through an absolute `dmin` minimum separation on
-  `IPCContact`, `IPCSelfContact`, `RigidBody.set_static_obstacle` and
-  `RigidBody.set_static_plane`. Collision detection, barrier-stiffness
-  tuning, friction and CCD use the same offset; zero remains the default.
-  Nonzero offsets are rejected with OGC, whose trust region does not expose
-  a minimum-separation parameter.
-- `IPCContact` / `IPCSelfContact`: `use_area_weighting` option enabling the
-  convergent (area-weighted) IPC formulation of ipctk.
-- `RigidBody.set_static_plane`: IPC contact against an analytic static plane.
-  Unlike a flat meshed obstacle, the contact force does not depend on which
-  obstacle node, edge or face is the closest.
-- Mesh import (`Mesh.read` for Abaqus `.inp` decks, `Mesh.from_meshio`) uses
-  [meshlane](https://github.com/simvia-tech/meshlane), a maintained fork of
-  meshio, when it is installed, and falls back to meshio otherwise. The `io`
-  extra now installs `meshlane>=5.5.0` instead of `meshio`.
-- Require Simcoon >= 2.1. UMAT callbacks receive `start` and a string `corate`
-  explicitly. The Simcoon adapter handles `work_correction`, `tangent_output`,
-  and conversion of the rate name to Simcoon's numeric code, without temporary
-  call attributes or compatibility checks for older versions.
-- Keep the state returned by UMAT initialization, with values assigned through
-  `set_initial_statev()` taking precedence. Custom callbacks must accept the
-  new keywords and handle `start=True` during initialization.
-- The `tube_compression` example uses `IPCSelfContact` (ipctk >= 1.6) instead
-  of the penalty self-contact.
+- `Problem.get_results` and `add_output` now default to `position=None`
+  instead of 1, saving all configured beam/shell points. Shell Stress/Strain
+  storage has shape `(6, n_thickness_points, n_locations)`. Mixed beam/shell
+  tensor output requires `position=None`; use the respective dataset options
+  for subsequent selection.
+- Shell drilling penalties use a fixed initial membrane shear stiffness scale
+  for both historical and consistent tangents, including nonlinear sections,
+  instead of following the current stiffness.
+- Rectangular beam torsional stiffness uses a Saint-Venant series rather than
+  the previous polynomial approximation.
+- Unavailable section recovery follows `ignore_missing`. Mixed assemblies keep
+  fields provided by any submesh; a field unavailable everywhere raises
+  `NameError` unless `ignore_missing=True`. Invalid positions remain errors.
+- Mesh import uses [meshlane](https://github.com/simvia-tech/meshlane) when
+  installed and falls back to meshio otherwise. The `io` extra installs
+  `meshlane>=5.5.0` instead of meshio.
+- Require Simcoon >= 2.1. UMAT callbacks receive `start` and the selected string
+  `corate` explicitly. Initialization retains the returned state, with
+  `set_initial_statev()` values taking precedence.
+- The lattice beam example explicitly enables its consistent tangent for
+  large-deformation convergence. The `tube_compression` example uses
+  `IPCSelfContact` (ipctk >= 1.6) instead of penalty self-contact.
 
 ### Fixed
 
-- Rigid-body CCD bounds rotation-path curvature without relying on a single
-  midpoint, preventing complete revolutions from bypassing collision checks.
-  The line search never drops its curvature margin or physical offset.
-- Analytic-plane CCD explicitly enforces the requested minimum distance,
-  which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
-- IPC proximity safeguards compare the remaining linear gap above `dmin`
-  with `dhat`, rather than comparing a squared distance with a length.
-- IPC contact in `2Daxi`: the `2*pi*r` weight is now carried by the ipctk
-  collisions, so the residual, tangent matrix, energy line search and
-  automatic barrier stiffness are consistent (the tangent was previously
-  weighted twice and the energy / barrier stiffness not at all).
-- IPC friction produced no force: the friction potential was evaluated with
-  absolute positions instead of the slip. Friction is now lagged over the
-  time increment. With ipctk 1.6, the barrier stiffness was also passed as
-  the static friction coefficient and missing from the normal force.
-- `IPCContact(use_ogc=True)` raises in `2Daxi` (not supported).
-- `RigidBody.set_static_obstacle` registers a CCD line search (`use_ccd=True`
-  by default), so a time step that moves the body further than `dhat` no
-  longer carries it through the obstacle and fails with a NaN barrier. The
-  search follows the curved vertex paths of a rotating body (conservative
-  piecewise linear CCD).
+- Correct the `Iyy`/`Izz` assignments of non-square `BeamRectangular` sections:
+  `a` is along local y and `b` along local z.
+- Use the polar area moment `Iyy + Izz` for beam axial rotary inertia instead
+  of the Saint-Venant torsion constant `Jx`. Torsional stiffness remains `G*Jx`.
+- Correct the 3D beam frame update so rigid axial rotation produces no spurious
+  local nodal rotation and the bending axes follow the section orientation.
+- Correct the shell frame update with `true_drilling_rotation=False`: rigid
+  rotation no longer produces spurious membrane strains or drilling reactions.
+- Make shell thickness strain `epsilon0 - z*kappa` consistent with the existing
+  curvature definition. Correct face stress signs, nonlinear material-point
+  kinematics, laminate membrane/bending coupling (`-B`) and distribution plots.
+- Rigid-body CCD accounts for curved rotation paths, preventing complete
+  revolutions from bypassing collision checks.
+- IPC contact in `2Daxi` consistently weights residual, tangent, energy and
+  automatic barrier stiffness by `2*pi*r`. Unsupported OGC use raises an error.
+- IPC friction uses incremental slip rather than absolute positions and is
+  lagged over the time increment. Correct the ipctk 1.6 barrier-stiffness and
+  friction-coefficient arguments.
+- Static rigid obstacles register CCD by default, preventing steps from moving
+  a body through an obstacle beyond the contact activation distance.
+
+### Migration
+
+- Shell output now saves all configured thickness points by default. Pass
+  `position=1` to save only the top face. Raw stored tensors include a
+  thickness-point axis; use `DataSet.get_data` and `shell_options` to select
+  a `(6, n_locations)` tensor or a scalar envelope. Beam output positions are
+  normalized `(y, z)` pairs, not scalar thickness coordinates.
+- Corrected rectangular bending inertias and shell thickness signs can change
+  existing results. Recompute affected beam, asymmetric-laminate or nonlinear
+  shell analyses; nonlinear shell drilling penalties also use the fixed
+  initial stiffness scale.
+- Custom UMAT callbacks and `_call_umat` overrides must accept the new
+  `start` and `corate` keyword arguments, and handle `start=True` during
+  initialization. Install Simcoon >= 2.1.
 
 ## [1.0.1] - 2026-10-01
 

@@ -38,16 +38,18 @@ def test_linear_output_positions_and_resultant_recovery(tmp_path):
     assert "Stress" not in result.beam_derived_fields()
     assert "ShellLocalFrame" in result.gausspoint_data
     for kind in ("Stress", "Strain"):
-        for reduction in ("abs_max", "min", "max"):
+        for reduction in ("signed_abs_max", "abs_max", "min", "max"):
             result.shell_options.update(reduction=reduction)
             envelope = result[kind]
             assert envelope.shape == (6, assembly.n_gauss_points)
             for component in range(6):
                 np.testing.assert_allclose(envelope[component], result[kind, component])
             raw = result.gausspoint_data[kind]
-            if reduction == "abs_max":
+            if reduction == "signed_abs_max":
                 index = np.argmax(np.abs(raw), axis=1, keepdims=True)
                 expected = np.take_along_axis(raw, index, axis=1)[:, 0]
+            elif reduction == "abs_max":
+                expected = np.max(np.abs(raw), axis=1)
             else:
                 expected = getattr(np, reduction)(raw, axis=1)
             np.testing.assert_allclose(envelope, expected)
@@ -92,6 +94,29 @@ def test_legacy_formats_preserve_thickness_metadata(tmp_path, monkeypatch, exten
     assert loaded.field_metadata.keys() == result.field_metadata.keys()
 
 
+@pytest.mark.parametrize("position", [-1, 0.3])
+def test_default_read_uses_single_saved_point_after_reload(tmp_path, position):
+    pb, assembly, law = shell_problem()
+    result = pb.get_results(assembly, ["Stress", "Strain"], position=position)
+    assert result.shell_options["position"] is None
+    for kind in ("Stress", "Strain"):
+        np.testing.assert_allclose(result[kind], result.gausspoint_data[kind][:, 0])
+    for extension in ("fdh5", "npz"):
+        path = tmp_path / ("single." + extension)
+        result.save(str(path))
+        loaded = fd.DataSet(result.mesh)
+        loaded.load(str(path))
+        np.testing.assert_allclose(loaded["Stress"], result["Stress"])
+        loaded.shell_options.update(position=1)
+        with pytest.raises(ValueError, match="One saved thickness point"):
+            loaded["Stress"]
+    # Generalized fields alone still default to the top face.
+    generalized = pb.get_results(assembly, ["ShellStress"])
+    np.testing.assert_allclose(
+        generalized["Stress"], law.get_stress(assembly, position=1).asarray()
+    )
+
+
 def test_signed_extrema_and_atomic_selection():
     pb, assembly, _ = shell_problem()
     result = pb.get_results(assembly, ["Stress"])
@@ -101,11 +126,13 @@ def test_signed_extrema_and_atomic_selection():
     assert result.shell_options["reduction"] is None
     np.testing.assert_allclose(result["Stress", "XX"], 12)
     # Equal magnitudes select the first point, also within round-off.
-    result.shell_options.update(reduction="abs_max")
+    result.shell_options.update(reduction="signed_abs_max")
     np.testing.assert_allclose(result["Stress", "XX"], -12)
     tensor[0, 2] = 12.0 * (1 + 1e-13)
     np.testing.assert_allclose(result["Stress", "XX"], -12)
     tensor[0, 2] = 12.0
+    result.shell_options.update(reduction="abs_max")
+    np.testing.assert_allclose(result["Stress", "XX"], 12)
     result.shell_options.update(reduction="max", point_index=999)
     np.testing.assert_allclose(result["Stress", "XX"], 12)
     result.shell_options.update(reduction=None, point_index=1)
@@ -248,7 +275,7 @@ def test_viewer_lists_shell_components_with_thickness_reduction():
     viewer = pytest.importorskip("fedoo.util.viewer")
     pb, assembly, _ = shell_problem()
     result = pb.get_results(assembly, ["Stress", "Strain"])
-    result.shell_options.update(reduction="abs_max")
+    result.shell_options.update(reduction="signed_abs_max")
     dock = SimpleNamespace(data=result)
     # Component discovery must not request a full tensor under a scalar
     # thickness reduction. Call the method without creating a Qt window.
@@ -258,7 +285,7 @@ def test_viewer_lists_shell_components_with_thickness_reduction():
         assert "XY" in components
         if field.startswith("Stress"):
             assert "vm" in components
-    assert result.shell_options["reduction"] == "abs_max"
+    assert result.shell_options["reduction"] == "signed_abs_max"
 
 
 @pytest.mark.parametrize("association", ["GaussPoint", "Element", "Node"])
@@ -306,7 +333,7 @@ def test_nonlinear_saves_native_points_and_interpolates(tmp_path):
     np.testing.assert_allclose(loaded["Stress", "XX"], face)
     loaded.shell_options.update(extrapolate=False)
     np.testing.assert_allclose(loaded["Stress", "XX"], 1)
-    loaded.shell_options.update(reduction="abs_max", samples=2)
+    loaded.shell_options.update(reduction="signed_abs_max", samples=2)
     np.testing.assert_allclose(loaded["Stress", "XX"], -30)
     saved = pb.get_results(assembly, ["Stress"])
     assert saved.gausspoint_data["Stress"].shape[1] == 5
@@ -351,7 +378,7 @@ def test_nonlinear_face_recovery_extrapolation_is_optional(source):
             result["Stress"], reference.get_stress(assembly, position=outer).asarray()
         )
         result.shell_options.update(extrapolate=True)
-    result.shell_options.update(reduction="abs_max")
+    result.shell_options.update(reduction="signed_abs_max")
     with_extrapolation = result["Stress", "XX"]
     result.shell_options.update(extrapolate=False)
     if source == "stored":
@@ -602,7 +629,7 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
     assert "BeamStress" not in loaded.gausspoint_data
     assert "ShellStress" not in loaded.gausspoint_data
     assert ("_ShellStress" in loaded.gausspoint_data) == (shell_kind != "linear")
-    for reduction in ("min", "max", "abs_max"):
+    for reduction in ("min", "max", "signed_abs_max", "abs_max"):
         loaded.beam_options.update(reduction=reduction)
         loaded.shell_options.update(reduction=reduction)
         for component in ("XX", "vm", "I"):
@@ -614,9 +641,14 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
                 scalar = np.asarray(
                     StressTensorList(raw.reshape(6, -1))[component]
                 ).reshape(raw.shape[1:])
-                if reduction == "abs_max":
+                if sid == 2:
+                    # Section options do not alter ordinary continuum fields.
+                    expected = scalar[0]
+                elif reduction == "signed_abs_max":
                     indices = np.argmax(np.abs(scalar), axis=0)
                     expected = np.take_along_axis(scalar, indices[None], axis=0)[0]
+                elif reduction == "abs_max":
+                    expected = np.max(np.abs(scalar), axis=0)
                 else:
                     expected = getattr(np, reduction)(scalar, axis=0)
                 np.testing.assert_allclose(values.submesh(sid), expected)

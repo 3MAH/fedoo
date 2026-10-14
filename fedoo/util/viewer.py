@@ -4,6 +4,7 @@ from fedoo.util.shell_recovery import (
     ShellOptions,
     sample_positions,
     stored_shell_point_index,
+    default_shell_position,
 )
 
 import fedoo as fd
@@ -1615,7 +1616,8 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Normalized coordinates (y, z)", "position"),
             ("Maximum", "max"),
             ("Minimum", "min"),
-            ("Largest magnitude (signed)", "abs_max"),
+            ("Largest magnitude (signed)", "signed_abs_max"),
+            ("Largest magnitude", "abs_max"),
         ]
         for label, value in modes:
             reduction.addItem(label, value)
@@ -2192,7 +2194,8 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Point index", "point_index"),
             ("Maximum", "max"),
             ("Minimum", "min"),
-            ("Largest magnitude (signed)", "abs_max"),
+            ("Largest magnitude (signed)", "signed_abs_max"),
+            ("Largest magnitude", "abs_max"),
         ):
             reduction.addItem(label, mode)
         reduction.setCurrentIndex(
@@ -2212,7 +2215,11 @@ class MainWindow(QtWidgets.QMainWindow):
         position.setDecimals(10)
         position.setRange(-1, 1)
         position.setSingleStep(0.1)
-        position.setValue(options["position"] or 0.0)
+        position.setValue(
+            options["position"]
+            if options["position"] is not None
+            else default_shell_position(data.field_metadata.get(kind))
+        )
         layout.addRow("Normalized position:", position)
         index = QSpinBox()
         index.setObjectName("shell_section_point_index")

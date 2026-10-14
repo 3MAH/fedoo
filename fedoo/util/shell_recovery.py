@@ -23,9 +23,11 @@ def validate_positions(position):
 class ShellOptions(BeamOptions):
     """Shell thickness selection for dataset stress and strain reads.
 
-    The default reads the top face: ``reduction=None`` with ``position=1``.
-    Reductions follow :class:`BeamOptions`: signed ``'abs_max'``, ``'max'`` and
-    ``'min'``. Full tensors are reduced componentwise; their components may
+    With reduction=None and no position/index, read the sole saved thickness
+    point if present; otherwise read the top face. Reductions follow
+    :class:`BeamOptions`: ``'signed_abs_max'`` retains the selected sign,
+    ``'abs_max'`` returns a nonnegative magnitude, and ``'max'``/``'min'``
+    select algebraic extrema. Full tensors are reduced componentwise; they may
     come from different thickness points. Requested invariants are evaluated
     at each point before reduction, whereas invariants computed from the
     envelope are not guaranteed conservative.
@@ -49,8 +51,7 @@ class ShellOptions(BeamOptions):
         super().__init__()
         dict.update(self, samples=3, extrapolate=True)
         dict.update(self, stored_position="interpolated", reference_point_index=None)
-        # Top face by default, as before multi-point outputs.
-        dict.update(self, reduction=None, position=1.0)
+        dict.update(self, reduction=None, position=None)
         if values:
             self.update(values)
 
@@ -100,6 +101,12 @@ class ShellOptions(BeamOptions):
             dict.__setitem__(
                 self, "position", None if position is None else float(points[0])
             )
+
+
+def default_shell_position(stored_description):
+    """Select the sole saved thickness point, or the top face otherwise."""
+    points = np.asarray((stored_description or {}).get("stored_points", []))
+    return float(points.ravel()[0]) if points.size == 1 else 1.0
 
 
 def reconstructs_stored_shell(kind, description, stored_description):
@@ -257,6 +264,12 @@ def recover_shell_field(
     integration_values=None,
 ):
     """Select stored tensors or recover/interpolate through the thickness."""
+    if (
+        options["reduction"] is None
+        and options["point_index"] is None
+        and options["position"] is None
+    ):
+        options = dict(options, position=default_shell_position(stored_description))
     use_stored = use_stored_beam_field(
         options,
         stored is not None,

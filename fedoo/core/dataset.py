@@ -167,11 +167,13 @@ class DataSet:
     beam_options : dict
         Section ``position`` (normalized (y, z)) or ``point_index``, mutually
         exclusive. ``source`` is 'auto', 'stored' or 'recomputed'. ``reduction``
-        is None, 'max', 'min' or 'abs_max' (default, retaining the selected sign).
+        is None, 'max', 'min', 'abs_max' (nonnegative), or 'signed_abs_max'
+        (default, retaining the selected sign).
         ``samples`` affects recomputed sampling only. Extrema are estimates.
     shell_options : dict
         Normalized thickness ``position`` in [-1, 1], or ``point_index``.
-        The default reads the top face (``reduction=None``, ``position=1``).
+        With no position/index, the default reads the sole saved thickness point,
+        or the top face when multiple points or only generalized fields exist.
         Sources and reductions follow ``beam_options``. Nonlinear stresses
         are interpolated layerwise from saved material points; ``samples``
         sets the generated count per layer and is ignored for stored tensors.
@@ -1624,8 +1626,8 @@ class DataSet:
     def shell_options(self):
         """Thickness options; see :class:`fedoo.util.shell_recovery.ShellOptions`.
 
-        Default reads return the tensor at the top face (reduction=None,
-        position=1). With a reduction, full-tensor reads return componentwise
+        With reduction=None and no position/index, read the sole saved thickness
+        point if available, otherwise the top face. With a reduction, reads return
         extrema, potentially from different thickness points, and scalar
         invariants are computed before reduction.
         For nonlinear stress recovery, extrapolate=True (default) extends the

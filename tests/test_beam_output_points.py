@@ -302,7 +302,7 @@ def test_shell_default_read_selects_top_face_stress():
     bottom = pb.get_results(assembly, ["Stress"], position=-1)
     np.testing.assert_allclose(default["Stress", "XX"], top["Stress", "XX"])
     assert np.all(default["Stress", "XX"] < bottom["Stress", "XX"])
-    default.shell_options.update(reduction="abs_max")
+    default.shell_options.update(reduction="signed_abs_max")
     np.testing.assert_allclose(default["Stress", "XX"], bottom["Stress", "XX"])
 
 

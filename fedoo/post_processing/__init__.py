@@ -136,19 +136,22 @@ Use ``res.shell_options`` to select the source and thickness value::
     res.shell_options.update(reduction=None, position=0.25)
     stress = res.get_data("Stress", "XX")
     res.shell_options.update(reduction=None, point_index=0)
-    res.shell_options.update(source="recomputed", reduction="abs_max", samples=11)
+    res.shell_options.update(source="recomputed", reduction="signed_abs_max", samples=11)
     von_mises = res.get_data("Stress_global", "vm")
 
 The default source is ``"auto"``: prefer stored tensors, otherwise recover or
 interpolate. ``"stored"`` and ``"recomputed"`` explicitly require that source.
-The default reads the top face (``reduction=None``, ``position=1``). The
-``"abs_max"`` reduction selects the largest absolute component value, retaining
+With ``reduction=None`` and no position/index, the default reads the sole saved
+thickness point, or the top face if multiple points or only generalized fields
+are available. Explicit positions are respected. The
+``"signed_abs_max"`` reduction selects the largest absolute component value, retaining
 its sign, the first thickness point winning equal magnitudes; ``"max"`` and
-``"min"`` are also supported. Invariants
+``"min"`` select algebraic extrema. ``"abs_max"`` returns the nonnegative
+maximum magnitude. Both absolute reductions propagate NaNs. Invariants
 and principal values are evaluated at each point before reduction. A reduction
-ignores point selection; without a reduction, give ``position`` or
-``point_index``, not both. Updating either selector clears the other.
-Full-tensor reads reduce each of the six components independently and return
+ignores point selection; without a reduction, an explicit ``position`` or
+``point_index`` overrides automatic selection. Updating either clears the other.
+With a reduction, full-tensor reads reduce each component independently and return
 ``(6, n_locations)``. These components may come from different thickness points;
 the envelope is not a tensor at one physical point. Invariants computed from
 this envelope differ from pointwise invariant extrema and are not guaranteed
@@ -345,9 +348,10 @@ preferences remain active when changing result frames.
   ``reference_submesh`` to its sampling reference. The reference remains strict;
   other submeshes use the preferred source when available, otherwise the other
   source. API selections remain strict by default (``source_fallback=False``).
-* ``reduction="abs_max"`` (default) returns the value with the largest absolute
+* ``reduction="signed_abs_max"`` (default) returns the value with the largest absolute
   magnitude, retaining its sign. Equal-magnitude ties select the first output
-  point. ``"max"`` and ``"min"`` use algebraic extrema.
+  point. ``"abs_max"`` returns the nonnegative maximum magnitude. Both propagate
+  NaNs. ``"max"`` and ``"min"`` use algebraic extrema.
 * ``reduction=None`` selects one point using normalized ``position=(y,z)`` or
   zero-based ``point_index``. Supplying both non-None in one update is rejected.
   Selecting either clears the other. A reduction ignores both selectors.
@@ -373,7 +377,7 @@ For example::
     stress_at_nearest_saved_point = results["Stress", "XX"]
     results.beam_options.update(source="recomputed", position=(0.5, -0.25))
     stress_at_position = results["Stress", "XX"]
-    results.beam_options.update(reduction="abs_max", samples=128)
+    results.beam_options.update(reduction="signed_abs_max", samples=128)
     signed_extreme = results["Stress", "XX"]
     maximum_vm = results["Stress", "vm"]
 
