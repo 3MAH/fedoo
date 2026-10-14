@@ -1359,7 +1359,8 @@ class IPCContact(AssemblyBase):
         Like ``compute_minimum_distance``, ipctk works with *squared*
         distances here: it compares its arguments to
         ``(dhat_epsilon_scale * (bbox_diag + dmin))**2``.  The gaps are
-        therefore squared (clamped at zero) and ``dmin=0`` is passed, the
+        therefore squared (they are positive: ``_build_collisions`` rejects
+        any separation not above ``dmin``) and ``dmin=0`` is passed, the
         offset being already removed, so that the test reads
         ``gap < dhat``.  Only called between time steps (in
         ``set_start``), never inside the NR loop.
@@ -1370,7 +1371,7 @@ class IPCContact(AssemblyBase):
         min_dist = self._minimum_distance(vertices)
 
         def squared_gap(distance):
-            return max(distance - self._dmin, 0.0) ** 2
+            return (distance - self._dmin) ** 2
 
         eps_scale = self._actual_dhat / bbox_diag
         new_kappa = ipctk.update_barrier_stiffness(
