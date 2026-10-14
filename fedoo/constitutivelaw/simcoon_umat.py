@@ -70,12 +70,28 @@ class Simcoon(MechanicalUMAT):
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
 
-    * A modular material uses the ``MODUL`` UMAT. In finite strain it requires
-      the ``log_R`` formulation; set ``weakform.corate = "log_R"`` before
-      initializing the problem. Small-strain analyses are unaffected.
+    * A modular material uses the ``MODUL`` UMAT. Under ``nlgeom="UL"`` it
+      requires the ``log_R`` rate, the default. Small-strain analyses are
+      unaffected.
+
+    * Under ``nlgeom="TL"`` the laws run the total formulation: they are fed
+      the material logarithmic strain ln U and work on the stress T dual to
+      it (see :attr:`fedoo.weakform.StressEquilibrium.kinematic_form`).
     """
 
     supports_tangent_output = True
+
+    @property
+    def supports_total_formulation(self):
+        """Whether simcoon serves this law under the total formulation.
+
+        simcoon answers: its log-strain boxes, the modular material among them,
+        and the hyperelastic kernels built on F are served; the rate law and the
+        small-strain-only laws are not. A simcoon without the total formulation
+        (2.1) serves none, and the law keeps the rate update.
+        """
+        serves = getattr(sim, "total_formulation_serves", None)
+        return serves is not None and serves(self.umat_name)
 
     @property
     def manages_material_frame(self):
@@ -1206,14 +1222,20 @@ class Simcoon(MechanicalUMAT):
     ):
         """Dispatch the generic MechanicalUMAT call to Simcoon.
 
+        ``corate`` is None under the total formulation (``nlgeom="TL"``), which has no rate.
+
         A step-cut request from the law is routed to the solver's failed-increment path
         (InvalidKinematicStateError), which retries the increment with a smaller time step.
         """
+        if corate is None:
+            kinematic_form = {"kinematic_form": "total"}
+        else:
+            kinematic_form = {"corate": _CORATE_CODES[corate]}
         try:
             return sim.umat(
                 self.umat_name,
                 *args,
-                corate=_CORATE_CODES[corate],
+                **kinematic_form,
                 work_correction=work_correction,
                 tangent_output=tangent_output,
                 **kwargs,
