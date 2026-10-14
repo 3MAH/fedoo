@@ -490,10 +490,8 @@ FDH5 is the default and recommended format. If ``DataSet.save``,
 without an extension, the ``.fdh5`` extension is assumed.
 
 The available file types are:
-    * 'fdh5': The native HDF5-based Fedoo format. It stores the mesh, node and
-      element sets, node/element/Gauss-point fields, and multiple iterations
-      in one file. It also preserves the complete MultiMesh structure and its
-      per-submesh fields. This is the default format.
+    * 'fdh5': Fedoo's native HDF5 result format (default). See
+      :ref:`fdh5_format` for its contents and write policies.
     * 'fdz': A legacy zipped archive containing the mesh using the 'vtk' format
       named '_mesh_.vtk', and data from several iterations named 'iter_x.npz'
       where x is the iteration number (x=0 for the 1st iteration).
@@ -515,6 +513,59 @@ The available file types are:
       The mesh is not included and may be saved beside in a vtk file.
     * 'xlsx': Same as csv but with the excel format.
 
+.. _fdh5_format:
+
+FDH5 format
+~~~~~~~~~~~
+
+FDH5 stores the mesh, node and element sets, node/element/Gauss-point fields,
+scalar outputs such as Time, and multiple saved frames in one file. It
+preserves the complete MultiMesh structure and its per-submesh fields.
+Beam/shell section descriptions and output-point coordinates are saved when
+available, and local frames can be saved for recovery in global coordinates.
+No conversion to nodal fields is required for storage.
+
+.. note::
+
+   Opening an FDH5 file in the viewer while its simulation is running is
+   supported and should normally work: temporary read/write lock conflicts
+   are retried. Persistent contention can still exceed the retry timeout and
+   interrupt simulation output. Keep HDF5 file locking enabled; for critical
+   runs, wait until the simulation finishes before opening the results.
+
+The :doc:`FDH5 file layout <fdh5>` describes the HDF5 groups and array
+conventions. That page is generated from the :mod:`fedoo.util.fdh5` module
+docstring, keeping the detailed format description alongside its implementation.
+
+The file structure below is illustrative: optional field and metadata groups
+are present only when the corresponding outputs have been saved.
+
+.. literalinclude:: /../fedoo/util/fdh5.py
+   :language: text
+   :start-after: .. code-block:: text
+   :end-before: Field arrays retain their Fedoo shapes.
+   :dedent: 4
+
+FDH5 section tensors retain their point axis: stored Stress/Strain arrays
+have shape ``(6, n_section_points, n_locations)`` when multiple section points
+are saved. Use ``results.get_data`` with ``beam_options`` or ``shell_options``
+to select one point or reduce across points. Field descriptions are saved
+per frame and per submesh, so recovery can be performed after reopening the
+file without the original material object. Global recovery additionally
+requires the corresponding saved local-frame field.
+
+The file stores the requested outputs and recovery metadata, rather than a
+complete solver state for restarting an analysis. Dataset selection options
+and viewer settings are not saved; read-time defaults apply after reopening.
+Older files without section descriptions remain readable, but may only
+provide their original fields.
+
+For automatic simulation output, ``Problem.add_output`` accepts
+``write_mode="overwrite"`` (default), ``"append"`` or ``"error"`` for FDH5.
+Appending adds saved frames to an existing compatible mesh file; it does not
+resume the solver. In contrast, ``DataSet.to_fdh5(..., overwrite=True)``
+replaces the whole file, not only an existing iteration.
+
 
 Read data from disk
 -------------------
@@ -523,6 +574,27 @@ To read data saved on disk, use the function :py:func:`read_data`.
 The data are imported as :py:class:`DataSet` or
 :py:class:`MultiFrameDataSet` objects depending on the imported file(s).
 FDH5 is used by default when the filename has no extension.
+
+.. code-block:: python
+
+    results = fd.read_data("simulation.fdh5")
+    if isinstance(results, fd.MultiFrameDataSet):
+        results.load(-1)  # load the last saved frame
+    fd.viewer(results)
+
+One saved frame returns a DataSet; several frames return a MultiFrameDataSet
+whose frame fields are loaded on demand. ``load(i)`` selects the zero-based
+index in the list of saved frames, not a Newton iteration number.
+The viewer discovers new FDH5 frames during navigation; Reload also rereads
+the current frame. Existing all-frame color limits and history plots are not
+automatically recomputed. Reapply the limits or recreate the plot to include
+new frames. If the simulation temporarily locks the file, retry after it
+finishes writing the frame.
+FDH5 writes retry temporary reader lock conflicts for up to 10 seconds, so a
+brief viewer read does not abort output. Eager frame reads release their handle
+before plotting. Keep HDF5 file locking enabled; read-only access still needs
+protection against a writer changing the file. Explicit lazy-reader contexts
+must be closed promptly to let the simulation write.
 
 
 .. _very_simple_problem:
@@ -589,9 +661,8 @@ time interval (here the results are saved on a file).
 Fedoo interactive viewer
 ========================
 
-Fedoo includes a graphical application to visulize a result file or
-a DataSet like object. To be able to launch the viewer, the
-package pyvistaqt has to be installed.
+Fedoo includes a graphical viewer for result files and DataSet objects.
+Install the plotting and GUI dependencies with ``pip install "fedoo[plot,gui]"``.
 
 Then the viewer can either be launched as a standalone application from
 command line:
@@ -616,7 +687,23 @@ The viewer includes the following tools and features:
 
 * Management of multiple independent windows, which can be linked together.
 * Field and iteration selectors for data exploration.
+* Automatic discovery of new FDH5 frames when navigating an ongoing simulation.
+  The Reload button also rereads the current frame. A file temporarily locked
+  by the writer can be retried on the next navigation or Reload.
+  Existing all-frame color limits and history plots are kept: reapply
+  All frames Min/Max or recreate the history plot to include new frames.
 * A wide range of plotting options.
+* Show saved shell thickness in Shell options (disabled by default).
+  Each ``tri3``/``quad4`` shell submesh uses its saved section thickness,
+  including varying thickness, along normals of the deformed midsurface.
+  Beams and solids retain their own geometry. The selected field is repeated
+  through the display thickness; this does not recover distinct face stresses
+  or change the simulation mesh. Save shell stress/strain or generalized
+  shell fields to include the section metadata needed for this display.
+  Clicking a top/bottom display node reports its original node ID and the
+  displayed field under the current section selection. Gauss-point displays
+  retain element discontinuities; Element displays report adjacent element
+  values at a shared node.
 * Show or hide elements from predefined sets, rectangular selections,
   or arbitrary expressions.
 * Plot results along an interactively defined line.

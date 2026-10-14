@@ -104,6 +104,31 @@ def _array_to_pyvista_data(data: np.ndarray) -> np.ndarray:
     return data.T
 
 
+def _thicken_plot_mesh(meshplot, elm_type, thickness):
+    """Thicken a displayed linear surface, preserving field and picking arrays."""
+    if elm_type not in ("tri3", "quad4") or np.all(np.asarray(thickness) == 0):
+        return meshplot
+    from fedoo.mesh.functions import thicken
+
+    n_nodes = 3 if elm_type == "tri3" else 4
+    elements = meshplot.cells.reshape(-1, n_nodes + 1)[:, 1:]
+    used, inverse = np.unique(elements, return_inverse=True)
+    surface = Mesh(meshplot.points[used], inverse.reshape(elements.shape), elm_type)
+    h = np.broadcast_to(np.asarray(thickness, dtype=float), (meshplot.n_points,))[used]
+    if not np.all(np.isfinite(h)) or np.any(h <= 0):
+        raise ValueError("Saved shell thickness must be finite and positive")
+    volume = thicken(surface, 1.0).to_pyvista()
+    midsurface = np.repeat(surface.nodes, 2, axis=0)
+    volume.points = midsurface + (volume.points - midsurface) * np.repeat(h, 2)[:, None]
+    for name, values in meshplot.point_data.items():
+        volume.point_data[name] = np.repeat(values[used], 2, axis=0)
+    if "vtkOriginalPointIds" not in volume.point_data:
+        volume.point_data["vtkOriginalPointIds"] = np.repeat(used, 2)
+    for name, values in meshplot.cell_data.items():
+        volume.cell_data[name] = values
+    return volume
+
+
 def _component_from_array(field: str, data: np.ndarray, component=None):
     """Extract one component from a Fedoo data array."""
     if component == "norm" and field in ("Disp", "Rot") and np.ndim(data) == 1:
@@ -643,6 +668,13 @@ class DataSet:
             plotted. If no current iteration is defined, the last iteration
             is loaded and plotted.
 
+        shell_thickness : bool, default = False
+            Display the saved shell section thickness for ``tri3``/``quad4``
+            surfaces along deformed midsurface normals. The
+            selected field is repeated through the thickness, without extra
+            section recovery. Other element types and submeshes without saved
+            shell section metadata keep their original geometry.
+
         **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
@@ -717,6 +749,12 @@ class DataSet:
         return_cpos = kargs.pop("return_cpos", False)
         cmap = kargs.pop("cmap", "jet")  # if cmap not defined, default to "jet"
         extra_cell_data = kargs.pop("_extra_cell_data", None)
+        shell_thickness = kargs.pop("shell_thickness", False)
+        shell_thickness = bool(
+            shell_thickness
+            and self.mesh.elm_type in ("tri3", "quad4")
+            and "_ShellSection" in self.field_metadata
+        )
 
         if data_type == "GaussPoint":
             if self.meshplot_gp is None:
@@ -769,6 +807,18 @@ class DataSet:
                 meshplot.points = as_3d_coordinates(self.mesh.nodes)
 
             center = 0.5 * (meshplot.points.min(axis=0) + meshplot.points.max(axis=0))
+
+        # Carry physical node ids through duplicated GP nodes, thickening,
+        # element extraction and mixed-mesh rendering.
+        meshplot.point_data["_fedoo_node_ids"] = (
+            self.mesh.elements.ravel()
+            if data_type == "GaussPoint"
+            else np.arange(self.mesh.n_nodes)
+        )
+        if data_type == "Element":
+            meshplot.cell_data["Data"] = data
+        elif data_type:
+            meshplot.point_data["Data"] = data
 
         if extra_cell_data:
             for key, value in extra_cell_data.items():
@@ -850,12 +900,30 @@ class DataSet:
             sargs["title_font_size"] = 1
 
         mesh_to_show = meshplot
-        if element_set is not None or clip_args is not None:
+        if element_set is not None or clip_args is not None or shell_thickness:
             # add data field to mesh object to clip data with the mesh
             if data_type == "Element":
                 mesh_to_show.cell_data["Data"] = data
             elif data_type:
                 mesh_to_show.point_data["Data"] = data
+
+            if shell_thickness:
+                h = np.asarray(
+                    self.field_metadata["_ShellSection"]["thickness"], dtype=float
+                )
+                if h.ndim:
+                    # Section properties are saved at in-plane Gauss points.
+                    h = self.mesh.convert_data(
+                        h.ravel(),
+                        "GaussPoint",
+                        "Node",
+                        n_elm_gp=self.field_metadata["_ShellSection"].get(
+                            "n_elm_gp", h.size // self.mesh.n_elements
+                        ),
+                    )
+                    if data_type == "GaussPoint":
+                        h = h[self.mesh.elements.ravel()]
+                mesh_to_show = _thicken_plot_mesh(mesh_to_show, self.mesh.elm_type, h)
 
             if element_set is not None:
                 if len(element_set) == 0:
