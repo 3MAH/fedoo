@@ -497,13 +497,25 @@ class Problem(ProblemBase):
         row = []
         col = []
 
+        # entries are only collected when the list of bc changed since the
+        # last consistency check (see ListBC.check)
+        checked_entries = [] if self.bc._check_required() else None
+
         for e in self.bc.generate(self, t_fact, t_fact_old):
+            if checked_entries is not None:
+                checked_entries.append(e)
+
             if e.bc_type == "Dirichlet":
                 self._Xbc[e._dof_index] = e._current_value
                 dof_blocked.update(e._dof_index)
 
             if e.bc_type == "Neumann":
-                F[e._dof_index] = e._current_value
+                # generalized forces from distinct bc are summed. A dof
+                # repeated inside a single bc is still counted once.
+                F[e._dof_index] += e._current_value
+                # own contribution, used by init_bc_start_value
+                e._applied_dof_index = e._dof_index
+                e._applied_value = e._current_value
 
             if e.bc_type == "MPC":
                 self._Xbc[e._dof_index[0]] = (
@@ -518,6 +530,9 @@ class Problem(ProblemBase):
                     (np.array(e._dof_index[0]).reshape(-1, 1) * np.ones(n_fact)).ravel()
                 )  # slave dof (elimated)
                 col.append(e._dof_index[1:].T.ravel())  # master dofs
+
+        if checked_entries is not None:
+            self.bc._check_entries(self, checked_entries)
 
         dof_slave.update(dof_blocked)
         dof_slave = np.fromiter(dof_slave, int, len(dof_slave))
@@ -586,6 +601,15 @@ class Problem(ProblemBase):
         t_fact = self.t_fact
         self.apply_boundary_conditions(t_fact, t_fact)
 
+    def check_boundary_conditions(self):
+        """Look for boundary conditions applied twice on the same dof.
+
+        Shortcut for ``self.bc.check(self)``. See
+        :py:meth:`fedoo.ListBC.check` for the description of the returned
+        report.
+        """
+        return self.bc.check(self)
+
     def init_bc_start_value(self):
         ### is used only for incremental problems
         U = self.get_dof_solution()
@@ -593,6 +617,20 @@ class Problem(ProblemBase):
             return
         F = self.get_ext_forces()
         n_nodes = self.mesh.n_nodes
+
+        # Generalized forces are summed over the Neumann bc. The part of F
+        # applied by the other bc should then be removed to get the start
+        # value of a given bc.
+        F_applied = None
+        if not (np.isscalar(F) and F == 0):
+            for e in self.bc.list_all():
+                if e.bc_type == "Neumann" and hasattr(e, "_applied_value"):
+                    if len(e._applied_dof_index) == 0:
+                        continue
+                    if F_applied is None:
+                        F_applied = np.zeros(self.n_dof)
+                    F_applied[e._applied_dof_index] += e._applied_value
+
         # for e in self.bc.generate(self):
         for e in self.bc.list_all():
             if e.bc_type == "Dirichlet":
@@ -602,7 +640,17 @@ class Problem(ProblemBase):
             if e.bc_type == "Neumann":
                 if e._start_value_default is None:
                     if not (np.isscalar(F) and F == 0):
-                        e.start_value = F[e.variable * n_nodes + e.node_set]
+                        dof = e.variable * n_nodes + e.node_set
+                        start_value = F[dof]
+                        if F_applied is not None:
+                            other = F_applied[dof]
+                            if hasattr(e, "_applied_value") and np.array_equal(
+                                e._applied_dof_index, dof
+                            ):
+                                other = other - e._applied_value
+                            if np.any(other):
+                                start_value = start_value - other
+                        e.start_value = start_value
 
     def _get_force_vector(self):
         """Recover the force vector of the current linear system."""
