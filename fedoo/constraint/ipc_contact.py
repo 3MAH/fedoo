@@ -1353,26 +1353,34 @@ class IPCContact(AssemblyBase):
 
         Uses ``ipctk.update_barrier_stiffness`` with
         ``dhat_epsilon_scale = dhat / bbox_diag`` so the doubling
-        triggers within the barrier zone.  The distances passed to
-        ipctk are the gaps above the offset ``dmin`` (true distances
-        minus ``dmin``), so that the ``dhat`` threshold keeps its
-        meaning whatever the offset.  Only called between time steps
-        (in ``set_start``), never inside the NR loop.
+        triggers within the barrier zone.  The doubling test acts on the
+        gap above the offset ``dmin`` (true distance minus ``dmin``), so
+        that the ``dhat`` threshold keeps its meaning whatever the offset.
+        Like ``compute_minimum_distance``, ipctk works with *squared*
+        distances here: it compares its arguments to
+        ``(dhat_epsilon_scale * (bbox_diag + dmin))**2``.  The gaps are
+        therefore squared (clamped at zero) and ``dmin=0`` is passed, the
+        offset being already removed, so that the test reads
+        ``gap < dhat``.  Only called between time steps (in
+        ``set_start``), never inside the NR loop.
         """
         ipctk = _import_ipctk()
         bbox_diag = self._bbox_diag
 
         min_dist = self._minimum_distance(vertices)
 
+        def squared_gap(distance):
+            return max(distance - self._dmin, 0.0) ** 2
+
         eps_scale = self._actual_dhat / bbox_diag
         new_kappa = ipctk.update_barrier_stiffness(
-            self._prev_min_distance - self._dmin,
-            min_dist - self._dmin,
+            squared_gap(self._prev_min_distance),
+            squared_gap(min_dist),
             self._max_kappa,
             self._kappa,
             bbox_diag,
             dhat_epsilon_scale=eps_scale,
-            dmin=self._dmin,
+            dmin=0.0,
         )
         if new_kappa > self._kappa:
             self._kappa = new_kappa

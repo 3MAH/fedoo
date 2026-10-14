@@ -220,7 +220,35 @@ def test_barrier_stiffness_tuning_receives_offset(monkeypatch):
     monkeypatch.setattr(ipctk, "update_barrier_stiffness", update_with_offset)
     contact._initialize_kappa(contact._rest_positions)
     contact._update_kappa_adaptive(contact._rest_positions)
-    assert calls == {"initial": 0.4, "update": 0.4}
+    # The update receives squared gaps above the offset, hence dmin=0.
+    assert calls == {"initial": 0.4, "update": 0.0}
+
+
+@pytest.mark.parametrize("dmin", [0.0, 0.4])
+@pytest.mark.parametrize("scale", [1.0, 1e3])
+@pytest.mark.parametrize(
+    "prev_gap, gap, doubled",
+    [
+        (0.75, 0.5, True),  # inside dhat and closing: double
+        (0.5, 0.75, False),  # inside dhat but opening
+        (1.5, 1.25, False),  # closing but outside dhat
+    ],
+)
+def test_adaptive_kappa_doubles_on_gap_below_dhat(dmin, scale, prev_gap, gap, doubled):
+    # Gaps given in units of dhat; the threshold must read gap < dhat
+    # whatever the length scale and the offset.
+    dhat = 0.02 * scale
+    contact = fd.constraint.IPCContact.__new__(fd.constraint.IPCContact)
+    contact._bbox_diag = 1.0 * scale
+    contact._actual_dhat = dhat
+    contact._dmin = dmin * scale
+    contact._prev_min_distance = contact._dmin + prev_gap * dhat
+    contact._max_kappa = 100.0
+    contact._kappa = 10.0
+    contact.sv = {}
+    contact._minimum_distance = lambda vertices: contact._dmin + gap * dhat
+    contact._update_kappa_adaptive(None)
+    assert contact._kappa == (20.0 if doubled else 10.0)
 
 
 def test_self_contact_and_relative_dhat_keep_absolute_offset():
