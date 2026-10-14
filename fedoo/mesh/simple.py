@@ -1,5 +1,8 @@
 """This module contains functions to generate simple meshes"""
 
+import math
+
+
 from fedoo.core.mesh import Mesh
 import itertools
 import numpy as np
@@ -831,8 +834,6 @@ def box_mesh(
 
 
 if __name__ == "__main__":
-    import math
-
     a = line_mesh_cylindric(11, 1, 0, math.pi, "lin2")
     b = line_mesh_cylindric(11, 1, 0, math.pi, "lin4")
 

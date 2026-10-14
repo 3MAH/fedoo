@@ -9,8 +9,11 @@
 # from .simple_plot import mesh_plot_2d, field_plot_2d
 
 from .recovery import recover_gradient, recover_hessian, to_voigt, to_upper_diagonal
+from .beam_tensors import BeamStressList, BeamStrainList
 
 __all__ = [
+    "BeamStressList",
+    "BeamStrainList",
     "recover_gradient",
     "recover_hessian",
     "to_voigt",

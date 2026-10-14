@@ -14,6 +14,30 @@ def _dynamic_model():
     return mesh, stiffness
 
 
+def test_rectangular_beam_torsional_mass_uses_polar_area_moment():
+    space = fd.ModelingSpace("3D")
+    density, a, b, length = 2.0, 2.0, 1.0, 3.0
+    material = fd.constitutivelaw.ElasticIsotrop(1000, 0.25)
+    material.set_density(density)
+    section = fd.constitutivelaw.BeamRectangular(material, a, b)
+    polar = a * b * (a**2 + b**2) / 12
+    assert section.Jx != pytest.approx(polar)
+    mesh = fd.Mesh(np.array([[0.0, 0, 0], [length, 0, 0]]), np.array([[0, 1]]), "lin2")
+    wf = fd.weakform.BeamEquilibrium(section, space=space)
+    pb = fd.problem.Linear(fd.Assembly.create(wf, mesh), time_step=0.01)
+    pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+    pb.initialize()
+    velocity = np.zeros((space.nvar, mesh.n_nodes))
+    velocity[space.variable_rank("RotX")] = 1
+    v = velocity.ravel()
+    energy = 0.5 * v @ pb._dynamic_mass @ v
+    assert energy == pytest.approx(0.5 * density * polar * length)
+    assert section.get_beam_rigidity()[3] == pytest.approx(material.G * section.Jx)
+    # Circular sections retain their previous axial inertia.
+    circle = fd.constitutivelaw.BeamCircular(material, 1)
+    assert circle.rotary_density[0] == pytest.approx(density * circle.Jx)
+
+
 def test_linear_without_integrator_keeps_static_path():
     mesh, stiffness = _dynamic_model()
     problem = fd.problem.Linear(stiffness)

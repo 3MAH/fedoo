@@ -1,3 +1,10 @@
+from fedoo.util.shell_recovery import (
+    sample_positions,
+    validate_positions,
+    interpolate_tensors,
+    generalized_tensors,
+)
+
 # derive de ConstitutiveLaw
 # compatible with the simcoon strain and stress notation
 
@@ -9,14 +16,204 @@ import numpy as np
 
 
 class ShellBase(ConstitutiveLaw):
-    # base model class that should derive any other shell constitutive laws
-    def __init__(self, thickness, k=1, name=""):
+    """Base shell law; section recovery is opt-in for custom subclasses.
+
+    Built-in recovery models are homogeneous_linear, homogeneous_nonlinear,
+    laminate_linear and laminate_nonlinear. Subclasses using these models must
+    provide their corresponding material and thickness-integration information.
+    Linear laminates expose layer_materials. Without a declared _recovery_model,
+    generalized section outputs remain available but tensor recovery raises
+    NotImplementedError, handled as an unavailable output field.
+    """
+
+    _recovery_model = None
+
+    def __init__(self, thickness, k=1, name="", *, output_points=None, n_points=3):
         ConstitutiveLaw.__init__(self, name)  # heritage
 
         self.thickness = thickness
         """Shell thickness."""
         self.k = k
         """Shear shape factor."""
+        self.n_points = n_points
+        self.output_points = output_points
+
+    @property
+    def n_points(self):
+        """Output sampling count per layer, an integer of at least two."""
+        return self._n_points
+
+    @n_points.setter
+    def n_points(self, value):
+        if not isinstance(value, (int, np.integer)) or value < 2:
+            raise ValueError("Shell n_points must be an integer of at least two")
+        self._n_points = value
+
+    def _require_recovery(self):
+        if self._recovery_model is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not define shell section recovery"
+            )
+
+    @property
+    def layer_materials(self):
+        """Layer materials in stacking order; required for linear laminate recovery."""
+        raise NotImplementedError("This shell law does not expose layer materials")
+
+    @property
+    def output_points(self):
+        """Normalized thickness positions saved when output position is None.
+
+        Nonlinear shells default to their actual material integration points;
+        linear laminates include both sides of every layer interface.
+        """
+        self._require_recovery()
+        if self._output_points is not None:
+            return self._output_points.copy()
+        if self._recovery_model != "homogeneous_linear":
+            return self._integration_sampling()[0]
+
+        return sample_positions(self.section_description(), self.n_points)[0]
+
+    @output_points.setter
+    def output_points(self, points):
+        self._output_points = None if points is None else validate_positions(points)
+
+    def _integration_sampling(self):
+        if hasattr(self, "_layer_z"):
+            points = np.concatenate(self._layer_z) * 2 / self.thickness
+            layers = np.concatenate(
+                [np.full(len(z), i) for i, z in enumerate(self._layer_z)]
+            )
+            interfaces = self._interfaces * 2 / self.thickness
+            interfaces[[0, -1]] = [-1, 1]
+            return points, layers, interfaces
+        if hasattr(self, "_z"):
+            return (
+                self._z * 2 / self.thickness,
+                np.zeros(len(self._z), dtype=int),
+                np.array([-1.0, 1.0]),
+            )
+        # Linear laminates need the two one-sided limits at every interface.
+        interfaces = (
+            np.concatenate(([0.0], np.cumsum(self.list_thickness))) * 2 / self.thickness
+            - 1
+        )
+        interfaces[[0, -1]] = [-1, 1]
+        points = np.column_stack((interfaces[:-1], interfaces[1:])).ravel()
+        return points, np.repeat(np.arange(len(self.list_thickness)), 2), interfaces
+
+    def section_description(self, assembly=None):
+        """Numeric, material-independent information for saved shell recovery."""
+        self._require_recovery()
+        thickness = np.asarray(self.thickness)
+        if assembly is not None and thickness.ndim:
+            thickness = assembly.convert_data(thickness)
+        description = dict(
+            family="shell",
+            version=1,
+            model=self._recovery_model,
+            thickness=thickness,
+            k=self.k,
+            n_points=self.n_points,
+        )
+        if assembly is not None:
+            description["n_elm_gp"] = assembly.n_elm_gp
+        if self._recovery_model != "homogeneous_linear":
+            points, layers, interfaces = self._integration_sampling()
+            description.update(
+                integration_points=points,
+                integration_layers=layers,
+                interfaces=interfaces,
+            )
+        return description
+
+    def integration_stresses(self, assembly):
+        """Actual thickness stresses, including elastic transverse shear."""
+        self._require_recovery()
+        if self._recovery_model == "laminate_linear":
+            points, layers, _ = self._integration_sampling()
+            tensors = []
+            for point, layer in zip(points, layers):
+                # Use each layer's own material, including at shared interfaces.
+                strain = self.get_strain(assembly, position=float(point)).asarray()
+                material = self.layer_materials[layer]
+                tensors.append(_elastic_shell_stress(material, assembly, strain))
+            return np.stack(tensors, axis=1)
+        if hasattr(self, "_material_assemblies"):
+            if self._material_assemblies is None:
+                raise RuntimeError("The shell law has not been initialized")
+            blocks = []
+            for layer, material_assembly in enumerate(self._material_assemblies):
+                block = (
+                    material_assembly.sv["Stress"]
+                    .asarray()
+                    .reshape(6, -1, assembly.n_gauss_points)
+                    .copy()
+                )
+                shear = self._shear_matrices[layer]
+                blocks.append((block, shear))
+        else:
+            if self._material_assembly is None:
+                raise RuntimeError("The shell law has not been initialized")
+            block = (
+                self._material_assembly.sv["Stress"]
+                .asarray()
+                .reshape(6, -1, assembly.n_gauss_points)
+                .copy()
+            )
+            blocks = [(block, self._elastic_shear_matrix())]
+        strain = self.get_strain(assembly, position=0).asarray()
+        for block, shear in blocks:
+            block[4:6] = (shear @ strain[4:6])[:, None, :]
+        return np.concatenate([block for block, _ in blocks], axis=1)
+
+    def get_output_tensors(self, assembly, kind, position=None):
+        """Return (6, thickness point, shell GP) tensors and point metadata."""
+
+        points = (
+            self.output_points if position is None else validate_positions(position)
+        )
+        metadata = self.section_description(assembly)
+        metadata["stored_points"] = points
+        if self._recovery_model != "homogeneous_linear":
+            native, layers, interfaces = self._integration_sampling()
+            metadata["point_layers"] = (
+                layers
+                if position is None and self._output_points is None
+                else np.clip(
+                    np.searchsorted(interfaces, points, side="left") - 1,
+                    0,
+                    len(interfaces) - 2,
+                )
+            )
+            if (
+                position is None
+                and self._output_points is None
+                and self._recovery_model.endswith("nonlinear")
+            ):
+                metadata["sampling"] = "integration"
+        if kind == "Strain":
+            tensors = self.get_strain(assembly, position=points).asarray()
+        elif self._recovery_model == "homogeneous_linear":
+            tensors = self.get_stress(assembly, position=points).asarray()
+        else:
+            raw = self.integration_stresses(assembly)
+            native, layers, interfaces = self._integration_sampling()
+            if position is None and self._output_points is None:
+                tensors = raw
+                metadata["point_layers"] = layers
+            else:
+                tensors = interpolate_tensors(
+                    raw, native, points, layers, interfaces, allow_constant=True
+                )
+                metadata["point_layers"] = np.clip(
+                    np.searchsorted(interfaces, points, side="left") - 1,
+                    0,
+                    len(interfaces) - 2,
+                )
+        cls = StrainTensorList if kind == "Strain" else StressTensorList
+        return cls(tensors), metadata
 
     def get_shell_stiffness_matrix(self):
         raise NameError(
@@ -102,34 +299,73 @@ class ShellBase(ConstitutiveLaw):
         Returns
         -------
         StrainTensorList object containing the strain at integration point
+        The in-plane strain is epsilon0 - z*kappa, with z positive along
+        the local shell normal and kappa_xx = -d(RotY)/dx.
+        """
+
+        position = kargs.get("position", 1)
+        if position is None:
+            position = self.output_points
+        values = assembly.sv["ShellStrain"]
+        values = np.array(
+            [
+                np.broadcast_to(c, (assembly.n_gauss_points,))
+                for c in ([0] * 8 if np.isscalar(values) else values)
+            ]
+        )
+        tensors = generalized_tensors(
+            values, self.section_description(assembly), "Strain", position
+        )
+        return StrainTensorList(tensors[:, 0] if np.isscalar(position) else tensors)
+
+    def get_stress(self, assembly, **kargs):
+        """Recover local stress at normalized thickness position(s).
+
+        The default position is +1 (top face); position=None uses configured
+        output points. This method does not reduce points. Dataset reads use
+        ``shell_options`` and default to the sole saved point, or the top face
+        when multiple points or only generalized fields exist. With a reduction, full
+        tensors are reduced componentwise and components can come from different
+        thickness points. Scalar invariants are evaluated before reduction;
+        computing invariants from an envelope instead is not guaranteed
+        conservative. These selection rules also apply to dataset Strain fields.
         """
         position = kargs.get("position", 1)
-        z = position * self.thickness / 2
+        tensors, _ = self.get_output_tensors(assembly, "Stress", position)
+        return (
+            StressTensorList(tensors.asarray()[:, 0])
+            if np.isscalar(position)
+            else tensors
+        )
 
-        Strain = StrainTensorList([0 for i in range(6)])
-        ShellStrain = assembly.sv["ShellStrain"]
-        if np.isscalar(ShellStrain) and ShellStrain == 0:
-            zeros = np.zeros(assembly.n_gauss_points)
-            return StrainTensorList([zeros.copy() for _ in range(6)])
-        Strain[0] = ShellStrain[0] + z * ShellStrain[3]  # epsXX -> membrane and bending
-        Strain[1] = ShellStrain[1] + z * ShellStrain[4]  # epsYY -> membrane and bending
-        Strain[3] = ShellStrain[2] + z * ShellStrain[5]  # 2epsXY -> membrane and twist
-        Strain[4:6] = ShellStrain[6:8]  # 2epsXZ and 2epsYZ -> shear
 
-        return Strain
-
-    def get_stress(self, **kargs):
-        raise NameError('"GetStress" not implemented, contact developer.')
+def _elastic_shell_stress(material, assembly, strain):
+    plane = material.get_elastic_matrix("2Dstress")
+    shear = material.get_elastic_matrix()
+    result = np.zeros_like(strain)
+    for i in (0, 1, 3, 4, 5):
+        matrix = shear if i >= 4 else plane
+        indices = (4, 5) if i >= 4 else (0, 1, 3)
+        result[i] = sum(
+            strain[j] * assembly.convert_data(matrix[i][j]) for j in indices
+        )
+    return result
 
 
 class ShellHomogeneous(ShellBase):
-    def __init__(self, material, thickness, k=1, name=""):
+    _recovery_model = "homogeneous_linear"
+
+    def __init__(
+        self, material, thickness, k=1, name="", *, output_points=None, n_points=3
+    ):
         # k: shear shape factor
 
         if isinstance(material, str):
             material = ConstitutiveLaw.get_all()[material]
 
-        ShellBase.__init__(self, thickness, k, name)  # heritage
+        ShellBase.__init__(
+            self, thickness, k, name, output_points=output_points, n_points=n_points
+        )
 
         self.material = material
 
@@ -161,39 +397,8 @@ class ShellHomogeneous(ShellBase):
         return H
 
     def get_stress(self, assembly, **kargs):
-        Strain = self.get_strain(assembly, **kargs)
-        Hplane = self.material.get_elastic_matrix(
-            "2Dstress"
-        )  # membrane rigidity matrix with plane stress assumption
-        Stress = [
-            sum(
-                [
-                    (
-                        0
-                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
-                        else Strain[j] * Hplane[i][j]
-                    )
-                    for j in range(4)
-                ]
-            )
-            for i in range(4)
-        ]  # SXX, SYY, SXY (SZZ should be = 0)
-        Hshear = self.material.get_elastic_matrix()
-        Stress += [
-            sum(
-                [
-                    (
-                        0
-                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
-                        else Strain[j] * Hshear[i][j]
-                    )
-                    for j in [4, 5]
-                ]
-            )
-            for i in [4, 5]
-        ]  # SXX, SYY, SXY (SZZ should be = 0)
-
-        return StressTensorList(Stress)
+        strain = self.get_strain(assembly, **kargs).asarray()
+        return StressTensorList(_elastic_shell_stress(self.material, assembly, strain))
 
     def get_stress_distribution(self, assembly, pg, resolution=100):
         h = self.thickness
@@ -202,13 +407,13 @@ class ShellHomogeneous(ShellBase):
         Strain = StrainTensorList([0 for i in range(6)])
         ShellStrain = assembly.sv["ShellStrain"]
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[3][pg]
+            ShellStrain[0][pg] - z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] + z * ShellStrain[4][pg]
+            ShellStrain[1][pg] - z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
         Strain[3] = (
-            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+            ShellStrain[2][pg] - z * ShellStrain[5][pg]
         )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear
@@ -302,14 +507,17 @@ def _tangent_array(tangent, n_points):
 
 
 def _strain_matrix(z):
-    """Membrane+bending strain-interpolation matrix at through-thickness ``z``."""
+    """Map generalized strains to epsilon0 - z*kappa at thickness ``z``.
+
+    Its transpose integrates energy-conjugate moments as -integral(z*sigma).
+    """
     matrix = np.zeros((6, 8))
     matrix[0, 0] = 1
-    matrix[0, 3] = z
+    matrix[0, 3] = -z
     matrix[1, 1] = 1
-    matrix[1, 4] = z
+    matrix[1, 4] = -z
     matrix[3, 2] = 1
-    matrix[3, 5] = z
+    matrix[3, 5] = -z
     return matrix
 
 
@@ -341,6 +549,8 @@ class ShellHomogeneousNonLinear(ShellBase):
         Name of the shell constitutive law.
     """
 
+    _recovery_model = "homogeneous_nonlinear"
+
     def __init__(
         self,
         material,
@@ -348,13 +558,18 @@ class ShellHomogeneousNonLinear(ShellBase):
         n_thickness_points=5,
         k=1,
         name="",
+        *,
+        output_points=None,
+        n_points=3,
     ):
         if isinstance(material, str):
             material = ConstitutiveLaw.get_all()[material]
         if n_thickness_points < 1:
             raise ValueError("n_thickness_points must be at least one.")
 
-        super().__init__(thickness, k, name)
+        super().__init__(
+            thickness, k, name, output_points=output_points, n_points=n_points
+        )
         self.material = copy.deepcopy(material)
         self._shear_material = copy.deepcopy(material)
         self.n_thickness_points = n_thickness_points
@@ -573,6 +788,8 @@ class ShellLaminateNonLinear(ShellBase):
         Name of the shell constitutive law.
     """
 
+    _recovery_model = "laminate_nonlinear"
+
     def __init__(
         self,
         list_mat,
@@ -580,6 +797,9 @@ class ShellLaminateNonLinear(ShellBase):
         n_thickness_points=3,
         k=1,
         name="",
+        *,
+        output_points=None,
+        n_points=3,
     ):
         if len(list_mat) != len(list_thickness):
             raise ValueError("list_mat and list_thickness must have the same length.")
@@ -609,7 +829,9 @@ class ShellLaminateNonLinear(ShellBase):
             raise ValueError("Every layer must have at least one thickness point.")
 
         thickness = float(np.sum(list_thickness))
-        super().__init__(thickness, k, name)
+        super().__init__(
+            thickness, k, name, output_points=output_points, n_points=n_points
+        )
         self.materials = [copy.deepcopy(material) for material in materials]
         self._shear_materials = [copy.deepcopy(material) for material in materials]
         self.list_thickness = np.asarray(list_thickness, dtype=float)
@@ -870,7 +1092,23 @@ class ShellLaminateNonLinear(ShellBase):
 
 
 class ShellLaminate(ShellBase):
-    def __init__(self, list_mat, list_thickness, k=1, name=""):
+    """Elastic layers ordered bottom to top along the local shell normal.
+
+    In-plane strain is epsilon0 - z*kappa. The coupling blocks are therefore
+    -B, where B = integral(z*C) through the thickness. Generalized moments
+    are -integral(z*sigma), conjugate to the existing curvature convention.
+    """
+
+    _recovery_model = "laminate_linear"
+
+    @property
+    def layer_materials(self):
+        """Layer materials from bottom to top, without exposing private storage."""
+        return tuple(self.__list_mat)
+
+    def __init__(
+        self, list_mat, list_thickness, k=1, name="", *, output_points=None, n_points=3
+    ):
         # assert get_Dimension() == '3D', "No 2D model for a shell kinematic. Choose '3D' problem dimension."
 
         self.__list_mat = [
@@ -884,7 +1122,9 @@ class ShellLaminate(ShellBase):
         )  # z coord of layers interfaces
         self.list_thickness = list_thickness
 
-        ShellBase.__init__(self, thickness, k, name)  # heritage
+        ShellBase.__init__(
+            self, thickness, k, name, output_points=output_points, n_points=n_points
+        )
 
     def compute_area_density(self):
         return sum(
@@ -916,10 +1156,10 @@ class ShellLaminate(ShellBase):
 
             H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 0:3] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 3:6] += (
                 (1 / 3) * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3) * Hplane
@@ -953,10 +1193,10 @@ class ShellLaminate(ShellBase):
 
             H[0:3, 0:3] += self.list_thickness[i] * Hplane  # Membrane
             H[0:3, 3:6] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 0:3] += (
-                0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
+                -0.5 * (self.__layer[i + 1] ** 2 - self.__layer[i] ** 2) * Hplane
             )
             H[3:6, 3:6] += (
                 (1 / 3) * (self.__layer[i + 1] ** 3 - self.__layer[i] ** 3) * Hplane
@@ -965,44 +1205,7 @@ class ShellLaminate(ShellBase):
         return H
 
     def get_stress(self, assembly, **kargs):
-        Strain = self.get_strain(assembly, **kargs)
-        position = kargs.get("position", 1)
-        layer = self.find_layer(
-            position
-        )  # find the layer corresponding to the specified position
-
-        Hplane = self.__list_mat[layer].get_elastic_matrix(
-            "2Dstress"
-        )  # membrane rigidity matrix with plane stress assumption
-        Stress = [
-            sum(
-                [
-                    (
-                        0
-                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
-                        else Strain[j] * Hplane[i][j]
-                    )
-                    for j in range(4)
-                ]
-            )
-            for i in range(4)
-        ]  # SXX, SYY, SXY (SZZ should be = 0)
-        Hshear = self.__list_mat[layer].get_elastic_matrix()
-        Stress += [
-            sum(
-                [
-                    (
-                        0
-                        if (np.isscalar(Strain[j]) and Strain[j] == 0)
-                        else Strain[j] * Hshear[i][j]
-                    )
-                    for j in [4, 5]
-                ]
-            )
-            for i in [4, 5]
-        ]  # SXX, SYY, SXY (SZZ should be = 0)
-
-        return StressTensorList(Stress)
+        return super().get_stress(assembly, **kargs)
 
     def get_stress_distribution(self, assembly, pg, resolution=100):
         h = self.thickness
@@ -1012,13 +1215,13 @@ class ShellLaminate(ShellBase):
         ShellStrain = assembly.sv["ShellStrain"]
 
         Strain[0] = (
-            ShellStrain[0][pg] + z * ShellStrain[3][pg]
+            ShellStrain[0][pg] - z * ShellStrain[3][pg]
         )  # epsXX -> membrane and bending
         Strain[1] = (
-            ShellStrain[1][pg] + z * ShellStrain[4][pg]
+            ShellStrain[1][pg] - z * ShellStrain[4][pg]
         )  # epsYY -> membrane and bending
         Strain[3] = (
-            ShellStrain[2][pg] + z * ShellStrain[5][pg]
+            ShellStrain[2][pg] - z * ShellStrain[5][pg]
         )  # 2epsXY -> membrane and twist
         Strain[4] = ShellStrain[6][pg] * np.ones_like(z)  # 2epsXZ -> shear
         Strain[5] = ShellStrain[7][pg] * np.ones_like(z)  # 2epsYZ -> shear

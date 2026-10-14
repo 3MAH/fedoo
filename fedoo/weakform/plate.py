@@ -38,9 +38,16 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
           membrane deformation.
     drill_stiffness_coefficient : float, default=1e-2
         The penalty coefficient used for the drilling rotation constraint scaled by the
-        membrane shear stiffness.
+        initial membrane shear stiffness, held fixed during the solve for both
+        tangent options and both drilling modes.
         Increasing this value enforces the constraint more strictly but
         may introduce drilling locking in fully integrated elements.
+    consistent_tangent : bool, default=False
+        For UL, analytically differentiate the complete corotational residual,
+        including current geometry, frame, FI/SRI/MITC interpolation and drilling.
+        The tangent can be nonsymmetric. False retains the historical material
+        plus membrane-force geometric stiffness. Both options use the same
+        fixed initial stiffness scale for the drilling penalty.
     name : str, optional
         Name of the WeakForm.
     nlgeom : bool or str, optional
@@ -56,6 +63,8 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=False,
     ):
         if isinstance(plate_properties, str):
             plate_properties = ConstitutiveLaw.get_all()[plate_properties]
@@ -90,6 +99,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self.nlgeom = nlgeom
         self.true_drilling_rotation = true_drilling_rotation
         self.drill_stiffness_coefficient = drill_stiffness_coefficient
+        self.consistent_tangent = consistent_tangent
+        if consistent_tangent:
+            self.assembly_options["assume_sym"] = False
         self._store_local_pos = False
         if type(self).__name__ in ("PlateEquilibriumFI", "PlateEquilibrium"):
             self.time_evolution = SECOND_ORDER
@@ -140,6 +152,20 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 )
                 assembly.sv["_NodeLocalPos"] = node_local_pos
 
+        if self.consistent_tangent and self.nlgeom:
+            if self.nlgeom != "UL":
+                raise NotImplementedError(
+                    "The consistent shell tangent requires nlgeom='UL'."
+                )
+            if self._plate_weak_equation_owner() is not PlateEquilibriumFI:
+                raise NotImplementedError(
+                    "Use PlateEquilibrium or PlateEquilibriumFI for the consistent shell tangent; "
+                    "manually split shell weak forms are not supported."
+                )
+            from fedoo.weakform._shell_tangent import initialize_shell_tangent
+
+            initialize_shell_tangent(self, assembly)
+
     def _compute_local_dof(self, assembly, pb):
         mesh = assembly.current.mesh
         nodes_pos = mesh.nodes[mesh.elements]
@@ -155,8 +181,9 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         delta_rotvec_nodes = pb._get_vect_component(pb.get_X(), "Rot")
         delta_rotvec = delta_rotvec_nodes.T[mesh.elements].mean(axis=1)
 
+        # Local axes are rows: a spatial rotation Q updates R to R Q.T.
         rigid_rotmat_trial = assembly.sv["RigidRotationMat"] @ (
-            Rotation.from_rotvec(delta_rotvec).as_matrix()
+            Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(0, 2, 1)
         )
 
         current_local_frame = mesh.get_element_local_frame()
@@ -207,6 +234,10 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         rigid_rotmat[:, 0, :] = e1
         rigid_rotmat[:, 1, :] = e2
         rigid_rotmat[:, 2, :] = e3
+
+        # Trial residuals and interpolation must use the same trial frame.
+        if self._use_consistent_tangent(assembly):
+            assembly.current._element_local_frame = rigid_rotmat[:, None]
 
         if self._store_local_pos:
             assembly.sv["_NodeLocalPos"] = np.matmul(
@@ -291,15 +322,29 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         dof_local[v_rot * n_dof : (v_rot + 3) * n_dof] = rot_loc.transpose(
             2, 1, 0
         ).ravel()
+        if self._use_consistent_tangent(assembly):
+            assembly.sv["_ShellTangentDof"] = (
+                dof_local.reshape(self.space.nvar, mesh.n_elm_nodes, mesh.n_elements)
+                .transpose(2, 0, 1)
+                .reshape(mesh.n_elements, -1)
+            )
         return dof_local
 
     def update(self, assembly, pb):
+        # Capture the scale after initialization, before the material update.
+        if self.drill_stiffness_coefficient != 0:
+            self._drill_reference(assembly)
+        assembly.sv.pop("_ShellTangentOperators", None)
         if self.nlgeom == "UL":
             assembly.set_disp(pb.get_disp())
 
         if np.array_equal(pb.get_dof_solution(), 0):
             assembly.sv["ShellStrain"] = 0
             assembly.sv["_DrillConstraint"] = 0
+            if self._use_consistent_tangent(assembly):
+                assembly.sv["_ShellTangentDof"] = np.zeros_like(
+                    assembly.sv["_ShellTangentDof"]
+                )
             return
 
         op_plate_strain = self.generalized_strain_operator()
@@ -332,6 +377,19 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         assembly.sv["_DrillConstraint"] = assembly.current.get_gp_results(
             op_drill_constraint, dof, use_local_dof=use_local_dof
         )
+
+    def update_2(self, assembly, pb):
+        """Prepare tangent fields once, after the constitutive state update."""
+        # A line-search trial only evaluates the residual: skip the tangent.
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
+            self._prepare_consistent_tangent(assembly.current)
+
+    def set_start(self, assembly, pb):
+        # Constitutive set_start may change the section tangent or resultants.
+        # The subsequent assembly prepares fields from that updated state.
+        assembly.sv.pop("_ShellTangentOperators", None)
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
@@ -406,7 +464,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
             )
 
             # Geometrical stiffness (Local String Effect)
-            if assembly._nlgeom:
+            if assembly._nlgeom and not self._use_consistent_tangent(assembly):
                 Nx = initial_stress[0]
                 Ny = initial_stress[1]
                 Nxy = initial_stress[2]
@@ -440,7 +498,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         if self.drill_stiffness_coefficient != 0:
             # penalty for RotZ (drilling DOF stabilization)
-            representative_stiffness = H[2][2]
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -449,7 +507,114 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 * penalty
             )
 
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
+            diffop += self._get_consistent_tangent(assembly)
         return diffop
+
+    def _use_consistent_tangent(self, assembly):
+        return self.consistent_tangent and assembly._nlgeom == "UL"
+
+    def _plate_weak_equation_owner(self):
+        """Plate class whose ``get_weak_equation`` builds this weak form.
+
+        Classes of the method resolution order that are not plate weak forms
+        are skipped: a time integrator derives a subclass whose mixin only
+        rescales the equation returned by ``super()``, which leaves the plate
+        equation, hence its consistent tangent, unchanged. A plate subclass
+        overriding ``get_weak_equation`` (manually split shell weak forms) is
+        returned as the owner.
+        """
+        for cls in type(self).__mro__:
+            if issubclass(cls, PlateEquilibriumFI) and "get_weak_equation" in vars(cls):
+                return cls
+        return None
+
+    def _drill_reference(self, assembly):
+        """Initial drilling-penalty scale shared by both tangent options.
+
+        A fixed scale avoids differentiating H (a material third derivative).
+        It is taken from the section stiffness on first use rather than in
+        ``initialize``: the assembly initializes the constitutive law after
+        the weak form, and a section built on a law that only provides its
+        elastic matrix once initialized (Simcoon) has no stiffness before.
+        The first use precedes any constitutive update, and a rollback that
+        discards the entry also restores the section state it is read from,
+        so the value is always the one of the initial state.
+        """
+        reference = assembly.sv.get("_ShellDrillReference")
+        if reference is None:
+            stiffness = self.constitutivelaw.get_shell_stiffness_matrix()[2][2]
+            reference = np.array(assembly.convert_data(stiffness), copy=True)
+            assembly.sv["_ShellDrillReference"] = reference
+        return reference
+
+    def _prepare_consistent_tangent(self, assembly):
+        """Cache numerical fields in the state; never cache material stiffness."""
+        from fedoo.weakform._shell_tangent import shell_tangent_operators
+
+        stress = assembly.sv["ShellStress"]
+        stress = [0] * 8 if np.array_equal(stress, 0) else list(stress)
+        penalty = self.drill_stiffness_coefficient * self._drill_reference(assembly)
+        stress.append(penalty * assembly.sv["_DrillConstraint"])
+        tangent = shell_tangent_operators(self, assembly, stress)
+        # Replace the entry rather than mutate its arrays: sv_start snapshots
+        # must retain the previous state's geometry/resultant derivatives.
+        assembly.sv["_ShellTangentOperators"] = tangent
+        return tangent
+
+    def _get_consistent_tangent(self, assembly):
+        """Four derivatives of r(v)=integral (B T v).T s dA.
+
+        Include drilling as a ninth generalized strain/resultant. The ordinary
+        material and drilling tangents are already present in get_weak_equation.
+        """
+        eps = self.generalized_strain_operator() + [self.drill_constraint_operator()]
+        H = assembly.sv["_ShellStiffnessMatrix"]
+        penalty = self.drill_stiffness_coefficient * self._drill_reference(assembly)
+        tangent = assembly.sv.get("_ShellTangentOperators")
+        if tangent is None:
+            # Initialization and set_start can assemble before update_2.
+            tangent = self._prepare_consistent_tangent(assembly)
+
+        # 1. Strain change: eps(v).T H [B(delta_q-delta_u_local)+(delta_B)q].
+        ne, ng = assembly.mesh.n_elements, assembly.n_elm_gp
+
+        def gauss_coefficient(value):
+            return (
+                np.broadcast_to(assembly.convert_data(value), (ne * ng,))
+                .reshape(ng, ne)
+                .T[..., None]
+            )
+
+        strain_change = np.zeros_like(tangent.strain_correction)
+        for i in range(8):
+            for j in range(8):
+                if not np.array_equal(H[i][j], 0):
+                    strain_change[i] += (
+                        gauss_coefficient(H[i][j]) * tangent.strain_correction[j]
+                    )
+        strain_change[8] = gauss_coefficient(penalty) * tangent.strain_correction[8]
+
+        # 2. Virtual interpolation change: ((delta_B) v_local).T s.
+        interpolation_change = tangent.interpolation_work
+
+        # 3. Integration measure change: eps(v).T s delta(dA)/dA.
+        measure_change = np.moveaxis(
+            tangent.resultants[..., None] * tangent.relative_area[:, :, None], 2, 0
+        )
+
+        # 4. Frame rotation: (B delta_T v).T s.
+        frame_rotation = tangent.frame_rotation
+
+        # Combine coefficients sharing the same virtual/trial interpolation
+        # before creating DiffOps. The four derivatives above remain distinct,
+        # without expanding their products into thousands of duplicate terms.
+        return sum(
+            op.virtual * tangent.field(self, coefficients)
+            for op, coefficients in zip(eps, strain_change + measure_change)
+        ) + tangent.virtual_work(self, interpolation_change + frame_rotation)
 
 
 class PlateEquilibrium(
@@ -501,9 +666,14 @@ class PlateEquilibrium(
           deformation.
     drill_stiffness_coefficient : float, default=1e-2
         The penalty coefficient used for the drilling rotation constraint.
-        Typically scaled by the membrane shear stiffness. Increasing this value
+        Scaled by the initial membrane shear stiffness, held fixed during the
+        solve for both tangent options and both drilling modes. Increasing this value
         enforces the constraint more strictly but may introduce drilling locking
         in fully integrated elements.
+    consistent_tangent : bool, default=False
+        Use the complete analytical UL residual derivative, including MITC,
+        drilling and current geometry. False retains the historical tangent.
+        Both options use the same fixed initial drilling stiffness scale.
     name : str, optional
         Name of the WeakForm instance.
     nlgeom : bool or str, optional
@@ -519,14 +689,17 @@ class PlateEquilibrium(
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=False,
     ):
         super().__init__(
             plate_properties,
-            true_drilling_rotation,
-            drill_stiffness_coefficient,
-            name,
-            nlgeom,
-            space,
+            true_drilling_rotation=true_drilling_rotation,
+            drill_stiffness_coefficient=drill_stiffness_coefficient,
+            name=name,
+            nlgeom=nlgeom,
+            space=space,
+            consistent_tangent=consistent_tangent,
         )
         # alias with "_" prefix may be used for reduced integration.
         self.space.variable_alias("_DispX", "DispX")
@@ -543,7 +716,7 @@ class PlateEquilibrium(
         # self.assembly_options["elm_type", "quad9"] = "pquad9sri"
 
     def initialize(self, assembly, pb):
-        if assembly.elm_type[-4:] == "mitc":
+        if assembly.elm_type.removesuffix("_consistent").endswith("mitc"):
             self._mitc = True
             self._store_local_pos = True
         else:
@@ -683,7 +856,7 @@ class PlateShearEquilibrium(PlateEquilibriumFI):
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
-            representative_stiffness = H[2][2]
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -780,7 +953,7 @@ class PlateKirchhoffLoveEquilibrium(PlateEquilibriumFI):
             # penalty for RotZ
             # use full integration if simple stiffness to avoid singularity
             op_drill_constraint = self.drill_constraint_operator()
-            representative_stiffness = H[2][2]
+            representative_stiffness = self._drill_reference(assembly)
             penalty = representative_stiffness * self.drill_stiffness_coefficient
 
             diffop += (
@@ -807,12 +980,10 @@ class PlateDrillingPenalty(PlateEquilibriumFI):
             assembly.sv["_ShellStiffnessMatrix"] = (
                 self.constitutivelaw.get_shell_stiffness_matrix()
             )
-        H = assembly.sv["_ShellStiffnessMatrix"]
-
         # penalty for RotZ
         # use full integration if simple stiffness to avoid singularity
         op_drill_constraint = self.drill_constraint_operator()
-        representative_stiffness = H[2][2]
+        representative_stiffness = self._drill_reference(assembly)
         penalty = representative_stiffness * self.drill_stiffness_coefficient
 
         diffop = (

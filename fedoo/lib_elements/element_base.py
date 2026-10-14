@@ -1,10 +1,11 @@
+from itertools import product
+
 import numpy as np
 
 
 def _monomial_exponents(ndim, max_degree):
     """Exponent tuples of the monomials in ``ndim`` variables, ordered by
     total degree, then by maximum partial degree, then lexicographically."""
-    from itertools import product
 
     exponents = [
         e for e in product(range(max_degree + 1), repeat=ndim) if sum(e) <= max_degree

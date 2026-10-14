@@ -1,9 +1,12 @@
+from fedoo.weakform._beam_tangent import beam_tangent_operators
+
 from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.weakform.inertia import Inertia, RotaryInertia
 from scipy.spatial.transform import Rotation
 import numpy as np
+from fedoo.util.beam_tensors import BeamStressList, BeamStrainList
 
 
 class BeamEquilibrium(WeakFormBase):
@@ -31,6 +34,15 @@ class BeamEquilibrium(WeakFormBase):
     k: scalar or arrays of gauss point values, optional
         Shear coefficient. If k=0 (*default*) the beam use the bernoulli
         hypothesis.
+    consistent_tangent: bool, default=False
+        For standard two-node ``beam`` elements with ``nlgeom=True`` or
+        ``'UL'``, differentiate the complete existing internal-force residual.
+        Includes the changing length, frame and local finite rotations. The
+        resulting tangent may be nonsymmetric. Set False for the historical
+        material plus axial-force geometric tangent. Alternative beam
+        interpolations retain that historical tangent.
+        This option is read-only after construction. Create a new weak form
+        to select a different tangent, including when sharing forms across assemblies.
     name: str
         name of the WeakForm.
 
@@ -52,6 +64,8 @@ class BeamEquilibrium(WeakFormBase):
         name="",
         nlgeom=None,
         space=None,
+        *,
+        consistent_tangent=False,
     ):
         # k: shear shape factor
 
@@ -97,6 +111,24 @@ class BeamEquilibrium(WeakFormBase):
         ``None`` preserves the historical behavior, in which the term follows
         ``nlgeom``. A boolean value explicitly enables or disables it.
         """
+        self._consistent_tangent = consistent_tangent
+        if consistent_tangent:
+            for variable in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
+                if variable in self.space.list_variables():
+                    self.space.variable_alias("_BeamMean" + variable, variable)
+
+    @property
+    def consistent_tangent(self):
+        """Read-only tangent selection, set through the constructor.
+
+        False (default) retains the historical tangent. True differentiates the
+        UL corotational residual for standard two-node beams, including length,
+        frame and finite-rotation derivatives; the tangent may be nonsymmetric.
+        geometric_stiffness=False retains the material-only tangent. Other beam
+        interpolations use the historical tangent. Create a new weak form to
+        change this option; a form may be shared by multiple assemblies.
+        """
+        return self._consistent_tangent
 
     def get_storage(self):
         if self.storage is not None:
@@ -116,8 +148,22 @@ class BeamEquilibrium(WeakFormBase):
 
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
+        # Resolve the formulation default here, as in StressEquilibrium,
+        # while preserving explicit weak-form or assembly settings.
+        if assembly.assume_sym is None:
+            assume_sym = self.assembly_options.get("assume_sym", assembly.elm_type)
+            if assume_sym is None:
+                # Coupled interpolations expand a weak operator onto several
+                # variables. The symmetric assembly shortcut filters terms
+                # before that expansion and can omit required contributions.
+                assume_sym = not (
+                    self._use_consistent_tangent(assembly)
+                    or assembly._get_associated_variables()
+                )
+            assembly.assume_sym = assume_sym
 
     def update(self, assembly, pb):
+        assembly.sv.pop("_BeamTangentOperators", None)
         # function called when the problem is updated (NR loop or time increment)
         # Nlgeom implemented only for updated lagragian formulation
         if self.nlgeom == "UL":
@@ -131,6 +177,7 @@ class BeamEquilibrium(WeakFormBase):
         dof = pb.get_dof_solution()  # displacement and rotation node values
         if np.isscalar(dof) and dof == 0:
             assembly.sv["BeamStrain"] = assembly.sv["BeamStress"] = 0
+            assembly.sv.pop("_BeamTangentData", None)
         else:
             op_beam_strain = assembly.space.op_beam_strain()
             Ke = [
@@ -241,10 +288,11 @@ class BeamEquilibrium(WeakFormBase):
                     # get element mean rotvec increment
                     delta_rotvec = 0.5 * delta_rotvec_nodes.T[mesh.elements].sum(axis=1)
 
-                    # update rigid rotation local_frame (rotmatrix from global frame)
-                    rigid_rotmat_trial = (
-                        assembly.sv["RigidRotationMat"]
-                        @ Rotation.from_rotvec(delta_rotvec).as_matrix()
+                    # Local axes are rows: a spatial rotation Q updates R to R Q.T.
+                    rigid_rotmat_trial = assembly.sv[
+                        "RigidRotationMat"
+                    ] @ Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(
+                        0, 2, 1
                     )
 
                     # get rigid rotation by projection (X axis is the poutre normal)
@@ -369,8 +417,25 @@ class BeamEquilibrium(WeakFormBase):
                                         - pb.get_dof_solution()[bc._dof_index]
                                     )
 
+                if self._use_consistent_tangent(assembly):
+                    frame = (
+                        mesh.get_element_local_frame()
+                        if self.space.ndim == 2
+                        else rigid_rotmat
+                    )
+                    # Trial frames must also be used when evaluating a line search.
+                    assembly.current._element_local_frame = frame[:, None]
+                    assembly.sv["_BeamTangentData"] = (
+                        dof_local.reshape(self.space.nvar, 2, mesh.n_elements)
+                        .transpose(2, 0, 1)
+                        .reshape(mesh.n_elements, -1),
+                        frame,
+                        None if self.space.ndim == 2 else nodes_rotmat[mesh.elements],
+                        None if self.space.ndim == 2 else initial_element_rotmat,
+                    )
+
                 # compute the beam strain at gausspoint
-                assembly.sv["BeamStrain"] = _BeamComponentList(
+                assembly.sv["BeamStrain"] = BeamStrainList(
                     [
                         0
                         if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
@@ -382,16 +447,18 @@ class BeamEquilibrium(WeakFormBase):
                 )
 
             else:
-                assembly.sv["BeamStrain"] = [
-                    (
-                        0
-                        if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
-                        else assembly.get_gp_results(op, dof)
-                    )
-                    for i, op in enumerate(op_beam_strain)
-                ]
+                assembly.sv["BeamStrain"] = BeamStrainList(
+                    [
+                        (
+                            0
+                            if ((np.isscalar(Ke[i]) and Ke[i] == 0) or (op == 0))
+                            else assembly.get_gp_results(op, dof)
+                        )
+                        for i, op in enumerate(op_beam_strain)
+                    ]
+                )
 
-            assembly.sv["BeamStress"] = _BeamComponentList(
+            assembly.sv["BeamStress"] = BeamStressList(
                 [Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)]
             )
 
@@ -399,6 +466,11 @@ class BeamEquilibrium(WeakFormBase):
         if self.nlgeom == "UL":
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
+            if self.space.ndim == 2 and self._use_consistent_tangent(assembly):
+                data = assembly.sv_start.get("_BeamTangentData")
+                assembly.current._element_local_frame = (
+                    None if data is None else data[1][:, None]
+                )
             if self.space.ndim == 3:
                 if "RigidRotationMat" in assembly.sv_start:
                     assembly.current._element_local_frame = assembly.sv_start[
@@ -447,7 +519,7 @@ class BeamEquilibrium(WeakFormBase):
             geometric_stiffness = self.geometric_stiffness
             if geometric_stiffness is None:
                 geometric_stiffness = bool(assembly._nlgeom)
-            if geometric_stiffness:
+            if geometric_stiffness and not self._use_consistent_tangent(assembly):
                 N = initial_stress[0]  # normal force
                 dv_dx = self.space.derivative("DispY", "X")
                 diff_op = diff_op + dv_dx.virtual * dv_dx * N
@@ -460,26 +532,75 @@ class BeamEquilibrium(WeakFormBase):
                 # uncomment the following line to activate
                 # diff_op = diff_op + eps[0].virtual * eps[0] * N
 
+        # A line-search trial only evaluates the residual: skip the tangent.
+        if self._use_consistent_tangent(assembly) and not getattr(
+            pb, "_line_search_update", False
+        ):
+            data = assembly.sv.get("_BeamTangentData")
+            if data is not None:
+                diff_op += self._get_consistent_tangent(assembly, data)
         return diff_op
+
+    def _get_consistent_tangent(self, assembly, data):
+        """Correction to the material tangent, written as four weak terms.
+
+        r(v) = integral eps(v).T s ds, eps(v) = B T v.
+        The ordinary eps.virtual * Ke * eps term is already assembled.
+        Only its correction and the three stress-dependent terms follow.
+        """
+
+        # Built once per update and reused by the residual and matrix
+        # assemblies. The entry is replaced, never mutated, so the sv_start
+        # snapshot keeps the operators of the state it was taken from.
+        tangent = assembly.sv.get("_BeamTangentOperators")
+        if tangent is None:
+            tangent = beam_tangent_operators(self, assembly, data)
+            assembly.sv["_BeamTangentOperators"] = tangent
+        eps = self.space.op_beam_strain()
+        Ke = self.properties.get_beam_rigidity()
+        stress = assembly.sv["BeamStress"]
+
+        # 1. Strain change: eps(v).T D [B(delta_q-delta_u_local)+B_L q delta_L].
+        strain_change = sum(
+            eps[i].virtual * tangent.strain_correction[i] * Ke[i]
+            for i in range(6)
+            if eps[i] != 0 and tangent.strain_correction[i] != 0
+        )
+
+        # 2. Virtual interpolation change: (B_L v_local).T s delta_L.
+        interpolation_change = 0
+        if tangent.interpolation_work != 0:
+            interpolation_change = (
+                tangent.interpolation_work.virtual * tangent.delta_length
+            )
+
+        # 3. Integration measure change: eps(v).T s delta_L/L.
+        measure_change = 0
+        if not np.array_equal(stress, 0):
+            measure_change = sum(
+                eps[i].virtual * tangent.relative_length * stress[i]
+                for i in range(6)
+                if eps[i] != 0
+            )
+
+        # 4. Frame rotation: (B delta_T v).T s = sum_j work_j(v) spin_j.
+        frame_rotation = sum(
+            work.virtual * spin
+            for work, spin in zip(tangent.frame_work, tangent.frame_spin)
+            if work != 0 and spin != 0
+        )
+        return strain_change + interpolation_change + measure_change + frame_rotation
+
+    def _use_consistent_tangent(self, assembly):
+        return (
+            self.consistent_tangent
+            and self.geometric_stiffness is not False
+            and assembly._nlgeom == "UL"
+            and assembly.elm_type == "beam"
+        )
 
     def _get_generalized_stress_op(self):
         # only for post treatment
         eps = self.space.op_beam_strain()
         Ke = self.properties.get_beam_rigidity()
         return [eps[i] * Ke[i] for i in range(6)]
-
-
-class _BeamComponentList(list):
-    def asarray(self):
-        try:
-            return np.array(self)
-        except ValueError:  # fill zeros first
-            for i in range(6):
-                if not (np.isscalar(self[i])):
-                    N = len(self[i])  # number of stress values
-                    break
-
-            res = np.empty((6, N))
-            for i in range(6):
-                res[i] = self[i]
-            return res

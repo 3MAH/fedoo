@@ -154,9 +154,11 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             eigenvectors[i, j] gives the jth component of the principal
             direction associated to the ith principal value.
         """
-        full_tensor = self.to_tensor().transpose(2, 0, 1)
+        full_tensor = np.moveaxis(self.to_tensor(), (0, 1), (-2, -1))
         eigenvalues, eigenvectors = np.linalg.eigh(full_tensor)
-        return eigenvalues.T, eigenvectors.transpose(2, 1, 0)
+        return np.moveaxis(eigenvalues, -1, 0), np.moveaxis(
+            eigenvectors, (-1, -2), (0, 1)
+        )
 
     def eigvalues(self):
         """Return the principal values of the tensor for all points.
@@ -167,8 +169,8 @@ class _SymetricTensorList(list):  # base class for StressTensorList and StrainTe
             eigenvalues[i] gives ith principal values arranged in ascending
             order for all points
         """
-        full_tensor = self.to_tensor().transpose(2, 0, 1)
-        return np.linalg.eigvalsh(full_tensor).T
+        full_tensor = np.moveaxis(self.to_tensor(), (0, 1), (-2, -1))
+        return np.moveaxis(np.linalg.eigvalsh(full_tensor), -1, 0)
 
     def fill_zeros(self):
         """Replace null scalar components with arrays of zeros.

@@ -1,5 +1,8 @@
 """Periodic boundary condition constraint."""
 
+from fedoo.util.test_periodicity import match_opposing_faces, pair_node_sets
+
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
@@ -184,10 +187,6 @@ class PeriodicBC(BCBase):
         Raises ``ValueError`` with a clear message if the mesh is not
         periodic at the requested ``tol``.
         """
-        from fedoo.util.test_periodicity import (
-            match_opposing_faces,
-            pair_node_sets,
-        )
 
         rve_size = []
         crd = mesh.nodes

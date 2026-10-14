@@ -3,6 +3,9 @@
 Should not be used, excepted to create inherited classes.
 """
 
+import sys
+
+
 from fedoo.core.modelingspace import ModelingSpace
 from fedoo.util.localframe import (
     _normalize_location,
@@ -57,7 +60,6 @@ if not USE_PYPARDISO:
 if not USE_PYPARDISO and not USE_MUMPS:
     try:
         import petsc4py
-        import sys
 
         petsc4py.init(sys.argv)
         from petsc4py import PETSc
@@ -93,7 +95,6 @@ def _reload_external_solvers(config_dict):
         global PETSc
 
         import petsc4py
-        import sys
 
         petsc4py.init(sys.argv)
         from petsc4py import PETSc
@@ -610,8 +611,6 @@ class ProblemBase:
 
                 if "PETSc" not in dir():
                     try:
-                        import sys
-
                         import petsc4py
                         from petsc4py import PETSc
 
