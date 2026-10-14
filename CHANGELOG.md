@@ -4,17 +4,25 @@ All notable changes to fedoo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and fedoo aims to follow
 semantic versioning.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-14
 
 ### Added
 
-- Total formulation for `nlgeom="TL"`: the strain-space framework of Miehe,
-  Apel and Lambrecht (2002). A Simcoon law is fed the material logarithmic
-  strain ln U, a state function of F, and works on the stress T dual to it;
-  nothing is transported and the strain is exact at any step size. It needs a
-  simcoon that provides `sim.umat(kinematic_form="total")` (after 2.1); with
-  simcoon 2.1 the previous update is kept. `weakform.kinematic_form` tells which
-  one runs.
+- Viewer frame-count refresh during navigation and an explicit Reload button
+  for ongoing FDH5 simulations. Existing all-frame limits and history plots
+  remain unchanged until requested again.
+- Optional shell thickness display in the viewer's Shell options for
+  `tri3`/`quad4` surfaces, using saved section thickness and deformed midsurface
+  normals. Supports varying thickness and mixed meshes; unused shared nodes
+  are excluded from display geometry.
+- Total finite-strain formulation for `nlgeom="TL"`, following the strain-space
+  framework of Miehe, Apel and Lambrecht (2002). Supported Simcoon laws use
+  material logarithmic strain ln U and its dual stress T in the reference
+  configuration. Strain is computed directly from F; constitutive integration
+  can still depend on the time increment. This requires Simcoon's total-formulation
+  API and a law it supports, including supported modular materials. With
+  Simcoon 2.1, unsupported laws or plane stress, TL retains the rate update.
+  `weakform.kinematic_form` reports the selected formulation.
 - Result fields `LogStrainU`, `LogStrainV` and `LogStressU`, and
   `StressTensorList.cauchy_to_log_stress_u` / `log_stress_u_to_cauchy`, to compare a TL
   run and a UL run with `corate="log_r"` on the same measures.
@@ -23,18 +31,16 @@ semantic versioning.
   surface, so that `dmin` may exceed the edge length (shell thickness larger
   than the element size).
 - `IPCContact` / `IPCSelfContact`: `psd_projection=False` assembles the exact
-  contact hessian instead of ipctk's per-collision PSD projection. The
-  projection is inexact (finite-difference mismatch of order one) and makes
-  Newton converge linearly, about 0.7 per iteration, whenever the contact
-  carries a large share of the load; with the exact hessian and a direct solver
-  the shell lattice compression converges in 4-7 iterations.
+  contact Hessian instead of ipctk's per-collision positive-semidefinite
+  projection. This can improve Newton convergence but may produce an indefinite
+  tangent. Projection remains enabled by default; convergence gains depend on
+  the problem and solver.
 - `ListBC.check` and `Problem.check_boundary_conditions` report the boundary
   conditions that can't be applied together on a dof: Dirichlet bc with
   different values, Dirichlet bc on a dof eliminated by a mpc, dof eliminated
   by several mpc and nodal force ignored on a blocked dof. The check runs the
   first time the bc are applied after the list is modified, according to
   `pb.bc.check_mode` (`"warn"` by default, `"raise"` or `"ignore"`).
-
 - Optional analytical corotational tangents for standard two-node beams in
   2D/3D and FI/SRI/MITC shells in updated Lagrangian geometry. Enable the
   keyword-only `consistent_tangent=True` constructor option on
@@ -42,7 +48,10 @@ semantic versioning.
   historical tangent remains the default. Consistent tangents include changing
   geometry, interpolation and frame rotations, and may be nonsymmetric.
   The shell option excludes TL and manually split weak forms; alternative beam
-  interpolations retain their historical tangent.
+  interpolations retain their historical tangent. Beam materials remain
+  isotropic linear elastic, and the beam option is read-only after construction.
+  Consistent tangents can substantially increase assembly cost, particularly
+  for shells; their convergence benefit depends on the problem.
 - Beam section stress/strain recovery at normalized `(y, z)` coordinates.
   `BeamStressList` and `BeamStrainList` support offline recovery; strain from
   `BeamStrain` uses beam kinematics without Poisson contraction. Standard
@@ -58,8 +67,10 @@ semantic versioning.
   `abs_max`, the beam default, returns the nonnegative largest magnitude.
   `signed_abs_max` retains the selected value's sign, choosing the first point
   for magnitudes tied within relative tolerance 1e-9. Both propagate NaNs.
-  `max` and `min` select algebraic extrema and retain the sign. Full tensors are reduced
-  componentwise; scalar invariants are evaluated at each point before reduction.
+  `max` and `min` select algebraic extrema and retain the sign. Full tensors
+  are reduced componentwise; scalar invariants are evaluated at each point
+  before reduction. A componentwise envelope is not a tensor at one physical
+  point, and invariants computed from it are not guaranteed conservative.
 - Automatic shell read selection: with no reduction or explicit point/index,
   use the sole saved thickness point, otherwise the top face. This also applies
   after reloading. Nonlinear stresses are interpolated within each layer and
@@ -95,19 +106,16 @@ semantic versioning.
   once. For Dirichlet bc, the last one in the list is still applied, and a
   Dirichlet bc prevails over a Neumann bc on the same dof.
 - `nlgeom="TL"` and `nlgeom="UL"` now select the constitutive formulation as
-  well as the configuration: TL is the total formulation (ln U and its dual
-  stress), UL the rate formulation (ln V and the Kirchhoff stress, with
-  `weakform.corate`). `corate` belongs to UL: setting it with `nlgeom="TL"`
-  raises at initialization. Results of a TL analysis with a Simcoon law change
-  when the stress is not coaxial with the stretch (plastic shear, off-axis
-  anisotropy); they are unchanged for isotropic elasticity and proportional
-  loading. Native laws and plane-stress problems keep the previous `"log_r"`
-  update in TL.
+  well as the configuration. Eligible TL models use the total formulation
+  (ln U and its dual stress); UL uses the rate formulation with
+  `weakform.corate`. Setting an explicit `corate` in TL raises at initialization
+  only when the law runs the total formulation. TL models using the fallback
+  rate formulation still accept `corate`. TL results can change for noncoaxial
+  stress/stretch loading, such as plastic shear or off-axis anisotropy.
 - `IPCContact` stores true minimum distances between contact primitives
   (ipctk returns squared distances). The adaptive barrier-stiffness update
   and the proximity safeguards act on the gap above `dmin`, compared with
   `dhat` as documented.
-
 - `Problem.get_results` and `add_output` now default to `position=None`
   instead of 1, saving all configured beam/shell points. Shell Stress/Strain
   storage has shape `(6, n_thickness_points, n_locations)`. Mixed beam/shell
@@ -125,16 +133,23 @@ semantic versioning.
   installed and falls back to meshio otherwise. The `io` extra installs
   `meshlane>=5.5.0` instead of meshio.
 - Require Simcoon >= 2.1. UMAT callbacks receive `start` and the selected string
-  `corate` explicitly. Initialization retains the returned state, with
-  `set_initial_statev()` values taking precedence. The adapter handles
+  `corate` explicitly, replacing the adapter's temporary call attributes and
+  older-version signature detection. The adapter handles
   `work_correction`, `tangent_output` and conversion of the rate name to
   Simcoon's numeric code.
 - The lattice beam example explicitly enables its consistent tangent for
   large-deformation convergence. The `tube_compression` example uses
   `IPCSelfContact` (ipctk >= 1.6) instead of penalty self-contact.
+- Quick Start now uses current mesh/assembly APIs and runnable object names,
+  retrieves stiffness after initialization, and recommends the Fedoo viewer
+  with `fedoo[plot,gui]`. VTK export remains available for external viewers.
 
 ### Fixed
 
+- FDH5 output retries temporary file-lock conflicts with a live viewer instead
+  of failing immediately. Eager mesh/frame reads use one short-lived handle;
+  HDF5 locking remains enabled. Retries are bounded, and unrelated I/O errors
+  still raise immediately.
 - A distributed load added with `pb.bc.add` (`Pressure`, `SurfaceForce`,
   `DistributedForce`) no longer erases the Neumann bc defined before it, and
   two Neumann bc on the same dof no longer overwrite each other.
@@ -146,11 +161,13 @@ semantic versioning.
   which IPC Toolkit 1.6 otherwise ignores for plane-vertex sweeps.
 - IPC proximity safeguards compare the remaining linear gap above `dmin`
   with `dhat`, rather than comparing a squared distance with a length.
-
 - Correct the `Iyy`/`Izz` assignments of non-square `BeamRectangular` sections:
   `a` is along local y and `b` along local z.
 - Use the polar area moment `Iyy + Izz` for beam axial rotary inertia instead
   of the Saint-Venant torsion constant `Jx`. Torsional stiffness remains `G*Jx`.
+- Beam assembly resolves its symmetry default during initialization and avoids
+  the symmetric shortcut for coupled interpolations or consistent tangents,
+  preserving explicitly configured symmetry settings.
 - Correct the 3D beam frame update so rigid axial rotation produces no spurious
   local nodal rotation and the bending axes follow the section orientation.
 - Correct the shell frame update with `true_drilling_rotation=False`: rigid
@@ -159,6 +176,11 @@ semantic versioning.
   curvature definition. Correct face stress signs, nonlinear material-point
   kinematics, laminate membrane/bending coupling (`-B`) and distribution plots.
 - Correct finite-strain strain rotation for native anisotropic elastic laws.
+- Committing a finite-strain increment no longer rotates an already current
+  Cauchy stress a second time. History transport is handled by the constitutive
+  update for the next increment.
+- Tensor principal-value/direction routines support additional section-point
+  axes instead of assuming a single point axis.
 - Rigid-body CCD accounts for curved rotation paths, preventing complete
   revolutions from bypassing collision checks. The line search retains its
   curvature margin and physical offset.
@@ -184,6 +206,12 @@ semantic versioning.
 - Custom UMAT callbacks and `_call_umat` overrides must accept the new
   `start` and `corate` keyword arguments, and handle `start=True` during
   initialization. Install Simcoon >= 2.1.
+- For a TL model that selects the total formulation, remove explicit `corate`
+  assignments (or set `corate=None`). Choose UL when an objective rate is
+  intended. `kinematic_form` is selected during problem initialization.
+- Use an appropriate general solver for nonsymmetric consistent tangents.
+  Disabling IPC's PSD projection can also require an indefinite solver;
+  explicitly forcing positive-definite factorization is then unsuitable.
 
 ## [1.0.1] - 2026-10-01
 
@@ -198,12 +226,16 @@ semantic versioning.
 
 ### Fixed
 
+- Preserve state returned by Simcoon UMAT initialization, with user-assigned
+  `set_initial_statev()` components taking precedence. Initialization is
+  distinguished from Newton updates at time zero. Assembly reset clears
+  initial-state metadata; reapply initial values before reinitializing.
 - Nonlinear force recovery uses the evaluated residual, including inertia and
   damping, and refreshes it after vector updates and rollback. Linear implicit
   dynamics retain the completed step's force balance. Explicit dynamics recover
   the solved system's balance on demand, including diagonal mass operators,
-  without storing force snapshots. Consistent
-  mass central difference includes prescribed accelerations in the free equations.
+  without storing force snapshots. Consistent-mass central difference includes
+  prescribed accelerations in the free equations.
 - The Newton force criterion evaluates residuals even with a zero force reference.
 - Rigid-body forces and torques are applied through constant Neumann conditions,
   keeping them separate from contact and inertia in the assembled residual.
@@ -256,6 +288,8 @@ semantic versioning.
 
 ### Changed
 
+- Require the stable Simcoon release >= 2.0.1, replacing the beta dependency
+  >= 2.0.0b1 used in Fedoo 1.0.0b2.
 - Plane-strain incompressibility methods now retain the three-dimensional
   volumetric/deviatoric split: the assumed `zz` strain receives one third of
   the volumetric correction, and finite-strain mean dilatation uses the cube

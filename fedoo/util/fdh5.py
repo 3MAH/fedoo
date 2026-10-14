@@ -1,46 +1,84 @@
 """
-The Fedoo FDH5 format is a HDF5 file that is structured
-to store multiple data computed from fedoo.
-The structure of the file is the following:
+FDH5 is Fedoo's native HDF5 result format. It stores mesh geometry and sets,
+requested fields, scalar outputs and optional section-recovery descriptions
+for one or several saved frames. Element/Gauss-point fields and beam section
+definitions are grouped by submesh; nodal fields use the shared node table.
 
-mesh/
-├── nodes
-├── node_sets/
-├── submesh_0/
-│     ├── elements
-│     ├── element_sets/
-│     └── metadata/
-│           └── element_type = "tri3"
-├── submesh_1/
-│     ├── elements
-│     ├── element_sets/
-│     └── metadata/
-│           └── element_type = "tri3"
-├── submesh_2/
-│     ├── elements
-│     ├── element_sets/
-│     └── metadata/
-│           └── element_type = "quad4"
-└── ...
+The following layout is illustrative: field and metadata groups are present
+only when corresponding outputs have been saved.
 
-results/
-├── iter_0/
-│   ├── node_data/
-│   ├── element_data/
-│   │     ├── submesh_0/
-│   │     │    ├── stress
-│   │     │    ├── plasticity
-│   │     │    └── ...
-│   │     ├── submesh_1/
-│   │     └── ...
-│   ├── gausspoint_data/
-│   │     ├── submesh_0/
-│   │     ├── submesh_1/
-│   │     └── ...
-│   ├── scalars/
-│   └── metadata/
-├── iter_1/
-└── ...
+.. code-block:: text
+
+    mesh/
+    ├── nodes
+    ├── node_sets/
+    ├── submesh_0/
+    │     ├── elements
+    │     ├── element_sets/
+    │     └── metadata/
+    │           └── element_type = "tri3"
+    ├── submesh_1/
+    │     ├── elements
+    │     ├── element_sets/
+    │     └── metadata/
+    │           └── element_type = "tri3"
+    ├── submesh_2/
+    │     ├── elements
+    │     ├── element_sets/
+    │     └── metadata/
+    │           └── element_type = "quad4"
+    └── ...
+
+    results/
+    ├── iter_0/
+    │   ├── node_data/
+    │   ├── element_data/
+    │   │     ├── submesh_0/
+    │   │     │    ├── stress
+    │   │     │    ├── plasticity
+    │   │     │    └── ...
+    │   │     ├── submesh_1/
+    │   │     └── ...
+    │   ├── gausspoint_data/
+    │   │     ├── submesh_0/
+    │   │     ├── submesh_1/
+    │   │     └── ...
+    │   ├── scalars/
+    │   ├── section_metadata/
+    │   │     ├── submesh_0/       (shared beam section description)
+    │   │     │    └── properties/
+    │   │     └── ...
+    │   ├── field_metadata/       (shell/field descriptions and output points)
+    │   └── metadata/
+    ├── iter_1/
+    └── ...
+
+Field arrays retain their Fedoo shapes. Scalar mesh fields have one location
+axis; vector/tensor fields are component-first. Section Stress/Strain tensors
+can include a section-point axis, with shape
+``(6, n_section_points, n_locations)``. Gauss-point locations use GP-major
+ordering within each submesh (element indices vary fastest).
+
+Section descriptions use typed HDF5 datasets. Uniform beam properties are
+stored in ``section_metadata``; varying properties are referenced private
+``_Section_*`` fields with an explicit Node, Element or GaussPoint association.
+Saved local-frame fields allow conversion of recovered tensors to global
+coordinates. These descriptions are optional: older files remain readable,
+but section recovery requires the necessary geometry, fields and frames.
+
+``fedoo.read_data`` returns a DataSet for one frame and a MultiFrameDataSet
+for multiple frames. It loads sequence fields on demand. Dataset selections
+and viewer settings are not persisted, and the file is not a solver restart
+checkpoint. The format version stored in the root attributes is independent
+of the Fedoo package version.
+
+Live viewing uses short, sequential read/write access with HDF5 locking
+enabled. Writers retry temporary lock conflicts for up to 10 seconds by
+default; readers retry for up to 0.2 seconds. Eager mesh/frame reads copy all
+arrays through one handle and release it before plotting. Explicit lazy
+read handles must be closed before a writer can proceed. Both reader/writer
+constructors accept ``lock_timeout``; persistent contention raises the original
+error, and unrelated I/O errors are not retried.
 """
 
 from __future__ import annotations
@@ -55,6 +93,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import contextlib
 import json
+import errno
+import time as _time
 
 import numpy as np
 
@@ -85,6 +125,33 @@ def _read_metadata_tree(group):
 
 PathLike = Union[str, Path]
 NDArray = np.ndarray
+
+
+def _open_hdf5(path, mode, lock_timeout):
+    """Wait for transient file-lock contention, keeping HDF5 locking enabled."""
+    deadline = _time.monotonic() + lock_timeout
+    while True:
+        try:
+            return h5py.File(path, mode)
+        except OSError as exc:
+            message = str(exc).lower()
+            locked = (
+                exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK)
+                or getattr(exc, "winerror", None) in (32, 33)
+                or "unable to lock file" in message
+                or "file is already open for read-only" in message
+            )
+            remaining = deadline - _time.monotonic()
+            if not locked or remaining <= 0:
+                raise
+            _time.sleep(min(0.05, remaining))
+
+
+def _materialize_hdf5(value):
+    """Copy an eager result before releasing its shared read lock."""
+    if isinstance(value, dict):
+        return {key: _materialize_hdf5(item) for key, item in value.items()}
+    return value[...] if isinstance(value, h5py.Dataset) else value
 
 
 def submesh_id(index: int) -> str:
@@ -135,6 +202,7 @@ class FDH5Writer:
         compression: CompressionConfig = CompressionConfig(),
         validate: bool = True,
         create_parents: bool = True,
+        lock_timeout: float = 10.0,
     ) -> None:
         """Open (or create) an FDH5 file for writing.
 
@@ -149,6 +217,9 @@ class FDH5Writer:
         create_parents : bool, optional
             If True (default), create the parent directories of ``file_path``
             when they do not already exist.
+        lock_timeout : float, default=10
+            Seconds to retry temporary file-lock conflicts with readers before
+            raising the original error. Other I/O errors raise immediately.
         """
         self.path = Path(file_path)
         if create_parents:
@@ -156,12 +227,18 @@ class FDH5Writer:
 
         self.compression = compression
         self.validate = validate
+        if not np.isfinite(lock_timeout) or lock_timeout < 0:
+            raise ValueError("lock_timeout must be finite and nonnegative")
+        self.lock_timeout = lock_timeout
 
-        with h5py.File(self.path, "a") as f:
+        with self._open() as f:
             if "format" not in f.attrs:
                 f.attrs["format"] = "FDH5"
                 f.attrs["version"] = self.FILE_VERSION
                 f.attrs["created_utc"] = datetime.now(timezone.utc).isoformat()
+
+    def _open(self):
+        return _open_hdf5(self.path, "a", self.lock_timeout)
 
     def _create_dataset(
         self,
@@ -222,7 +299,7 @@ class FDH5Writer:
             if not np.issubdtype(nodes.dtype, np.floating):
                 raise TypeError("nodes must be floating point")
 
-        with h5py.File(self.path, "a") as f:
+        with self._open() as f:
             mesh = f.require_group("mesh")
 
             if "nodes" in mesh and overwrite:
@@ -283,7 +360,7 @@ class FDH5Writer:
             if not np.issubdtype(elements.dtype, np.integer):
                 raise TypeError("elements must be integer indices (0-based)")
 
-        with h5py.File(self.path, "a") as f:
+        with self._open() as f:
             mesh = f.require_group("mesh")
             sid = submesh_id or self._next_submesh_id(f)
 
@@ -330,13 +407,15 @@ class FDH5Writer:
         iteration : int
             Iteration index; stored as the ``iter_<n>`` results subgroup.
         node_data : mapping of str to numpy.ndarray, optional
-            Nodal fields, each with shape ``(n_nodes, ...)``.
+            Nodal fields, stored without reshaping. Fedoo scalar fields have
+            shape ``(n_nodes,)`` and component fields ``(n_components, n_nodes)``.
         element_data : mapping, optional
             Element fields keyed by submesh id, then by field name.
         gausspoint_data : mapping, optional
-            Gauss-point fields keyed by submesh id, then by field name. Each
-            field uses a GP-major flattened layout of shape
-            ``(n_elements * n_gauss_points, n_components)``.
+            Gauss-point fields keyed by submesh id, then by field name, stored
+            without reshaping. Fedoo component fields normally have shape
+            ``(n_components, n_elements * n_gauss_points)``. Section tensors
+            retain their extra point axis. Locations use GP-major ordering.
         scalars : mapping of str to (int, float or numpy.ndarray), optional
             Scalar quantities stored under the iteration ``scalars`` group.
         field_metadata : mapping, optional
@@ -357,7 +436,7 @@ class FDH5Writer:
         """
         iter_name = iteration_name(iteration)
 
-        with h5py.File(self.path, "a") as f:
+        with self._open() as f:
             results = f.require_group("results")
 
             if iter_name in results:
@@ -484,12 +563,18 @@ class FDH5Reader:
       - lazy reads (h5py.Dataset)
 
     Lazy access MUST be used inside `with reader.open():`.
+    Close that context promptly when a simulation is writing the same file.
+    ``lock_timeout`` controls retries for temporary lock conflicts (default
+    0.2 seconds); unrelated I/O errors raise immediately.
     """
 
-    def __init__(self, file_path: PathLike) -> None:
+    def __init__(self, file_path: PathLike, *, lock_timeout: float = 0.2) -> None:
         self.path = Path(file_path)
         if not self.path.exists():
             raise FileNotFoundError(self.path)
+        if not np.isfinite(lock_timeout) or lock_timeout < 0:
+            raise ValueError("lock_timeout must be finite and nonnegative")
+        self.lock_timeout = lock_timeout
 
     @contextlib.contextmanager
     def open(self) -> Iterator[h5py.File]:
@@ -499,7 +584,7 @@ class FDH5Reader:
         Required for lazy access (datasets remain valid only
         while the file is open).
         """
-        f = h5py.File(self.path, "r")
+        f = self._open()
         try:
             yield f
         finally:
@@ -507,7 +592,7 @@ class FDH5Reader:
 
     def _open(self) -> h5py.File:
         """Internal helper for eager reads."""
-        return h5py.File(self.path, "r")
+        return _open_hdf5(self.path, "r", self.lock_timeout)
 
     @staticmethod
     def _decode(value: Any) -> Any:
@@ -668,6 +753,12 @@ class FDH5Reader:
         """
         Read the full mesh (nodes + submeshes).
         """
+        if not lazy:
+            with (
+                self._open() if file is None else contextlib.nullcontext(file)
+            ) as handle:
+                return _materialize_hdf5(self.read_mesh(lazy=True, file=handle))
+        self._require_lazy_file(file)
         mesh: Dict[str, Any] = {}
         mesh["nodes"] = self.read_nodes(lazy=lazy, file=file)
         mesh["node_sets"] = self.read_node_sets(lazy=lazy, file=file)
@@ -703,7 +794,7 @@ class FDH5Reader:
             int(name.split("_")[1]) for name in grp if name.startswith("iter_")
         )
 
-    def read_iteration_metadata(self, iteration: int) -> Dict[str, Any]:
+    def read_iteration_metadata(self, iteration: int, *, file=None) -> Dict[str, Any]:
         """Read the metadata attributes of one result iteration.
 
         Parameters
@@ -716,13 +807,13 @@ class FDH5Reader:
         dict of str to Any
             Metadata attributes (e.g. ``iteration``, ``time``, ``dt``).
         """
-        with self._open() as f:
+        with self._open() if file is None else contextlib.nullcontext(file) as f:
             md = f[f"results/{iteration_name(iteration)}/metadata"]
             return {k: self._decode(v) for k, v in md.attrs.items()}
 
-    def read_field_metadata(self, iteration: int) -> Dict[str, Any]:
+    def read_field_metadata(self, iteration: int, *, file=None) -> Dict[str, Any]:
         """Read optional numeric field descriptions; empty for legacy files."""
-        with self._open() as file:
+        with self._open() if file is None else contextlib.nullcontext(file) as file:
             group = file[f"results/{iteration_name(iteration)}"]
             metadata = {}
             if "field_metadata" in group:
@@ -769,12 +860,19 @@ class FDH5Reader:
         file: h5py.File | None = None,
     ) -> Dict[str, Any]:
         """Read all data stored for one result iteration."""
+        if not lazy:
+            with (
+                self._open() if file is None else contextlib.nullcontext(file)
+            ) as handle:
+                return _materialize_hdf5(
+                    self.read_iteration(iteration, lazy=True, file=handle)
+                )
         if lazy:
             self._require_lazy_file(file)
 
         return {
-            "metadata": self.read_iteration_metadata(iteration),
-            "field_metadata": self.read_field_metadata(iteration),
+            "metadata": self.read_iteration_metadata(iteration, file=file),
+            "field_metadata": self.read_field_metadata(iteration, file=file),
             "node_data": self.read_node_data(iteration, lazy=lazy, file=file),
             "element_data": self.read_element_data(iteration, lazy=lazy, file=file),
             "gausspoint_data": self.read_gausspoint_data(
@@ -1073,6 +1171,8 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
             if field in dataset.gausspoint_data
         }
     )
+    dataset._fdh5_filename = str(Path(filename).resolve())
+    dataset._fdh5_iteration = iteration
 
 
 def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = False):
@@ -1142,7 +1242,9 @@ def read_fdh5(filename: str):
     iterations = reader.list_iterations()
 
     if len(iterations) == 0:
-        return DataSet(mesh)
+        dataset = DataSet(mesh)
+        dataset._fdh5_filename = str(path.resolve())
+        return dataset
 
     if len(iterations) == 1:
         dataset = DataSet(mesh)

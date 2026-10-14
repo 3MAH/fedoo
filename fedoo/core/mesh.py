@@ -110,9 +110,11 @@ class Mesh(MeshBase):
 
     A fedoo mesh can be initialized with the following constructors:
 
-      * :py:meth:`fedoo.Mesh.read` to load a mesh from a file (vtk file recommanded).
+      * :py:meth:`fedoo.Mesh.read` to load mesh geometry from a file.
       * :py:meth:`fedoo.Mesh.from_pyvista` to build a mesh from pyvista
         UnstructuredGrid or PolyData objects
+      * :py:meth:`fedoo.Mesh.from_meshio` to import geometry and sets from
+        meshlane or meshio objects
       * the Mesh constructor describes bellow to build a Mesh by directly
         setting its attributes (node coordinates, elements list, element type, ...)
 
@@ -237,8 +239,12 @@ class Mesh(MeshBase):
 
         Notes
         -----
-        If the pyvista mesh with single element type may be imported.
-        Multi-element meshes will be integrated later."""
+        A single supported cell type returns a Mesh; multiple cell types
+        return a MultiMesh. Unsupported cell types are skipped with a warning.
+        Fedoo node sets encoded as ``_nset_<name>`` field arrays are imported.
+        ``_eset_<name>`` element sets are imported for single-type meshes;
+        mixed meshes currently omit those element sets with a warning.
+        """
         if USE_PYVISTA:
             if isinstance(pvmesh, pv.PolyData):
                 pvmesh = pvmesh.cast_to_unstructured_grid()
@@ -417,7 +423,10 @@ class Mesh(MeshBase):
         (quadratic) elements, multiple element types (returned as a
         :py:class:`MultiMesh`) and node/element sets (``*NSET``/``*ELSET``).
         Other formats are read with pyvista, which relies on the native VTK
-        readers.
+        readers, or with meshlane/meshio when pyvista is unavailable. Use
+        :meth:`from_meshio` to choose meshlane/meshio explicitly for other
+        supported formats. This imports mesh geometry, not materials, loads
+        or analysis steps. Use :func:`fedoo.read_data` for result files.
 
         Parameters
         ----------

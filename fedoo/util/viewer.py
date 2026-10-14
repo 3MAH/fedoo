@@ -38,6 +38,7 @@ import re
 
 from fedoo.core.multimeshdata import MultiMeshData
 from fedoo.core.mesh import MultiMesh
+from fedoo.util.fdh5 import FDH5Reader
 from fedoo.util.field_components import get_field_components
 
 USE_PYVISTA_QT = True
@@ -85,6 +86,45 @@ def _global_data_array(data):
 
 def _data_n_iter(data):
     return getattr(data, "n_iter", 1)
+
+
+def _refresh_result_frames(data, reload_current=False):
+    """Discover FDH5 frames without reading their fields or computing histories.
+
+    A single-frame file may become a sequence while its simulation runs.
+    Keep loaded fields and selection options until an explicit reload/load.
+    """
+    filename = getattr(data, "_fdh5_filename", None)
+    refs = getattr(data, "list_data", [])
+    if refs and isinstance(refs[0], tuple) and refs[0][0] == "fdh5":
+        filename = refs[0][1]
+    if filename is None:
+        return data
+    iterations = FDH5Reader(filename).list_iterations()
+    if not iterations:
+        return data
+    current_id = getattr(data, "_fdh5_iteration", None)
+    if refs and data.loaded_iter is not None:
+        current_id = refs[data.loaded_iter][2]
+    new_refs = [("fdh5", filename, iteration) for iteration in iterations]
+    if not hasattr(data, "list_data"):
+        sequence = fd.MultiFrameDataSet(data.mesh)
+        sequence.__dict__.update(data.__dict__)
+        data = sequence
+    data.list_data = new_refs
+    data.loaded_iter = (
+        iterations.index(current_id) if current_id in iterations else None
+    )
+    if reload_current:
+        index = data.loaded_iter if data.loaded_iter is not None else 0
+        previous_iter = data.loaded_iter
+        data.loaded_iter = None
+        try:
+            data.load(index)
+        except (OSError, KeyError):
+            data.loaded_iter = previous_iter
+            raise
+    return data
 
 
 @contextmanager
@@ -291,6 +331,7 @@ class PlotDock(QDockWidget):
                 # Other plot options
                 "scale": 1.0,
                 "scale_save": 1.0,
+                "shell_thickness": False,
                 "show_edges": True,
                 "show_scalar_bar": True,
                 "node_labels": False,
@@ -415,7 +456,13 @@ class PlotDock(QDockWidget):
             plotter = self.plotter
 
         if iteration is not None and hasattr(self.data, "loaded_iter"):
-            self.data.load(iteration)
+            try:
+                self.data.load(iteration)
+            except (OSError, KeyError) as exc:
+                self.parent().statusBar().showMessage(
+                    f"Results temporarily unavailable: {exc}"
+                )
+                return
 
         if self.opts["clim_mode"] == "current":
             clim = None
@@ -455,6 +502,7 @@ class PlotDock(QDockWidget):
                 node_labels=self.opts["node_labels"],
                 element_labels=self.opts["element_labels"],
                 scale=self.opts["scale"],
+                shell_thickness=self.opts.get("shell_thickness", False),
                 opacity=self.opts["opacity"],
                 pbr=self.opts["pbr"],
                 metallic=self.opts["metallic"],
@@ -571,9 +619,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.beam_section_button.setEnabled(False)
         self.beam_toolbar.addWidget(self.beam_section_button)
 
+        self.shell_toolbar = QToolBar("Shell")
+        self.shell_toolbar.addWidget(QLabel("Coordinates: "))
+        self.shell_csys_combo = QtWidgets.QComboBox()
+        self.shell_csys_combo.addItem("Stored", "stored")
+        self.shell_csys_combo.setEnabled(False)
+        self.shell_csys_combo.setToolTip(
+            "Coordinate system for recovered shell Stress and Strain"
+        )
+        self.shell_csys_combo.currentIndexChanged.connect(
+            self.csys_combo.setCurrentIndex
+        )
+        self.shell_toolbar.addWidget(self.shell_csys_combo)
+        self.shell_toolbar.addSeparator()
+        self.shell_section_button = QPushButton("Shell…")
+        self.shell_section_button.setToolTip(
+            "Select the thickness point or an envelope for derived shell tensors"
+        )
+        self.shell_section_button.clicked.connect(self.open_shell_section_dialog)
+        self.shell_section_button.setEnabled(False)
+        self.shell_toolbar.addWidget(self.shell_section_button)
+
         self.addToolBar(Qt.TopToolBarArea, toolbar_fields)
         self.addToolBar(Qt.TopToolBarArea, self.beam_toolbar)
+        self.addToolBar(Qt.TopToolBarArea, self.shell_toolbar)
         self.beam_toolbar.hide()
+        self.shell_toolbar.hide()
 
         # ------------------------------------------------
         # Toolbar 2: Iteration controls
@@ -589,6 +660,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         toolbar_iter.addWidget(self.iter_slider)
         toolbar_iter.addWidget(self.iter_spin)
+
+        self.reload_btn = QPushButton("Reload")
+        self.reload_btn.setToolTip(
+            "Discover newly saved frames and reload the current frame. "
+            "Reapply All frames Min/Max or recreate history plots to update them."
+        )
+        self.reload_btn.clicked.connect(self.reload_results)
+        toolbar_iter.addWidget(self.reload_btn)
 
         self.animate_btn = QPushButton("▶ Play")
         self.animate_btn.setCheckable(True)
@@ -831,8 +910,6 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(view_right_action)
         view_menu.addAction(view_isometric_action)
         view_menu.addAction(reset_camera_action)
-        view_menu.addSeparator()
-        view_menu.addAction(self.beam_toolbar.toggleViewAction())
 
         # --- Menu Tools ---
         tools_menu = menubar.addMenu("Tools")
@@ -1372,6 +1449,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._on_select_elm_changed(True)
 
     def _on_anim_tick(self):
+        self._refresh_iterations()
         # go to next iteration
         new_iter = self.iteration + 1
         if new_iter > self.iter_slider.maximum():
@@ -1385,6 +1463,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.iter_slider.setValue(new_iter)
 
     def _on_slider_changed(self, val: int):
+        self._refresh_iterations()
         # sync iter spin_box without emit signal
         if self.iter_spin.value() != val:
             old_state = self.iter_spin.blockSignals(True)
@@ -1406,6 +1485,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.update_plot(iteration=self.iteration)
 
     def _on_spin_changed(self, val: int):
+        self._refresh_iterations()
         # sync slider without emit signal
         if self.iter_slider.value() != val:
             old_state = self.iter_slider.blockSignals(True)
@@ -1426,6 +1506,42 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.update_plot(iteration=self.iteration)
 
+    def _refresh_iterations(self, reload_current=False):
+        """Refresh only frame references; keep expensive all-frame outputs."""
+        docks = self.all_docks if self._sync_iter else [self.active_dock]
+        refreshed = {}
+        for dock in docks:
+            if dock is None:
+                continue
+            try:
+                key = id(dock.data)
+                if key not in refreshed:
+                    refreshed[key] = _refresh_result_frames(
+                        dock.data, reload_current=reload_current
+                    )
+                dock.data = refreshed[key]
+                dock.current_iter = min(
+                    dock.current_iter, max(0, _data_n_iter(dock.data) - 1)
+                )
+            except (OSError, KeyError) as exc:
+                # The simulation may have the file open for writing. Retry on
+                # the next navigation/reload rather than interrupting it.
+                self.statusBar().showMessage(f"Results temporarily unavailable: {exc}")
+        if self.active_dock:
+            blockers = [
+                QSignalBlocker(self.iter_slider),
+                QSignalBlocker(self.iter_spin),
+            ]
+            self.setRange(0, max(0, _data_n_iter(self.data) - 1))
+            del blockers
+
+    def reload_results(self):
+        self._refresh_iterations(reload_current=True)
+        docks = self.all_docks if self._sync_iter else [self.active_dock]
+        for dock in docks:
+            if dock is not None:
+                dock.update_plot(iteration=dock.current_iter)
+
     # set slider and iteration spinbox min/max values
     def setRange(self, min_iter: int, max_iter: int):
         self.iter_slider.setRange(min_iter, max_iter)
@@ -1441,6 +1557,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.stop_animation()
 
     def start_animation(self):
+        self._refresh_iterations()
         if self.anim_timer.isActive():
             return
         if self.iter_slider.maximum() <= self.iter_slider.minimum():
@@ -1487,6 +1604,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.beam_options_action.setEnabled(bool(beams))
         self.beam_section_button.setEnabled(bool(beams))
         self.shell_options_action.setEnabled(bool(shells))
+        self.shell_section_button.setEnabled(bool(shells))
         if f"{field}_local" in derived:
             self.csys_combo.addItem("Local", "local")
             if f"{field}_global" in derived:
@@ -1498,9 +1616,21 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.csys_combo.addItem("Stored", "stored")
             self.csys_combo.setEnabled(False)
+        shell_blocker = QSignalBlocker(self.shell_csys_combo)
+        self.shell_csys_combo.clear()
+        for index in range(self.csys_combo.count()):
+            self.shell_csys_combo.addItem(
+                self.csys_combo.itemText(index), self.csys_combo.itemData(index)
+            )
+        self.shell_csys_combo.setCurrentIndex(self.csys_combo.currentIndex())
+        self.shell_csys_combo.setEnabled(bool(shells) and self.csys_combo.isEnabled())
+        del shell_blocker
         del blocker
 
     def on_coordinates_changed(self, index):
+        shell_blocker = QSignalBlocker(self.shell_csys_combo)
+        self.shell_csys_combo.setCurrentIndex(index)
+        del shell_blocker
         if self.active_dock is None:
             return
         field = self.field_combo.currentText()
@@ -2156,6 +2286,16 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle("Shell options")
         layout = QtWidgets.QFormLayout(dialog)
+        show_thickness = QCheckBox("Show saved shell thickness")
+        show_thickness.setObjectName("shell_display_thickness")
+        show_thickness.setChecked(bool(dock.opts.get("shell_thickness", False)))
+        show_thickness.setEnabled(data.mesh.elm_type in ("tri3", "quad4"))
+        show_thickness.setToolTip(
+            "Display the saved section thickness on tri3/quad4 shells. "
+            "Each shell submesh uses its own thickness; the selected field is "
+            "repeated through it without additional face-stress recovery."
+        )
+        layout.addRow(show_thickness)
         help_label = QLabel("Thickness position: −1 bottom, 0 midsurface, +1 top.")
         help_label.setToolTip(
             "Only homogeneous linear shell stresses are recovered from resultants. Other stresses are interpolated within each layer from saved material-point values. At interfaces, a coordinate selects the lower layer; use a point index to select a particular side."
@@ -2347,7 +2487,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if reduction.currentData() == "point_index"
             else None,
         )
-        if not self.apply_shell_options(updated, frame.currentData(), kind):
+        if not self.apply_shell_options(
+            updated, frame.currentData(), kind, show_thickness.isChecked()
+        ):
             return
         if submesh_choice is not None:
             dock.data.active_submesh = submesh_choice.currentData()
@@ -2356,7 +2498,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_coordinate_choices(kind)
         self.update_components(kind)
 
-    def apply_shell_options(self, updated, coordinates, kind):
+    def apply_shell_options(self, updated, coordinates, kind, show_thickness=None):
         """Validate all eligible panes before applying thickness settings."""
 
         active = self.active_dock
@@ -2407,6 +2549,8 @@ class MainWindow(QtWidgets.QMainWindow):
             ):
                 target.data = target.data.copy()
             target.data.shell_options = selection
+            if show_thickness is not None:
+                target.opts["shell_thickness"] = show_thickness
             target.opts["clim"] = None
             target.beam_csys = coordinates
             if target is active or displayed in ("Stress", "Strain"):

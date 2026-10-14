@@ -9,7 +9,8 @@ import numpy as np
 def import_file(filename: str, name: str = "") -> Mesh:
     """Import a mesh from a file.
 
-    Mesh.read should be prefered in most cases.
+    Legacy ASCII VTK/Gmsh reader. Prefer :meth:`fedoo.Mesh.read` for new
+    workflows and broader format support.
 
     Parameters
     ----------
@@ -35,12 +36,13 @@ def import_msh(
 ) -> Mesh:
     """Import a mesh from a msh file (gmsh format).
 
-    Mesh.read should be prefered in most cases.
+    Legacy ASCII Gmsh reader. Prefer :meth:`fedoo.Mesh.read` or
+    :meth:`fedoo.Mesh.from_meshio` for new workflows.
 
     Parameters
     ----------
     filename : str
-        Name of file to import. Should be a ".msh" or a ".vtk" ascii files.
+        Name of the ASCII Gmsh ``.msh`` file to import.
     name : str, optional
         Name of the imported Mesh. The default is "".
     mesh_type : list of str in {'curve', 'surface', 'volume'}
@@ -459,14 +461,14 @@ def import_msh(
 
 
 def import_vtk(filename: str, name: str = "") -> Mesh:
-    """Import a mesh from a vtk file (gmsh format).
+    """Import a mesh from a legacy ASCII VTK file.
 
-    Mesh.read should be prefered in most cases.
+    Prefer :meth:`fedoo.Mesh.read` for new workflows.
 
     Parameters
     ----------
     filename : str
-        Name of file to import. Should be a ".msh" or a ".vtk" ascii files.
+        Name of the ASCII ``.vtk`` file to import.
     name : str, optional
         Name of the imported Mesh. The default is "".
 

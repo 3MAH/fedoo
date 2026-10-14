@@ -13,24 +13,26 @@ The main steps to define a problem are:
 5. Create the Assembly associated to the weak formulations and the mesh
 6. Define the type of Problem (Static, Dynamic, ...) and the solver
 7. Solve the Problem
-8. Analyse and export results (vizualisation with Paraview recommanded)
+8. Analyse results with the Fedoo viewer and export them if needed
 
 Import library
 ______________
 
-The first step is to import the fedoo library. Obvisously, fedoo needs to be :doc:`installed <install>`.
+The first step is to import the fedoo library. Fedoo needs to be :doc:`installed <install>`.
 
 .. code-block:: python
 
    import fedoo as fd #Import all the fedoo library
-   import numpy as np #Numpy is often usefull
+   import numpy as np #NumPy is useful for array operations
    
 
 Create the modeling space
 ___________________________
 
 In fedoo, most of objects are associated to a modeling space. The modeling space is a space in which the variables and coordinates are created. 
-The dimension of the modeling space car be '3D' or '2D' (for planar problem). The dimension of the space may also be set to '2Dstress' for planar problem based on the plane stress assumption.
+Use ``'3D'`` for three-dimensional problems, ``'2Dplane'`` (or ``'2D'``)
+for plane strain, ``'2Dstress'`` for plane stress, and ``'2Daxi'`` for
+axisymmetric problems.
 
 .. code-block:: python
 
@@ -45,9 +47,10 @@ For instance to build the mesh of a box (3d rectangle), we can use:
 
 .. code-block:: python
 
-    my_mesh = fd.mesh.box_mesh(nx=31, ny=21, nz=21, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type = 'hex8')
+    my_mesh = fd.mesh.box_mesh(nx=11, ny=3, nz=3, x_min=0, x_max=1000, y_min=0, y_max=100, z_min=0, z_max=100, elm_type='hex8')
 
-You can also import a Mesh by using one of the following Mesh constructor :py:meth:`fedoo.Mesh.read`, :py:meth:`fedoo.Mesh.from_pyvista` or with the function fd.mesh.import_file (see :ref:`importmesh`) that allow to import meshes from the VTK or GMSH format.
+You can also import a mesh with :py:meth:`fedoo.Mesh.read` or
+:py:meth:`fedoo.Mesh.from_pyvista`. See :ref:`importmesh` for supported formats.
 
 
 Create weak formulations 
@@ -84,12 +87,9 @@ For instance, a simple assembly for the previously defined weak formulation and 
     
     my_assembly = fd.Assembly.create(my_weakform, my_mesh) 
 
-The Assembly object will automatically compute the assembled stiffness matrix using scipy sparse matrix format.
-To get the global stiffness matrix: 
-
-.. code-block:: python
-
-    my_assembly.get_matrix(). 
+The problem initializes the assembly and builds its global stiffness matrix
+in SciPy sparse format when solving. Retrieve the matrix after solving with
+``my_assembly.get_global_matrix()``.
 
 
 Set the Problem and the solver
@@ -99,7 +99,7 @@ The problem should now be defined. Here a Linear problem is created based on the
 
 .. code-block:: python
     
-    pb = fd.problem.Linear("MyAssembly") 
+    pb = fd.problem.Linear(my_assembly)
 
 The solver can be modified as follow:
 
@@ -117,20 +117,21 @@ Boundary conditions
 _____________________
 
 To apply the boundary conditions, we need to define some list of nodes indices for boundaries.
-The boundaries are automatically stored as set of nodes ('left', 'right', 'top', 'bottom', ...) when the function Mesh.BoxMesh is used.
+The boundaries are automatically stored as sets of nodes ('left', 'right',
+'top', 'bottom', ...) when ``fd.mesh.box_mesh`` is used.
 
 .. code-block:: python
 
-    nodes_left = fd.Mesh['Domain'].node_sets["left"]
-    nodes_right = fd.Mesh['Domain'].node_sets["right"]
+    nodes_left = my_mesh.node_sets["left"]
+    nodes_right = my_mesh.node_sets["right"]
 
 An easy way to get a set of nodes from the position of nodes is to use the :py:meth:`fedoo.Mesh.find_nodes` method.
 For instance, to get the left and right list of nodes with a 1e-10 position tolerance: 
 
 .. code-block:: python
 
-    nodes_left = Mesh['Domain'].find_nodes('X', mesh.bounding_box.xmin, tol=1e-10)
-    nodes_right = Mesh['Domain'].find_nodes('X', mesh.bounding_box.xmax, tol=1e-10)
+    nodes_left = my_mesh.find_nodes('X', my_mesh.bounding_box.xmin, tol=1e-10)
+    nodes_right = my_mesh.find_nodes('X', my_mesh.bounding_box.xmax, tol=1e-10)
 
     
 Once the list of nodes have been defined, the boundary conditions can be added to the problem. 
@@ -156,4 +157,24 @@ __________________________________
 Analyse and export results
 ________________________________
 
-See the section :doc:`Post-Processing <post_processing>`
+Retrieve the fields from the solved problem and open them in the Fedoo viewer:
+
+.. code-block:: python
+
+    results = pb.get_results(my_assembly, ["Disp", "Stress", "Strain"])
+    fd.viewer(results)
+
+Install the viewer dependencies with ``pip install "fedoo[plot,gui]"``.
+The viewer provides field/component selection, deformation scaling and
+image export. It can also open saved results:
+
+.. code-block:: python
+
+    results.save("cantilever.fdh5")
+    # In a later session:
+    fd.viewer("cantilever.fdh5")
+
+For external tools such as ParaView, export a VTK file with
+``results.save("cantilever.vtk")``. See
+:doc:`Post-Processing <post_processing>` for nonlinear time histories,
+section output and more viewer options.
