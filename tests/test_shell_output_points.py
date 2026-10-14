@@ -125,6 +125,11 @@ def test_extrema_and_atomic_selection():
     # The largest magnitude is unsigned; min and max retain the sign.
     result.shell_options.update(reduction="abs_max")
     np.testing.assert_allclose(result["Stress", "XX"], 12)
+    result.shell_options.update(reduction="signed_abs_max")
+    np.testing.assert_allclose(result["Stress", "XX"], -12)
+    tensor[0, -1] = 12 * (1 + 1e-13)
+    np.testing.assert_allclose(result["Stress", "XX"], -12)
+    tensor[0, -1] = 12
     result.shell_options.update(reduction="min")
     np.testing.assert_allclose(result["Stress", "XX"], -12)
     result.shell_options.update(reduction="max", point_index=999)

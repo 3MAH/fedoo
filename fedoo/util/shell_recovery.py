@@ -25,7 +25,9 @@ class ShellOptions(BeamOptions):
 
     With reduction=None and no position/index, read the sole saved thickness
     point if present; otherwise read the top face. Reductions follow
-    :class:`BeamOptions`: ``'abs_max'`` returns a nonnegative magnitude, and
+    :class:`BeamOptions`: ``'abs_max'`` returns a nonnegative magnitude,
+    ``'signed_abs_max'`` retains the selected sign (first point for ties within
+    relative tolerance 1e-9), and both propagate NaNs.
     ``'max'``/``'min'`` select algebraic extrema. Full tensors are reduced componentwise; they may
     come from different thickness points. Requested invariants are evaluated
     at each point before reduction, whereas invariants computed from the

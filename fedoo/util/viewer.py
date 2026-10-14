@@ -1617,6 +1617,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Maximum", "max"),
             ("Minimum", "min"),
             ("Largest magnitude", "abs_max"),
+            ("Largest magnitude (signed)", "signed_abs_max"),
         ]
         for label, value in modes:
             reduction.addItem(label, value)
@@ -2194,6 +2195,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Maximum", "max"),
             ("Minimum", "min"),
             ("Largest magnitude", "abs_max"),
+            ("Largest magnitude (signed)", "signed_abs_max"),
         ):
             reduction.addItem(label, mode)
         reduction.setCurrentIndex(

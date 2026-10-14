@@ -34,8 +34,10 @@ class BeamOptions(dict):
 
     ``reduction='abs_max'`` is the default: each requested component returns
     its largest magnitude across section points, as a nonnegative value; NaNs
-    propagate. ``'max'`` and ``'min'`` select algebraic extrema and retain the
-    sign. With no component requested, all
+    propagate. ``'signed_abs_max'`` retains the selected value's sign, choosing
+    the first point for magnitudes tied within relative tolerance 1e-9; it also
+    propagates NaNs. ``'max'`` and ``'min'`` select algebraic extrema and retain
+    the sign. With no component requested, all
     six tensor components are reduced independently, returning shape
     ``(6, n_locations)``. These extrema can come from different points and
     do not represent a stress or strain tensor at one physical location.
@@ -102,8 +104,11 @@ class BeamOptions(dict):
             "max",
             "min",
             "abs_max",
+            "signed_abs_max",
         ):
-            raise ValueError("reduction must be None, 'max', 'min' or 'abs_max'")
+            raise ValueError(
+                "reduction must be None, 'max', 'min', 'abs_max' or 'signed_abs_max'"
+            )
         if "stored_position" in changed and changed["stored_position"] not in (
             "nearest",
             "exact",
@@ -194,8 +199,16 @@ def reduce_section_tensors(tensors, kind, component, reduction):
         return np.max(value, axis=point_axis)
     if reduction == "min":
         return np.min(value, axis=point_axis)
-    # Unsigned: a sign would be arbitrary for symmetric distributions (bending).
-    return np.max(np.abs(value), axis=point_axis)
+    magnitude = np.abs(value)
+    if reduction == "abs_max":
+        return np.max(magnitude, axis=point_axis)
+    peak = np.max(magnitude, axis=point_axis, keepdims=True)
+    # Resolve symmetric/near-symmetric extrema consistently in point order.
+    indices = np.argmax(magnitude >= peak * (1 - 1e-9), axis=point_axis, keepdims=True)
+    result = np.take_along_axis(value, indices, axis=point_axis).squeeze(point_axis)
+    # NaN peaks must propagate even though argmax selects the first point.
+    np.minimum(result, peak.squeeze(point_axis), out=result)
+    return result
 
 
 def _polar_sampling_grid(samples, pipe):

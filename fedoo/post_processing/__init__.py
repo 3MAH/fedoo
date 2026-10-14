@@ -145,8 +145,9 @@ With ``reduction=None`` and no position/index, the default reads the sole saved
 thickness point, or the top face if multiple points or only generalized fields
 are available. Explicit positions are respected. The
 ``"abs_max"`` reduction returns the largest absolute component value, without
-its sign, and propagates NaNs; ``"max"`` and ``"min"`` select algebraic
-extrema. Invariants
+its sign. ``"signed_abs_max"`` retains the selected sign, choosing the first
+point for magnitudes tied within relative tolerance 1e-9. Both propagate NaNs;
+``"max"`` and ``"min"`` select algebraic extrema. Invariants
 and principal values are evaluated at each point before reduction. A reduction
 ignores point selection; without a reduction, an explicit ``position`` or
 ``point_index`` overrides automatic selection. Updating either clears the other.
@@ -348,7 +349,9 @@ preferences remain active when changing result frames.
   other submeshes use the preferred source when available, otherwise the other
   source. API selections remain strict by default (``source_fallback=False``).
 * ``reduction="abs_max"`` (default) returns the largest absolute magnitude as a
-  nonnegative value and propagates NaNs. ``"max"`` and ``"min"`` use algebraic
+  nonnegative value. ``"signed_abs_max"`` retains the selected sign, choosing
+  the first point for magnitudes tied within relative tolerance 1e-9. Both
+  propagate NaNs. ``"max"`` and ``"min"`` use algebraic
   extrema and retain the sign (largest tension and largest compression for a
   normal stress).
 * ``reduction=None`` selects one point using normalized ``position=(y,z)`` or

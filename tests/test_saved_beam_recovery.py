@@ -326,10 +326,12 @@ def test_compression_maximum_and_maximum_absolute_are_distinct():
     np.testing.assert_allclose(data["Stress", "XX"], -9)
     data.beam_options.update(reduction="abs_max")
     np.testing.assert_allclose(data["Stress", "XX"], 9)
+    data.beam_options.update(reduction="signed_abs_max")
+    np.testing.assert_allclose(data["Stress", "XX"], -9)
 
 
 @pytest.mark.parametrize("component", [None, 0])
-def test_abs_max_is_unsigned_and_preserves_nan(component):
+def test_magnitude_reductions_preserve_nan_and_selected_sign(component):
     tensors = np.zeros((6, 2, 6))
     tensors[0] = np.array(
         [
@@ -341,13 +343,18 @@ def test_abs_max_is_unsigned_and_preserves_nan(component):
             [0, 0],
         ]
     ).T
-    result = reduce_section_tensors(tensors, "Stress", component, "abs_max")
-    if component is None:
-        result = result[0]
-    np.testing.assert_allclose(result, [12, 5, np.nan, np.inf, np.inf, 0])
+    for reduction, expected in (
+        ("abs_max", [12, 5, np.nan, np.inf, np.inf, 0]),
+        ("signed_abs_max", [-12, -5, np.nan, np.inf, -np.inf, 0]),
+    ):
+        assert BeamOptions({"reduction": reduction})["reduction"] == reduction
+        result = reduce_section_tensors(tensors, "Stress", component, reduction)
+        if component is None:
+            result = result[0]
+        np.testing.assert_allclose(result, expected)
     assert BeamOptions()["reduction"] == "abs_max"
     with pytest.raises(ValueError, match="reduction must be"):
-        BeamOptions({"reduction": "signed_abs_max"})
+        BeamOptions({"reduction": "invalid"})
 
 
 def test_oblique_circle_maximum_converges_with_sampling():

@@ -28,9 +28,10 @@ semantic versioning.
   points, and linear laminates include both sides of each interface.
 - Dataset `beam_options` and `shell_options` for stored/recomputed fields,
   local/global coordinates, individual section points and reductions.
-  `abs_max`, the beam default, returns the nonnegative largest magnitude and
-  propagates NaNs; a sign would be arbitrary for symmetric distributions such
-  as pure bending. `max` and `min` select algebraic extrema and retain the sign. Full tensors are reduced
+  `abs_max`, the beam default, returns the nonnegative largest magnitude.
+  `signed_abs_max` retains the selected value's sign, choosing the first point
+  for magnitudes tied within relative tolerance 1e-9. Both propagate NaNs.
+  `max` and `min` select algebraic extrema and retain the sign. Full tensors are reduced
   componentwise; scalar invariants are evaluated at each point before reduction.
 - Automatic shell read selection: with no reduction or explicit point/index,
   use the sole saved thickness point, otherwise the top face. This also applies

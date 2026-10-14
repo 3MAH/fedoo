@@ -167,8 +167,8 @@ class DataSet:
     beam_options : dict
         Section ``position`` (normalized (y, z)) or ``point_index``, mutually
         exclusive. ``source`` is 'auto', 'stored' or 'recomputed'. ``reduction``
-        is None, 'max', 'min' or 'abs_max' (default, nonnegative largest
-        magnitude).
+        is None, 'max', 'min', 'signed_abs_max' (largest magnitude retaining its
+        sign) or 'abs_max' (default, nonnegative largest magnitude).
         ``samples`` affects recomputed sampling only. Extrema are estimates.
     shell_options : dict
         Normalized thickness ``position`` in [-1, 1], or ``point_index``.
