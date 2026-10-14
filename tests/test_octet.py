@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import fedoo as fd
+import simcoon
 
 
 def test_octet():
@@ -76,8 +77,18 @@ def test_octet():
     TensorStrain = res.gausspoint_data["Strain"]
     TensorStress = res.gausspoint_data["Stress"]
 
-    assert np.abs(TensorStress[4][222] - 81.37703546761797) < 1e-3
-    assert np.abs(TensorStrain[2][876] - 0.030039991967348946) < 1e-6
+    # Simcoon 2.2 regularizes power-law hardening at first yield. This changes
+    # the EPICP history, including in small strain. The total-formulation API
+    # was introduced in the same release; retain the 2.1 reference as well.
+    if hasattr(simcoon, "total_formulation_serves"):
+        expected_stress = 81.92911895293878
+        expected_strain = 0.030042246439856226
+    else:
+        expected_stress = 81.37703546761797
+        expected_strain = 0.030039991967348946
+
+    assert np.abs(TensorStress[4][222] - expected_stress) < 1e-3
+    assert np.abs(TensorStrain[2][876] - expected_strain) < 1e-6
 
 
 if __name__ == "__main__":
