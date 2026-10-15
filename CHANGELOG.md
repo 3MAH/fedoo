@@ -4,6 +4,15 @@ All notable changes to fedoo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and fedoo aims to follow
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
+  centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
+  `lin2` mesh directly instead of extracting its surface. With `dmin` equal
+  to the fiber diameter, this models contact between equal-radius rods.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added
