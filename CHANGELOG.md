@@ -4,6 +4,29 @@ All notable changes to fedoo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and fedoo aims to follow
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- `BeamFiberSection`: nonlinear multifiber beam section. A private copy of a
+  3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
+  stress at fiber points of a rectangular, circular or pipe section, and the
+  normal force, bending moments and their full section tangent are integrated
+  from the fibers. Transverse shear and torsion remain elastic. Works with
+  `BeamEquilibrium` in 2D and 3D, small strain or corotational `nlgeom`,
+  including `consistent_tangent=True`. Saved `Stress` fields are the fiber
+  stresses (`recovery="stored_only"`).
+- `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
+  `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
+  tangent onto any set of Voigt components; native elastic laws and UMAT laws
+  (`ndi=1`) support it. Exact Simcoon stresses under `ndi=1` require a Simcoon
+  version that condenses this state.
+
+### Changed
+
+- The material-point helpers of the nonlinear shells moved to
+  `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

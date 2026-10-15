@@ -6,6 +6,25 @@ from simcoon import Rotation
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.voigt_tensors import StressTensorList
 
+# Reduced stress states: Voigt slots kept by the static condensation. The
+# stress of every other slot is zero ("1Dstress": beam fibers, sigma_11 only).
+_KEPT_COMPONENTS = {"2Dstress": (0, 1, 3), "1Dstress": (0,)}
+
+
+def _dense_tangent(H):
+    """Return H as a float (6, 6) or (6, 6, n) array, broadcasting scalars."""
+    if isinstance(H, np.ndarray) and H.dtype != object:
+        return np.asarray(H, dtype=float)
+    entries = [[np.asarray(H[i][j], dtype=float) for j in range(6)] for i in range(6)]
+    n_points = max(entry.size for row in entries for entry in row)
+    if all(entry.ndim == 0 for row in entries for entry in row):
+        return np.array(entries, dtype=float)
+    dense = np.empty((6, 6, n_points))
+    for i in range(6):
+        for j in range(6):
+            dense[i, j] = entries[i][j]
+    return dense
+
 
 class Mechanical3D(ConstitutiveLaw):
     """Base class for mechanical constitutive laws.
@@ -180,6 +199,44 @@ class Mechanical3D(ConstitutiveLaw):
             else [0, 0, 0, 0, 0, 0]
             for i in range(6)
         ]
+
+    @staticmethod
+    def get_H_condensed(H, kept):
+        """Statically condense a 3D tangent onto the Voigt slots ``kept``.
+
+        The stress of the other slots is zero: the returned tangent is the
+        Schur complement :math:`H_{kk} - H_{kc} H_{cc}^{-1} H_{ck}`. Its rows
+        and columns of the condensed slots are zero.
+
+        Parameters
+        ----------
+        H : array_like
+            Full 3D tangent, of shape (6, 6) or (6, 6, n_points). Entries may
+            be scalars or point-wise arrays.
+        kept : sequence of int
+            Voigt slots whose strain is prescribed, e.g. ``(0,)`` for a
+            uniaxial stress state.
+
+        Returns
+        -------
+        numpy.ndarray
+            Condensed tangent with the shape of the dense input.
+        """
+        H = _dense_tangent(H)
+        kept = list(kept)
+        condensed = [i for i in range(6) if i not in kept]
+        single = H.ndim == 2
+        points = (H[..., None] if single else H).transpose(2, 0, 1)
+        H_kk = points[:, kept][:, :, kept]
+        H_kc = points[:, kept][:, :, condensed]
+        H_cc = points[:, condensed][:, :, condensed]
+        H_ck = points[:, condensed][:, :, kept]
+        reduced = np.zeros_like(points)
+        reduced[np.ix_(range(len(points)), kept, kept)] = H_kk - H_kc @ np.linalg.solve(
+            H_cc, H_ck
+        )
+        reduced = reduced.transpose(1, 2, 0)
+        return reduced[..., 0] if single else reduced
 
     # Material-frame resolution
 
@@ -367,8 +424,7 @@ class Mechanical3D(ConstitutiveLaw):
             matrices = np.repeat(matrices, len(frames), axis=0)
         elif len(frames) != len(matrices):
             raise ValueError(
-                f"got {len(frames)} material frames for "
-                f"{len(matrices)} matrix values"
+                f"got {len(frames)} material frames for {len(matrices)} matrix values"
             )
         local = frames.transpose(0, 2, 1) @ matrices @ frames
         if single and len(local) == 1:
@@ -575,14 +631,15 @@ class MechanicalUMAT(Mechanical3D):
         return {}, False
 
     def _get_ndi(self, assembly):
-        if assembly.space.get_dimension() != "2Dstress":
+        dimension = assembly.space.get_dimension()
+        if dimension not in _KEPT_COMPONENTS:
             return 3
         if self._Lt_from_F:
             raise NotImplementedError(
                 "UMAT laws with a deformation-gradient tangent are not "
-                "compatible with the 2D plane-stress assumption"
+                f"compatible with the reduced stress state {dimension!r}"
             )
-        return 2
+        return 2 if dimension == "2Dstress" else 1
 
     def _statev_array(self, assembly):
         """Return an assembly Statev array with the required exact shape."""
@@ -745,8 +802,8 @@ class MechanicalUMAT(Mechanical3D):
         assembly.sv["TangentMatrix"] = self.local2global_H(
             tangent_local, assembly, current=False
         )
-        if ndi == 2:
-            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
+        if ndi < 3:
+            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly)
         if self.use_elastic_lt:
             assembly.sv["ElasticMatrix"] = assembly.sv["TangentMatrix"]
         self.is_initialized = True
@@ -865,8 +922,8 @@ class MechanicalUMAT(Mechanical3D):
         assembly.sv["TangentMatrix"] = self.local2global_H(
             tangent_local, assembly, current=in_trial
         )
-        if ndi == 2:
-            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
+        if ndi < 3:
+            assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly)
         assembly.sv["Stress"] = StressTensorList(
             self._rotate_vector_in(stress_local, trial_frame, "stress", True)
             if in_trial
@@ -897,4 +954,6 @@ class MechanicalUMAT(Mechanical3D):
         H = assembly.sv["TangentMatrix"]
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
+        if dimension == "1Dstress":
+            return self.get_H_condensed(H, _KEPT_COMPONENTS["1Dstress"])
         return H

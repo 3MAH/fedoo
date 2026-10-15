@@ -94,6 +94,10 @@ class BeamEquilibrium(WeakFormBase):
             self.properties = BeamProperties(
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
+        if getattr(self.properties, "is_section_law", False):
+            # A nonlinear section (e.g. BeamFiberSection) owns BeamStress and
+            # the section tangent: the assembly drives its lifecycle.
+            self.constitutivelaw = self.properties
         self.time_evolution = SECOND_ORDER
         self.assembly_options.set("elm_type", "beam", elm_type="lin2")
 
@@ -458,9 +462,11 @@ class BeamEquilibrium(WeakFormBase):
                     ]
                 )
 
-            assembly.sv["BeamStress"] = BeamStressList(
-                [Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)]
-            )
+            if self.constitutivelaw is None:
+                # A section law computes BeamStress from BeamStrain itself.
+                assembly.sv["BeamStress"] = BeamStressList(
+                    [Ke[i] * assembly.sv["BeamStrain"][i] for i in range(6)]
+                )
 
     def to_start(self, assembly, pb):
         if self.nlgeom == "UL":
@@ -499,11 +505,23 @@ class BeamEquilibrium(WeakFormBase):
 
     def get_weak_equation(self, assembly, pb):
         eps = self.space.op_beam_strain()
-        Ke = self.properties.get_beam_rigidity()
-
-        diff_op = sum(
-            [eps[i].virtual * eps[i] * Ke[i] if eps[i] != 0 else 0 for i in range(6)]
-        )
+        tangent = self._section_tangent(assembly)
+        if tangent is None:
+            Ke = self.properties.get_beam_rigidity()
+            diff_op = sum(
+                [
+                    eps[i].virtual * eps[i] * Ke[i] if eps[i] != 0 else 0
+                    for i in range(6)
+                ]
+            )
+        else:
+            # Full section tangent of a section law, one value per Gauss point
+            diff_op = sum(
+                eps[i].virtual * eps[j] * tangent[i, j]
+                for i in range(6)
+                for j in range(6)
+                if eps[i] != 0 and eps[j] != 0 and np.any(tangent[i, j])
+            )
 
         initial_stress = assembly.sv["BeamStress"]
 
@@ -557,15 +575,25 @@ class BeamEquilibrium(WeakFormBase):
             tangent = beam_tangent_operators(self, assembly, data)
             assembly.sv["_BeamTangentOperators"] = tangent
         eps = self.space.op_beam_strain()
-        Ke = self.properties.get_beam_rigidity()
         stress = assembly.sv["BeamStress"]
+        correction = tangent.strain_correction
+        section_tangent = self._section_tangent(assembly)
 
         # 1. Strain change: eps(v).T D [B(delta_q-delta_u_local)+B_L q delta_L].
-        strain_change = sum(
-            eps[i].virtual * tangent.strain_correction[i] * Ke[i]
-            for i in range(6)
-            if eps[i] != 0 and tangent.strain_correction[i] != 0
-        )
+        if section_tangent is None:
+            Ke = self.properties.get_beam_rigidity()
+            strain_change = sum(
+                eps[i].virtual * correction[i] * Ke[i]
+                for i in range(6)
+                if eps[i] != 0 and correction[i] != 0
+            )
+        else:
+            strain_change = sum(
+                eps[i].virtual * correction[j] * section_tangent[i, j]
+                for i in range(6)
+                for j in range(6)
+                if eps[i] != 0 and correction[j] != 0 and np.any(section_tangent[i, j])
+            )
 
         # 2. Virtual interpolation change: (B_L v_local).T s delta_L.
         interpolation_change = 0
@@ -590,6 +618,12 @@ class BeamEquilibrium(WeakFormBase):
             if work != 0 and spin != 0
         )
         return strain_change + interpolation_change + measure_change + frame_rotation
+
+    def _section_tangent(self, assembly):
+        """Section tangent (6, 6, n_gp) of a section law, or None."""
+        if self.constitutivelaw is None:
+            return None
+        return assembly.sv.get("_BeamStiffnessMatrix")
 
     def _use_consistent_tangent(self, assembly):
         return (

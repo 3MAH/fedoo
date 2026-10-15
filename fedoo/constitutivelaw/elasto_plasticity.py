@@ -108,6 +108,12 @@ class ElastoPlasticity(MechanicalUMAT):
                 'law, e.g. fedoo.constitutivelaw.Simcoon("EPICP", props), '
                 "which supports the 2Dstress assumption."
             )
+        if dimension == "1Dstress":
+            raise NotImplementedError(
+                "ElastoPlasticity does not implement the uniaxial ('1Dstress') "
+                "return mapping used by beam fibers. Use a Simcoon plasticity "
+                'law, e.g. fedoo.constitutivelaw.Simcoon("EPICP", props).'
+            )
 
         young_modulus = self.young_modulus
         poisson_ratio = self.poisson_ratio
@@ -460,6 +466,8 @@ class ElastoPlasticity(MechanicalUMAT):
         finite_strain = F1.size > 0
         if ndi == 2:
             self.get_elastic_matrix("2Dstress")
+        elif ndi == 1:
+            self.get_elastic_matrix("1Dstress")
 
         strain = self._as_point_array(strain)
         dstrain = self._as_point_array(dstrain)
