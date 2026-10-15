@@ -32,7 +32,8 @@ def _ring_exclusion_filter(ipctk, elements, n_vertices, n_rings):
     ipctk only skips the primitives sharing a vertex (one ring). With a
     thickness offset ``dmin`` larger than the edge length, the next rings
     lie below ``dmin + dhat`` and would be repelled. ``elements`` is the
-    local connectivity of the collision mesh (edges in 2D, faces in 3D).
+    local connectivity of the collision mesh (``lin2`` edges or ``tri3``
+    faces).
     """
     from scipy import sparse
 
@@ -215,10 +216,12 @@ class IPCContact(AssemblyBase):
     mesh : fedoo.Mesh
         Full volumetric mesh (needed for DOF compatibility).
     surface_mesh : fedoo.Mesh, optional
-        Pre-extracted surface mesh (``lin2`` in 2D, ``tri3`` in 3D).
+        Pre-extracted surface mesh (``lin2`` in 2D, ``tri3`` in 3D). In 3D,
+        a ``lin2`` mesh is a curve, such as beam centerlines: its edges are
+        the only collision primitives.
     extract_surface : bool, default=False
         If ``True``, automatically extract the surface from the volumetric
-        mesh.
+        mesh. A 3D ``lin2`` mesh is used directly as the contact mesh.
     dhat : float, default=1e-3
         Barrier activation distance.  Pairs of primitives closer than
         ``dhat`` receive a repulsive barrier force.  A smaller value gives
@@ -1192,7 +1195,11 @@ class IPCContact(AssemblyBase):
 
         # Extract surface mesh if needed
         if self._extract_surface and self._surface_mesh is None:
-            self._surface_mesh = extract_surface_mesh(self.mesh, reduce_order=True)
+            if ndim == 3 and self.mesh.elm_type == "lin2":
+                # A 3D curve mesh (e.g. beam centerlines) is its own contact mesh
+                self._surface_mesh = self.mesh
+            else:
+                self._surface_mesh = extract_surface_mesh(self.mesh, reduce_order=True)
 
         if self._surface_mesh is None:
             raise ValueError(
@@ -1250,8 +1257,10 @@ class IPCContact(AssemblyBase):
         self._broad_phase = self._create_broad_phase()
 
         # Build edges and faces for the collision mesh
-        if ndim == 2:
-            edges = local_elements  # lin2 elements are edges
+        if ndim == 2 or surf_mesh.elm_type == "lin2":
+            # lin2 elements are edges: 2D boundaries, or 3D curves such as
+            # beam centerlines (codimensional edges, no faces)
+            edges = local_elements
             faces = np.empty((0, 3), dtype=int)
         else:  # 3D
             edges = ipctk.edges(local_elements)
@@ -1562,7 +1571,10 @@ class IPCSelfContact(IPCContact):
     Convenience wrapper around :py:class:`IPCContact` that automatically
     extracts the surface mesh from the volumetric mesh. Useful for
     problems where a single body may come into contact with itself (e.g.
-    buckling, folding, compression of porous structures).
+    buckling, folding, compression of porous structures). A 3D ``lin2``
+    mesh (beam centerlines, e.g. ropes or fiber bundles) is used directly
+    as the contact mesh; set ``dmin`` to the fiber diameter and raise
+    ``excluded_rings`` when the elements are shorter than ``dmin + dhat``.
 
     All barrier stiffness tuning is automatic (see :py:class:`IPCContact`
     for details).
