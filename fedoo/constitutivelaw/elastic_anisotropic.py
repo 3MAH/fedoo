@@ -112,6 +112,8 @@ class ElasticAnisotropic(Mechanical3D):
         H = self.local2global_H(self._H, assembly)
         if dimension == "2Dstress":
             return self.get_H_plane_stress(H)
+        elif dimension == "1Dstress":
+            return self.get_H_condensed(H, (0,))
         else:
             return H
 
