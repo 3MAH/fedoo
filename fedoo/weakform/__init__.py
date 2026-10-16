@@ -33,6 +33,8 @@ The WeakForm library contains the following classes:
    StressEquilibriumRI
    StressEquilibriumMixed
    HeatEquation
+   PoroMechanicsSimple
+   PoroMechanics
    BeamEquilibrium
    SpringEquilibrium
    PlateEquilibrium

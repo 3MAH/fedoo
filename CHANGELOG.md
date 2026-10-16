@@ -4,6 +4,40 @@ All notable changes to fedoo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and fedoo aims to follow
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Finite-strain Biot poromechanics. In `nlgeom="UL"` the pore-stress
+  coupling now includes its geometric tangent. `nlgeom="TL"` is now the exact
+  pull-back of UL and gives the same solution. The momentum coupling is
+  -alpha p J C^{-1}:delta E, the storage and coupling terms of the mass
+  balance carry the J of dv = J dV, and the mobility is pulled back to
+  (k/mu) J C^{-1}. `PoroMechanicsSimple` now computes `lnJ`, so
+  deformation-dependent permeabilities (Holmes-Mow, Kozeny-Carman) receive
+  the current J.
+- Poromechanics documentation page (`docs/poromechanics.rst`) and a
+  Poromechanics section in the example gallery: Terzaghi consolidation
+  compared with the analytical series, finite-strain consolidation of a
+  Neo-Hookean skeleton, and the Taylor-Hood example.
+  `PoroMechanics`, `PoroMechanicsSimple`, `PoroFluidProperties` and the
+  permeability models are now listed in the API reference.
+
+### Changed
+
+- The poromechanics weak forms raise `NotImplementedError` in `2Daxi`: the
+  Biot coupling lacked the axisymmetric measure and hoop strain.
+- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
+  used in finite strain without `lnJ`.
+
+### Fixed
+
+- `PoroDarcy` in `nlgeom="UL"`: the pore-pressure gradient of the residual
+  was computed on the reference mesh instead of the current one. The
+  residual missed a factor of order J, while the tangent used the current
+  mesh. Transient finite-strain consolidation was wrong by about the strain
+  level (5 % at 5 % compression), but drained states were not affected.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

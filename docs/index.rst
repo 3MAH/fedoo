@@ -22,6 +22,7 @@ Welcome to FEDOO's documentation!
    time
    problem
    boundary_conditions
+   poromechanics
    post_processing
    heterogeneous
    user_problems
