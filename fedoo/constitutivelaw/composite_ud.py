@@ -37,6 +37,9 @@ class CompositeUD(ElasticAnisotropic):
         The name of the constitutive law
     degrees: bool, optional
         If True (default), ``angle`` is in degrees. If False, it is in radians.
+    thermal: ThermalProperties, optional
+        Effective thermal properties of the composite, supplied explicitly.
+        Expansion coefficients and conductivity are expressed in global axes.
 
     Notes
     -----
@@ -57,6 +60,8 @@ class CompositeUD(ElasticAnisotropic):
         angle=0,
         name="",
         degrees=True,
+        *,
+        thermal=None,
     ):
         Mechanical3D.__init__(self, name=name)  # heritage
 
@@ -69,6 +74,8 @@ class CompositeUD(ElasticAnisotropic):
             "angle": angle,
             "degrees": degrees,
         }
+        if thermal is not None:
+            self.set_thermal_properties(thermal)
 
     def get_engineering_constants(self):
         """

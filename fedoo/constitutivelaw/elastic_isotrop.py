@@ -23,16 +23,21 @@ class ElasticIsotrop(ElasticAnisotropic):
         The Poisson Ratio of the elastic isotropic material
     name: str, optional
         The name of the constitutive law
+    thermal: ThermalProperties, optional
+        Optional thermal expansion, conductivity, capacity and density. Can
+        also be attached using ``set_thermal_properties`` before the weakforms.
     """
 
     is_isotropic = True
 
-    def __init__(self, E, nu, name=""):
+    def __init__(self, E, nu, name="", *, thermal=None):
         Mechanical3D.__init__(self, name=name)  # heritage
         self.E = E
         """Young Modulus of the material"""
         self.nu = nu
         """Poisson Ratio of the material """
+        if thermal is not None:
+            self.set_thermal_properties(thermal)
 
     def get_tangent_matrix(
         self, assembly, dimension=None

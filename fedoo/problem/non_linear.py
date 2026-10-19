@@ -630,11 +630,65 @@ class NonLinear(Problem):
 
         For Force and Work error criterion, the problem must be updated
         (update method).
+        Fields returns the largest field residual divided by its own
+        absolute-plus-relative threshold. Convergence requires a value < 1.
         """
         norm_type = self.nr_parameters["norm_type"]
         dof_free = self._dof_free
         if len(dof_free) == 0:
+            if self.nr_parameters["criterion"] == "Fields":
+                self.nr_errors = {field: 0.0 for field in self.nr_parameters["fields"]}
             return 0
+        if self.nr_parameters["criterion"] == "Fields":
+            residual = self._get_free_dof_residual()
+            force = self.get_ext_forces(include_mpc=False)
+            covered = np.zeros(len(dof_free), dtype=bool)
+            labels = (
+                np.full(self.n_dof, -1, dtype=np.int32)
+                if self._MFext is not None
+                else None
+            )
+            errors = {}
+            for label, (field, parameters) in enumerate(
+                self.nr_parameters["fields"].items()
+            ):
+                mask = self._new_vect_dof()
+                self._set_vect_component(mask, field, 1)
+                mask = mask.astype(bool)
+                selected = mask[dof_free]
+                if np.any(covered & selected):
+                    raise ValueError(
+                        "Convergence fields must not overlap on free DOFs."
+                    )
+                covered |= selected
+                if labels is not None:
+                    labels[mask] = label
+                scale = parameters.get("reference")
+                if scale is None:
+                    scale = np.linalg.norm(force[mask], norm_type)
+                threshold = (
+                    parameters.get("atol", 0) + parameters.get("rtol", 0) * scale
+                )
+                value = (
+                    np.linalg.norm(residual[selected], norm_type)
+                    if np.any(selected)
+                    else 0.0
+                )
+                errors[field] = (
+                    value / threshold if threshold else (0 if value == 0 else np.inf)
+                )
+            if not np.all(covered):
+                raise ValueError(
+                    "Convergence fields must cover every free DOF, including global DOFs."
+                )
+            if labels is not None:
+                mapping = self._MatCB.tocoo()
+                if np.any(labels[mapping.row] != labels[dof_free[mapping.col]]):
+                    raise ValueError(
+                        "Fields convergence does not support MPCs mixing different fields."
+                    )
+            self.nr_errors = errors
+            return float(np.max(list(errors.values())))
         if self.nr_parameters["criterion"] == "Displacement":
             if self._err0 is None:  # assess err0 from current state
                 # Normalize by the current increment (not the total
@@ -707,11 +761,17 @@ class NonLinear(Problem):
         pb.nr_parameters dict.
 
         Parameter:
-            * criterion: str in ['Displacement', 'Force', 'Work'],
+            * criterion: str in ['Displacement', 'Force', 'Work', 'Fields'],
               default = "Displacement".
               Type of convergence test.
 
         Optional parameters that can be set as kargs:
+            * 'fields': dict, required for Fields. Maps field names to
+              dictionaries containing nonnegative 'atol', 'rtol', and optional
+              'reference'. All free DOFs must be covered without overlaps.
+              The residual threshold for each field is atol + rtol*reference;
+              Fields converges when all normalized errors are below one.
+              Scalar tol/tol_nr does not change this residual threshold.
             * 'err0': float or None, default = None.
               The reference error.
               If None (default), err0 is automatically computed. For Force,
@@ -756,13 +816,49 @@ class NonLinear(Problem):
                  for 4 consecutive Newton-Raphson iterations.
               2. The error spikes to more than 100 times the previous error.
         """
-        if criterion not in ["Displacement", "Force", "Work"]:
+        if criterion not in ["Displacement", "Force", "Work", "Fields"]:
             raise NameError(
-                'criterion must be set to "Displacement", "Force" or "Work"'
+                'criterion must be "Displacement", "Force", "Work" or "Fields"'
             )
-        self.nr_parameters["criterion"] = criterion
+        if criterion == "Fields":
+            fields = kargs.get("fields", self.nr_parameters.get("fields"))
+            if not isinstance(fields, dict) or not fields:
+                raise ValueError(
+                    "Fields criterion requires a nonempty fields dictionary."
+                )
+            for field, parameters in fields.items():
+                mask = self._new_vect_dof()
+                self._set_vect_component(mask, field, 1)
+                if not isinstance(parameters, dict) or set(parameters) - {
+                    "atol",
+                    "rtol",
+                    "reference",
+                }:
+                    raise ValueError(
+                        "Each field accepts atol, rtol and optional reference."
+                    )
+                values = [
+                    value
+                    for key, value in parameters.items()
+                    if key != "reference" or value is not None
+                ]
+                if any(
+                    not np.isscalar(value) or not np.isfinite(value) or value < 0
+                    for value in values
+                ):
+                    raise ValueError(
+                        "Field tolerances and references must be finite nonnegative scalars."
+                    )
+                if parameters.get("atol", 0) == 0 and parameters.get("rtol", 0) == 0:
+                    raise ValueError(
+                        "Each field needs a positive absolute or relative tolerance."
+                    )
+            kargs["fields"] = {
+                field: dict(parameters) for field, parameters in fields.items()
+            }
 
         allowed_keys = [
+            "fields",
             "err0",
             "tol",
             "max_subiter",
@@ -786,6 +882,8 @@ class NonLinear(Problem):
                 )
 
             self.nr_parameters[key] = kargs[key]
+
+        self.nr_parameters["criterion"] = criterion
 
         if "ls_mode" in kargs and kargs["ls_mode"] != "natural":
             self._disable_line_search_factorization_reuse()
@@ -998,7 +1096,7 @@ class NonLinear(Problem):
             prev_error = error
             error = self.compute_nr_error()
             if (
-                error < tol_nr
+                error < (1.0 if self.nr_parameters["criterion"] == "Fields" else tol_nr)
                 and subiter >= self._nr_min_subiter
                 # NB: _boundary_is_0 True implies _Xbc was zeroed, so testing
                 # the actual _Xbc content subsumes the flag

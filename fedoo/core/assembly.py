@@ -1485,6 +1485,7 @@ class Assembly(AssemblyBase):
                 new_mesh._saved_gausspoint2node_l2 = {}
                 new_assembly = copy(self)
                 new_assembly.mesh = new_mesh
+                new_assembly._reference_assembly = self
                 self.current = new_assembly
             else:
                 self.current.mesh.nodes = new_crd
@@ -1806,6 +1807,18 @@ class Assembly(AssemblyBase):
             hasattr(weakform, "list_weakform") and weakform.assembly_options is None
         ):  # WeakFormSum object
             list_weakform = weakform.list_weakform
+            materials = {
+                wf.constitutivelaw
+                for wf in list_weakform
+                if wf.constitutivelaw is not None
+            }
+            coupled = [
+                law for law in materials if getattr(law, "is_thermomechanical", False)
+            ]
+            if coupled and len(materials) != 1:
+                raise ValueError(
+                    "Summed coupled weakforms must share the same material instance."
+                )
 
             # get lists of some non compatible assembly_options items for each weakform in list_weakform
             list_elm_type = [
@@ -1857,6 +1870,17 @@ class Assembly(AssemblyBase):
                 return Assembly(weakform, mesh, elm_type, name, **kargs)
 
             else:  # we need to create and sum several assemblies
+                for material in weakform.constitutivelaw._list_constitutivelaw:
+                    if getattr(material, "is_thermomechanical", False):
+                        properties = {
+                            list_prop[i]
+                            for i, wf in enumerate(list_weakform)
+                            if wf.constitutivelaw is material
+                        }
+                        if len(properties) > 1:
+                            raise ValueError(
+                                "Coupled weakforms must use matching quadrature and nonsymmetric assembly."
+                            )
                 list_assembly = []
                 for prop in list_diff_prop:
                     indices = [i for i, value in enumerate(list_prop) if value == prop]

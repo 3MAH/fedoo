@@ -4,6 +4,31 @@ All notable changes to fedoo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and fedoo aims to follow
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Initial small-strain thermo-mechanical coupling by summing StressEquilibrium
+  and HeatEquation with a shared material. Native elastic solids accept optional
+  ThermalProperties through ``thermal=`` or ``set_thermal_properties``. Includes
+  an isotropic Simcoon umat_T adapter, both coupling blocks, consistent
+  thermal storage and undamped endpoint Newmark compatibility.
+- A Fields Newton criterion with independent absolute/relative residual
+  tolerances and optional reference scales per field, including MPC reduction.
+- A monolithic thermal expansion example with analytic and Simcoon variants,
+  and documentation of supported modes and remaining finite-strain work.
+- Finite-strain native thermoelasticity in 3D and plane strain, using the
+  reference logarithmic energy with either TL or UL mechanical assembly.
+  Heat conduction uses TL geometry, pulled-back conductivity and its consistent
+  deformation tangent; capacity and sources use reference volume. Includes
+  both coupling blocks and implicit endpoint Newmark mechanics. The Simcoon
+  umat_T adapter remains small strain. Requires Simcoon >=2.2.
+
+### Fixed
+
+- Cartesian UL inertia integrates reference mass, including when the
+  constitutive deformation gradient uses an incompressibility projection.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

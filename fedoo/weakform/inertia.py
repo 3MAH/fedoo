@@ -1,5 +1,6 @@
 from fedoo.core.weakform import WeakFormBase
 from fedoo.weakform._axi_utils import axi_volume_weight
+from fedoo.weakform._reference import reference_volume_weight
 
 
 class Inertia(WeakFormBase):
@@ -37,7 +38,10 @@ class Inertia(WeakFormBase):
         op_dU = self.space.op_disp()  # displacement increment (incremental formulation)
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
 
-        diff_op = sum([a * b * self.density for (a, b) in zip(op_dU_vir, op_dU)])
+        density = self.density
+        if not self.space.is_axisymmetric:
+            density = density * reference_volume_weight(assembly)
+        diff_op = sum([a * b * density for (a, b) in zip(op_dU_vir, op_dU)])
 
         if self.space.is_axisymmetric:
             diff_op = diff_op * axi_volume_weight(assembly)

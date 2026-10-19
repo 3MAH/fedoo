@@ -89,6 +89,12 @@ class StressEquilibrium(WeakFormBase):
             self.space.new_vector("Disp", ("DispX", "DispY"))
 
         self.constitutivelaw = constitutivelaw
+        if getattr(constitutivelaw, "is_thermomechanical", False):
+            if incompressibility is not None:
+                raise NotImplementedError(
+                    "Coupled materials currently require the standard strain operator."
+                )
+            self.assembly_options["assume_sym"] = False
         # Tag a second-order (dynamic) evolution. The mass term is resolved from
         # the material density (or an explicit set_inertia) at integrator
         # compile time, so a set_density() call made after the weakform is built
@@ -198,6 +204,13 @@ class StressEquilibrium(WeakFormBase):
         if self.incompressibility == "fbar":
             DiffOp = DiffOp + self._get_fbar_tangent_op(
                 assembly, eps, H, initial_stress
+            )
+
+        dsdT = assembly.sv.get("StressTemperatureTangent")
+        if dsdT is not None and "Temp" in self.space.list_variables():
+            temperature = self.space.variable("Temp")
+            DiffOp += sum(
+                eps[i].virtual * temperature * dsdT[i] for i in range(6) if eps[i] != 0
             )
 
         if self.space.is_axisymmetric:
@@ -340,6 +353,13 @@ class StressEquilibrium(WeakFormBase):
 
     def initialize(self, assembly, pb):
         """Initialize the weakform at the begining of a problem."""
+        if (
+            getattr(self.constitutivelaw, "is_thermomechanical", False)
+            and self.incompressibility is not None
+        ):
+            raise NotImplementedError(
+                "Coupled thermal solids do not yet support incompressibility projections."
+            )
         # TO DO: change stress initialization to remove initial stress
         # term in the global vector assembly
 
