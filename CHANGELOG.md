@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Added
 
+- `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
+  centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
+  `lin2` mesh directly instead of extracting its surface. With `dmin` equal
+  to the fiber diameter, this models contact between equal-radius rods.
 - Finite-strain Biot poromechanics. In `nlgeom="UL"` the pore-stress
   coupling now includes its geometric tangent. `nlgeom="TL"` is now the exact
   pull-back of UL and gives the same solution. The momentum coupling is
