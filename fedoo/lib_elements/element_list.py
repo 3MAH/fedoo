@@ -305,6 +305,11 @@ def get_node_elm_coordinates(element, nNd_elm=None):
 
 
 def get_all():
+    """Return the registry of element types, a dict ``{name: element}``.
+
+    Its keys are the names accepted as ``elm_type`` (``"hex8"``, ``"tet10"``,
+    ``"quad8"``, ...), including the combined elements created by the user.
+    """
     return _dict_elements
 
 
@@ -320,12 +325,60 @@ def get_default_n_gp(element, mesh=None, raise_error=True):
 
 
 def get_element(element_str):
+    """Return the element registered under the name ``element_str``.
+
+    Raises ``KeyError`` for an unknown name (see :py:func:`get_all`).
+    """
     # if not isinstance(element_str, str): return element_str
     # return _dict_elements[element_str.lower()]
     return _dict_elements[element_str]
 
 
 class CombinedElement:  # element that use several interpolation depending on the variable
+    """Element type whose variables may use different interpolations.
+
+    The base element is used for the geometry and, by default, for every
+    variable. :py:meth:`set_variable_interpolation` assigns another element
+    to one variable, typically a lower-order element built on the vertex
+    nodes of the base element. The classical use is a Taylor-Hood pair,
+    quadratic displacement and linear pressure, which satisfies the inf-sup
+    (LBB) condition of mixed and undrained poromechanical formulations.
+
+    The new element type is registered globally under ``name`` when the
+    object is created: create it before the assembly and pass ``name`` as
+    ``elm_type`` to :py:meth:`fedoo.Assembly.create`. The mesh keeps the
+    element type of the base element. Creating another combined element with
+    the same name replaces the previous one.
+
+    Parameters
+    ----------
+    name : str
+        Name of the new element type.
+    base_elm : str or element class
+        Element used for the geometry and for the variables without a
+        specific interpolation, e.g. ``"hex20"``.
+    **kargs
+        Advanced options: ``default_n_gp`` (number of integration points,
+        default that of ``base_elm``), ``n_nodes``, ``local_csys``,
+        ``dict_elm_type`` and ``associated_variables``.
+
+    Notes
+    -----
+    The DOFs of a variable on nodes that its interpolation does not use
+    (mid-side nodes for a linear pressure on a quadratic mesh) receive no
+    contribution: they are eliminated by the solver and stay at zero.
+
+    Examples
+    --------
+    Quadratic displacement with a linear pore pressure:
+
+    >>> import fedoo as fd
+    >>> fd.ModelingSpace("3D")  # doctest: +SKIP
+    >>> elm = fd.lib_elements.CombinedElement("hex20lbb", "hex20")
+    >>> elm.set_variable_interpolation("PorePressure", "hex8")
+    >>> # assembly = fd.Assembly.create(wf, mesh_hex20, elm_type="hex20lbb")
+    """
+
     def __init__(self, name, base_elm, **kargs):
         assert isinstance(name, str), "Element name should be a str."
         if isinstance(base_elm, str):
@@ -347,6 +400,20 @@ class CombinedElement:  # element that use several interpolation depending on th
     def set_variable_interpolation(
         self, variable_name, elm_type, associated_variables=None
     ):
+        """Use a specific element to interpolate one variable.
+
+        Parameters
+        ----------
+        variable_name : str
+            Name of the variable, e.g. ``"PorePressure"`` or ``"Pressure"``.
+        elm_type : str or element class
+            Element used for this variable, e.g. ``"hex8"`` on a ``"hex20"``
+            base element. Its nodes are the first nodes of the base element
+            (the vertex nodes for the standard quadratic elements).
+        associated_variables : dict, optional
+            Associated variables of the interpolation, as for elements
+            with coupled variables (beams). Not needed for scalar fields.
+        """
         if isinstance(elm_type, str):
             elm_type = _dict_elements[elm_type]
 
@@ -355,9 +422,15 @@ class CombinedElement:  # element that use several interpolation depending on th
             self.associated_variables[variable_name] = associated_variables
 
     def get_elm_type(self, variable_name):
+        """Return the element interpolating ``variable_name``.
+
+        The base element unless :py:meth:`set_variable_interpolation` set
+        another one for this variable.
+        """
         return self.dict_elm_type.get(variable_name, self.base_elm)
 
     def get_all_elm_type(self):
+        """Return the set of elements used by the variables, base included."""
         list_elm_type = set(self.dict_elm_type.values())
         list_elm_type.add(self.base_elm)
         return list_elm_type

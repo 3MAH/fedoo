@@ -60,24 +60,107 @@ compressible (:math:`\nu \approx 0.1` to :math:`0.3`). Use
 ``PoroMechanicsSimple`` with a compressible skeleton law, and a Taylor-Hood
 interpolation if the loading is fast (see below).
 
-Element interpolation (LBB stability)
--------------------------------------
+Element interpolation: equal order or Taylor-Hood
+-------------------------------------------------
 
-Equal-order linear interpolation of ``u`` and ``PorePressure`` works for
-moderate consolidation problems thanks to the storage term, but exhibits
-checkerboard pressure modes in the undrained limit (large ``biot_modulus``,
-fast loading). fedoo supports Taylor-Hood interpolation natively through
-combined elements: define the combined element *before* creating the
-assembly, e.g. quadratic ``u`` with linear pressure::
+**Why the choice matters.** When the fluid has no time to flow (low
+permeability, short time step) and is nearly incompressible (large
+``biot_modulus``), the mass balance reduces to
+:math:`\alpha\,\dot\varepsilon_v \approx 0`: the skeleton cannot change volume,
+and the pore pressure acts as the Lagrange multiplier that enforces this
+constraint. This is the *undrained* limit. It has the same mathematical
+structure as incompressible elasticity or Stokes flow, a saddle-point problem,
+and its discretization is stable only if the pressure field is not too rich
+compared with the displacement field. This requirement is the *inf-sup*
+condition, also called the LBB condition after Ladyzhenskaya, Babuska and
+Brezzi.
 
-    mesh = fd.mesh.box_mesh(..., elm_type="hex20")
-    # Quadratic displacement, PorePressure interpolated linearly on the
-    # hex8 sub-element:
-    elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")
+When it is violated, some pressure patterns produce no nodal force on the
+displacement field. Nothing in the equations controls them, so they appear as
+spurious oscillations of the pressure, typically alternating in sign from one
+node to the next (*checkerboard* modes). They are strongest near drained
+boundaries and loaded faces during the first increments. In the strictly
+undrained limit, the system matrix is singular.
+
+**Equal-order interpolation** uses the same element for ``u`` and
+``PorePressure``, e.g. ``hex8`` for both. It does not satisfy the inf-sup
+condition, but the storage term (:math:`1/M`) and the Darcy term stabilise it
+as long as the fluid can flow within a time step. A classical rule of thumb
+for linear elements is that oscillations stay small when
+
+.. math::
+
+   \Delta t \gtrsim \frac{h^2}{6\,c_v}, \qquad
+   c_v = \frac{k}{\mu_f}\Big(K + \tfrac43 G\Big),
+
+with :math:`h` the element size near the drained boundary or the load,
+:math:`c_v` the consolidation coefficient and :math:`K`, :math:`G` the drained
+bulk and shear moduli of the skeleton (:math:`K + \tfrac43 G` is the
+oedometric modulus). This is the criterion of Vermeer and Verruijt (1981),
+derived for one-dimensional consolidation with linear elements and
+incompressible constituents; with a hydraulic conductivity
+:math:`k_h = k\,\gamma_w/\mu_f` it reads
+:math:`\Delta t \gtrsim \gamma_w h^2/(6\,E_{oed}\,k_h)`, the form quoted in
+the Abaqus documentation. Fine meshes,
+low permeabilities and short first steps of a fast loading are therefore the
+risky cases. Equal-order elements are fine for most consolidation analyses
+that do not need the very first instants.
+
+**Taylor-Hood interpolation** interpolates the displacement one order higher
+than the pressure: quadratic ``u`` and linear ``PorePressure``. This pair
+satisfies the inf-sup condition and gives a smooth pressure even in the
+undrained limit, at the cost of a quadratic mesh.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Quadratic mesh (``u``)
+     - Linear pressure element
+   * - ``hex20``
+     - ``hex8``
+   * - ``tet10``
+     - ``tet4``
+   * - ``quad8``
+     - ``quad4``
+   * - ``tri6``
+     - ``tri3``
+
+**How to build it in fedoo.** A
+:py:class:`~fedoo.lib_elements.CombinedElement` defines a new
+element type in which each variable may use its own interpolation. Its base
+element (here the quadratic one) is used for the geometry and for every
+variable by default; ``set_variable_interpolation`` assigns a linear
+interpolation to one variable, built on the vertex nodes of the quadratic
+element. The mesh itself stays quadratic. The combined element is registered
+under the name given as first argument, which must therefore be created
+*before* the assembly and passed as ``elm_type``::
+
+    mesh = fd.mesh.box_mesh(..., elm_type="hex20")  # quadratic mesh
+
+    # New element type "hex20lbb": hex20 for u and the geometry,
+    # hex8 (vertex nodes only) for PorePressure.
+    elm = fd.lib_elements.CombinedElement("hex20lbb", "hex20")
     elm.set_variable_interpolation("PorePressure", "hex8")
+
     assembly = fd.Assembly.create(wf, mesh, elm_type="hex20lbb")
 
-See the example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`.
+With the three-field :py:class:`~fedoo.weakform.PoroMechanics`, interpolate
+the skeleton ``Pressure`` linearly as well
+(``elm.set_variable_interpolation("Pressure", "hex8")``).
+
+.. note::
+
+   With a Taylor-Hood element, the ``PorePressure`` DOFs of the mid-side
+   nodes are not used: fedoo eliminates them and they stay at zero. A nodal
+   plot of ``PorePressure`` therefore shows zeros at the mid-side nodes,
+   which looks like an oscillation but is not one. Read the pressure at the
+   vertex nodes, or at the integration points with
+   ``assembly.get_gp_results(pb.space.variable("PorePressure"),
+   pb.get_dof_solution())``. Pressure boundary conditions on mid-side nodes
+   have no effect.
+
+The example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`
+compares equal-order and Taylor-Hood interpolations in the undrained limit.
 
 Fluid properties and permeability models
 ----------------------------------------
