@@ -35,32 +35,30 @@ change :math:`\varepsilon_v = \ln J`.
 Weak forms and choosing a variant
 ---------------------------------
 
-Two ready-made :py:class:`~fedoo.core.weakform.WeakFormSum` classes group
-the momentum balance, the Darcy term and the storage/coupling term:
+Each variant is a :py:class:`~fedoo.core.weakform.WeakFormSum` of the
+momentum balance, the Darcy term and the storage/coupling term. They differ
+by the treatment of the volume change of the skeleton.
 
-* :py:class:`fedoo.weakform.PoroMechanicsSimple` — two-field
-  ``(u, PorePressure)`` formulation built on the standard
-  :py:class:`~fedoo.weakform.StressEquilibrium`. **This is the default
-  choice.** Use it whenever the boundary conditions include a free-traction
-  face (Mandel consolidation, unconfined compression of cartilage, soft
-  tissue indentation): the three-field variant oscillates there because its
-  skeleton Lagrange multiplier is under-constrained.
+* :py:class:`fedoo.weakform.PoroMechanicsSimple` (**default**). Unknowns
+  ``u`` and ``PorePressure``; the skeleton is handled by the standard
+  :py:class:`~fedoo.weakform.StressEquilibrium`. Use it unless you have a
+  specific reason not to.
 
-* :py:class:`fedoo.weakform.PoroMechanics` — three-field
-  ``(u, PorePressure, Pressure)`` formulation built on
-  :py:class:`~fedoo.weakform.StressEquilibriumMixed`, where ``Pressure`` is
-  the volumetric Lagrange multiplier of the skeleton. Reserve it for a
-  genuinely quasi-incompressible **skeleton** (drained Poisson ratio close
-  to 0.5) with well-constrained (confined) boundaries. Requires
-  ``bulk_modulus`` in ``nlgeom`` modes.
+* :py:class:`fedoo.weakform.PoroMechanics`. Adds a third unknown,
+  ``Pressure``, which enforces the volume change of the skeleton
+  (:py:class:`~fedoo.weakform.StressEquilibriumMixed`). It is only useful
+  when the *skeleton itself* is nearly incompressible (drained Poisson ratio
+  close to 0.5) and the sample is confined. Its pressure oscillates near
+  free-traction faces (Mandel consolidation, unconfined compression,
+  indentation). ``bulk_modulus`` is required with ``nlgeom``.
 
-Note that for most biological tissues the *drained* skeleton is quite
-compressible (:math:`\nu \sim 0.1..0.3`); the observed near-incompressibility
-of the tissue is the *undrained* response, and it is already carried by the
-``PorePressure`` field. The two-field ``PoroMechanicsSimple`` variant with a
-compressible skeleton law is therefore the recommended setting for
-free-traction soft-tissue problems, combined with a Taylor-Hood
-interpolation for stability (below).
+**Soft tissues and gels.** A saturated tissue behaves as incompressible
+when it is loaded quickly, but this comes from the fluid, which has no time
+to escape (undrained response), not from the skeleton. The fluid part is
+already carried by ``PorePressure``, and the drained skeleton is
+compressible (:math:`\nu \approx 0.1` to :math:`0.3`). Use
+``PoroMechanicsSimple`` with a compressible skeleton law, and a Taylor-Hood
+interpolation if the loading is fast (see below).
 
 Element interpolation (LBB stability)
 -------------------------------------
