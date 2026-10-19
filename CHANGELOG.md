@@ -36,6 +36,18 @@ semantic versioning.
 
 ### Fixed
 
+- **Taylor-Hood elements built with `CombinedElement`** (quadratic `u`,
+  linear pressure, e.g. `hex20`/`hex8`): the operators of the linear
+  sub-element were allocated with `np.empty` and only their vertex columns
+  were filled, so the mid-side columns held uninitialised memory. The
+  global matrix then coupled the pressure of mid-side nodes to the
+  displacement, giving wrong pressures or "numerically singular" failures
+  that depended on the run (affects `PoroMechanicsSimple`,
+  `PoroMechanics` and `StressEquilibriumMixed` with a linear pressure).
+  The operators are now zero there, and the DOFs that no element
+  interpolates (pressure at mid-side nodes) are blocked at 0
+  automatically. The Taylor-Hood example now compares an undrained strip
+  footing with its analytical solution.
 - `PoroDarcy` in `nlgeom="UL"`: the pore-pressure gradient of the residual
   was computed on the reference mesh instead of the current one. The
   residual missed a factor of order J, while the tangent used the current

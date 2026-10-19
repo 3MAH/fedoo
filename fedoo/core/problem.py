@@ -17,6 +17,86 @@ def _same_sparse(a, b):
     )
 
 
+def _leaf_assemblies(assembly):
+    """Assemblies with a mesh and an element type, AssemblySum flattened."""
+    if assembly is None:
+        return []
+    children = getattr(assembly, "list_assembly", None)
+    if children is not None:
+        return [leaf for child in children for leaf in _leaf_assemblies(child)]
+    if (
+        getattr(assembly, "elm_type", None) is None
+        or getattr(assembly, "mesh", None) is None
+    ):
+        return []
+    return [assembly]
+
+
+def _reference_dim(elm_type):
+    """Dimension of the reference element, or None if unknown."""
+    from fedoo.lib_elements.element_list import get_node_elm_coordinates
+
+    try:
+        return get_node_elm_coordinates(elm_type).shape[1]
+    except Exception:  # elements without nodal coordinates (beams, ...)
+        return None
+
+
+def _orphan_dofs(problem):
+    """Global indices of DOFs that no element of the problem interpolates.
+
+    With a :py:class:`~fedoo.lib_elements.CombinedElement`, a variable may be
+    interpolated by a sub-element using only the first nodes of each element
+    (e.g. a linear pressure on the vertex nodes of a quadratic mesh). Its DOFs
+    at the other nodes have no shape function: they are orphans, unless
+    another assembly of the same dimension interpolates the variable at those
+    nodes. Lower-dimensional assemblies (boundary loads on the faces) are not
+    counted as interpolating it. The result is cached.
+    """
+    from fedoo.lib_elements.element_list import get_element
+
+    leaves = _leaf_assemblies(getattr(problem, "assembly", None))
+    n_nodes = problem.mesh.n_nodes
+    key = (tuple(id(a) for a in leaves), n_nodes, problem.space.nvar)
+    cache = getattr(problem, "_orphan_dof_cache", None)
+    if cache is not None and cache[0] == key:
+        return cache[1]
+
+    combined = [
+        leaf for leaf in leaves if hasattr(get_element(leaf.elm_type), "get_elm_type")
+    ]
+    orphans = set()
+    if combined:
+        dims = [
+            _reference_dim(get_element(leaf.elm_type).base_elm.name)
+            for leaf in combined
+        ]
+        dim = max(d for d in dims if d is not None) if any(dims) else None
+        for var in problem.space.list_variables():
+            candidates = set()
+            used = set()
+            for leaf in leaves:
+                elements = leaf.mesh.elements
+                element = get_element(leaf.elm_type)
+                if leaf in combined:
+                    n_used = getattr(element.get_elm_type(var), "n_nodes", None)
+                    if n_used is not None and n_used < elements.shape[1]:
+                        candidates.update(np.unique(elements[:, n_used:]).tolist())
+                        used.update(np.unique(elements[:, :n_used]).tolist())
+                        continue
+                else:
+                    leaf_dim = _reference_dim(leaf.elm_type)
+                    if dim is not None and leaf_dim is not None and leaf_dim < dim:
+                        continue
+                used.update(np.unique(elements).tolist())
+            nodes = candidates - used
+            if nodes:
+                rank = problem.space.variable_rank(var)
+                orphans.update(rank * n_nodes + node for node in nodes)
+    problem._orphan_dof_cache = (key, orphans)
+    return orphans
+
+
 class Problem(ProblemBase):
     """Base class to define a problem that generate a linear system and to solve
     the linear system with some defined boundary conditions.
@@ -547,6 +627,12 @@ class Problem(ProblemBase):
 
         if checked_entries is not None:
             self.bc._check_entries(self, checked_entries)
+
+        # DOFs that no element interpolates (mid-side pressure nodes of a
+        # Taylor-Hood CombinedElement) have empty rows and columns: they are
+        # blocked at 0, unless a boundary condition already eliminates them.
+        orphans = _orphan_dofs(self).difference(dof_blocked, dof_slave)
+        dof_blocked.update(orphans)
 
         dof_slave.update(dof_blocked)
         dof_slave = np.fromiter(dof_slave, int, len(dof_slave))
