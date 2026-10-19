@@ -151,10 +151,11 @@ which is, per unit current volume,
   pulled back to :math:`(k/\mu_f) J \mathbf{C}^{-1}`.
 
 In both modes the dependence of the Darcy term on the displacement (moving
-mesh in UL, :math:`J \mathbf{C}^{-1}` in TL) and the derivative
-:math:`d(J\mathbf{C}^{-1})/du` of the TL momentum coupling are not
-linearized: the residual is exact, these tangent blocks use frozen
-kinematics.
+mesh in UL, :math:`J \mathbf{C}^{-1}` in TL), the variation of the volume
+element :math:`dv` in the UL storage and coupling terms of the mass balance,
+and the derivative :math:`d(J\mathbf{C}^{-1})/du` of the TL momentum
+coupling are not linearized: the residual is exact, these tangent blocks
+use frozen kinematics.
 
 **Relation to Coussy's poromechanics.** In the Lagrangian finite-strain
 poroelasticity of Coussy (*Poromechanics*, 2004), the Lagrangian porosity
@@ -194,7 +195,13 @@ Validation
   :math:`\ln J = \ln(1 + \delta/L)` at the drained state —
   ``tests/test_poromech_finite_strain.py``;
 * TL against UL on the same consolidation, and the TL mass-balance tangent
-  against finite differences — ``tests/test_poromech_finite_strain_tl.py``.
+  against finite differences — ``tests/test_poromech_finite_strain_tl.py``;
+* ``2Daxi``: homogeneous undrained unconfined compression of a cylinder vs
+  the closed-form solution (both formulations), drained relaxation, and
+  steady radial flow through a hollow cylinder vs the logarithmic pressure
+  profile — ``tests/test_poromech_axi.py``. The draining case was also
+  compared once with a 3D model of the full cylinder, with close agreement
+  (this comparison is not part of the test suite).
 
 Limitations
 -----------
@@ -209,9 +216,8 @@ Limitations
   smaller total strain, an elasto-plastic/corotational law (``ELISO`` etc.,
   which are unaffected), or finer load steps do *not* help (the threshold is
   on the strain level, not the step size).
-* ``2Daxi`` modeling spaces are not supported: all poromechanics weak forms
-  raise an explicit ``NotImplementedError`` (the Biot coupling lacks the
-  ``2*pi*r`` measure and the hoop strain term).
+* ``2Daxi`` is supported in small strain and in UL, like
+  :py:class:`~fedoo.weakform.StressEquilibrium`. It is not available in TL.
 * The permeability tensor is isotropic (:math:`k \mathbf{I}`); anisotropic
   permeability is not implemented.
 * No gravity/body-force term for the fluid yet (``fluid_density`` is
@@ -225,6 +231,11 @@ Examples
 * :ref:`sphx_glr_examples_poromechanics_finite_strain_consolidation.py` —
   finite-strain (UL) confined consolidation of a Neo-Hookean skeleton with
   Holmes-Mow permeability;
+* :ref:`sphx_glr_examples_poromechanics_indentation_soft_tissue.py` —
+  axisymmetric (``2Daxi``) indentation of a hyperelastic soft tissue by a
+  rigid spherical indenter with IPC contact, an impermeable contact zone
+  that follows the contact, and force relaxation as the fluid is squeezed
+  out;
 * :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py` — equal-order vs
   Taylor-Hood interpolation in the undrained limit.
 
