@@ -151,13 +151,12 @@ the skeleton ``Pressure`` linearly as well
 .. note::
 
    With a Taylor-Hood element, the ``PorePressure`` DOFs of the mid-side
-   nodes are not used: fedoo eliminates them and they stay at zero. A nodal
-   plot of ``PorePressure`` therefore shows zeros at the mid-side nodes,
-   which looks like an oscillation but is not one. Read the pressure at the
-   vertex nodes, or at the integration points with
+   nodes carry no physical value: the pressure is defined by the vertex
+   nodes only. A nodal plot of ``PorePressure`` that includes the mid-side
+   nodes is therefore misleading. Read the pressure at the vertex nodes, or
+   at the integration points with
    ``assembly.get_gp_results(pb.space.variable("PorePressure"),
-   pb.get_dof_solution())``. Pressure boundary conditions on mid-side nodes
-   have no effect.
+   pb.get_dof_solution())``.
 
 The example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`
 compares equal-order and Taylor-Hood interpolations in the undrained limit.

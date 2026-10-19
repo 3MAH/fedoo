@@ -365,8 +365,8 @@ class CombinedElement:  # element that use several interpolation depending on th
     Notes
     -----
     The DOFs of a variable on nodes that its interpolation does not use
-    (mid-side nodes for a linear pressure on a quadratic mesh) receive no
-    contribution: they are eliminated by the solver and stay at zero.
+    (mid-side nodes for a linear pressure on a quadratic mesh) carry no
+    physical value.
 
     Examples
     --------
