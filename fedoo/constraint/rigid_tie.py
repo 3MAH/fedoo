@@ -7,6 +7,8 @@ from fedoo.core.boundary_conditions import BCBase, MPC, ListBC
 from simcoon import Rotation
 from simcoon import dR_drotvec
 
+from fedoo.util.so3 import left_jacobian
+
 
 def _resolve_rigid_dofs(problem, var_cd, node_cd, n_dof):
     """Return the ``n_dof`` rigid DOF values and their global indices.
@@ -84,6 +86,18 @@ class RigidTie(BCBase):
         increment is composed multiplicatively and the converged orientation
         is stored as a quaternion. If ``False``, the DOFs are interpreted as
         one total rotation vector.
+    include_rotation : bool, default=False
+        If ``True``, also tie the nodal rotation DOFs (``RotX``, ``RotY``,
+        ``RotZ``) of the slave nodes to the rigid rotation, for beam or
+        shell nodes clamped to a rigid body
+        (:py:class:`fedoo.weakform.BeamEquilibrium`,
+        :py:class:`fedoo.weakform.PlateEquilibrium`). The nodal spin
+        increments are linked to the rigid rotation increments, and the
+        nodal rotations of the slave nodes are reset to the exact rigid
+        rotation whenever the weak form composes its nodal rotations (see
+        :py:meth:`get_nodal_rotations`). Requires rotation DOFs in the
+        modeling space. If ``False``, only the displacements are tied: the
+        slave nodes behave as pinned to the rigid body.
     name : str, optional
         Name of the created boundary condition. The default is "Rigid Tie".
 
@@ -124,10 +138,19 @@ class RigidTie(BCBase):
         rigid_tie = fd.constraint.RigidTie(right_face)
     """
 
-    def __init__(self, list_nodes, center=None, use_quaternion=True, name="Rigid Tie"):
+    def __init__(
+        self,
+        list_nodes,
+        center=None,
+        use_quaternion=True,
+        name="Rigid Tie",
+        *,
+        include_rotation=False,
+    ):
         self.list_nodes = list_nodes
         self.center = center
         self.use_quaternion = bool(use_quaternion)
+        self.include_rotation = bool(include_rotation)
         self.bc_type = "RigidTie"
         BCBase.__init__(self, name)
         self._keep_at_end = True
@@ -184,10 +207,40 @@ class RigidTie(BCBase):
             np.c_[rank * n_nodes, (rank + 1) * n_nodes, (rank + 2) * n_nodes]
             + self.list_nodes[:, None]
         )
+        if self.include_rotation and "RotX" not in problem.space.list_variables():
+            raise ValueError(
+                "include_rotation=True requires the RotX, RotY and RotZ "
+                "variables (beam or shell nodes)"
+            )
 
         if self.use_quaternion:
             self._Q_base = Rotation.identity()
             self._angles_at_base = np.zeros(3)
+
+    def current_rotation(self, problem):
+        """Rotation matrix of the rigid body for the current rigid DOFs."""
+        dof_ref, _ = self._get_dof_ref(problem)
+        return self._compute_rotation(dof_ref[3:])[0]
+
+    def get_nodal_rotations(self, problem):
+        """Rigid rotation imposed on the slave nodes with ``include_rotation``.
+
+        Returns ``(list_nodes, R)``, ``R`` the (3, 3) rotation matrix of the
+        rigid body, or None when the rotations are not tied.
+        """
+        if not self.include_rotation:
+            return None
+        return self.list_nodes, self.current_rotation(problem)
+
+    def _spin_jacobian(self, rotvec):
+        """d(spin)/d(rigid rotation DOFs): the left Jacobian of the increment."""
+        rotvec = np.asarray(rotvec, dtype=float)
+        if self.use_quaternion and hasattr(self, "_Q_base"):
+            rotvec = rotvec - self._angles_at_base
+        if not np.all(np.isfinite(rotvec)):
+            # same fallback as _compute_rotation: identity increment
+            rotvec = np.zeros(3)
+        return left_jacobian(rotvec)
 
     def _get_dof_ref(self, problem):
         """Return the current six rigid-body DOFs and their global indices."""
@@ -352,6 +405,23 @@ class RigidTie(BCBase):
                 ],
             )
         )
+        if self.include_rotation:
+            # dtheta_node = J(increment) d(rigid rotvec): the nodal spin follows
+            # the spin of the rigid rotation.
+            jacobian = self._spin_jacobian(rotvec)
+            for row, variable in enumerate(("RotX", "RotY", "RotZ")):
+                res.append(
+                    MPC(
+                        [list_nodes]
+                        + [np.full_like(list_nodes, node_cd[3 + k]) for k in range(3)],
+                        [variable, var_cd[3], var_cd[4], var_cd[5]],
+                        [np.full_like(list_nodes, 1.0)]
+                        + [
+                            np.full_like(list_nodes, -jacobian[row, k], dtype=float)
+                            for k in range(3)
+                        ],
+                    )
+                )
 
         res.initialize(problem)
         return res.generate(problem, t_fact, t_fact_old)

@@ -2,6 +2,10 @@ from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.weakform.inertia import Inertia, RotaryInertia
+from fedoo.weakform._nodal_rotations import (
+    commit_nodal_rotations,
+    compose_nodal_rotations,
+)
 from scipy.spatial.transform import Rotation
 import numpy as np
 
@@ -178,7 +182,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         # 2. ELEMENT FRAME EXTRACTION
         # =========================================================
         # Incremental frame update
-        delta_rotvec_nodes = pb._get_vect_component(pb.get_X(), "Rot")
+        delta_rotvec_nodes, nodes_rotmat = compose_nodal_rotations(assembly, pb)
         delta_rotvec = delta_rotvec_nodes.T[mesh.elements].mean(axis=1)
 
         # Local axes are rows: a spatial rotation Q updates R to R Q.T.
@@ -245,47 +249,15 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 (nodes_pos - current_center[:, np.newaxis, :]).transpose(0, 2, 1),
             ).transpose(0, 2, 1)
 
-        nodes_rotmat = (
-            Rotation.from_rotvec(delta_rotvec_nodes.T).as_matrix()  # transpose(0,2,1)
-            @ assembly.sv["_NodesRotationMatrix"]
-        )
-
         R_global_nodes = nodes_rotmat[mesh.elements]
 
         # State Updates
         if not pb._line_search_update:
             assembly.sv["RigidRotationMat"] = rigid_rotmat
-            assembly.sv["_NodesRotationMatrix"] = nodes_rotmat
             assembly.current._element_local_frame = rigid_rotmat.reshape(
                 mesh.n_elements, -1, 3, 3
             )
-
-            rot_var = self.space.get_rank_vector("Rot")
-            n_slice = slice(rot_var[0] * mesh.n_nodes, (rot_var[0] + 3) * mesh.n_nodes)
-
-            if np.isscalar(pb._U) and pb._U == 0:
-                pb._dU[n_slice] = (
-                    Rotation.from_matrix(nodes_rotmat).as_rotvec().T.ravel()
-                )
-            else:
-                nodes_rotmat_from_U = Rotation.from_rotvec(
-                    pb._U[n_slice].reshape(3, -1).T
-                ).as_matrix()
-
-                pb._dU[n_slice] = (
-                    Rotation.from_matrix(
-                        nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
-                    )
-                    .as_rotvec()
-                    .T.ravel()
-                )
-
-            for bc in pb.bc.list_all():
-                if bc.bc_type == "Dirichlet" and bc.variable in rot_var:
-                    pb._Xbc[bc._dof_index] = (
-                        bc.get_true_value(pb.t_fact)
-                        - pb.get_dof_solution()[bc._dof_index]
-                    )
+            commit_nodal_rotations(self.space, assembly, pb, nodes_rotmat)
 
         # =========================================================
         # 3. DEFORMATIONAL KINEMATICS & LOCAL DOF ASSEMBLY

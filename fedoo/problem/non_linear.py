@@ -10,6 +10,24 @@ import warnings
 from typing import Callable
 
 
+def _snapshot_sv(assembly):
+    """Shallow copy of the state variables of an assembly (or AssemblySum)."""
+    if isinstance(assembly, AssemblySum):
+        return [_snapshot_sv(a) for a in assembly.list_assembly]
+    sv = getattr(assembly, "sv", None)
+    return None if sv is None else dict(sv)
+
+
+def _restore_sv(assembly, snapshot):
+    """Restore a snapshot taken by _snapshot_sv."""
+    if isinstance(assembly, AssemblySum):
+        for a, sub in zip(assembly.list_assembly, snapshot):
+            _restore_sv(a, sub)
+    elif snapshot is not None:
+        assembly.sv.clear()
+        assembly.sv.update(snapshot)
+
+
 class NonLinear(Problem):
     def __init__(self, assembly, nlgeom=False, name="MainProblem"):
         if isinstance(assembly, str):
@@ -839,11 +857,21 @@ class NonLinear(Problem):
         the scaled Dirichlet values), _Xbc is identically zero: convergence
         may then be declared even if the line search kept returning
         alpha < 1 (which leaves the _boundary_is_0 flag False forever).
+
+        Round-off is tolerated: weak forms that rewrite the prescribed DOFs
+        (multiplicative nodal rotations rewritten as rotation vectors) leave
+        residues of relative order 1e-16 in _Xbc.
         """
         xbc = self._Xbc
         if np.isscalar(xbc):
             return xbc == 0
-        return not np.any(xbc)
+        if not np.any(xbc):
+            return True
+        scale = 1.0
+        for state in (self._U, self._dU):
+            if np.ndim(state):
+                scale = max(scale, np.max(np.abs(state)))
+        return np.max(np.abs(xbc)) <= 1e-12 * scale
 
     def elastic_prediction(self, keep_tangent=False):
         """Solve the elastic prediction of a new increment.
@@ -1044,6 +1072,10 @@ class NonLinear(Problem):
                     # error: saving it once the error has already risen would
                     # store the bad iterate the rollback below is meant to undo
                     self._dU_old = self._dU.copy()
+                    # with the state variables of that iterate: the nodal
+                    # rotation state of beams and shells is not a function of
+                    # _dU alone
+                    self._sv_old = _snapshot_sv(self.assembly)
                 if consecutive_increases >= 2 and xi < 1.0:
                     # Diverging - switch to elastic stiffness
                     if self.print_info > 1:
@@ -1067,6 +1099,10 @@ class NonLinear(Problem):
                     else:
                         # redo last iteration (copy: _dU is updated in place)
                         self._dU = self._dU_old.copy()
+                        _restore_sv(self.assembly, self._sv_old)
+                        # the restored state already includes the last
+                        # correction: it must not be composed again
+                        self.set_X(np.zeros_like(self._dU))
                         subiter = max(subiter - 2, 1)
                         continue
                 elif consecutive_decreases > 0:

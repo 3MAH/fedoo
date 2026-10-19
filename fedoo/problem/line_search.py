@@ -41,7 +41,11 @@ def _evaluate_residual_norm(pb, dX, alpha):
     pb.assembly._save_sv()  # save assembly stat_variables
     d_0 = pb.get_D()
     du_0 = pb._dU.copy() if hasattr(pb._dU, "copy") else pb._dU
+    x_0 = pb.get_X()
     pb._dU += alpha * dX
+    # Weak forms with a multiplicative rotation state compose the last
+    # correction get_X() on their stored triads: expose the trial step.
+    pb.set_X(alpha * dX)
     pb._line_search_update = True
     try:
         # 2. Re-assemble the internal force vector (D) at the new displacement
@@ -63,6 +67,7 @@ def _evaluate_residual_norm(pb, dX, alpha):
         # 4. Cleanup: restore the original state so the search never
         # permanently alters it
         pb._line_search_update = False
+        pb.set_X(x_0)
         pb._dU = du_0
         pb.assembly._load_sv()
         pb.set_D(d_0)

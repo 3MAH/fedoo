@@ -10,16 +10,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from fedoo.util.so3 import skew as _skew
+
 _TANGENT_BATCH_SIZE = 2048
-
-
-def _skew(v):
-    """Skew matrices for vectors with arbitrary leading batch dimensions."""
-    x, y, z = np.moveaxis(v, -1, 0)
-    zero = np.zeros_like(x)
-    return np.stack([zero, -z, y, z, zero, -x, -y, x, zero], axis=-1).reshape(
-        v.shape[:-1] + (3, 3)
-    )
 
 
 def _log_derivative(v):

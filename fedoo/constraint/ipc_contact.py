@@ -253,6 +253,14 @@ class IPCContact(AssemblyBase):
         inexact: Newton then converges linearly (about 0.7 per iteration).
         ``False`` assembles the exact hessian; with a direct solver this
         restores quadratic convergence in the compliant-contact regime.
+    ccd_method : {"tight_inclusion", "additive"}, default="tight_inclusion"
+        Narrow-phase continuous collision detection of the step filter.
+        ``"tight_inclusion"`` (ipctk default) computes an accurate time of
+        impact but becomes very slow with a nonzero ``dmin``: about 1.7 s
+        per call for a few tens of beam edges. ``"additive"`` (additive
+        CCD) is conservative, stopping at about 0.9 times the time of
+        impact, and fast whatever ``dmin``: recommended for beam
+        centerlines and thick shells.
     barrier_stiffness : float, optional
         Barrier stiffness :math:`\kappa`.  If ``None`` (default), it is
         automatically computed and adaptively updated — **this is the
@@ -346,10 +354,19 @@ class IPCContact(AssemblyBase):
         psd_projection=True,
         name="IPC Contact",
         space=None,
+        *,
+        ccd_method="tight_inclusion",
     ):
         self._dmin = _validate_dmin(dmin)
         self._excluded_rings = _validate_excluded_rings(excluded_rings)
         self._psd_projection = bool(psd_projection)
+        if ccd_method not in ("tight_inclusion", "additive"):
+            raise ValueError(
+                "ccd_method should be 'tight_inclusion' or 'additive', "
+                f"got {ccd_method!r}"
+            )
+        self._ccd_method = ccd_method
+        self._ccd = None  # narrow-phase CCD instance, built on first use
         if use_ogc and self._dmin > 0:
             raise NotImplementedError("dmin > 0 is not supported with use_ogc=True.")
         if use_ccd is None:
@@ -491,6 +508,16 @@ class IPCContact(AssemblyBase):
         rigid_body.assembly.mesh = self.mesh
         rigid_body._ipc_registered_mesh = self.mesh
         self._rigid_bodies.append((surface_node_indices, rigid_body))
+
+    def _narrow_phase_ccd(self):
+        """ipctk narrow-phase CCD instance for the selected ccd_method."""
+        if self._ccd is None:
+            ipctk = _import_ipctk()
+            if self._ccd_method == "additive":
+                self._ccd = ipctk.AdditiveCCD()
+            else:
+                self._ccd = ipctk.TightInclusionCCD()
+        return self._ccd
 
     def _create_broad_phase(self):
         """Create an ipctk BroadPhase instance from the string name."""
@@ -980,6 +1007,7 @@ class IPCContact(AssemblyBase):
             vertices_next,
             min_distance=min_distance,
             broad_phase=self._broad_phase,
+            narrow_phase_ccd=self._narrow_phase_ccd(),
         )
 
         # If the extra margin prevents a step, retry with the physical
@@ -992,6 +1020,7 @@ class IPCContact(AssemblyBase):
                 vertices_next,
                 min_distance=min_distance,
                 broad_phase=self._broad_phase,
+                narrow_phase_ccd=self._narrow_phase_ccd(),
             )
 
         alpha = min(
@@ -1036,14 +1065,22 @@ class IPCContact(AssemblyBase):
         c1, c2 = 0.0, 0.0
         parent = self.associated_assembly_sum
         if parent is not None:
+            # Sum over every other assembly: the external work below is the
+            # full one, the internal work must be too (rigid body, inertia,
+            # several solids).
             for asm in parent._list_assembly:
                 if asm is not self:
                     D_e = asm.current.get_global_vector()
                     K_e = asm.current.get_global_matrix()
                     if D_e is not None and K_e is not None:
-                        c1 = -np.dot(D_e, dX)
-                        c2 = np.dot(dX, K_e @ dX)
-                    break
+                        c1 -= np.dot(D_e, dX)
+                        c2 += np.dot(dX, K_e @ dX)
+        # Work of the external (Neumann) loads, B = -D at equilibrium. Under
+        # force control the elastic energy alone increases along every
+        # admissible step, and the test below backtracked to 2**-12.
+        external = pb.get_B()
+        if not (np.isscalar(external) and external == 0):
+            c1 -= np.dot(external, dX)
 
         for _ls_iter in range(12):
             vertices_trial = vertices_current + alpha * surf_disp
@@ -1670,6 +1707,8 @@ class IPCSelfContact(IPCContact):
         psd_projection=True,
         name="IPC Self Contact",
         space=None,
+        *,
+        ccd_method="tight_inclusion",
     ):
         super().__init__(
             mesh=mesh,
@@ -1691,4 +1730,5 @@ class IPCSelfContact(IPCContact):
             dmin=dmin,
             excluded_rings=excluded_rings,
             psd_projection=psd_projection,
+            ccd_method=ccd_method,
         )

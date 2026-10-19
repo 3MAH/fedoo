@@ -173,3 +173,49 @@ def test_crossed_beams_contact():
     disp_z = pb.get_disp()[2]
     assert disp_z[:n_nodes].min() < -0.005
     assert disp_z[n_nodes:].max() > -push + 0.005
+
+
+def test_energy_line_search_accounts_for_external_forces():
+    # The upper beam is pushed onto the lower one by a dead force, not by a
+    # prescribed displacement. The energy backtracking used to ignore the
+    # external work: under force control the elastic energy increases along
+    # every admissible step, alpha fell to 2**-12 and the increments failed.
+    fd.ModelingSpace("3D")
+    radius, gap, dhat, n_nodes = 0.05, 0.2, 0.02, 10
+    mesh = _crossed_rods(gap, n_nodes=n_nodes)
+    section = fd.constitutivelaw.BeamCircular(
+        fd.constitutivelaw.ElasticIsotrop(1e5, 0.3), radius, k=0.9
+    )
+    wf = fd.weakform.BeamEquilibrium(section, nlgeom=True, kinematics="exact")
+    contact = fd.constraint.IPCContact(
+        mesh,
+        surface_mesh=mesh,
+        dhat=dhat,
+        dhat_is_relative=False,
+        dmin=2 * radius,
+        use_ccd=True,
+        ccd_method="additive",
+    )
+    pb = fd.problem.NonLinear(fd.Assembly.sum(fd.Assembly.create(wf, mesh), contact))
+    lower_ends = [0, n_nodes - 1]
+    upper_ends = [n_nodes, 2 * n_nodes - 1]
+    pb.bc.add("Dirichlet", lower_ends, "Disp", 0)
+    pb.bc.add("Dirichlet", lower_ends, "Rot", 0)
+    pb.bc.add("Dirichlet", upper_ends, "Disp", 0)
+    pb.bc.add("Dirichlet", upper_ends, "RotY", 0)
+    pb.bc.add("Neumann", [n_nodes + n_nodes // 2], "DispZ", -20.0)
+    pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
+    increments = []
+    pb.nlsolve(
+        dt=0.1,
+        tmax=1.0,
+        update_dt=True,
+        dt_max=0.1,
+        print_info=0,
+        callback=lambda problem: increments.append(problem.time),
+    )
+    # no increment was cut (14 increments with 11 failures before the fix)
+    assert len(increments) == 10
+    vertices = contact._get_current_vertices(pb)
+    assert len(contact._collisions) > 0
+    assert contact._minimum_distance(vertices) >= 2 * radius * (1 - 1e-6)

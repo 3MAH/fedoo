@@ -69,6 +69,23 @@ class BCBase:
         """Implement boundary-condition-specific registration if required."""
         pass
 
+    def get_nodal_rotations(self, problem):
+        """Nodal rotations imposed exactly by this boundary condition.
+
+        Weak forms with a multiplicative nodal rotation state (beams,
+        shells) overwrite the rotation of the returned nodes after each
+        Newton correction, because a linear constraint on the spin
+        increments only holds the rotation to first order.
+
+        Returns
+        -------
+        tuple or None
+            ``(nodes, rotation_matrix)`` with ``rotation_matrix`` of shape
+            ``(3, 3)`` or ``(len(nodes), 3, 3)``, or None (default) when the
+            boundary condition imposes no nodal rotation.
+        """
+        return None
+
 
 class BoundaryConditionWarning(UserWarning):
     """Warning emitted when boundary conditions overlap on some dof."""

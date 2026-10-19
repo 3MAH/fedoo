@@ -1,4 +1,13 @@
 from fedoo.weakform._beam_tangent import beam_tangent_operators
+from fedoo.weakform._nodal_rotations import (
+    commit_nodal_rotations,
+    compose_nodal_rotations,
+)
+from fedoo.weakform._beam_exact import (
+    element_operators,
+    exact_beam_kinematics,
+    to_field_basis,
+)
 
 from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.time_evolution import SECOND_ORDER
@@ -66,9 +75,20 @@ class BeamEquilibrium(WeakFormBase):
         space=None,
         *,
         consistent_tangent=False,
+        kinematics=None,
     ):
         # k: shear shape factor
 
+        if kinematics not in (None, "corotational", "exact"):
+            raise ValueError(
+                "kinematics should be None, 'corotational' or 'exact', "
+                f"got {kinematics!r}"
+            )
+        if kinematics == "exact" and consistent_tangent:
+            raise ValueError(
+                "consistent_tangent applies to the corotational kinematics; "
+                "kinematics='exact' always assembles its exact tangent"
+            )
         WeakFormBase.__init__(self, name, space)
 
         self.space.new_variable("DispX")
@@ -116,10 +136,34 @@ class BeamEquilibrium(WeakFormBase):
         ``nlgeom``. A boolean value explicitly enables or disables it.
         """
         self._consistent_tangent = consistent_tangent
-        if consistent_tangent:
+        self._kinematics = kinematics
+        if consistent_tangent or kinematics == "exact":
             for variable in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
                 if variable in self.space.list_variables():
                     self.space.variable_alias("_BeamMean" + variable, variable)
+        if kinematics == "exact":
+            # Reduced one-point integration of the two-node element (no
+            # shear locking); all element quantities are midpoint values.
+            self.assembly_options.set("n_elm_gp", 1, elm_type="beam")
+
+    @property
+    def kinematics(self):
+        """Read-only beam kinematics, set through the constructor.
+
+        * ``None`` (default): ``"corotational"`` when geometric nonlinearities
+          are active, unused otherwise.
+        * ``"corotational"``: updated Lagrangian corotational beam, small
+          strain in each element frame (``nlgeom="UL"`` only).
+        * ``"exact"``: geometrically exact Simo-Reissner beam (Crisfield-Jelenic
+          rotation interpolation, one Gauss point per two-node element),
+          finite rotations and finite strains of the beam axis. Requires
+          ``nlgeom`` (``"UL"`` or ``"TL"``: the formulation is total
+          Lagrangian in both cases), the ``beam`` element and ``k > 0``.
+        """
+        return self._kinematics
+
+    def _is_exact(self):
+        return self._kinematics == "exact"
 
     @property
     def consistent_tangent(self):
@@ -152,6 +196,14 @@ class BeamEquilibrium(WeakFormBase):
 
         self._initialize_nlgeom(assembly, pb)
         self.nlgeom = assembly._nlgeom
+        if self._is_exact():
+            self._initialize_exact(assembly)
+        elif assembly._nlgeom == "TL":
+            raise NotImplementedError(
+                "The corotational beam is updated Lagrangian only: use "
+                "nlgeom='UL', or kinematics='exact' for a total Lagrangian "
+                "geometrically exact beam"
+            )
         # Resolve the formulation default here, as in StressEquilibrium,
         # while preserving explicit weak-form or assembly settings.
         if assembly.assume_sym is None:
@@ -167,6 +219,9 @@ class BeamEquilibrium(WeakFormBase):
             assembly.assume_sym = assume_sym
 
     def update(self, assembly, pb):
+        if self._is_exact():
+            self._update_exact(assembly, pb)
+            return
         assembly.sv.pop("_BeamTangentOperators", None)
         # function called when the problem is updated (NR loop or time increment)
         # Nlgeom implemented only for updated lagragian formulation
@@ -286,8 +341,9 @@ class BeamEquilibrium(WeakFormBase):
                         - mesh.nodes[mesh.elements[:, 0]]
                     )
 
-                    # get rotvec increment at nodes
-                    delta_rotvec_nodes = pb._get_vect_component(pb.get_X(), "Rot")
+                    delta_rotvec_nodes, nodes_rotmat = compose_nodal_rotations(
+                        assembly, pb
+                    )
 
                     # get element mean rotvec increment
                     delta_rotvec = 0.5 * delta_rotvec_nodes.T[mesh.elements].sum(axis=1)
@@ -317,11 +373,6 @@ class BeamEquilibrium(WeakFormBase):
                     # compute local dof vector
                     # compute u2, rot1 and rot2, ie the rot dof at node 1 and 2
                     # u1 = 0 as the first node is the center of the local bases
-                    nodes_rotmat = (
-                        Rotation.from_rotvec(delta_rotvec_nodes.T).as_matrix()
-                        @ assembly.sv["_NodesRotationMatrix"]
-                    )
-
                     rot1 = Rotation.from_matrix(
                         rigid_rotmat
                         @ nodes_rotmat[mesh.elements[:, 0]]
@@ -359,67 +410,10 @@ class BeamEquilibrium(WeakFormBase):
                         # update saved values for next iteration
                         # don't do for line_search iteration that is only a trial
                         assembly.sv["RigidRotationMat"] = rigid_rotmat
-                        assembly.sv["_NodesRotationMatrix"] = nodes_rotmat
                         assembly.current._element_local_frame = rigid_rotmat.reshape(
                             mesh.n_elements, -1, self.space.ndim, self.space.ndim
                         )
-
-                        # update rot values and dirichlet boundary conditions
-
-                        rot_var = self.space.get_rank_vector("Rot")
-                        ### WARNING only work if vectors are contigous in the variable order
-                        if np.isscalar(pb._U) and pb._U == 0:
-                            pb._dU[
-                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                                * assembly.mesh.n_nodes
-                            ] = (
-                                Rotation.from_matrix(nodes_rotmat).as_rotvec().T
-                            ).ravel()
-                        else:
-                            nodes_rotmat_from_U = Rotation.from_rotvec(
-                                pb._U[
-                                    rot_var[0] * assembly.mesh.n_nodes : (
-                                        rot_var[0] + 3
-                                    )
-                                    * assembly.mesh.n_nodes
-                                ]
-                                .reshape(3, -1)
-                                .T
-                            ).as_matrix()
-
-                            # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
-                            pb._dU[
-                                rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                                * assembly.mesh.n_nodes
-                            ] = (
-                                Rotation.from_matrix(
-                                    nodes_rotmat
-                                    @ nodes_rotmat_from_U.transpose(0, 2, 1)
-                                )
-                                .as_rotvec()
-                                .T.ravel()
-                            )
-
-                            # Or equivalent but sigularité if angle > pi
-                            # pb._dU[
-                            #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            #     * assembly.mesh.n_nodes
-                            # ] = (
-                            #     Rotation.from_matrix(nodes_rotmat).as_rotvec().T
-                            # ).ravel() - pb._U[
-                            #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
-                            #     * assembly.mesh.n_nodes
-                            # ]
-
-                        for bc in pb.bc.list_all():
-                            if bc.bc_type == "Dirichlet":
-                                if bc.variable in rot_var:
-                                    # if bc._dof_index[0] == 605:
-                                    #     print(bc.get_true_value(pb._t_fact))
-                                    pb._Xbc[bc._dof_index] = (
-                                        bc.get_true_value(pb.t_fact)
-                                        - pb.get_dof_solution()[bc._dof_index]
-                                    )
+                        commit_nodal_rotations(self.space, assembly, pb, nodes_rotmat)
 
                 if self._use_consistent_tangent(assembly):
                     frame = (
@@ -469,7 +463,7 @@ class BeamEquilibrium(WeakFormBase):
                 )
 
     def to_start(self, assembly, pb):
-        if self.nlgeom == "UL":
+        if self.nlgeom == "UL" and not self._is_exact():
             # if updated lagragian method -> reset the mesh to the begining of the increment
             assembly.set_disp(pb.get_disp())
             if self.space.ndim == 2 and self._use_consistent_tangent(assembly):
@@ -504,6 +498,8 @@ class BeamEquilibrium(WeakFormBase):
             # rot_dof = Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec()
 
     def get_weak_equation(self, assembly, pb):
+        if self._is_exact():
+            return self._get_exact_weak_equation(assembly, pb)
         eps = self.space.op_beam_strain()
         tangent = self._section_tangent(assembly)
         if tangent is None:
@@ -618,6 +614,132 @@ class BeamEquilibrium(WeakFormBase):
             if work != 0 and spin != 0
         )
         return strain_change + interpolation_change + measure_change + frame_rotation
+
+    # Geometrically exact (Simo-Reissner) kinematics
+    def _initialize_exact(self, assembly):
+        if not assembly._nlgeom:
+            raise ValueError(
+                "kinematics='exact' is a nonlinear formulation: set nlgeom "
+                "to 'UL' or 'TL'"
+            )
+        if assembly.elm_type != "beam":
+            raise NotImplementedError(
+                "kinematics='exact' requires the two-node 'beam' element, "
+                f"got {assembly.elm_type!r}"
+            )
+        rigidity = self.properties.get_beam_rigidity()
+        if any(np.isscalar(r) and r == 0 for r in rigidity[1:3]):
+            raise ValueError(
+                "kinematics='exact' is a shear deformable beam: set the shear "
+                "coefficient k > 0 (for instance 5/6)"
+            )
+        if self.space.ndim == 3:
+            assembly.sv["_NodesRotationMatrix"] = np.tile(
+                np.eye(3), (assembly.mesh.n_nodes, 1, 1)
+            )
+        # The mesh is never updated: the exact strains are measured from the
+        # reference configuration.
+        self._update_exact(assembly, None)
+
+    def _update_exact(self, assembly, pb):
+        mesh = assembly.mesh
+        ne, ng, dim = mesh.n_elements, assembly.n_elm_gp, self.space.ndim
+        frame = np.asarray(assembly.get_element_local_frame())
+        length = np.linalg.norm(
+            mesh.nodes[mesh.elements[:, 1]] - mesh.nodes[mesh.elements[:, 0]], axis=1
+        )
+        disp = 0 if pb is None else pb.get_disp()
+        if np.isscalar(disp) and disp == 0:
+            u_local = np.zeros((ne, 2, dim))
+        else:
+            u_local = np.einsum("eij,enj->eni", frame, disp.T[mesh.elements])
+
+        if dim == 2:
+            rot = 0 if pb is None else pb.get_rot()
+            rotations = (
+                np.zeros((ne, 2))
+                if np.isscalar(rot) and rot == 0
+                else np.reshape(rot, -1)[mesh.elements]
+            )
+        else:
+            nodes_rotmat = assembly.sv["_NodesRotationMatrix"]
+            if pb is not None and not (np.isscalar(pb.get_X()) and pb.get_X() == 0):
+                _, nodes_rotmat = compose_nodal_rotations(assembly, pb)
+                if not pb._line_search_update:
+                    commit_nodal_rotations(self.space, assembly, pb, nodes_rotmat)
+            # Nodal triads in the reference element frame, where the reference
+            # triads are the identity.
+            rotations = (
+                frame[:, None]
+                @ nodes_rotmat[mesh.elements]
+                @ frame[:, None].swapaxes(-1, -2)
+            )
+
+        # A line-search trial only evaluates the residual: skip d B.
+        need_tangent = pb is None or not pb._line_search_update
+        kinematics = exact_beam_kinematics(
+            self.space, length, u_local, rotations, need_tangent
+        )
+        # Replaced, never mutated: sv_start keeps the kinematics of its state.
+        assembly.sv["_BeamExactKinematics"] = (length, kinematics)
+        assembly.sv["BeamStrain"] = BeamStrainList(
+            [np.tile(kinematics.strain[:, i], ng) for i in range(6)]
+        )
+        if self.constitutivelaw is None:
+            rigidity = self.properties.get_beam_rigidity()
+            assembly.sv["BeamStress"] = BeamStressList(
+                [rigidity[i] * assembly.sv["BeamStrain"][i] for i in range(6)]
+            )
+
+    def _get_exact_weak_equation(self, assembly, pb):
+        length, kinematics = assembly.sv["_BeamExactKinematics"]
+        ne, ng = assembly.mesh.n_elements, assembly.n_elm_gp
+        stress = np.zeros((ng, ne, 6))
+        values = assembly.sv["BeamStress"]
+        if not (np.isscalar(values) and values == 0):
+            for i, value in enumerate(values):
+                stress[..., i] = np.broadcast_to(value, (ng * ne,)).reshape(ng, ne)
+        # A line-search trial only evaluates the residual: skip the tangent.
+        need_tangent = pb is None or not getattr(pb, "_line_search_update", False)
+        tangent = self._exact_section_tangent(assembly) if need_tangent else None
+        force, stiffness = element_operators(kinematics, stress, tangent)
+        force, stiffness = to_field_basis(length, force, stiffness, self.space.nvar)
+
+        basis = {}
+        for variable in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
+            if variable in self.space.list_variables():
+                rank = self.space.variable_rank(variable)
+                basis[2 * rank] = self.space.variable("_BeamMean" + variable)
+                basis[2 * rank + 1] = self.space.derivative("_BeamMean" + variable, "X")
+        diff_op = 0
+        for p, op in basis.items():
+            if np.any(force[..., p]):
+                diff_op += op.virtual * force[..., p].ravel()
+        if stiffness is not None:
+            for p, op_p in basis.items():
+                for q, op_q in basis.items():
+                    if np.any(stiffness[..., p, q]):
+                        diff_op += op_p.virtual * op_q * stiffness[..., p, q].ravel()
+        return diff_op
+
+    def _exact_section_tangent(self, assembly):
+        """Section tangent (ng, ne, 6, 6) at the Gauss points of the elements."""
+        ne, ng = assembly.mesh.n_elements, assembly.n_elm_gp
+        section_tangent = self._section_tangent(assembly)
+        tangent = np.zeros((ng, ne, 6, 6))
+        if section_tangent is None:
+            rigidity = self.properties.get_beam_rigidity()
+            for i in range(6):
+                tangent[..., i, i] = np.broadcast_to(rigidity[i], (ng * ne,)).reshape(
+                    ng, ne
+                )
+        else:
+            for i in range(6):
+                for j in range(6):
+                    tangent[..., i, j] = np.broadcast_to(
+                        section_tangent[i][j], (ng * ne,)
+                    ).reshape(ng, ne)
+        return tangent
 
     def _section_tangent(self, assembly):
         """Section tangent (6, 6, n_gp) of a section law, or None."""
