@@ -41,7 +41,29 @@ def _evaluate_residual_norm(pb, dX, alpha):
     pb.assembly._save_sv()  # save assembly stat_variables
     d_0 = pb.get_D()
     du_0 = pb._dU.copy() if hasattr(pb._dU, "copy") else pb._dU
+    x_0 = pb.get_X()
+    b_0 = pb.get_B()
+    # Nonlinear MPC updates rebuild these even during a vector-only trial.
+    boundary_state = {
+        name: getattr(pb, name)
+        for name in (
+            "_Xbc",
+            "_MatCB",
+            "_MFext",
+            "_dof_free",
+            "_dof_blocked",
+            "_dof_slave",
+            "_bc_residual_norm",
+            "_reduced_cache",
+        )
+        if hasattr(pb, name)
+    }
+    if hasattr(pb._Xbc, "copy"):
+        boundary_state["_Xbc"] = pb._Xbc.copy()
     pb._dU += alpha * dX
+    # UL beam/shell rotations are composed from X rather than recovered from
+    # the total displacement. Use the same trial correction for both paths.
+    pb.set_X(alpha * dX)
     pb._line_search_update = True
     try:
         # 2. Re-assemble the internal force vector (D) at the new displacement
@@ -64,8 +86,12 @@ def _evaluate_residual_norm(pb, dX, alpha):
         # permanently alters it
         pb._line_search_update = False
         pb._dU = du_0
+        pb.set_X(x_0)
         pb.assembly._load_sv()
         pb.set_D(d_0)
+        pb.set_B(b_0)
+        for name, value in boundary_state.items():
+            setattr(pb, name, value)
 
 
 def _natural_test(pb, res, dx_norm, alpha, norm_type):
@@ -119,10 +145,8 @@ def line_search(pb, dX):
 
     ls_mode = pb.nr_parameters.get("ls_mode", "natural")
     norm_type = pb.nr_parameters["norm_type"]
-    # Residual of the current iterate (alpha = 0). MUST be read before any
-    # trial: _evaluate_residual_norm restores _dU, the state variables and D,
-    # but a constraint with _update_during_inc rebuilds B, _MatCB and
-    # _dof_free during the trial and those are NOT restored.
+    # Read the current iterate's residual before evaluating any trial.
+    # Trial evaluation restores the displacement, forces and MPC reduction.
     res_0 = pb._get_free_dof_residual()
     norm_0 = np.linalg.norm(res_0, norm_type)
 

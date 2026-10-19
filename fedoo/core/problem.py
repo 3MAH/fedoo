@@ -177,7 +177,7 @@ class Problem(ProblemBase):
         output_list=None,
         output_type=None,
         file_format="fdh5",
-        compressed=False,
+        compressed=True,
         position=None,
         element_set=None,
         save_mesh=True,
@@ -214,8 +214,12 @@ class Problem(ProblemBase):
             file format used to save the results. The default file format
             and recommanding one is "fdh5".
 
-        compressed : bool, default = False
-            if True, the fdz data are compressed.
+        compressed : bool or int, default=True
+            For FDH5, True uses gzip level 4, False disables compression, and
+            an integer from 0 to 9 selects the gzip level. Integer 0 keeps the
+            gzip filter with compression disabled. Existing iterations are
+            unaffected when appending. For other formats, compression is
+            enabled when this option is truthy, where supported.
 
         position : None, scalar, coordinate pair or array, optional
             For beams, normalized (y, z) coordinates, either one pair or an

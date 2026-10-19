@@ -184,6 +184,15 @@ class CompressionConfig:
     compression_opts: Optional[int] = 4
     chunks: Optional[Union[bool, tuple[int, ...]]] = True
 
+    @classmethod
+    def from_compressed(cls, compressed):
+        """Translate the public bool or gzip-level option into storage settings."""
+        if isinstance(compressed, (bool, np.bool_)):
+            return cls() if compressed else cls(compression=None, compression_opts=None)
+        if isinstance(compressed, (int, np.integer)) and 0 <= compressed <= 9:
+            return cls(compression_opts=int(compressed))
+        raise ValueError("compressed must be True, False, or an integer from 0 to 9")
+
 
 class FDH5Writer:
     """Writer for the Fedoo HDF5 (FDH5) result format.
@@ -1175,11 +1184,19 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
     dataset._fdh5_iteration = iteration
 
 
-def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = False):
+def write_dataset(
+    dataset,
+    filename: str,
+    iteration: int = 0,
+    overwrite: bool = False,
+    compressed: bool | int = True,
+):
     """Write a Fedoo DataSet iteration to a FDH5 file."""
 
     if dataset.mesh is None:
         raise TypeError("Mesh should be defined before writing a FDH5 file.")
+
+    compression = CompressionConfig.from_compressed(compressed)
 
     path = Path(filename)
     if path.suffix == "":
@@ -1190,7 +1207,7 @@ def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = 
         path.unlink()
         file_exists = False
 
-    writer = FDH5Writer(path)
+    writer = FDH5Writer(path, compression=compression)
     if not file_exists:
         writer.write_mesh(
             dataset.mesh.nodes,

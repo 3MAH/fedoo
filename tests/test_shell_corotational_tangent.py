@@ -10,6 +10,144 @@ import fedoo as fd
 from fedoo.lib_elements.element_list import get_element
 
 
+@pytest.mark.parametrize("damping", [False, True])
+@pytest.mark.parametrize("element", ["ptri3mitc", "pquad4mitc"])
+def test_automatic_tangent_switch_matches_always_consistent(damping, element):
+    """Switching at a deformed iterate preserves the residual and full Jacobian."""
+    _, expected, _ = _shell(element, consistent=True, damping=damping)
+    wf, assembly, pb = _shell(element, consistent=None, damping=damping)
+    residual = assembly.current.get_global_vector().copy()
+    assert not wf._use_consistent_tangent(assembly)
+    assert pb._set_automatic_consistent_tangent(True) == 1
+    assembly.current.assemble_global_mat("all")
+    assert wf._use_consistent_tangent(assembly)
+    np.testing.assert_allclose(
+        assembly.current.get_global_vector(), residual, atol=1e-10
+    )
+    np.testing.assert_allclose(
+        assembly.current.get_global_matrix().toarray(),
+        expected.current.get_global_matrix().toarray(),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+    _assert_force_derivative(assembly, pb)
+
+
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_automatic_tangent_stagnation_and_attempt_reset(monkeypatch, adaptive):
+    wf, assembly, pb = _shell("ptri3mitc", consistent=None, damping=True)
+    # Exercise AssemblySum as well as the shell+damping WeakFormSum.
+    previous_dU = pb._dU.copy()
+    pb = fd.problem.NonLinear(fd.Assembly.sum(assembly))
+    pb._dU = previous_dU
+    pb.nr_parameters["adaptive_stiffness"] = adaptive
+    errors = iter([1.0] * 8 + ([0.0] if adaptive else []))
+    matrices = []
+    monkeypatch.setattr(pb, "elastic_prediction", lambda: None)
+    monkeypatch.setattr(pb, "_update_d", lambda: None)
+    monkeypatch.setattr(pb, "compute_nr_error", lambda: next(errors))
+    monkeypatch.setattr(pb, "_xbc_is_applied", lambda: True)
+    monkeypatch.setattr(pb, "solve_nr_increment", lambda: None)
+    monkeypatch.setattr(
+        pb, "_elastic_reference_matrix", lambda **kwargs: assembly.current.global_matrix
+    )
+
+    def update(compute, **kwargs):
+        if compute == "matrix":
+            matrices.append(wf._use_consistent_tangent(assembly))
+
+    monkeypatch.setattr(pb, "update", update)
+    converged, subiter, _ = pb.solve_time_increment(max_subiter=20)
+    assert bool(converged) == adaptive
+    # Three nonproductive checks, then four fresh checks before failure or
+    # adaptive rollback (which subtracts two from its iteration counter).
+    assert subiter == (6 if adaptive else 8)
+    assert matrices == [False, False, False, True, True, True, True]
+    assert wf._use_consistent_tangent(assembly)
+    errors = iter([0.0])
+    converged, _, _ = pb.solve_time_increment(max_subiter=20)
+    assert converged
+    assert not wf._use_consistent_tangent(assembly)
+
+
+@pytest.mark.parametrize(
+    "trace,switch_iteration,converged",
+    [
+        # User's oscillating residual: temporary decreases do not hide stagnation.
+        ([0.09261, 0.02166, 0.00904, 0.01427, 0.00939, 0.03107, 0.0], 6, True),
+        # Four oscillating errors after switching exhaust the fresh grace period.
+        (
+            [
+                0.09261,
+                0.02166,
+                0.00904,
+                0.01427,
+                0.00939,
+                0.03107,
+                0.05,
+                0.04,
+                0.06,
+                0.05,
+            ],
+            6,
+            False,
+        ),
+        # Sub-1% individual decreases accumulate into significant progress.
+        ([0.995**i for i in range(10)] + [0.0], None, True),
+        # Earliest activation and a fresh reference at the larger switching error.
+        ([1.0, 2.0, 1.5, 2.0, 1.8, 1.6, 1.4, 0.0], 4, True),
+    ],
+)
+def test_automatic_tangent_progress_reference(
+    monkeypatch, trace, switch_iteration, converged
+):
+    wf, assembly, pb = _shell("ptri3mitc", consistent=None)
+    errors = iter(trace)
+    matrices = []
+    monkeypatch.setattr(pb, "elastic_prediction", lambda: None)
+    monkeypatch.setattr(pb, "_update_d", lambda: None)
+    monkeypatch.setattr(pb, "compute_nr_error", lambda: next(errors))
+    monkeypatch.setattr(pb, "_xbc_is_applied", lambda: True)
+    monkeypatch.setattr(pb, "solve_nr_increment", lambda: None)
+
+    def update(compute, **kwargs):
+        if compute == "matrix":
+            matrices.append(wf._use_consistent_tangent(assembly))
+
+    monkeypatch.setattr(pb, "update", update)
+    result, subiter, _ = pb.solve_time_increment(max_subiter=30)
+    assert bool(result) == converged
+    assert subiter == len(trace)
+    assert matrices == [
+        switch_iteration is not None and i >= switch_iteration
+        for i in range(1, len(trace))
+    ]
+
+
+@pytest.mark.parametrize("consistent", [False, None])
+@pytest.mark.parametrize("limit", [2, 4, 8])
+def test_configurable_early_divergence(monkeypatch, consistent, limit):
+    wf, assembly, pb = _shell("ptri3mitc", consistent=consistent)
+    pb.set_nr_criterion("Force", early_divergence_niter=limit)
+    monkeypatch.setattr(pb, "elastic_prediction", lambda: None)
+    monkeypatch.setattr(pb, "_update_d", lambda: None)
+    monkeypatch.setattr(pb, "compute_nr_error", lambda: 1.0)
+    monkeypatch.setattr(pb, "update", lambda **kwargs: None)
+    monkeypatch.setattr(pb, "solve_nr_increment", lambda: None)
+    converged, subiter, _ = pb.solve_time_increment(max_subiter=30)
+    assert not converged
+    # Automatic mode still switches at iteration four, even for limit < 3.
+    assert subiter == (4 if consistent is None else 1) + limit
+    assert bool(wf._use_consistent_tangent(assembly)) == (consistent is None)
+
+
+@pytest.mark.parametrize("limit", [0, -1, 2.5, True, None])
+def test_invalid_early_divergence_limit(limit):
+    _, _, pb = _shell("ptri3mitc", consistent=False)
+    with pytest.raises(ValueError, match="positive integer"):
+        pb.set_nr_criterion("Force", early_divergence_niter=limit)
+
+
 def _shell(
     element="pquad4mitc",
     drilling=True,
@@ -89,6 +227,39 @@ def _shell(
 def test_shell_tangent_matches_force_derivative(element, drilling):
     _, assembly, pb = _shell(element, drilling)
     _assert_force_derivative(assembly, pb, full=element == "pquad4mitc" and drilling)
+
+
+@pytest.mark.parametrize("consistent", [False, True])
+@pytest.mark.parametrize("alpha", [0.0, 0.25, 1.0])
+def test_line_search_scales_shell_trial_rotations(consistent, alpha):
+    from fedoo.problem.line_search import _evaluate_residual_norm
+
+    _, assembly, pb = _shell("ptri3mitc", consistent=consistent)
+    pb.init_bc_start_value()
+    pb.apply_boundary_conditions(0.0, 0.0)
+    pb._update_d()
+    base_residual = pb._get_free_dof_residual().copy()
+    base_du = pb._dU.copy()
+    direction = np.random.default_rng(17).normal(size=len(base_du)) * 0.01
+    pb.set_X(direction)
+    _, trial = _evaluate_residual_norm(pb, direction, alpha)
+    np.testing.assert_array_equal(pb.get_X(), direction)
+    np.testing.assert_array_equal(pb._dU, base_du)
+    if alpha == 0:
+        np.testing.assert_allclose(trial, base_residual, rtol=1e-10, atol=1e-10)
+
+    # Independent evaluation of the requested trial, including its rotations.
+    _, expected_assembly, expected = _shell("ptri3mitc", consistent=consistent)
+    expected.init_bc_start_value()
+    expected.apply_boundary_conditions(0.0, 0.0)
+    expected._dU = base_du + alpha * direction
+    expected.set_X(alpha * direction)
+    expected._line_search_update = True
+    expected_assembly.update(expected, compute="vector")
+    expected._update_d()
+    np.testing.assert_allclose(
+        trial, expected._get_free_dof_residual(), rtol=1e-10, atol=1e-10
+    )
 
 
 def _assert_force_derivative(assembly, pb, full=False):

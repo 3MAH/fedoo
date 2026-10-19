@@ -8,18 +8,20 @@ from simcoon import Rotation
 from simcoon import dR_drotvec
 
 
-def _resolve_rigid_dofs(problem, var_cd, node_cd, n_dof):
+def _resolve_rigid_dofs(problem, var_cd, node_cd, n_dof, include_pending=False):
     """Return the ``n_dof`` rigid DOF values and their global indices.
 
     Shared by :class:`RigidTie` (6 DOF) and :class:`RigidTie2D` (3 DOF). The
-    values fall back to zeros before the problem holds a solution.
+    values fall back to zeros before the problem holds a solution. Pending
+    Dirichlet corrections are only included when generating predictive MPCs,
+    never when evaluating the current or line-search trial configuration.
     """
     dof_cd = [
         problem.n_node_dof + problem._global_dof.indice_start(var_cd[i]) + node_cd[i]
         for i in range(n_dof)
     ]
     dof_sol = problem.get_dof_solution()
-    xbc = problem._Xbc
+    xbc = problem._Xbc if include_pending else 0
 
     if np.isscalar(dof_sol) and dof_sol == 0:
         if np.isscalar(xbc) and xbc == 0:
@@ -273,7 +275,9 @@ class RigidTie(BCBase):
         node_cd = self.node_cd
         list_nodes = self.list_nodes
 
-        dof_ref, dof_cd = self._get_dof_ref(problem)
+        dof_ref, dof_cd = _resolve_rigid_dofs(
+            problem, var_cd, node_cd, 6, include_pending=True
+        )
 
         disp_ref = dof_ref[:3]  # reference displacement
         rotvec = dof_ref[3:]
@@ -449,7 +453,9 @@ class RigidTie2D(BCBase):
         node_cd = self.node_cd
         list_nodes = self.list_nodes
 
-        dof_ref, _ = self._get_dof_ref(problem)
+        dof_ref, _ = _resolve_rigid_dofs(
+            problem, var_cd, node_cd, 3, include_pending=True
+        )
 
         disp_ref = dof_ref[:2]  # reference displacement
         rotation, dR_drz = self._compute_rotation(dof_ref[2])
