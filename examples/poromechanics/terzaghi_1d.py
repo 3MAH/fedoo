@@ -1,42 +1,83 @@
-"""1D Terzaghi consolidation of a saturated linear-elastic column.
+"""
+Terzaghi 1D consolidation (small strain)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A thin column of saturated linear-elastic porous material is compressed by an
-imposed downward displacement of its top surface. The top surface drains
-(``PorePressure = 0``), the bottom and lateral surfaces are sealed. Lateral
-displacement is prevented to enforce 1D consolidation.
+A column of saturated porous material with a linear elastic skeleton is
+loaded by a constant pressure on its top face. The top face is drained
+(``PorePressure = 0``), the bottom and lateral faces are sealed, and the
+lateral displacements are blocked (oedometric, i.e. 1D, consolidation).
 
-Runs the coupled (u, PorePressure, Pressure) system and plots:
-  * the pore pressure profile along the column at several time instants;
-  * the time history of pore pressure at the closed (bottom) end.
+When the load is applied the fluid cannot escape instantly: it carries the
+load and the pore pressure jumps to its undrained value. The fluid then
+drains through the top face and the load is progressively transferred to
+the skeleton. The pore pressure at the sealed bottom face is compared with
+the classical Terzaghi series solution.
+
+The model uses Biot poroelasticity: the total Cauchy stress is
+:math:`\\sigma = \\sigma_{\\mathrm{eff}}(\\varepsilon) - \\alpha p \\mathbf{I}`
+and the fluid mass balance is
+
+.. math::
+
+   \\frac{1}{M}\\dot p + \\alpha\\, \\dot\\varepsilon_v
+   - \\nabla \\cdot \\left( \\frac{k}{\\mu_f} \\nabla p \\right) = 0.
+
+See :doc:`/poromechanics` for details.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import fedoo as fd
 
+###############################################################################
+# Material parameters and analytical solution
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# With a single drainage path of length :math:`L`, the closed-form solution
+# uses the oedometric modulus :math:`M_{oed} = K + 4G/3`, the consolidation
+# coefficient :math:`c_v = (k/\mu_f) / (\alpha^2/M_{oed} + 1/M)` and the time
+# factor :math:`T = c_v t / L^2`.
 
-# ---------------------- Geometry and material -----------------------
-L = 1.0
-nx = ny = 2
-nz = 20
+L = 1.0  # column height [m]
+E, nu = 1.0e6, 0.3  # drained skeleton [Pa]
+M = 1.0e8  # Biot modulus [Pa] (nearly incompressible fluid)
+alpha = 1.0  # Biot coefficient
+k = 1.0e-7  # permeability
+mu_f = 1.0  # fluid viscosity
+sigma0 = 1.0e3  # applied surface load [Pa]
 
-E = 1.0e6  # Pa
-nu = 0.3
-biot_M = 1.0e8  # Pa, near-incompressible fluid
-k_intrinsic = 1.0e-7
-mu_f = 1.0
-delta = -1.0e-4  # imposed compressive top displacement (m)
+G = E / (2.0 * (1.0 + nu))
+K = E / (3.0 * (1.0 - 2.0 * nu))
+M_oed = K + 4.0 * G / 3.0
+c_v = (k / mu_f) / (alpha**2 / M_oed + 1.0 / M)
+p0 = alpha * M * sigma0 / (M_oed + alpha**2 * M)  # undrained pore pressure
+settlement_drained = -sigma0 * L / M_oed
 
-dt = 0.5
-nb_steps = 60
-snapshot_steps = [0, 1, 3, 7, 15, 30, 59]
 
-# ---------------------- Setup ----------------------------------------
+def terzaghi_bottom_pressure(T, nterms=300):
+    """Normalized pore pressure p(z=0, t) / p0 at the sealed face."""
+    m = np.arange(nterms)
+    Mm = (np.pi / 2.0) * (2 * m + 1)
+    return np.sum((2.0 / Mm) * ((-1.0) ** m) * np.exp(-(Mm**2) * T))
+
+
+###############################################################################
+# Mesh, constitutive laws and weak form
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# The skeleton law is a standard mechanical law. The fluid properties are
+# grouped in :py:class:`~fedoo.constitutivelaw.PoroFluidProperties`. The
+# :py:class:`~fedoo.weakform.PoroMechanics` weak form couples the momentum
+# balance (unknowns ``Disp`` and the skeleton ``Pressure`` multiplier) with
+# the fluid mass balance (unknown ``PorePressure``).
+# :py:class:`~fedoo.weakform.PoroMechanicsSimple` is the two-field
+# alternative, recommended when the model has a free-traction face.
+
 fd.ModelingSpace("3D")
 
+nz = 20
 mesh = fd.mesh.box_mesh(
-    nx=nx + 1,
-    ny=ny + 1,
+    nx=2,
+    ny=2,
     nz=nz + 1,
     x_min=0,
     x_max=0.1,
@@ -45,27 +86,25 @@ mesh = fd.mesh.box_mesh(
     z_min=0,
     z_max=L,
     elm_type="hex8",
-    name="Column",
 )
 
-skel = fd.constitutivelaw.ElasticIsotrop(E, nu, name="Skeleton")
+skeleton = fd.constitutivelaw.ElasticIsotrop(E, nu)
 fluid = fd.constitutivelaw.PoroFluidProperties(
-    permeability=k_intrinsic,
+    permeability=k,
     fluid_viscosity=mu_f,
-    biot_coefficient=1.0,
-    biot_modulus=biot_M,
+    biot_coefficient=alpha,
+    biot_modulus=M,
     initial_porosity=0.5,
 )
-K_bulk = E / (3.0 * (1.0 - 2.0 * nu))
-wf = fd.weakform.PoroMechanics(
-    skel, fluid, bulk_modulus=K_bulk, nlgeom=False, name="Poro"
-)
-fd.Assembly.create(wf, mesh, name="PoroAssembly")
+wf = fd.weakform.PoroMechanics(skeleton, fluid, bulk_modulus=K, nlgeom=False)
+poro_assembly = fd.Assembly.create(wf, mesh)
 
-pb = fd.problem.NonLinear("PoroAssembly")
-pb.set_nr_criterion("Displacement", tol=1e-3, max_subiter=10, err0=1.0)
+###############################################################################
+# Loading and boundary conditions
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# The surface load is applied as a step: setting ``initial_pressure`` equal
+# to the final pressure removes the default linear ramp over the time step.
 
-# ---------------------- Boundary conditions --------------------------
 top = mesh.find_nodes("Z", L)
 bottom = mesh.find_nodes("Z", 0.0)
 side_x = np.unique(
@@ -75,78 +114,85 @@ side_y = np.unique(
     np.concatenate([mesh.find_nodes("Y", 0.0), mesh.find_nodes("Y", 0.1)])
 )
 
+load = fd.constraint.Pressure.from_nodes(mesh, top, sigma0, initial_pressure=sigma0)
+
+pb = fd.problem.NonLinear(poro_assembly + load)
+pb.set_nr_criterion("Displacement", tol=1e-4, max_subiter=30)
+
 pb.bc.add("Dirichlet", side_x, "DispX", 0.0)
 pb.bc.add("Dirichlet", side_y, "DispY", 0.0)
 pb.bc.add("Dirichlet", bottom, "DispZ", 0.0)
-# Near-step load: ramp to full over the first time step, then hold, so the
-# consolidation transient (undrained pressure rise, then drainage decay) shows.
-pb.bc.add(
-    "Dirichlet", top, "DispZ", delta, time_func=lambda tf: min(1.0, tf * nb_steps)
-)
-pb.bc.add("Dirichlet", top, "PorePressure", 0.0)
+pb.bc.add("Dirichlet", top, "PorePressure", 0.0)  # drained top face
 
-# ---------------------- Solve ---------------------------------------
+###############################################################################
+# Time integration
+# ~~~~~~~~~~~~~~~~
+# The time increments are driven by hand to record the bottom pore pressure,
+# the top settlement and a few pressure profiles along the column.
+
+dt = 0.2
+nb_steps = 60
+snapshot_steps = [0, 4, 14, 29, 59]
+
 pb.initialize()
 pb.tmax = dt * nb_steps
 pb.dtime = dt
 pb.set_start()
 
-# Sample 'column' of nodes along z (use x=0, y=0 nodes if available)
-col_mask = (mesh.nodes[:, 0] == 0.0) & (mesh.nodes[:, 1] == 0.0)
-col_idx = np.where(col_mask)[0]
-col_z = mesh.nodes[col_idx, 2]
-sort_idx = np.argsort(col_z)
-col_idx = col_idx[sort_idx]
-col_z = col_z[sort_idx]
+column = np.where((mesh.nodes[:, 0] == 0.0) & (mesh.nodes[:, 1] == 0.0))[0]
+column = column[np.argsort(mesh.nodes[column, 2])]
 
-p_profiles = {}
-p_bottom_hist = np.zeros(nb_steps)
-uz_top_hist = np.zeros(nb_steps)
-
+p_bottom = np.zeros(nb_steps)
+uz_top = np.zeros(nb_steps)
+profiles = {}
 for step in range(nb_steps):
     pb.time = step * dt
     convergence, nb_nr, res = pb.solve_time_increment()
     if not convergence:
-        print(f"Step {step}: not converged (res={res:g})")
+        raise RuntimeError(f"Step {step}: Newton-Raphson failed (res={res:g})")
     pb.set_start()
 
     p = pb.get_dof_solution("PorePressure")
-    uz = pb.get_dof_solution("DispZ")
-    p_bottom_hist[step] = np.mean(p[bottom])
-    uz_top_hist[step] = np.mean(uz[top])
-
+    p_bottom[step] = np.mean(p[bottom])
+    uz_top[step] = np.mean(pb.get_dof_solution("DispZ")[top])
     if step in snapshot_steps:
-        p_profiles[step] = p[col_idx].copy()
+        profiles[step] = p[column].copy()
 
-# ---------------------- Plot ----------------------------------------
-try:
-    import matplotlib.pyplot as plt
+###############################################################################
+# Comparison with the Terzaghi solution
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+t = (np.arange(nb_steps) + 1) * dt
+T = c_v * t / L**2
+T_fine = np.linspace(1e-3, T[-1], 300)
+series = [terzaghi_bottom_pressure(Ti) for Ti in T_fine]
 
-    ax = axes[0]
-    for step, p_z in p_profiles.items():
-        ax.plot(p_z, col_z, label=f"t = {step * dt:.1f} s")
-    ax.set_xlabel("PorePressure [Pa]")
-    ax.set_ylabel("z [m]")
-    ax.set_title("Pore pressure profile during consolidation")
-    ax.legend()
-    ax.grid(True)
+print(f"Undrained pore pressure: fedoo {p_bottom[0]:.4g} Pa, analytical {p0:.4g} Pa")
+print(
+    f"Final settlement: fedoo {uz_top[-1]:.4g} m, "
+    f"drained analytical {settlement_drained:.4g} m"
+)
 
-    ax = axes[1]
-    t = np.arange(nb_steps) * dt
-    ax.plot(t, p_bottom_hist, "b-", label="bottom (z=0)")
-    ax.set_xlabel("time [s]")
-    ax.set_ylabel("PorePressure [Pa]")
-    ax.set_title("Bottom pore pressure history")
-    ax.legend()
-    ax.grid(True)
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
 
-    fig.tight_layout()
-    plt.show()
-except ImportError:
-    print("matplotlib not available, skipping plots.")
-    for step, p_z in p_profiles.items():
-        print(f"\nt = {step * dt:.1f} s — p(z):")
-        for z, p_val in zip(col_z, p_z):
-            print(f"  z = {z:.3f} m   p = {p_val:.4g} Pa")
+ax = axes[0]
+ax.plot(T_fine, series, "k-", label="Terzaghi series")
+ax.plot(T, p_bottom / p0, "o", ms=4, label="fedoo")
+ax.set_xlabel(r"time factor $T = c_v t / L^2$")
+ax.set_ylabel(r"$p(z=0) / p_0$")
+ax.set_title("Pore pressure at the sealed bottom")
+ax.legend()
+ax.grid(True)
+
+ax = axes[1]
+z = mesh.nodes[column, 2]
+for step, p_z in profiles.items():
+    ax.plot(p_z / p0, z, label=f"T = {T[step]:.2f}")
+ax.set_xlabel(r"$p / p_0$")
+ax.set_ylabel("z [m]")
+ax.set_title("Pore pressure profiles")
+ax.legend()
+ax.grid(True)
+
+fig.tight_layout()
+plt.show()
