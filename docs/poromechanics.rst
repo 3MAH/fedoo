@@ -101,15 +101,21 @@ derived for one-dimensional consolidation with linear elements and
 incompressible constituents; with a hydraulic conductivity
 :math:`k_h = k\,\gamma_w/\mu_f` it reads
 :math:`\Delta t \gtrsim \gamma_w h^2/(6\,E_{oed}\,k_h)`, the form quoted in
-the Abaqus documentation. Fine meshes,
-low permeabilities and short first steps of a fast loading are therefore the
-risky cases. Equal-order elements are fine for most consolidation analyses
-that do not need the very first instants.
+the Abaqus documentation. Fine meshes, low permeabilities and short first
+steps of a fast loading are therefore the risky cases. The default fluid
+(``biot_modulus=None``, incompressible, :math:`1/M = 0`) is the worst case:
+only the Darcy term is left to stabilise. Equal-order elements are fine for
+most consolidation analyses that do not need the very first instants.
 
 **Taylor-Hood interpolation** interpolates the displacement one order higher
 than the pressure: quadratic ``u`` and linear ``PorePressure``. This pair
 satisfies the inf-sup condition and gives a smooth pressure even in the
-undrained limit, at the cost of a quadratic mesh.
+undrained limit, at the cost of a quadratic mesh. It does not remove a
+second, physical difficulty of the first instants: the pressure boundary
+layer near a drained face is thinner than one element, and the first
+pressure node overshoots (of the order of 25 % at the first step of a
+Terzaghi column). Refine the mesh near drained faces or use a larger first step if
+the very early response matters.
 
 .. list-table::
    :header-rows: 1
@@ -148,18 +154,39 @@ With the three-field :py:class:`~fedoo.weakform.PoroMechanics`, interpolate
 the skeleton ``Pressure`` linearly as well
 (``elm.set_variable_interpolation("Pressure", "hex8")``).
 
+**Practical points.**
+
+* The name of a combined element is global: creating another one with the
+  same name replaces it. Use one name per base element type.
+* Keep the default integration of the base element; reduced-integration
+  bases (``hex20r``, ...) are not validated with Taylor-Hood.
+* fedoo has no ``tet10`` mesh generator: import a quadratic mesh (gmsh) or
+  convert a ``tet4`` mesh with ``fd.mesh.change_elm_type(mesh, "tet10")``
+  (slow on large meshes). For ``tri6``/``tet10``, avoid meshes where an
+  element has all its vertices on the boundary (corner elements of
+  structured diagonal splits): they can carry a spurious pressure mode.
+* **Drained boundaries**: prescribe ``PorePressure`` on the vertex nodes of
+  the face; with a linear pressure this drains the whole face. Conditions
+  on mid-side nodes have no effect.
+* **Fluid fluxes** given as nodal values must be distributed on the vertex
+  nodes with the weights of the linear element (one half per edge end,
+  for instance), not with the quadratic weights.
+
 .. note::
 
-   With a Taylor-Hood element, the ``PorePressure`` DOFs of the mid-side
-   nodes carry no physical value: the pressure is defined by the vertex
-   nodes only. A nodal plot of ``PorePressure`` that includes the mid-side
-   nodes is therefore misleading. Read the pressure at the vertex nodes, or
-   at the integration points with
-   ``assembly.get_gp_results(pb.space.variable("PorePressure"),
-   pb.get_dof_solution())``.
+   The ``PorePressure`` DOFs of the mid-side nodes are not interpolated by
+   any element: fedoo eliminates them automatically and they stay at zero.
+   A nodal plot built from ``pb.get_dof_solution("PorePressure")`` on all
+   nodes (or a VTK export of the quadratic cells) therefore shows a sawtooth
+   that is not in the solution. Use the interpolated values instead:
+   ``assembly.get_node_results(pb.space.variable("PorePressure"),
+   pb.get_dof_solution())`` returns the exact values at every node, the
+   mid-side ones being linearly interpolated from the vertices, and
+   ``assembly.get_gp_results(...)`` gives them at the integration points.
 
 The example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`
-compares equal-order and Taylor-Hood interpolations in the undrained limit.
+compares equal-order and Taylor-Hood interpolations on an undrained strip
+footing with an analytical solution.
 
 Fluid properties and permeability models
 ----------------------------------------
@@ -269,7 +296,12 @@ Validation
 * Mandel 2D vs the Abousleiman analytical solution, including the
   Mandel-Cryer non-monotonic pressure peak (~1 %) —
   ``tests/test_poromech_mandel_analytical.py``;
-* Taylor-Hood LBB stability — ``tests/test_poromech_taylor_hood.py``;
+* Taylor-Hood elements: pressure operators and eliminated mid-side DOFs,
+  exact undrained oedometer for ``quad8``/``quad4``, ``tri6``/``tri3`` and
+  ``hex20``/``hex8``, and undrained strip footing against the elastic
+  solution (Taylor-Hood within 3 %, equal order with a checkerboard) —
+  ``tests/test_combined_element_taylor_hood.py`` and
+  ``tests/test_poromech_taylor_hood.py``;
 * Finite strain with a simcoon Neo-Hookean skeleton (``NEOHC``, UL) and
   Holmes-Mow permeability: exact confined kinematics
   :math:`\ln J = \ln(1 + \delta/L)` at the drained state —
