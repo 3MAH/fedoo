@@ -21,11 +21,41 @@ semantic versioning.
   tangent onto any set of Voigt components; native elastic laws and UMAT laws
   (`ndi=1`) support it. Exact Simcoon stresses under `ndi=1` require a Simcoon
   version that condenses this state.
+- `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
+  centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
+  `lin2` mesh directly instead of extracting its surface. With `dmin` equal
+  to the fiber diameter, this models contact between equal-radius rods.
+- Finite-strain Biot poromechanics. In `nlgeom="UL"` the pore-stress
+  coupling now includes its geometric tangent. `nlgeom="TL"` is now the exact
+  pull-back of UL and gives the same solution. The momentum coupling is
+  -alpha p J C^{-1}:delta E, the storage and coupling terms of the mass
+  balance carry the J of dv = J dV, and the mobility is pulled back to
+  (k/mu) J C^{-1}. `PoroMechanicsSimple` now computes `lnJ`, so
+  deformation-dependent permeabilities (Holmes-Mow, Kozeny-Carman) receive
+  the current J.
+- Poromechanics documentation page (`docs/poromechanics.rst`) and a
+  Poromechanics section in the example gallery: Terzaghi consolidation
+  compared with the analytical series, finite-strain consolidation of a
+  Neo-Hookean skeleton, and the Taylor-Hood example.
+  `PoroMechanics`, `PoroMechanicsSimple`, `PoroFluidProperties` and the
+  permeability models are now listed in the API reference.
 
 ### Changed
 
 - The material-point helpers of the nonlinear shells moved to
   `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
+- The poromechanics weak forms raise `NotImplementedError` in `2Daxi`: the
+  Biot coupling lacked the axisymmetric measure and hoop strain.
+- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
+  used in finite strain without `lnJ`.
+
+### Fixed
+
+- `PoroDarcy` in `nlgeom="UL"`: the pore-pressure gradient of the residual
+  was computed on the reference mesh instead of the current one. The
+  residual missed a factor of order J, while the tangent used the current
+  mesh. Transient finite-strain consolidation was wrong by about the strain
+  level (5 % at 5 % compression), but drained states were not affected.
 
 ## [1.1.0] - 2026-10-14
 

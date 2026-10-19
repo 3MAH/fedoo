@@ -1,4 +1,6 @@
-"""Inf-sup (LBB) stable mixed / poromechanics elements in fedoo (Taylor-Hood).
+"""
+Inf-sup (LBB) stable elements: Taylor-Hood interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The mixed displacement-pressure and the Biot u-PorePressure saddle systems need
 an inf-sup (LBB) stable interpolation pair. Equal-order pairs (displacement and
@@ -6,7 +8,7 @@ pressure interpolated identically) violate the LBB condition and pollute the
 pressure with spurious "checkerboard" modes.
 
 fedoo supports a DIFFERENT interpolation order per variable -- so a Taylor-Hood
-pair (quadratic displacement, linear pressure) needs no new machinery:
+pair (quadratic displacement, linear pressure) needs no new machinery::
 
     elm = fd.lib_elements.element_list.CombinedElement("quad8lbb", "quad8")
     elm.set_variable_interpolation("Pressure", "quad4")          # one order lower

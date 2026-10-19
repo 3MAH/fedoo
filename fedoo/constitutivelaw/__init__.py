@@ -89,6 +89,21 @@ These laws should be associated with :py:class:`fedoo.weakform.HeatEquation`
 
    ThermalProperties
 
+Poromechanics fluid properties
+==============================
+
+These properties should be associated with
+:py:class:`fedoo.weakform.PoroMechanicsSimple` or
+:py:class:`fedoo.weakform.PoroMechanics`. See :doc:`/poromechanics`.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   PoroFluidProperties
+   HolmesMowPermeability
+   KozenyCarmanPermeability
+
 Manage local frames
 ===================
 
