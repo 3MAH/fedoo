@@ -101,6 +101,26 @@ def test_sealed_undrained_oedometer_is_exact(quad, lin, n_vertex):
     np.testing.assert_allclose(pressure, 1e8 * 1e-4, rtol=1e-8)
 
 
+@pytest.mark.parametrize("other_assembly", ["boundary", "volume"])
+def test_orphan_dofs_in_nested_assembly_sum(other_assembly):
+    mesh, assembly = _poro("quad8", "quad4", f"nested_{other_assembly}")
+    if other_assembly == "boundary":
+        other = fd.constraint.Pressure.from_nodes(mesh, mesh.find_nodes("Y", 1), 1)
+    else:
+        other = fd.Assembly.create(assembly.weakform, mesh, elm_type="quad8")
+    inner = fd.AssemblySum([assembly, other])
+    outer = fd.AssemblySum([inner, assembly])
+    problem = fd.problem.NonLinear(outer)
+    problem.apply_boundary_conditions()
+
+    rank = assembly.space.variable_rank("PorePressure")
+    mids = rank * mesh.n_nodes + _mid_nodes(mesh, 4)
+    # A boundary load cannot activate unused pressure DOFs, whereas another
+    # volume assembly with quadratic pressure interpolation does activate them.
+    assert np.all(np.isin(mids, problem._dof_free) == (other_assembly == "volume"))
+    assert outer.list_assembly[0] is inner
+
+
 def _strip_footing(taylor_hood, n=32, half_width=1.0, size=8.0, q=1e3):
     """Undrained strip footing, incompressible constituents (B = 1, nu_u = 1/2).
 

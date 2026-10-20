@@ -17,86 +17,6 @@ def _same_sparse(a, b):
     )
 
 
-def _leaf_assemblies(assembly):
-    """Assemblies with a mesh and an element type, AssemblySum flattened."""
-    if assembly is None:
-        return []
-    children = getattr(assembly, "list_assembly", None)
-    if children is not None:
-        return [leaf for child in children for leaf in _leaf_assemblies(child)]
-    if (
-        getattr(assembly, "elm_type", None) is None
-        or getattr(assembly, "mesh", None) is None
-    ):
-        return []
-    return [assembly]
-
-
-def _reference_dim(elm_type):
-    """Dimension of the reference element, or None if unknown."""
-    from fedoo.lib_elements.element_list import get_node_elm_coordinates
-
-    try:
-        return get_node_elm_coordinates(elm_type).shape[1]
-    except Exception:  # elements without nodal coordinates (beams, ...)
-        return None
-
-
-def _orphan_dofs(problem):
-    """Global indices of DOFs that no element of the problem interpolates.
-
-    With a :py:class:`~fedoo.lib_elements.CombinedElement`, a variable may be
-    interpolated by a sub-element using only the first nodes of each element
-    (e.g. a linear pressure on the vertex nodes of a quadratic mesh). Its DOFs
-    at the other nodes have no shape function: they are orphans, unless
-    another assembly of the same dimension interpolates the variable at those
-    nodes. Lower-dimensional assemblies (boundary loads on the faces) are not
-    counted as interpolating it. The result is cached.
-    """
-    from fedoo.lib_elements.element_list import get_element
-
-    leaves = _leaf_assemblies(getattr(problem, "assembly", None))
-    n_nodes = problem.mesh.n_nodes
-    key = (tuple(id(a) for a in leaves), n_nodes, problem.space.nvar)
-    cache = getattr(problem, "_orphan_dof_cache", None)
-    if cache is not None and cache[0] == key:
-        return cache[1]
-
-    combined = [
-        leaf for leaf in leaves if hasattr(get_element(leaf.elm_type), "get_elm_type")
-    ]
-    orphans = set()
-    if combined:
-        dims = [
-            _reference_dim(get_element(leaf.elm_type).base_elm.name)
-            for leaf in combined
-        ]
-        dim = max(d for d in dims if d is not None) if any(dims) else None
-        for var in problem.space.list_variables():
-            candidates = set()
-            used = set()
-            for leaf in leaves:
-                elements = leaf.mesh.elements
-                element = get_element(leaf.elm_type)
-                if leaf in combined:
-                    n_used = getattr(element.get_elm_type(var), "n_nodes", None)
-                    if n_used is not None and n_used < elements.shape[1]:
-                        candidates.update(np.unique(elements[:, n_used:]).tolist())
-                        used.update(np.unique(elements[:, :n_used]).tolist())
-                        continue
-                else:
-                    leaf_dim = _reference_dim(leaf.elm_type)
-                    if dim is not None and leaf_dim is not None and leaf_dim < dim:
-                        continue
-                used.update(np.unique(elements).tolist())
-            nodes = candidates - used
-            if nodes:
-                rank = problem.space.variable_rank(var)
-                orphans.update(rank * n_nodes + node for node in nodes)
-    problem._orphan_dof_cache = (key, orphans)
-    return orphans
-
-
 class Problem(ProblemBase):
     """Base class to define a problem that generate a linear system and to solve
     the linear system with some defined boundary conditions.
@@ -578,6 +498,95 @@ class Problem(ProblemBase):
         self.set_X(vector)
         return self
 
+    def _get_orphan_dofs(self):
+        """Global indices of DOFs that no element of the problem interpolates.
+
+        A CombinedElement can interpolate a variable on only the first nodes
+        of each element (e.g. linear pressure on a quadratic mesh). The other
+        nodes are orphans unless another assembly of the same dimension
+        interpolates the variable there. Lower-dimensional boundary loads do
+        not count as interpolating it. The result is cached.
+        """
+        from fedoo.lib_elements.element_list import (
+            get_element,
+            get_node_elm_coordinates,
+        )
+
+        assembly = getattr(self, "assembly", None)
+        leaves = (
+            [
+                leaf
+                for leaf in assembly.iter_leaf()
+                if getattr(leaf, "elm_type", None) is not None
+                and getattr(leaf, "mesh", None) is not None
+            ]
+            if assembly is not None
+            else []
+        )
+        n_nodes = self.mesh.n_nodes
+        key = (tuple(id(a) for a in leaves), n_nodes, self.space.nvar)
+        cache = getattr(self, "_orphan_dof_cache", None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+
+        leaf_elements = [(leaf, get_element(leaf.elm_type)) for leaf in leaves]
+        orphans = set()
+        if any(hasattr(element, "get_elm_type") for _, element in leaf_elements):
+            interpolations = []
+            combined_dims = []
+            for leaf, element in leaf_elements:
+                is_combined = hasattr(element, "get_elm_type")
+                geometry = element.base_elm if is_combined else element
+                try:
+                    coordinates = get_node_elm_coordinates(geometry.name)
+                except (AttributeError, KeyError):
+                    coordinates = None
+                dimension = None if coordinates is None else coordinates.shape[1]
+                interpolations.append((leaf.mesh.elements, element, dimension))
+                if is_combined and dimension is not None:
+                    combined_dims.append(dimension)
+            dim = max(combined_dims, default=None)
+
+            for var in self.space.list_variables():
+                candidates = set()
+                used_node_counts = []
+                for elements, element, leaf_dim in interpolations:
+                    n_used = None
+                    if hasattr(element, "get_elm_type"):
+                        n_used = getattr(element.get_elm_type(var), "n_nodes", None)
+                    if n_used is not None and n_used < elements.shape[1]:
+                        candidates.update(elements[:, n_used:].ravel().tolist())
+                    else:
+                        n_used = None
+                    used_node_counts.append(n_used)
+                # Variables interpolated on every element node need no scan
+                # of the connectivity to identify unused DOFs.
+                if not candidates:
+                    continue
+
+                for (elements, element, leaf_dim), n_used in zip(
+                    interpolations, used_node_counts
+                ):
+                    if n_used is not None:
+                        used_nodes = elements[:, :n_used]
+                    elif (
+                        not hasattr(element, "get_elm_type")
+                        and dim is not None
+                        and leaf_dim is not None
+                        and leaf_dim < dim
+                    ):
+                        continue
+                    else:
+                        used_nodes = elements
+                    candidates.difference_update(used_nodes.ravel().tolist())
+                    if not candidates:
+                        break
+                if candidates:
+                    rank = self.space.variable_rank(var)
+                    orphans.update(rank * n_nodes + node for node in candidates)
+        self._orphan_dof_cache = (key, orphans)
+        return orphans
+
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
         n_dof = self.n_dof
         self._Xbc = np.zeros(n_dof)
@@ -631,7 +640,7 @@ class Problem(ProblemBase):
         # DOFs that no element interpolates (mid-side pressure nodes of a
         # Taylor-Hood CombinedElement) have empty rows and columns: they are
         # blocked at 0, unless a boundary condition already eliminates them.
-        orphans = _orphan_dofs(self).difference(dof_blocked, dof_slave)
+        orphans = self._get_orphan_dofs().difference(dof_blocked, dof_slave)
         dof_blocked.update(orphans)
 
         dof_slave.update(dof_blocked)
