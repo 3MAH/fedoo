@@ -12,6 +12,7 @@
 #
 
 import os
+import re
 import sys
 
 try:
@@ -21,7 +22,7 @@ except ModuleNotFoundError:
 
 import pyvista
 from pyvista.plotting.utilities.sphinx_gallery import DynamicScraper
-from sphinx_gallery.sorting import FileNameSortKey
+from sphinx_gallery.sorting import ExplicitOrder, FileNameSortKey
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -124,6 +125,24 @@ pyvista.BUILDING_GALLERY = True
 # pyvista.set_jupyter_backend(None)
 
 # -- Sphinx Gallery Options
+# Examples listed in examples/precomputed_runs.toml are too heavy to be run at
+# each build: they are rendered without being executed, and their page shows
+# the precomputed animation and the run record (see tools/run_precomputed.py).
+with open(
+    os.path.join(os.path.dirname(__file__), "..", "examples", "precomputed_runs.toml"),
+    "rb",
+) as file:
+    _precomputed = tomllib.load(file)
+_precomputed_pages = {
+    "examples/" + entry["path"][: -len(".py")]: entry
+    for entry in _precomputed["example"]
+}
+_executed_pattern = (
+    r"^(?!.*/(?:"
+    + "|".join(re.escape(entry["path"]) for entry in _precomputed["example"])
+    + r")$).*\.py$"
+)
+
 sphinx_gallery_conf = {
     # convert rst to md for ipynb
     "pypandoc": True,
@@ -131,9 +150,95 @@ sphinx_gallery_conf = {
     "examples_dirs": ["../examples/"],
     # path where to save gallery generated examples
     "gallery_dirs": ["examples"],
-    # Pattern to search for example files
-    "filename_pattern": r"\.py",
+    # Examples to execute: all except the precomputed ones (rendered only)
+    "filename_pattern": _executed_pattern,
+    # Basic examples first, then the categories in a fixed order
+    "subsection_order": ExplicitOrder(
+        [
+            f"../examples/{category}"
+            for category in (
+                "basic",
+                "boundary_conditions",
+                "contact",
+                "finite_strain",
+                "plasticity",
+                "shells",
+                "dynamics",
+                "thermal",
+                "poromechanics",
+                "custom_weak_forms",
+                "homogenization",
+                "mesh",
+            )
+        ]
+        + ["*"]
+    ),
     # Sort gallery example by file name instead of number of lines (default)
     "within_subsection_order": FileNameSortKey,
     "image_scrapers": (DynamicScraper(), "matplotlib"),
 }
+
+
+def _precomputed_banner(entry):
+    """Return the rst inserted at the top of a precomputed example page."""
+    run = entry.get("run", {})
+    if not run:
+        return (
+            ".. note::\n\n"
+            "   This example is too heavy to be run at each documentation\n"
+            "   build. Its results have not been generated yet: run the\n"
+            "   script to obtain them.\n\n"
+        )
+    versions = ", ".join(
+        f"{name} {run[name]}"
+        for name in ("fedoo", "simcoon", "ipctk", "numpy")
+        if name in run
+    )
+    if "commit" in run:
+        versions += f" (fedoo commit {run['commit']})"
+    if "media" not in entry:
+        media = None
+    elif entry["media"].endswith(".gif"):
+        url = f"{_precomputed['media_root']}/{entry['media']}"
+        media = f'   <img src="{url}" style="width: 100%" alt="{entry["path"]}">\n'
+    else:
+        url = f"{_precomputed['media_root']}/{entry['media']}"
+        media = (
+            f'   <video controls loop muted playsinline style="width: 100%"'
+            f' src="{url}"></video>\n'
+        )
+    what = "The animation below was" if media else "Its results were"
+    note = (
+        ".. note::\n\n"
+        "   This example is too heavy to be run at each documentation build.\n"
+        f"   {what} precomputed on "
+        f"{run.get('date', '?')} with {versions}, in about "
+        f"{run.get('wall_time_s', '?')} s ({run.get('machine', '?')}). Run\n"
+        "   the script to reproduce it with your fedoo version.\n\n"
+    )
+    if media is None:
+        return note
+    return note + ".. raw:: html\n\n" + media + "\n"
+
+
+def _insert_precomputed_banner(app, docname, source):
+    """Insert the banner after the title of a precomputed example page."""
+    entry = _precomputed_pages.get(docname)
+    if entry is None:
+        return
+    lines = source[0].split("\n")
+    label = f".. _sphx_glr_{docname.replace('/', '_')}.py:"
+    try:
+        start = lines.index(label)
+    except ValueError:
+        return
+    for i in range(start + 1, len(lines) - 1):
+        underline = lines[i + 1]
+        if lines[i].strip() and underline and set(underline) <= set("=-~^*"):
+            lines.insert(i + 2, "\n" + _precomputed_banner(entry))
+            source[0] = "\n".join(lines)
+            return
+
+
+def setup(app):
+    app.connect("source-read", _insert_precomputed_banner)

@@ -49,6 +49,22 @@ The WeakForm library contains the following classes:
    ExternalPressure
    HourglassStiffness
    ArtificialDamping
+
+Examples by weak form:
+
+* :py:class:`BeamEquilibrium`:
+  :ref:`sphx_glr_examples_basic_beam_elements_cantilever.py`,
+  :ref:`sphx_glr_examples_basic_lattice_beam.py`.
+* Plate and shell weak forms (:py:class:`PlateEquilibrium` and variants):
+  :ref:`sphx_glr_examples_shells_plate_elements_cantilever.py`,
+  :ref:`sphx_glr_examples_shells_laminate_cantilever.py`,
+  :ref:`sphx_glr_examples_shells_spherical_shell_compression_plastic.py`.
+* :py:class:`HeatEquation`:
+  :ref:`sphx_glr_examples_thermal_thermal_conduction_2d.py`,
+  :ref:`sphx_glr_examples_thermal_thermal_conduction_3d.py`,
+  :ref:`sphx_glr_examples_thermal_thermomechanical_weak_coupling_3d.py`.
+* :py:class:`PoroMechanics` and :py:class:`PoroMechanicsSimple`:
+  :ref:`sphx_glr_examples_poromechanics_terzaghi_1d.py`.
 """
 
 from .beam import BeamEquilibrium

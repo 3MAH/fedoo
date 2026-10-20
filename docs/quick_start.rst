@@ -191,3 +191,13 @@ For external tools such as ParaView, export a VTK file with
 ``results.save("cantilever.vtk")``. See
 :doc:`Post-Processing <post_processing>` for nonlinear time histories,
 section output and more viewer options.
+
+
+Next steps
+__________
+
+The :doc:`example gallery <examples/index>` contains complete scripts grouped
+by topic. The basic examples are a good continuation of this guide, for
+instance :ref:`sphx_glr_examples_basic_cantilever_beam_3d.py` (the same
+cantilever beam with ``hex8`` elements) and
+:ref:`sphx_glr_examples_basic_visualization.py` (post-processing options).

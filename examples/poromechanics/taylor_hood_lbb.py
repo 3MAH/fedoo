@@ -8,7 +8,9 @@ pressure interpolated identically) violate the LBB condition and pollute the
 pressure with spurious "checkerboard" modes.
 
 fedoo supports a DIFFERENT interpolation order per variable -- so a Taylor-Hood
-pair (quadratic displacement, linear pressure) needs no new machinery::
+pair (quadratic displacement, linear pressure) needs no new machinery:
+
+.. code-block:: python
 
     elm = fd.lib_elements.element_list.CombinedElement("quad8lbb", "quad8")
     elm.set_variable_interpolation("Pressure", "quad4")          # one order lower

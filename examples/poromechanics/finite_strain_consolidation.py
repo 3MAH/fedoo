@@ -1,4 +1,4 @@
-"""
+r"""
 Finite strain consolidation of a hyperelastic porous column
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -11,7 +11,7 @@ as is typical for soft biological tissues such as articular cartilage.
 The problem is solved in finite strain with the updated Lagrangian
 formulation (``nlgeom="UL"``, log_R corotational, the simcoon convention).
 The volumetric strain of the Biot mass balance is then the logarithmic
-volume change :math:`\\varepsilon_v = \\ln J`, and the permeability is
+volume change :math:`\varepsilon_v = \ln J`, and the permeability is
 evaluated with the current :math:`J` at each Gauss point.
 
 When the load is applied, the fluid carries it and the column barely
@@ -32,7 +32,7 @@ import fedoo as fd
 
 ###############################################################################
 # Parameters
-# ~~~~~~~~~~
+# ----------
 
 L = 1.0  # column height [m]
 sigma0 = 1.2e5  # applied surface load [Pa], about 8 % settlement
@@ -46,7 +46,7 @@ k0 = 1.0e-8  # reference permeability (fluid viscosity = 1)
 
 ###############################################################################
 # Mesh, constitutive laws and weak form
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# -------------------------------------
 # The permeability is given as a callable
 # :py:class:`~fedoo.constitutivelaw.HolmesMowPermeability`, which receives
 # :math:`J` from the weak form. The two-field
@@ -84,7 +84,7 @@ assembly = fd.Assembly.create(wf, mesh)
 
 ###############################################################################
 # Boundary conditions
-# ~~~~~~~~~~~~~~~~~~~
+# -------------------
 # Lateral confinement, fixed and sealed bottom, drained top face. The load
 # is applied as a step: ``initial_pressure`` equal to the final pressure
 # removes the default ramp over the time step.
@@ -113,7 +113,7 @@ pb.bc.add("Dirichlet", top, "PorePressure", 0.0)
 
 ###############################################################################
 # Time integration
-# ~~~~~~~~~~~~~~~~
+# ----------------
 # ``lnJ`` is stored at Gauss points in the assembly state variables. Its
 # element average is recorded at a few instants, together with the pore
 # pressure at the sealed bottom and the settlement of the top face.
@@ -144,7 +144,7 @@ for step in range(nb_steps):
 
 ###############################################################################
 # Final state
-# ~~~~~~~~~~~
+# -----------
 # Once drained, the compaction is uniform along the column and the
 # Holmes-Mow permeability has dropped accordingly.
 
@@ -155,7 +155,7 @@ print(f"permeability ratio k/k0: {permeability(np.exp(lnJ)).mean() / k0:.3f}")
 
 ###############################################################################
 # Pore pressure history and compaction profiles
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ---------------------------------------------
 
 t = (np.arange(nb_steps) + 1) * dt
 

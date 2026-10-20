@@ -15,7 +15,9 @@ dependencies:
   - vtk>=9.2
   - pypandoc
   - pyvista>=0.42
-  - simcoon>=2.1
+  - simcoon>=2.2
+  - gmsh
+  - python-gmsh
   - pytest
   - sphinx
   - sphinx_rtd_theme

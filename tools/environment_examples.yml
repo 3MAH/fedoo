@@ -1,0 +1,34 @@
+# Environment to run all the examples, including the precomputed ones
+# (tools/run_examples.py and tools/run_precomputed.py), on Linux or macOS:
+#
+#     conda env create -f tools/environment_examples.yml
+#     conda activate fedoo-examples
+#
+# fedoo itself is taken from the source tree (the run scripts put the
+# repository root on PYTHONPATH), so it is not installed here.
+name: fedoo-examples
+
+channels:
+  - conda-forge
+  - set3mah
+
+dependencies:
+  - python=3.13
+  - numpy>=2
+  - scipy
+  - h5py
+  - matplotlib
+  - pypardiso # [x86 or x86_64]
+  - python-mumps
+  - vtk>=9.2
+  - pyvista>=0.42
+  - simcoon>=2.2
+  - gmsh
+  - python-gmsh
+  - mmg # mmg3d_O3, for util/meshes/make_gyroid_mesh.py
+  - imageio
+  - imageio-ffmpeg # mp4 and gif movies
+  - pip
+  - pip:
+      - ipctk==1.6.0
+      - microgen[cad]==2.0.0b1

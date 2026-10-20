@@ -97,6 +97,8 @@ plotted directly:
 
    MultiMeshData
 
+Example: :ref:`sphx_glr_examples_boundary_conditions_multi_mesh_example.py`.
+
 Beam and shell section fields
 -----------------------------
 
@@ -741,6 +743,9 @@ A few convenient methods are proposed to generate images or movies from
    MultiFrameDataSet.plot
    MultiFrameDataSet.plot_history
    MultiFrameDataSet.write_movie
+
+Example: :ref:`sphx_glr_examples_basic_visualization.py` (linked views,
+clipping, element-set filtering, line sampling and time histories).
 
 
 Save results

@@ -24,6 +24,11 @@ Thermal diffusion is a first-order evolution and can be advanced independently:
 
    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
 
+Examples: :ref:`sphx_glr_examples_thermal_thermal_conduction_2d.py`
+(:class:`BackwardEuler` on a heat equation) and
+:ref:`sphx_glr_examples_dynamics_rigid_body_bounce.py` (:class:`Newmark` on a
+rigid body with contact).
+
 Static analysis
 ===============
 
@@ -99,6 +104,10 @@ which is equivalent to:
 
    fd.time.GeneralizedAlpha(alpha_m=0.0, alpha_f=0.0,
                             beta=0.25, gamma=0.5)
+
+Examples: :ref:`sphx_glr_examples_dynamics_rigid_body_bounce.py`,
+:ref:`sphx_glr_examples_dynamics_multi_mesh_dynamic_contact.py` and
+:ref:`sphx_glr_examples_finite_strain_neohookean_cantilever_force.py`.
 
 Explicit second-order schemes
 =============================

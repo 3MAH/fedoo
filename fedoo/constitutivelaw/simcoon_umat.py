@@ -29,7 +29,23 @@ class Simcoon(MechanicalUMAT):
     props: numpy.array
         The constitive laws properties
     tangent_mode : int, default=1
-        Tangent selector forwarded to the Simcoon UMAT.
+        Tangent operator requested from the Simcoon UMAT, forwarded unchanged
+        (simcoon >= 2.0 numbering):
+
+        * ``0``: elastic operator (no tangent assembly, :math:`L_t = L`).
+        * ``1``: continuum tangent (fedoo default).
+        * ``2``: algorithmic (consistent) tangent of the convex cutting plane
+          (CCP) return mapping. This is the simcoon default.
+        * ``3``: closest point projection (CPP): the law is integrated with a
+          closest point projection return mapping and returns its exact
+          consistent tangent. Available from simcoon 2.2 (simcoon 2.1 rejects
+          it). A law without a CPP integrator falls back to mode ``2``.
+
+        Modes 0 to 2 integrate the law with the same return mapping and only
+        change the tangent. Simcoon versions before 2.0 used another
+        numbering (``0`` continuum, ``1`` algorithmic): a script written for
+        them must be renumbered. The attribute ``tangent_mode`` can also be
+        changed after construction.
     name : str
         The name of the constitutive law
 
@@ -130,7 +146,10 @@ class Simcoon(MechanicalUMAT):
             Composable Simcoon material containing an elasticity block and
             zero or more inelastic mechanisms.
         tangent_mode : int, default=1
-            Tangent selector forwarded to the Simcoon ``MODUL`` UMAT.
+            Tangent operator requested from the Simcoon ``MODUL`` UMAT: ``0``
+            elastic, ``1`` continuum, ``2`` algorithmic (convex cutting
+            plane), ``3`` closest point projection (simcoon >= 2.2). See
+            :class:`Simcoon`.
         name : str, optional
             Fedoo constitutive-law registration name.
 

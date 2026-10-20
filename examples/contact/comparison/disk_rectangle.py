@@ -1,9 +1,10 @@
 """
 Disk-rectangle contact: penalty vs IPC comparison
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This example compares the two contact approaches available in fedoo
-on a 2D problem: a stiff disk pushed into an elastic rectangle.
+on a 2D problem: an elastic disk (E = 50 GPa) pushed into an elastic
+rectangle (E = 200 GPa).
 
   - **Penalty method** (``fd.constraint.Contact``): node-to-surface
     formulation with a user-tuned penalty parameter ``eps_n``.
@@ -11,7 +12,9 @@ on a 2D problem: a stiff disk pushed into an elastic rectangle.
     formulation from the ipctk library guaranteeing intersection-free
     configurations, with optional friction and CCD line search.
 
-Both simulations use the same geometry and boundary conditions.
+Both simulations use the same geometry and boundary conditions. The disk
+starts at a small gap ``GAP`` from the rectangle: the IPC barrier is not
+defined for two bodies that already touch (zero distance).
 Per-increment metrics are tracked and a comparison summary is printed.
 
 .. note::
@@ -25,6 +28,27 @@ import os
 from time import time
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
+
+GAP = 0.01  # initial gap between the disk and the rectangle (> IPC dhat)
+
+
+def track_nr_iterations(pb):
+    """Record the Newton-Raphson iteration count of each converged increment.
+
+    ``pb.n_iter`` counts converged increments, not Newton iterations, so the
+    count returned by ``solve_time_increment`` is captured instead.
+    """
+    last = [0]
+    original = pb.solve_time_increment
+
+    def wrapped(max_subiter=None, tol_nr=None):
+        convergence, nr_iter, err = original(max_subiter, tol_nr)
+        if convergence:
+            last[0] = nr_iter
+        return convergence, nr_iter, err
+
+    pb.solve_time_increment = wrapped
+    return last
 
 
 def build_mesh_and_material():
@@ -45,7 +69,7 @@ def build_mesh_and_material():
 
     # --- Disk mesh ---
     mesh_disk = fd.mesh.disk_mesh(radius=0.5, nr=6, nt=6, elm_type="quad4")
-    mesh_disk.nodes += np.array([1.5, 0.48])
+    mesh_disk.nodes += np.array([1.5 + GAP, 0.48])
     mesh_disk.element_sets["disk"] = np.arange(mesh_disk.n_elements)
 
     # --- Stack into one mesh ---
@@ -73,7 +97,7 @@ print("=" * 60)
 mesh, material = build_mesh_and_material()
 
 nodes_left = mesh.find_nodes("X", 0)
-nodes_bc = mesh.find_nodes("X>1.5")
+nodes_bc = mesh.find_nodes(f"X>{1.5 + GAP}")  # right half of the disk
 nodes_bc = list(set(nodes_bc).intersection(mesh.node_sets["boundary"]))
 
 # Slave nodes = right face of rectangle (exclude disk nodes at X=1)
@@ -110,15 +134,13 @@ history_penalty = {
     "contact_force_norm": [],
     "max_disp_x": [],
 }
-_penalty_prev_niter = [0]  # mutable container for closure
+_penalty_nr = track_nr_iterations(pb_penalty)
 
 
 def track_penalty(pb):
     history_penalty["time"].append(pb.time)
     # NR iterations for this increment
-    nr_this = pb.n_iter - _penalty_prev_niter[0]
-    _penalty_prev_niter[0] = pb.n_iter
-    history_penalty["nr_iters"].append(nr_this)
+    history_penalty["nr_iters"].append(_penalty_nr[0])
     # Reaction force at left boundary (X component)
     F = pb.get_ext_forces("Disp")
     history_penalty["reaction_x"].append(np.sum(F[0, nodes_left]))
@@ -157,7 +179,7 @@ print("=" * 60)
 mesh2, material2 = build_mesh_and_material()
 
 nodes_left2 = mesh2.find_nodes("X", 0)
-nodes_bc2 = mesh2.find_nodes("X>1.5")
+nodes_bc2 = mesh2.find_nodes(f"X>{1.5 + GAP}")  # right half of the disk
 nodes_bc2 = list(set(nodes_bc2).intersection(mesh2.node_sets["boundary"]))
 
 # Nodes at rectangle right face only (exclude disk nodes at X=1)
@@ -199,15 +221,13 @@ history_ipc = {
     "kappa": [],
     "min_distance": [],
 }
-_ipc_prev_niter = [0]
+_ipc_nr = track_nr_iterations(pb_ipc)
 
 
 def track_ipc(pb):
     history_ipc["time"].append(pb.time)
     # NR iterations for this increment
-    nr_this = pb.n_iter - _ipc_prev_niter[0]
-    _ipc_prev_niter[0] = pb.n_iter
-    history_ipc["nr_iters"].append(nr_this)
+    history_ipc["nr_iters"].append(_ipc_nr[0])
     # Reaction force at left boundary (X component)
     F = pb.get_ext_forces("Disp")
     history_ipc["reaction_x"].append(np.sum(F[0, nodes_left2]))
@@ -216,18 +236,14 @@ def track_ipc(pb):
     # Max X-displacement at contact interface (rectangle right face)
     disp = pb.get_disp()
     history_ipc["max_disp_x"].append(np.max(np.abs(disp[0, nodes_contact2])))
+    # Diagnostics read private IPCContact attributes (_collisions, _kappa,
+    # _get_current_vertices, _minimum_distance): not a stable public API.
     # IPC-specific metrics
     history_ipc["n_collisions"].append(len(ipc_contact._collisions))
     history_ipc["kappa"].append(ipc_contact._kappa)
-    # Minimum distance (gap)
+    # Minimum distance (true distance: ipctk returns squared distances)
     verts = ipc_contact._get_current_vertices(pb)
-    if len(ipc_contact._collisions) > 0:
-        min_d = ipc_contact._collisions.compute_minimum_distance(
-            ipc_contact._collision_mesh, verts
-        )
-    else:
-        min_d = float("inf")
-    history_ipc["min_distance"].append(min_d)
+    history_ipc["min_distance"].append(ipc_contact._minimum_distance(verts))
 
 
 t0 = time()
@@ -341,7 +357,7 @@ print("-" * 62)
 print(f"{'Inc':>4} {'Time':>8} {'NR iter':>8} {'Reaction Fx':>14} {'|F_contact|':>14}")
 for i in range(len(history_penalty["time"])):
     print(
-        f"{i+1:4d} {history_penalty['time'][i]:8.4f} "
+        f"{i + 1:4d} {history_penalty['time'][i]:8.4f} "
         f"{history_penalty['nr_iters'][i]:8d} "
         f"{history_penalty['reaction_x'][i]:14.2f} "
         f"{history_penalty['contact_force_norm'][i]:14.2f}"
@@ -359,7 +375,7 @@ for i in range(len(history_ipc["time"])):
     min_d = history_ipc["min_distance"][i]
     min_d_str = f"{min_d:.2e}" if np.isfinite(min_d) else "inf"
     print(
-        f"{i+1:4d} {history_ipc['time'][i]:8.4f} "
+        f"{i + 1:4d} {history_ipc['time'][i]:8.4f} "
         f"{history_ipc['nr_iters'][i]:8d} "
         f"{history_ipc['reaction_x'][i]:14.2f} "
         f"{history_ipc['contact_force_norm'][i]:14.2f} "

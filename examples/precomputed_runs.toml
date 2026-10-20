@@ -1,0 +1,151 @@
+# Examples that are too heavy to run at each documentation build.
+#
+# The documentation build (docs/conf.py) does not execute the examples listed
+# here: their page shows the code and a precomputed animation, with the
+# software versions and the date of the run recorded below.
+#
+# The animations are hosted in the 3MAH/fedoo-docs repository, under
+# ``media_root``. Regenerate them with ``python tools/run_precomputed.py``,
+# which runs the listed examples headless, writes the animations in
+# ``docs/build/precomputed_media/`` and updates the run record of each entry;
+# then copy that folder to ``media/examples/`` in 3MAH/fedoo-docs. Run all the
+# examples with the same fedoo version when preparing a release, so that the
+# recorded versions match.
+#
+# Entry fields
+# ------------
+# path       example script, relative to ``examples/``
+# media      animation file name, relative to ``media_root`` (mp4 or gif)
+# movie      optional table: how to build the animation from a result file,
+#            e.g. {result = "results/tube_compression", field = "P"}; other
+#            keys are passed to MultiFrameDataSet.write_movie. Without it, the
+#            example must write a file named like ``media`` in its folder or
+#            in its ``results`` subfolder.
+# run        run record written by tools/run_precomputed.py; empty until the
+#            example has been run: fedoo version and commit, simcoon, ipctk
+#            and numpy versions, date, machine, wall time in seconds
+
+media_root = "https://3mah.github.io/fedoo-docs/media/examples"
+
+[[example]]
+path = "contact/tube_compression.py"
+media = "contact/tube_compression.gif"
+run = {}
+
+[[example]]
+path = "contact/ipc_tube_compression.py"
+media = "contact/ipc_tube_compression.gif"
+movie = {result = "results/tube_compression_ipc", field = "P", data_type = "Node", framerate = 10}
+run = {}
+
+[[example]]
+path = "contact/ipc_indentation_3d.py"
+media = "contact/ipc_indentation_3d.gif"
+movie = {result = "results/indentation_3d", field = "Stress", component = "vm", data_type = "Node", framerate = 10, elevation = 75, azimuth = 20}
+run = {}
+
+[[example]]
+path = "contact/ipc_punch_indentation.py"
+media = "contact/ipc_punch_indentation.gif"
+movie = {result = "results/punch_ipc", field = "Stress", component = "vm", data_type = "Node", framerate = 10, elevation = 75, azimuth = 20}
+run = {}
+
+[[example]]
+path = "contact/ipc_gyroid_compression.py"
+media = "contact/ipc_gyroid_compression.gif"
+movie = {result = "results/gyroid_ipc", field = "Stress", component = "vm", data_type = "Node", framerate = 10}
+run = {}
+
+[[example]]
+path = "contact/ipc_gyroid_compression_periodic.py"
+media = "contact/ipc_gyroid_compression_periodic.gif"
+movie = {result = "results/gyroid_ipc_periodic", field = "Stress", component = "vm", data_type = "Node", framerate = 10}
+run = {}
+
+[[example]]
+path = "contact/ipc_gyroid_compression_plastic.py"
+media = "contact/ipc_gyroid_compression_plastic.gif"
+movie = {result = "results/gyroid_ipc_plastic", field = "Stress", component = "vm", data_type = "Node", framerate = 10}
+run = {}
+
+[[example]]
+path = "finite_strain/neohookean_cantilever_force.py"
+media = "finite_strain/neohookean_cantilever_force.gif"
+movie = {result = "results/neohookean_cantilever_force", field = "Stress", component = "vm", data_type = "Node"}
+run = {}
+
+[[example]]
+path = "plasticity/plastic_bending_2d.py"
+media = "plasticity/plastic_bending_2d.gif"
+movie = {result = "results/bendingPlastic.fdz", field = "Stress", component = "vm", data_type = "Node", azimuth = 0, elevation = 0}
+run = {}
+
+[[example]]
+path = "plasticity/plastic_bending_2d_from_scratch.py"
+run = {}
+
+[[example]]
+path = "plasticity/plastic_bending_3d.py"
+media = "plasticity/plastic_bending_3d.gif"
+movie = {result = "results/bendingPlastic3D.fdz", field = "Stress", component = "vm", data_type = "Node"}
+run = {}
+
+[[example]]
+path = "plasticity/shear_test.py"
+media = "plasticity/shear_test.gif"
+movie = {result = "results/sheartest_ref", field = "Stress", component = "vm", data_type = "Node"}
+run = {}
+
+[[example]]
+path = "plasticity/torsion_test.py"
+media = "plasticity/torsion_test.gif"
+movie = {result = "results/torsion_test", field = "Stress", component = "vm", data_type = "Node", framerate = 12}
+run = {}
+
+[[example]]
+path = "plasticity/heterogeneous_struct_nl.py"
+media = "plasticity/heterogeneous_struct_nl.gif"
+movie = {result = "results/heterogeneous_struct_nl", field = "Stress", component = "vm", data_type = "Node", azimuth = 0, elevation = 0}
+run = {}
+
+[[example]]
+path = "dynamics/multi_mesh_dynamic_contact.py"
+media = "dynamics/multi_mesh_dynamic_contact.gif"
+movie = {result = "results/ping_pong_multimesh", field = "Stress", component = "vm", data_type = "Node", framerate = 25}
+run = {}
+
+[[example]]
+path = "dynamics/rigid_body_bunny_bounce.py"
+media = "dynamics/rigid_body_bunny_bounce.gif"
+run = {}
+
+[[example]]
+path = "dynamics/rigid_body_cow_bounce.py"
+media = "dynamics/rigid_body_cow_bounce.gif"
+run = {}
+
+[[example]]
+path = "thermal/thermomechanical_weak_coupling_3d.py"
+media = "thermal/thermomechanical_weak_coupling_3d.gif"
+run = {}
+
+[[example]]
+path = "homogenization/fe2_plate_with_hole.py"
+media = "homogenization/fe2_plate_with_hole.gif"
+movie = {result = "results/FE2", field = "Stress", component = "vm", data_type = "Node", azimuth = 0, elevation = 0}
+run = {}
+
+[[example]]
+path = "homogenization/non_periodic_homogenization.py"
+run = {}
+
+[[example]]
+path = "dynamics/rigid_body_bounce_ipc.py"
+media = "dynamics/rigid_body_bounce_ipc.gif"
+run = {}
+
+[[example]]
+path = "dynamics/broberg_dynamic_crack.py"
+media = "dynamics/broberg_dynamic_crack.gif"
+movie = {result = "results/Broberg2D_Dynamic", field = "Stress", component = "YY", data_type = "Node", framerate = 25, azimuth = 0, elevation = 0}
+run = {}

@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 import fedoo as fd
 from fedoo.core.mechanical3d import MechanicalUMAT
@@ -291,3 +292,16 @@ def test_initialize_rejects_an_invalid_manual_statev_shape():
 
     with np.testing.assert_raises_regex(ValueError, "expected \\(2, 3\\)"):
         material.initialize(assembly, SimpleNamespace())
+
+
+def test_corate_on_law_deprecated():
+    # The objective rate belongs to the weak form; setting it on a law is
+    # ignored, and is deprecated before becoming an error.
+    material = fd.constitutivelaw.Simcoon(
+        "ELISO", np.array([210000.0, 0.3, 0.0]), name="corate_law"
+    )
+    with pytest.warns(DeprecationWarning, match="wf.corate"):
+        material.corate = "log"
+    with pytest.warns(DeprecationWarning, match="ignored"):
+        assert material.corate == "log"
+    assert not hasattr(fd.constitutivelaw.ElasticIsotrop(1.0, 0.3), "corate")

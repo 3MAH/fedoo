@@ -124,6 +124,11 @@ for new workflows.
 Mesh Creation Functions
 ===============================
 
+Examples: :ref:`sphx_glr_examples_basic_simple_mesh_generation.py` (built-in
+generators, extrusion and swept geometries) and
+:ref:`sphx_glr_examples_mesh_hessian_recovery.py` (nodal gradient and Hessian
+recovery on a mesh).
+
 .. autosummary::
    :toctree: generated/
 
