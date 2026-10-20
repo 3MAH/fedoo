@@ -213,7 +213,9 @@ def _precomputed_banner(entry):
         "   This example is too heavy to be run at each documentation build.\n"
         f"   {what} precomputed on "
         f"{run.get('date', '?')} with {versions}, in about "
-        f"{run.get('wall_time_s', '?')} s ({run.get('machine', '?')}). Run\n"
+        f"{run.get('wall_time_s', '?')} s ({run.get('machine', '?')}"
+        + (f", BLAS {run['blas']}" if "blas" in run else "")
+        + "). Run\n"
         "   the script to reproduce it with your fedoo version.\n\n"
     )
     if media is None:

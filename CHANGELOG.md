@@ -57,8 +57,12 @@ semantic versioning.
   and their page shows an animation precomputed with
   `tools/run_precomputed.py`, with the fedoo version, date and wall time of
   the run. `tools/run_examples.py` runs the other gallery examples headless
-  and writes a status and timing report; `tools/environment_examples.yml`
-  provides all the optional dependencies of the examples.
+  and writes a status and timing report. `tools/setup_examples_env.py`
+  creates the conda environment of the examples (`tools/environment_examples.yml`
+  plus `fedoo[all]`) with the BLAS and sparse solver suited to the platform:
+  Accelerate and python-mumps on macOS, MKL and pypardiso on x86_64,
+  OpenBLAS and python-mumps on arm64 Linux. Both run scripts record the BLAS
+  variant and warn when it is not the recommended one.
 - `examples/homogenization/getL.py` is merged into
   `periodic_homogenization.py` (octet truss and gyroid cells);
   `examples/PeriodicBoundaryConditions/3D_periodic_BC.py` is merged into
@@ -85,6 +89,9 @@ semantic versioning.
   problems, time integration, meshes, post-processing, weak forms,
   constitutive laws).
 - `environment_doc.yml` installs `gmsh` and `python-gmsh`.
+- `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
+  on Intel Macs, where pypardiso does not work); pypardiso is kept for
+  Linux and Windows x86_64.
 
 ### Fixed
 

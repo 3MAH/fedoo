@@ -31,6 +31,9 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from run_precomputed import blas_variant  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
 REGISTRY = os.path.join(EXAMPLES, "precomputed_runs.toml")
@@ -113,6 +116,7 @@ def main():
         if not paths:
             parser.error(f"no gallery example matches {', '.join(args.paths)}")
     os.makedirs(args.log_dir, exist_ok=True)
+    blas = blas_variant()
 
     rows, failures = [], []
     for i, path in enumerate(paths, 1):
@@ -132,7 +136,7 @@ def main():
         report.write(
             f"# Example runs, {datetime.date.today().isoformat()}\n\n"
             f"fedoo {fedoo_version}, simcoon {simcoon.__version__}, numpy "
-            f"{numpy.__version__}, Python {platform.python_version()}, "
+            f"{numpy.__version__} (BLAS {blas}), Python {platform.python_version()}, "
             f"{platform.system()} {platform.machine()}\n\n"
             f"{sum(s == 'ok' for _, s, _ in rows)}/{len(rows)} ok, total "
             f"{sum(t for _, _, t in rows) / 60:.1f} min\n\n"

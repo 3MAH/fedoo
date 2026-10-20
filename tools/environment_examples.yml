@@ -1,11 +1,15 @@
-# Environment to run all the examples, including the precomputed ones
-# (tools/run_examples.py and tools/run_precomputed.py), on Linux or macOS:
+# Base environment to run all the examples, including the precomputed ones
+# (tools/run_examples.py and tools/run_precomputed.py).
 #
-#     conda env create -f tools/environment_examples.yml
-#     conda activate fedoo-examples
+# Do not create it directly: use, from the repository root,
 #
-# fedoo itself is taken from the source tree (the run scripts put the
-# repository root on PYTHONPATH), so it is not installed here.
+#     python tools/setup_examples_env.py
+#
+# which creates this environment, then installs the BLAS/LAPACK and the sparse
+# solver suited to the platform (Accelerate + python-mumps on macOS, MKL +
+# pypardiso on Linux and Windows x86_64, OpenBLAS + python-mumps on arm64
+# Linux), and finally fedoo itself in editable mode with ``fedoo[all]``.
+# Environment files cannot select packages per platform, hence the script.
 name: fedoo-examples
 
 channels:
@@ -14,21 +18,16 @@ channels:
 
 dependencies:
   - python=3.13
+  # numpy and scipy from conda-forge, linked to the conda libblas chosen by the
+  # setup script; the PyPI wheels bundle their own BLAS
   - numpy>=2
   - scipy
   - h5py
-  - matplotlib
-  - pypardiso # [x86 or x86_64]
-  - python-mumps
-  - vtk>=9.2
-  - pyvista>=0.42
   - simcoon>=2.2
   - gmsh
   - python-gmsh
   - mmg # mmg3d_O3, for util/meshes/make_gyroid_mesh.py
-  - imageio
   - imageio-ffmpeg # mp4 and gif movies
   - pip
   - pip:
-      - ipctk==1.6.0
       - microgen[cad]==2.0.0b1

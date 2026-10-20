@@ -49,6 +49,47 @@ EXAMPLES = os.path.join(ROOT, "examples")
 REGISTRY = os.path.join(EXAMPLES, "precomputed_runs.toml")
 
 
+def blas_variant():
+    """Return the BLAS/LAPACK variant used by numpy, scipy and MUMPS.
+
+    In a conda environment, it is the build of the ``libblas`` package
+    (``accelerate``, ``openblas``, ``mkl``...); otherwise, the BLAS numpy was
+    built with. A warning is printed when it is not the one recommended for
+    the platform (see ``tools/setup_examples_env.py``): Accelerate on macOS,
+    MKL on x86_64.
+    """
+    import glob
+    import json
+
+    variant = None
+    meta = glob.glob(os.path.join(sys.prefix, "conda-meta", "libblas-*.json"))
+    if meta:
+        with open(meta[0]) as file:
+            build = json.load(file)["build"]
+        variant = next(
+            (v for v in ("accelerate", "openblas", "mkl", "blis") if v in build), build
+        )
+    else:
+        import numpy
+
+        try:
+            config = numpy.show_config(mode="dicts")
+            variant = config["Build Dependencies"]["blas"]["name"]
+        except (TypeError, KeyError):
+            variant = "unknown"
+    from setup_examples_env import platform_packages
+
+    expected = platform_packages()[0].rsplit("*", 1)[-1]
+    if expected != "openblas" and expected not in variant.lower():
+        print(
+            f"WARNING: BLAS is {variant!r}, not {expected!r} as recommended on "
+            "this platform; see tools/setup_examples_env.py",
+            file=sys.stderr,
+            flush=True,
+        )
+    return variant
+
+
 def _versions():
     import numpy
     import simcoon
@@ -62,6 +103,7 @@ def _versions():
         "fedoo": fedoo_version,
         "simcoon": simcoon.__version__,
         "numpy": numpy.__version__,
+        "blas": blas_variant(),
     }
     try:
         import ipctk
@@ -167,6 +209,8 @@ def main():
 
     with open(REGISTRY, "rb") as file:
         entries = tomllib.load(file)["example"]
+    if not args.list:
+        blas_variant()  # warn before hours of computation, not after
     if args.list:
         for entry in entries:
             done = entry["run"].get("date", "never run")

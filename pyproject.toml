@@ -36,8 +36,8 @@ all = ['fedoo[solver,plot,test,ipc,io]']
 io = ['meshlane>=5.5.0']
 ipc = ['ipctk>=1.6']
 solver = [
-    'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
-    'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
+    'pypardiso ; platform_system!="Darwin" and platform_machine!="arm64" and platform_machine!="aarch64"',
+    'python-mumps ; platform_system=="Darwin" or platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
     'matplotlib>=3.5',
