@@ -577,8 +577,8 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
   pedagogical purposes, but new transient models should prefer
   problem-level time integrators.
 
-Example: :ref:`sphx_glr_examples_finite_strain_neohookean_cantilever_force.py`
-(Newmark integrator on a :class:`NonLinear` problem).
+Example: :ref:`sphx_glr_examples_finite_strain_neohookean_snap_through.py`
+(Newmark integrator on a :class:`NonLinear` problem, passing a limit point).
 """
 
 from .explicit_dynamic import ExplicitDynamic

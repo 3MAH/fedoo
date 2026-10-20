@@ -69,12 +69,6 @@ movie = {result = "results/gyroid_ipc_plastic", field = "Stress", component = "v
 run = {}
 
 [[example]]
-path = "finite_strain/neohookean_cantilever_force.py"
-media = "finite_strain/neohookean_cantilever_force.gif"
-movie = {result = "results/neohookean_cantilever_force", field = "Stress", component = "vm", data_type = "Node"}
-run = {}
-
-[[example]]
 path = "plasticity/plastic_bending_2d.py"
 media = "plasticity/plastic_bending_2d.gif"
 movie = {result = "results/bendingPlastic.fdz", field = "Stress", component = "vm", data_type = "Node", azimuth = 0, elevation = 0}

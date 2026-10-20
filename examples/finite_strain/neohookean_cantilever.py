@@ -1,11 +1,11 @@
 r"""
-Finite-strain Neo-Hookean cantilever (rigid cap)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Finite-strain Neo-Hookean cantilever (rigid cap, force and displacement control)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A slender, nearly-incompressible cylinder is clamped at its base and bent by a
 transverse load applied to a rigid cap tied to its top face. It is loaded well
 into the large-deflection, finite-strain regime (tip deflection of order the
-cylinder length, ~40 % local strain at the clamped base).
+cylinder length, cap rotated by ~90 degrees).
 
 This exercises the updated-lagrangian hyperelastic path of
 :class:`fedoo.weakform.StressEquilibrium` with a simcoon ``NEOHC`` (compressible
@@ -18,8 +18,41 @@ with :math:`\mu = E/(2(1+\nu))` the shear modulus and
 :math:`\kappa = E/(3(1-2\nu))` the bulk modulus.
 
 The rigid cap is a :class:`fedoo.constraint.RigidTie`: it ties the whole top face
-to six global rigid-body DOFs (``RigidDispX/Y/Z``, ``RigidRotX/Y/Z``). Here the
-cap is driven by prescribing its transverse displacement ``RigidDispX``.
+to six global rigid-body DOFs (``RigidDispX/Y/Z``, ``RigidRotX/Y/Z``). The same
+static problem is solved with the two loading protocols:
+
+* **force control**: a transverse force is applied on ``RigidDispX``
+  (Neumann condition on the cap DOF);
+* **displacement control**: ``RigidDispX`` is prescribed up to the deflection
+  reached under force control, and the reaction force is recovered with
+  :meth:`get_ext_forces`.
+
+Both protocols must follow the same force-deflection curve, which is the
+cross-check plotted at the end.
+
+Force control is the demanding one: the transverse stiffness of the cap is tiny
+(~40 N/m at the origin) and the response stiffens strongly as the cylinder
+aligns with the load, so each Newton step is a large move along a soft bending
+mode. The equilibrium path is nevertheless monotonic (no limit point), so a plain
+static analysis follows it without any inertial or viscous regularization,
+provided that:
+
+* the force increments are small while the structure is soft. From the
+  undeformed state, the linear prediction of a 2 N increment is already a
+  transverse translation of 0.9 L, far outside the convergence basin of
+  Newton's method. The force is therefore ramped quadratically in time (gentle
+  start, larger increments once the cylinder has stiffened); the automatic
+  time stepping (``update_dt=True``) remains as a safety net and would cut an
+  increment that fails;
+* the ``"Force"`` convergence criterion (residual relative to the applied
+  load), which measures equilibrium directly. On a soft mode the norm of the
+  displacement correction says little about the remaining out-of-balance
+  force, so a loose absolute displacement tolerance can accept unbalanced
+  states;
+* the safeguard line search (``mode="safeguard"``), which only rejects trial
+  states with inverted elements and never throttles legitimate large soft-mode
+  steps. A pure residual-descent line search (``mode="minimize"``) would
+  strangle them.
 
 The mesh is read from an Abaqus ``.inp`` deck. Two are provided and give the same
 cap displacement (the peak stress at the clamped base depends on the mesh): a
@@ -27,15 +60,9 @@ cap displacement (the peak stress at the clamped base depends on the mesh): a
 (:class:`fedoo.weakform.StressEquilibriumRI`, which avoids volumetric locking at
 :math:`\nu = 0.49`), and a **quadratic** hex20 mesh solved with full integration
 (:class:`fedoo.weakform.StressEquilibrium`).
-
-Displacement control is used because static *force* control is ill-conditioned
-for such a flexible structure: the cap's transverse stiffness is tiny next to the
-internal stiffness, so a force increment demands a large displacement jump.
-Loading by force is done through implicit dynamics in
-:ref:`sphx_glr_examples_finite_strain_neohookean_cantilever_force.py`, where the
-inertia of the cap regularizes that soft mode.
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 import fedoo as fd
@@ -48,7 +75,7 @@ E, nu = 60e6, 0.49  # Young's modulus [Pa], Poisson's ratio
 mu = E / (2 * (1 + nu))
 kappa = E / (3 * (1 - 2 * nu))
 
-U_CAP = 0.03  # prescribed transverse cap displacement [m] (~0.6 L)
+F_CAP = 20.0  # transverse force on the cap [N]
 
 # "linear"    -> hex8,  reduced integration (StressEquilibriumRI); faster
 # "quadratic" -> hex20, full integration    (StressEquilibrium)
@@ -70,8 +97,8 @@ bottom = mesh.find_nodes("Z", z.min())  # clamped base
 top = mesh.find_nodes("Z", z.max())  # tied to the rigid cap
 
 ###############################################################################
-# Material, weak form, assembly
-# -----------------------------
+# Material and weak form
+# ----------------------
 material = fd.constitutivelaw.Simcoon("NEOHC", [mu, kappa], name="neohookean")
 
 if mesh.elm_type == "hex8":
@@ -82,30 +109,80 @@ else:  # hex20: full integration
 # the initial-stress stiffness is part of the tangent under large rotations;
 # it is assembled by default in finite strain (geometric_stiffness=None)
 
-assembly = fd.Assembly.create(wf, mesh, name="assembly")
 
 ###############################################################################
-# Problem, boundary conditions, solve (displacement control)
-# ----------------------------------------------------------
-pb = fd.problem.NonLinear(assembly)
-pb.set_nr_criterion("Displacement", err0=1.0, tol=1e-3, max_subiter=20)
+# Static solve, either protocol
+# -----------------------------
+def solve(control, value, output=None):
+    """Load the cap by a force [N] or a displacement [m] along X.
 
-results = pb.add_output(
-    "results/neohookean_cantilever", assembly, ["Disp", "Stress", "Strain"]
-)
+    Returns the problem, its output and the (deflection, force) history of
+    the cap, one row per converged increment.
+    """
+    assembly = fd.Assembly.create(wf, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_nr_criterion("Force", tol=1e-4, max_subiter=20)
+    pb.add_line_search(mode="safeguard")  # validity filter, never throttles
 
-pb.bc.add(fd.constraint.RigidTie(top))  # rigid cap on the top face
-pb.bc.add("Dirichlet", bottom, "Disp", 0)  # clamp the base
-pb.bc.add("Dirichlet", "RigidDispX", U_CAP)  # drive the cap transversely
+    results = None
+    if output is not None:
+        results = pb.add_output(output, assembly, ["Disp", "Stress", "Strain"])
 
-pb.nlsolve(dt=0.05, tmax=1.0, update_dt=True, print_info=1, interval_output=0.05)
+    pb.bc.add(fd.constraint.RigidTie(top))  # rigid cap on the top face
+    pb.bc.add("Dirichlet", bottom, "Disp", 0)  # clamp the base
+    if control == "force":
+        # quadratic ramp: small force increments while the structure is soft
+        pb.bc.add("Neumann", "RigidDispX", value, time_func=lambda t: t**2)
+    else:
+        pb.bc.add("Dirichlet", "RigidDispX", value)
+
+    history = [(0.0, 0.0)]
+
+    def record(problem):
+        ux = float(np.ravel(problem.get_dof_solution("RigidDispX"))[0])
+        fx = float(np.ravel(problem.get_ext_forces("RigidDispX"))[0])
+        history.append((ux, fx))
+
+    pb.nlsolve(
+        dt=0.02,
+        tmax=1.0,
+        update_dt=True,
+        dt_max=0.02,
+        print_info=1,
+        interval_output=0.02,
+        callback=record,
+    )
+    return pb, results, np.array(history)
+
+
+pb, results, curve_force = solve("force", F_CAP, output="results/neohookean_cantilever")
+ux_final = curve_force[-1, 0]
+rot_y = float(np.ravel(pb.get_dof_solution("RigidRotY"))[0])
+
+# displacement control up to the same deflection: the reaction must match
+_, _, curve_disp = solve("displacement", ux_final)
 
 ###############################################################################
 # Post-processing
 # ---------------
+print(
+    f"\nforce control       : F = {F_CAP:.2f} N -> ux = {ux_final * 1000:.2f} mm "
+    f"({ux_final / L:.3f} L), rotY = {np.degrees(rot_y):.1f} deg"
+)
+print(
+    f"displacement control: ux = {curve_disp[-1, 0] * 1000:.2f} mm "
+    f"-> F = {curve_disp[-1, 1]:.2f} N"
+)
+
 results.load(results.n_iter - 1)  # last (fully-loaded) increment
-disp = results.get_data("Disp", None, "Node")
-print(f"max |displacement| : {np.linalg.norm(disp, axis=0).max():.4e} m  (L = {L})")
 print(f"max von Mises stress: {results.get_data('Stress', 'vm', 'Node').max():.4e} Pa")
+
+fig, ax = plt.subplots()
+ax.plot(curve_disp[:, 0] * 1000, curve_disp[:, 1], "-", label="displacement control")
+ax.plot(curve_force[:, 0] * 1000, curve_force[:, 1], "o", label="force control")
+ax.set_xlabel("cap deflection [mm]")
+ax.set_ylabel("transverse force [N]")
+ax.legend()
+plt.show()
 
 results.plot("Stress", component="vm", data_type="Node", show=True)

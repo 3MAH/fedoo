@@ -70,6 +70,12 @@ semantic versioning.
   is merged into `thermomechanical_weak_coupling_3d.py`, which now writes its
   own animation; the unused `examples/homogenization/data/` folder and
   `examples/thermal/octet_surf.msh` are removed.
+- `examples/finite_strain/neohookean_cantilever_force.py` is merged into
+  `neohookean_cantilever.py`, which now solves the cantilever statically under
+  both force and displacement control and compares the two curves; implicit
+  dynamics is no longer needed there. The new `neohookean_snap_through.py`
+  shows where it is: a compressed blade whose static force-controlled path
+  ends at a limit point, passed with a Newmark integrator.
 - `examples/FE2/test_fe2.py` and
   `examples/models/axisymmetric/thick_cylinder_inflation_axi.py` are moved to
   `tests/test_fe2.py` and `tests/test_thick_cylinder_inflation_axi.py`.

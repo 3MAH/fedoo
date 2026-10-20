@@ -107,7 +107,7 @@ which is equivalent to:
 
 Examples: :ref:`sphx_glr_examples_dynamics_rigid_body_bounce.py`,
 :ref:`sphx_glr_examples_dynamics_multi_mesh_dynamic_contact.py` and
-:ref:`sphx_glr_examples_finite_strain_neohookean_cantilever_force.py`.
+:ref:`sphx_glr_examples_finite_strain_neohookean_snap_through.py`.
 
 Explicit second-order schemes
 =============================
