@@ -338,8 +338,18 @@ The following parameters can be adjusted via :meth:`NonLinear.set_nr_criterion` 
   in fewer iterations than this value, the time step ``dt`` is increased.
 * **check_early_divergence**: If ``True``, the solver aborts the increment if the 
   error spikes to 100 times the previous iteration error (or becomes ``NaN`` 
-  or ``inf``), or if the error increases/stagnates (less than 0.1% decrease) for 4 
-  consecutive iterations.
+  or ``inf``), or if the error increases/stagnates (less than 0.1% decrease) for
+  ``early_divergence_niter`` consecutive iterations (default: 4).
+  With automatic beam or shell tangents, stagnation instead means that many iterations
+  without a 1% improvement of a reference error, after
+  activating the consistent tangent. Adaptive stiffness, when enabled, gets
+  an opportunity to recover before the stagnation abort. See below.
+* **early_divergence_niter**: Positive integer, default ``4``. Controls the
+  nonproductive-iteration count before early rejection, for example
+  ``problem.set_nr_criterion("Force", early_divergence_niter=8)``. This setting
+  does not change the tangent-switch or adaptive stiffness thresholds, the
+  immediate failure checks, or ``max_subiter``. It is ignored when
+  ``check_early_divergence=False``.
 * **norm_type**: Defines the mathematical norm used to compute the error.
   (default: ``2`` for Euclidean) 
 
@@ -518,6 +528,43 @@ lead to non-physical states or divergence.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Useful for elastoplasticity or damage modeling where a sudden change in 
 direction requires a "safe" search direction.
+
+* **Automatic Consistent Beam and Shell Tangents**:
+    * **Usage**: Set ``consistent_tangent=None`` on
+      :class:`fedoo.weakform.PlateEquilibrium` or
+      :class:`fedoo.weakform.PlateEquilibriumFI`, or
+      :class:`fedoo.weakform.BeamEquilibrium` with ``nlgeom=True`` (UL).
+      ``False`` always uses the historical approximate tangent; ``True`` always
+      uses the complete consistent tangent. Beams support standard two-node
+      ``beam`` elements in 2D and 3D, with Bernoulli or Timoshenko kinematics.
+      Alternative beam interpolations and ``geometric_stiffness=False`` retain
+      their historical tangent. Unrelated weak forms, including contact and
+      damping, are ignored by the switching mechanism. Eligible beam and shell
+      assemblies switch together when used in the same problem; activation is
+      stored per assembly, so sharing a weak form between problems does not
+      share the runtime switch.
+    * **Progress monitoring**: The first evaluated Newton error establishes a
+      reference. An error at least 1% below that reference replaces it and
+      resets the nonproductive-iteration counter. Smaller decreases and
+      oscillations count as nonproductive. Three such iterations activate the
+      consistent tangent at the current iterate, without restarting the
+      increment. The earliest switch is iteration four. For example, errors
+      ``0.09261, 0.02166, 0.00904, 0.01427, 0.00939, 0.03107`` trigger the
+      switch at iteration six.
+    * **After switching**: The current error becomes a fresh reference and all
+      progress counters reset. Four further nonproductive iterations trigger
+      adaptive stiffness if enabled and available. Early rejection uses
+      ``early_divergence_niter`` (default: four) when
+      ``check_early_divergence=True``. The reference and counter
+      reset again when adaptive stiffness activates. The consistent tangent
+      remains active for the rest of the attempt. Every new increment attempt,
+      including a retry after time-step reduction, starts with the approximate
+      tangent again.
+    * **Safeguards**: Convergence and invalid-geometry checks still run at every
+      iteration. With ``check_early_divergence=True``, nonfinite errors and
+      errors greater than 100 times the previous error still cause immediate
+      failure. The progress rule uses the selected normalized NR error and
+      does not change its normalization or the convergence tolerance.
 
 * **Adaptive Stiffness (Blending)**:
     * **Mechanism**: Blends the tangent matrix :math:`\mathbf{K_T}` with the 

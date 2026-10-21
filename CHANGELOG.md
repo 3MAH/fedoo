@@ -8,6 +8,42 @@ semantic versioning.
 
 ### Added
 
+- Automatic consistent tangents with `consistent_tangent=None` for supported
+  updated Lagrangian beams and shells. Each increment attempt starts with the
+  historical tangent and switches at the current iterate after three iterations
+  without a 1% improvement of the reference Newton error. Activation is stored
+  per assembly, including shared weak forms and assembly sums; explicit `True`
+  and `False` retain their always-consistent and historical behavior.
+- Configurable `early_divergence_niter` in `NonLinear.set_nr_criterion`
+  (positive integer, default 4) to control stagnation-based early rejection
+  independently of the tangent-switch and adaptive-stiffness thresholds.
+- FDH5 compression selection through `add_output` and `DataSet.to_fdh5`:
+  `True` uses gzip level 4, `False` disables compression, and integers 0-9
+  select the gzip level. Invalid settings and conflicting settings for
+  registrations sharing an output file are rejected. Appending preserves
+  existing datasets and applies the selected compression to new datasets.
+
+### Changed
+
+- `add_output` now defaults to `compressed=True`. FDH5 retains its previous
+  default gzip level 4, but honors explicit `False` and integer levels instead
+  of ignoring the option. Other formats supporting the boolean compression
+  option now also default to compressed output.
+- Automatic beam/shell tangent switching tracks significant improvement
+  against a reference error so oscillations do not conceal stagnation. Switching
+  resets the progress counters, and adaptive stiffness gets an opportunity to
+  recover before stagnation-based rejection. Immediate divergence safeguards
+  remain active when `check_early_divergence=True`.
+- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
+  used in finite strain without `lnJ`.
+
+### Fixed
+
+- Residual line-search trials now scale the incremental rotation correction
+  together with the trial displacement and restore it afterward. Previously,
+  corotational beams and shells used the full rotation correction for reduced
+  trial steps, producing inconsistent residual evaluations and impairing
+  convergence.
 - `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
   centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
   `lin2` mesh directly instead of extracting its surface. With `dmin` equal
@@ -32,14 +68,6 @@ semantic versioning.
   includes the hoop component. New example: axisymmetric indentation of a hyperelastic soft
   tissue by a rigid spherical indenter (`RigidTie2D` and `IPCContact`),
   with poroelastic force relaxation.
-
-### Changed
-
-- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
-  used in finite strain without `lnJ`.
-
-### Fixed
-
 - **Taylor-Hood elements built with `CombinedElement`** (quadratic `u`,
   linear pressure, e.g. `hex20`/`hex8`): the operators of the linear
   sub-element were allocated with `np.empty` and only their vertex columns

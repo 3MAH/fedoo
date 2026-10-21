@@ -2450,6 +2450,7 @@ class DataSet:
         filename: str,
         iteration: int = 0,
         overwrite: bool = False,
+        compressed: bool | int = True,
     ) -> None:
         """Write the dataset to a FDH5 file.
 
@@ -2463,6 +2464,10 @@ class DataSet:
         overwrite : bool, default=False
             If True, an existing file is removed before writing. If False, the
             mesh is kept and only the requested iteration is added or replaced.
+        compressed : bool or int, default=True
+            True uses gzip level 4; False disables compression. Integers 0-9
+            select the gzip level (0 uses the gzip filter without compression).
+            Applies to newly written datasets, not existing iterations.
 
         Notes
         -----
@@ -2471,7 +2476,13 @@ class DataSet:
         written under ``submesh_0``.
         """
 
-        write_dataset(self, filename, iteration=iteration, overwrite=overwrite)
+        write_dataset(
+            self,
+            filename,
+            iteration=iteration,
+            overwrite=overwrite,
+            compressed=compressed,
+        )
 
     def savez(self, filename: str, save_mesh: bool = False) -> None:
         """Write a npz file using the numpy savez function.

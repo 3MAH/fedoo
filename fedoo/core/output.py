@@ -4,7 +4,7 @@ from fedoo.util.beam_recovery import (
     validate_positions,
     SectionRecoveryUnavailable,
 )
-from fedoo.util.fdh5 import FDH5Reader
+from fedoo.util.fdh5 import FDH5Reader, CompressionConfig
 
 import numpy as np
 
@@ -972,7 +972,7 @@ class _ProblemOutput:
         output_list,
         output_type=None,
         file_format="fdh5",
-        compressed=False,
+        compressed=True,
         position=None,
         element_set=None,
         save_mesh=True,
@@ -997,6 +997,9 @@ class _ProblemOutput:
             filename = os.path.splitext(filename)[
                 0
             ]  # remove extension for the base name
+
+        if file_format == "fdh5":
+            compression = CompressionConfig.from_compressed(compressed)
 
         if include_static_obstacles and file_format != "fdh5":
             raise ValueError(
@@ -1064,6 +1067,11 @@ class _ProblemOutput:
             full_filename = filename + ".fdh5"
             state = self._multiframe_files.get(full_filename)
             if state is not None:
+                if state["compression"] != compression:
+                    raise ValueError(
+                        f"Output file {full_filename!r} is already registered "
+                        "with different compression settings."
+                    )
                 if state["write_mode"] != write_mode:
                     raise ValueError(
                         f"Output file {full_filename!r} is already registered "
@@ -1084,6 +1092,7 @@ class _ProblemOutput:
                     ]
 
                 state = {
+                    "compression": compression,
                     "write_mode": write_mode,
                     "next_iteration": max(iterations, default=-1) + 1,
                     "has_written": False,
@@ -1219,6 +1228,7 @@ class _ProblemOutput:
                     list_full_filename[i],
                     iteration=iteration,
                     overwrite=(first_write and state["write_mode"] == "overwrite"),
+                    compressed=list_compressed[i],
                 )
                 self.data_sets[list_filename[i]].list_data.append(
                     ("fdh5", list_full_filename[i], iteration)
