@@ -34,6 +34,8 @@ semantic versioning.
   resets the progress counters, and adaptive stiffness gets an opportunity to
   recover before stagnation-based rejection. Immediate divergence safeguards
   remain active when `check_early_divergence=True`.
+- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
+  used in finite strain without `lnJ`.
 
 ### Fixed
 
@@ -42,6 +44,47 @@ semantic versioning.
   corotational beams and shells used the full rotation correction for reduced
   trial steps, producing inconsistent residual evaluations and impairing
   convergence.
+- `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
+  centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
+  `lin2` mesh directly instead of extracting its surface. With `dmin` equal
+  to the fiber diameter, this models contact between equal-radius rods.
+- Finite-strain Biot poromechanics. In `nlgeom="UL"` the pore-stress
+  coupling now includes its geometric tangent. `nlgeom="TL"` is now the exact
+  pull-back of UL and gives the same solution. The momentum coupling is
+  -alpha p J C^{-1}:delta E, the storage and coupling terms of the mass
+  balance carry the J of dv = J dV, and the mobility is pulled back to
+  (k/mu) J C^{-1}. `PoroMechanicsSimple` now computes `lnJ`, so
+  deformation-dependent permeabilities (Holmes-Mow, Kozeny-Carman) receive
+  the current J.
+- Poromechanics documentation page (`docs/poromechanics.rst`) and a
+  Poromechanics section in the example gallery: Terzaghi consolidation
+  compared with the analytical series, finite-strain consolidation of a
+  Neo-Hookean skeleton, and the Taylor-Hood example.
+  `PoroMechanics`, `PoroMechanicsSimple`, `PoroFluidProperties` and the
+  permeability models are now listed in the API reference.
+- `2Daxi` support for the poromechanics weak forms, in small strain and UL.
+  The Biot coupling and the storage term include the hoop strain, all terms
+  carry the 2*pi*r measure, and the UL geometric tangent of the pore stress
+  includes the hoop component. New example: axisymmetric indentation of a hyperelastic soft
+  tissue by a rigid spherical indenter (`RigidTie2D` and `IPCContact`),
+  with poroelastic force relaxation.
+- **Taylor-Hood elements built with `CombinedElement`** (quadratic `u`,
+  linear pressure, e.g. `hex20`/`hex8`): the operators of the linear
+  sub-element were allocated with `np.empty` and only their vertex columns
+  were filled, so the mid-side columns held uninitialised memory. The
+  global matrix then coupled the pressure of mid-side nodes to the
+  displacement, giving wrong pressures or "numerically singular" failures
+  that depended on the run (affects `PoroMechanicsSimple`,
+  `PoroMechanics` and `StressEquilibriumMixed` with a linear pressure).
+  The operators are now zero there, and the DOFs that no element
+  interpolates (pressure at mid-side nodes) are blocked at 0
+  automatically. The Taylor-Hood example now compares an undrained strip
+  footing with its analytical solution.
+- `PoroDarcy` in `nlgeom="UL"`: the pore-pressure gradient of the residual
+  was computed on the reference mesh instead of the current one. The
+  residual missed a factor of order J, while the tangent used the current
+  mesh. Transient finite-strain consolidation was wrong by about the strain
+  level (5 % at 5 % compression), but drained states were not affected.
 
 ## [1.1.0] - 2026-10-14
 

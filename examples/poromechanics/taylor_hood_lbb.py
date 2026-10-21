@@ -1,22 +1,30 @@
-"""Inf-sup (LBB) stable mixed / poromechanics elements in fedoo (Taylor-Hood).
+r"""
+Inf-sup (LBB) stable elements: Taylor-Hood interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The mixed displacement-pressure and the Biot u-PorePressure saddle systems need
-an inf-sup (LBB) stable interpolation pair. Equal-order pairs (displacement and
-pressure interpolated identically) violate the LBB condition and pollute the
-pressure with spurious "checkerboard" modes.
+In the undrained limit (nearly incompressible fluid, no time to drain), the
+pore pressure enforces a volume constraint and the Biot system becomes a
+saddle-point problem. Its discretization is stable only if the pair of
+displacement and pressure interpolations satisfies the inf-sup (LBB)
+condition. Equal-order pairs (same element for both fields) violate it, and
+the pressure shows spurious node-to-node oscillations ("checkerboard").
 
-fedoo supports a DIFFERENT interpolation order per variable -- so a Taylor-Hood
-pair (quadratic displacement, linear pressure) needs no new machinery:
+A Taylor-Hood pair (quadratic displacement, linear pressure) satisfies it. In
+fedoo it is built with a :py:class:`~fedoo.lib_elements.CombinedElement`::
 
-    elm = fd.lib_elements.element_list.CombinedElement("quad8lbb", "quad8")
-    elm.set_variable_interpolation("Pressure", "quad4")          # one order lower
+    elm = fd.lib_elements.CombinedElement("quad8lbb", "quad8")
+    elm.set_variable_interpolation("PorePressure", "quad4")
     assembly = fd.Assembly.create(wf, mesh_quad8, elm_type="quad8lbb")
 
-Part A compares, on the SAME quad8 mesh and SAME quadratic displacement, the
-equal-order pressure (quad8) and the Taylor-Hood pressure (quad4) on a nearly
-incompressible problem -- the equal-order pressure shows larger (checkerboard)
-extrema. Part B uses a Taylor-Hood poro element (hex20 / hex8) and recovers the
-exact undrained Biot pressure.
+The pressure DOFs of the mid-side nodes, which the linear pressure does not
+use, are eliminated automatically.
+
+Part A loads a strip footing on an undrained half-space (incompressible
+constituents) and compares the pore pressure on the axis with the elastic
+solution :math:`p = (2q/\pi)\arctan(b/z)`: Taylor-Hood (quad8/quad4)
+against equal order (quad4/quad4) with the same pressure resolution. Part B
+recovers the exact undrained Biot pressure with a 3D Taylor-Hood element
+(hex20/hex8). Runs in a few seconds.
 """
 
 import numpy as np
@@ -25,71 +33,61 @@ import fedoo as fd
 
 
 # ----------------------------------------------------------------------
-# Part A - nearly-incompressible mixed elasticity: pressure smoothness
+# Part A - undrained strip footing: Taylor-Hood vs equal order
 # ----------------------------------------------------------------------
-def mixed_cantilever(pressure_elm, name, nu=0.49999):
-    """Plane-strain cantilever bending. pressure_elm in {"quad8","quad4"}."""
-    E = 1.0
-    K = E / (3 * (1 - 2 * nu))
-    fd.ModelingSpace("2Dplane")
-    mesh = fd.mesh.rectangle_mesh(
-        nx=25,
-        ny=9,
-        x_min=0,
-        x_max=4,
-        y_min=0,
-        y_max=1,
-        elm_type="quad8",
-        name="beam_" + name,
+def strip_footing(taylor_hood, n=32, b=1.0, size=8.0, q=1.0e3):
+    """Pore pressure on the axis under a strip load q of half-width b."""
+    fd.ModelingSpace("2D")
+    if taylor_hood:
+        mesh = fd.mesh.rectangle_mesh(
+            n // 2 + 1, n // 2 + 1, 0, size, -size, 0, "quad8"
+        )
+        elm = fd.lib_elements.CombinedElement("quad8lbb", "quad8")
+        elm.set_variable_interpolation("PorePressure", "quad4")
+        elm_type = "quad8lbb"
+    else:  # same number of pressure nodes
+        mesh = fd.mesh.rectangle_mesh(n + 1, n + 1, 0, size, -size, 0, "quad4")
+        elm_type = "quad4"
+    # biot_modulus=None: incompressible fluid; tiny permeability and time step
+    fluid = fd.constitutivelaw.PoroFluidProperties(permeability=1e-12)
+    wf = fd.weakform.PoroMechanicsSimple(
+        fd.constitutivelaw.ElasticIsotrop(1e6, 0.3), fluid, nlgeom=False
     )
-    mat = fd.constitutivelaw.ElasticIsotrop(E, nu, name="mat_" + name)
-    wf = fd.weakform.StressEquilibriumMixed(
-        mat, bulk_modulus=K, nlgeom=False, name="wf_" + name
-    )
-    if pressure_elm == "quad4":  # Taylor-Hood Q2-Q1
-        elm = fd.lib_elements.element_list.CombinedElement(name, "quad8")
-        elm.set_variable_interpolation("Pressure", "quad4")
-        elm_type = name
-    else:  # equal order Q2-Q2
-        elm_type = "quad8"
-    asm = fd.Assembly.create(wf, mesh, elm_type=elm_type, name="asm_" + name)
-    pb = fd.problem.NonLinear("asm_" + name)
-    pb.set_nr_criterion("Displacement", tol=1e-4, max_subiter=40)
-    pb.bc.add("Dirichlet", mesh.find_nodes("X", 0.0), "DispX", 0.0)
-    pb.bc.add("Dirichlet", mesh.find_nodes("X", 0.0), "DispY", 0.0)
-    pb.bc.add(
-        "Dirichlet",
-        mesh.find_nodes("X", 4.0),
-        "DispY",
-        -0.05,
-        time_func=lambda tf: min(1.0, tf * 1e9),
-    )
-    pb.initialize()
-    pb.tmax = 1.0
-    pb.dtime = 1.0
-    pb.set_start()
-    pb.time = 0.0
-    pb.solve_time_increment()
-    p_gp = np.asarray(
-        asm.get_gp_results(pb.space.variable("Pressure"), pb.get_dof_solution())
-    ).ravel()
-    return p_gp
+    asm = fd.Assembly.create(wf, mesh, elm_type=elm_type)
+    top = mesh.find_nodes("Y", 0.0)
+    loaded = top[mesh.nodes[top, 0] <= b + 1e-9]
+    load = fd.constraint.Pressure.from_nodes(mesh, loaded, q, initial_pressure=q)
+    pb = fd.problem.NonLinear(asm + load)
+    pb.bc.add("Dirichlet", "left", "DispX", 0)  # symmetry axis
+    pb.bc.add("Dirichlet", "right", "DispX", 0)
+    pb.bc.add("Dirichlet", "bottom", "Disp", 0)
+    pb.nlsolve(dt=1e-6, tmax=1e-6, update_dt=False, print_info=0)
+
+    pressure = pb.get_dof_solution("PorePressure")
+    vertices = np.unique(mesh.elements[:, :4])
+    axis = vertices[np.isclose(mesh.nodes[vertices, 0], 0)]
+    depth = -mesh.nodes[axis, 1]
+    order = np.argsort(depth)
+    return depth[order], pressure[axis][order] / q
 
 
 print("=" * 70)
-print(" Part A - nearly incompressible mixed elasticity (nu = 0.49999)")
-print(" same quad8 mesh & quadratic displacement; only the Pressure order differs")
+print(" Part A - undrained strip footing, pore pressure p/q on the axis")
 print("=" * 70)
-# Taylor-Hood here (well posed). The equal-order run is deferred to the very end
-# because the LBB-deficient saddle is singular and its failed factorization
-# pollutes the shared in-process direct solver.
-p_th = mixed_cantilever("quad4", "q8th")  # Taylor-Hood Q2-Q1
+z, p_th = strip_footing(taylor_hood=True)
+z_eq, p_eq = strip_footing(taylor_hood=False)
+for depth in (0.5, 1.0, 1.5, 2.0):
+    i, j = np.argmin(abs(z - depth)), np.argmin(abs(z_eq - depth))
+    exact = 2 / np.pi * np.arctan(1.0 / depth)
+    print(
+        f"  z/b = {depth:3.1f}: exact {exact:.3f} | Taylor-Hood {p_th[i]:.3f}"
+        f" | equal order {p_eq[j]:.3f}"
+    )
 print(
-    f"  Taylor-Hood Q2-Q1 (Pressure quad4): well posed, smooth pressure, "
-    f"extrema [{p_th.min():+.4g}, {p_th.max():+.4g}]"
+    "  equal order, consecutive axis nodes near z = b:",
+    np.round(p_eq[(z_eq > 0.4) & (z_eq < 1.4)], 3),
+    "-> checkerboard",
 )
-print("  equal order Q2-Q2 (Pressure quad8): see end of script.")
-
 
 # ----------------------------------------------------------------------
 # Part B - Taylor-Hood poromechanics (hex20 displacement / hex8 PorePressure)
@@ -124,7 +122,7 @@ fluid = fd.constitutivelaw.PoroFluidProperties(
 )
 wf = fd.weakform.PoroMechanicsSimple(skel, fluid, nlgeom=False, name="poro")
 
-elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")
+elm = fd.lib_elements.CombinedElement("hex20lbb", "hex20")
 elm.set_variable_interpolation("PorePressure", "hex8")
 asm = fd.Assembly.create(wf, mesh, elm_type="hex20lbb", name="poroTH")
 
@@ -163,21 +161,4 @@ print(
 )
 print(f"  analytical  p0 = -alpha*M*tr(eps) = {-alpha * M * dz / L:.5g} Pa  (match)")
 
-# ----------------------------------------------------------------------
-# Equal-order LBB failure (run LAST: it is singular and corrupts the solver)
-# ----------------------------------------------------------------------
-print("\n" + "=" * 70)
-print(" Equal-order Q2-Q2 on the Part A problem (LBB-deficient)")
-print("=" * 70)
-try:
-    p_eq = mixed_cantilever("quad8", "q8eq")
-    print(
-        f"  solved, but gp pressure extrema [{p_eq.min():+.4g}, {p_eq.max():+.4g}] "
-        f"({np.max(np.abs(p_eq)) / np.max(np.abs(p_th)):.2f}x the Taylor-Hood "
-        f"extrema -> checkerboard pollution)"
-    )
-except Exception as e:
-    print(f"  *** {type(e).__name__}: {str(e)[:55]} ***")
-    print("  -> SINGULAR saddle: the textbook inf-sup (LBB) failure that the")
-    print("     Taylor-Hood pair above avoids on the very same mesh.")
 print("\nDONE")

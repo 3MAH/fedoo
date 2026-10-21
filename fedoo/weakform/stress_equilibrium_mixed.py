@@ -1,5 +1,6 @@
 """Mixed Stress Equilibrium weak form."""
 
+from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
 from fedoo.weakform.stress_equilibrium import (
     StressEquilibrium,
     _check_F_validity,
@@ -87,10 +88,8 @@ class StressEquilibriumMixed(StressEquilibrium):
             initial_stress = assembly.sv["Stress"]
 
             if self.space.is_axisymmetric:
-                rr = assembly.sv["_R_gausspoints"]
-                eps[2] = self.space.variable("DispX") * np.divide(
-                    1, rr, out=np.zeros_like(rr), where=rr != 0
-                )
+                rr = axi_radius(assembly)
+                eps[2] = axi_hoop_strain_op(self.space, rr)
 
         # -----------------------------------------------------------
         # 2. Decompose Stress and Tangent Matrix
