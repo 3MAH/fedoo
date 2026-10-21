@@ -169,17 +169,9 @@ def _mesh_with_static_obstacles(assemb, element_set=None):
     """Build an output MultiMesh containing results and static geometry."""
     result_mesh = _output_mesh_for_assembly(assemb, element_set)
 
-    def leaf_assemblies(assembly):
-        children = getattr(assembly, "list_assembly", None)
-        if children is None:
-            yield assembly
-        else:
-            for child in children:
-                yield from leaf_assemblies(child)
-
     obstacles = []
     seen = set()
-    for sub_assemb in leaf_assemblies(assemb):
+    for sub_assemb in assemb.iter_leaf():
         obstacle = getattr(sub_assemb, "_ipc_obstacle_mesh", None)
         if obstacle is None:
             continue

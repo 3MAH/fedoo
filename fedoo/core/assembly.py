@@ -1036,9 +1036,12 @@ class Assembly(AssemblyBase):
                 nb_dir_deriv + n_diff_interpolations
             )  # nombre d'opérateur à discrétiser
 
+            # zeros, not empty: a sub-element of a CombinedElement (linear
+            # pressure on a quadratic mesh) fills only its n_interpol_nodes
+            # columns, the others must be exact zeros.
             data = [
                 [
-                    np.empty((n_elements, n_elm_gp, n_elm_nodes))
+                    np.zeros((n_elements, n_elm_gp, n_elm_nodes))
                     for j in range(NbDoFperNode)
                 ]
                 for i in range(nop)
