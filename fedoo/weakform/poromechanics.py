@@ -29,6 +29,11 @@ import warnings
 import numpy as np
 
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.weakform._axi_utils import (
+    axi_hoop_strain_op,
+    axi_radius,
+    axi_volume_weight,
+)
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.weakform.stress_equilibrium_mixed import StressEquilibriumMixed
 
@@ -111,7 +116,34 @@ def _cinv_from_dlnJ_weights(m_vol):
     ]
 
 
-def _ul_pore_geometric_tangent(space, p_tilde):
+def _vol_strain_ops(space, assembly):
+    """Operators whose sum is ``tr(delta_eps)`` (small strain and UL).
+
+    In ``2Daxi`` the hoop component ``u_r / r`` is added, since
+    ``op_strain`` leaves its slot 2 empty.
+    """
+    eps = space.op_strain()
+    ops = [eps[i] for i in range(3) if eps[i] != 0]
+    if space.is_axisymmetric:
+        ops.append(axi_hoop_strain_op(space, axi_radius(assembly)))
+    return ops
+
+
+def _tr_eps_gp(space, assembly, disp):
+    """Small-strain ``tr(eps)`` at gauss points, hoop strain included."""
+    eps = space.op_strain()
+    tr_eps = 0
+    for i in range(3):
+        if eps[i] != 0:
+            tr_eps = tr_eps + assembly.get_gp_results(eps[i], disp)
+    if space.is_axisymmetric:
+        rr = axi_radius(assembly)
+        u_r = assembly.get_gp_results(space.variable("DispX"), disp)
+        tr_eps = tr_eps + np.divide(u_r, rr, out=np.zeros_like(rr), where=rr != 0)
+    return tr_eps
+
+
+def _ul_pore_geometric_tangent(space, p_tilde, rr=None):
     """Geometric (initial-stress-like) tangent of the pore stress in UL.
 
     In updated Lagrangian the coupling residual is assembled on the
@@ -132,6 +164,9 @@ def _ul_pore_geometric_tangent(space, p_tilde):
     ``op_strain``. This is a tangent-only (matrix) contribution: it cannot
     change the converged solution, only restore Newton convergence — without
     it the tangent error grows with p and Newton stalls at finite strain.
+
+    In ``2Daxi`` (``rr`` given) the hoop component ``u_r / r`` of the
+    displacement gradient is added to both terms.
     """
     gu = space.op_grad_u()
     diff_op = 0
@@ -140,6 +175,10 @@ def _ul_pore_geometric_tangent(space, p_tilde):
             if gu[k][l] != 0 and gu[l][k] != 0:
                 diff_op += gu[k][l].virtual * (gu[l][k] * p_tilde)
     tr_op = space.op_div_u()
+    if rr is not None:
+        hoop = axi_hoop_strain_op(space, rr)
+        diff_op += hoop.virtual * (hoop * p_tilde)
+        tr_op = tr_op + hoop
     diff_op -= tr_op.virtual * (tr_op * p_tilde)
     return diff_op
 
@@ -175,17 +214,21 @@ def _biot_coupling_diff_op(space, assembly, alpha):
         if m_vol is not None:
             J = np.exp(assembly.sv["lnJ"])
             m_vol = [J * m for m in m_vol]
-    else:
-        eps = space.op_strain()
 
     if m_vol is None:
-        diff_op = -alpha * sum(
-            [0 if eps[i] == 0 else eps[i].virtual * p_pore_total for i in range(3)]
-        )
+        if assembly._nlgeom == "TL":  # fallback when C is not available
+            vol_ops = [eps[i] for i in range(3) if eps[i] != 0]
+        else:  # tr(delta_eps), with the hoop strain in 2Daxi
+            vol_ops = _vol_strain_ops(space, assembly)
+        diff_op = -alpha * sum([op.virtual * p_pore_total for op in vol_ops])
+        rr = axi_radius(assembly) if space.is_axisymmetric else None
         if assembly._nlgeom == "UL" and not (
             np.isscalar(p_pore_curr) and p_pore_curr == 0
         ):
-            diff_op += _ul_pore_geometric_tangent(space, alpha * p_pore_curr)
+            diff_op += _ul_pore_geometric_tangent(space, alpha * p_pore_curr, rr)
+        if rr is not None:
+            # same 2*pi*r measure as StressEquilibrium (current radius in UL)
+            diff_op = diff_op * ((2 * np.pi) * rr)
     else:
         diff_op = -alpha * sum(
             [
@@ -234,6 +277,7 @@ class PoroMomentum(StressEquilibriumMixed):
     name : str, default ""
     nlgeom : bool or {'TL', 'UL'}, optional
         Geometric non-linearity flag.
+        ``"2Daxi"`` supports small strain and ``"UL"``; ``"TL"`` raises.
     space : ModelingSpace, optional
     """
 
@@ -257,13 +301,6 @@ class PoroMomentum(StressEquilibriumMixed):
         )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
-        if self.space._dimension == "2Daxi":
-            # The parent supports 2Daxi, but the Biot coupling terms added
-            # here carry neither the 2*pi*r integration weight nor the hoop
-            # strain contribution: refuse rather than assemble silently wrong.
-            raise NotImplementedError(
-                "PoroMomentum is not implemented for the '2Daxi' modeling space."
-            )
         # The Biot u-PorePressure coupling is genuinely one-sided (it only
         # writes the upper [Disp][PorePressure] block). StressEquilibrium
         # defaults assume_sym=True, which would mirror that block into a
@@ -307,12 +344,7 @@ class PoroMomentum(StressEquilibriumMixed):
                 # sv["F"] holds the isochoric F_bar in the mixed formulation.
                 _comp_dlnJ_weights(assembly, f_is_isochoric=True)
         else:
-            eps_op = self.space.op_strain()
-            tr_eps = 0
-            for i in range(3):
-                if eps_op[i] != 0:
-                    tr_eps = tr_eps + assembly.get_gp_results(eps_op[i], disp)
-            assembly.sv["_tr_eps_gp"] = tr_eps
+            assembly.sv["_tr_eps_gp"] = _tr_eps_gp(self.space, assembly, disp)
 
 
 # ----------------------------------------------------------------------
@@ -336,11 +368,6 @@ class PoroDarcy(WeakFormBase):
 
     def __init__(self, fluid_props, name="", space=None):
         WeakFormBase.__init__(self, name, space)
-        if self.space._dimension == "2Daxi":
-            raise NotImplementedError(
-                "PoroDarcy is not implemented for the '2Daxi' modeling space."
-            )
-
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
 
@@ -451,6 +478,8 @@ class PoroDarcy(WeakFormBase):
                 for i in range(3)
             ]
         )
+        if self.space.is_axisymmetric:
+            diff_op = diff_op * axi_volume_weight(assembly)
         return diff_op
 
 
@@ -485,11 +514,6 @@ class PoroMassStorage(WeakFormBase):
 
     def __init__(self, fluid_props, name="", space=None):
         WeakFormBase.__init__(self, name, space)
-        if self.space._dimension == "2Daxi":
-            raise NotImplementedError(
-                "PoroMassStorage is not implemented for the '2Daxi' modeling space."
-            )
-
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
 
@@ -540,12 +564,7 @@ class PoroMassStorage(WeakFormBase):
                 self.space.variable("PorePressure"), disp
             )
         if "_tr_eps_gp" not in assembly.sv or np.isscalar(assembly.sv["_tr_eps_gp"]):
-            eps_op = self.space.op_strain()
-            tr_eps = 0
-            for i in range(3):
-                if eps_op[i] != 0:
-                    tr_eps = tr_eps + assembly.get_gp_results(eps_op[i], disp)
-            assembly.sv["_tr_eps_gp"] = tr_eps
+            assembly.sv["_tr_eps_gp"] = _tr_eps_gp(self.space, assembly, disp)
 
     def get_weak_equation(self, assembly, pb):
         if pb.dtime == 0:
@@ -568,11 +587,13 @@ class PoroMassStorage(WeakFormBase):
             eps_op = self.space.op_strain(assembly.sv.get("DispGradient", 0))
             m_vol = assembly.sv.get("_dlnJ_weights_gp")
         else:
-            eps_op = self.space.op_strain()
             m_vol = None
 
         if m_vol is None:
-            eps_vol_inc = sum([eps_op[i] for i in range(3) if eps_op[i] != 0])
+            if getattr(assembly, "_nlgeom", None) == "TL":
+                eps_vol_inc = sum([eps_op[i] for i in range(3) if eps_op[i] != 0])
+            else:  # tr(delta_eps), with the hoop strain in 2Daxi
+                eps_vol_inc = sum(_vol_strain_ops(self.space, assembly))
         else:
             eps_vol_inc = sum(
                 [eps_op[i] * m_vol[i] for i in range(6) if eps_op[i] != 0]
@@ -624,6 +645,8 @@ class PoroMassStorage(WeakFormBase):
             )
             diff_op = diff_op + p_inc.virtual * (eps_vol_inc * (J * rate))
 
+        if self.space.is_axisymmetric and not np.isscalar(diff_op):
+            diff_op = diff_op * axi_volume_weight(assembly)
         return diff_op
 
 
@@ -659,6 +682,8 @@ class PoroMomentumSimple(StressEquilibrium):
         tangent required by the selected finite-strain formulation.
     name : str, default ""
     nlgeom : bool or {'TL', 'UL'}, optional
+        Geometric-nonlinearity formulation.
+        ``"2Daxi"`` supports small strain and ``"UL"``; ``"TL"`` raises.
     space : ModelingSpace, optional
     """
 
@@ -680,12 +705,6 @@ class PoroMomentumSimple(StressEquilibrium):
         )
         self.fluid_props = fluid_props
         self.space.new_variable("PorePressure")
-        if self.space._dimension == "2Daxi":
-            # See PoroMomentum.__init__: the Biot coupling terms lack the
-            # 2*pi*r measure and the hoop strain contribution.
-            raise NotImplementedError(
-                "PoroMomentumSimple is not implemented for the '2Daxi' modeling space."
-            )
         # See PoroMomentum.__init__: disable the symmetric-assembly assumption
         # so the one-sided Biot coupling is not mirrored into a phantom block
         # and the three sub-forms co-assemble in a single shared state dict.
@@ -731,12 +750,7 @@ class PoroMomentumSimple(StressEquilibrium):
             if assembly._nlgeom == "TL":
                 _comp_dlnJ_weights(assembly, f_is_isochoric=False)
         else:
-            eps_op = self.space.op_strain()
-            tr_eps = 0
-            for i in range(3):
-                if eps_op[i] != 0:
-                    tr_eps = tr_eps + assembly.get_gp_results(eps_op[i], disp)
-            assembly.sv["_tr_eps_gp"] = tr_eps
+            assembly.sv["_tr_eps_gp"] = _tr_eps_gp(self.space, assembly, disp)
 
 
 # ----------------------------------------------------------------------
@@ -772,6 +786,7 @@ class PoroMechanics(WeakFormSum):
         ``"poromechanics"``.
     nlgeom : bool or {'TL', 'UL'}, optional
         Geometric-nonlinearity formulation.
+        ``"2Daxi"`` supports small strain and ``"UL"``; ``"TL"`` raises.
     space : ModelingSpace, optional
         Modeling space. Defaults to the active modeling space.
     """
@@ -837,6 +852,7 @@ class PoroMechanicsSimple(WeakFormSum):
         ``"poromechanics_simple"``.
     nlgeom : bool or {'TL', 'UL'}, optional
         Geometric-nonlinearity formulation.
+        ``"2Daxi"`` supports small strain and ``"UL"``; ``"TL"`` raises.
     space : ModelingSpace, optional
         Modeling space. Defaults to the active modeling space.
     """

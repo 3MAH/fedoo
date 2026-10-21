@@ -16,6 +16,7 @@ Welcome to FEDOO's documentation!
    install
    quick_start
    mesh
+   elements
    constitutive_law
    weak_form
    assembly

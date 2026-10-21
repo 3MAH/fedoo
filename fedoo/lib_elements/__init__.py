@@ -1,4 +1,39 @@
-"""Lib elements module."""
+"""Element library.
+
+=============================================
+Element library (:mod:`fedoo.lib_elements`)
+=============================================
+
+An element type is selected by its name, given as ``elm_type`` when a mesh
+is built or an assembly is created (``"hex8"``, ``"hex20"``, ``"tet4"``,
+``"tet10"``, ``"quad4"``, ``"quad8"``, ``"tri3"``, ``"tri6"``, ``"lin2"``,
+...). The names known to fedoo are the keys of
+:py:func:`~fedoo.lib_elements.get_all`.
+
+By default every variable of the modeling space is interpolated with the
+element of the mesh. A :py:class:`~fedoo.lib_elements.CombinedElement`
+defines a new element type in which some variables use another
+interpolation, for instance quadratic displacement and linear pressure
+(Taylor-Hood pair) for mixed formulations and poromechanics::
+
+    import fedoo as fd
+
+    elm = fd.lib_elements.CombinedElement("hex20lbb", "hex20")
+    elm.set_variable_interpolation("PorePressure", "hex8")
+    # assembly = fd.Assembly.create(wf, mesh_hex20, elm_type="hex20lbb")
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   CombinedElement
+
+.. autosummary::
+   :toctree: generated/
+
+   get_all
+   get_element
+"""
 
 from .beam import (
     Beam,

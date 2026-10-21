@@ -26,11 +26,15 @@ semantic versioning.
   Neo-Hookean skeleton, and the Taylor-Hood example.
   `PoroMechanics`, `PoroMechanicsSimple`, `PoroFluidProperties` and the
   permeability models are now listed in the API reference.
+- `2Daxi` support for the poromechanics weak forms, in small strain and UL.
+  The Biot coupling and the storage term include the hoop strain, all terms
+  carry the 2*pi*r measure, and the UL geometric tangent of the pore stress
+  includes the hoop component. New example: axisymmetric indentation of a hyperelastic soft
+  tissue by a rigid spherical indenter (`RigidTie2D` and `IPCContact`),
+  with poroelastic force relaxation.
 
 ### Changed
 
-- The poromechanics weak forms raise `NotImplementedError` in `2Daxi`: the
-  Biot coupling lacked the axisymmetric measure and hoop strain.
 - `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
   used in finite strain without `lnJ`.
 

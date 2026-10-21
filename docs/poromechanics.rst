@@ -35,51 +35,158 @@ change :math:`\varepsilon_v = \ln J`.
 Weak forms and choosing a variant
 ---------------------------------
 
-Two ready-made :py:class:`~fedoo.core.weakform.WeakFormSum` classes group
-the momentum balance, the Darcy term and the storage/coupling term:
+Each variant is a :py:class:`~fedoo.core.weakform.WeakFormSum` of the
+momentum balance, the Darcy term and the storage/coupling term. They differ
+by the treatment of the volume change of the skeleton.
 
-* :py:class:`fedoo.weakform.PoroMechanicsSimple` — two-field
-  ``(u, PorePressure)`` formulation built on the standard
-  :py:class:`~fedoo.weakform.StressEquilibrium`. **This is the default
-  choice.** Use it whenever the boundary conditions include a free-traction
-  face (Mandel consolidation, unconfined compression of cartilage, soft
-  tissue indentation): the three-field variant oscillates there because its
-  skeleton Lagrange multiplier is under-constrained.
+* :py:class:`fedoo.weakform.PoroMechanicsSimple` (**default**). Unknowns
+  ``u`` and ``PorePressure``; the skeleton is handled by the standard
+  :py:class:`~fedoo.weakform.StressEquilibrium`. Use it unless you have a
+  specific reason not to.
 
-* :py:class:`fedoo.weakform.PoroMechanics` — three-field
-  ``(u, PorePressure, Pressure)`` formulation built on
-  :py:class:`~fedoo.weakform.StressEquilibriumMixed`, where ``Pressure`` is
-  the volumetric Lagrange multiplier of the skeleton. Reserve it for a
-  genuinely quasi-incompressible **skeleton** (drained Poisson ratio close
-  to 0.5) with well-constrained (confined) boundaries. Requires
-  ``bulk_modulus`` in ``nlgeom`` modes.
+* :py:class:`fedoo.weakform.PoroMechanics`. Adds a third unknown,
+  ``Pressure``, which enforces the volume change of the skeleton
+  (:py:class:`~fedoo.weakform.StressEquilibriumMixed`). It is only useful
+  when the *skeleton itself* is nearly incompressible (drained Poisson ratio
+  close to 0.5) and the sample is confined. Its pressure oscillates near
+  free-traction faces (Mandel consolidation, unconfined compression,
+  indentation). ``bulk_modulus`` is required with ``nlgeom``.
 
-Note that for most biological tissues the *drained* skeleton is quite
-compressible (:math:`\nu \sim 0.1..0.3`); the observed near-incompressibility
-of the tissue is the *undrained* response, and it is already carried by the
-``PorePressure`` field. The two-field ``PoroMechanicsSimple`` variant with a
-compressible skeleton law is therefore the recommended setting for
-free-traction soft-tissue problems, combined with a Taylor-Hood
-interpolation for stability (below).
+**Soft tissues and gels.** A saturated tissue behaves as incompressible
+when it is loaded quickly, but this comes from the fluid, which has no time
+to escape (undrained response), not from the skeleton. The fluid part is
+already carried by ``PorePressure``, and the drained skeleton is
+compressible (:math:`\nu \approx 0.1` to :math:`0.3`). Use
+``PoroMechanicsSimple`` with a compressible skeleton law, and a Taylor-Hood
+interpolation if the loading is fast (see below).
 
-Element interpolation (LBB stability)
--------------------------------------
+Element interpolation: equal order or Taylor-Hood
+-------------------------------------------------
 
-Equal-order linear interpolation of ``u`` and ``PorePressure`` works for
-moderate consolidation problems thanks to the storage term, but exhibits
-checkerboard pressure modes in the undrained limit (large ``biot_modulus``,
-fast loading). fedoo supports Taylor-Hood interpolation natively through
-combined elements: define the combined element *before* creating the
-assembly, e.g. quadratic ``u`` with linear pressure::
+**Why the choice matters.** When the fluid has no time to flow (low
+permeability, short time step) and is nearly incompressible (large
+``biot_modulus``), the mass balance reduces to
+:math:`\alpha\,\dot\varepsilon_v \approx 0`: the skeleton cannot change volume,
+and the pore pressure acts as the Lagrange multiplier that enforces this
+constraint. This is the *undrained* limit. It has the same mathematical
+structure as incompressible elasticity or Stokes flow, a saddle-point problem,
+and its discretization is stable only if the pressure field is not too rich
+compared with the displacement field. This requirement is the *inf-sup*
+condition, also called the LBB condition after Ladyzhenskaya, Babuska and
+Brezzi.
 
-    mesh = fd.mesh.box_mesh(..., elm_type="hex20")
-    # Quadratic displacement, PorePressure interpolated linearly on the
-    # hex8 sub-element:
-    elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")
+When it is violated, some pressure patterns produce no nodal force on the
+displacement field. Nothing in the equations controls them, so they appear as
+spurious oscillations of the pressure, typically alternating in sign from one
+node to the next (*checkerboard* modes). They are strongest near drained
+boundaries and loaded faces during the first increments. In the strictly
+undrained limit, the system matrix is singular.
+
+**Equal-order interpolation** uses the same element for ``u`` and
+``PorePressure``, e.g. ``hex8`` for both. It does not satisfy the inf-sup
+condition, but the storage term (:math:`1/M`) and the Darcy term stabilise it
+as long as the fluid can flow within a time step. A classical rule of thumb
+for linear elements is that oscillations stay small when
+
+.. math::
+
+   \Delta t \gtrsim \frac{h^2}{6\,c_v}, \qquad
+   c_v = \frac{k}{\mu_f}\Big(K + \tfrac43 G\Big),
+
+with :math:`h` the element size near the drained boundary or the load,
+:math:`c_v` the consolidation coefficient and :math:`K`, :math:`G` the drained
+bulk and shear moduli of the skeleton (:math:`K + \tfrac43 G` is the
+oedometric modulus). This is the criterion of Vermeer and Verruijt (1981),
+derived for one-dimensional consolidation with linear elements and
+incompressible constituents; with a hydraulic conductivity
+:math:`k_h = k\,\gamma_w/\mu_f` it reads
+:math:`\Delta t \gtrsim \gamma_w h^2/(6\,E_{oed}\,k_h)`, the form quoted in
+the Abaqus documentation. Fine meshes, low permeabilities and short first
+steps of a fast loading are therefore the risky cases. The default fluid
+(``biot_modulus=None``, incompressible, :math:`1/M = 0`) is the worst case:
+only the Darcy term is left to stabilise. Equal-order elements are fine for
+most consolidation analyses that do not need the very first instants.
+
+**Taylor-Hood interpolation** interpolates the displacement one order higher
+than the pressure: quadratic ``u`` and linear ``PorePressure``. This pair
+satisfies the inf-sup condition and gives a smooth pressure even in the
+undrained limit, at the cost of a quadratic mesh. It does not remove a
+second, physical difficulty of the first instants: the pressure boundary
+layer near a drained face is thinner than one element, and the first
+pressure node overshoots (of the order of 25 % at the first step of a
+Terzaghi column). Refine the mesh near drained faces or use a larger first step if
+the very early response matters.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Quadratic mesh (``u``)
+     - Linear pressure element
+   * - ``hex20``
+     - ``hex8``
+   * - ``tet10``
+     - ``tet4``
+   * - ``quad8``
+     - ``quad4``
+   * - ``tri6``
+     - ``tri3``
+
+**How to build it in fedoo.** A
+:py:class:`~fedoo.lib_elements.CombinedElement` defines a new
+element type in which each variable may use its own interpolation. Its base
+element (here the quadratic one) is used for the geometry and for every
+variable by default; ``set_variable_interpolation`` assigns a linear
+interpolation to one variable, built on the vertex nodes of the quadratic
+element. The mesh itself stays quadratic. The combined element is registered
+under the name given as first argument, which must therefore be created
+*before* the assembly and passed as ``elm_type``::
+
+    mesh = fd.mesh.box_mesh(..., elm_type="hex20")  # quadratic mesh
+
+    # New element type "hex20lbb": hex20 for u and the geometry,
+    # hex8 (vertex nodes only) for PorePressure.
+    elm = fd.lib_elements.CombinedElement("hex20lbb", "hex20")
     elm.set_variable_interpolation("PorePressure", "hex8")
+
     assembly = fd.Assembly.create(wf, mesh, elm_type="hex20lbb")
 
-See the example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`.
+With the three-field :py:class:`~fedoo.weakform.PoroMechanics`, interpolate
+the skeleton ``Pressure`` linearly as well
+(``elm.set_variable_interpolation("Pressure", "hex8")``).
+
+**Practical points.**
+
+* The name of a combined element is global: creating another one with the
+  same name replaces it. Use one name per base element type.
+* Keep the default integration of the base element; reduced-integration
+  bases (``hex20r``, ...) are not validated with Taylor-Hood.
+* fedoo has no ``tet10`` mesh generator: import a quadratic mesh (gmsh) or
+  convert a ``tet4`` mesh with ``fd.mesh.change_elm_type(mesh, "tet10")``
+  (slow on large meshes). For ``tri6``/``tet10``, avoid meshes where an
+  element has all its vertices on the boundary (corner elements of
+  structured diagonal splits): they can carry a spurious pressure mode.
+* **Drained boundaries**: prescribe ``PorePressure`` on the vertex nodes of
+  the face; with a linear pressure this drains the whole face. Conditions
+  on mid-side nodes have no effect.
+* **Fluid fluxes** given as nodal values must be distributed on the vertex
+  nodes with the weights of the linear element (one half per edge end,
+  for instance), not with the quadratic weights.
+
+.. note::
+
+   The ``PorePressure`` DOFs of the mid-side nodes are not interpolated by
+   any element: fedoo eliminates them automatically and they stay at zero.
+   A nodal plot built from ``pb.get_dof_solution("PorePressure")`` on all
+   nodes (or a VTK export of the quadratic cells) therefore shows a sawtooth
+   that is not in the solution. Use the interpolated values instead:
+   ``assembly.get_node_results(pb.space.variable("PorePressure"),
+   pb.get_dof_solution())`` returns the exact values at every node, the
+   mid-side ones being linearly interpolated from the vertices, and
+   ``assembly.get_gp_results(...)`` gives them at the integration points.
+
+The example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`
+compares equal-order and Taylor-Hood interpolations on an undrained strip
+footing with an analytical solution.
 
 Fluid properties and permeability models
 ----------------------------------------
@@ -151,10 +258,11 @@ which is, per unit current volume,
   pulled back to :math:`(k/\mu_f) J \mathbf{C}^{-1}`.
 
 In both modes the dependence of the Darcy term on the displacement (moving
-mesh in UL, :math:`J \mathbf{C}^{-1}` in TL) and the derivative
-:math:`d(J\mathbf{C}^{-1})/du` of the TL momentum coupling are not
-linearized: the residual is exact, these tangent blocks use frozen
-kinematics.
+mesh in UL, :math:`J \mathbf{C}^{-1}` in TL), the variation of the volume
+element :math:`dv` in the UL storage and coupling terms of the mass balance,
+and the derivative :math:`d(J\mathbf{C}^{-1})/du` of the TL momentum
+coupling are not linearized: the residual is exact, these tangent blocks
+use frozen kinematics.
 
 **Relation to Coussy's poromechanics.** In the Lagrangian finite-strain
 poroelasticity of Coussy (*Poromechanics*, 2004), the Lagrangian porosity
@@ -188,13 +296,24 @@ Validation
 * Mandel 2D vs the Abousleiman analytical solution, including the
   Mandel-Cryer non-monotonic pressure peak (~1 %) —
   ``tests/test_poromech_mandel_analytical.py``;
-* Taylor-Hood LBB stability — ``tests/test_poromech_taylor_hood.py``;
+* Taylor-Hood elements: pressure operators and eliminated mid-side DOFs,
+  exact undrained oedometer for ``quad8``/``quad4``, ``tri6``/``tri3`` and
+  ``hex20``/``hex8``, and undrained strip footing against the elastic
+  solution (Taylor-Hood within 3 %, equal order with a checkerboard) —
+  ``tests/test_combined_element_taylor_hood.py`` and
+  ``tests/test_poromech_taylor_hood.py``;
 * Finite strain with a simcoon Neo-Hookean skeleton (``NEOHC``, UL) and
   Holmes-Mow permeability: exact confined kinematics
   :math:`\ln J = \ln(1 + \delta/L)` at the drained state —
   ``tests/test_poromech_finite_strain.py``;
 * TL against UL on the same consolidation, and the TL mass-balance tangent
-  against finite differences — ``tests/test_poromech_finite_strain_tl.py``.
+  against finite differences — ``tests/test_poromech_finite_strain_tl.py``;
+* ``2Daxi``: homogeneous undrained unconfined compression of a cylinder vs
+  the closed-form solution (both formulations), drained relaxation, and
+  steady radial flow through a hollow cylinder vs the logarithmic pressure
+  profile — ``tests/test_poromech_axi.py``. The draining case was also
+  compared once with a 3D model of the full cylinder, with close agreement
+  (this comparison is not part of the test suite).
 
 Limitations
 -----------
@@ -209,9 +328,8 @@ Limitations
   smaller total strain, an elasto-plastic/corotational law (``ELISO`` etc.,
   which are unaffected), or finer load steps do *not* help (the threshold is
   on the strain level, not the step size).
-* ``2Daxi`` modeling spaces are not supported: all poromechanics weak forms
-  raise an explicit ``NotImplementedError`` (the Biot coupling lacks the
-  ``2*pi*r`` measure and the hoop strain term).
+* ``2Daxi`` is supported in small strain and in UL, like
+  :py:class:`~fedoo.weakform.StressEquilibrium`. It is not available in TL.
 * The permeability tensor is isotropic (:math:`k \mathbf{I}`); anisotropic
   permeability is not implemented.
 * No gravity/body-force term for the fluid yet (``fluid_density`` is
@@ -225,6 +343,11 @@ Examples
 * :ref:`sphx_glr_examples_poromechanics_finite_strain_consolidation.py` —
   finite-strain (UL) confined consolidation of a Neo-Hookean skeleton with
   Holmes-Mow permeability;
+* :ref:`sphx_glr_examples_poromechanics_indentation_soft_tissue.py` —
+  axisymmetric (``2Daxi``) indentation of a hyperelastic soft tissue by a
+  rigid spherical indenter with IPC contact, an impermeable contact zone
+  that follows the contact, and force relaxation as the fluid is squeezed
+  out;
 * :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py` — equal-order vs
   Taylor-Hood interpolation in the undrained limit.
 
