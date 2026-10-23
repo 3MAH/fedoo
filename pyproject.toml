@@ -32,7 +32,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,test,ipc,io]']
+all = ['fedoo[solver,plot,test,ipc,io,zstd]']
+zstd = ['hdf5plugin>=4']
 io = ['meshlane>=5.5.0']
 ipc = ['ipctk>=1.6']
 solver = [

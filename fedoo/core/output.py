@@ -429,9 +429,9 @@ def _get_assemblysum_results(
                         (sub_result.gausspoint_data, "GaussPoint"),
                     ):
                         for name, value in storage.items():
-                            if (
-                                name.startswith(("_Section_", "_Shell"))
-                                or name == "ShellLocalFrame"
+                            if name.startswith(("_Section_", "_Shell")) or name in (
+                                "ShellLocalFrame",
+                                "BeamLocalFrame",
                             ):
                                 if association == "Node" and multimesh:
                                     name += f"_submesh_{submesh_id}"
@@ -627,10 +627,10 @@ def _get_results(
         elif res[:5] == "Fext(" and res[-1] == ")":
             var = res[5:-1]
             data = pb.get_ext_forces(var)
-            if data.shape[-1] == assemb.mesh.n_nodes:
-                data_type = "Node"  # if var is a node field variable (or vector)
-            else:
+            if var in pb._global_dof._variable or var in pb._global_dof._vector:
                 data_type = "Scalar"  # if var is global_dof variable
+            else:
+                data_type = "Node"
 
         elif res == "ShellLocalFrame":
             law = _find_constitutivelaw_with_method(
@@ -893,6 +893,15 @@ def _get_results(
                         }[association]
                         storage["_Section_" + name] = np.asarray(value)
 
+    if "_BeamSection" in result.field_metadata:
+        law = _find_constitutivelaw_with_method(assemb.weakform, "get_beam_rigidity")
+        frames = law.get_local_frame(assemb).reshape(-1, 9).T
+        if element_set is not None:
+            frames = frames.reshape(9, -1, assemb.mesh.n_elements)[
+                ..., element_set
+            ].reshape(9, -1)
+        result.gausspoint_data["BeamLocalFrame"] = frames
+
     shell_fields = {"ShellStress", "ShellStrain", "ShellLocalFrame", "Stress", "Strain"}
     if shell_fields.intersection(output_list):
         law = _find_constitutivelaw_with_method(
@@ -1000,6 +1009,7 @@ class _ProblemOutput:
 
         if file_format == "fdh5":
             compression = CompressionConfig.from_compressed(compressed)
+            compression.dataset_kwargs()
 
         if include_static_obstacles and file_format != "fdh5":
             raise ValueError(

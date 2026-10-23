@@ -655,4 +655,10 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
             np.testing.assert_allclose(
                 loaded.get_data("Stress_global", component).submesh(2), expected
             )
-            assert not loaded._submesh_has_field("Stress_global", 0)
+            assert loaded._submesh_has_field("Stress_global", 0)
+            # This beam is aligned with X, so its automatically saved frame
+            # leaves scalar components unchanged.
+            np.testing.assert_allclose(
+                loaded.get_data("Stress_global", component).submesh(0),
+                loaded.get_data("Stress_local", component).submesh(0),
+            )
