@@ -13,7 +13,6 @@ from fedoo.lib_elements.element_list import get_default_n_gp, get_element
 from fedoo.util.test_periodicity import is_periodic
 from scipy import sparse
 import warnings
-import re
 
 from os.path import splitext
 from pathlib import Path
@@ -900,6 +899,8 @@ class Mesh(MeshBase):
         value: float = 0,
         tol: float = 1e-6,
         name: str | None = None,
+        *,
+        data=None,
     ) -> np.ndarray[int]:
         """Return a list of nodes from a given selection criterion
 
@@ -939,6 +940,10 @@ class Mesh(MeshBase):
 
         name : str, optional
             If name is given a node_set is added to the mesh.
+        *,
+        data : DataSet, optional
+            Dataset exposing field/component names such as ``Disp_X`` in
+            arbitrary expressions. Fields are evaluated at nodes.
 
         Returns
         -------
@@ -964,7 +969,7 @@ class Mesh(MeshBase):
         """
         if name:
             if isinstance(name, str):
-                indices = self.find_nodes(selection_criterion, value, tol)
+                indices = self.find_nodes(selection_criterion, value, tol, data=data)
                 self.node_sets[name] = indices
             else:
                 raise (TypeError, "str expected for node set name.")
@@ -995,10 +1000,35 @@ class Mesh(MeshBase):
             )[0]
         elif isinstance(selection_criterion, str):
             # assume arbitrary expression
-            return np.where(self._eval_expr(selection_criterion))[0]
+            return np.where(self._eval_expr(selection_criterion, data=data))[0]
 
         else:
             raise NameError("selection_criterion should be a string'")
+
+    def find_surface_nodes(
+        self, seed, seed_type="Node", angle=30.0, *, seed_face=None, boundary_edges=None
+    ):
+        """Return connected exterior-patch node IDs from a node or element seed.
+
+        See :func:`fedoo.mesh.find_surface_nodes` for angle semantics and
+        ambiguous-seed handling. Does not modify the mesh or its named sets.
+        """
+        from fedoo.mesh.selection import find_surface_nodes
+
+        return find_surface_nodes(
+            self,
+            seed,
+            seed_type,
+            angle,
+            seed_face=seed_face,
+            boundary_edges=boundary_edges,
+        )
+
+    def find_edge_nodes(self, seed, angle=30.0, feature_angle=30.0, *, seed_edge=None):
+        """Return exterior feature-edge node IDs; see ``fedoo.mesh.find_edge_nodes``."""
+        from fedoo.mesh.selection import find_edge_nodes
+
+        return find_edge_nodes(self, seed, angle, feature_angle, seed_edge=seed_edge)
 
     def find_elements(
         self,
@@ -1008,6 +1038,8 @@ class Mesh(MeshBase):
         select_by: str = "centers",
         all_nodes: bool = True,
         name: str | None = None,
+        *,
+        data=None,
     ):
         """Return a list of elements from a given selection criterion
 
@@ -1032,6 +1064,11 @@ class Mesh(MeshBase):
             If False, get elements that have at least 1 node verifying the criterion.
         name : str, optional
             If name is given an element_set is added to the mesh.
+        *,
+        data : DataSet, optional
+            Dataset exposing fields such as ``Stress_XX``. For center
+            selection fields are converted to Element values; for node
+            selection they are converted to Node values.
 
         Returns
         -------
@@ -1040,64 +1077,46 @@ class Mesh(MeshBase):
         if name:
             if isinstance(name, str):
                 indices = self.find_elements(
-                    selection_criterion, value, tol, select_by, all_nodes
+                    selection_criterion, value, tol, select_by, all_nodes, data=data
                 )
                 self.element_sets[name] = indices
             else:
                 raise (TypeError, "str expected for node set name.")
         if select_by == "centers":
+            if data is not None and selection_criterion.lower() not in (
+                "x",
+                "y",
+                "z",
+                "xy",
+                "xz",
+                "yz",
+                "point",
+                "distance",
+            ):
+                return np.flatnonzero(
+                    self._eval_expr(
+                        selection_criterion,
+                        nodes=self.element_centers,
+                        data=data,
+                        data_type="Element",
+                    )
+                )
             return Mesh(self.element_centers).find_nodes(
                 selection_criterion, value, tol
             )
         elif select_by == "nodes":
             return self.get_elements_from_nodes(
-                self.find_nodes(selection_criterion, value, tol), all_nodes
+                self.find_nodes(selection_criterion, value, tol, data=data), all_nodes
             )
         else:
             raise ValueError("select_by should be in {'centers', 'nodes'}")
 
-    def _eval_expr(
-        self, expr, nodes=None
-    ):  # evaluate an expression within the find_nodes method
-        TOKEN_RE = re.compile(
-            r"""
-            \s*(
-                (?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+\-]?\d+)? |   # numbers
-                [XYZ]                                       | # variables
-                abs(?=\s*\()                                | # abs()
-                and|or|&|\|                                 | # logic
-                <=|>=|==|!=|<|>                             | # comparisons
-                \+|\-|\*{1,2}|/                             | # arithmetic
-                \(|\)                                       | # parentheses
-            )
-        """,
-            re.VERBOSE,
+    def _eval_expr(self, expr, nodes=None, *, data=None, data_type="Node"):
+        from fedoo.util.expressions import selection_mask
+
+        return selection_mask(
+            expr, mesh=self, data=data, data_type=data_type, positions=nodes
         )
-        tokens = TOKEN_RE.findall(expr)
-        if "".join(tokens).replace(" ", "") != expr.replace(" ", ""):
-            raise ValueError(f"Invalid token in expression: {expr}")
-        # enforce comparison presence
-        if not any(t in {">", "<", "==", "<=", ">=", "!="} for t in tokens):
-            raise ValueError("Expression must contain a comparison (>, <, ==, etc.)")
-
-        mapping = {"and": ")&(", "or": ")|(", "&": ")&(", "|": ")|("}
-
-        expr_n = "(" + "".join(mapping.get(t, t) for t in tokens) + ")"
-        if nodes is None:
-            nodes = self.nodes
-        env = {
-            "abs": np.abs,
-            "X": nodes[:, 0] if self.nodes.shape[1] >= 1 else None,
-            "Y": nodes[:, 1] if self.nodes.shape[1] >= 2 else None,
-            "Z": nodes[:, 2] if self.nodes.shape[1] >= 3 else None,
-        }
-        try:
-            result = eval(expr_n, {"__builtins__": {}}, env)
-        except Exception as e:
-            raise ValueError(f"Failed to evaluate: {e}")
-        if not (isinstance(result, np.ndarray) and result.dtype == bool):
-            raise ValueError("Expression did not evaluate to a boolean NumPy array.")
-        return result
 
     def get_elements_from_nodes(
         self, node_set: str | list[int], all_nodes: bool = True
@@ -1356,7 +1375,7 @@ class Mesh(MeshBase):
                     raise ValueError(f"guide vectors must have {self.ndim} components")
                 if location not in (None, "Node", "Element", "GaussPoint"):
                     raise ValueError(
-                        "guide location must be 'Node', 'Element' or " "'GaussPoint'"
+                        "guide location must be 'Node', 'Element' or 'GaussPoint'"
                     )
 
                 if guide.ndim == 3:
@@ -2359,6 +2378,8 @@ class MultiMesh(Mesh):
         select_by: str = "centers",
         all_nodes: bool = True,
         name: str | None = None,
+        *,
+        data=None,
     ):
         """Return global element ids matching a selection criterion.
 
@@ -2366,6 +2387,31 @@ class MultiMesh(Mesh):
         as an element set is not supported and raises ``NotImplementedError``;
         add the set to the relevant submesh instead.
         """
+        if data is not None:
+            from fedoo.util.expressions import nodes_to_elements, selection_mask
+
+            if name:
+                raise NotImplementedError("Add element sets to the relevant submesh")
+            if select_by == "nodes":
+                nodes = self.find_nodes(selection_criterion, value, tol, data=data)
+                return nodes_to_elements(self, nodes, all_nodes)
+            if select_by != "centers":
+                raise ValueError("select_by should be 'centers' or 'nodes'")
+            if selection_criterion.lower() not in (
+                "x",
+                "y",
+                "z",
+                "xy",
+                "xz",
+                "yz",
+                "point",
+                "distance",
+            ):
+                return np.flatnonzero(
+                    selection_mask(
+                        selection_criterion, mesh=self, data=data, data_type="Element"
+                    )
+                )
         element_ids = []
         offset = 0
         for mesh in self._mesh_list:

@@ -8,6 +8,26 @@ semantic versioning.
 
 ### Added
 
+- Viewer node-set management, conversion between node and element sets, and
+  field-based selection expressions such as `Stress_XX > 100`. Node sets can
+  grow exterior surface patches, 2D boundary lines and 3D feature edges from
+  a picked node, with adjustable angle limits and midside-node support.
+- Computed scalar expressions using fields, named sets and existing scalars.
+  Definitions are evaluated for the current frame and again as frames load;
+  FDH5 export includes the computed values for every exported frame, editable
+  expression definitions and user-created sets.
+- Optional viewer Object inspector for meshes, submeshes, sets, fields,
+  computed scalars and live boundary conditions, with geometry highlighting,
+  links to editing tools, and mesh/set visibility actions.
+- `ProblemDataSet` and the viewer's Problem menu for opening current Python
+  workspace Problems without solving. Live Problems support boundary-condition
+  inspection and editing; stored modal/buckling modes use the iteration controls.
+  FDH5 export is a snapshot of the selected state or mode, not a solver restart.
+- Optional lossless Zstandard compression for FDH5 through `compressed="zstd"`
+  or `CompressionConfig`, and a `fedoo[zstd]` dependency group. The viewer's
+  Save as dialog offers uncompressed, gzip and Zstandard output with level
+  selection; Zstandard readers and writers require `hdf5plugin`.
+- Optional current-time annotation under Options > Plot, disabled by default.
 - Automatic consistent tangents with `consistent_tangent=None` for supported
   updated Lagrangian beams and shells. Each increment attempt starts with the
   historical tangent and switches at the current iterate after three iterations
@@ -25,6 +45,12 @@ semantic versioning.
 
 ### Changed
 
+- Viewer iteration controls use left/right arrows to decrease/increase the
+  frame or mode. Set, scalar and scalar-bar dialogs use more compact layouts;
+  detailed scalar-expression guidance is available from a separate Help button.
+- The Object inspector shows generated submesh selections only as mesh entries,
+  avoiding duplicate element-set entries. Generated submesh sets remain in the
+  set manager and are excluded from FDH5 exports; user-created sets are retained.
 - `add_output` now defaults to `compressed=True`. FDH5 retains its previous
   default gzip level 4, but honors explicit `False` and integer levels instead
   of ignoring the option. Other formats supporting the boolean compression
@@ -39,6 +65,19 @@ semantic versioning.
 
 ### Fixed
 
+- Viewer history quick search synchronizes the selected field and component,
+  including global DOFs and their forces. Global outputs use value indices
+  rather than node/element/Gauss-point conversion.
+- Plane clipping reuses its widget and defers scene updates outside the native
+  callback, avoiding unsafe widget recreation while dragging. Animation retains
+  camera position, zoom and projection while clipping.
+- Viewer FDH5 saves write a temporary file before replacing the destination,
+  preserving source frames when resaving or recompressing the opened file.
+- Restored visible rectangle feedback during on-screen set selection and the
+  Object inspector's compact dock width after closing and reopening result views.
+- History and main-view picking share physical node/global element ID mapping
+  for clipped and mixed meshes; starting another element pick removes the
+  previous click observer.
 - Residual line-search trials now scale the incremental rotation correction
   together with the trial displacement and restore it afterward. Previously,
   corotational beams and shells used the full rotation correction for reduced

@@ -72,6 +72,14 @@ and viewer settings are not persisted, and the file is not a solver restart
 checkpoint. The format version stored in the root attributes is independent
 of the Fedoo package version.
 
+Gzip level 4 is the default lossless compression. Optional Zstandard uses the
+HDF5 Zstd filter (id 32015), provided by ``pip install fedoo[zstd]`` or
+``pip install hdf5plugin``. Fedoo registers it automatically when needed;
+external readers need the same filter. Writers mark files containing Zstandard
+with the root attribute ``fedoo_requires_zstd`` so readers can explain a
+missing dependency before accessing compressed arrays. This marker remains
+set when later frames use another codec. The FDH5 layout is unchanged.
+
 Live viewing uses short, sequential read/write access with HDF5 locking
 enabled. Writers retry temporary lock conflicts for up to 10 seconds by
 default; readers retry for up to 0.2 seconds. Eager mesh/frame reads copy all
@@ -94,6 +102,7 @@ from datetime import datetime, timezone
 import contextlib
 import json
 import errno
+import importlib
 import time as _time
 
 import numpy as np
@@ -125,6 +134,26 @@ def _read_metadata_tree(group):
 
 PathLike = Union[str, Path]
 NDArray = np.ndarray
+
+ZSTD_FILTER_ID = 32015
+
+
+def zstd_available():
+    """Register the optional HDF5 filters when installed."""
+    if not h5py.h5z.filter_avail(ZSTD_FILTER_ID):
+        try:
+            importlib.import_module("hdf5plugin")
+        except ImportError:
+            return False
+    return h5py.h5z.filter_avail(ZSTD_FILTER_ID)
+
+
+def _require_zstd():
+    if not zstd_available():
+        raise ImportError(
+            "Zstandard-compressed FDH5 files require the HDF5 Zstandard filter. "
+            "Install it with 'pip install fedoo[zstd]' or 'pip install hdf5plugin'."
+        )
 
 
 def _open_hdf5(path, mode, lock_timeout):
@@ -170,28 +199,70 @@ class CompressionConfig:
 
     Parameters
     ----------
-    compression : {"gzip", "lzf"} or None, optional
+    compression : {"gzip", "lzf", "zstd"} or None, optional
         Compression filter applied to non-scalar datasets; ``None`` disables
         compression. Default is ``"gzip"``.
     compression_opts : int or None, optional
-        Compression level for the gzip filter (0-9). Default is 4.
+        Compression level: 0-9 for gzip, 1-22 for Zstandard. Default is 4.
+        Zstandard requires the optional ``fedoo[zstd]`` dependency on readers
+        and writers. ``compressed="zstd"`` uses level 3.
     chunks : bool or tuple of int or None, optional
         Chunk shape passed to h5py; ``True`` enables auto-chunking and ``None``
         disables chunking. Default is ``True``.
     """
 
-    compression: Optional[Literal["gzip", "lzf"]] = "gzip"
+    compression: Optional[Literal["gzip", "lzf", "zstd"]] = "gzip"
     compression_opts: Optional[int] = 4
     chunks: Optional[Union[bool, tuple[int, ...]]] = True
 
+    def __post_init__(self):
+        if self.compression not in (None, "gzip", "lzf", "zstd"):
+            raise ValueError("compression must be None, 'gzip', 'lzf', or 'zstd'")
+        if self.compression in ("gzip", "zstd"):
+            minimum, maximum = (0, 9) if self.compression == "gzip" else (1, 22)
+            level = self.compression_opts
+            if level is not None and (
+                not isinstance(level, (int, np.integer))
+                or not minimum <= level <= maximum
+            ):
+                raise ValueError(
+                    f"{self.compression} compression level must be {minimum}-{maximum}"
+                )
+
+    def dataset_kwargs(self):
+        """Validate codec availability before opening or replacing a file."""
+        kwargs = {}
+        if self.compression == "zstd":
+            _require_zstd()
+            kwargs.update(
+                compression=ZSTD_FILTER_ID,
+                compression_opts=(
+                    3 if self.compression_opts is None else self.compression_opts,
+                ),
+            )
+        elif self.compression is not None:
+            kwargs["compression"] = self.compression
+            if self.compression == "gzip" and self.compression_opts is not None:
+                kwargs["compression_opts"] = self.compression_opts
+        if self.chunks is not None:
+            kwargs["chunks"] = self.chunks
+        return kwargs
+
     @classmethod
     def from_compressed(cls, compressed):
-        """Translate the public bool or gzip-level option into storage settings."""
+        """Accept legacy flags/levels, codec names, or explicit settings."""
+        if isinstance(compressed, cls):
+            return compressed
         if isinstance(compressed, (bool, np.bool_)):
             return cls() if compressed else cls(compression=None, compression_opts=None)
         if isinstance(compressed, (int, np.integer)) and 0 <= compressed <= 9:
             return cls(compression_opts=int(compressed))
-        raise ValueError("compressed must be True, False, or an integer from 0 to 9")
+        if isinstance(compressed, str) and compressed in ("gzip", "lzf", "zstd"):
+            return cls(compressed, 3 if compressed == "zstd" else 4)
+        raise ValueError(
+            "compressed must be True, False, a gzip level from 0 to 9, "
+            "a codec name ('gzip', 'lzf', 'zstd'), or CompressionConfig"
+        )
 
 
 class FDH5Writer:
@@ -230,6 +301,7 @@ class FDH5Writer:
             Seconds to retry temporary file-lock conflicts with readers before
             raising the original error. Other I/O errors raise immediately.
         """
+        self._compression_kwargs = compression.dataset_kwargs()
         self.path = Path(file_path)
         if create_parents:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -241,6 +313,8 @@ class FDH5Writer:
         self.lock_timeout = lock_timeout
 
         with self._open() as f:
+            if compression.compression == "zstd":
+                f.attrs["fedoo_requires_zstd"] = True
             if "format" not in f.attrs:
                 f.attrs["format"] = "FDH5"
                 f.attrs["version"] = self.FILE_VERSION
@@ -263,14 +337,8 @@ class FDH5Writer:
             else:
                 raise ValueError(f"Dataset '{parent.name}/{name}' already exists")
 
-        kwargs: Dict[str, Any] = {}
         is_scalar = np.asarray(data).shape == ()
-        if self.compression.compression and not is_scalar:
-            kwargs["compression"] = self.compression.compression
-            if self.compression.compression == "gzip":
-                kwargs["compression_opts"] = self.compression.compression_opts
-        if self.compression.chunks is not None and not is_scalar:
-            kwargs["chunks"] = self.compression.chunks
+        kwargs = {} if is_scalar else self._compression_kwargs
 
         return parent.create_dataset(name, data=data, **kwargs)
 
@@ -601,7 +669,14 @@ class FDH5Reader:
 
     def _open(self) -> h5py.File:
         """Internal helper for eager reads."""
-        return _open_hdf5(self.path, "r", self.lock_timeout)
+        handle = _open_hdf5(self.path, "r", self.lock_timeout)
+        try:
+            if handle.attrs.get("fedoo_requires_zstd", False):
+                _require_zstd()
+        except Exception:
+            handle.close()
+            raise
+        return handle
 
     @staticmethod
     def _decode(value: Any) -> Any:
@@ -1173,6 +1248,9 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
         key: scalar_value(value) for key, value in iter_data["scalars"].items()
     }
     dataset.field_metadata = iter_data["field_metadata"]
+    stored_expressions = dataset.field_metadata.pop("_ScalarExpressions", {})
+    if stored_expressions and not dataset.scalar_expressions:
+        dataset.scalar_expressions = stored_expressions
     dataset.field_metadata.update(
         {
             field: description
@@ -1189,7 +1267,7 @@ def write_dataset(
     filename: str,
     iteration: int = 0,
     overwrite: bool = False,
-    compressed: bool | int = True,
+    compressed: bool | int | str | CompressionConfig = True,
 ):
     """Write a Fedoo DataSet iteration to a FDH5 file."""
 
@@ -1197,6 +1275,7 @@ def write_dataset(
         raise TypeError("Mesh should be defined before writing a FDH5 file.")
 
     compression = CompressionConfig.from_compressed(compressed)
+    compression.dataset_kwargs()
 
     path = Path(filename)
     if path.suffix == "":
@@ -1231,13 +1310,16 @@ def write_dataset(
             )
 
     time = dataset.scalar_data.get("Time", None)
+    field_metadata = dict(dataset.field_metadata)
+    if dataset.scalar_expressions:
+        field_metadata["_ScalarExpressions"] = dataset.scalar_expressions
     writer.write_iteration(
         iteration,
         node_data=dataset.node_data,
         element_data=fields_to_submesh_dict(dataset, dataset.element_data),
         gausspoint_data=fields_to_submesh_dict(dataset, dataset.gausspoint_data),
         scalars=dataset.scalar_data,
-        field_metadata=dataset.field_metadata,
+        field_metadata=field_metadata,
         time=time,
         overwrite=True,
     )

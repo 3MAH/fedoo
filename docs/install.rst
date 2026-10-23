@@ -44,7 +44,9 @@ It is also possible to install fedoo with all recommended dependencies
     $ pip install fedoo[all]
 
 This installs the following optional groups: ``solver``, ``plot``,
-``simcoon``, ``test`` and ``ipc``.
+``test``, ``ipc``, ``io`` and ``zstd``. Zstandard compression for FDH5 can
+also be installed separately with ``pip install "fedoo[zstd]"``; both writers
+and readers need the optional ``hdf5plugin`` package.
 
 ``pyvistaqt``, which is required for the viewer, is not included in the all
 group. This allows you to choose your preferred Qt binding (``pyqt5``,
@@ -62,7 +64,7 @@ and ``pyside6``:
 
 .. code-block:: none
 
-    $ pip install fedoo[all, gui]
+    $ pip install "fedoo[all,gui]"
 
 
 Individual optional groups

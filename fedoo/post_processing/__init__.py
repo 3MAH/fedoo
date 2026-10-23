@@ -43,6 +43,15 @@ Class DataSet
 
    DataSet
 
+Class ProblemDataSet
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   ProblemDataSet
+
 Class MultiFrameDataSet
 -----------------------
 
@@ -296,7 +305,7 @@ as ``results["BeamStress", "MY"]`` uses the same labels. Unknown user fields
 retain numerical component labels.
 
 Automatic recovery from FDH5 beam results
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Gauss-point outputs of ``BeamStress`` or ``BeamStrain`` automatically
 include section metadata shared by both fields, associated with their submesh.
@@ -324,7 +333,8 @@ description. Older descriptions containing isotropic constants are still read,
 but these constants do not influence kinematic strain recovery.
 
 ``Stress``, ``Stress_local`` and ``Stress_global`` share one selection policy
-(likewise for strain). Global components require ``BeamLocalFrame``. The viewer
+(likewise for strain). Global components require ``BeamLocalFrame``, which is
+included automatically with beam stress or strain output, as for shells. The viewer
 shows one Stress and one Strain entry. **Options → Beam…** selects the source,
 coordinate system, section position/index and reduction. Its optional Beam
 toolbar is hidden by default.
@@ -413,7 +423,7 @@ position with ``reduction=None``; the viewer disables indices and reductions.
 Recomputation still requires the recovery model for the requested stresses.
 
 Section classes own storage and geometry
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``BeamProperties.section_description()`` defines the portable section schema.
 Subclasses declare a unique ``section_type`` and their ``section_dimensions``;
@@ -566,6 +576,31 @@ Appending adds saved frames to an existing compatible mesh file; it does not
 resume the solver. In contrast, ``DataSet.to_fdh5(..., overwrite=True)``
 replaces the whole file, not only an existing iteration.
 
+FDH5 compression
+^^^^^^^^^^^^^^^^
+
+FDH5 uses lossless gzip compression at level 4 by default. The viewer's
+File > Save as dialog offers None, gzip (levels 1-9), and Zstandard
+(levels 1-22, default 3). The last successful choice is reused by Save for
+that dataset. Zstandard is optional: install ``pip install fedoo[zstd]``
+or ``pip install hdf5plugin`` on both writers and readers. Fedoo registers
+the filter automatically; other HDF5 readers also need a compatible filter.
+Gzip remains the portable default and requires no extra dependency.
+
+.. code-block:: python
+
+    from fedoo.util.fdh5 import CompressionConfig
+
+    data.to_fdh5("result.fdh5", overwrite=True, compressed="zstd")
+    data.save("result.fdh5", compressed=CompressionConfig("zstd", 5))
+    results.save_all("history.fdh5", compressed="zstd")
+    data.save("uncompressed.fdh5", compressed=False)
+
+Existing ``compressed=True`` and integer gzip levels retain their meaning.
+Compression settings apply to newly written arrays; appending with a
+different codec does not recompress earlier frames. Higher Zstandard
+levels can need considerably more time and memory; start with level 3.
+
 
 Read data from disk
 -------------------
@@ -658,10 +693,13 @@ time interval (here the results are saved on a file).
 
 .. image:: ./_static/examples/example_plot_dataset_nl.png
 
+.. _fedoo_viewer:
+
 Fedoo interactive viewer
 ========================
 
-Fedoo includes a graphical viewer for result files and DataSet objects.
+Fedoo includes a graphical viewer for result files, DataSet objects and live
+Problems.
 Install the plotting and GUI dependencies with ``pip install "fedoo[plot,gui]"``.
 
 Then the viewer can either be launched as a standalone application from
@@ -671,8 +709,7 @@ command line:
 
     $ python -m fedoo.viewer
 
-or from a python code. The code below show different ways to start the viewer
-inside a python code:
+or from Python:
 
 .. code-block:: python
 
@@ -682,11 +719,19 @@ inside a python code:
     fd.viewer()  # start the viewer with no file opened
     fd.viewer(result)  # start the viewer and open the result DataSet
     fd.viewer('myfile.fdh5')  # start the viewer with the data from a file
+    fd.viewer(pb)  # inspect an existing Problem in the current Python session
 
 The viewer includes the following tools and features:
 
-* Management of multiple independent windows, which can be linked together.
-* Field and iteration selectors for data exploration.
+* Manage independent views with Windows > Arrange Windows (tabbed,
+  horizontal, vertical or automatic layout). Windows > Link windows links
+  fields, iterations and/or cameras; Options > Apply options to separately
+  selects whether plotting options affect the active view or all views.
+  Unlinked views retain their own selected frame. Linked iteration navigation
+  skips views that do not contain the requested frame. Windows > Copy Window
+  creates another view of the current results.
+* Field and iteration selectors for data exploration. The iteration spinbox
+  decreases on the left and increases on the right.
 * Automatic discovery of new FDH5 frames when navigating an ongoing simulation.
   The Reload button also rereads the current frame. A file temporarily locked
   by the writer can be retried on the next navigation or Reload.
@@ -704,16 +749,169 @@ The viewer includes the following tools and features:
   displayed field under the current section selection. Gauss-point displays
   retain element discontinuities; Element displays report adjacent element
   values at a shared node.
-* Show or hide elements from predefined sets, rectangular selections,
-  or arbitrary expressions.
+* Open Tools > Element Sets or Node Sets to manage selections. Element Sets
+  can show or hide elements from predefined sets, rectangular selections,
+  or arbitrary expressions; Node Sets manages nodes without visibility controls.
+  Pick on screen displays a rectangle while dragging. New creates a named set
+  from the current selection; Replace, Add and Remove load a set into the
+  selection using the chosen operation.
+* Manage node sets (selection, create, rename, remove) without visibility
+  controls. Node Sets offers Create from element set; Element Sets offers
+  Create from node set. Choose a source set in the dropdown and click Create.
+  For element creation, a checkbox switches between requiring all element
+  nodes or at least one node; its label shows the current rule.
+  Node-to-element conversion can require all nodes or any node; element-to-node
+  conversion collects unique nodes. MultiMesh element ids remain global.
+* Grow an exterior surface selection in Node Sets. Click Select to pick a
+  boundary node using the existing single-node picker, then select the patch
+  with the chosen maximum normal angle. All viewer seeds are nodes;
+  interior nodes are rejected.
+  Corner seeds offer a starting-face choice. Boundary edges mode follows a
+  line on a 2D mesh, including planar meshes stored with XYZ coordinates;
+  Surface faces mode traverses shell faces. The result is a node selection
+  that can be saved as a named set and reconstructed with ``extract_surface``.
+  Exterior edges (3D) follows creases and open shell boundaries. Sharpness
+  controls the minimum face-normal angle identifying a crease; Turn limit
+  controls the allowed direction change along the edge. Branches stop
+  traversal, and ambiguous corner seeds offer a starting-edge choice.
+  Edge results are node IDs, including midside nodes, and can be saved as sets.
+* Use field/component names such as ``Stress_XX`` in selection expressions.
+  Element tests use element-center positions and element field values;
+  node tests use nodal positions and values. Field conversions follow DataSet.
+* Compute scalar expressions from fields, existing scalars and named sets.
+  The help button beside Expression opens the full guidance and examples in
+  a separate window, which can stay open while entering an expression.
+  For example ``sum(Disp_X[nodes("Top")])``,
+  ``mean(Stress_XX[elements("Wall")])`` with Element field values, or
+  ``sum(scalar("Fext(RigidDisp)")[2])``. The result must be one finite number.
+  Compute / update scalar evaluates the current frame immediately. Other
+  frames are evaluated when loaded or requested by a history plot, rather than
+  eagerly processing the whole file. File > Save or Save as evaluates and
+  exports every frame of a multiframe dataset, including numeric scalar values,
+  expression definitions and user-created sets. Definitions remain editable
+  after reopening. A live Problem exports only its selected state or mode.
 * Plot results along an interactively defined line.
-* Plot time-history data, when applicable.
+* Tools > History plot accepts field/component names in quick search.
+  For global DOFs and their associated forces, ID indexes the saved output
+  array, not a node, element or Gauss point; changing the field association
+  does not convert these global values.
+* Optionally open Windows > Object inspector to browse the active dataset's
+  mesh, named sets, stored fields, computed scalars and live Problem boundary
+  conditions. Set and condition selections highlight their geometry; the
+  read-only properties include counts, field shapes/ranges and expressions.
+  Automatically generated submesh element sets are omitted here because the
+  corresponding submesh already appears under Mesh. User-created sets remain
+  visible, including sets whose names start with ``submesh_``.
+  Manage delegates edits to the existing tools. The panel can float or
+  dock on either side; fullscreen hides it and restores its prior visibility.
+  A docked inspector returns to a compact width when opening another dataset.
+  Right-click an element set, mesh, or submesh for Show only and a checkable
+  Mask action. Unchecking Mask restores that object's elements without
+  resetting other visibility choices. Visibility uses the same element
+  filter as Element Sets, and the properties show partial masking.
+* Optionally show the current ``Time`` scalar in the upper-right corner.
+  It is hidden by default; enable Show time in Options > Plot.
+  The existing active/all views target
+  applies to this option too.
+* Open a live Problem directly, or use a ``ProblemDataSet`` wrapper. The
+  Problem > Open existing problem dialog also lists Problems from the current
+  Python session's workspace variables, the named Fedoo registry and the
+  active Problem. Refresh updates the list; reopening a Problem refreshes
+  its existing viewer pane; different Problems open separate panes. Use
+  Windows > Copy Window for another view when needed. This reads existing
+  objects without running a solve. Reload reads its current state; Save as
+  exports a single-state FDH5 snapshot.
+  Problem > Boundary conditions inspects and highlights existing constraints,
+  and adds/edits nodal Dirichlet or Neumann conditions using node sets or
+  the nodes of element sets. Neumann values are per-node forces, not pressure.
+  Custom constraints can be inspected. Edits affect the live Problem; solve
+  from Python to update its solution. BC definitions are not exported to FDH5.
+* File > Save as exports FDH5 with None, gzip or optional Zstandard
+  compression. File > Save reuses that view's last successful compression
+  choice. All compression options are lossless. User-created node and element
+  sets are included; automatically generated All/submesh selection sets are
+  not exported. Submesh geometry and names are preserved independently of
+  these generated sets. Display visibility masks do not remove mesh elements
+  from the saved result. See :ref:`fdh5_format` for compression dependencies.
 * Clip the current mesh using an interactively defined plane.
 * Save figures and create movies using the current visualization settings.
 
 
 Basic operations
 ================
+
+Live problem results
+--------------------
+
+``ProblemDataSet`` implements the DataSet interface for one current Problem
+state. It extracts results using ``problem.get_results`` without running a
+solve. Default fields include available DOFs, forces and stress/strain;
+pass ``fields`` to request a specific set. Reading through ``get_data``
+refreshes automatically; call ``refresh`` before reading the storage
+dictionaries directly. Copies are detached DataSet snapshots.
+
+Pass the Problem directly to ``fd.viewer(pb)``; creating the wrapper explicitly
+is optional. In an already running viewer, **Problem > Open existing problem**
+finds Problems in that same Python session. A standalone viewer cannot access
+objects in a separate Python process. **Reload** refreshes the current results,
+and **Problem > Boundary conditions** edits the live constraints; solving
+remains an explicit operation in Python.
+
+.. code-block:: python
+
+    import fedoo as fd
+
+    # pb is an existing Problem, for example after pb.solve() or pb.nlsolve().
+    fd.viewer(pb)  # inspect its results and manage live boundary conditions
+
+    # Optionally choose which fields the live wrapper exposes.
+    current = fd.ProblemDataSet(pb, fields=["Disp", "Stress"])
+    current.get_data("Disp", "X")
+    current.save("current.fdh5")
+    fd.viewer(current)
+
+For modal and linear buckling Problems with computed modes, the viewer's
+iteration slider, spinbox and Play button navigate the retained modes with
+the same zero-based indexing as FDH5 frames. The ``Mode`` scalar is one-based,
+as in saved mode output. Selection calls ``problem.set_mode`` and refreshes
+the live fields and frequency/load-factor metadata without another eigensolve.
+Reload discovers modes computed after opening the viewer. From Python use
+``current.set_mode(index)``; ``current.n_modes`` gives the retained count.
+
+Other Problems retain one current state. There is no accumulated time history
+in a ProblemDataSet. Export saves the selected mode/current state's fields,
+computed scalars and named sets; it does not create a solver restart file.
+
+Shared mathematical expressions
+-------------------------------
+
+``fedoo.util.expressions.evaluate_expression`` provides the same evaluator
+used by mesh selection and viewer tools. It accepts a mesh for positions
+and an optional DataSet for fields and scalar outputs. ``X``, ``Y``, ``Z``
+and ``ID`` refer to nodes or element centers, depending on ``data_type``.
+Scalar computations use reference positions; viewer selection additionally
+offers deformed positions. Logical ``and``/``or`` and ``&``/``|`` operate
+elementwise. Named mathematical functions can also use the ``np.`` prefix.
+Arbitrary Python statements and attribute access are not supported. The
+expression language uses an explicit list of supported operations and functions,
+not Python ``eval``. Expensive expressions can still consume substantial memory
+or computation time; there are no strict resource limits. Stored definitions
+are evaluated when frames load, so use trusted expression definitions.
+
+.. code-block:: python
+
+    from fedoo.util.expressions import evaluate_expression
+
+    ids = mesh.find_nodes("Disp_X > 0 and X < 1", data=results)
+    ids = mesh.find_elements("Stress_XX > 100", data=results)
+    total = evaluate_expression('sum(Disp_X[nodes("Top")])', data=results)
+    results.add_scalar_expression("TopDisplacement", 'sum(Disp_X[nodes("Top")])')
+    results.save("computed.fdh5")  # one DataSet
+    # For a MultiFrameDataSet, use results.save_all("computed.fdh5").
+
+``field("Stress_XX", "Element")`` explicitly selects a field association.
+``scalar("name")`` handles scalar names containing punctuation, and
+``node_sets["Top"]`` / ``element_sets["Wall"]`` also provide set indices.
 
 The principale methods/functions to extract, plot and manage
 result data are listed in this section.
