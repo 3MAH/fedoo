@@ -92,7 +92,7 @@ def test_static_linear_registered_output_is_automatic_and_can_be_cleared(tmp_pat
     assert saved == [0, 1]
 
 
-@pytest.mark.parametrize("compressed", ["default", True, False, *range(10)])
+@pytest.mark.parametrize("compressed", ["default", "gzip", True, False, *range(10)])
 def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     import h5py
 
@@ -104,7 +104,9 @@ def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     problem.add_output(filename, ["Disp"], **options)
     problem.save_results()
     problem.save_results()
-    expected_level = 4 if compressed == "default" or compressed is True else compressed
+    expected_level = (
+        4 if compressed in ("default", "gzip") or compressed is True else compressed
+    )
     with h5py.File(filename, "r") as handle:
         arrays = []
         handle.visititems(
@@ -125,7 +127,7 @@ def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     np.testing.assert_array_equal(loaded.node_data["Disp"], stored)
 
 
-@pytest.mark.parametrize("compressed", [-1, 10, 4.0, None, "gzip"])
+@pytest.mark.parametrize("compressed", [-1, 10, 4.0, None, "unsupported"])
 def test_invalid_fdh5_compression_preserves_existing_file(tmp_path, compressed):
     filename = tmp_path / "existing.fdh5"
     filename.write_bytes(b"keep existing results")
