@@ -65,6 +65,10 @@ semantic versioning.
 
 ### Fixed
 
+- Coordinate-only mesh expressions no longer assume element connectivity is
+  present, restoring geometry-based element selection in examples such as
+  spherical shell compression. Element expressions retain the original mesh's
+  named sets and global MultiMesh IDs even without an associated dataset.
 - Viewer history quick search synchronizes the selected field and component,
   including global DOFs and their forces. Global outputs use value indices
   rather than node/element/Gauss-point conversion.

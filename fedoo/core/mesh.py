@@ -1083,7 +1083,7 @@ class Mesh(MeshBase):
             else:
                 raise (TypeError, "str expected for node set name.")
         if select_by == "centers":
-            if data is not None and selection_criterion.lower() not in (
+            if selection_criterion.lower() not in (
                 "x",
                 "y",
                 "z",
@@ -2387,31 +2387,30 @@ class MultiMesh(Mesh):
         as an element set is not supported and raises ``NotImplementedError``;
         add the set to the relevant submesh instead.
         """
-        if data is not None:
-            from fedoo.util.expressions import nodes_to_elements, selection_mask
+        from fedoo.util.expressions import nodes_to_elements, selection_mask
 
-            if name:
-                raise NotImplementedError("Add element sets to the relevant submesh")
-            if select_by == "nodes":
-                nodes = self.find_nodes(selection_criterion, value, tol, data=data)
-                return nodes_to_elements(self, nodes, all_nodes)
-            if select_by != "centers":
-                raise ValueError("select_by should be 'centers' or 'nodes'")
-            if selection_criterion.lower() not in (
-                "x",
-                "y",
-                "z",
-                "xy",
-                "xz",
-                "yz",
-                "point",
-                "distance",
-            ):
-                return np.flatnonzero(
-                    selection_mask(
-                        selection_criterion, mesh=self, data=data, data_type="Element"
-                    )
+        if name:
+            raise NotImplementedError("Add element sets to the relevant submesh")
+        if select_by == "nodes":
+            nodes = self.find_nodes(selection_criterion, value, tol, data=data)
+            return nodes_to_elements(self, nodes, all_nodes)
+        if select_by != "centers":
+            raise ValueError("select_by should be 'centers' or 'nodes'")
+        if selection_criterion.lower() not in (
+            "x",
+            "y",
+            "z",
+            "xy",
+            "xz",
+            "yz",
+            "point",
+            "distance",
+        ):
+            return np.flatnonzero(
+                selection_mask(
+                    selection_criterion, mesh=self, data=data, data_type="Element"
                 )
+            )
         element_ids = []
         offset = 0
         for mesh in self._mesh_list:

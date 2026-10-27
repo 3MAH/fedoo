@@ -206,7 +206,11 @@ def evaluate_expression(
     element_sets = {} if mesh is None else dict(mesh.element_sets)
     if mesh is not None:
         node_sets.setdefault("All", np.arange(mesh.n_nodes))
-        element_sets.setdefault("All", np.arange(mesh.n_elements))
+        blocks = getattr(mesh, "submeshes", (mesh,))
+        n_elements = sum(
+            block.n_elements for block in blocks if block.elements is not None
+        )
+        element_sets.setdefault("All", np.arange(n_elements))
     node_sets = {name: np.asarray(ids, dtype=int) for name, ids in node_sets.items()}
     element_sets = {
         name: np.asarray(ids, dtype=int) for name, ids in element_sets.items()

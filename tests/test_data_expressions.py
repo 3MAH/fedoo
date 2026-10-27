@@ -138,3 +138,23 @@ def test_derived_scalar_history_and_saved_definition(data, tmp_path):
     )
     reopened.add_scalar_expression("Work", "TopSum * 2")
     np.testing.assert_allclose(reopened.get_history("Work"), [24.0, 48.0])
+
+
+@pytest.mark.parametrize("dimension", [2, 3])
+def test_coordinate_only_mesh_supports_node_expressions(dimension):
+    points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])[
+        :, :dimension
+    ]
+    mesh = fd.Mesh(points)
+    np.testing.assert_array_equal(mesh.find_nodes("X > 0 and Y == 0"), [1])
+    np.testing.assert_array_equal(mesh.find_nodes('ID == nodes("All")[-1]'), [2])
+    assert evaluate_expression('count_nonzero(elements("All"))', mesh=mesh) == 0
+
+
+def test_element_expressions_without_dataset_keep_mesh_sets(data):
+    mesh = data.mesh
+    blocks = getattr(mesh, "submeshes", (mesh,))
+    centers = np.concatenate([block.element_centers for block in blocks])
+    expected = np.flatnonzero((centers[:, 0] > 0.25) | (centers[:, 1] < 0))
+    np.testing.assert_array_equal(mesh.find_elements("X > 0.25 or Y < 0"), expected)
+    np.testing.assert_array_equal(mesh.find_elements('ID == elements("wall")[0]'), [0])
