@@ -34,13 +34,17 @@ class BeamEquilibrium(WeakFormBase):
     k: scalar or arrays of gauss point values, optional
         Shear coefficient. If k=0 (*default*) the beam use the bernoulli
         hypothesis.
-    consistent_tangent: bool, default=False
+    consistent_tangent: bool or None, default=False
         For standard two-node ``beam`` elements with ``nlgeom=True`` or
         ``'UL'``, differentiate the complete existing internal-force residual.
         Includes the changing length, frame and local finite rotations. The
         resulting tangent may be nonsymmetric. Set False for the historical
         material plus axial-force geometric tangent. Alternative beam
         interpolations retain that historical tangent.
+        None starts each increment attempt with the historical tangent and
+        switches after three iterations without at least a 1% improvement of
+        the reference error. Significant improvements update the reference
+        and reset the counter; the earliest switch is iteration four.
         This option is read-only after construction. Create a new weak form
         to select a different tangent, including when sharing forms across assemblies.
     name: str
@@ -112,7 +116,7 @@ class BeamEquilibrium(WeakFormBase):
         ``nlgeom``. A boolean value explicitly enables or disables it.
         """
         self._consistent_tangent = consistent_tangent
-        if consistent_tangent:
+        if consistent_tangent is not False:
             for variable in ("DispX", "DispY", "DispZ", "RotX", "RotY", "RotZ"):
                 if variable in self.space.list_variables():
                     self.space.variable_alias("_BeamMean" + variable, variable)
@@ -127,6 +131,8 @@ class BeamEquilibrium(WeakFormBase):
         geometric_stiffness=False retains the material-only tangent. Other beam
         interpolations use the historical tangent. Create a new weak form to
         change this option; a form may be shared by multiple assemblies.
+        None enables automatic switching on stalled convergence; the runtime
+        activation is stored separately for each assembly.
         """
         return self._consistent_tangent
 
@@ -143,6 +149,8 @@ class BeamEquilibrium(WeakFormBase):
         return WeakFormSum([translational_inertia, rotary_inertia])
 
     def initialize(self, assembly, pb):
+        assembly._automatic_consistent_tangent = False
+        assembly.current._automatic_consistent_tangent = False
         assembly.sv["BeamStrain"] = 0
         assembly.sv["BeamStress"] = 0
 
@@ -157,7 +165,10 @@ class BeamEquilibrium(WeakFormBase):
                 # variables. The symmetric assembly shortcut filters terms
                 # before that expansion and can omit required contributions.
                 assume_sym = not (
-                    self._use_consistent_tangent(assembly)
+                    (
+                        self.consistent_tangent is not False
+                        and self._supports_consistent_tangent(assembly)
+                    )
                     or assembly._get_associated_variables()
                 )
             assembly.assume_sym = assume_sym
@@ -417,7 +428,10 @@ class BeamEquilibrium(WeakFormBase):
                                         - pb.get_dof_solution()[bc._dof_index]
                                     )
 
-                if self._use_consistent_tangent(assembly):
+                if (
+                    self.consistent_tangent is not False
+                    and self._supports_consistent_tangent(assembly)
+                ):
                     frame = (
                         mesh.get_element_local_frame()
                         if self.space.ndim == 2
@@ -593,11 +607,32 @@ class BeamEquilibrium(WeakFormBase):
 
     def _use_consistent_tangent(self, assembly):
         return (
-            self.consistent_tangent
-            and self.geometric_stiffness is not False
+            self.consistent_tangent is True
+            or (
+                self.consistent_tangent is None
+                and getattr(assembly, "_automatic_consistent_tangent", False)
+            )
+        ) and self._supports_consistent_tangent(assembly)
+
+    def _supports_consistent_tangent(self, assembly):
+        return (
+            self.geometric_stiffness is not False
             and assembly._nlgeom == "UL"
             and assembly.elm_type == "beam"
         )
+
+    def _set_automatic_tangent(self, assembly, active):
+        """Switch accuracy at the current iterate, independently per assembly."""
+        if self.consistent_tangent is not None or not self._supports_consistent_tangent(
+            assembly
+        ):
+            return False
+        if getattr(assembly.current, "_automatic_consistent_tangent", False) != active:
+            assembly.current._saved_bloc_structure = None
+        assembly._automatic_consistent_tangent = active
+        assembly.current._automatic_consistent_tangent = active
+        assembly.sv.pop("_BeamTangentOperators", None)
+        return True
 
     def _get_generalized_stress_op(self):
         # only for post treatment

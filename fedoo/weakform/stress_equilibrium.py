@@ -8,6 +8,7 @@ from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.lib_elements.element_base import _evaluate_monomials, _monomial_exponents
 from fedoo.lib_elements.element_list import get_element
 from fedoo.weakform.inertia import Inertia
+from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
@@ -151,13 +152,8 @@ class StressEquilibrium(WeakFormBase):
             ]  # Stress = Cauchy for updated lagrangian method
 
             if self.space.is_axisymmetric:
-                rr = assembly.sv["_R_gausspoints"]
-
-                # nlgeom = False
-                eps[2] = self.space.variable("DispX") * np.divide(
-                    1, rr, out=np.zeros_like(rr), where=rr != 0
-                )  # put zero if X==0 (division by 0)
-                # eps[2] = self.space.variable('DispX') * (1/rr)
+                rr = axi_radius(assembly)
+                eps[2] = axi_hoop_strain_op(self.space, rr)
 
         H = assembly.sv["TangentMatrix"]
 
