@@ -39,6 +39,14 @@ semantic versioning.
 
 ### Fixed
 
+- `incompressibility="fbar"` with the total Lagrangian method (`nlgeom="TL"`)
+  now uses the consistent nonsymmetric tangent for `quad4` and `hex8`.
+  Without it, Newton stalled from the first increment on nearly
+  incompressible materials, whatever the time step, since the missing term
+  scales with the bulk modulus. The total-Lagrangian residual is now the
+  pull-back of the updated-Lagrangian one, `S = J F^-1 sigma(F_bar) F^-T`
+  instead of the PK2 stress of `F_bar`, so that both methods reach the same
+  solution.
 - Residual line-search trials now scale the incremental rotation correction
   together with the trial displacement and restore it afterward. Previously,
   corotational beams and shells used the full rotation correction for reduced

@@ -156,6 +156,11 @@ class StressEquilibrium(WeakFormBase):
                 eps[2] = axi_hoop_strain_op(self.space, rr)
 
         H = assembly.sv["TangentMatrix"]
+        if assembly._nlgeom == "TL" and "_Fbar_alpha" in assembly.sv:
+            # F-bar, TL: S = S_bar / alpha with alpha = (J_center / J)^(1/3),
+            # hence dS/dE = alpha dS_bar/dE_bar at fixed alpha (see _comp_Fbar)
+            alpha = assembly.sv["_Fbar_alpha"]
+            H = [[H[i][j] * alpha for j in range(6)] for i in range(6)]
 
         dilatation_correction = self._get_dilatation_correction_op(assembly)
         if dilatation_correction is not None:
@@ -208,13 +213,15 @@ class StressEquilibrium(WeakFormBase):
         # analysis of nearly incompressible solids, de Souza Neto et al, IJSS.
         # Return 0 if the operators at the element center are not available.
         if (
-            assembly._nlgeom == "TL"
-            or self.space.is_axisymmetric
+            self.space.is_axisymmetric
             or "_DispX"
             not in getattr(get_element(assembly.elm_type), "dict_elm_type", {})
             or _get_dilatation_degree(assembly) is not None
         ):
             return 0
+
+        if assembly._nlgeom == "TL":
+            return self._get_fbar_tangent_op_tl(assembly, eps, H, stress)
 
         q = [(1 / 3.0) * (H[i][0] + H[i][1] + H[i][2]) for i in range(6)]
         if assembly._nlgeom and not (np.isscalar(stress) and stress == 0):
@@ -231,6 +238,43 @@ class StressEquilibrium(WeakFormBase):
         return sum(
             0 if eps[i] == 0 else eps[i].virtual * q[i] * correction for i in range(6)
         )
+
+    def _get_fbar_tangent_op_tl(self, assembly, eps, H, stress):
+        # Total-Lagrangian counterpart: with F_bar = alpha F and S = S_bar/alpha,
+        # dS = alpha C_bar:dE + dtheta (alpha C_bar:C - S), where
+        # dtheta = dalpha/alpha = (F_c^-T:Grad du_c - F^-T:Grad du)/3.
+        # H is already alpha C_bar (see get_weak_equation) and stress is S.
+        # before the first displacement update: F = F_bar = F_c = I
+        alpha = assembly.sv.get("_Fbar_alpha", 1.0)
+        F_bar = assembly.sv["F"]
+        F_inv = alpha * np.linalg.inv(F_bar.transpose(2, 0, 1)).transpose(1, 2, 0)
+        Fc_inv = assembly.sv.get("_Fbar_Fc_inv", np.eye(3))
+        C = np.einsum("kig,kjg->ijg", F_bar, F_bar) / alpha**2
+        # right Cauchy-Green tensor as an engineering strain vector
+        C_vec = [C[0, 0], C[1, 1], C[2, 2], 2 * C[0, 1], 2 * C[0, 2], 2 * C[1, 2]]
+        q = [sum(H[i][j] * C_vec[j] for j in range(6)) for i in range(6)]
+        if not (np.isscalar(stress) and stress == 0):
+            q = [q[i] - stress[i] for i in range(6)]
+
+        crd = ["X", "Y", "Z"][: self.space.ndim]
+        n = len(crd)
+        dtheta = (1 / 3.0) * sum(
+            self.space.derivative("_Disp" + crd[i], crd[j]) * Fc_inv[j, i]
+            - self.space.derivative("Disp" + crd[i], crd[j]) * F_inv[j, i]
+            for i in range(n)
+            for j in range(n)
+        )
+        # dE:Q = Grad du:(F Q) for a symmetric Q: n*n gradient terms instead of
+        # the expanded components of dE (the symbolic products dominate the cost)
+        Q = [[q[0], q[3], q[4]], [q[3], q[1], q[5]], [q[4], q[5], q[2]]]
+        F = F_bar / alpha
+        virtual = sum(
+            self.space.derivative("Disp" + crd[k], crd[j]).virtual
+            * sum(F[k, m] * Q[m][j] for m in range(3))
+            for k in range(n)
+            for j in range(n)
+        )
+        return virtual * dtheta
 
     def _get_dilatation_correction_op(self, assembly):
         # Return the operator theta_bar - div(u), where theta_bar is the
@@ -442,9 +486,7 @@ class StressEquilibrium(WeakFormBase):
                 get_element(assembly.elm_type), "dict_elm_type", {}
             )
             consistent_tangent = (
-                has_center_interpolation
-                and assembly._nlgeom != "TL"
-                and not self.space.is_axisymmetric
+                has_center_interpolation and not self.space.is_axisymmetric
             )
             if consistent_tangent:
                 # consistent (non symmetric) tangent matrix
@@ -457,8 +499,6 @@ class StressEquilibrium(WeakFormBase):
                         f"'{assembly.mesh.elm_type}' has no element-center "
                         "displacement interpolation"
                     )
-                if assembly._nlgeom == "TL":
-                    reasons.append("the total-Lagrangian formulation is used")
                 if self.space.is_axisymmetric:
                     reasons.append("the modeling space is axisymmetric")
                 warnings.warn(
@@ -582,7 +622,7 @@ class StressEquilibrium(WeakFormBase):
         if assembly._nlgeom == "TL":
             # PK2 feeds the TL residual and must be refreshed even when the
             # tangent conversion is disabled or during a line-search trial.
-            assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
+            assembly.sv["PK2"] = _comp_pk2_tl(assembly)
 
         # A law using sim.umat tangent_output already returned the tangent of
         # this configuration (see MechanicalUMAT.update).
@@ -684,9 +724,7 @@ class StressEquilibrium(WeakFormBase):
                 # transported with the rotation of the increment being solved, by the
                 # law itself (see MechanicalUMAT.update).
                 if assembly._nlgeom == "TL":
-                    assembly.sv["PK2"] = assembly.sv["Stress"].cauchy_to_pk2(
-                        assembly.sv["F"]
-                    )
+                    assembly.sv["PK2"] = _comp_pk2_tl(assembly)
 
     def _init_nl_strain_op_vir(self):
         # initialize non linear operator for strain
@@ -778,9 +816,12 @@ class StressEquilibrium(WeakFormBase):
               emits a warning because the formulation is not consistent.
             * "fbar": F-bar method where the volume change is evaluated at the
               element center. The consistent non symmetric tangent matrix is
-              used for "quad4" and "hex8" elements (not available for '2Daxi'
-              and with the total lagrangian method). In small strain, it
-              reduces to a center-based B-bar volumetric correction.
+              used for "quad4" and "hex8" elements (not available for
+              '2Daxi'), with the updated and the total lagrangian methods.
+              The total lagrangian residual is the pull-back of the updated
+              lagrangian one, S = J F^-1 sigma(F_bar) F^-T, so that both
+              reach the same solution. In small strain, it reduces to a
+              center-based B-bar volumetric correction.
 
         This attribute should be defined before the creation of the associated
         assembly. Elements with constant strain ("tri3", "tet4") or
@@ -1192,15 +1233,33 @@ def _comp_Fbar(assembly, displacement):
     grad_values_center = _get_grad_disp_center(assembly, displacement)
     # the element-center Jacobian must be validated too: a negative Jcenter
     # would silently turn the fractional power below into NaN
-    Jcenter = _check_F_validity(np.add(eye_3, grad_values_center))
+    Fc = np.add(eye_3, grad_values_center)
+    Jcenter = _check_F_validity(Fc)
     # Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
-    F1 = F1 * ((Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3))
+    alpha = (Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3)
+    F1 = F1 * alpha
 
+    if assembly._nlgeom == "TL":
+        # used by the TL residual (S = S_bar / alpha) and tangent; the gauss
+        # points are numbered gauss point first: g * n_elements + e
+        assembly.sv["_Fbar_alpha"] = alpha
+        Fc_inv = np.linalg.inv(Fc.transpose(2, 0, 1)).transpose(1, 2, 0)
+        assembly.sv["_Fbar_Fc_inv"] = np.tile(Fc_inv, (1, 1, assembly.n_elm_gp))
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
         F0 = np.empty_like(F1)
         F0[...] = eye_3
         assembly.sv_start["F"] = F0
+
+
+def _comp_pk2_tl(assembly):
+    # Second Piola-Kirchhoff stress of the TL residual. With F-bar, the law
+    # gets F_bar = alpha F and the residual is the pull-back of the UL one
+    # (de Souza Neto et al. 1996): S = J F^-1 sigma(F_bar) F^-T = S_bar / alpha.
+    pk2 = assembly.sv["Stress"].cauchy_to_pk2(assembly.sv["F"])
+    if "_Fbar_alpha" in assembly.sv:
+        pk2 = StressTensorList(pk2.asarray() / assembly.sv["_Fbar_alpha"])
+    return pk2
 
 
 # funtions to compute strain
