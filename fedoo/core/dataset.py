@@ -14,7 +14,12 @@ from fedoo.util.shell_recovery import (
     can_recompute_shell,
     reconstructs_stored_shell,
 )
-from fedoo.util.fdh5 import load_dataset_iteration, write_dataset, read_fdh5
+from fedoo.util.fdh5 import (
+    CompressionConfig,
+    load_dataset_iteration,
+    write_dataset,
+    read_fdh5,
+)
 from fedoo.util.mesh_writer import write_vtk, write_msh
 
 
@@ -241,6 +246,7 @@ class DataSet:
         self.element_data = {}
         self.gausspoint_data = {}
         self.scalar_data = {}
+        self.scalar_expressions = {}
         self.field_metadata = {}
         self._beam_section_overrides = {}
         self.beam_options = {}
@@ -272,6 +278,43 @@ class DataSet:
 
         self.meshplot = None
         self.meshplot_gp = None  # a mesh with discontinuity between each element to plot gauss points field
+
+    def add_scalar_expression(self, name, expression, data_type="Node"):
+        """Compute one scalar per frame from fields, scalars and named sets.
+
+        For example ``sum(Disp_X[nodes("Top")])`` or
+        ``mean(Stress_XX[elements("Wall")])`` with ``data_type="Element"``.
+        Definitions are recomputed on frame loads and copied with the dataset.
+        Saving exports their numeric values for every frame.
+        """
+        from fedoo.util.expressions import evaluate_scalar_expressions
+
+        name = name.strip()
+        if not name or "/" in name or "\0" in name or name in self.field_names():
+            raise ValueError("Choose a nonempty scalar name distinct from field names")
+        if name in self.scalar_data and name not in self.scalar_expressions:
+            raise ValueError(f"Scalar '{name}' already exists in the result data")
+        if data_type not in ("Node", "Element"):
+            raise ValueError("Scalar field association must be Node or Element")
+        previous = self.scalar_expressions
+        self.scalar_expressions = dict(previous)
+        self.scalar_expressions[name] = {
+            "expression": expression,
+            "data_type": data_type,
+        }
+        try:
+            values = evaluate_scalar_expressions(self)
+        except Exception:
+            self.scalar_expressions = previous
+            raise
+        self.scalar_data.update(values)
+        return self.scalar_data[name]
+
+    def _evaluate_scalar_expressions(self):
+        if self.scalar_expressions:
+            from fedoo.util.expressions import evaluate_scalar_expressions
+
+            self.scalar_data.update(evaluate_scalar_expressions(self))
 
     def _is_multimesh(self) -> bool:
         return isinstance(self.mesh, MultiMesh)
@@ -936,7 +979,8 @@ class DataSet:
                 )
 
             if clip_args is not None:
-                if clip_args.pop("cell_ids", False):
+                clip_options = dict(clip_args)
+                if clip_options.pop("cell_ids", False):
                     if "vtkOriginalCellIds" in mesh_to_show.cell_data:
                         mesh_to_show.cell_data["cell_ids"] = mesh_to_show.cell_data[
                             "vtkOriginalCellIds"
@@ -945,7 +989,7 @@ class DataSet:
                         mesh_to_show.cell_data["cell_ids"] = np.arange(
                             self.mesh.n_elements
                         )
-                mesh_to_show = mesh_to_show.clip(**clip_args)
+                mesh_to_show = mesh_to_show.clip(**clip_options)
 
             if data_type == "Element":
                 data = mesh_to_show.cell_data["Data"]
@@ -1506,6 +1550,8 @@ class DataSet:
         -----
         This method supports automatic conversion between node, element,
         and Gauss point data types when applicable.
+        Scalar data, including global DOF arrays, have no mesh association:
+        ``data_type`` is ignored and their stored value indices are preserved.
 
         With a ``MultiMesh``, element and Gauss point fields may be stored as a
         dictionary keyed by submesh id, submesh name, or unique element type.
@@ -1523,6 +1569,14 @@ class DataSet:
         order is needed. ``np.asarray(stress)`` instead returns the data of
         the active submesh.
         """
+
+        # Global DOFs and scalar histories have no mesh association. In
+        # particular, never convert or wrap them as per-submesh GP data.
+        if field in self.scalar_expressions:
+            self._evaluate_scalar_expressions()
+        if field in self.scalar_data:
+            data = _component_from_array(field, self.scalar_data[field], component)
+            return (data, "Scalar") if return_data_type else data
 
         if field in self.beam_derived_fields():
             return self._get_beam_data(
@@ -2046,7 +2100,10 @@ class DataSet:
         )
 
     def save(
-        self, filename: str, save_mesh: bool = False, compressed: bool = False
+        self,
+        filename: str,
+        save_mesh: bool = False,
+        compressed: bool | int | str | CompressionConfig | None = None,
     ) -> None:
         """Save data to a file.
         File type is inferred from the extension of the filename.
@@ -2080,8 +2137,13 @@ class DataSet:
         save_mesh : bool, default = False
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
             For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
-        compressed : bool, default = False
-            If True, the file is compressed if available (only for npz and fdz files)
+        compressed : bool, int, str, CompressionConfig or None, default=None
+            For FDH5, True uses gzip level 4, False disables compression, and
+            integers 0-9 select the gzip level. For npz and fdz, True enables
+            compression. None preserves format defaults: gzip level 4 for
+            FDH5, no compression for npz and fdz.
+            FDH5 also accepts ``"zstd"`` (level 3, requires ``fedoo[zstd]``),
+            ``"gzip"``, ``"lzf"``, or a ``CompressionConfig`` for custom levels.
         """
         ext = os.path.splitext(filename)[1]
         ext = ext.lower()
@@ -2106,7 +2168,12 @@ class DataSet:
                 filename, save_mesh=True, compressed=compressed
             )  # create a new file and add the mesh
         elif ext == ".fdh5":
-            self.to_fdh5(filename, iteration=0, overwrite=True)
+            self.to_fdh5(
+                filename,
+                iteration=0,
+                overwrite=True,
+                compressed=True if compressed is None else compressed,
+            )
 
     def save_mesh(self, filename: str):
         """Save the mesh using a vtk file. The extension of filename is ignored and modified to '.vtk'."""
@@ -2209,6 +2276,8 @@ class DataSet:
                 raise NameError("Can't load data -> Data not understood")
         else:
             raise NameError("Can't load data -> Data not understood")
+
+        self._evaluate_scalar_expressions()
 
     def load_dict(self, data: dict) -> None:
         """Load data from a dict generated with the to_dict method.
@@ -2450,7 +2519,7 @@ class DataSet:
         filename: str,
         iteration: int = 0,
         overwrite: bool = False,
-        compressed: bool | int = True,
+        compressed: bool | int | str | CompressionConfig = True,
     ) -> None:
         """Write the dataset to a FDH5 file.
 
@@ -2464,10 +2533,13 @@ class DataSet:
         overwrite : bool, default=False
             If True, an existing file is removed before writing. If False, the
             mesh is kept and only the requested iteration is added or replaced.
-        compressed : bool or int, default=True
+        compressed : bool, int, str or CompressionConfig, default=True
             True uses gzip level 4; False disables compression. Integers 0-9
             select the gzip level (0 uses the gzip filter without compression).
             Applies to newly written datasets, not existing iterations.
+            ``"zstd"`` selects Zstandard level 3 and requires ``fedoo[zstd]``
+            for both writing and reading. Use ``CompressionConfig("zstd", 5)``
+            for a custom level (1-22). ``"gzip"`` and ``"lzf"`` also work.
 
         Notes
         -----
@@ -2548,6 +2620,7 @@ class DataSet:
         copy.element_data = dict(self.element_data)
         copy.gausspoint_data = dict(self.gausspoint_data)
         copy.scalar_data = dict(self.scalar_data)
+        copy.scalar_expressions = deepcopy(self.scalar_expressions)
         copy.field_metadata = deepcopy(self.field_metadata)
         copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
         copy.beam_options = dict(self.beam_options)
@@ -2580,6 +2653,7 @@ class DataSet:
             key: value if np.isscalar(value) else np.array(value).copy()
             for key, value in self.scalar_data.items()
         }
+        copy.scalar_expressions = deepcopy(self.scalar_expressions)
         copy.field_metadata = deepcopy(self.field_metadata)
         copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
         copy.beam_options = dict(self.beam_options)
@@ -2606,7 +2680,10 @@ class MultiFrameDataSet(DataSet):
         return DataSet.__getitem__(self, items)
 
     def save_all(
-        self, filename: str, file_format: str = "fdh5", compressed: bool = False
+        self,
+        filename: str,
+        file_format: str = "fdh5",
+        compressed: bool | int | str | CompressionConfig | None = None,
     ):
         """Save all data from MultiFrameDataSet.
 
@@ -2615,6 +2692,11 @@ class MultiFrameDataSet(DataSet):
         If format is not 'fdz' or 'fdh5', the data files are saved using the given filename and format
         simply adding the iteration number to the file name. The mesh is also saved in vtk format in the same directory.
         For 'fdh5', all iterations are written into one HDF5 file.
+        ``compressed`` follows :meth:`DataSet.save`: None uses format defaults,
+        False disables compression, True enables it, and FDH5 also accepts a
+        gzip level from 0 to 9.
+        FDH5 also accepts codec names and ``CompressionConfig``; see
+        :meth:`DataSet.to_fdh5` for Zstandard support.
         """
         dirname = os.path.dirname(filename)
         extension = os.path.splitext(filename)[1]
@@ -2643,7 +2725,12 @@ class MultiFrameDataSet(DataSet):
                 filename += ".fdh5"
             for i in range(len(self.list_data)):
                 self.load(i)
-                self.to_fdh5(filename, iteration=i, overwrite=(i == 0))
+                self.to_fdh5(
+                    filename,
+                    iteration=i,
+                    overwrite=(i == 0),
+                    compressed=True if compressed is None else compressed,
+                )
         else:
             for i in range(len(self.list_data)):
                 self.load(i)
@@ -3058,6 +3145,7 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.copy(), list(self.list_data))
+        copy.scalar_expressions = deepcopy(self.scalar_expressions)
         copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)
@@ -3077,6 +3165,7 @@ class MultiFrameDataSet(DataSet):
         The copied MultiFrameDataSet object.
         """
         copy = MultiFrameDataSet(self.mesh.deepcopy(), list(self.list_data))
+        copy.scalar_expressions = deepcopy(self.scalar_expressions)
         copy._beam_section_overrides = deepcopy(self._beam_section_overrides)
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)

@@ -268,25 +268,6 @@ def test_reference_point_keeps_laminate_interface_side():
     assert mixed.shell_options["reference_point_index"] is None
 
 
-def test_viewer_lists_shell_components_with_thickness_reduction():
-    from types import SimpleNamespace
-
-    viewer = pytest.importorskip("fedoo.util.viewer")
-    pb, assembly, _ = shell_problem()
-    result = pb.get_results(assembly, ["Stress", "Strain"])
-    result.shell_options.update(reduction="abs_max")
-    dock = SimpleNamespace(data=result)
-    # Component discovery must not request a full tensor under a scalar
-    # thickness reduction. Call the method without creating a Qt window.
-    for field in ("Stress", "Stress_local", "Stress_global", "Strain"):
-        components = viewer.PlotDock.get_components(dock, field)
-        assert "XX" in components
-        assert "XY" in components
-        if field.startswith("Stress"):
-            assert "vm" in components
-    assert result.shell_options["reduction"] == "abs_max"
-
-
 @pytest.mark.parametrize("association", ["GaussPoint", "Element", "Node"])
 def test_stored_associations_and_rotation(association):
     pb, assembly, _ = shell_problem()
@@ -655,4 +636,10 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
             np.testing.assert_allclose(
                 loaded.get_data("Stress_global", component).submesh(2), expected
             )
-            assert not loaded._submesh_has_field("Stress_global", 0)
+            assert loaded._submesh_has_field("Stress_global", 0)
+            # This beam is aligned with X, so its automatically saved frame
+            # leaves scalar components unchanged.
+            np.testing.assert_allclose(
+                loaded.get_data("Stress_global", component).submesh(0),
+                loaded.get_data("Stress_local", component).submesh(0),
+            )

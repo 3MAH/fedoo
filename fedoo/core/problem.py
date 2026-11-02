@@ -214,12 +214,15 @@ class Problem(ProblemBase):
             file format used to save the results. The default file format
             and recommanding one is "fdh5".
 
-        compressed : bool or int, default=True
+        compressed : bool, int, str or CompressionConfig, default=True
             For FDH5, True uses gzip level 4, False disables compression, and
             an integer from 0 to 9 selects the gzip level. Integer 0 keeps the
             gzip filter with compression disabled. Existing iterations are
             unaffected when appending. For other formats, compression is
             enabled when this option is truthy, where supported.
+            FDH5 also accepts ``"zstd"`` (level 3, requires ``fedoo[zstd]``)
+            or ``fedoo.util.fdh5.CompressionConfig("zstd", level)`` for a
+            custom Zstandard level from 1 to 22.
 
         position : None, scalar, coordinate pair or array, optional
             For beams, normalized (y, z) coordinates, either one pair or an

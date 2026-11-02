@@ -24,6 +24,7 @@ from .core import (
     MultiFrameDataSet,
     MultiMeshData,
     Problem,
+    ProblemDataSet,
     WeakForm,
     WeakFormSum,
     read_data,

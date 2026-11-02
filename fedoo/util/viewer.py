@@ -26,7 +26,16 @@ from qtpy.QtWidgets import (
     QWidget,
     QShortcut,
 )
-from qtpy.QtCore import Qt, Signal, QSignalBlocker, QTimer, QEvent, QSize
+from qtpy.QtCore import (
+    Qt,
+    Signal,
+    QSignalBlocker,
+    QTimer,
+    QEvent,
+    QSize,
+    QObject,
+    QRect,
+)
 import matplotlib as mpl  # only for colormap
 import pyvista as pv
 from pyvistaqt import QtInteractor
@@ -35,11 +44,30 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 import os
 import re
+import tempfile
 
 from fedoo.core.multimeshdata import MultiMeshData
 from fedoo.core.mesh import MultiMesh
-from fedoo.util.fdh5 import FDH5Reader
+from fedoo.core.base import ProblemBase
+from fedoo.core.boundary_conditions import BoundaryCondition, ListBC
+from fedoo.core.problem_dataset import ProblemDataSet, _is_problem
+from fedoo.core.dataset import as_3d_coordinates
+from fedoo.util._viewer.object_inspector import ObjectInspector
+from fedoo.mesh.selection import (
+    find_surface_nodes,
+    find_edge_nodes,
+    AmbiguousSurfaceSeed,
+    AmbiguousEdgeSeed,
+)
+from fedoo.util.fdh5 import CompressionConfig, FDH5Reader, zstd_available
 from fedoo.util.field_components import get_field_components
+from fedoo.util.expressions import (
+    evaluate_expression,
+    selection_mask,
+    mesh_positions,
+    nodes_to_elements,
+    elements_to_nodes,
+)
 
 USE_PYVISTA_QT = True
 SOLID_COLOR_FIELD = "Solid color"
@@ -124,6 +152,10 @@ def _refresh_result_frames(data, reload_current=False):
     A single-frame file may become a sequence while its simulation runs.
     Keep loaded fields and selection options until an explicit reload/load.
     """
+    if isinstance(data, ProblemDataSet):
+        if reload_current:
+            data.refresh()
+        return data
     filename = getattr(data, "_fdh5_filename", None)
     refs = getattr(data, "list_data", [])
     if refs and isinstance(refs[0], tuple) and refs[0][0] == "fdh5":
@@ -155,6 +187,18 @@ def _refresh_result_frames(data, reload_current=False):
             data.loaded_iter = previous_iter
             raise
     return data
+
+
+@contextmanager
+def _preserve_camera(plotter, enabled):
+    """Keep zoom and projection as well as position across scene rebuilds."""
+    camera = plotter.camera.copy() if enabled else None
+    try:
+        yield
+    finally:
+        if camera is not None:
+            plotter.camera.DeepCopy(camera)
+            plotter.reset_camera_clipping_range()
 
 
 @contextmanager
@@ -297,6 +341,52 @@ class DockTitleBar(QtWidgets.QWidget):
             """)
 
 
+class IterationSpinBox(QSpinBox):
+    """Editable frame number with chronological left/right step buttons."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+        self.setStyleSheet("QSpinBox { padding-left: 20px; padding-right: 20px; }")
+        self.lineEdit().setAlignment(Qt.AlignCenter)
+        self.previous_button = QtWidgets.QToolButton(self)
+        self.next_button = QtWidgets.QToolButton(self)
+        for button, direction, text, step in (
+            (self.previous_button, Qt.LeftArrow, "Previous iteration", self.stepDown),
+            (self.next_button, Qt.RightArrow, "Next iteration", self.stepUp),
+        ):
+            button.setArrowType(direction)
+            button.setToolTip(text)
+            button.setAutoRepeat(True)
+            button.setFocusPolicy(Qt.NoFocus)
+            button.clicked.connect(step)
+        self.valueChanged.connect(self._update_step_buttons)
+        self._update_step_buttons()
+
+    def _update_step_buttons(self, *args):
+        enabled = self.stepEnabled()
+        self.previous_button.setEnabled(
+            bool(enabled & QtWidgets.QAbstractSpinBox.StepDownEnabled)
+        )
+        self.next_button.setEnabled(
+            bool(enabled & QtWidgets.QAbstractSpinBox.StepUpEnabled)
+        )
+
+    def setRange(self, minimum, maximum):
+        super().setRange(minimum, maximum)
+        self._update_step_buttons()
+
+    def setValue(self, value):
+        super().setValue(value)
+        self._update_step_buttons()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        rect = self.contentsRect().adjusted(2, 2, -2, -2)
+        self.previous_button.setGeometry(rect.left(), rect.top(), 18, rect.height())
+        self.next_button.setGeometry(rect.right() - 17, rect.top(), 18, rect.height())
+
+
 class PlotDock(QDockWidget):
     _n_created_dock = 0  # total dock created
 
@@ -305,12 +395,14 @@ class PlotDock(QDockWidget):
         self._dock_index = PlotDock._n_created_dock
         self.title = title
         self.filename = filename
-        title = f"{self._dock_index }: " + str(title)
+        title = f"{self._dock_index}: " + str(title)
         super().__init__(title, parent)
         self.data = data
         self.line_points = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))
         self.element_sets = None
         self.unsaved_element_set_names = set()
+        self.node_sets = None
+        self.unsaved_node_set_names = set()
         # visibility_mode to keep track on current_selection for element_sets dialog box
         #  -> None for show all, "show" or "hide"
         self.visibility_mode = None
@@ -390,7 +482,9 @@ class PlotDock(QDockWidget):
                 data.load(-1)
             self.current_iter = data.loaded_iter
         else:
-            self.current_iter = 0
+            self.current_iter = (
+                (data.current_mode or 0) if isinstance(data, ProblemDataSet) else 0
+            )
 
         field_names = _viewer_field_names(data)
         self.beam_csys = "global"
@@ -485,14 +579,24 @@ class PlotDock(QDockWidget):
         if plotter is None:
             plotter = self.plotter
 
-        if iteration is not None and hasattr(self.data, "loaded_iter"):
+        if iteration is not None and (
+            hasattr(self.data, "loaded_iter")
+            or (isinstance(self.data, ProblemDataSet) and self.data.n_modes)
+        ):
             try:
-                self.data.load(iteration)
-            except (OSError, KeyError) as exc:
+                if isinstance(self.data, ProblemDataSet):
+                    self.data.set_mode(iteration)
+                else:
+                    self.data.load(iteration)
+            except (OSError, KeyError, ValueError, IndexError) as exc:
                 self.parent().statusBar().showMessage(
                     f"Results temporarily unavailable: {exc}"
                 )
                 return
+
+        scalar_dialog = getattr(self.parent(), "scalar_expression_dialog", None)
+        if scalar_dialog is not None and scalar_dialog.isVisible():
+            scalar_dialog.refresh()
 
         if self.opts["clim_mode"] == "current":
             clim = None
@@ -513,7 +617,10 @@ class PlotDock(QDockWidget):
             ):
                 multimesh_kargs["missing_field_color"] = self.opts["color"]
 
-        with _defer_rendering(plotter, is_multimesh):
+        with (
+            _defer_rendering(plotter, is_multimesh or lock_view),
+            _preserve_camera(plotter, lock_view),
+        ):
             # plotter.clear()  # not compatible with pbr ???
             plotter.renderer.clear_actors()
             plot_kargs = {}
@@ -554,12 +661,34 @@ class PlotDock(QDockWidget):
             if self.parent()._line_widget_enabled:
                 self.parent()._rebuild_line_widget()
 
+            if self.opts.get("show_time", False) and "Time" in self.data.scalar_data:
+                time_value = np.asarray(self.data.scalar_data["Time"])
+                if time_value.size == 1 and np.isfinite(time_value.item()):
+                    plotter.add_text(
+                        f"Time = {time_value.item():.6g}",
+                        position="upper_right",
+                        font_size=10,
+                        color="black",
+                        name="_fedoo_time",
+                    )
+        if self is self.parent().active_dock:
+            self.parent()._refresh_object_inspector()
+
     def closeEvent(self, event):
+        if self is self.parent().active_dock:
+            self.parent()._clip_redraw_timer.stop()
+            for dialog in (
+                self.parent().node_sets_dialog,
+                self.parent().element_sets_dialog,
+            ):
+                if dialog is not None:
+                    dialog.close()
         self.plotter.close()
         if self is self.parent().active_dock:
             self.parent().active_dock = None
         self.parent().all_docks.remove(self)
         self.parent()._update_dock_selector()
+        self.parent()._refresh_object_inspector()
         if self.parent().active_dock is None:
             self.parent().field_combo.clear()
             for action in self.parent().actions_requiring_data:
@@ -584,6 +713,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._renderer_dialog = None
         self._plot_dialog = None
         self.element_sets_dialog = None
+        self.node_sets_dialog = None
+        self.scalar_expression_dialog = None
+        self.boundary_conditions_dialog = None
+        self.object_inspector = None
+        self._problem_dialog = None
         self._window_index = 1
         self._picking_target = -1  # internal arg for picking tools. -1 = No target
         self._syncing_line_widget = False
@@ -591,6 +725,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # if plane_widget or line wiget should be shown in the active dock
         self._plane_widget_enabled = False
+        self._plane_widget = None
+        self._plane_widget_plotter = None
+        self._clip_redraw_timer = QTimer(self)
+        self._clip_redraw_timer.setSingleShot(True)
+        self._clip_redraw_timer.timeout.connect(self.update_plot)
         self._line_widget_enabled = False
 
         self.apply_options_to_all = True
@@ -684,7 +823,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         toolbar_iter.addWidget(QLabel("Iteration:"))
         self.iter_slider = QSlider(Qt.Horizontal)
-        self.iter_spin = QSpinBox()
+        self.iter_spin = IterationSpinBox()
         self.iter_slider.setTracking(False)
         self.iter_slider.setTickPosition(QSlider.TicksBelow)
 
@@ -926,6 +1065,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Menu View ---
         view_menu = menubar.addMenu("View")
+        self.object_inspector = ObjectInspector(self)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.object_inspector)
+        self.object_inspector.hide()
+        self.object_inspector_action = self.object_inspector.toggleViewAction()
         # add same actions as view toolbar
         self._link_views_action = QtWidgets.QAction("Link views", self)
         self._link_views_action.setCheckable(True)
@@ -958,6 +1101,25 @@ class MainWindow(QtWidgets.QMainWindow):
         element_sets_action.triggered.connect(self.open_element_sets_dialog)
         tools_menu.addAction(element_sets_action)
 
+        node_sets_action = QtWidgets.QAction("Node sets...", self)
+        node_sets_action.triggered.connect(self.open_node_sets_dialog)
+        tools_menu.addAction(node_sets_action)
+        scalar_expression_action = QtWidgets.QAction("Compute scalar...", self)
+        scalar_expression_action.triggered.connect(self.open_scalar_expression_dialog)
+        tools_menu.addAction(scalar_expression_action)
+
+        problem_menu = menubar.addMenu("Problem")
+        self.open_problem_action = QtWidgets.QAction("Open existing problem...", self)
+        self.open_problem_action.triggered.connect(self.open_existing_problem_dialog)
+        problem_menu.addAction(self.open_problem_action)
+        self.boundary_conditions_action = QtWidgets.QAction(
+            "Boundary conditions...", self
+        )
+        self.boundary_conditions_action.triggered.connect(
+            self.open_boundary_conditions_dialog
+        )
+        problem_menu.addAction(self.boundary_conditions_action)
+
         # --- History Plot Dialog ---
         history_plot_action = QtWidgets.QAction("History plot...", self)
         history_plot_action.triggered.connect(self.open_history_plot_dialog)
@@ -966,6 +1128,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Menu Windows ---
         windows_menu = menubar.addMenu("Windows")
+        windows_menu.addAction(self.object_inspector_action)
 
         toolbars_menu = windows_menu.addMenu("Toolbars")  # Show/Hide Toolbars
         for tb in self.findChildren(QtWidgets.QToolBar):
@@ -1056,6 +1219,9 @@ class MainWindow(QtWidgets.QMainWindow):
             clipAction,
             plotOverLineAction,
             element_sets_action,
+            node_sets_action,
+            scalar_expression_action,
+            self.boundary_conditions_action,
             history_plot_action,
             view_top_action,
             view_bottom_action,
@@ -1077,6 +1243,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 data = fd.read_data(data)
             else:
                 title = "Data"
+
+            if _is_problem(data):
+                title = data.name or "Problem"
+                data = ProblemDataSet(data)
 
             self.add_dataset_dock(data, title=title, filename=filename)
             # self.plotter = QtInteractor(self)
@@ -1111,6 +1281,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return self.active_dock.update_plot(*args, **kargs)
 
     def add_dataset_dock(self, data, title, opts=None, filename=None):
+        if _is_problem(data):
+            data = ProblemDataSet(data)
         dock = PlotDock(data, title, self, opts, filename=filename)
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
@@ -1142,7 +1314,7 @@ class MainWindow(QtWidgets.QMainWindow):
         et = event.type()
         if et in (QEvent.FocusIn, QEvent.MouseButtonPress):
             dock = self._dock_for_widget(obj)
-            if dock:
+            if dock and dock is not self.active_dock:
                 self._set_active(dock)
         return super().eventFilter(obj, event)
 
@@ -1210,26 +1382,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window_layout = self._distribute_tabified
 
     def _distribute_vertical(self):
-        if not self.all_docks:
-            return
-
-        self.addDockWidget(Qt.RightDockWidgetArea, self.all_docks[0])
-
-        for dock in self.all_docks[1:]:
-            self.splitDockWidget(self.all_docks[0], dock, Qt.Vertical)
+        self._distribute_split(Qt.Vertical)
         self.window_layout = self._distribute_vertical
 
     def _distribute_horizontal(self):
+        self._distribute_split(Qt.Horizontal)
+        self.window_layout = self._distribute_horizontal
+
+    def _distribute_split(self, orientation):
         if not self.all_docks:
             return
-
-        # Add the first dock
-        self.addDockWidget(Qt.RightDockWidgetArea, self.all_docks[0])
-
-        # Split horizontally for the rest
+        first = self.all_docks[0]
+        self.addDockWidget(Qt.RightDockWidgetArea, first)
         for dock in self.all_docks[1:]:
-            self.splitDockWidget(self.all_docks[0], dock, Qt.Horizontal)
-        self.window_layout = self._distribute_horizontal
+            self.splitDockWidget(first, dock, orientation)
 
     def _distribute_auto(self):
         n = len(self.all_docks)
@@ -1357,6 +1523,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._toggle_link_views(False)
 
     def _set_active(self, dock):
+        self._clip_redraw_timer.stop()
         # block all signals to avoid replot
         blockers = [
             QSignalBlocker(self.iter_slider),
@@ -1369,19 +1536,23 @@ class MainWindow(QtWidgets.QMainWindow):
             # remove plane widget from previous active dock
             # try:
             self.plotter.clear_plane_widgets()
+            self._plane_widget = None
+            self._plane_widget_plotter = None
             # except Exception:
             #     self.plotter.clear_widgets()
         if self._line_widget_enabled and self.active_dock:
             self.plotter.clear_line_widgets()
         if self.active_dock:
             self.plotter.remove_actor("_picked_cell")  # if picked cell mesh exist
+            self.plotter.remove_actor("_picked_node_set")
             self.plotter.disable_picking()
         if self.element_sets_dialog:
             self.element_sets_dialog._stop_picking()
+        if self.node_sets_dialog:
+            self.node_sets_dialog._cancel_surface_pick()
+            self.node_sets_dialog._stop_picking()
         if self._history_plot_dialog:
-            if getattr(self, "_lbp_tag", None) is not None:
-                self.plotter.interactor.RemoveObserver(self._lbp_tag)
-                self._lbp_tag = None
+            self._stop_element_picking()
 
         # save node/element selector current values
         node_selector_ischecked = self.select_node_action.isChecked()
@@ -1406,6 +1577,8 @@ class MainWindow(QtWidgets.QMainWindow):
             d._titlebar._set_active(d is dock)
 
         max_iter = _data_n_iter(dock.data) - 1
+        if isinstance(dock.data, ProblemDataSet) and dock.data.current_mode is not None:
+            dock.current_iter = dock.data.current_mode
         current_iter = dock.current_iter  # may be modified by setRange
         self.setRange(0, max_iter)
         self.iter_slider.setValue(current_iter)
@@ -1467,6 +1640,17 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.element_sets_dialog.current_selection = set()
             self.element_sets_dialog._update_selection_info()
+        if self.node_sets_dialog:
+            self.node_sets_dialog.current_selection = set()
+            self.node_sets_dialog._refresh_sets_list()
+            self.node_sets_dialog._update_selection_info()
+        if self.scalar_expression_dialog:
+            self.scalar_expression_dialog.refresh()
+        self.boundary_conditions_action.setEnabled(
+            isinstance(dock.data, ProblemDataSet)
+        )
+        if self.boundary_conditions_dialog:
+            self.boundary_conditions_dialog.refresh()
         if self._history_plot_dialog:
             self._history_plot_dialog._on_change_active()
         if self.active_dock in self.all_docks:
@@ -1477,6 +1661,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self._on_select_node_changed(True)
         elif elm_selector_ischecked:
             self._on_select_elm_changed(True)
+        self._refresh_object_inspector()
+
+    def _refresh_object_inspector(self):
+        if self.object_inspector is not None:
+            self.object_inspector.schedule_refresh()
 
     def _on_anim_tick(self):
         self._refresh_iterations()
@@ -1493,44 +1682,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.iter_slider.setValue(new_iter)
 
     def _on_slider_changed(self, val: int):
-        self._refresh_iterations()
-        # sync iter spin_box without emit signal
-        if self.iter_spin.value() != val:
-            old_state = self.iter_spin.blockSignals(True)
-            self.iter_spin.setValue(val)
-            self.iter_spin.blockSignals(old_state)
-
-        if self.active_dock:
-            self.active_dock.current_iter = val
-
-        # Sync iteration across all docks if enabled
-        if self._sync_iter:
-            for dock in self.all_docks:
-                if (
-                    _data_n_iter(dock.data) > val
-                ):  # only update if the dock has this iteration
-                    dock.current_iter = val
-                    dock.update_plot(iteration=val)
-        else:
-            self.update_plot(iteration=self.iteration)
+        self._change_iteration(val, self.iter_spin)
 
     def _on_spin_changed(self, val: int):
+        self._change_iteration(val, self.iter_slider)
+
+    def _change_iteration(self, val, other_control):
         self._refresh_iterations()
-        # sync slider without emit signal
-        if self.iter_slider.value() != val:
-            old_state = self.iter_slider.blockSignals(True)
-            self.iter_slider.setValue(val)
-            self.iter_slider.blockSignals(old_state)
+        if other_control.value() != val:
+            blocker = QSignalBlocker(other_control)
+            other_control.setValue(val)
+            del blocker
 
         if self.active_dock:
             self.active_dock.current_iter = val
 
-        # Sync iteration across all docks if enabled
         if self._sync_iter:
             for dock in self.all_docks:
-                if (
-                    _data_n_iter(dock.data) > val
-                ):  # only update if the dock has this iteration
+                if _data_n_iter(dock.data) > val:
                     dock.current_iter = val
                     dock.update_plot(iteration=val)
         else:
@@ -1550,6 +1719,12 @@ class MainWindow(QtWidgets.QMainWindow):
                         dock.data, reload_current=reload_current
                     )
                 dock.data = refreshed[key]
+                if (
+                    reload_current
+                    and isinstance(dock.data, ProblemDataSet)
+                    and dock.data.current_mode is not None
+                ):
+                    dock.current_iter = dock.data.current_mode
                 dock.current_iter = min(
                     dock.current_iter, max(0, _data_n_iter(dock.data) - 1)
                 )
@@ -1563,6 +1738,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 QSignalBlocker(self.iter_spin),
             ]
             self.setRange(0, max(0, _data_n_iter(self.data) - 1))
+            if reload_current and isinstance(self.data, ProblemDataSet):
+                self.iter_slider.setValue(self.active_dock.current_iter)
+                self.iter_spin.setValue(self.active_dock.current_iter)
             del blockers
 
     def reload_results(self):
@@ -1576,6 +1754,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def setRange(self, min_iter: int, max_iter: int):
         self.iter_slider.setRange(min_iter, max_iter)
         self.iter_spin.setRange(min_iter, max_iter)
+        mode_navigation = (
+            self.active_dock
+            and isinstance(self.data, ProblemDataSet)
+            and self.data.n_modes
+        )
+        hint = (
+            "Select a stored eigenmode (zero-based index, as for FDH5 frames)."
+            if mode_navigation
+            else "Select a result iteration."
+        )
+        self.iter_slider.setToolTip(hint)
+        self.iter_spin.setToolTip(hint)
         # Ajuster les ticks si besoin
         self.iter_slider.setTickInterval(max(1, (max_iter - min_iter) // 10))
 
@@ -2708,6 +2898,31 @@ class MainWindow(QtWidgets.QMainWindow):
             if name not in excluded and values is not None
         }
 
+    def _ensure_dock_node_sets(self, dock):
+        if dock.node_sets is None:
+            dock.node_sets = {"All": None, **dock.data.mesh.node_sets}
+            dock.unsaved_node_set_names = (
+                {"All"} if "All" not in dock.data.mesh.node_sets else set()
+            )
+
+    def _sync_viewer_sets(self, dock):
+        """Keep named sets available to expressions and the FDH5 save path."""
+        self._ensure_dock_node_sets(dock)
+        mesh = dock.data.mesh
+        node_sets = {
+            name: np.asarray(values, dtype=int)
+            for name, values in dock.node_sets.items()
+            if name not in dock.unsaved_node_set_names and values is not None
+        }
+        mesh.node_sets = node_sets
+        if _is_multimesh(mesh):
+            for submesh in mesh.submeshes:
+                submesh.node_sets = node_sets
+        self._apply_saved_element_sets_to_mesh(mesh, self._element_sets_for_save(dock))
+        if isinstance(dock.data, ProblemDataSet):
+            dock.data.sync_problem_sets()
+        self._refresh_object_inspector()
+
     def _apply_saved_element_sets_to_mesh(self, mesh, element_sets):
         if not _is_multimesh(mesh):
             mesh.element_sets = {
@@ -2728,6 +2943,7 @@ class MainWindow(QtWidgets.QMainWindow):
             submesh.element_sets = sets
 
     def _data_for_fdh5_save(self, dock):
+        self._sync_viewer_sets(dock)
         data = dock.data.deepcopy()
         self._apply_saved_element_sets_to_mesh(
             data.mesh,
@@ -2735,7 +2951,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         return data
 
-    def _save_data_to_fdh5(self, filename):
+    def _save_data_to_fdh5(self, filename, compressed=None):
         if self.active_dock is None:
             return False
 
@@ -2748,12 +2964,27 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
+        if compressed is None:
+            compressed = self.active_dock.opts.get("fdh5_compression", True)
+        try:
+            CompressionConfig.from_compressed(compressed).dataset_kwargs()
+        except ImportError as exc:
+            QtWidgets.QMessageBox.warning(self, "Save data", str(exc))
+            return False
         data = self._data_for_fdh5_save(self.active_dock)
-        if isinstance(data, fd.MultiFrameDataSet):
-            data.save_all(filename, file_format="fdh5")
-        else:
-            data.save(filename)
+        # Read all source frames before replacing the destination, which may
+        # itself be the file backing this dataset (e.g. when recompressing).
+        with tempfile.TemporaryDirectory(
+            prefix=".fedoo-save-", dir=os.path.dirname(os.path.abspath(filename))
+        ) as temporary:
+            destination = os.path.join(temporary, "data.fdh5")
+            if isinstance(data, fd.MultiFrameDataSet):
+                data.save_all(destination, file_format="fdh5", compressed=compressed)
+            else:
+                data.save(destination, compressed=compressed)
+            os.replace(destination, filename)
 
+        self.active_dock.opts["fdh5_compression"] = compressed
         self.active_dock.filename = filename
         self.active_dock.title = os.path.basename(filename)
         self.active_dock.setWindowTitle(
@@ -2778,14 +3009,65 @@ class MainWindow(QtWidgets.QMainWindow):
         if not start or os.path.splitext(start)[1].lower() != ".fdh5":
             start = os.path.splitext(start)[0] + ".fdh5"
 
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self,
-            "Save data as",
-            start,
-            "Fedoo HDF5 files (*.fdh5)",
+        dlg = QtWidgets.QFileDialog(self, "Save data as")
+        dlg.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        dlg.setNameFilter("Fedoo HDF5 files (*.fdh5)")
+        dlg.setDefaultSuffix("fdh5")
+        dlg.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+        dlg.selectFile(start)
+
+        options = QtWidgets.QWidget(dlg)
+        options_layout = QtWidgets.QHBoxLayout(options)
+        options_layout.setContentsMargins(0, 0, 0, 0)
+        compression = QtWidgets.QComboBox(options)
+        compression.setObjectName("fdh5_compression")
+        compression.addItem("None", None)
+        compression.addItem("gzip", "gzip")
+        compression.addItem("Zstandard", "zstd")
+        available = zstd_available()
+        compression.model().item(2).setEnabled(available)
+        compression.setToolTip(
+            "Lossless FDH5 compression. Zstandard requires hdf5plugin on readers "
+            "and writers; install with pip install fedoo[zstd]."
         )
-        if filename:
-            self._save_data_to_fdh5(filename)
+        level = QtWidgets.QSpinBox(options)
+        level.setObjectName("fdh5_compression_level")
+        saved = self.active_dock.opts.get("fdh5_compression", True)
+        config = CompressionConfig.from_compressed(saved)
+
+        def update_level():
+            codec = compression.currentData()
+            level.setEnabled(codec is not None)
+            level.setRange(1, 22 if codec == "zstd" else 9)
+            level.setValue(3 if codec == "zstd" else 4)
+            level.setToolTip(
+                "1: fastest save; higher levels favor compression. "
+                + ("Zstandard default: 3." if codec == "zstd" else "gzip default: 4.")
+            )
+
+        compression.currentIndexChanged.connect(update_level)
+        selected = compression.findData(config.compression)
+        compression.setCurrentIndex(max(0, selected))
+        update_level()
+        if config.compression_opts is not None:
+            level.setValue(config.compression_opts)
+        options_layout.addWidget(QtWidgets.QLabel("Compression:", options))
+        options_layout.addWidget(compression)
+        options_layout.addWidget(QtWidgets.QLabel("Level:", options))
+        options_layout.addWidget(level)
+        options_layout.addStretch(1)
+        grid = dlg.layout()
+        grid.addWidget(options, grid.rowCount(), 0, 1, grid.columnCount())
+
+        if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            self._save_data_to_fdh5(
+                dlg.selectedFiles()[0],
+                compressed=(
+                    False
+                    if compression.currentData() is None
+                    else CompressionConfig(compression.currentData(), level.value())
+                ),
+            )
 
     def open_clim_dialog(self):
         if self._clim_dialog is None:
@@ -2797,19 +3079,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._clim_dialog.setWindowModality(Qt.NonModal)
         self._clim_dialog.show()
         self._clim_dialog.raise_()
-
-    def _update_dialog_state(self, dlg, mode, vmin, vmax, n_colors, n_labels):
-        # Mettre à jour les valeurs du popup sans le recréer
-        if mode == "current":
-            dlg.rb_current.setChecked(True)
-        elif mode == "all":
-            dlg.rb_all.setChecked(True)
-        else:
-            dlg.rb_manual.setChecked(True)
-        dlg.vmin_spin.setValue(float(vmin))
-        dlg.vmax_spin.setValue(float(vmax))
-        dlg.ncolors_spin.setValue(int(n_colors))
-        dlg.nlabels_spin.setValue(int(n_labels))
 
     def apply_clim_from_dialog(self):
         """Called by the Apply button."""
@@ -2841,6 +3110,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self._plot_dialog:
             self._plot_dialog = PlotOptionsDialog(self)
             self._plot_dialog.optionsChanged.connect(self._apply_plot_options)
+        self._plot_dialog.update_values()
         # Show non-modally (no exec())
         self._plot_dialog.show()
         self._plot_dialog.raise_()
@@ -2866,6 +3136,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         opts["show_edges"] = self._plot_dialog.edges_cb.isChecked()
         opts["show_scalar_bar"] = self._plot_dialog.scalarbar_cb.isChecked()
+        opts["show_time"] = self._plot_dialog.show_time_cb.isChecked()
         if self._plot_dialog.axes_cb.isChecked():
             dock.plotter.show_axes()
         else:
@@ -3256,7 +3527,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """Quand la fenêtre est fermée : on retire le widget plan."""
         self.disable_plane_widget()
 
-    def _on_dialog_clip_changed(self, enabled, origin, normal, invert):
+    def _on_dialog_clip_changed(
+        self, enabled, origin, normal, invert, *, defer_render=False
+    ):
         """Dialog → Apply clip and update clip plane widget."""
         self.opts["clip_invert"] = bool(invert)
         self.opts["clip_normal"] = normal
@@ -3272,7 +3545,13 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.opts["clip_args"] = None
 
-        self.update_plot()
+        if defer_render:
+            # Leave VTK's interaction callback before rebuilding its scene.
+            # Multiple pending movements only need the newest plane position.
+            self._clip_redraw_timer.start(0)
+        else:
+            self._clip_redraw_timer.stop()
+            self.update_plot()
 
     # ----------------------------
     # Plane widget gestion
@@ -3293,16 +3572,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
         origin = self.opts["clip_origin"]
         normal = self.opts["clip_normal"]
+        widget = self._plane_widget
+        if (
+            widget is not None
+            and self._plane_widget_plotter is self.plotter
+            and widget.GetEnabled()
+        ):
+            widget.PlaceWidget(bounds)
+            widget.SetOrigin(origin)
+            widget.SetNormal(normal)
+            widget.UpdatePlacement()
+            return
+        dock = self.active_dock
         # bounds = self._bounds
 
         def _cb(normal_cb, origin_cb):
             """Widget → Dialog + Clip (live)."""
-            if self._clip_dialog is not None:
+            if (
+                self.active_dock is dock
+                and self._plane_widget_enabled
+                and self._clip_dialog is not None
+            ):
                 self._clip_dialog.set_values_from_widget(
                     origin_cb, normal_cb, invert=self.opts["clip_invert"]
                 )
-                self._clip_dialog._emit_clip_params()  # emit signal
-                self.update_plot()
+                self._on_dialog_clip_changed(
+                    self._clip_dialog.enableClipChk.isChecked(),
+                    origin_cb,
+                    normal_cb,
+                    self.opts["clip_invert"],
+                    defer_render=True,
+                )
 
         def clamp_to_bounds(pt, b):
             # to avoid origin outside the bounds
@@ -3311,6 +3611,7 @@ class MainWindow(QtWidgets.QMainWindow):
             z = min(max(pt[2], b[4]), b[5])
             return (x, y, z)
 
+        self.plotter.clear_plane_widgets()
         self._plane_widget = self.plotter.add_plane_widget(
             callback=_cb,
             bounds=bounds,
@@ -3325,12 +3626,14 @@ class MainWindow(QtWidgets.QMainWindow):
             test_callback=False,
         )
         self._plane_widget_enabled = True
+        self._plane_widget_plotter = self.plotter
 
         # Init dialog si ouverte
         # if self._clip_dialog is not None:
         #     self._clip_dialog.set_values_from_widget(origin, normal, invert=self.opts['clip_invert'])
 
     def disable_plane_widget(self):
+        self._clip_redraw_timer.stop()
         if not self._plane_widget_enabled:
             return
         try:
@@ -3338,6 +3641,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception:
             self.plotter.clear_widgets()
         self._plane_widget = None
+        self._plane_widget_plotter = None
         self._plane_widget_enabled = False
 
     #
@@ -3475,15 +3779,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.statusBar().setVisible(True)
             self._pick_element()
         else:
-            if getattr(self, "_lbp_tag", None) is not None:
-                self.plotter.interactor.RemoveObserver(self._lbp_tag)
-                self._lbp_tag = None
+            self._stop_element_picking()
             self.plotter.remove_actor("_picked_cell")
             # self.plotter.disable_picking()
             self.statusBar().setVisible(False)
 
-    def _pick_node(self):
-        """Start one-shot picking to select node"""
+    def _stop_element_picking(self):
+        if getattr(self, "_lbp_tag", None) is not None:
+            self.plotter.interactor.RemoveObserver(self._lbp_tag)
+            self._lbp_tag = None
+
+    def _pick_node(self, on_pick=None):
+        """Start point picking with an optional consumer of physical node IDs."""
+        self._stop_element_picking()
 
         def _picked(point, picker):
             pid, value, association = _picked_node_value(
@@ -3501,6 +3809,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     msg += f" ({association})"
 
             self.statusBar().showMessage(msg)
+            if pid is not None and on_pick is not None:
+                on_pick(int(pid))
 
         # Enable one-shot point picking (left click)
         self.plotter.disable_picking()
@@ -3512,7 +3822,9 @@ class MainWindow(QtWidgets.QMainWindow):
             use_picker=True,
         )
 
-    def _pick_element(self):
+    def _pick_element(self, on_pick=None):
+        self._stop_element_picking()
+        self.plotter.disable_picking()
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.0005)
 
@@ -3576,12 +3888,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.statusBar().showMessage(msg)
 
+            if on_pick is not None:
+                on_pick(cell_id)
+
         self._lbp_tag = self.plotter.interactor.AddObserver(
             "LeftButtonPressEvent", _on_click
         )
-        # self.plotter.interactor.AddObserver(
-        #     "LeftButtonPressEvent", _on_click
-        # )
 
     def plot_over_line(self, p1, p2, resolution):
         """
@@ -3635,10 +3947,53 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pol_results_dialog.activateWindow()
 
     def open_element_sets_dialog(self):
-        # Hook a menu action or button to open dialog
-        self.element_sets_dialog = ElementVisibilityDialog(parent=self)
+        if self.element_sets_dialog is None:
+            self.element_sets_dialog = ElementVisibilityDialog(parent=self)
+        self.element_sets_dialog._refresh_sets_list()
         self.element_sets_dialog.show()
         self.element_sets_dialog.raise_()
+
+    def open_node_sets_dialog(self):
+        if self.node_sets_dialog is None:
+            self.node_sets_dialog = NodeSetsDialog(parent=self)
+        self.node_sets_dialog._refresh_sets_list()
+        self.node_sets_dialog.show()
+        self.node_sets_dialog.raise_()
+
+    def open_scalar_expression_dialog(self):
+        if self.scalar_expression_dialog is None:
+            self.scalar_expression_dialog = ScalarExpressionDialog(self)
+        self.scalar_expression_dialog.refresh()
+        self.scalar_expression_dialog.show()
+        self.scalar_expression_dialog.raise_()
+
+    def open_existing_problem_dialog(self):
+        if self._problem_dialog is None:
+            self._problem_dialog = OpenProblemDialog(self)
+        self._problem_dialog.refresh()
+        self._problem_dialog.show()
+        self._problem_dialog.raise_()
+        self._problem_dialog.activateWindow()
+
+    def open_workspace_problem(self, problem, title):
+        """Open a live session object, or refresh its existing viewer pane."""
+        for dock in self.all_docks:
+            if isinstance(dock.data, ProblemDataSet) and dock.data.problem is problem:
+                dock.data.refresh()
+                self._set_active(dock)
+                dock.update_plot()
+                return dock
+        snapshot = ProblemDataSet(problem)
+        return self.add_dataset_dock(snapshot, title=problem.name or title)
+
+    def open_boundary_conditions_dialog(self):
+        if self.active_dock is None or not isinstance(self.data, ProblemDataSet):
+            return
+        if self.boundary_conditions_dialog is None:
+            self.boundary_conditions_dialog = BoundaryConditionsDialog(self)
+        self.boundary_conditions_dialog.refresh()
+        self.boundary_conditions_dialog.show()
+        self.boundary_conditions_dialog.raise_()
 
     def open_history_plot_dialog(self):
         if self._history_plot_dialog is None:
@@ -3652,6 +4007,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if not (self.isFullScreen()):
             # Remember current visible toolbars/menubar to restore later
             self._hidden_ui_when_fullscreen = []
+            if self.object_inspector is not None and self.object_inspector.isVisible():
+                self._hidden_ui_when_fullscreen.append(
+                    ("inspector", self.object_inspector)
+                )
+                self.object_inspector.hide()
             if self.menuBar().isVisible():
                 self.menuBar().setVisible(False)
                 self._hidden_ui_when_fullscreen.append(("menubar", self.menuBar()))
@@ -3677,6 +4037,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         self.stop_animation()  # remove timer if present
+        if self.object_inspector is not None:
+            self.object_inspector.stop()
+        self._clip_redraw_timer.stop()
+        self._plane_widget_enabled = False
+        if self._problem_dialog is not None:
+            self._problem_dialog.close()
+        for dialog in (
+            self.node_sets_dialog,
+            self.element_sets_dialog,
+            self.scalar_expression_dialog,
+        ):
+            if dialog is not None:
+                dialog.close()
         for dock in self.all_docks:
             dock.plotter.close()  # free vtk context
         super().closeEvent(event)
@@ -3704,6 +4077,7 @@ class PlotOptionsDialog(QtWidgets.QDialog):
         # other options
         self.edges_cb = QtWidgets.QCheckBox("Show edges")
         self.scalarbar_cb = QtWidgets.QCheckBox("Show scalar bar")
+        self.show_time_cb = QtWidgets.QCheckBox("Show time")
         self.axes_cb = QtWidgets.QCheckBox("Show axes")
         self.node_labels_cb = QtWidgets.QCheckBox("Show node labels")
         self.element_labels_cb = QtWidgets.QCheckBox("Show element labels")
@@ -3729,6 +4103,7 @@ class PlotOptionsDialog(QtWidgets.QDialog):
         opts_layout = QtWidgets.QFormLayout()
         opts_layout.addRow(self.edges_cb)
         opts_layout.addRow(self.scalarbar_cb)
+        opts_layout.addRow(self.show_time_cb)
         opts_layout.addRow(self.axes_cb)
         opts_layout.addRow(self.node_labels_cb)
         opts_layout.addRow(self.element_labels_cb)
@@ -3778,6 +4153,7 @@ class PlotOptionsDialog(QtWidgets.QDialog):
         self.scale_spin.setEnabled(self.scale_cb.isChecked())
 
         self.scalarbar_cb.setChecked(opts["show_scalar_bar"])
+        self.show_time_cb.setChecked(opts.get("show_time", False))
         self.edges_cb.setChecked(opts["show_edges"])
         self.axes_cb.setChecked(self.parent().plotter.renderer.axes_enabled)
         self.node_labels_cb.setChecked(opts["node_labels"])
@@ -3898,8 +4274,8 @@ class ClimOptionsDialog(QtWidgets.QDialog):
         form.addRow(self.rb_manual)
         form.addRow("Max:", self.vmax_spin)
         form.addRow("Min:", self.vmin_spin)
-        form.addRow("Number of colors:", self.ncolors_spin)
-        form.addRow("Number of labels:", self.nlabels_spin)
+        form.addRow("Colors:", self.ncolors_spin)
+        form.addRow("Labels:", self.nlabels_spin)
 
         btn_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok
@@ -3925,6 +4301,7 @@ class ClimOptionsDialog(QtWidgets.QDialog):
         vlayout.addLayout(form)
         vlayout.addWidget(cmap_group)
         vlayout.addWidget(btn_box)
+        self.resize(420, self.minimumSizeHint().height())
 
     def update_values(self):
         opts = self.parent().opts
@@ -4018,12 +4395,16 @@ class CMapPreview(QtWidgets.QLabel):
     def __init__(self, height=24, parent=None):
         super().__init__(parent)
         self.setFixedHeight(height)
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(160)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+        self.setScaledContents(True)
+        self._preview_args = None
         self.setFrameShape(QtWidgets.QFrame.Box)
         self.setLineWidth(1)
         self.setAlignment(Qt.AlignCenter)
 
     def update_preview(self, cmap_name: str, reverse: bool = False, n_colors=256):
+        self._preview_args = (cmap_name, reverse, n_colors)
         try:
             # cmap = mpl.colormaps.get(cmap_name)
             cmap = mpl.colormaps[cmap_name].resampled(n_colors)
@@ -4032,7 +4413,7 @@ class CMapPreview(QtWidgets.QLabel):
             return
 
         # Create a horizontal gradient [0..1]
-        width = max(self.width(), 300)
+        width = max(self.contentsRect().width(), 1)
         height = self.height()
         x = np.linspace(0, 1, width)
         grad = np.tile(x, (height, 1))
@@ -4049,6 +4430,17 @@ class CMapPreview(QtWidgets.QLabel):
         qimg = QtGui.QImage(rgba_uint8.data, w, h, 4 * w, QtGui.QImage.Format_RGBA8888)
         pix = QtGui.QPixmap.fromImage(qimg)
         self.setPixmap(pix)
+
+    def sizeHint(self):
+        return QSize(220, self.height())
+
+    def minimumSizeHint(self):
+        return QSize(160, self.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._preview_args is not None:
+            self.update_preview(*self._preview_args)
 
 
 class RedererOptionsDialog(QtWidgets.QDialog):
@@ -4451,17 +4843,53 @@ class PlotOverLineDialog(QtWidgets.QDialog):
         self.plotRequested.emit(p1, p2, resolution)
 
 
+class _SelectionRubberBand(QObject):
+    """Qt overlay stays visible with QtInteractor/OpenGL rubber-band picking."""
+
+    def __init__(self, widget, parent):
+        super().__init__(parent)
+        self.widget = widget
+        self.band = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, widget)
+        self.band.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.origin = None
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self.origin = event.pos()
+            self.band.setGeometry(QRect(self.origin, self.origin))
+            self.band.show()
+            self.band.raise_()
+        elif event.type() == QEvent.MouseMove and self.origin is not None:
+            self.band.setGeometry(QRect(self.origin, event.pos()).normalized())
+        elif event.type() == QEvent.MouseButtonRelease:
+            self.origin = None
+            self.band.hide()
+        return False
+
+    def stop(self):
+        self.widget.removeEventFilter(self)
+        self.band.hide()
+        self.band.deleteLater()
+        self.deleteLater()
+
+
 class ElementVisibilityDialog(QtWidgets.QDialog):
     """
     Non-modal dialog to manage FEM element visibility and element sets.
     """
+
+    entity = "Element"
+    set_attribute = "element_sets"
 
     def __init__(
         self,
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Element Visibility & Sets")
+        self.setWindowTitle(
+            "Element Visibility & Sets" if self.entity == "Element" else "Node Sets"
+        )
         self.setModal(False)  # non modale
 
         # self.setWindowModality(Qt.NonModal)
@@ -4475,12 +4903,17 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
         # # Track selection and visibility (start fully visible)
         self.current_selection = set()
+        self._selection_band = None
+        self._surface_pick_dock = None
 
         # Build UI
         self._build_ui()
+        self.layout().activate()
+        self.resize(760, self.minimumSizeHint().height())
 
     def all_elements(self):
-        return set(range(self.parent().data.mesh.n_elements))
+        mesh = self.parent().data.mesh
+        return set(range(mesh.n_elements if self.entity == "Element" else mesh.n_nodes))
 
     @property
     def plotter(self):
@@ -4488,6 +4921,8 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
     @property
     def visibility_mode(self):
+        if self.entity == "Node":
+            return None
         return self.parent().active_dock.visibility_mode
 
     @visibility_mode.setter
@@ -4499,10 +4934,10 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         main_layout = QVBoxLayout(self)
 
         splitter = QtWidgets.QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(splitter, 1)
 
         # Left: Element sets management
-        sets_box = QtWidgets.QGroupBox("Element Sets")
+        sets_box = QtWidgets.QGroupBox(f"{self.entity} Sets")
         sets_layout = QVBoxLayout(sets_box)
 
         self.sets_list = QtWidgets.QListWidget()
@@ -4511,15 +4946,16 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
         btn_row = QtWidgets.QHBoxLayout()
 
-        save_selection_btn = QPushButton("New set from selection")
+        save_selection_btn = QPushButton("New...")
+        save_selection_btn.setToolTip("Create a new set from the current selection")
         save_selection_btn.clicked.connect(self._save_selection_as_new_set)
         btn_row.addWidget(save_selection_btn)
 
-        rename_btn = QPushButton("Rename Set…")
+        rename_btn = QPushButton("Rename")
         rename_btn.clicked.connect(self._rename_selected_set)
         btn_row.addWidget(rename_btn)
 
-        remove_btn = QPushButton("Remove Set")
+        remove_btn = QPushButton("Remove")
         remove_btn.clicked.connect(self._remove_selected_set)
         btn_row.addWidget(remove_btn)
 
@@ -4528,11 +4964,8 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
         load_row = QtWidgets.QHBoxLayout()
 
-        load_label = QLabel("Element set → Selection: ")
-        load_label.setMinimumWidth(
-            load_label.fontMetrics().horizontalAdvance("Element set → Selection: ")
-        )
-        load_row.addWidget(load_label)
+        load_label = QLabel("Selection:")
+        sets_layout.addWidget(load_label)
 
         # Replace selection
         load_replace_btn = QPushButton("Replace")
@@ -4560,17 +4993,45 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         # Add the new row to the left panel
         sets_layout.addLayout(load_row)
 
+        incoming = "node" if self.entity == "Element" else "element"
+        conversion_row = QHBoxLayout()
+        conversion_label = QLabel("From:")
+        conversion_label.setToolTip(f"Create from {incoming} set")
+        conversion_row.addWidget(conversion_label)
+        self.conversion_sources = QtWidgets.QComboBox()
+        self.conversion_sources.setAccessibleName(f"Source {incoming} set")
+        self.conversion_sources.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.conversion_sources.setMinimumContentsLength(8)
+        self.conversion_sources.currentTextChanged.connect(
+            self.conversion_sources.setToolTip
+        )
+        conversion_row.addWidget(self.conversion_sources, 1)
+        conversion = QPushButton("Create")
+        conversion.clicked.connect(self._convert_selected_set)
+        conversion_row.addWidget(conversion)
+        sets_layout.addLayout(conversion_row)
+        if self.entity == "Element":
+            self.conversion_all_nodes = QCheckBox()
+            self.conversion_all_nodes.setChecked(True)
+            self.conversion_all_nodes.toggled.connect(self._update_conversion_mode_text)
+            self._update_conversion_mode_text()
+            sets_layout.addWidget(self.conversion_all_nodes)
+        self._refresh_conversion_sources()
+
         splitter.addWidget(sets_box)
 
         # Right: Selection & visibility controls
         right_box = QtWidgets.QGroupBox("Selection")
         right_layout = QtWidgets.QVBoxLayout()
+        right_layout.setAlignment(Qt.AlignTop)
         right_box.setLayout(right_layout)
 
         # --- Top row: Clear + Invert + Selection info --------------------------------
         sel_top_row = QtWidgets.QHBoxLayout()
 
-        clear_sel_btn = QPushButton("Clear Selection")
+        clear_sel_btn = QPushButton("Clear")
         clear_sel_btn.setToolTip("Clear the current selection")
         clear_sel_btn.clicked.connect(self._clear_selection)
         sel_top_row.addWidget(clear_sel_btn)
@@ -4582,7 +5043,7 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
         sel_top_row.addStretch(1)  # push the label to the right
 
-        self.sel_info_lbl = QLabel("Selection: 0 cells")
+        self.sel_info_lbl = QLabel(f"0 {self.entity.lower()}s")
         sel_top_row.addWidget(self.sel_info_lbl)
 
         right_layout.addLayout(sel_top_row)
@@ -4592,11 +5053,13 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         pick_layout = QtWidgets.QHBoxLayout()
         pick_group.setLayout(pick_layout)
 
-        self.start_pick_btn = QPushButton("Start Picking")
+        self.start_pick_btn = QPushButton("Start")
+        self.start_pick_btn.setToolTip("Start rectangle picking")
         self.start_pick_btn.clicked.connect(self._start_picking)
         pick_layout.addWidget(self.start_pick_btn)
 
-        self.stop_pick_btn = QPushButton("Stop Picking")
+        self.stop_pick_btn = QPushButton("Stop")
+        self.stop_pick_btn.setToolTip("Stop rectangle picking")
         self.stop_pick_btn.clicked.connect(self._stop_picking)
         self.stop_pick_btn.setEnabled(False)
         pick_layout.addWidget(self.stop_pick_btn)
@@ -4609,8 +5072,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         labels_col.setSpacing(0)  # optional: tighter stacking
         labels_col.setContentsMargins(0, 0, 0, 0)  # optional: remove extra margins
 
-        labels_col.addWidget(QLabel("Press Ctrl to add to selection"))
-        labels_col.addWidget(QLabel("Press Maj to remove from selection"))
+        modifier_hint = QLabel("Ctrl + / Shift −")
+        modifier_hint.setToolTip(
+            "Hold Ctrl to add to the selection, or Shift to remove from it."
+        )
+        labels_col.addWidget(modifier_hint)
 
         # Add the vertical layout to the horizontal layout
         pick_layout.addLayout(labels_col)
@@ -4618,15 +5084,19 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         right_layout.addWidget(pick_group)
 
         # --- Selection by expression -------------------------------------------------
-        expr_group = QtWidgets.QGroupBox("Select by test on element positions")
+        expr_group = QtWidgets.QGroupBox("Select by expression")
         expr_form = QtWidgets.QFormLayout()
         expr_group.setLayout(expr_form)
 
         self.expr_edit = QtWidgets.QLineEdit()
-        self.expr_edit.setPlaceholderText("X**2 + 5*Y**2 <= 0.5 or abs(X)>0.8")
+        self.expr_edit.setPlaceholderText("Stress_XX > 100 and X < 0.5")
+        self.expr_edit.setToolTip(
+            "Coordinates X/Y/Z, ID, field components (Stress_XX, Disp_X), "
+            "and NumPy functions. Element fields use element averages; node fields use nodal values."
+        )
         expr_form.addRow(QLabel("Expression:"), self.expr_edit)
 
-        apply_expr_btn = QPushButton("Apply Expression → Selection")
+        apply_expr_btn = QPushButton("Apply expression")
         apply_expr_btn.clicked.connect(self._apply_expression_to_selection)
 
         expr_form.addRow(apply_expr_btn)
@@ -4637,6 +5107,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
         right_layout.addWidget(expr_group)
 
+        if self.entity == "Node":
+            self._build_surface_selector(right_layout)
+
         # --- Show/Hide selected elements ------------------------
         vis_group = QtWidgets.QGroupBox("Show/Hide elements")
         vis_layout = QtWidgets.QHBoxLayout()
@@ -4646,22 +5119,81 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         show_all_btn.clicked.connect(lambda: self._apply_visibility("all"))
         vis_layout.addWidget(show_all_btn)
 
-        add_btn = QPushButton("Show selected")
+        add_btn = QPushButton("Show")
+        add_btn.setToolTip("Show selected elements")
         add_btn.clicked.connect(lambda: self._apply_visibility("show"))
         vis_layout.addWidget(add_btn)
 
-        remove_btn = QPushButton("Hide selected")
+        remove_btn = QPushButton("Hide")
+        remove_btn.setToolTip("Hide selected elements")
         remove_btn.clicked.connect(lambda: self._apply_visibility("hide"))
         vis_layout.addWidget(remove_btn)
 
-        right_layout.addWidget(vis_group)
+        if self.entity == "Element":
+            right_layout.addWidget(vis_group)
+        else:
+            vis_group.deleteLater()
 
         splitter.addWidget(right_box)
-        splitter.setSizes([300, 500])
+        splitter.setSizes([300, 420])
 
-        # Info footer
         self.status_lbl = QLabel("Ready.")
+        self.status_lbl.setSizePolicy(
+            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed
+        )
         main_layout.addWidget(self.status_lbl)
+
+    def _build_surface_selector(self, right_layout):
+        surface_group = QtWidgets.QGroupBox("Select exterior surface nodes")
+        self.surface_group = surface_group
+        surface_form = QtWidgets.QFormLayout(surface_group)
+        self.surface_mode = QtWidgets.QComboBox()
+        self.surface_mode.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.surface_mode.setMinimumContentsLength(10)
+        self.surface_mode.currentTextChanged.connect(self.surface_mode.setToolTip)
+        surface_form.addRow("Surface:", self.surface_mode)
+        self.surface_seed_id = QSpinBox()
+        self.surface_seed_id.setRange(0, 2147483647)
+        self.surface_seed_id.setMinimumWidth(70)
+        self.surface_seed_id.setSizePolicy(
+            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed
+        )
+        seed_row = QHBoxLayout()
+        seed_row.addWidget(self.surface_seed_id)
+        self.surface_select_button = QPushButton("Select")
+        self.surface_select_button.clicked.connect(self._surface_seed_from_selection)
+        seed_row.addWidget(self.surface_select_button)
+        surface_form.addRow("Seed node:", seed_row)
+        self.surface_angle = QDoubleSpinBox()
+        self.surface_angle.setRange(0, 180)
+        self.surface_angle.setDecimals(1)
+        self.surface_angle.setValue(30)
+        self.surface_angle.setSuffix("°")
+        self.surface_angle.setToolTip(
+            "Maximum angle between neighboring face normals. 0° is flat; "
+            "30° stops at a 90° corner. Uses the deformed-mesh option above."
+        )
+        self.surface_angle_label = QLabel("Angle limit:")
+        surface_form.addRow(self.surface_angle_label, self.surface_angle)
+        self.surface_feature_angle = QDoubleSpinBox()
+        self.surface_feature_angle.setRange(0, 180)
+        self.surface_feature_angle.setDecimals(1)
+        self.surface_feature_angle.setValue(30)
+        self.surface_feature_angle.setSuffix("°")
+        self.surface_feature_angle.setToolTip(
+            "Minimum angle between exterior face normals to identify a crease. Open shell boundaries always qualify."
+        )
+        self.surface_feature_label = QLabel("Sharpness:")
+        surface_form.addRow(self.surface_feature_label, self.surface_feature_angle)
+        surface_button = QPushButton("Select surface nodes")
+        self.surface_apply_button = surface_button
+        surface_button.clicked.connect(self._select_surface_nodes)
+        surface_form.addRow(surface_button)
+        right_layout.addWidget(surface_group)
+        self.surface_mode.currentIndexChanged.connect(self._update_surface_mode)
+        self._refresh_surface_options()
 
     def update_plot(self):
         """Rebuild displayed geometry from visible_elements."""
@@ -4674,18 +5206,109 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
     def _refresh_sets_list(self):
         if self.element_sets is None:
             element_sets, unsaved = self._default_element_sets()
-            self.parent().active_dock.element_sets = element_sets
-            self.parent().active_dock.unsaved_element_set_names = unsaved
+            self.element_sets = element_sets
+            self.unsaved_set_names = unsaved
+        self.parent()._sync_viewer_sets(self.parent().active_dock)
         self.sets_list.clear()
         for name in sorted(self.element_sets.keys()):
             values = self.element_sets[name]
             if values is None:
-                n_elements = self.parent().data.mesh.n_elements
+                n_elements = len(self.all_elements())
             else:
                 n_elements = len(values)
-            item = QtWidgets.QListWidgetItem(f"{name} ({n_elements} elements)")
+            item = QtWidgets.QListWidgetItem(
+                f"{name} ({n_elements} {self.entity.lower()}s)"
+            )
             item.setData(Qt.UserRole, name)
+            item.setToolTip(name)
             self.sets_list.addItem(item)
+        self._refresh_conversion_sources()
+        for dialog in (
+            self.parent().node_sets_dialog,
+            self.parent().element_sets_dialog,
+        ):
+            if dialog is not None and dialog is not self:
+                dialog._refresh_conversion_sources()
+        if self.entity == "Node" and hasattr(self, "surface_mode"):
+            self._refresh_surface_options()
+
+    def _refresh_conversion_sources(self):
+        if not hasattr(self, "conversion_sources"):
+            return
+        dock = self.parent().active_dock
+        self.parent()._ensure_dock_node_sets(dock)
+        self.parent()._ensure_dock_element_sets(dock)
+        sources = dock.node_sets if self.entity == "Element" else dock.element_sets
+        selected = self.conversion_sources.currentText()
+        self.conversion_sources.clear()
+        self.conversion_sources.addItems(sorted(sources))
+        if selected in sources:
+            self.conversion_sources.setCurrentText(selected)
+
+    def _update_conversion_mode_text(self, *args):
+        self.conversion_all_nodes.setText(
+            "All nodes required"
+            if self.conversion_all_nodes.isChecked()
+            else "At least one node"
+        )
+        self.conversion_all_nodes.setToolTip(
+            "All element nodes must belong to the source set"
+            if self.conversion_all_nodes.isChecked()
+            else "At least one element node must belong to the source set"
+        )
+
+    def _refresh_surface_options(self):
+        dock = self.parent().active_dock
+        if getattr(self, "_surface_options_dock", None) is dock:
+            return
+        self._cancel_surface_pick()
+        self._surface_options_dock = dock
+        mesh = dock.data.mesh
+        blocks = getattr(mesh, "submeshes", (mesh,))
+        is_surface = all(block.elm_type.startswith(("tri", "quad")) for block in blocks)
+        blocker = QSignalBlocker(self.surface_mode)
+        self.surface_mode.clear()
+        if is_surface:
+            self.surface_mode.addItem("Boundary edges (2D mesh)", "boundary")
+            if mesh.nodes.shape[1] == 3:
+                self.surface_mode.addItem("Surface faces (shell mesh)", "faces")
+                points = mesh.nodes
+                planar = (
+                    np.linalg.matrix_rank(points - points[0]) <= 2
+                    if len(points)
+                    else True
+                )
+                if not planar or "_ShellSection" in dock.data.field_metadata:
+                    self.surface_mode.setCurrentIndex(1)
+        else:
+            self.surface_mode.addItem("Exterior faces (solid mesh)", "solid")
+        if mesh.nodes.shape[1] == 3:
+            self.surface_mode.addItem("Exterior edges (3D)", "edges")
+        del blocker
+        self._update_surface_mode()
+
+    def _update_surface_mode(self, *args):
+        if self._surface_pick_dock is not None:
+            self._cancel_surface_pick()
+        edges = self.surface_mode.currentData() == "edges"
+        self.surface_feature_label.setVisible(edges)
+        self.surface_feature_angle.setVisible(edges)
+        self.surface_angle_label.setText("Turn limit:" if edges else "Angle limit:")
+        self.surface_angle.setToolTip(
+            "Maximum change of direction while following an edge. 0° follows straight edges; traversal stops at branches."
+            if edges
+            else "Maximum angle between neighboring face normals. 0° is flat; 30° stops at a 90° corner."
+        )
+        self.surface_apply_button.setText(
+            "Select edge nodes" if edges else "Select surface nodes"
+        )
+        self.surface_group.setTitle(
+            "Select exterior edge nodes"
+            if edges
+            else "Select boundary line nodes"
+            if self.surface_mode.currentData() == "boundary"
+            else "Select exterior surface nodes"
+        )
 
     def _selected_set_name(self):
         item = self.sets_list.currentItem()
@@ -4704,7 +5327,23 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self.current_selection |= selection
             else:
                 self.current_selection = selection
+        else:
+            self.current_selection = set(selection)
 
+        if self.entity == "Node":
+            self.plotter.remove_actor("_picked_node_set")
+            if self.current_selection:
+                points = self._node_positions()[sorted(self.current_selection)]
+                self.plotter.add_points(
+                    points,
+                    color="pink",
+                    point_size=12,
+                    name="_picked_node_set",
+                    render_points_as_spheres=True,
+                    reset_camera=False,
+                )
+            self._update_selection_info()
+            return
         self.plotter.remove_actor("_picked_cell")
         if self.visibility_mode:
             if self.visibility_mode == "show":
@@ -4717,12 +5356,17 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 )
             self.update_plot()
         else:
-            pvmesh = self.parent().active_dock.pv_mesh
+            pvmesh = self.parent().data.mesh.to_pyvista()
+            pvmesh.points = self._node_positions()
             if self.current_selection:
                 cell = pvmesh.extract_cells(list(self.current_selection))
                 self.plotter.remove_actor("_picked_cell")
                 self.plotter.add_mesh(
-                    cell, style="wireframe", color="pink", name="_picked_cell"
+                    cell,
+                    style="wireframe",
+                    color="pink",
+                    name="_picked_cell",
+                    reset_camera=False,
                 )
         self._update_selection_info()
 
@@ -4730,49 +5374,79 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
     # -------------- Picking integration -----------------
     def _start_picking(self):
+        self._cancel_surface_pick()
+        for dialog in (
+            self.parent().node_sets_dialog,
+            self.parent().element_sets_dialog,
+        ):
+            if dialog is not None and dialog is not self:
+                dialog._cancel_surface_pick()
+                dialog._stop_picking()
+
         def _on_rectangle(rect_selection):
             # rect_selection.frustum is a vtkPlanes; rect_selection.viewport is the 2D rectangle.
             planes = rect_selection.frustum  # vtkPlanes (camera frustum through the drawn rectangle)  [1](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.enable_rectangle_picking)
 
             # Compute cell-centers once; cache if your mesh is large
             pvmesh = self.parent().active_dock.pv_mesh
-            centers = pvmesh.cell_centers().points  # (N,3)
+            centers = (
+                self._node_positions()
+                if self.entity == "Node"
+                else pvmesh.cell_centers().points
+            )
 
             f = planes.EvaluateFunction  # C++ method: <=0 means "inside" the convex volume. [2](https://vtk.org/doc/nightly/html/classvtkExtractSelectedFrustum.html)
             inside_mask = np.fromiter(
                 (f(x, y, z) <= 0.0 for x, y, z in centers),
-                count=pvmesh.n_cells,
+                count=len(centers),
                 dtype=bool,
             )
             picked_ids = np.nonzero(inside_mask)[0].astype(int)
-            if "_fedoo_global_cell_ids" in pvmesh.cell_data:
+            if self.entity == "Node":
+                pass  # Physical nodes already use the mesh's original numbering.
+            elif "_fedoo_global_cell_ids" in pvmesh.cell_data:
                 picked_ids = pvmesh.cell_data["_fedoo_global_cell_ids"][picked_ids]
             elif "vtkOriginalCellIds" in pvmesh.cell_data:
                 picked_ids = pvmesh.cell_data["vtkOriginalCellIds"][picked_ids]
 
             picked_ids = set(picked_ids)
 
-            self.status_lbl.setText(
-                f"{len(self.current_selection)} elements) selected from rectangle."
-            )
             self.update_selection(picked_ids, True)
+            self.status_lbl.setText(
+                f"Selected {len(self.current_selection)} {self.entity.lower()}s from rectangle."
+            )
 
         self.plotter.disable_picking()
         self.plotter.enable_rectangle_picking(
             callback=_on_rectangle,
             start=True,  # start immediately
+            show_message=False,
         )
+        widget = self.plotter.interactor
+        if not isinstance(widget, QtWidgets.QWidget):
+            widget = self.plotter
+        if self._selection_band is not None:
+            self._selection_band.stop()
+        self._selection_band = _SelectionRubberBand(widget, self)
 
         self.start_pick_btn.setEnabled(False)
         self.stop_pick_btn.setEnabled(True)
-        self.status_lbl.setText("Picking enabled: click cells to add to selection.")
+        self.status_lbl.setText(
+            f"Picking enabled: drag a rectangle to select {self.entity.lower()}s."
+        )
         # except Exception as e:
         #     QtWidgets.QMessageBox.warning(self, "Picking error", f"Failed to enable picking:\n{e}")
 
     def _stop_picking(self):
+        if self._selection_band is not None:
+            self._selection_band.stop()
+            self._selection_band = None
+        if not self.stop_pick_btn.isEnabled():
+            return
         try:
             self.plotter.enable_trackball_style()
             self.plotter.disable_picking()
+            self.plotter.enable_trackball_style()
             self.start_pick_btn.setEnabled(True)
             self.stop_pick_btn.setEnabled(False)
             self.status_lbl.setText("Picking disabled.")
@@ -4790,7 +5464,145 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         self.update_selection(self.current_selection)
 
     def _update_selection_info(self):
-        self.sel_info_lbl.setText(f"Selection: {len(self.current_selection)} cells")
+        self.sel_info_lbl.setText(
+            f"{len(self.current_selection)} {self.entity.lower()}s"
+        )
+
+    def _node_positions(self):
+        coordinates = as_3d_coordinates(self.parent().data.mesh.nodes).astype(
+            float, copy=True
+        )
+        if self.use_def_mesh.isChecked() and "Disp" in self.parent().data.node_data:
+            coordinates += self.parent().opts["scale"] * as_3d_coordinates(
+                self.parent().data.node_data["Disp"].T
+            )
+        return coordinates
+
+    def _surface_seed_from_selection(self):
+        if self._surface_pick_dock is not None:
+            self._cancel_surface_pick()
+            return
+        main = self.parent()
+        for dialog in (main.node_sets_dialog, main.element_sets_dialog):
+            if dialog is not None:
+                dialog._stop_picking()
+        main.select_node_action.setChecked(False)
+        main.select_elm_action.setChecked(False)
+        self._surface_pick_dock = main.active_dock
+        self.surface_select_button.setText("Cancel")
+        self.status_lbl.setText("Click one node in the view to set the seed.")
+        main.statusBar().setVisible(True)
+        picked_dock = main.active_dock
+
+        def selected(entity_id):
+            if (
+                self._surface_pick_dock is not picked_dock
+                or main.active_dock is not picked_dock
+            ):
+                return
+            self.surface_seed_id.setValue(entity_id)
+            self.status_lbl.setText(f"Seed node ID {entity_id} selected.")
+            # Remove picker observers after the native click callback returns.
+            QTimer.singleShot(0, self._cancel_surface_pick)
+
+        main._pick_node(on_pick=selected)
+
+    def _cancel_surface_pick(self, *args):
+        dock = self._surface_pick_dock
+        if dock is None:
+            return
+        main = self.parent()
+        dock.plotter.disable_picking()
+        if getattr(main, "_lbp_tag", None) is not None and main.active_dock is dock:
+            dock.plotter.interactor.RemoveObserver(main._lbp_tag)
+            main._lbp_tag = None
+        self._surface_pick_dock = None
+        self.surface_select_button.setText("Select")
+
+    def _select_surface_nodes(self):
+        self._cancel_surface_pick()
+        mesh = self.parent().data.mesh
+        if self.use_def_mesh.isChecked():
+            mesh = mesh.copy()
+            mesh.nodes = self._node_positions()[:, : mesh.nodes.shape[1]]
+            for block in getattr(mesh, "submeshes", ()):
+                block.nodes = mesh.nodes
+        seed = self.surface_seed_id.value()
+        angle = self.surface_angle.value()
+        edge_mode = self.surface_mode.currentData() == "edges"
+        try:
+            try:
+                nodes = (
+                    find_edge_nodes(
+                        mesh, seed, angle, self.surface_feature_angle.value()
+                    )
+                    if edge_mode
+                    else find_surface_nodes(
+                        mesh,
+                        seed,
+                        angle=angle,
+                        boundary_edges=self.surface_mode.currentData() == "boundary",
+                    )
+                )
+            except AmbiguousEdgeSeed as exc:
+                choices = [
+                    f"Edge {index}: nodes {a}–{b}; direction ({direction[0]:.3g}, {direction[1]:.3g}, {direction[2]:.3g})"
+                    for index, (a, b), direction in zip(
+                        exc.edge_ids, exc.endpoints, exc.directions
+                    )
+                ]
+                choice, accepted = QtWidgets.QInputDialog.getItem(
+                    self,
+                    "Choose the starting edge",
+                    "The seed touches several edge chains. Choose a starting edge:",
+                    choices,
+                    0,
+                    False,
+                )
+                if not accepted:
+                    return
+                nodes = find_edge_nodes(
+                    mesh,
+                    seed,
+                    angle,
+                    self.surface_feature_angle.value(),
+                    seed_edge=int(exc.edge_ids[choices.index(choice)]),
+                )
+            except AmbiguousSurfaceSeed as exc:
+                choices = [
+                    f"Face {face_id}: normal ({normal[0]:.3g}, {normal[1]:.3g}, {normal[2]:.3g})"
+                    for face_id, normal in zip(exc.face_ids, exc.normals)
+                ]
+                choice, accepted = QtWidgets.QInputDialog.getItem(
+                    self,
+                    "Choose the starting surface",
+                    "The seed touches several patches. Choose a starting face:",
+                    choices,
+                    0,
+                    False,
+                )
+                if not accepted:
+                    return
+                face_id = int(exc.face_ids[choices.index(choice)])
+                nodes = find_surface_nodes(
+                    mesh,
+                    seed,
+                    angle=angle,
+                    seed_face=face_id,
+                    boundary_edges=self.surface_mode.currentData() == "boundary",
+                )
+        except (ValueError, NotImplementedError) as exc:
+            message = str(exc)
+            if "does not belong to an exterior" in message:
+                message = "The seed is inside the mesh. Select a node on the exterior boundary."
+            QtWidgets.QMessageBox.warning(self, "Surface selection", message)
+            return
+        self.parent().open_node_sets_dialog()
+        dialog = self.parent().node_sets_dialog
+        dialog.update_selection(set(nodes))
+        message = f"Selected {len(nodes)} {'edge' if edge_mode else 'surface'} nodes. Save the selection as a node set."
+        self.status_lbl.setText(message)
+        dialog.status_lbl.setText(message)
 
     # -------------- Expression selection ----------------
     def _apply_expression_to_selection(self):
@@ -4800,21 +5612,27 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "No expression", "Please enter an expression."
             )
             return
-        # try:
         data = self.parent().data
-        if "Disp" in data.node_data and self.use_def_mesh.isChecked():
-            mesh = data.mesh.copy()
-            mesh.nodes = mesh.nodes + data.node_data["Disp"].T
-            if _is_multimesh(mesh):
-                for submesh in mesh.submeshes:
-                    submesh.nodes = mesh.nodes
-        else:
-            mesh = data.mesh
-        ids = set(mesh.find_elements(expr))
+        mesh = data.mesh.copy()
+        mesh.nodes = self._node_positions()[:, : data.mesh.nodes.shape[1]]
+        if _is_multimesh(mesh):
+            for submesh in mesh.submeshes:
+                submesh.nodes = mesh.nodes
+        try:
+            ids = set(
+                np.flatnonzero(
+                    selection_mask(expr, mesh=mesh, data=data, data_type=self.entity)
+                )
+            )
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Expression error", str(exc))
+            return
         # Clamp to valid ids
         self.current_selection = ids
         self.update_selection(ids)
-        self.status_lbl.setText(f"Selection set from expression ({len(ids)} cells).")
+        self.status_lbl.setText(
+            f"Selection set from expression ({len(ids)} {self.entity.lower()}s)."
+        )
         # except Exception as e:
         #     QtWidgets.QMessageBox.warning(self, "Expression error", f"Failed to parse:\n{e}")
 
@@ -4828,7 +5646,25 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
 
     @property
     def element_sets(self):
-        return self.parent().active_dock.element_sets
+        return getattr(self.parent().active_dock, self.set_attribute)
+
+    @element_sets.setter
+    def element_sets(self, value):
+        setattr(self.parent().active_dock, self.set_attribute, value)
+
+    @property
+    def unsaved_set_names(self):
+        return getattr(
+            self.parent().active_dock, "unsaved_" + self.set_attribute[:-1] + "_names"
+        )
+
+    @unsaved_set_names.setter
+    def unsaved_set_names(self, value):
+        setattr(
+            self.parent().active_dock,
+            "unsaved_" + self.set_attribute[:-1] + "_names",
+            value,
+        )
 
     # -------------- Visibility operations ----------------
 
@@ -4855,9 +5691,9 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         elif mode == "replace":
             self.current_selection = element_set
 
-        self.update_selection(element_set)
+        self.update_selection(self.current_selection)
         self.status_lbl.setText(
-            f"Element set loaded with {len(self.current_selection)} elements"
+            f"{self.entity} set loaded with {len(self.current_selection)} {self.entity.lower()}s"
         )
 
     def _apply_visibility(self, mode: str):
@@ -4892,9 +5728,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "No set selected", "Please select a set to rename."
             )
             return
-        if name in self.parent().active_dock.unsaved_element_set_names:
+        if name in self.unsaved_set_names:
             QtWidgets.QMessageBox.information(
-                self, "Built-in set", "Built-in element sets cannot be renamed."
+                self,
+                "Built-in set",
+                f"Built-in {self.entity.lower()} sets cannot be renamed.",
             )
             return
         new_name, ok = QtWidgets.QInputDialog.getText(
@@ -4919,9 +5757,11 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "No set selected", "Please select a set to rename."
             )
             return
-        if name in self.parent().active_dock.unsaved_element_set_names:
+        if name in self.unsaved_set_names:
             QtWidgets.QMessageBox.information(
-                self, "Built-in set", "Built-in element sets cannot be removed."
+                self,
+                "Built-in set",
+                f"Built-in {self.entity.lower()} sets cannot be removed.",
             )
             return
         del self.element_sets[name]
@@ -4940,7 +5780,7 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
                 self, "Name exists", f"A set named '{new_name}' already exists."
             )
             return
-        if new_name in self.parent().active_dock.unsaved_element_set_names:
+        if new_name in self.unsaved_set_names:
             QtWidgets.QMessageBox.warning(
                 self, "Reserved name", f"'{new_name}' is a built-in set name."
             )
@@ -4948,15 +5788,657 @@ class ElementVisibilityDialog(QtWidgets.QDialog):
         if self.current_selection:
             self.element_sets[new_name] = list(self.current_selection)
         else:
-            QtWidgets.QMessageBox.warning("Empty selection.")
+            QtWidgets.QMessageBox.warning(
+                self, "Empty selection", "Select at least one item."
+            )
             return
         self._refresh_sets_list()
         # self._refresh_sets_combo()
         self.status_lbl.setText(f"Saved selection as set '{new_name}'")
 
     def closeEvent(self, event):
-        self._stop_picking()
+        if self.parent().active_dock is not None:
+            self._cancel_surface_pick()
+            self._stop_picking()
+            self.plotter.remove_actor(
+                "_picked_node_set" if self.entity == "Node" else "_picked_cell"
+            )
         super().closeEvent(event)
+
+    def _convert_selected_set(self):
+        name = self.conversion_sources.currentText()
+        if not name:
+            QtWidgets.QMessageBox.information(
+                self, "No set selected", "Choose a source set from the dropdown."
+            )
+            return
+        dock = self.parent().active_dock
+        mesh = dock.data.mesh
+        sources = dock.node_sets if self.entity == "Element" else dock.element_sets
+        count = mesh.n_nodes if self.entity == "Element" else mesh.n_elements
+        values = (
+            np.arange(count)
+            if sources[name] is None
+            else np.asarray(sources[name], dtype=int)
+        )
+        indices = (
+            nodes_to_elements(mesh, values, self.conversion_all_nodes.isChecked())
+            if self.entity == "Element"
+            else elements_to_nodes(mesh, values)
+        )
+        new_name, accepted = QtWidgets.QInputDialog.getText(
+            self,
+            f"Create {self.entity.lower()} set",
+            "New set name:",
+            text=name,
+        )
+        if not accepted or not new_name.strip():
+            return
+        new_name = new_name.strip()
+        self.parent()._sync_viewer_sets(self.parent().active_dock)
+        sets = self.element_sets
+        if new_name in sets:
+            QtWidgets.QMessageBox.warning(
+                self, "Name exists", f"Set '{new_name}' already exists."
+            )
+            return
+        sets[new_name] = indices
+        self.parent()._sync_viewer_sets(self.parent().active_dock)
+        self._refresh_sets_list()
+        self.status_lbl.setText(
+            f"Created {self.entity.lower()} set '{new_name}' ({len(indices)} IDs)."
+        )
+
+
+class NodeSetsDialog(ElementVisibilityDialog):
+    """Node selection and named sets, without element visibility controls."""
+
+    entity = "Node"
+    set_attribute = "node_sets"
+
+    def _default_element_sets(self):
+        self.parent()._ensure_dock_node_sets(self.parent().active_dock)
+        return (
+            self.parent().active_dock.node_sets,
+            self.parent().active_dock.unsaved_node_set_names,
+        )
+
+
+def _workspace_problems():
+    """Discover live Problems in this process without evaluating user code."""
+    found = {}
+
+    def add(label, problem):
+        if _is_problem(problem):
+            entry = found.setdefault(id(problem), [problem, set()])
+            entry[1].add(str(label))
+
+    main = sys.modules.get("__main__")
+    namespaces = [vars(main)] if main is not None else []
+    ipython = sys.modules.get("IPython")
+    shell = ipython.get_ipython() if ipython is not None else None
+    if shell is not None:
+        namespaces.append(shell.user_ns)
+    for namespace in namespaces:
+        for name, value in list(namespace.items()):
+            if not name.startswith("_"):
+                add(name, value)
+    for name, problem in list(ProblemBase.get_all().items()):
+        add(name, problem)
+    active = ProblemBase.get_active()
+    if _is_problem(active) and id(active) not in found:
+        add(active.name or "Active problem", active)
+    return sorted(
+        [(" / ".join(sorted(labels)), problem) for problem, labels in found.values()],
+        key=lambda item: item[0].casefold(),
+    )
+
+
+class OpenProblemDialog(QtWidgets.QDialog):
+    """Choose a live Problem from the current interpreter workspace."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Open existing problem")
+        self.resize(650, 320)
+        layout = QVBoxLayout(self)
+        description = QLabel(
+            "Choose a Problem from this Python session (workspace variables, "
+            "named Fedoo problems, or the active problem). Opening shows its "
+            "current state without solving."
+        )
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        self.table = QtWidgets.QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(
+            ["Variable / name", "Type", "Nodes", "Elements"]
+        )
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.horizontalHeader().setSectionResizeMode(
+            0, QtWidgets.QHeaderView.Stretch
+        )
+        self.table.itemDoubleClicked.connect(self.open_selected)
+        self.table.itemSelectionChanged.connect(self._update_open_button)
+        layout.addWidget(self.table)
+        self.status = QLabel()
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        buttons = QHBoxLayout()
+        refresh = QPushButton("Refresh")
+        refresh.clicked.connect(self.refresh)
+        buttons.addWidget(refresh)
+        buttons.addStretch()
+        self.open_button = QPushButton("Open")
+        self.open_button.setDefault(True)
+        self.open_button.clicked.connect(self.open_selected)
+        buttons.addWidget(self.open_button)
+        close = QPushButton("Cancel")
+        close.clicked.connect(self.reject)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
+        self.problems = []
+        self.open_button.setEnabled(False)
+
+    def refresh(self):
+        previous = self.selected_problem()
+        self.problems = _workspace_problems()
+        # Keep unnamed problems already open here discoverable too.
+        for dock in self.parent().all_docks:
+            if isinstance(dock.data, ProblemDataSet) and not any(
+                problem is dock.data.problem for _, problem in self.problems
+            ):
+                self.problems.append((dock.title, dock.data.problem))
+        blocker = QSignalBlocker(self.table)
+        self.table.setRowCount(len(self.problems))
+        selected = 0
+        for row, (label, problem) in enumerate(self.problems):
+            mesh = getattr(problem, "mesh", None)
+            for column, value in enumerate(
+                (
+                    label,
+                    type(problem).__name__,
+                    getattr(mesh, "n_nodes", "—"),
+                    getattr(mesh, "n_elements", "—"),
+                )
+            ):
+                self.table.setItem(row, column, QtWidgets.QTableWidgetItem(str(value)))
+            if problem is previous or (
+                previous is None and problem is ProblemBase.get_active()
+            ):
+                selected = row
+        if self.problems:
+            self.table.selectRow(selected)
+        del blocker
+        self._update_open_button()
+        self.status.setText(
+            ""
+            if self.problems
+            else "No Problem objects found. Create a Problem in this Python session, then click Refresh."
+        )
+
+    def selected_problem(self):
+        row = self.table.currentRow()
+        return self.problems[row][1] if 0 <= row < len(self.problems) else None
+
+    def _update_open_button(self):
+        self.open_button.setEnabled(self.selected_problem() is not None)
+
+    def open_selected(self, *args):
+        row = self.table.currentRow()
+        if not 0 <= row < len(self.problems):
+            return
+        title, problem = self.problems[row]
+        try:
+            self.parent().open_workspace_problem(problem, title)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Cannot open problem", str(exc))
+            return
+        self.accept()
+
+
+class BoundaryConditionsDialog(QtWidgets.QDialog):
+    """Inspect all BCs and edit standard conditions on a live Problem."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Boundary conditions")
+        self.resize(850, 580)
+        self.records = []
+        self.editing = None
+        self._building_form = False
+        layout = QVBoxLayout(self)
+        self.table = QtWidgets.QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(
+            ["Name", "Type", "Variable", "Set / IDs", "Value"]
+        )
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.itemSelectionChanged.connect(self._selected)
+        layout.addWidget(self.table)
+        self.details = QtWidgets.QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setMaximumHeight(100)
+        layout.addWidget(self.details)
+        form = QtWidgets.QFormLayout()
+        self.name_edit = QtWidgets.QLineEdit()
+        self.type_combo = QtWidgets.QComboBox()
+        self.type_combo.addItems(["Dirichlet", "Neumann"])
+        self.variable_combo = QtWidgets.QComboBox()
+        self.variable_combo.currentTextChanged.connect(self._refresh_targets)
+        self.target_combo = QtWidgets.QComboBox()
+        self.value_edit = QtWidgets.QLineEdit("0")
+        self.value_edit.setPlaceholderText(
+            "Constant or array expression; blank preserves an existing array"
+        )
+        for label, widget in (
+            ("Name:", self.name_edit),
+            ("Type:", self.type_combo),
+            ("Variable / component:", self.variable_combo),
+            ("Apply to:", self.target_combo),
+            ("Value:", self.value_edit),
+        ):
+            form.addRow(label, widget)
+        layout.addLayout(form)
+        explanation = QLabel(
+            "Element sets select all of their nodes. Neumann values are nodal forces, "
+            "not surface pressures. Existing time functions and start values are preserved "
+            "when editing. Custom constraints are inspectable; the editor handles "
+            "Dirichlet/Neumann conditions. Changes affect the live problem; solve it "
+            "from Python to recompute the solution."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        buttons = QHBoxLayout()
+        self.new_button = QPushButton("New")
+        self.new_button.clicked.connect(self.new_condition)
+        self.apply_button = QPushButton("Add condition")
+        self.apply_button.clicked.connect(self.apply_condition)
+        self.highlight_button = QPushButton("Show associated nodes")
+        self.highlight_button.clicked.connect(self.highlight_selected)
+        self.remove_button = QPushButton("Remove selected")
+        self.remove_button.clicked.connect(self.remove_selected)
+        for button in (
+            self.new_button,
+            self.apply_button,
+            self.highlight_button,
+            self.remove_button,
+        ):
+            buttons.addWidget(button)
+        layout.addLayout(buttons)
+        self.status = QLabel()
+        layout.addWidget(self.status)
+        self.refresh()
+
+    @property
+    def problem(self):
+        data = self.parent().data if self.parent().active_dock else None
+        return data.problem if isinstance(data, ProblemDataSet) else None
+
+    def refresh(self):
+        problem = self.problem
+        self.records = []
+        self.editing = None
+        blocker = QSignalBlocker(self.table)
+        self.table.setRowCount(0)
+        self._building_form = True
+        self.variable_combo.clear()
+        if problem is not None:
+            self.parent()._sync_viewer_sets(self.parent().active_dock)
+            self.variable_combo.addItems(
+                list(problem.space.list_variables())
+                + list(problem.global_dof._variable)
+            )
+
+            def collect(boundaries):
+                for container in (boundaries.data, boundaries.data_end):
+                    for index, condition in enumerate(container):
+                        if isinstance(condition, ListBC):
+                            collect(condition)
+                        else:
+                            self.records.append((container, index, condition))
+
+            collect(problem.bc)
+            for _, _, condition in self.records:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                target = getattr(condition, "_viewer_set_reference", None)
+                source = getattr(
+                    condition, "node_set_name", getattr(condition, "node_set", "—")
+                )
+                source = f"{target[0]}: {target[1]}" if target else str(source)
+                values = (
+                    condition.name,
+                    getattr(condition, "bc_type", type(condition).__name__),
+                    str(getattr(condition, "variable_name", "—")),
+                    source,
+                    str(getattr(condition, "value", "—")),
+                )
+                for column, text in enumerate(values):
+                    self.table.setItem(row, column, QtWidgets.QTableWidgetItem(text))
+        self._building_form = False
+        del blocker
+        self._refresh_targets()
+        self.new_condition()
+        self.setEnabled(problem is not None)
+
+    def _refresh_targets(self, *args):
+        if self._building_form:
+            return
+        self.target_combo.clear()
+        problem = self.problem
+        if problem is None:
+            return
+        variable = self.variable_combo.currentText()
+        if variable in problem.global_dof._variable:
+            count = len(problem.global_dof[variable])
+            self.target_combo.addItem("All global DOF IDs", ("IDs", list(range(count))))
+            for index in range(count):
+                self.target_combo.addItem(f"Global DOF ID {index}", ("IDs", [index]))
+            return
+        dock = self.parent().active_dock
+        for label, attribute in (("Node", "node_sets"), ("Element", "element_sets")):
+            for name in sorted(getattr(dock, attribute)):
+                self.target_combo.addItem(f"{label} set: {name}", (label, name))
+
+    def new_condition(self):
+        self.editing = None
+        self.table.clearSelection()
+        self.name_edit.clear()
+        self.value_edit.setText("0")
+        self.apply_button.setText("Add condition")
+        self.apply_button.setEnabled(self.problem is not None)
+        self.highlight_button.setEnabled(False)
+        self.remove_button.setEnabled(False)
+        self.details.clear()
+
+    def _selected(self):
+        selected = self.table.selectionModel().selectedRows()
+        if len(selected) != 1:
+            return
+        record = self.records[selected[0].row()]
+        condition = record[2]
+        self.editing = record
+        self.details.setPlainText(str(condition))
+        self.name_edit.setText(condition.name)
+        self.apply_button.setText("Update condition")
+        editable = isinstance(condition, BoundaryCondition)
+        self.apply_button.setEnabled(editable)
+        self.highlight_button.setEnabled(True)
+        self.remove_button.setEnabled(editable)
+        if not editable:
+            self.status.setText(
+                "Custom constraint: inspect its details and associated nodes."
+            )
+            return
+        self.type_combo.setCurrentText(condition.bc_type)
+        self.variable_combo.setCurrentText(condition.variable_name)
+        self._refresh_targets()
+        reference = getattr(condition, "_viewer_set_reference", None)
+        if reference is None:
+            source = condition.node_set_name
+            reference = (
+                ("Node", source)
+                if isinstance(source, str)
+                else ("IDs", list(np.asarray(source, dtype=int)))
+            )
+        found = -1
+        for index in range(self.target_combo.count()):
+            candidate = self.target_combo.itemData(index)
+            if candidate[0] == reference[0] and np.array_equal(
+                candidate[1], reference[1]
+            ):
+                found = index
+                break
+        if found < 0:
+            self.target_combo.addItem("Current condition IDs", reference)
+            found = self.target_combo.count() - 1
+        self.target_combo.setCurrentIndex(found)
+        self.value_edit.setText(
+            repr(float(condition.value)) if np.ndim(condition.value) == 0 else ""
+        )
+        self.status.setText("")
+
+    def _target_nodes(self, reference):
+        kind, target = reference
+        dock = self.parent().active_dock
+        if kind == "IDs":
+            return np.asarray(target, dtype=int)
+        sets = dock.node_sets if kind == "Node" else dock.element_sets
+        values = sets[target]
+        count = dock.data.mesh.n_nodes if kind == "Node" else dock.data.mesh.n_elements
+        ids = np.arange(count) if values is None else np.asarray(values, dtype=int)
+        return ids if kind == "Node" else elements_to_nodes(dock.data.mesh, ids)
+
+    def apply_condition(self):
+        problem = self.problem
+        if problem is None:
+            return
+        try:
+            reference = self.target_combo.currentData()
+            if reference is None:
+                raise ValueError("Select a node set, element set or global DOF ID")
+            indices = self._target_nodes(reference)
+            if not len(indices):
+                raise ValueError("The target set is empty")
+            variable = self.variable_combo.currentText()
+            if (
+                variable not in problem.space.list_variables()
+                and variable not in problem.global_dof._variable
+            ):
+                raise ValueError("Select a problem variable")
+            old = self.editing[2] if self.editing else None
+            expression = self.value_edit.text().strip()
+            if not expression and old is not None:
+                value = old.value
+            else:
+                value = np.asarray(
+                    evaluate_expression(expression, data=self.parent().data),
+                    dtype=float,
+                )
+                if (
+                    value.ndim > 1
+                    or value.size not in (1, len(indices))
+                    or not np.all(np.isfinite(value))
+                ):
+                    raise ValueError(
+                        "Value must be finite: one number or one value per target ID"
+                    )
+                value = value.item() if value.ndim == 0 else value
+            node_set = (
+                reference[1]
+                if reference[0] == "Node" and reference[1] in problem.mesh.node_sets
+                else indices
+            )
+            condition = BoundaryCondition(
+                self.type_combo.currentText(),
+                node_set,
+                variable,
+                value,
+                time_func=old.time_func if old is not None else None,
+                start_value=old.start_value if old is not None else None,
+                name=self.name_edit.text().strip(),
+            )
+            condition._viewer_set_reference = reference
+            if old is None:
+                problem.bc.add(condition)
+            else:
+                condition.initialize(problem)
+                condition._start_value_default = old._start_value_default
+                self.editing[0][self.editing[1]] = condition
+            problem.bc._checked_signature = None
+            problem.invalidate_factorization()
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Boundary condition error", str(exc))
+            return
+        self.refresh()
+        self.status.setText(
+            "Problem boundary conditions updated. Solve from Python to update the solution."
+        )
+
+    def highlight_selected(self):
+        if self.editing is None:
+            return
+        condition = self.editing[2]
+        variable = getattr(condition, "variable_name", None)
+        if variable in self.problem.global_dof._variable:
+            self.status.setText("Global DOF IDs have no mesh-node association.")
+            return
+        nodes = getattr(condition, "node_set", None)
+        if nodes is None:
+            assembly = getattr(condition, "assembly", None)
+            nodes = np.unique(assembly.mesh.elements) if assembly is not None else None
+        if nodes is None:
+            self.status.setText("This custom constraint does not expose a node set.")
+            return
+        nodes = np.unique(np.asarray(nodes, dtype=int))
+        nodes = nodes[(nodes >= 0) & (nodes < self.problem.mesh.n_nodes)]
+        self.parent().open_node_sets_dialog()
+        self.parent().node_sets_dialog.update_selection(set(nodes))
+
+    def remove_selected(self):
+        if self.editing is None:
+            return
+        del self.editing[0][self.editing[1]]
+        self.problem.bc._checked_signature = None
+        self.problem.invalidate_factorization()
+        self.refresh()
+
+
+class ScalarExpressionDialog(QtWidgets.QDialog):
+    """Define scalar results evaluated at each frame from a shared expression."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Compute scalar")
+        self.resize(520, 360)
+        self._help_dialog = None
+        layout = QVBoxLayout(self)
+        form = QtWidgets.QFormLayout()
+        self.name_edit = QtWidgets.QLineEdit()
+        self.expression_edit = QtWidgets.QLineEdit()
+        self.expression_edit.setPlaceholderText('sum(Disp_X[nodes("Top")])')
+        self.data_type_combo = QtWidgets.QComboBox()
+        self.data_type_combo.addItems(["Node", "Element"])
+        form.addRow("Scalar name:", self.name_edit)
+        expression_row = QHBoxLayout()
+        expression_row.addWidget(self.expression_edit, 1)
+        self.help_button = QtWidgets.QToolButton()
+        self.help_button.setIcon(
+            self.style().standardIcon(QtWidgets.QStyle.SP_DialogHelpButton)
+        )
+        self.help_button.setToolTip("Expression help and examples")
+        self.help_button.setAccessibleName("Expression help")
+        self.help_button.setAutoRaise(True)
+        self.help_button.clicked.connect(self.open_help)
+        expression_row.addWidget(self.help_button)
+        form.addRow("Expression:", expression_row)
+        form.addRow("Field values at:", self.data_type_combo)
+        layout.addLayout(form)
+        self.table = QtWidgets.QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Scalar", "Current value", "Expression"])
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.itemSelectionChanged.connect(self._load_selected)
+        self.table.itemDoubleClicked.connect(self._insert_scalar)
+        self.table.setToolTip("Double-click a scalar to insert it into the expression.")
+        self.table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.table)
+        apply_button = QPushButton("Compute / update scalar")
+        apply_button.clicked.connect(self.compute)
+        layout.addWidget(apply_button)
+        self.status = QLabel()
+        layout.addWidget(self.status)
+        self.refresh()
+
+    def open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = QtWidgets.QDialog(self)
+            self._help_dialog.setWindowTitle("Compute scalar — Expression help")
+            self._help_dialog.resize(520, 390)
+            layout = QVBoxLayout(self._help_dialog)
+            text = QtWidgets.QTextBrowser()
+            text.setPlainText(
+                "Examples\n\n"
+                "CompressionForce * PlateShortening\n"
+                'sum(Disp_X[nodes("Top")])\n'
+                'mean(Stress_XX[elements("Wall")])\n'
+                'sum(scalar("Fext(RigidDisp)")[2])\n\n'
+                "Available values\n\n"
+                "Use X, Y, Z, ID, field/component names (Stress_XX, Disp_X), "
+                'node_sets["name"], element_sets["name"], and NumPy functions '
+                "(sum, mean, min, max, sqrt, ...). Functions can also use the np. prefix.\n\n"
+                "Field values at selects Node or Element values. Use Element for "
+                'expressions indexed by elements("Wall"); use Node for nodes("Top").\n'
+                'Use scalar("name") for scalar names containing punctuation.\n\n'
+                "Expressions use reference positions and must return one finite number.\n\n"
+                "Editing and saving\n\n"
+                "Select a computed scalar to edit its definition. Double-click a scalar "
+                "to insert it into the expression.\n\n"
+                "Expressions update on frame changes and are exported as scalar histories "
+                "by Save As. Their definitions are saved too, so they remain editable "
+                "after reopening the FDH5 file."
+            )
+            layout.addWidget(text)
+            close = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+            close.rejected.connect(self._help_dialog.close)
+            layout.addWidget(close)
+        self._help_dialog.show()
+        self._help_dialog.raise_()
+        self._help_dialog.activateWindow()
+
+    def closeEvent(self, event):
+        if self._help_dialog is not None:
+            self._help_dialog.close()
+        super().closeEvent(event)
+
+    def refresh(self):
+        data = self.parent().data
+        blocker = QSignalBlocker(self.table)
+        self.table.setRowCount(0)
+        for name, value in sorted(data.scalar_data.items()):
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            definition = data.scalar_expressions.get(name, {})
+            for column, text in enumerate(
+                (name, str(value), definition.get("expression", ""))
+            ):
+                self.table.setItem(row, column, QtWidgets.QTableWidgetItem(text))
+        del blocker
+
+    def _load_selected(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        name = self.table.item(row, 0).text()
+        definition = self.parent().data.scalar_expressions.get(name)
+        if definition is not None:
+            self.name_edit.setText(name)
+            self.expression_edit.setText(definition["expression"])
+            self.data_type_combo.setCurrentText(definition["data_type"])
+
+    def _insert_scalar(self, item):
+        name = self.table.item(item.row(), 0).text()
+        self.expression_edit.insert(f"scalar({name!r})")
+
+    def compute(self):
+        main = self.parent()
+        main._sync_viewer_sets(main.active_dock)
+        try:
+            value = main.data.add_scalar_expression(
+                self.name_edit.text(),
+                self.expression_edit.text(),
+                self.data_type_combo.currentText(),
+            )
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Scalar expression error", str(exc))
+            return
+        self.status.setText(f"{self.name_edit.text().strip()} = {value}")
+        self.refresh()
+        if main._history_plot_dialog is not None:
+            main._history_plot_dialog.update_fields()
 
 
 class MplLinePlotDialog(QtWidgets.QDialog):
@@ -5077,7 +6559,8 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         id_row = QtWidgets.QHBoxLayout()
         id_row.addWidget(self.id_spin)
         id_row.addWidget(self.pick_mesh_btn)
-        form_layout.addRow("Cell/Node ID:", id_row)
+        self.id_label = QtWidgets.QLabel("Cell/Node ID:")
+        form_layout.addRow(self.id_label, id_row)
 
         layout.addLayout(form_layout)
 
@@ -5175,14 +6658,18 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         data = getattr(self.parent, "data", None)
         if data is not None and field in data.scalar_data:
             self.data_type_combo.setEnabled(False)
-            self.id_spin.setEnabled(False)
+            self.data_type_combo.setToolTip(
+                "Global values have no mesh association; data type is ignored."
+            )
             self.pick_mesh_btn.setEnabled(False)
         else:
             self.data_type_combo.setEnabled(True)
+            self.data_type_combo.setToolTip("")
             self.id_spin.setEnabled(True)
             self.pick_mesh_btn.setEnabled(True)
 
         self.update_components(field)
+        self.update_data_type(self.data_type_combo.currentText())
 
     def on_y_table_row_selected(self):
         selected = self.y_table.selectionModel().selectedRows()
@@ -5239,72 +6726,18 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             self._start_pick_element(mainwin)
 
     def _start_pick_node(self, mainwin):
-        # Use MainWindow._pick_node logic, but update id_spin when picked
-        def _picked(point):
-            mesh = mainwin.active_dock.pv_mesh
-            # try:
-            if mainwin.opts["clip_args"]:
-                if "Disp" in mainwin.data.node_data:
-                    crd = mainwin.data.mesh.nodes + mainwin.data["Disp"].T
-                    pid = np.linalg.norm(crd - point, axis=1).argmin()
-                else:
-                    pid = mainwin.data.mesh.nearest_node(point)
-            else:
-                pid = mesh.find_closest_point(point)
-                if mainwin.current_data_type == "GaussPoint" and not _is_multimesh(
-                    mainwin.data.mesh
-                ):
-                    pid = mainwin.data.mesh.elements.ravel()[pid]
-
-            if mesh is not None and pid is not None and pid >= 0:
-                self.id_spin.setValue(pid)
-
+        def picked(node_id):
+            self.id_spin.setValue(node_id)
             mainwin.plotter.disable_picking()
 
-        mainwin.plotter.disable_picking()
-        mainwin.plotter.enable_point_picking(
-            callback=_picked, left_clicking=True, show_message=True, picker="point"
-        )
+        mainwin._pick_node(on_pick=picked)
 
     def _start_pick_element(self, mainwin):
-        picker = vtk.vtkCellPicker()
-        picker.SetTolerance(0.0005)
+        def picked(element_id):
+            self.id_spin.setValue(element_id)
+            mainwin._stop_element_picking()
 
-        def _on_click(obj, event):
-            x, y = mainwin.plotter.interactor.GetEventPosition()
-            picker.Pick(x, y, 0, mainwin.plotter.renderer)
-            cell_id = picker.GetCellId()
-            if cell_id < 0:
-                return
-            display_cell_id = cell_id
-            actor_name, mesh = mainwin.active_dock.picked_actor_mesh(picker.GetActor())
-            if mesh is None:
-                mesh = mainwin.active_dock.pv_mesh
-            cell = mesh.extract_cells(cell_id)
-            mainwin.plotter.remove_actor("_picked_cell")
-            mainwin.plotter.add_mesh(
-                cell, style="wireframe", color="pink", name="_picked_cell"
-            )
-            if mainwin.opts["clip_args"]:
-                cell_id = mesh.cell_data["cell_ids"][cell_id]
-            elif "vtkOriginalCellIds" in mesh.cell_data:
-                cell_id = mesh.cell_data["vtkOriginalCellIds"][cell_id]
-            if "_fedoo_global_cell_ids" in mesh.cell_data:
-                cell_id = mesh.cell_data["_fedoo_global_cell_ids"][display_cell_id]
-            if mesh is not None and cell_id is not None:
-                self.id_spin.setValue(int(cell_id))
-            # Remove observer after pick
-            if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
-                mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
-                self._lbp_tag = None
-
-        # Remove previous observer if any
-        if hasattr(self, "_lbp_tag") and self._lbp_tag is not None:
-            mainwin.plotter.interactor.RemoveObserver(self._lbp_tag)
-            self._lbp_tag = None
-        self._lbp_tag = mainwin.plotter.interactor.AddObserver(
-            "LeftButtonPressEvent", _on_click
-        )
+        mainwin._pick_element(on_pick=picked)
 
     def update_fields(self):
         data = getattr(self.parent, "data", None)
@@ -5335,10 +6768,27 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         self.comp_combo.blockSignals(False)
 
     def update_data_type(self, data_type):
-        if data_type == "Node":
-            self.id_spin.setMaximum(self.parent.data.mesh.n_nodes)
+        data = self.parent.data
+        field = self.field_combo.currentText()
+        if field in data.scalar_data:
+            values = np.asarray(data.scalar_data[field])
+            count = values.shape[-1] if values.ndim else 1
+            self.id_label.setText("ID:")
+            self.id_spin.setToolTip(
+                "Index in the global values; unrelated to mesh nodes or elements."
+            )
+            self.id_spin.setEnabled(count > 1)
+        elif data_type == "Node":
+            count = data.mesh.n_nodes
+            self.id_label.setText("Cell/Node ID:")
+            self.id_spin.setToolTip("")
+            self.id_spin.setEnabled(True)
         else:
-            self.id_spin.setMaximum(self.parent.data.mesh.n_elements)
+            count = data.mesh.n_elements
+            self.id_label.setText("Cell/Node ID:")
+            self.id_spin.setToolTip("")
+            self.id_spin.setEnabled(True)
+        self.id_spin.setMaximum(max(0, count - 1))
 
     def update_completer(self):
         # Build list of field_component strings for autocompletion
@@ -5361,12 +6811,19 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             self.completion_model.appendRow(QtGui.QStandardItem(item))
 
     def on_filter_edit(self, text):
-        # Parse text like 'Stress_XY' or 'Stress'
-        field, comp = "", ""
-        if "_" in text:
-            field, comp = text.split("_", 1)
+        # Match whole names first, then the longest field prefix. Global DOF
+        # names (including Fext(...)) can themselves contain underscores.
+        names = [self.field_combo.itemText(i) for i in range(self.field_combo.count())]
+        field, comp = text, "All components"
+        for name in sorted(names, key=len, reverse=True):
+            if text.casefold() == name.casefold():
+                field = name
+                break
         else:
-            field, comp = text, "All components"
+            for name in sorted(names, key=len, reverse=True):
+                if text.casefold().startswith(name.casefold() + "_"):
+                    field, comp = name, text[len(name) + 1 :]
+                    break
         idx_field = self.field_combo.findText(field, Qt.MatchFixedString)
         if idx_field >= 0:
             self.field_combo.setCurrentIndex(idx_field)
@@ -5406,10 +6863,10 @@ class HistoryPlotDialog(QtWidgets.QDialog):
             return
 
         if field in data.scalar_data:
-            if n_comps <= 1:
-                self.x_info.setText(f"{field}")
-            else:
-                self.x_info.setText(f"{field}_{comp}")
+            label = field if n_comps <= 1 else f"{field}_{comp}"
+            if np.ndim(data.scalar_data[field]):
+                label += f" (ID={indice})"
+            self.x_info.setText(label)
         else:
             if n_comps <= 1:
                 self.x_info.setText(f"{field} ({data_type}, ID={indice})")
@@ -5425,8 +6882,8 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         if data is None:
             return False
         if field in data.scalar_data:
-            # should also test the size of scalar data
-            return True
+            values = np.asarray(data.scalar_data[field])
+            return 0 <= indice < (values.shape[-1] if values.ndim else 1)
         else:
             if field not in data.field_names():
                 return False
@@ -5478,6 +6935,8 @@ class HistoryPlotDialog(QtWidgets.QDialog):
         )
         if field in data.scalar_data:
             label = f"{field}_{comp}"
+            if np.ndim(data.scalar_data[field]):
+                label += f" (ID={idx})"
         else:
             if indice is None and dtype == "GaussPoint":
                 # add all gauss points values
