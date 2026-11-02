@@ -15,6 +15,13 @@ pair (quadratic displacement, linear pressure) needs no new machinery:
     elm = fd.lib_elements.element_list.CombinedElement("quad8lbb", "quad8")
     elm.set_variable_interpolation("Pressure", "quad4")          # one order lower
     assembly = fd.Assembly.create(wf, mesh_quad8, elm_type="quad8lbb")
+    # the mid-side nodes carry a Pressure dof that quad4 does not use: fix it
+    midside = np.setdiff1d(np.arange(mesh_quad8.n_nodes), mesh_quad8.elements[:, :4])
+    pb.bc.add("Dirichlet", midside, "Pressure", 0)
+
+The pressure dofs of the mid-side nodes appear in no equation: without this
+condition the matrix is singular, and the direct solver fails or not depending
+on its pivoting order.
 
 Part A compares, on the SAME quad8 mesh and SAME quadratic displacement, the
 equal-order pressure (quad8) and the Taylor-Hood pressure (quad4) on a nearly
@@ -68,6 +75,10 @@ def mixed_cantilever(pressure_elm, name, nu=0.49999):
         -0.05,
         time_func=lambda tf: min(1.0, tf * 1e9),
     )
+    if pressure_elm == "quad4":
+        # unused Pressure dofs of the quad8 mid-side nodes (see above)
+        midside = np.setdiff1d(np.arange(mesh.n_nodes), mesh.elements[:, :4])
+        pb.bc.add("Dirichlet", midside, "Pressure", 0.0)
     pb.initialize()
     pb.tmax = 1.0
     pb.dtime = 1.0
@@ -146,6 +157,9 @@ pb.bc.add(
     dz,
     time_func=lambda tf: min(1.0, tf * 1e9),
 )
+# unused PorePressure dofs of the hex20 mid-side nodes (hex8 interpolation)
+midside = np.setdiff1d(np.arange(mesh.n_nodes), mesh.elements[:, :8])
+pb.bc.add("Dirichlet", midside, "PorePressure", 0.0)
 
 dt = 1.0e-3  # tiny step, fully sealed -> undrained
 pb.initialize()

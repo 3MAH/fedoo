@@ -78,6 +78,11 @@ assembly, e.g. quadratic ``u`` with linear pressure::
     elm = fd.lib_elements.element_list.CombinedElement("hex20lbb", "hex20")
     elm.set_variable_interpolation("PorePressure", "hex8")
     assembly = fd.Assembly.create(wf, mesh, elm_type="hex20lbb")
+    pb = fd.problem.NonLinear(assembly)
+    # The PorePressure dofs of the mid-side nodes are not used by the hex8
+    # interpolation: fix them, otherwise the matrix is singular.
+    midside = np.setdiff1d(np.arange(mesh.n_nodes), mesh.elements[:, :8])
+    pb.bc.add("Dirichlet", midside, "PorePressure", 0)
 
 See the example :ref:`sphx_glr_examples_poromechanics_taylor_hood_lbb.py`.
 

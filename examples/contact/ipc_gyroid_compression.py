@@ -2,7 +2,7 @@
 Gyroid self-contact under compression (3D, IPC method)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Compresses a 3D gyroid unit cell (50 % axial strain) with IPC
+Compresses a 3D gyroid unit cell (40 % axial strain) with IPC
 self-contact to prevent wall intersections. Linear elastic material,
 updated Lagrangian formulation.
 
@@ -49,11 +49,13 @@ if not os.path.isdir("results"):
     os.mkdir("results")
 res = pb.add_output("results/gyroid_ipc", solid_assembly, ["Disp", "Stress"])
 
-# --- BCs: compression 50% ---
+# --- BCs: compression 40% ---
+# With this linear elastic law, the solution stops converging near 48 % (the
+# walls reach densification), unlike the elasto-plastic version.
 nodes_top = mesh.find_nodes("Z", mesh.bounding_box.zmax)
 nodes_bottom = mesh.find_nodes("Z", mesh.bounding_box.zmin)
 pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
-pb.bc.add("Dirichlet", nodes_top, "Disp", [0, 0, -0.5])
+pb.bc.add("Dirichlet", nodes_top, "Disp", [0, 0, -0.4])
 pb.set_nr_criterion("Displacement", tol=5.0e-3, max_subiter=25)
 
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.05)

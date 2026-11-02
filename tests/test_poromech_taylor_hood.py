@@ -74,6 +74,11 @@ def test_taylor_hood_poro_undrained_magnitude():
         time_func=lambda tf: min(1.0, tf * 1e9),
     )
 
+    # the hex20 mid-side nodes carry a PorePressure dof that the hex8
+    # interpolation does not use: fix it, otherwise the matrix is singular and
+    # the direct solver fails or not depending on its pivoting order
+    midside = np.setdiff1d(np.arange(mesh.n_nodes), mesh.elements[:, :8])
+    pb.bc.add("Dirichlet", midside, "PorePressure", 0.0)
     # tiny dt -> negligible diffusion; fully sealed (no PorePressure BC) -> undrained
     dt = 1.0e-3
     pb.initialize()
