@@ -474,17 +474,11 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
   .. code-block:: python
 
       import fedoo as fd
-      import numpy as np
       # Define a quadratic element with linear pressure (Taylor-Hood)
       new_elm = fd.lib_elements.element_list.CombinedElement("quad8lbb", "quad8")
       new_elm.set_variable_interpolation("Pressure", "quad4")
       wf = fd.weakform.StressEquilibriumMixed(material, bulk_modulus=kappa)
       assembly = fd.Assembly.create(wf, my_mesh, elm_type="quad8lbb")
-      pb = fd.problem.NonLinear(assembly)
-      # The Pressure dofs of the mid-side nodes are not used by the quad4
-      # interpolation: fix them, otherwise the matrix is singular.
-      midside = np.setdiff1d(np.arange(my_mesh.n_nodes), my_mesh.elements[:, :4])
-      pb.bc.add("Dirichlet", midside, "Pressure", 0)
 
 Example: :ref:`sphx_glr_examples_finite_strain_incompressibility_comparison.py`
 compares these formulations on a nearly incompressible plastic problem.

@@ -149,11 +149,6 @@ under the name given as first argument, which must therefore be created
     elm.set_variable_interpolation("PorePressure", "hex8")
 
     assembly = fd.Assembly.create(wf, mesh, elm_type="hex20lbb")
-    pb = fd.problem.NonLinear(assembly)
-    # The PorePressure dofs of the mid-side nodes are not used by the hex8
-    # interpolation: fix them, otherwise the matrix is singular.
-    midside = np.setdiff1d(np.arange(mesh.n_nodes), mesh.elements[:, :8])
-    pb.bc.add("Dirichlet", midside, "PorePressure", 0)
 
 With the three-field :py:class:`~fedoo.weakform.PoroMechanics`, interpolate
 the skeleton ``Pressure`` linearly as well
