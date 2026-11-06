@@ -9,6 +9,11 @@ from fedoo.core.dataset import as_3d_coordinates
 from fedoo.core.multimeshdata import MultiMeshData
 from fedoo.core.problem_dataset import ProblemDataSet
 from fedoo.util.field_components import get_field_components
+from fedoo.util.frame_fields import (
+    is_frame_field,
+    FRAME_COMPONENTS,
+    FRAME_MATRIX_COMPONENTS,
+)
 
 
 class ObjectInspector(QtWidgets.QDockWidget):
@@ -24,9 +29,16 @@ class ObjectInspector(QtWidgets.QDockWidget):
         self._source_dock = None
         self._highlight_dock = None
         self._initial_width_applied = False
+        self._width_ratio = None
+        self._separator_dragging = False
         self._width_timer = QTimer(self)
         self._width_timer.setSingleShot(True)
-        self._width_timer.timeout.connect(self._restore_minimum_width)
+        self._width_timer.timeout.connect(self._restore_width)
+        self._ratio_timer = QTimer(self)
+        self._ratio_timer.setSingleShot(True)
+        self._ratio_timer.timeout.connect(self._remember_width)
+        self.topLevelChanged.connect(lambda *_: self._width_timer.start(0))
+        self.dockLocationChanged.connect(lambda *_: self._width_timer.start(0))
         window.installEventFilter(self)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -41,6 +53,8 @@ class ObjectInspector(QtWidgets.QDockWidget):
         self.tree.setHeaderHidden(True)
         self.tree.setUniformRowHeights(True)
         self.tree.currentItemChanged.connect(self._selection_changed)
+        self.tree.itemClicked.connect(self._activate_component)
+        self.tree.itemActivated.connect(self._activate_component)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.properties = QtWidgets.QTableWidget(0, 2)
@@ -78,31 +92,68 @@ class ObjectInspector(QtWidgets.QDockWidget):
         self.plot_button.setEnabled(False)
 
     def eventFilter(self, watched, event):
-        if watched is self.window and event.type() == QEvent.Resize:
-            self._width_timer.start(0)
+        if watched is self.window:
+            if event.type() == QEvent.Resize:
+                self._width_timer.start(0)
+            elif (
+                event.type() == QEvent.MouseButtonPress
+                and event.button() == Qt.LeftButton
+            ):
+                self._separator_dragging = self._on_separator(event.pos())
+            elif event.type() == QEvent.MouseButtonRelease and self._separator_dragging:
+                self._separator_dragging = False
+                self._ratio_timer.start(0)
         return super().eventFilter(watched, event)
 
-    def _restore_minimum_width(self):
-        dock = self.window.active_dock
+    def _on_separator(self, position):
+        if not self.isVisible() or self.isFloating():
+            return False
+        area = self.window.dockWidgetArea(self)
+        rect = self.geometry()
+        edge = rect.right() if area == Qt.LeftDockWidgetArea else rect.left()
+        extent = self.style().pixelMetric(QtWidgets.QStyle.PM_DockWidgetSeparatorExtent)
+        return (
+            rect.top() <= position.y() <= rect.bottom()
+            and abs(position.x() - edge) <= extent + 1
+        )
+
+    def _minimum_width(self):
+        return max(self.minimumWidth(), self.minimumSizeHint().width())
+
+    def _restore_width(self):
         if (
-            dock is not None
-            and self.isVisible()
+            self.isVisible()
+            and not self.isFloating()
+            and not self.window.isFullScreen()
+            and not self._separator_dragging
+        ):
+            width = self._minimum_width()
+            if self._width_ratio is not None:
+                width = max(
+                    width, round(self._width_ratio * self.window.contentsRect().width())
+                )
+            self.window.resizeDocks([self], [width], Qt.Horizontal)
+            self._initial_width_applied = True
+
+    def _remember_width(self):
+        """Remember a divider drag: fixed minimum, otherwise a window ratio."""
+        if (
+            self.isVisible()
             and not self.isFloating()
             and not self.window.isFullScreen()
         ):
-            width = max(self.minimumWidth(), self.minimumSizeHint().width())
-            self.window.resizeDocks(
-                [self, dock],
-                [width, max(1, self.window.width() - width)],
-                Qt.Horizontal,
+            self._width_ratio = (
+                None
+                if self.width() <= self._minimum_width() + 1
+                else self.width() / max(1, self.window.contentsRect().width())
             )
-            self._initial_width_applied = True
 
     def _visibility_changed(self, visible):
         if visible and self.window.isFullScreen():
             self.hide()
         elif visible:
             self.refresh()
+            self._width_timer.start(0)
         else:
             self.stop()
 
@@ -124,6 +175,8 @@ class ObjectInspector(QtWidgets.QDockWidget):
     def stop(self):
         self._refresh_timer.stop()
         self._width_timer.stop()
+        self._ratio_timer.stop()
+        self._separator_dragging = False
         self._clear_highlight()
 
     def _key(self):
@@ -177,13 +230,14 @@ class ObjectInspector(QtWidgets.QDockWidget):
             and self.isVisible()
             and not self.isFloating()
         ):
-            self._restore_minimum_width()
+            self._restore_width()
         if source_changed:
             # Restore compact width after Qt redistributes space for changed views.
             self._width_timer.start(0)
         data = dock.data
-        self.window._ensure_dock_node_sets(dock)
-        self.window._ensure_dock_element_sets(dock)
+        if data.mesh is not None:
+            self.window._ensure_dock_node_sets(dock)
+            self.window._ensure_dock_element_sets(dock)
         live = isinstance(data, ProblemDataSet)
         self.context_label.setText(
             f"{dock.title} · Current state"
@@ -196,35 +250,36 @@ class ObjectInspector(QtWidgets.QDockWidget):
             "dataset",
             value=data,
         )
-        mesh_item = self._item(root, "Mesh", "mesh", value=data.mesh)
-        for index, block in enumerate(getattr(data.mesh, "submeshes", ())):
-            self._item(
-                mesh_item,
-                f"{index}: {block.name or block.elm_type} ({block.n_elements})",
-                "submesh",
-                str(index),
-                block,
-            )
-        for kind, label, sets in (
-            ("nodes", "Node sets", dock.node_sets),
-            ("elements", "Element sets", dock.element_sets),
-        ):
-            group = self._item(root, label, "group", kind)
-            for name, ids in sorted(sets.items()):
-                if (
-                    kind == "elements"
-                    and name.startswith("submesh_")
-                    and name in dock.unsaved_element_set_names
-                    and getattr(data.mesh, "submeshes", ())
-                ):
-                    # Generated block sets duplicate the entries below Mesh.
-                    continue
-                count = (
-                    (data.mesh.n_nodes if kind == "nodes" else data.mesh.n_elements)
-                    if ids is None
-                    else len(ids)
+        if data.mesh is not None:
+            mesh_item = self._item(root, "Mesh", "mesh", value=data.mesh)
+            for index, block in enumerate(getattr(data.mesh, "submeshes", ())):
+                self._item(
+                    mesh_item,
+                    f"{index}: {block.name or block.elm_type} ({block.n_elements})",
+                    "submesh",
+                    str(index),
+                    block,
                 )
-                self._item(group, f"{name} ({count})", kind, name, ids)
+            for kind, label, sets in (
+                ("nodes", "Node sets", dock.node_sets),
+                ("elements", "Element sets", dock.element_sets),
+            ):
+                group = self._item(root, label, "group", kind)
+                for name, ids in sorted(sets.items()):
+                    if (
+                        kind == "elements"
+                        and name.startswith("submesh_")
+                        and name in dock.unsaved_element_set_names
+                        and getattr(data.mesh, "submeshes", ())
+                    ):
+                        # Generated block sets duplicate the entries below Mesh.
+                        continue
+                    count = (
+                        (data.mesh.n_nodes if kind == "nodes" else data.mesh.n_elements)
+                        if ids is None
+                        else len(ids)
+                    )
+                    self._item(group, f"{name} ({count})", kind, name, ids)
         fields = self._item(root, "Fields", "group", "fields")
         for association, values in data.dict_data.items():
             if not values:
@@ -232,7 +287,19 @@ class ObjectInspector(QtWidgets.QDockWidget):
             group = self._item(fields, association, "group", association)
             for name in sorted(values):
                 if not name.startswith("_"):
-                    self._item(group, name, "field", (association, name), name)
+                    field_item = self._item(
+                        group, name, "field", (association, name), name
+                    )
+                    for component in self._component_labels(
+                        association, name, values[name]
+                    ):
+                        self._item(
+                            field_item,
+                            component,
+                            "component",
+                            (association, name, component),
+                            name,
+                        )
         if live:
             boundaries = self._item(root, "Boundary conditions", "group", "bc")
             for index, condition in enumerate(self._conditions(data.problem.bc)):
@@ -252,6 +319,31 @@ class ObjectInspector(QtWidgets.QDockWidget):
         self.tree.setCurrentItem(selected)
         del blocker
         self._selection_changed()
+
+    def _component_labels(self, association, field, raw):
+        if association == "Scalar":
+            return []
+        if is_frame_field(field, self.window.active_dock.data.field_metadata):
+            return [
+                label
+                for label in FRAME_COMPONENTS
+                if self.window.active_dock.data.mesh.ndim == 3 or label != "Local 3"
+            ] + list(FRAME_MATRIX_COMPONENTS)
+        first = (
+            next(
+                (np.asarray(block) for _, block in raw.items() if block is not None),
+                None,
+            )
+            if isinstance(raw, (MultiMeshData, dict))
+            else np.asarray(raw)
+        )
+        if first is None or first.ndim < 2:
+            return []
+        return get_field_components(field, first.shape[0])
+
+    def _display_field_name(self, field):
+        derived = self.window.active_dock.data.section_derived_fields()
+        return derived[field][0] if field in derived else field
 
     @staticmethod
     def _preview(value):
@@ -313,12 +405,12 @@ class ObjectInspector(QtWidgets.QDockWidget):
                     rows.append(("Visibility", self._visibility_state(key)))
                 self._highlight(kind, ids)
                 self.edit_button.setEnabled(True)
-            elif kind == "field":
-                association, field = name
+            elif kind in ("field", "component"):
+                association, field = name[:2]
                 raw = data.dict_data[association][field]
                 chunks = (
                     [np.asarray(block) for _, block in raw.items()]
-                    if isinstance(raw, MultiMeshData)
+                    if isinstance(raw, (MultiMeshData, dict))
                     else [np.asarray(raw)]
                 )
                 rows = [
@@ -326,13 +418,17 @@ class ObjectInspector(QtWidgets.QDockWidget):
                     ("Association", association),
                     ("Shape", ", ".join(str(chunk.shape) for chunk in chunks)),
                 ]
+                if kind == "component":
+                    rows.append(("Component", name[2]))
                 if chunks:
                     components = chunks[0].shape[0] if chunks[0].ndim > 1 else 1
                     if association != "Scalar":
                         rows.append(
                             (
                                 "Components",
-                                ", ".join(get_field_components(field, components)),
+                                ", ".join(
+                                    self._component_labels(association, field, raw)
+                                ),
                             )
                         )
                     numeric = [
@@ -359,7 +455,10 @@ class ObjectInspector(QtWidgets.QDockWidget):
                     self.edit_button.setEnabled(True)
                 self.plot_button.setEnabled(
                     association != "Scalar"
-                    and self.window.field_combo.findText(field) >= 0
+                    and self.window.field_combo.findText(
+                        self._display_field_name(field)
+                    )
+                    >= 0
                 )
             elif kind == "bc":
                 rows = [
@@ -399,6 +498,21 @@ class ObjectInspector(QtWidgets.QDockWidget):
             item.setToolTip(str(value))
             self.properties.setItem(row, 1, item)
         self.properties.resizeRowsToContents()
+        # A frame refresh restores tree selection without replotting it. Only a
+        # new user selection activates the requested component.
+        if args and key and key[0] == "component":
+            self._activate_component()
+
+    def _activate_component(self, *args):
+        key = self._key()
+        if key and key[0] == "component":
+            association, field, component = key[1]
+            if (
+                self.window.field_combo.currentText() != self._display_field_name(field)
+                or self.window.avg_combo.currentText() != association
+                or self.window.comp_combo.currentText() != component
+            ):
+                self.plot_field()
 
     def _clear_highlight(self):
         dock = self._highlight_dock
@@ -462,12 +576,12 @@ class ObjectInspector(QtWidgets.QDockWidget):
         if ids is None:
             return None
         menu = QtWidgets.QMenu(self)
-        show_only = menu.addAction("Show only")
+        show_only = menu.addAction("Show all" if key[0] == "mesh" else "Show only")
         show_only.setEnabled(bool(len(ids)))
         show_only.triggered.connect(
             lambda: self._apply_visibility(key, "only", dock=dock)
         )
-        mask = menu.addAction("Mask")
+        mask = menu.addAction("Mask all" if key[0] == "mesh" else "Mask")
         mask.setCheckable(True)
         mask.setEnabled(bool(len(ids)))
         mask.setChecked(self._visibility_state(key) == "Masked")
@@ -588,7 +702,9 @@ class ObjectInspector(QtWidgets.QDockWidget):
             self.refresh()
             return
         key = self._key()
-        if key and key[0] == "field" and self.plot_button.isEnabled():
-            association, field = key[1]
-            self.window.field_combo.setCurrentText(field)
+        if key and key[0] in ("field", "component") and self.plot_button.isEnabled():
+            association, field = key[1][:2]
+            self.window.field_combo.setCurrentText(self._display_field_name(field))
             self.window.avg_combo.setCurrentText(association)
+            if key[0] == "component":
+                self.window.comp_combo.setCurrentText(key[1][2])

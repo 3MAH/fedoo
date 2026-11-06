@@ -177,7 +177,7 @@ class Problem(ProblemBase):
         output_list=None,
         output_type=None,
         file_format="fdh5",
-        compressed=True,
+        compressed=None,
         position=None,
         element_set=None,
         save_mesh=True,
@@ -185,6 +185,8 @@ class Problem(ProblemBase):
         write_mode="overwrite",
         ignore_missing=False,
         private=False,
+        *,
+        fdh5_options=None,
     ):
         """Register an output for automatic saving managed by solve methods.
 
@@ -214,16 +216,17 @@ class Problem(ProblemBase):
             file format used to save the results. The default file format
             and recommanding one is "fdh5".
 
-        compressed : bool, int, str or CompressionConfig, default=True
-            For FDH5, True uses gzip level 4, False disables compression, and
-            an integer from 0 to 9 selects the gzip level. Integer 0 keeps the
-            gzip filter with compression disabled. Existing iterations are
-            unaffected when appending. For other formats, compression is
-            enabled when this option is truthy, where supported.
-            FDH5 also accepts ``"zstd"`` (level 3, requires ``fedoo[zstd]``)
-            or ``fedoo.util.fdh5.CompressionConfig("zstd", level)`` for a
-            custom Zstandard level from 1 to 22.
-
+        compressed : bool or None, default=None
+            For FDH5, None uses configured defaults; False disables compression;
+            True uses the configured codec, falling back to gzip level 4 when
+            it is None. For other formats, enables supported compression.
+        fdh5_options : dict, optional
+            Per-output overrides of :func:`fedoo.get_fdh5_options`: compression,
+            compression_level, float_dtype, coordinate_dtype, integer_min_bits,
+            and local_frame. Default result fields use float32; coordinates,
+            scalar outputs and metadata preserve precision. Set float_dtype=None
+            to preserve field precision. Cannot specify compression entries
+            together with compressed. Conversions affect saved arrays only.
         position : None, scalar, coordinate pair or array, optional
             For beams, normalized (y, z) coordinates, either one pair or an
             array with shape (n_section_points, 2). None extracts all configured
@@ -280,6 +283,7 @@ class Problem(ProblemBase):
             write_mode,
             ignore_missing,
             private,
+            fdh5_options=fdh5_options,
         )
 
     def clear_outputs(self):

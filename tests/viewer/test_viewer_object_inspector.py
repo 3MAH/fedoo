@@ -55,21 +55,27 @@ def properties(inspector):
 
 
 def show_inspector(app, window):
-    window.object_inspector_action.trigger()
-    app.processEvents()
+    if window.object_inspector.isHidden():
+        window.object_inspector_action.trigger()
+    for _ in range(3):
+        app.processEvents()
     assert window.object_inspector.isVisible()
     return window.object_inspector
 
 
-def test_optional_inspector_mesh_properties_and_set_highlighting(inspected_window):
+def test_default_inspector_mesh_properties_and_set_highlighting(inspected_window):
     viewer, app, window = inspected_window
-    assert window.object_inspector.isHidden()
-    assert not window.object_inspector_action.isChecked()
+    assert window.object_inspector.isVisible()
+    assert window.object_inspector_action.isChecked()
     inspector = show_inspector(app, window)
-    assert inspector.geometry().right() < window.active_dock.geometry().left()
+    assert inspector.geometry().right() < window._view_area.geometry().left()
     assert inspector.width() < window.width() / 2
-    assert inspector.width() == max(
-        inspector.minimumWidth(), inspector.minimumSizeHint().width()
+    assert inspector.width() == pytest.approx(
+        max(
+            inspector.minimumWidth(),
+            inspector.minimumSizeHint().width(),
+        ),
+        abs=1,
     )
     select(inspector, "mesh")
     assert properties(inspector)["Nodes"] == str(window.data.mesh.n_nodes)
@@ -97,8 +103,12 @@ def test_inspector_menu_and_minimum_width_after_window_resize(inspected_window):
         window.resize(width, 700)
         app.processEvents()
         app.processEvents()
-        assert inspector.width() == max(
-            inspector.minimumWidth(), inspector.minimumSizeHint().width()
+        assert inspector.width() == pytest.approx(
+            max(
+                inspector.minimumWidth(),
+                inspector.minimumSizeHint().width(),
+            ),
+            abs=1,
         )
     inspector.setFloating(True)
     inspector.resize(450, 500)
@@ -279,6 +289,10 @@ def test_mesh_context_menu_masks_and_restores_all_elements(inspected_window):
     viewer, app, window = inspected_window
     inspector = show_inspector(app, window)
     select(inspector, "mesh")
+    assert [action.text() for action in inspector._visibility_menu().actions()] == [
+        "Show all",
+        "Mask all",
+    ]
     inspector._visibility_menu().actions()[1].trigger()
     app.processEvents()
     assert window.opts["element_set"] == []
@@ -417,11 +431,14 @@ def test_inspector_width_after_closing_and_reopening_last_view(
         expected = (
             450
             if floating
-            else max(inspector.minimumWidth(), inspector.minimumSizeHint().width())
+            else max(
+                inspector.minimumWidth(),
+                inspector.minimumSizeHint().width(),
+            )
         )
         assert inspector.width() == expected
         if not floating:
-            assert inspector.geometry().right() < window.active_dock.geometry().left()
+            assert inspector.geometry().right() < window._view_area.geometry().left()
 
 
 def test_inspector_omits_only_generated_submesh_element_sets(inspected_window):
@@ -461,3 +478,215 @@ def test_inspector_omits_only_generated_submesh_element_sets(inspected_window):
     dock.unsaved_element_set_names.remove(saved_name)
     inspector.refresh()
     select(inspector, "elements", saved_name)
+
+
+def drag_inspector_width(app, window, width):
+    from qtpy.QtCore import QPoint, QPointF, QEvent, Qt
+    from qtpy.QtGui import QMouseEvent
+    from qtpy.QtTest import QTest
+
+    inspector = window.object_inspector
+    right = window.dockWidgetArea(inspector) == Qt.RightDockWidgetArea
+    rect = inspector.geometry()
+    start = QPoint(rect.left() - 3 if right else rect.right() + 3, rect.center().y())
+    delta = width - inspector.width()
+    end = start + QPoint(-delta if right else delta, 0)
+    QTest.mousePress(window, Qt.LeftButton, pos=start)
+    move = QMouseEvent(
+        QEvent.MouseMove,
+        QPointF(end),
+        QPointF(window.mapToGlobal(end)),
+        Qt.NoButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    from qtpy.QtWidgets import QApplication
+
+    QApplication.sendEvent(window, move)
+    app.processEvents()
+    QTest.mouseRelease(window, Qt.LeftButton, pos=end)
+    for _ in range(3):
+        app.processEvents()
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_inspector_remembers_divider_ratio_and_fixed_minimum(inspected_window, side):
+    from qtpy.QtCore import Qt
+
+    viewer, app, window = inspected_window
+    inspector = show_inspector(app, window)
+    area = Qt.LeftDockWidgetArea if side == "left" else Qt.RightDockWidgetArea
+    window.addDockWidget(area, inspector)
+    for _ in range(3):
+        app.processEvents()
+    drag_inspector_width(app, window, 400)
+    assert inspector.width() == pytest.approx(400, abs=3)
+    ratio = inspector.width() / window.width()
+    for width in (1400, 1200):
+        window.resize(width, 700)
+        for _ in range(3):
+            app.processEvents()
+        assert inspector.width() == pytest.approx(round(ratio * window.width()), abs=2)
+    minimum = max(inspector.minimumWidth(), inspector.minimumSizeHint().width())
+    drag_inspector_width(app, window, minimum)
+    assert inspector.width() == minimum
+    for width in (1500, 1100):
+        window.resize(width, 700)
+        for _ in range(3):
+            app.processEvents()
+        assert inspector.width() == minimum
+
+
+@pytest.mark.parametrize("side", ["left", "right", "floating"])
+def test_arrange_views_never_repositions_inspector(inspected_window, side):
+    from qtpy.QtCore import Qt
+
+    viewer, app, window = inspected_window
+    inspector = show_inspector(app, window)
+    allowed = Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+    assert inspector.allowedAreas() == allowed
+    window.add_dataset_dock(window.data.deepcopy(), "Second")
+    window.add_dataset_dock(window.data.deepcopy(), "Third")
+    if side == "floating":
+        inspector.setFloating(True)
+        inspector.resize(430, 500)
+    else:
+        inspector.setFloating(True)
+        area = Qt.LeftDockWidgetArea if side == "left" else Qt.RightDockWidgetArea
+        window.addDockWidget(area, inspector)
+        inspector.setFloating(False)
+    for _ in range(3):
+        app.processEvents()
+    before = inspector.geometry()
+    for layout in ("horizontal", "vertical", "tabified", "auto"):
+        getattr(window, f"_distribute_{layout}")()
+        for _ in range(3):
+            app.processEvents()
+        assert inspector.geometry() == before
+        assert all(
+            dock.parentWidget() is window._view_area for dock in window.all_docks
+        )
+        if side == "floating":
+            assert inspector.isFloating()
+        else:
+            assert window.dockWidgetArea(inspector) == area
+            assert inspector.geometry().top() == window._view_area.geometry().top()
+            assert (
+                inspector.geometry().bottom() == window._view_area.geometry().bottom()
+            )
+            if side == "left":
+                assert (
+                    inspector.geometry().right() < window._view_area.geometry().left()
+                )
+            else:
+                assert (
+                    inspector.geometry().left() > window._view_area.geometry().right()
+                )
+
+
+@pytest.mark.parametrize("association", ["Node", "Element", "GaussPoint"])
+def test_inspector_component_children_plot_and_survive_refresh(
+    inspected_window, monkeypatch, association
+):
+    viewer, app, window = inspected_window
+    data = window.data
+    count = data.mesh.n_nodes if association == "Node" else data.mesh.n_elements
+    if association == "GaussPoint":
+        count *= 4
+    data.dict_data[association]["Stress"] = np.arange(6 * count, dtype=float).reshape(
+        6, count
+    )
+    window._set_active(window.active_dock)
+    inspector = show_inspector(app, window)
+    field = select(inspector, "field", (association, "Stress"))
+    labels = [field.child(index).text(0) for index in range(field.childCount())]
+    assert labels == window.get_components("Stress")
+    field.setExpanded(True)
+    for component in ("XX", "vm", "I"):
+        select(inspector, "component", (association, "Stress", component))
+        assert window.field_combo.currentText() == "Stress"
+        assert window.avg_combo.currentText() == association
+        assert window.comp_combo.currentText() == component
+        assert window.active_dock.current_comp == component
+        assert properties(inspector)["Component"] == component
+    plots = []
+    monkeypatch.setattr(
+        window.active_dock, "update_plot", lambda *a, **k: plots.append(True)
+    )
+    inspector.refresh()
+    assert inspector._key() == ("component", (association, "Stress", "I"))
+    assert inspector.tree.currentItem().parent().isExpanded()
+    assert plots == []
+    assert select(inspector, "field", ("Scalar", "Total")).childCount() == 0
+
+
+def test_inspector_vector_and_custom_numeric_components(inspected_window):
+    viewer, app, window = inspected_window
+    window.data.node_data["CustomVector"] = np.ones((2, window.data.mesh.n_nodes))
+    window._set_active(window.active_dock)
+    inspector = show_inspector(app, window)
+    select(inspector, "component", ("Node", "Disp", "norm"))
+    assert window.comp_combo.currentText() == "norm"
+    select(inspector, "component", ("Node", "CustomVector", "1"))
+    assert window.current_component == 1
+    window.field_combo.setCurrentText("Value")
+    inspector.tree.itemClicked.emit(inspector.tree.currentItem(), 0)
+    assert window.field_combo.currentText() == "CustomVector"
+    assert window.current_component == 1
+
+
+def test_multimesh_tensor_components_use_same_labels_and_menu_actions(inspected_window):
+    viewer, app, window = inspected_window
+    source = window.data.mesh
+    mesh = fd.MultiMesh.from_mesh_list(
+        [
+            fd.Mesh(source.nodes, source.elements[:1], "quad4", name="A"),
+            fd.Mesh(source.nodes, source.elements[1:], "quad4", name="B"),
+        ],
+        register_name=False,
+    )
+    data = fd.DataSet(mesh)
+    data.element_data["Stress"] = {0: np.ones((6, 1)), 1: np.ones((6, 1)) * 2}
+    dock = window.add_dataset_dock(data, "Mixed stress")
+    app.processEvents()
+    inspector = show_inspector(app, window)
+    window._set_active(dock)
+    inspector.refresh()
+    select(inspector, "component", ("Element", "Stress", "vm"))
+    assert window.current_component == "vm"
+    for kind, name, expected in (
+        ("mesh", "", ["Show all", "Mask all"]),
+        ("submesh", "0", ["Show only", "Mask"]),
+    ):
+        select(inspector, kind, name)
+        assert [
+            action.text() for action in inspector._visibility_menu().actions()
+        ] == expected
+
+
+@pytest.mark.parametrize("with_data", [False, True])
+def test_default_inspector_handles_empty_and_meshless_views(
+    inspected_window, with_data
+):
+    viewer, app, _ = inspected_window
+    data = fd.DataSet() if with_data else None
+    if data is not None:
+        data.scalar_data["Time"] = 1.0
+    window = viewer.MainWindow(data)
+    window.resize(1100, 700)
+    window.show()
+    try:
+        for _ in range(3):
+            app.processEvents()
+        inspector = window.object_inspector
+        assert inspector.isVisible()
+        assert window.object_inspector_action.isChecked()
+        assert ("mesh", "") not in inspector._objects
+        if with_data:
+            select(inspector, "field", ("Scalar", "Time"))
+            assert properties(inspector)["Value"] == "1."
+        window.object_inspector_action.trigger()
+        assert inspector.isHidden()
+    finally:
+        window.close()
+        app.processEvents()

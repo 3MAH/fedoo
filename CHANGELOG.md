@@ -8,6 +8,30 @@ semantic versioning.
 
 ### Added
 
+- Independent local-frame overlays in DataSet.plot via local_frame and
+  one-based local_frame_axis, with size, density, placement and legend controls.
+  The viewer uses the same plotting implementation, including mixed-mesh
+  visibility. Frame matrix components remain available as ordinary scalar plots
+  for matrix, quaternion and rotation-vector inputs.
+
+- Metadata-driven local-frame fields for arbitrary names (`type: local_frame`),
+  with automatic tagging of shell/beam outputs and explicitly requested
+  MaterialLocalFrame output for supported mechanical constitutive laws.
+- Rotation-vector FDH5 encoding (`local_frame="rotvec"`, radians), plus shape
+  inference for tagged matrix/quaternion/rotvec inputs. Files record encoding
+  explicitly and restore ordinary matrices on reading.
+- Public local frames in the viewer field list with Whole frame / Local 1/2/3
+  components, and a frame-field selector for overlays including private frames.
+
+- Script-wide FDH5 storage defaults through set/get/reset_fdh5_options and
+  per-file fdh5_options on add_output/save/save_all/to_fdh5. Save As exposes
+  compression, floating-point precision, lossless integer packing and local-frame encoding.
+- Compact quaternion local frames with repeated Gauss-point frames stored once
+  per element, transparent matrix reconstruction, and coloured basis-vector
+  display with axis, placement, size and density controls in Options > Plot.
+
+- Expandable vector/tensor fields in the Object inspector, with direct component
+  selection using the same labels and invariants as the viewer field controls.
 - Viewer node-set management, conversion between node and element sets, and
   field-based selection expressions such as `Stress_XX > 100`. Node sets can
   grow exterior surface patches, 2D boundary lines and 3D feature edges from
@@ -45,6 +69,40 @@ semantic versioning.
 
 ### Changed
 
+- Simplify DataSet frame display to set_current_local_frame, show_local_frame
+  (boolean or mesh-size percentage), local_frame_axis and local_frame_options
+  (max_frames, gauss_points, legend). The viewer uses the same API.
+- Automatic geometric frames for shells in 3D and lines in 2D/3D when no saved
+  frame is available; 2D spaces display two axes. DataSet show_normals uses
+  geometric last axes and percentage sizing. Mesh quick-view methods are unchanged.
+
+- Local-frame display controls move to their own Options > Local frames dialog,
+  keeping the general Plot dialog focused on mesh and result display.
+
+- Viewer export uses Save As only (Ctrl+S or Ctrl+Shift+S), with overwrite
+  confirmation when replacing an existing file. Export rewrites all frames.
+
+- Local-frame legends are hidden by default and can be enabled independently
+  in Options > Local frames.
+
+- Automatically added beam/shell recovery frames use private field names and
+  stay hidden in the default viewer field list. Explicitly requested frames
+  remain public; the local-frame overlay and tensor recovery accept both forms.
+
+- FDH5 result fields now default to float32 storage; coordinates, scalar outputs
+  and metadata preserve precision. Use float_dtype=None to preserve result precision.
+  Integer packing defaults to a 32-bit minimum and preserves signedness.
+- Released boolean compressed arguments remain supported; unpublished codec/level
+  shortcuts move to fdh5_options. Explicit True falls back to gzip 4 when the
+  configured codec is None. Existing matrix-frame files remain readable.
+
+- The Object inspector is visible by default and docks only on the left or
+  right of a separate result-view
+  area, so arranging views does not reposition it. It starts at minimum width;
+  widening the divider chooses a proportion retained on resize, while dragging
+  back to minimum restores the fixed minimum width. Whole-mesh
+  visibility actions are labeled Show all and Mask all; submeshes and element
+  sets retain Show only and Mask.
 - Viewer iteration controls use left/right arrows to decrease/increase the
   frame or mode. Set, scalar and scalar-bar dialogs use more compact layouts;
   detailed scalar-expression guidance is available from a separate Help button.

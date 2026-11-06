@@ -15,9 +15,9 @@ from fedoo.util.shell_recovery import (
     reconstructs_stored_shell,
 )
 from fedoo.util.fdh5 import (
-    CompressionConfig,
     load_dataset_iteration,
     write_dataset,
+    resolve_fdh5_options,
     read_fdh5,
 )
 from fedoo.util.mesh_writer import write_vtk, write_msh
@@ -34,6 +34,7 @@ from fedoo.core.multimeshdata import MultiMeshData, copy_data_value
 from fedoo.lib_elements.element_list import get_default_n_gp
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.util.field_components import stored_component_index
+from fedoo.util.frame_fields import frame_matrices, is_frame_field, frame_axis_mask
 
 try:
     from matplotlib import pylab as plt
@@ -194,6 +195,10 @@ class DataSet:
         Dictionnary of scalar data.
     field_metadata : dict
         Numeric field descriptions persisted in FDH5, including beam sections.
+    current_local_frame : str or None
+        Read-only frame-field selection; change it with
+        :meth:`set_current_local_frame`. None selects automatically per submesh.
+        Selection affects arrow overlays, not the coordinate system of results.
     beam_options : dict
         Section ``position`` (normalized (y, z)) or ``point_index``, mutually
         exclusive. ``source`` is 'auto', 'stored' or 'recomputed'. ``reduction``
@@ -225,6 +230,16 @@ class DataSet:
     :py:meth:`fedoo.DataSet.get_data` method as it supports automatic
     conversion between different data types.
 
+    Local-frame selection is independent of the scalar field plotted. Use
+    :meth:`set_current_local_frame` to select a tagged orientation field, then
+    :meth:`plot` with ``show_local_frame=True`` or a size percentage to show it.
+    Selecting a frame alone does not enable arrows. The default selection, None,
+    prefers saved shell/beam frames, then other tagged frames such as material
+    orientations. If no field is available, geometric frames are constructed for
+    surfaces in 3D and lines in 2D/3D. Full-dimensional 2D/3D meshes have no
+    geometric fallback. A MultiMesh resolves this choice separately per submesh.
+    Copies and iteration changes preserve the selection; FDH5 does not store it.
+
     Parameters
     ----------
     mesh : Mesh, optional
@@ -248,6 +263,7 @@ class DataSet:
         self.scalar_data = {}
         self.scalar_expressions = {}
         self.field_metadata = {}
+        self._current_local_frame = None
         self._beam_section_overrides = {}
         self.beam_options = {}
         self.shell_options = {}
@@ -278,6 +294,38 @@ class DataSet:
 
         self.meshplot = None
         self.meshplot_gp = None  # a mesh with discontinuity between each element to plot gauss points field
+
+    @property
+    def current_local_frame(self):
+        """Selected orientation field, or None for automatic per-submesh selection."""
+        return self._current_local_frame
+
+    def set_current_local_frame(self, field=None):
+        """Select the orientation field used by local-frame arrow overlays.
+
+        Parameters
+        ----------
+        field : str or None, default=None
+            A field name, including private names. Known public shell/beam
+            names also resolve their private counterparts. None chooses a
+            saved frame independently per submesh, falling back to geometric
+            frames for shells in 3D and lines in 2D/3D. A selected field absent
+            from a submesh produces no arrows there.
+
+        Returns
+        -------
+        DataSet
+            This dataset, for fluent calls.
+
+        Notes
+        -----
+        This selection does not enable arrows or transform scalar result fields.
+        Use ``plot(show_local_frame=True)`` to display the selected frame.
+        """
+        if field is not None and not isinstance(field, str):
+            raise TypeError("The current local frame must be a field name or None")
+        self._current_local_frame = field
+        return self
 
     def add_scalar_expression(self, name, expression, data_type="Node"):
         """Compute one scalar per frame from fields, scalars and named sets.
@@ -562,6 +610,9 @@ class DataSet:
         clip_args: tuple | None = None,
         lock_view: bool = False,
         iteration: int | None = None,
+        show_local_frame: bool | float = False,
+        local_frame_axis=None,
+        local_frame_options=None,
         **kargs,
     ) -> None:
         """Plot a field on the surface of the associated mesh.
@@ -628,11 +679,13 @@ class DataSet:
             Plot the nodes. If True, the nodes are shown with a default size.
             If float, show_nodes is the required size.
 
-        show_normals : bool|float, default = False
-            Plot the face normals. If True,
-            the vectors are shown with a default magnitude.
-            If float, show_normals is the required magnitude.
-            Only available for 1D or 2D mesh.
+        show_normals : bool or float, default=False
+            Display geometric normals independently of the selected frame field.
+            True uses an arrow length of 2% of the mesh bounding-box diagonal;
+            a number supplies the percentage. Uses axis 3 for surfaces in 3D
+            and axis 2 for lines in 2D. Other mesh types are skipped. When
+            show_local_frame is also enabled, the local-frame display takes
+            precedence. The local_frame_options settings also apply to normals.
 
         plotter : pyvista.Plotter object or str in {'qt', 'pv'}
 
@@ -693,6 +746,35 @@ class DataSet:
             selected element or Gauss-point field is absent with this solid
             color. By default, submeshes missing the field are not plotted.
 
+        show_local_frame : bool or float, default=False
+            Display frame arrows independently of the scalar field and component.
+            False hides arrows. True uses 2% of the mesh bounding-box diagonal;
+            a nonnegative number specifies that percentage (1.0 means 1%).
+            Select the frame with :meth:`set_current_local_frame`; the default
+            selection None uses saved frames or the supported geometric fallback
+            separately for each submesh. Scalar colours are not transformed.
+
+        local_frame_axis : int, sequence of int or None, default=None
+            One-based axes: 1, 2 or 3, or a sequence such as [1, 3]. None displays
+            all axes: two in a 2D space, three in 3D. Explicit axis 3 in 2D
+            raises ValueError. For geometric shell frames, axis 3 is the normal;
+            for lines in 2D, axis 2 is the normal.
+
+        local_frame_options : dict or None, default=None
+            Optional display settings (omitted entries use these defaults):
+
+            * ``max_frames=1000``: maximum frame count, sampled across the
+              visible locations of all selected submeshes.
+            * ``gauss_points=False``: for Gauss-point fields, draw one frame at
+              each element centre using its first GP orientation. True displays
+              the GP positions and orientations; geometric fallback frames use
+              the default element quadrature. Nodal fields remain at nodes.
+            * ``legend=False``: show the local-axis colour legend when True.
+
+            These settings affect display only; visibility masks, clipping and
+            deformation also apply to the overlay. Unknown option names are
+            rejected when the overlay is enabled.
+
         clip_args : dict, optional
             Dictionary of arguments to pass to the pyvista clip filter in
             order to clip the current plot.
@@ -721,6 +803,26 @@ class DataSet:
         **kwargs : dict
             See pyvista.Plotter.add_mesh() in the document of pyvista for
             additional usefull options.
+
+        Examples
+        --------
+        Overlay the third axis of a selected shell frame on von Mises stress:
+
+        >>> data.set_current_local_frame("ShellLocalFrame")
+        >>> data.plot(field="Stress", component="vm", show_local_frame=2.0,
+        ...           local_frame_axis=3)
+
+        Restore automatic selection, showing all axes with fewer samples:
+
+        >>> data.set_current_local_frame(None)
+        >>> data.plot(show_local_frame=True,
+        ...           local_frame_options={"max_frames": 200, "legend": True})
+
+        A normal overlay always uses geometry; a scalar frame component remains
+        an ordinary colour plot:
+
+        >>> data.plot(field="Stress", component="vm", show_normals=2.0)
+        >>> data.plot(field="_ShellLocalFrame", component="XX")
 
         Notes
         -----
@@ -751,6 +853,52 @@ class DataSet:
             "scalars", field
         )  # kargs scalars can be used instead of field
 
+        frame_options = None
+        local_frame = self.current_local_frame
+        if show_local_frame is not False or show_normals is not False:
+            visible = (
+                show_local_frame if show_local_frame is not False else show_normals
+            )
+            if (
+                not isinstance(visible, (bool, int, float, np.number))
+                or not np.isfinite(visible)
+                or visible < 0
+            ):
+                raise ValueError(
+                    "show_local_frame/show_normals must be a boolean or a nonnegative size percentage"
+                )
+            display = {"max_frames": 1000, "gauss_points": False, "legend": False}
+            if local_frame_options is not None:
+                if (
+                    not isinstance(local_frame_options, dict)
+                    or local_frame_options.keys() - display.keys()
+                ):
+                    raise ValueError(
+                        "local_frame_options accepts max_frames, gauss_points and legend"
+                    )
+                display.update(local_frame_options)
+            axes = frame_axis_mask(local_frame_axis)
+            if self.mesh.ndim == 2:
+                if local_frame_axis is not None and axes[2]:
+                    raise ValueError("Axis 3 is unavailable in a 2D space")
+                axes = (axes[0], axes[1], False)
+            if visible:
+                frame_options = dict(
+                    frame_axes=axes,
+                    frame_axis_explicit=local_frame_axis is not None,
+                    frame_size=2.0
+                    if isinstance(visible, (bool, np.bool_))
+                    else float(visible),
+                    frame_max=display["max_frames"],
+                    frame_gauss_points=display["gauss_points"],
+                    frame_legend=display["legend"],
+                    geometric_normals=bool(show_normals) and show_local_frame is False,
+                    scale=scale,
+                    element_set=element_set,
+                    element_set_invert=element_set_invert,
+                    clip_args=clip_args,
+                )
+
         if self._is_multimesh():
             return self._plot_multimesh(
                 field=field,
@@ -778,6 +926,8 @@ class DataSet:
                 clip_args=clip_args,
                 lock_view=lock_view,
                 return_cpos=kargs.pop("return_cpos", False),
+                local_frame=local_frame,
+                frame_options=frame_options,
                 **kargs,
             )
 
@@ -1087,29 +1237,15 @@ class DataSet:
                 point_size=show_nodes,
             )
 
-        if show_normals:
-            if show_normals == True:
-                show_normals = 1.0  # normal magnitude
+        if frame_options is not None:
+            from fedoo.util.frame_plot import plot_local_frames
 
-            centers = self.mesh.element_centers
-            if self.mesh.elm_type[:3] not in ["lin", "tri", "qua"]:
-                raise NameError(
-                    "Can't plot normals for volume meshes. Use fedoo.mesh.extract_surface to get a compatible mesh."
-                )
-            normals = self.mesh.get_element_local_frame()[:, -1]
-
-            if ndim < 3:
-                normals = np.column_stack(
-                    (normals, np.zeros((self.mesh.n_elements, 3 - ndim)))
-                )
-                centers = np.column_stack(
-                    (
-                        self.mesh.element_centers,
-                        np.zeros((self.mesh.n_elements, 3 - ndim)),
-                    )
-                )
-
-            pl.add_arrows(centers, normals, mag=show_normals, show_scalar_bar=False)
+            plot_local_frames(
+                self,
+                pl,
+                frame_options,
+                local_frame if isinstance(local_frame, str) else None,
+            )
 
         # required to avoid bug for non adapted clipping range
         # pl.camera.reset_clipping_range()
@@ -1167,6 +1303,7 @@ class DataSet:
         """Build a lightweight DataSet view attached to one submesh."""
         submesh = self.mesh[submesh_id]
         dataset = DataSet(submesh)
+        dataset.set_current_local_frame(self.current_local_frame)
         dataset.node_data = self.node_data
         dataset.scalar_data = self.scalar_data
         dataset.beam_options = self.beam_options
@@ -1184,6 +1321,7 @@ class DataSet:
                     value,
                     submesh_id,
                     submesh.n_elements,
+                    fill_missing=not is_frame_field(field, self.field_metadata),
                 )
             )
             is not None
@@ -1196,10 +1334,13 @@ class DataSet:
                     value,
                     submesh_id,
                     submesh.n_elements * get_default_n_gp(submesh.elm_type, submesh),
-                    fill_missing=field
+                    fill_missing=not is_frame_field(field, self.field_metadata)
+                    and field
                     not in (
                         "BeamLocalFrame",
                         "ShellLocalFrame",
+                        "_BeamLocalFrame",
+                        "_ShellLocalFrame",
                         "_ShellStress",
                         "BeamStress",
                         "BeamStrain",
@@ -1309,6 +1450,8 @@ class DataSet:
         clip_args,
         lock_view,
         return_cpos,
+        local_frame,
+        frame_options,
         **kargs,
     ):
         """Plot a MultiMesh by reusing the single-mesh plotting path."""
@@ -1342,6 +1485,7 @@ class DataSet:
         scalar_bar_added = False
         plotted = False
         scalar_plotted = False
+        frame_element_sets = {}
 
         for submesh_id in submesh_indices:
             local_element_set, should_plot = self._submesh_element_set(
@@ -1394,6 +1538,7 @@ class DataSet:
             else:
                 sub_clip_args = None
 
+            frame_element_sets[submesh_id] = local_element_set
             pl = subdataset.plot(
                 field=submesh_field,
                 component=component,
@@ -1474,6 +1619,21 @@ class DataSet:
                     render_points_as_spheres=True,
                     point_size=show_nodes,
                 )
+
+        if frame_options is not None:
+            from fedoo.util.frame_plot import plot_local_frames
+
+            frame_options = dict(
+                frame_options,
+                selected_submeshes=list(frame_element_sets),
+                frame_element_sets=frame_element_sets,
+            )
+            plot_local_frames(
+                self,
+                pl,
+                frame_options,
+                local_frame if isinstance(local_frame, str) else None,
+            )
 
         pl.renderer.ResetCameraClippingRange()
 
@@ -1639,10 +1799,20 @@ class DataSet:
         if self._is_multimesh() and data_type in ["Element", "GaussPoint"]:
             data = self._as_multimesh_data(data)
 
+        def extract_component(value):
+            if (
+                component is not None
+                and is_frame_field(field, self.field_metadata)
+                and np.ndim(value) == 2
+            ):
+                value = frame_matrices(value).reshape(-1, 9).T
+                return _component_from_array("ShellLocalFrame", value, component)
+            return _component_from_array(field, value, component)
+
         if isinstance(data, MultiMeshData):
-            data = data.map(lambda val: _component_from_array(field, val, component))
+            data = data.map(extract_component)
         else:
-            data = _component_from_array(field, data, component)
+            data = extract_component(data)
 
         if (
             self._is_multimesh()
@@ -1740,7 +1910,7 @@ class DataSet:
                 for values in (self.node_data, self.element_data, self.gausspoint_data)
             ):
                 fields[kind] = (kind, source, False)
-            if "BeamLocalFrame" in self.gausspoint_data:
+            if self._local_frame("Beam") is not None:
                 fields[kind + "_global"] = (kind, source, True)
         return fields
 
@@ -1764,6 +1934,16 @@ class DataSet:
         self._shell_options = (
             values if isinstance(values, ShellOptions) else ShellOptions(values)
         )
+
+    def _local_frame(self, family):
+        """Resolve explicitly requested, automatic private, and legacy frames."""
+        name = family + "LocalFrame"
+        frame = self.gausspoint_data.get(name)
+        if frame is None:
+            frame = self.gausspoint_data.get("_" + name)
+        if frame is not None and np.asarray(frame).shape[0] in (3, 4):
+            return frame_matrices(frame).reshape(-1, 9).T
+        return frame
 
     def section_derived_fields(self):
         """Unified beam and shell tensor aliases for plotting."""
@@ -1796,7 +1976,7 @@ class DataSet:
                 for values in (self.gausspoint_data, self.element_data, self.node_data)
             ):
                 fields[kind] = (kind, f"Shell{kind}", False)
-            if "ShellLocalFrame" in self.gausspoint_data:
+            if self._local_frame("Shell") is not None:
                 fields[kind + "_global"] = (kind, f"Shell{kind}", True)
         return fields
 
@@ -1922,7 +2102,7 @@ class DataSet:
             and stored is not None
             and reconstructs_stored_shell(kind, description, metadata)
         )
-        frame = self.gausspoint_data.get("ShellLocalFrame") if global_frame else None
+        frame = self._local_frame("Shell") if global_frame else None
         if (
             (use_stored or from_stored)
             and frame is not None
@@ -2037,7 +2217,7 @@ class DataSet:
                 field, component, data_type, return_data_type, **kwargs
             )
         else:
-            frame = self.gausspoint_data.get("BeamLocalFrame") if global_frame else None
+            frame = self._local_frame("Beam") if global_frame else None
             description = self.beam_section_description()
             stored = None
             stored_type = "GaussPoint"
@@ -2103,7 +2283,9 @@ class DataSet:
         self,
         filename: str,
         save_mesh: bool = False,
-        compressed: bool | int | str | CompressionConfig | None = None,
+        compressed: bool | None = None,
+        *,
+        fdh5_options=None,
     ) -> None:
         """Save data to a file.
         File type is inferred from the extension of the filename.
@@ -2137,19 +2319,25 @@ class DataSet:
         save_mesh : bool, default = False
             If True, the mesh is also saved in a vtk file using the same filename with a '.vtk' extention.
             For vtk and msh file, the mesh is always included in the file and save_mesh have no effect.
-        compressed : bool, int, str, CompressionConfig or None, default=None
-            For FDH5, True uses gzip level 4, False disables compression, and
-            integers 0-9 select the gzip level. For npz and fdz, True enables
-            compression. None preserves format defaults: gzip level 4 for
-            FDH5, no compression for npz and fdz.
-            FDH5 also accepts ``"zstd"`` (level 3, requires ``fedoo[zstd]``),
-            ``"gzip"``, ``"lzf"``, or a ``CompressionConfig`` for custom levels.
+        compressed : bool or None, default=None
+            For FDH5, None uses configured defaults; False disables compression;
+            True uses the configured codec, falling back to gzip level 4 when
+            it is None. For other formats, enables supported compression.
+        fdh5_options : dict, optional
+            Per-output overrides of :func:`fedoo.get_fdh5_options`: compression,
+            compression_level, float_dtype, coordinate_dtype, integer_min_bits,
+            and local_frame. Default result fields use float32; coordinates,
+            scalar outputs and metadata preserve precision. Set float_dtype=None
+            to preserve field precision. Cannot specify compression entries
+            together with compressed. Conversions affect saved arrays only.
         """
         ext = os.path.splitext(filename)[1]
         ext = ext.lower()
         if ext == "":
             ext = ".fdh5"
             filename = filename + ext
+        if fdh5_options is not None and ext != ".fdh5":
+            raise ValueError("fdh5_options requires the FDH5 format")
         if ext == ".vtk":
             self.to_vtk(filename)
         elif ext == ".msh":
@@ -2172,7 +2360,8 @@ class DataSet:
                 filename,
                 iteration=0,
                 overwrite=True,
-                compressed=True if compressed is None else compressed,
+                compressed=compressed,
+                fdh5_options=fdh5_options,
             )
 
     def save_mesh(self, filename: str):
@@ -2519,7 +2708,9 @@ class DataSet:
         filename: str,
         iteration: int = 0,
         overwrite: bool = False,
-        compressed: bool | int | str | CompressionConfig = True,
+        compressed: bool | None = None,
+        *,
+        fdh5_options=None,
     ) -> None:
         """Write the dataset to a FDH5 file.
 
@@ -2533,14 +2724,17 @@ class DataSet:
         overwrite : bool, default=False
             If True, an existing file is removed before writing. If False, the
             mesh is kept and only the requested iteration is added or replaced.
-        compressed : bool, int, str or CompressionConfig, default=True
-            True uses gzip level 4; False disables compression. Integers 0-9
-            select the gzip level (0 uses the gzip filter without compression).
-            Applies to newly written datasets, not existing iterations.
-            ``"zstd"`` selects Zstandard level 3 and requires ``fedoo[zstd]``
-            for both writing and reading. Use ``CompressionConfig("zstd", 5)``
-            for a custom level (1-22). ``"gzip"`` and ``"lzf"`` also work.
-
+        compressed : bool or None, default=None
+            For FDH5, None uses configured defaults; False disables compression;
+            True uses the configured codec, falling back to gzip level 4 when
+            it is None. For other formats, enables supported compression.
+        fdh5_options : dict, optional
+            Per-output overrides of :func:`fedoo.get_fdh5_options`: compression,
+            compression_level, float_dtype, coordinate_dtype, integer_min_bits,
+            and local_frame. Default result fields use float32; coordinates,
+            scalar outputs and metadata preserve precision. Set float_dtype=None
+            to preserve field precision. Cannot specify compression entries
+            together with compressed. Conversions affect saved arrays only.
         Notes
         -----
         Element and Gauss point fields attached to a ``MultiMesh`` are written
@@ -2554,6 +2748,7 @@ class DataSet:
             iteration=iteration,
             overwrite=overwrite,
             compressed=compressed,
+            fdh5_options=fdh5_options,
         )
 
     def savez(self, filename: str, save_mesh: bool = False) -> None:
@@ -2626,6 +2821,7 @@ class DataSet:
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
+        copy.set_current_local_frame(self.current_local_frame)
         return copy
 
     def deepcopy(self):
@@ -2659,6 +2855,7 @@ class DataSet:
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
+        copy.set_current_local_frame(self.current_local_frame)
         return copy
 
 
@@ -2683,7 +2880,9 @@ class MultiFrameDataSet(DataSet):
         self,
         filename: str,
         file_format: str = "fdh5",
-        compressed: bool | int | str | CompressionConfig | None = None,
+        compressed: bool | None = None,
+        *,
+        fdh5_options=None,
     ):
         """Save all data from MultiFrameDataSet.
 
@@ -2692,11 +2891,8 @@ class MultiFrameDataSet(DataSet):
         If format is not 'fdz' or 'fdh5', the data files are saved using the given filename and format
         simply adding the iteration number to the file name. The mesh is also saved in vtk format in the same directory.
         For 'fdh5', all iterations are written into one HDF5 file.
-        ``compressed`` follows :meth:`DataSet.save`: None uses format defaults,
-        False disables compression, True enables it, and FDH5 also accepts a
-        gzip level from 0 to 9.
-        FDH5 also accepts codec names and ``CompressionConfig``; see
-        :meth:`DataSet.to_fdh5` for Zstandard support.
+        ``compressed`` and ``fdh5_options`` follow :meth:`DataSet.save`.
+        The same storage options apply to every exported frame.
         """
         dirname = os.path.dirname(filename)
         extension = os.path.splitext(filename)[1]
@@ -2712,6 +2908,11 @@ class MultiFrameDataSet(DataSet):
                 0
             ]  # remove extension for the base name
 
+        if fdh5_options is not None and file_format != "fdh5":
+            raise ValueError("fdh5_options requires the FDH5 format")
+        if file_format == "fdh5":
+            fdh5_options = resolve_fdh5_options(fdh5_options, compressed)
+            compressed = None
         if dirname and not (os.path.isdir(dirname)):
             os.mkdir(dirname)
         if file_format == "fdz":
@@ -2729,7 +2930,8 @@ class MultiFrameDataSet(DataSet):
                     filename,
                     iteration=i,
                     overwrite=(i == 0),
-                    compressed=True if compressed is None else compressed,
+                    compressed=compressed,
+                    fdh5_options=fdh5_options,
                 )
         else:
             for i in range(len(self.list_data)):
@@ -3150,6 +3352,7 @@ class MultiFrameDataSet(DataSet):
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
+        copy.set_current_local_frame(self.current_local_frame)
         if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy
@@ -3170,6 +3373,7 @@ class MultiFrameDataSet(DataSet):
         copy.beam_options = dict(self.beam_options)
         copy.shell_options = dict(self.shell_options)
         copy.active_submesh = self.active_submesh
+        copy.set_current_local_frame(self.current_local_frame)
         if self.loaded_iter is not None:
             copy.load(self.loaded_iter)
         return copy

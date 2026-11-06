@@ -134,7 +134,7 @@ integration points. Linear laminates save both sides of every layer interface.
 
 Shell tensors have shape ``(6, n_thickness_points, n_shell_gauss_points)``.
 Their coordinates and layer identities are stored as native FDH5 metadata.
-``ShellLocalFrame`` is included automatically for shell outputs and enables
+``_ShellLocalFrame`` is included automatically for shell outputs and enables
 global tensor components. Stored nodal tensors cannot be rotated unambiguously;
 use element/Gauss-point tensors or recompute before converting to nodes.
 
@@ -333,8 +333,9 @@ description. Older descriptions containing isotropic constants are still read,
 but these constants do not influence kinematic strain recovery.
 
 ``Stress``, ``Stress_local`` and ``Stress_global`` share one selection policy
-(likewise for strain). Global components require ``BeamLocalFrame``, which is
-included automatically with beam stress or strain output, as for shells. The viewer
+(likewise for strain). Global components require a beam local frame, which is
+included automatically as ``_BeamLocalFrame`` with beam stress or strain output,
+as for shells. Explicit requests retain the public name. The viewer
 shows one Stress and one Strain entry. **Options → Beam…** selects the source,
 coordinate system, section position/index and reduction. Its optional Beam
 toolbar is hidden by default.
@@ -576,30 +577,153 @@ Appending adds saved frames to an existing compatible mesh file; it does not
 resume the solver. In contrast, ``DataSet.to_fdh5(..., overwrite=True)``
 replaces the whole file, not only an existing iteration.
 
-FDH5 compression
-^^^^^^^^^^^^^^^^
+FDH5 storage options
+^^^^^^^^^^^^^^^^^^^^
 
-FDH5 uses lossless gzip compression at level 4 by default. The viewer's
-File > Save as dialog offers None, gzip (levels 1-9), and Zstandard
-(levels 1-22, default 3). The last successful choice is reused by Save for
-that dataset. Zstandard is optional: install ``pip install fedoo[zstd]``
-or ``pip install hdf5plugin`` on both writers and readers. Fedoo registers
-the filter automatically; other HDF5 readers also need a compatible filter.
-Gzip remains the portable default and requires no extra dependency.
+FDH5 defaults to gzip level 4, float32 result fields, and lossless integer
+packing with a 32-bit minimum. Coordinates, scalar outputs (including Time),
+and metadata retain their floating-point precision. Saving never modifies
+solver arrays. Float32 retains about seven significant decimal digits;
+choose ``float_dtype=None`` for precision-preserving results.
+
+Set defaults once per Python process, then override selected options per file:
 
 .. code-block:: python
 
-    from fedoo.util.fdh5 import CompressionConfig
+    import fedoo as fd
 
-    data.to_fdh5("result.fdh5", overwrite=True, compressed="zstd")
-    data.save("result.fdh5", compressed=CompressionConfig("zstd", 5))
-    results.save_all("history.fdh5", compressed="zstd")
-    data.save("uncompressed.fdh5", compressed=False)
+    fd.set_fdh5_options(
+        compression="zstd", compression_level=3,
+        float_dtype="float32", coordinate_dtype=None,
+        integer_min_bits=32, local_frame="quaternion",
+    )
+    pb.add_output("results.fdh5", assembly, ["Disp", "Stress"])
+    data.save("precise.fdh5", fdh5_options={"float_dtype": None})
+    results.save_all("history.fdh5", fdh5_options={"integer_min_bits": 16})
+    options = fd.get_fdh5_options()  # Independent copy
+    fd.reset_fdh5_options()
 
-Existing ``compressed=True`` and integer gzip levels retain their meaning.
-Compression settings apply to newly written arrays; appending with a
-different codec does not recompress earlier frames. Higher Zstandard
-levels can need considerably more time and memory; start with level 3.
+``add_output`` captures the resolved settings when registered; later changes
+to global defaults affect only new registrations. ``save``, ``save_all`` and
+``to_fdh5`` accept the same ``fdh5_options`` dictionary. Integer packing
+preserves signedness, checks both minimum and maximum, and never enlarges
+an existing smaller type. Set ``integer_min_bits=None`` to preserve types.
+Coordinate precision can be changed separately with ``coordinate_dtype``.
+
+The released boolean ``compressed`` argument remains supported. Omitting it
+uses the configured codec; False disables compression; True enables the
+configured codec, falling back to gzip level 4 if compression is configured
+as None. Do not combine it with compression entries in ``fdh5_options``.
+Unpublished integer/string compression shortcuts are replaced by the dictionary.
+Options affect newly written arrays only, including when appending.
+
+Zstandard requires ``pip install fedoo[zstd]`` or ``pip install hdf5plugin``
+on readers and writers. Gzip requires no plugin. The viewer's File > Save as
+exposes compression, field/coordinate precision, integer packing and frame
+encoding. Save As remembers the last successful settings for that view.
+Ctrl+S opens Save As; selecting the current filename allows replacing it after
+overwrite confirmation. Export rewrites all saved iterations.
+
+Proper orthonormal local-frame fields are saved as quaternions by default and reconstructed as ordinary nine-component matrices
+on reading. Identical Gauss-point frames within each element are stored once
+per element. Varying beam frames retain every sample; non-orthonormal arrays
+retain their matrix representation. Select ``local_frame="matrix"`` to store
+nine components, ``"quaternion"`` for four, or ``"rotvec"`` for three (radians). Older matrix files remain readable. Compact frames require an
+updated Fedoo reader; generic HDF5 readers see the encoded arrays. Encoding
+and repeated-Gauss-point counts are recorded explicitly as dataset attributes.
+Reading preserves stored field precision; expanding float32 to float64 would
+not recover discarded digits.
+
+Local frame display
+^^^^^^^^^^^^^^^^^^^
+
+Automatically added recovery frames are private (``_ShellLocalFrame`` and
+``_BeamLocalFrame``), so they are hidden in the viewer field list by default.
+Explicitly requesting ``ShellLocalFrame`` or ``BeamLocalFrame`` in output_list
+keeps the public field name. Options > Local frames > Show local frames uses private
+frames too, without enabling Show internal fields. Public frame names from
+older files remain supported for plotting and tensor recovery.
+
+Shell and beam frame outputs automatically receive ``type="local_frame"``
+field metadata. ``MaterialLocalFrame`` is generated only when explicitly
+requested; it exports the current material orientation exposed by a mechanical
+constitutive law, or the global basis when that law has no material rotation.
+It is not implicitly added to ordinary stress output. Laws without a single
+exposed material orientation report this field as unavailable (for example,
+a layered shell has several material orientations).
+
+Any field name can identify a local frame through metadata:
+
+.. code-block:: python
+
+    # basis_rows has shape (mesh.n_elements, 3, 3); rows are local axes in global coordinates.
+    data.element_data["FiberOrientation"] = basis_rows.reshape(-1, 9).T
+    data.field_metadata["FiberOrientation"] = {"type": "local_frame"}
+    data.save("fibres.fdh5", fdh5_options={"local_frame": "rotvec"})
+
+Tagged inputs may have shape (9, n_locations), (4, n_locations), or
+(3, n_locations): row-wise matrices, xyzw quaternions, or rotation vectors in
+radians, respectively. Compact forms represent the same row matrix using
+SciPy's Rotation convention. Shape inference applies only to tagged fields
+and legacy shell/beam/material frame names; ordinary vectors and tensors are
+not treated as orientations. FDH5 reads reconstruct nine-component matrices.
+Manual field metadata are preserved together with existing section descriptions.
+
+Local frames can be overlaid independently of scalar colours. Select a frame
+outside the plot call; None (the default) uses automatic selection per submesh:
+
+.. code-block:: python
+
+    data.set_current_local_frame("MaterialLocalFrame")
+    data.plot(field="Stress", component="vm", show_local_frame=2.0, local_frame_axis=3)
+    data.set_current_local_frame(None)
+    data.plot(
+        field="Stress", component="vm", show_local_frame=True,
+        local_frame_options={"max_frames": 500, "gauss_points": False, "legend": False},
+    )
+    data.plot(field="_ShellLocalFrame", component="XX")  # Scalar colours only
+    data.plot(show_normals=2.0)  # Geometric normal, independent of the selected frame
+
+``show_local_frame=False`` hides arrows. True uses a length of 2% of the mesh
+bounding-box diagonal; a number supplies that percentage (including 1.0).
+``local_frame_axis`` selects one-based axes; None shows all axes, or use a
+sequence such as [1, 2]. In 2D spaces only axes 1 and 2 are shown; explicitly
+requesting axis 3 raises an error. Surface meshes embedded in 3D have three axes.
+
+Automatic selection prefers available shell/beam frames, then other tagged
+frames including material orientations. Without saved frames, geometric frames
+are computed for surfaces in 3D and lines in 2D/3D, using existing mesh frame
+construction. No geometric fallback is used for 2D elements in 2D or volumes
+in 3D. These can still display explicitly selected or saved material frames.
+Each submesh is handled independently. Geometric frames use deformed positions;
+frames read from fields retain their saved orientations.
+
+``show_normals`` uses the same percentage convention and shared renderer, but
+always selects geometric normals: axis 3 for shells in 3D, axis 2 for lines in
+2D. Lines in 3D have no unique normal and are skipped. Mesh.plot_normals and
+Mesh.plot remain independent quick-view helpers with their existing API.
+
+The compact local_frame_options dictionary accepts max_frames (default 1000),
+gauss_points (False), and legend (False). Frame selections survive dataset
+copies and frame changes, without being written as result-file metadata.
+The viewer uses the same DataSet plotting feature, including deformation,
+clipping, visibility and frame sampling. Tagged frame scalar components such
+as XX or XY are decoded from the row matrix before extraction, independently
+of the stored representation.
+
+Public frame fields appear in the viewer field list. Their component selector
+offers Whole frame, Local 1, Local 2 and Local 3, followed by the nine matrix
+components XX/XY/XZ/YX/YY/YZ/ZX/ZY/ZZ, also selectable from the Object inspector.
+Matrix components produce ordinary scalar plots; frame choices produce arrows. Selecting one draws coloured basis arrows
+(local 1 red, 2 green, 3 blue). Options > Local frames can overlay frames on another
+result, choose the frame field (including private fields), individual axes,
+element-centre or Gauss-point placement,
+arrow length and a maximum frame count. The local-frame legend is hidden by
+default; enable Show local frame legend in Options > Local frames to display it.
+Shell normal-only display uses axis 3.
+Element-centre display uses the first available Gauss-point orientation,
+without averaging frame components. Frames follow deformation, loaded
+iterations, element visibility and the clipping plane.
 
 
 Read data from disk
@@ -786,7 +910,7 @@ The viewer includes the following tools and features:
   ``sum(scalar("Fext(RigidDisp)")[2])``. The result must be one finite number.
   Compute / update scalar evaluates the current frame immediately. Other
   frames are evaluated when loaded or requested by a history plot, rather than
-  eagerly processing the whole file. File > Save or Save as evaluates and
+  eagerly processing the whole file. File > Save as evaluates and
   exports every frame of a multiframe dataset, including numeric scalar values,
   expression definitions and user-created sets. Definitions remain editable
   after reopening. A live Problem exports only its selected state or mode.
@@ -795,20 +919,28 @@ The viewer includes the following tools and features:
   For global DOFs and their associated forces, ID indexes the saved output
   array, not a node, element or Gauss point; changing the field association
   does not convert these global values.
-* Optionally open Windows > Object inspector to browse the active dataset's
+* The Object inspector is visible by default; toggle it through
+  Windows > Object inspector. It browses the active dataset's
   mesh, named sets, stored fields, computed scalars and live Problem boundary
   conditions. Set and condition selections highlight their geometry; the
   read-only properties include counts, field shapes/ranges and expressions.
   Automatically generated submesh element sets are omitted here because the
   corresponding submesh already appears under Mesh. User-created sets remain
   visible, including sets whose names start with ``submesh_``.
-  Manage delegates edits to the existing tools. The panel can float or
-  dock on either side; fullscreen hides it and restores its prior visibility.
-  A docked inspector returns to a compact width when opening another dataset.
-  Right-click an element set, mesh, or submesh for Show only and a checkable
-  Mask action. Unchecking Mask restores that object's elements without
-  resetting other visibility choices. Visibility uses the same element
-  filter as Element Sets, and the properties show partial masking.
+  Expand a vector or tensor field to select its component directly, including
+  magnitudes and stress invariants supported by the field selector. Selecting a
+  component displays that field/component and association in the active view.
+  Manage delegates edits to the existing tools. The panel can float or dock
+  on the left or right, independently of Windows > Arrange Windows. Fullscreen
+  hides it and restores its prior visibility. It starts at its minimum width
+  and keeps that width when resizing the main window. Dragging the divider
+  wider chooses a proportion preserved on resize; dragging back to minimum
+  restores the fixed minimum width.
+  Right-click Mesh for Show all and a checkable Mask all action. Submeshes and
+  element sets retain Show only and Mask. Unchecking a mask restores that
+  object's elements without resetting other visibility choices. Visibility
+  uses the same element filter as Element Sets, and the properties show partial
+  masking.
 * Optionally show the current ``Time`` scalar in the upper-right corner.
   It is hidden by default; enable Show time in Options > Plot.
   The existing active/all views target
@@ -827,7 +959,7 @@ The viewer includes the following tools and features:
   Custom constraints can be inspected. Edits affect the live Problem; solve
   from Python to update its solution. BC definitions are not exported to FDH5.
 * File > Save as exports FDH5 with None, gzip or optional Zstandard
-  compression. File > Save reuses that view's last successful compression
+  compression. Save As remembers that view's last successful compression
   choice. All compression options are lossless. User-created node and element
   sets are included; automatically generated All/submesh selection sets are
   not exported. Submesh geometry and names are preserved independently of
@@ -935,6 +1067,7 @@ A few convenient methods are proposed to generate images or movies from
 .. autosummary::
    :toctree: generated/
 
+   DataSet.set_current_local_frame
    DataSet.plot
    MultiFrameDataSet.plot
    MultiFrameDataSet.plot_history

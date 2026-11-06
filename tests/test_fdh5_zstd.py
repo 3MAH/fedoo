@@ -21,7 +21,11 @@ def test_zstd_multimesh_lazy_reads_and_mixed_codec_append(tmp_path):
     data.scalar_data.update(Time=0.0, driver_dof=np.array([1.0, 2.0, 3.0]))
     data.field_metadata["GPValue"] = {"description": "Zstandard round trip"}
     filename = str(tmp_path / "multi.fdh5")
-    data.to_fdh5(filename, compressed=CompressionConfig("zstd", 5), overwrite=True)
+    data.to_fdh5(
+        filename,
+        fdh5_options={"compression": "zstd", "compression_level": 5},
+        overwrite=True,
+    )
     data.scalar_data["Time"] = 1.0
     data.to_fdh5(filename, iteration=1, compressed=True)
     reader = FDH5Reader(filename)
@@ -57,6 +61,9 @@ def test_missing_zstd_rejected_when_registering_simulation_output(
     output = _ProblemOutput()
     with pytest.raises(ImportError, match="hdf5plugin"):
         output.add_output(
-            str(tmp_path / "missing.fdh5"), None, ["Disp"], compressed="zstd"
+            str(tmp_path / "missing.fdh5"),
+            None,
+            ["Disp"],
+            fdh5_options={"compression": "zstd"},
         )
     assert not (tmp_path / "missing.fdh5").exists()

@@ -45,7 +45,7 @@ def test_multiple_views_layout_switch_close_and_duplicate(multiwindow, layout):
     assert set(window.all_docks) == set(docks)
     assert window.active_dock in docks
     if layout == "tabified":
-        assert set(window.tabifiedDockWidgets(first)) == {second, third}
+        assert set(window._view_area.tabifiedDockWidgets(first)) == {second, third}
     else:
         assert all(dock.isVisible() for dock in docks)
         for index, dock in enumerate(docks):

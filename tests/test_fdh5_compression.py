@@ -61,9 +61,9 @@ def test_save_propagates_fdh5_compression(tmp_path, multi_frame, compressed):
     data = _saved_data(tmp_path, multi_frame)
     filename = str(tmp_path / "saved.fdh5")
     if multi_frame:
-        data.save_all(filename, compressed=compressed)
+        data.save_all(filename, **_save_options(compressed))
     else:
-        data.save(filename, compressed=compressed)
+        data.save(filename, **_save_options(compressed))
     _check_compression(filename, compressed)
 
 
@@ -76,7 +76,9 @@ def test_zstd_missing_filter_preserves_existing_file(tmp_path, monkeypatch):
     original = filename.read_bytes()
     monkeypatch.setattr(fdh5, "zstd_available", lambda: False)
     with pytest.raises(ImportError, match=r"pip install fedoo\[zstd\]"):
-        data.to_fdh5(str(filename), overwrite=True, compressed="zstd")
+        data.to_fdh5(
+            str(filename), overwrite=True, fdh5_options={"compression": "zstd"}
+        )
     assert filename.read_bytes() == original
 
 
@@ -89,7 +91,7 @@ def test_zstd_reader_auto_registers_filter_and_explains_missing_dependency(
         pytest.skip("Optional hdf5plugin is not installed")
     data = _saved_data(tmp_path, False)
     filename = str(tmp_path / "zstd.fdh5")
-    data.to_fdh5(filename, overwrite=True, compressed="zstd")
+    data.to_fdh5(filename, overwrite=True, fdh5_options={"compression": "zstd"})
     imported = []
     import_module = fdh5.importlib.import_module
 
@@ -118,3 +120,15 @@ def test_zstd_reader_auto_registers_filter_and_explains_missing_dependency(
 def test_invalid_compression_settings(codec, level):
     with pytest.raises(ValueError):
         CompressionConfig(codec, level)
+
+
+def _save_options(compressed):
+    if compressed is None or isinstance(compressed, bool):
+        return {"compressed": compressed}
+    config = CompressionConfig.from_compressed(compressed)
+    return {
+        "fdh5_options": {
+            "compression": config.compression,
+            "compression_level": config.compression_opts,
+        }
+    }

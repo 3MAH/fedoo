@@ -85,12 +85,10 @@ def test_save_as_compression_controls(tmp_path, monkeypatch, multi_frame, compre
     try:
         window.save_current_data_as()
         _check_compression(filename, compressed)
-        assert CompressionConfig.from_compressed(
-            window.active_dock.opts["fdh5_compression"]
-        ) == CompressionConfig.from_compressed(compressed)
-        # Ordinary Save keeps the last successful Save As compression setting.
-        window.save_current_data()
-        _check_compression(filename, compressed)
+        saved_options = window.active_dock.opts["fdh5_options"]
+        assert saved_options["compression"] == config.compression
+        if config.compression is not None:
+            assert saved_options["compression_level"] == config.compression_opts
 
         def check_remembered(dialog):
             combo = dialog.findChild(viewer.QtWidgets.QComboBox, "fdh5_compression")
@@ -127,6 +125,16 @@ def test_save_as_disables_unavailable_zstd(tmp_path, monkeypatch):
     def cancel(dialog):
         combo = dialog.findChild(viewer.QtWidgets.QComboBox, "fdh5_compression")
         assert combo.currentData() == "gzip"
+        file_menu = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text() == "File"
+        )
+        actions = file_menu.actions()
+        assert not any(action.text() == "Save" for action in actions)
+        save_as = next(action for action in actions if action.text() == "Save as...")
+        assert "Ctrl+S" in [shortcut.toString() for shortcut in save_as.shortcuts()]
+        assert not dialog.testOption(viewer.QtWidgets.QFileDialog.DontConfirmOverwrite)
         assert not combo.model().item(combo.findData("zstd")).isEnabled()
         return viewer.QtWidgets.QDialog.Rejected
 

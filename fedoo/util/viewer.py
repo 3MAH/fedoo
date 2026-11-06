@@ -59,8 +59,19 @@ from fedoo.mesh.selection import (
     AmbiguousSurfaceSeed,
     AmbiguousEdgeSeed,
 )
-from fedoo.util.fdh5 import CompressionConfig, FDH5Reader, zstd_available
+from fedoo.util.fdh5 import (
+    CompressionConfig,
+    FDH5Reader,
+    zstd_available,
+    resolve_fdh5_options,
+)
+from fedoo.util._viewer.local_frame_options import LocalFrameOptionsDialog
 from fedoo.util.field_components import get_field_components
+from fedoo.util.frame_fields import (
+    is_frame_field,
+    FRAME_COMPONENTS,
+    FRAME_MATRIX_COMPONENTS,
+)
 from fedoo.util.expressions import (
     evaluate_expression,
     selection_mask,
@@ -397,6 +408,7 @@ class PlotDock(QDockWidget):
         self.filename = filename
         title = f"{self._dock_index}: " + str(title)
         super().__init__(title, parent)
+        self.main_window = parent
         self.data = data
         self.line_points = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))
         self.element_sets = None
@@ -559,6 +571,12 @@ class PlotDock(QDockWidget):
         if field == "":
             return [""]
         data = self.data
+        if is_frame_field(field, data.field_metadata):
+            return [
+                label
+                for label in FRAME_COMPONENTS
+                if data.mesh.ndim == 3 or label != "Local 3"
+            ] + list(FRAME_MATRIX_COMPONENTS)
         if field in data.section_derived_fields():
             return get_field_components(field, 6)
         if np.isscalar(data[field]):
@@ -589,12 +607,12 @@ class PlotDock(QDockWidget):
                 else:
                     self.data.load(iteration)
             except (OSError, KeyError, ValueError, IndexError) as exc:
-                self.parent().statusBar().showMessage(
+                self.main_window.statusBar().showMessage(
                     f"Results temporarily unavailable: {exc}"
                 )
                 return
 
-        scalar_dialog = getattr(self.parent(), "scalar_expression_dialog", None)
+        scalar_dialog = getattr(self.main_window, "scalar_expression_dialog", None)
         if scalar_dialog is not None and scalar_dialog.isVisible():
             scalar_dialog.refresh()
 
@@ -626,10 +644,42 @@ class PlotDock(QDockWidget):
             plot_kargs = {}
             if self.current_field is None:
                 plot_kargs["color"] = self.opts["color"]
+            frame_selected = is_frame_field(
+                self.current_field, self.data.field_metadata
+            ) and (self.current_comp is None or self.current_comp in FRAME_COMPONENTS)
+            overlay = frame_selected or self.opts.get("show_local_frames", False)
+            frame_axis = [
+                axis + 1
+                for axis, enabled in enumerate(
+                    self.opts.get("frame_axes", (True, True, True))
+                )
+                if enabled
+            ]
+            if frame_selected and self.current_comp in FRAME_COMPONENTS:
+                frame_axis = (
+                    None
+                    if self.current_comp == "Whole frame"
+                    else int(self.current_comp[-1])
+                )
+            if frame_selected:
+                plot_kargs["color"] = self.opts["color"]
+            selected_frame = self.opts.get("frame_field", self.data.current_local_frame)
+            self.data.set_current_local_frame(
+                self.current_field if frame_selected else selected_frame
+            )
+            if self.data.mesh.ndim == 2 and isinstance(frame_axis, list):
+                frame_axis = [axis for axis in frame_axis if axis <= 2]
             self.data.plot(
-                field=self.current_field,
+                field=None if frame_selected else self.current_field,
                 component=self.current_comp,
                 data_type=self.current_data_type,
+                show_local_frame=self.opts.get("frame_size", 2.0) if overlay else False,
+                local_frame_axis=frame_axis,
+                local_frame_options={
+                    "max_frames": self.opts.get("frame_max", 1000),
+                    "gauss_points": self.opts.get("frame_gauss_points", False),
+                    "legend": self.opts.get("frame_legend", False),
+                },
                 clim=clim,
                 plotter=plotter,
                 show=False,
@@ -655,11 +705,12 @@ class PlotDock(QDockWidget):
                 **plot_kargs,
             )
 
-            if self.parent()._plane_widget_enabled:
-                self.parent().enable_plane_widget()
+            self.data.set_current_local_frame(selected_frame)
+            if self.main_window._plane_widget_enabled:
+                self.main_window.enable_plane_widget()
 
-            if self.parent()._line_widget_enabled:
-                self.parent()._rebuild_line_widget()
+            if self.main_window._line_widget_enabled:
+                self.main_window._rebuild_line_widget()
 
             if self.opts.get("show_time", False) and "Time" in self.data.scalar_data:
                 time_value = np.asarray(self.data.scalar_data["Time"])
@@ -671,27 +722,27 @@ class PlotDock(QDockWidget):
                         color="black",
                         name="_fedoo_time",
                     )
-        if self is self.parent().active_dock:
-            self.parent()._refresh_object_inspector()
+        if self is self.main_window.active_dock:
+            self.main_window._refresh_object_inspector()
 
     def closeEvent(self, event):
-        if self is self.parent().active_dock:
-            self.parent()._clip_redraw_timer.stop()
+        if self is self.main_window.active_dock:
+            self.main_window._clip_redraw_timer.stop()
             for dialog in (
-                self.parent().node_sets_dialog,
-                self.parent().element_sets_dialog,
+                self.main_window.node_sets_dialog,
+                self.main_window.element_sets_dialog,
             ):
                 if dialog is not None:
                     dialog.close()
         self.plotter.close()
-        if self is self.parent().active_dock:
-            self.parent().active_dock = None
-        self.parent().all_docks.remove(self)
-        self.parent()._update_dock_selector()
-        self.parent()._refresh_object_inspector()
-        if self.parent().active_dock is None:
-            self.parent().field_combo.clear()
-            for action in self.parent().actions_requiring_data:
+        if self is self.main_window.active_dock:
+            self.main_window.active_dock = None
+        self.main_window.all_docks.remove(self)
+        self.main_window._update_dock_selector()
+        self.main_window._refresh_object_inspector()
+        if self.main_window.active_dock is None:
+            self.main_window.field_combo.clear()
+            for action in self.main_window.actions_requiring_data:
                 action.setEnabled(False)
         super().closeEvent(event)
 
@@ -712,6 +763,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pol_results_dialog = None
         self._renderer_dialog = None
         self._plot_dialog = None
+        self._local_frame_dialog = None
         self.element_sets_dialog = None
         self.node_sets_dialog = None
         self.scalar_expression_dialog = None
@@ -738,7 +790,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._is_fullscreen = False
         self._hidden_ui_when_fullscreen = []
 
-        self.setTabPosition(Qt.AllDockWidgetAreas, QtWidgets.QTabWidget.North)
+        # Result docks have their own layout. The outer dock areas are reserved
+        # for side panels so arranging views cannot split or tabify the inspector.
+        self._view_area = QtWidgets.QMainWindow(self)
+        self._view_area.setObjectName("fedoo_view_area")
+        self._view_area.setWindowFlags(Qt.Widget)
+        self._view_area.setDockOptions(
+            QtWidgets.QMainWindow.AllowNestedDocks
+            | QtWidgets.QMainWindow.AllowTabbedDocks
+        )
+        self._view_area.setTabPosition(
+            Qt.AllDockWidgetAreas, QtWidgets.QTabWidget.North
+        )
+        self.setCentralWidget(self._view_area)
 
         #####################################################################
         # Tool bars
@@ -993,13 +1057,10 @@ class MainWindow(QtWidgets.QMainWindow):
         file_menu.addAction(open_action)
 
         # Save Data
-        save_action = QtWidgets.QAction("Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_current_data)
-        file_menu.addAction(save_action)
-
         save_as_action = QtWidgets.QAction("Save as...", self)
-        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.setShortcuts(
+            [QtGui.QKeySequence("Ctrl+S"), QtGui.QKeySequence("Ctrl+Shift+S")]
+        )
         save_as_action.triggered.connect(self.save_current_data_as)
         file_menu.addAction(save_as_action)
 
@@ -1027,11 +1088,14 @@ class MainWindow(QtWidgets.QMainWindow):
         plot_options_action.setShortcut("Ctrl+P")
         plot_options_action.triggered.connect(self.open_plot_dialog)
         options_menu.addAction(plot_options_action)
+        local_frame_options_action = QtWidgets.QAction("Local frames...", self)
+        local_frame_options_action.triggered.connect(self.open_local_frame_dialog)
 
         clim_action = QtWidgets.QAction("Scalar bar…", self)
         clim_action.setShortcut("Ctrl+L")
         clim_action.triggered.connect(self.open_clim_dialog)
         options_menu.addAction(clim_action)
+        options_menu.addAction(local_frame_options_action)
 
         renderer_options_action = QtWidgets.QAction("Renderer…", self)
         renderer_options_action.triggered.connect(self.open_renderer_dialog)
@@ -1067,7 +1131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu = menubar.addMenu("View")
         self.object_inspector = ObjectInspector(self)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.object_inspector)
-        self.object_inspector.hide()
+        self.object_inspector.setVisible(True)
         self.object_inspector_action = self.object_inspector.toggleViewAction()
         # add same actions as view toolbar
         self._link_views_action = QtWidgets.QAction("Link views", self)
@@ -1209,12 +1273,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.actions_requiring_data = [
             plot_options_action,
+            local_frame_options_action,
             clim_action,
             renderer_options_action,
             self.beam_options_action,
             self.shell_options_action,
             copy_action,
-            save_action,
             save_as_action,
             clipAction,
             plotOverLineAction,
@@ -1285,7 +1349,7 @@ class MainWindow(QtWidgets.QMainWindow):
             data = ProblemDataSet(data)
         dock = PlotDock(data, title, self, opts, filename=filename)
 
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        self._view_area.addDockWidget(Qt.RightDockWidgetArea, dock)
         dock.visibilityChanged.connect(
             lambda v, d=dock: self._set_active(d) if v else None  # self._hide_dock
         )
@@ -1376,7 +1440,7 @@ class MainWindow(QtWidgets.QMainWindow):
             first = self.all_docks[0]
             for dock in self.all_docks:
                 if dock is not first:
-                    self.tabifyDockWidget(first, dock)
+                    self._view_area.tabifyDockWidget(first, dock)
         self._set_active(active_dock)
         self.active_dock.raise_()
         self.window_layout = self._distribute_tabified
@@ -1393,9 +1457,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.all_docks:
             return
         first = self.all_docks[0]
-        self.addDockWidget(Qt.RightDockWidgetArea, first)
+        self._view_area.addDockWidget(Qt.RightDockWidgetArea, first)
         for dock in self.all_docks[1:]:
-            self.splitDockWidget(first, dock, orientation)
+            self._view_area.splitDockWidget(first, dock, orientation)
 
     def _distribute_auto(self):
         n = len(self.all_docks)
@@ -1408,7 +1472,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # # Start with the first dock
         # main_dock = self.all_docks[0]
-        # self.addDockWidget(Qt.RightDockWidgetArea, main_dock)
+        # self._view_area.addDockWidget(Qt.RightDockWidgetArea, main_dock)
 
         # Arrange remaining docks
         dock_index = 0
@@ -1421,20 +1485,20 @@ class MainWindow(QtWidgets.QMainWindow):
                 if r == 0:
                     start_dock.append(dock)
                 if c == 0 and r == 0:
-                    self.addDockWidget(Qt.RightDockWidgetArea, dock)
+                    self._view_area.addDockWidget(Qt.RightDockWidgetArea, dock)
                     # current_row_start = dock
                 elif r == 0:
                     # First row: split horizontally
-                    self.splitDockWidget(start_dock[0], dock, Qt.Horizontal)
+                    self._view_area.splitDockWidget(start_dock[0], dock, Qt.Horizontal)
                     # current_row_start = dock
 
                 else:
                     # split vertically
-                    self.splitDockWidget(start_dock[c], dock, Qt.Vertical)
+                    self._view_area.splitDockWidget(start_dock[c], dock, Qt.Vertical)
                     # current_row_start = dock
                 # else:
                 #     # Subsequent columns: split horizontally
-                #     self.splitDockWidget(current_row_start, dock, Qt.Horizontal)
+                #     self._view_area.splitDockWidget(current_row_start, dock, Qt.Horizontal)
                 dock_index += 1
         self.window_layout = self._distribute_auto
 
@@ -1615,6 +1679,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.avg_combo.blockSignals(old_state)
         if self._plot_dialog:  # if plot dialog exist
             self._plot_dialog.update_values()
+        if self._local_frame_dialog:
+            self._local_frame_dialog.update_values()
         if self._renderer_dialog:
             self._renderer_dialog.update_values()
         if self._clim_dialog:
@@ -2951,7 +3017,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         return data
 
-    def _save_data_to_fdh5(self, filename, compressed=None):
+    def _save_data_to_fdh5(self, filename, compressed=None, fdh5_options=None):
         if self.active_dock is None:
             return False
 
@@ -2964,11 +3030,17 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if compressed is None:
-            compressed = self.active_dock.opts.get("fdh5_compression", True)
+        if fdh5_options is None:
+            fdh5_options = self.active_dock.opts.get("fdh5_options")
+        if compressed is not None and fdh5_options is not None:
+            fdh5_options = {
+                k: v
+                for k, v in fdh5_options.items()
+                if k not in ("compression", "compression_level")
+            }
         try:
-            CompressionConfig.from_compressed(compressed).dataset_kwargs()
-        except ImportError as exc:
+            settings = resolve_fdh5_options(fdh5_options, compressed)
+        except (ImportError, ValueError, TypeError) as exc:
             QtWidgets.QMessageBox.warning(self, "Save data", str(exc))
             return False
         data = self._data_for_fdh5_save(self.active_dock)
@@ -2979,12 +3051,12 @@ class MainWindow(QtWidgets.QMainWindow):
         ) as temporary:
             destination = os.path.join(temporary, "data.fdh5")
             if isinstance(data, fd.MultiFrameDataSet):
-                data.save_all(destination, file_format="fdh5", compressed=compressed)
+                data.save_all(destination, file_format="fdh5", fdh5_options=settings)
             else:
-                data.save(destination, compressed=compressed)
+                data.save(destination, fdh5_options=settings)
             os.replace(destination, filename)
 
-        self.active_dock.opts["fdh5_compression"] = compressed
+        self.active_dock.opts["fdh5_options"] = settings
         self.active_dock.filename = filename
         self.active_dock.title = os.path.basename(filename)
         self.active_dock.setWindowTitle(
@@ -2992,15 +3064,6 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         QtWidgets.QMessageBox.information(self, "Save data", f"Saved:\n{filename}")
         return True
-
-    def save_current_data(self):
-        if self.active_dock is None:
-            return
-        filename = self.active_dock.filename
-        if not filename or os.path.splitext(filename)[1].lower() != ".fdh5":
-            self.save_current_data_as()
-            return
-        self._save_data_to_fdh5(filename)
 
     def save_current_data_as(self):
         if self.active_dock is None:
@@ -3017,7 +3080,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg.selectFile(start)
 
         options = QtWidgets.QWidget(dlg)
-        options_layout = QtWidgets.QHBoxLayout(options)
+        options_layout = QtWidgets.QFormLayout(options)
         options_layout.setContentsMargins(0, 0, 0, 0)
         compression = QtWidgets.QComboBox(options)
         compression.setObjectName("fdh5_compression")
@@ -3032,13 +3095,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         level = QtWidgets.QSpinBox(options)
         level.setObjectName("fdh5_compression_level")
-        saved = self.active_dock.opts.get("fdh5_compression", True)
-        config = CompressionConfig.from_compressed(saved)
+        saved = resolve_fdh5_options(self.active_dock.opts.get("fdh5_options"))
+        config = CompressionConfig(saved["compression"], saved["compression_level"])
 
         def update_level():
             codec = compression.currentData()
             level.setEnabled(codec is not None)
-            level.setRange(1, 22 if codec == "zstd" else 9)
+            level.setRange(1 if codec == "zstd" else 0, 22 if codec == "zstd" else 9)
             level.setValue(3 if codec == "zstd" else 4)
             level.setToolTip(
                 "1: fastest save; higher levels favor compression. "
@@ -3051,22 +3114,73 @@ class MainWindow(QtWidgets.QMainWindow):
         update_level()
         if config.compression_opts is not None:
             level.setValue(config.compression_opts)
-        options_layout.addWidget(QtWidgets.QLabel("Compression:", options))
-        options_layout.addWidget(compression)
-        options_layout.addWidget(QtWidgets.QLabel("Level:", options))
-        options_layout.addWidget(level)
-        options_layout.addStretch(1)
+        compression_row = QtWidgets.QHBoxLayout()
+        compression_row.addWidget(compression)
+        compression_row.addWidget(QtWidgets.QLabel("Level:"))
+        compression_row.addWidget(level)
+        options_layout.addRow("Compression:", compression_row)
+        controls = {}
+        for key, label, choices in (
+            (
+                "float_dtype",
+                "Result precision:",
+                [("Preserve", None), ("float32", "float32"), ("float64", "float64")],
+            ),
+            (
+                "coordinate_dtype",
+                "Coordinate precision:",
+                [("Preserve", None), ("float32", "float32"), ("float64", "float64")],
+            ),
+            (
+                "integer_min_bits",
+                "Integer packing:",
+                [
+                    ("Preserve", None),
+                    ("8-bit minimum", 8),
+                    ("16-bit minimum", 16),
+                    ("32-bit minimum", 32),
+                    ("64-bit minimum", 64),
+                ],
+            ),
+            (
+                "local_frame",
+                "Local frames:",
+                [
+                    ("Quaternion (compact)", "quaternion"),
+                    ("Rotation vector (radians)", "rotvec"),
+                    ("Matrix", "matrix"),
+                ],
+            ),
+        ):
+            control = QtWidgets.QComboBox(options)
+            control.setObjectName("fdh5_" + key)
+            for text, value in choices:
+                control.addItem(text, value)
+            control.setCurrentIndex(control.findData(saved[key]))
+            options_layout.addRow(label, control)
+            controls[key] = control
+        controls["float_dtype"].setToolTip(
+            "float32 rounds result fields to about 7 significant digits. Scalar outputs and metadata preserve precision. In-memory arrays are unchanged."
+        )
+        controls["coordinate_dtype"].setToolTip(
+            "Preserve coordinates to retain small geometric details with large coordinate offsets."
+        )
+        controls["integer_min_bits"].setToolTip(
+            "Lossless packing; preserves signedness and never enlarges an existing smaller integer type."
+        )
         grid = dlg.layout()
         grid.addWidget(options, grid.rowCount(), 0, 1, grid.columnCount())
 
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             self._save_data_to_fdh5(
                 dlg.selectedFiles()[0],
-                compressed=(
-                    False
-                    if compression.currentData() is None
-                    else CompressionConfig(compression.currentData(), level.value())
-                ),
+                fdh5_options={
+                    **{key: control.currentData() for key, control in controls.items()},
+                    "compression": compression.currentData(),
+                    "compression_level": level.value()
+                    if compression.currentData() is not None
+                    else None,
+                },
             )
 
     def open_clim_dialog(self):
@@ -3152,6 +3266,30 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             opts["title_plot"] = self._plot_dialog.title_edit.text()
 
+    def open_local_frame_dialog(self):
+        if self.active_dock is None:
+            return
+        if self._local_frame_dialog is None:
+            self._local_frame_dialog = LocalFrameOptionsDialog(self)
+            self._local_frame_dialog.optionsChanged.connect(
+                self._apply_local_frame_options
+            )
+        self._local_frame_dialog.update_values()
+        self._local_frame_dialog.show()
+        self._local_frame_dialog.raise_()
+        self._local_frame_dialog.activateWindow()
+
+    def apply_local_frame_options_to_dock(self, dock):
+        dock.opts.update(self._local_frame_dialog.get_values())
+
+    def _apply_local_frame_options(self):
+        if self.active_dock is None:
+            return
+        docks = self.all_docks if self.apply_options_to_all else [self.active_dock]
+        for dock in docks:
+            self.apply_local_frame_options_to_dock(dock)
+            dock.update_plot()
+
     def open_renderer_dialog(self):
         # # Create once and keep a reference so it isn't garbage-collected
         if not self._renderer_dialog:
@@ -3207,7 +3345,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         dock.current_data_type = self.current_data_type
 
-        if dock.current_field is not None and dock.opts["clim_mode"] == "all":
+        if (
+            dock.current_field is not None
+            and (
+                not is_frame_field(dock.current_field, dock.data.field_metadata)
+                or dock.current_comp not in (None, *FRAME_COMPONENTS)
+            )
+            and dock.opts["clim_mode"] == "all"
+        ):
             if hasattr(dock.data, "get_all_frame_lim"):
                 dock.opts["clim"] = dock.data.get_all_frame_lim(
                     field=dock.current_field,
@@ -4108,7 +4253,6 @@ class PlotOptionsDialog(QtWidgets.QDialog):
         opts_layout.addRow(self.node_labels_cb)
         opts_layout.addRow(self.element_labels_cb)
         main.addLayout(opts_layout)
-
         # Title group layout
         title_layout = QtWidgets.QGridLayout()
         title_layout.addWidget(self.show_title_cb, 0, 0, 1, 2)

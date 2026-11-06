@@ -4,7 +4,8 @@ from fedoo.util.beam_recovery import (
     validate_positions,
     SectionRecoveryUnavailable,
 )
-from fedoo.util.fdh5 import FDH5Reader, CompressionConfig
+from fedoo.util.frame_fields import FRAME_NAMES
+from fedoo.util.fdh5 import resolve_fdh5_options, FDH5Reader
 
 import numpy as np
 
@@ -71,6 +72,7 @@ _available_output = [
     "BeamStrain",
     "BeamStress",
     "BeamLocalFrame",
+    "MaterialLocalFrame",
     "DispGradient",
 ]
 
@@ -409,40 +411,42 @@ def _get_assemblysum_results(
                         ][str(submesh_id)] = metadata
                     else:
                         result.field_metadata[res] = metadata
-                    section_key = (
-                        "_ShellSection"
-                        if metadata.get("family") == "shell"
-                        else "_BeamSection"
-                    )
-                    section_metadata = sub_result.field_metadata.get(
-                        section_key, metadata
-                    )
-                    if multimesh:
-                        result.field_metadata.setdefault(
-                            section_key, {"submeshes": {}}
-                        )["submeshes"][str(submesh_id)] = section_metadata
-                    else:
-                        result.field_metadata[section_key] = section_metadata
-                    for storage, association in (
-                        (sub_result.node_data, "Node"),
-                        (sub_result.element_data, "Element"),
-                        (sub_result.gausspoint_data, "GaussPoint"),
-                    ):
-                        for name, value in storage.items():
-                            if name.startswith(("_Section_", "_Shell")) or name in (
-                                "ShellLocalFrame",
-                                "BeamLocalFrame",
-                            ):
-                                if association == "Node" and multimesh:
-                                    name += f"_submesh_{submesh_id}"
-                                _store_assemblysum_field(
-                                    result,
-                                    name,
-                                    value,
-                                    association,
-                                    submesh_id,
-                                    multimesh,
-                                )
+                    if metadata.get("type") != "local_frame":
+                        section_key = (
+                            "_ShellSection"
+                            if metadata.get("family") == "shell"
+                            else "_BeamSection"
+                        )
+                        section_metadata = sub_result.field_metadata.get(
+                            section_key, metadata
+                        )
+                        if multimesh:
+                            result.field_metadata.setdefault(
+                                section_key, {"submeshes": {}}
+                            )["submeshes"][str(submesh_id)] = section_metadata
+                        else:
+                            result.field_metadata[section_key] = section_metadata
+                        for storage, association in (
+                            (sub_result.node_data, "Node"),
+                            (sub_result.element_data, "Element"),
+                            (sub_result.gausspoint_data, "GaussPoint"),
+                        ):
+                            for name, value in storage.items():
+                                if name.startswith(("_Section_", "_Shell")) or name in (
+                                    "ShellLocalFrame",
+                                    "BeamLocalFrame",
+                                    "_BeamLocalFrame",
+                                ):
+                                    if association == "Node" and multimesh:
+                                        name += f"_submesh_{submesh_id}"
+                                    _store_assemblysum_field(
+                                        result,
+                                        name,
+                                        value,
+                                        association,
+                                        submesh_id,
+                                        multimesh,
+                                    )
                 found = True
                 break
 
@@ -458,6 +462,13 @@ def _get_assemblysum_results(
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time
 
+    for frame_name in ("ShellLocalFrame", "BeamLocalFrame"):
+        if frame_name in output_list and frame_name in result.gausspoint_data:
+            result.gausspoint_data.pop("_" + frame_name, None)
+    for values in (result.node_data, result.element_data, result.gausspoint_data):
+        for name in values:
+            if name.lstrip("_") in FRAME_NAMES:
+                result.field_metadata.setdefault(name, {})["type"] = "local_frame"
     return result
 
 
@@ -645,12 +656,35 @@ def _get_results(
             data_type = "GaussPoint"
 
         elif res == "BeamLocalFrame":
-            law = _find_constitutivelaw_with_method(assemb.weakform, "get_local_frame")
+            law = _find_constitutivelaw_with_method(
+                assemb.weakform, "get_beam_rigidity"
+            )
             if law is None:
                 if ignore_missing:
                     continue
                 raise NameError('Field "BeamLocalFrame" not available')
             data = law.get_local_frame(assemb).reshape(-1, 9).T
+            data_type = "GaussPoint"
+
+        elif res == "MaterialLocalFrame":
+            law = _find_constitutivelaw_with_method(
+                assemb.weakform, "get_current_local_frame"
+            )
+            if law is None:
+                if ignore_missing:
+                    continue
+                raise NameError(
+                    'Field "MaterialLocalFrame" not available for this constitutive law'
+                )
+            frames = law.get_current_local_frame(assemb)
+            if frames is None:
+                frames = np.eye(3)[None]
+            frames = np.asarray(frames).reshape(-1, 3, 3)
+            if len(frames) == 1:
+                frames = np.broadcast_to(frames, (assemb.n_gauss_points, 3, 3))
+            # Material rotations map local components to global components;
+            # frame output stores their basis vectors in rows.
+            data = frames.transpose(0, 2, 1).reshape(-1, 9).T
             data_type = "GaussPoint"
 
         elif res in ["PK2", "Kirchhoff", "Strain", "Stress"]:
@@ -900,7 +934,10 @@ def _get_results(
             frames = frames.reshape(9, -1, assemb.mesh.n_elements)[
                 ..., element_set
             ].reshape(9, -1)
-        result.gausspoint_data["BeamLocalFrame"] = frames
+        frame_name = (
+            "BeamLocalFrame" if "BeamLocalFrame" in output_list else "_BeamLocalFrame"
+        )
+        result.gausspoint_data[frame_name] = frames
 
     shell_fields = {"ShellStress", "ShellStrain", "ShellLocalFrame", "Stress", "Strain"}
     if shell_fields.intersection(output_list):
@@ -931,7 +968,12 @@ def _get_results(
                 frames = frames.reshape(9, -1, assemb.mesh.n_elements)[
                     ..., element_set
                 ].reshape(9, -1)
-            result.gausspoint_data["ShellLocalFrame"] = frames
+            frame_name = (
+                "ShellLocalFrame"
+                if "ShellLocalFrame" in output_list
+                else "_ShellLocalFrame"
+            )
+            result.gausspoint_data[frame_name] = frames
             if law._recovery_model != "homogeneous_linear" and {
                 "Stress",
                 "ShellStress",
@@ -949,6 +991,11 @@ def _get_results(
 
     if hasattr(pb, "time"):
         result.scalar_data["Time"] = pb.time
+
+    for values in (result.node_data, result.element_data, result.gausspoint_data):
+        for name in values:
+            if name.lstrip("_") in FRAME_NAMES:
+                result.field_metadata.setdefault(name, {})["type"] = "local_frame"
 
     return result
 
@@ -981,7 +1028,7 @@ class _ProblemOutput:
         output_list,
         output_type=None,
         file_format="fdh5",
-        compressed=True,
+        compressed=None,
         position=None,
         element_set=None,
         save_mesh=True,
@@ -989,6 +1036,8 @@ class _ProblemOutput:
         write_mode="overwrite",
         ignore_missing=False,
         private=False,
+        *,
+        fdh5_options=None,
     ):
         filename = os.fspath(filename)
         dirname = os.path.dirname(filename)
@@ -1008,8 +1057,12 @@ class _ProblemOutput:
             ]  # remove extension for the base name
 
         if file_format == "fdh5":
-            compression = CompressionConfig.from_compressed(compressed)
-            compression.dataset_kwargs()
+            options = resolve_fdh5_options(fdh5_options, compressed)
+        else:
+            if fdh5_options is not None:
+                raise ValueError("fdh5_options requires the FDH5 format")
+            options = None
+            compressed = True if compressed is None else compressed
 
         if include_static_obstacles and file_format != "fdh5":
             raise ValueError(
@@ -1067,6 +1120,7 @@ class _ProblemOutput:
             "position": position,
             "element_set": element_set,
             "compressed": compressed,
+            "fdh5_options": options,
             "include_static_obstacles": include_static_obstacles,
             "ignore_missing": ignore_missing,
             "private": private,
@@ -1077,10 +1131,10 @@ class _ProblemOutput:
             full_filename = filename + ".fdh5"
             state = self._multiframe_files.get(full_filename)
             if state is not None:
-                if state["compression"] != compression:
+                if state["fdh5_options"] != options:
                     raise ValueError(
                         f"Output file {full_filename!r} is already registered "
-                        "with different compression settings."
+                        "with different compression or storage settings."
                     )
                 if state["write_mode"] != write_mode:
                     raise ValueError(
@@ -1102,7 +1156,7 @@ class _ProblemOutput:
                     ]
 
                 state = {
-                    "compression": compression,
+                    "fdh5_options": options,
                     "write_mode": write_mode,
                     "next_iteration": max(iterations, default=-1) + 1,
                     "has_written": False,
@@ -1135,6 +1189,7 @@ class _ProblemOutput:
         list_filename = []
         list_full_filename = []
         list_file_format = []
+        list_fdh5_options = []
         list_compressed = []  # True if the file should be compressed
         list_data = []
 
@@ -1172,6 +1227,7 @@ class _ProblemOutput:
                     list_full_filename.append(full_filename)
                     list_file_format.append(file_format)
                     list_compressed.append(compressed)
+                    list_fdh5_options.append(output["fdh5_options"])
 
                     out = DataSet(output_mesh)
                     list_data.append(out)
@@ -1238,7 +1294,7 @@ class _ProblemOutput:
                     list_full_filename[i],
                     iteration=iteration,
                     overwrite=(first_write and state["write_mode"] == "overwrite"),
-                    compressed=list_compressed[i],
+                    fdh5_options=list_fdh5_options[i],
                 )
                 self.data_sets[list_filename[i]].list_data.append(
                     ("fdh5", list_full_filename[i], iteration)

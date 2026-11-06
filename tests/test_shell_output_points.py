@@ -36,7 +36,8 @@ def test_linear_output_positions_and_resultant_recovery(tmp_path):
     )
     assert result.gausspoint_data["Stress"].shape == (6, 3, assembly.n_gauss_points)
     assert "Stress" not in result.beam_derived_fields()
-    assert "ShellLocalFrame" in result.gausspoint_data
+    assert "_ShellLocalFrame" in result.gausspoint_data
+    assert "ShellLocalFrame" not in result.gausspoint_data
     for kind in ("Stress", "Strain"):
         for reduction in ("abs_max", "min", "max"):
             result.shell_options.update(reduction=reduction)
@@ -153,7 +154,9 @@ def test_linear_stress_only_reconstruction_and_nearest_selection(tmp_path, assoc
     result = pb.get_results(
         assembly, ["Stress", "Strain"], position=[-0.6, 0.4], output_type=association
     )
-    result.save(str(tmp_path / "linear_tensors.fdh5"))
+    result.save(
+        str(tmp_path / "linear_tensors.fdh5"), fdh5_options={"float_dtype": None}
+    )
     loaded = fd.read_data(str(tmp_path / "linear_tensors.fdh5"))
     assert "ShellStress" not in loaded.gausspoint_data
     assert loaded.shell_sources("Stress") == (True, True)
@@ -489,7 +492,7 @@ def test_varying_thickness_and_element_subset(tmp_path):
         assembly, ["Stress", "ShellStress", "ShellStrain"], element_set=[1]
     )
     assert result.mesh.n_elements == 1
-    result.save(str(tmp_path / "subset.fdh5"))
+    result.save(str(tmp_path / "subset.fdh5"), fdh5_options={"float_dtype": None})
     loaded = fd.read_data(str(tmp_path / "subset.fdh5"))
     loaded.shell_options.update(source="recomputed", reduction=None, position=0.3)
     expected = (
@@ -643,3 +646,16 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
                 loaded.get_data("Stress_global", component).submesh(0),
                 loaded.get_data("Stress_local", component).submesh(0),
             )
+
+
+def test_explicit_shell_frame_is_public(tmp_path):
+    pb, assembly, _ = shell_problem()
+    result = pb.get_results(assembly, ["ShellStress", "ShellLocalFrame"])
+    assert "ShellLocalFrame" in result.gausspoint_data
+    assert "_ShellLocalFrame" not in result.gausspoint_data
+    result.save(str(tmp_path / "public_shell.fdh5"))
+    loaded = fd.read_data(str(tmp_path / "public_shell.fdh5"))
+    assert "Stress_global" in loaded.shell_derived_fields()
+    np.testing.assert_allclose(
+        loaded["ShellLocalFrame"], result["ShellLocalFrame"], atol=1e-7
+    )

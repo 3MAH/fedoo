@@ -26,7 +26,11 @@ def test_automatic_beam_frames_roundtrip(tmp_path, dimension, field, subset):
     expected = section.get_local_frame(assembly).reshape(-1, 9).T
     if subset:
         expected = expected.reshape(9, -1, 2)[..., ids].reshape(9, -1)
-    np.testing.assert_allclose(result.gausspoint_data["BeamLocalFrame"], expected)
+    assert "BeamLocalFrame" not in result.gausspoint_data
+    np.testing.assert_allclose(result.gausspoint_data["_BeamLocalFrame"], expected)
+    explicit = problem.get_results(assembly, [field, "BeamLocalFrame"], element_set=ids)
+    assert "_BeamLocalFrame" not in explicit.gausspoint_data
+    np.testing.assert_allclose(explicit.gausspoint_data["BeamLocalFrame"], expected)
     kind = "Strain" if "Strain" in field else "Stress"
     result.beam_options.update(position=(0, 0), reduction=None)
     global_values = result[kind + "_global"].copy()
