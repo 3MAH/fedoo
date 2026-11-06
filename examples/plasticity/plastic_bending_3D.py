@@ -1,30 +1,40 @@
-import os
+r"""
+3D elastoplastic three-point bending
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-n_threads = 4
-os.environ["OMP_NUM_THREADS"] = f"{n_threads}"
-os.environ["OPENBLAS_NUM_THREADS"] = f"{n_threads}"
-os.environ["MKL_NUM_THREADS"] = f"{n_threads}"
-os.environ["VECLIB_MAXIMUM_THREADS"] = f"{n_threads}"
-os.environ["NUMEXPR_NUM_THREADS"] = f"{n_threads}"
+A plate (length 16 mm, thickness 2 mm, width 10 mm, hex8 elements) lies on two
+line supports and an 8 mm displacement is imposed along the line at the middle
+of its top face. The material follows the J2 elastoplastic law with isotropic
+power-law hardening of Simcoon (``EPICP``). The problem is solved in finite
+strain with the updated Lagrangian formulation (``nlgeom="UL"``) and the F-bar
+method (``incompressibility="fbar"``) to avoid the volumetric locking of the
+nearly incompressible plastic flow.
+
+The shear stress :math:`\sigma_{xy}` at the end of the loading is plotted.
+"""
+
+import os
 
 import fedoo as fd
 import numpy as np
-from time import time
 
-start = time()
-# --------------- Pre-Treatment --------------------------------------------------------
+###############################################################################
+# Geometry, mesh and material
+# ---------------------------
+# Units: N, mm, MPa. ``mat = 2`` uses the native
+# :class:`fedoo.constitutivelaw.ElastoPlasticity` law instead of Simcoon, and
+# ``mat = 0`` the linear elastic Simcoon law ``ELISO``.
 
 space = fd.ModelingSpace("3D")
 
 NLGEOM = "UL"
-typeBending = "3nodes"  #'3nodes' or '4nodes'
-# Units: N, mm, MPa
+typeBending = "3nodes"  # '3nodes' or '4nodes'
 h = 2
 w = 10
 L = 16
 E = 200e3
 nu = 0.3
-alpha = 1e-5  # ???
+alpha = 1e-5  # thermal expansion coefficient (required by Simcoon, isothermal here)
 meshname = "Domain"
 uimp = -8
 
@@ -42,16 +52,14 @@ mesh = fd.mesh.box_mesh(
     name=meshname,
 )
 
-crd = mesh.nodes
-
 mat = 1
 if mat == 0:
     props = np.array([E, nu, alpha])
     material = fd.constitutivelaw.Simcoon("ELISO", props, name="constitutivelaw")
 elif mat == 1 or mat == 2:
     Re = 300
-    k = 1000  # 1500
-    m = 0.3  # 0.25
+    k = 1000
+    m = 0.3
     if mat == 1:
         props = np.array([E, nu, alpha, Re, k, m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name="constitutivelaw")
@@ -63,41 +71,35 @@ elif mat == 1 or mat == 2:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="constitutivelaw")
 
+###############################################################################
+# Weak form, assembly and problem
+# -------------------------------
+# :class:`fedoo.weakform.StressEquilibriumRI` (reduced integration with
+# hourglass stiffness) is an alternative to the F-bar method.
+
 wf = fd.weakform.StressEquilibrium(
     "constitutivelaw", nlgeom=NLGEOM, incompressibility="fbar"
 )
 
-# or alternatively with reduced integration + hourglass stiffness :
-# wf = fd.weakform.StressEquilibriumRI("constitutivelaw", nlgeom = True)
-
-# note set for boundary conditions
+# node sets for boundary conditions
 nodes_bottomLeft = mesh.find_nodes("XY", (0, 0))
 nodes_bottomRight = mesh.find_nodes("XY", (L, 0))
 
 if typeBending == "3nodes":
     nodes_topCenter = mesh.find_nodes("XY", (L / 2, h))
-    # nodes_topCenter = np.where((crd[:,0]==L/2) * (crd[:,1]==h))[0]
 else:
     nodes_top1 = mesh.find_nodes("XY", (L / 4, h))
     nodes_top2 = mesh.find_nodes("XY", (3 * L / 4, h))
     nodes_topCenter = np.hstack((nodes_top1, nodes_top2))
 
-# Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 27)     #uses mesh_change=True when the mesh change during the time
-# assemb = fd.Assembly.create("constitutivelaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 8)     #uses mesh_change=True when the mesh change during the time
 assemb = fd.Assembly.create(wf, meshname, name="Assembling")
 
-
 pb = fd.problem.NonLinear("Assembling")
-# pb.set_solver('cg', precond = True)
-# pb.set_solver('petsc', solver_type='preonly', pc_type='lu', pc_factor_mat_solver_type='mumps')
 pb.set_nr_criterion("Force", tol=5e-3, max_subiter=16)
 
-# create a 'result' folder and set the desired ouputs
+# create a 'results' folder and set the desired outputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
-# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'], output_type='Node', file_format ='vtk')
-# Problem.add_output('results/bendingPlastic3D', 'Assembling', ['Cauchy', 'strain', 'cauchy_vm', 'statev'], output_type='Element', file_format ='vtk')
-# res = pb.add_output('results/bendingPlastic3D', 'Assembling', ['Disp', 'Cauchy', 'Strain', 'Cauchy_vm', 'Statev', 'Wm'])
 res = pb.add_output(
     "results/bendingPlastic3D",
     "Assembling",
@@ -105,65 +107,18 @@ res = pb.add_output(
     file_format="fdz",
 )
 
+###############################################################################
+# Bending
+# -------
 
-################### step 1 ################################
-tmax = 1
 pb.bc.add("Dirichlet", nodes_bottomLeft, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_bottomRight, "DispY", 0)
 bc = pb.bc.add("Dirichlet", nodes_topCenter, "DispY", uimp)
 
 pb.nlsolve(dt=0.025, tmax=1, update_dt=True, print_info=1, interval_output=0.05)
 
-E = assemb.sv["Strain"]
-# E = np.array(fd.Assembly.get_all()['Assembling'].get_strain(pb.get_dof_solution(), "GaussPoint", False)).T
-#
-# ################### step 2 ################################
-# bc.Remove()
-# #We set initial condition to the applied force to relax the load
-# F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
-
-# Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
-
-print(time() - start)
-
-
-### plot with pyvista
-
-# print(assemb.sv['TangentMatrix'])
-
-# from pyvistaqt import BackgroundPlotter
-# plotter = BackgroundPlotter()
+###############################################################################
+# Shear stress at the end of the loading
+# --------------------------------------
 
 res.plot("Stress", component="XY", data_type="Node")
-
-# res.plot('Statev', 'Node', component = 1)
-# res.write_movie('test', 'Stress', component=0)
-
-# import pyvista as pv
-
-# meshplot = pv.read('results/bendingPlastic3D_15.vtk')
-# # meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
-
-# pl = pv.Plotter()
-# pl.set_background('White')
-
-# sargs = dict(
-#     interactive=True,
-#     title_font_size=20,
-#     label_font_size=16,
-#     color='Black',
-#     # n_colors= 10
-# )
-
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'Disp', component = 1, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-
-# cpos = pl.show(return_cpos = True)
-# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)

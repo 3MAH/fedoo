@@ -1,6 +1,6 @@
 """
 Hole plate self-contact: penalty vs IPC comparison
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A plate with a large circular hole (radius 45 mm in a 100 x 100 mm plate)
 is compressed vertically under plane strain until the hole walls come into
@@ -41,6 +41,12 @@ import os
 from time import time
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
+
+# Vertical displacement imposed on the top edge (mm). With 40 mm the hole walls
+# touch during the second half of the loading. Raising it to 70 mm crushes the
+# hole much further (folded walls in contact over a large length): a harder
+# and slower contact sequence for both methods, run in about 10 min.
+CRUSH = 40.0
 
 
 # =========================================================================
@@ -116,7 +122,7 @@ res_penalty = pb_penalty.add_output(
 )
 
 pb_penalty.bc.add("Dirichlet", nodes_bot, "Disp", 0)
-pb_penalty.bc.add("Dirichlet", nodes_top, "Disp", [0, -40])
+pb_penalty.bc.add("Dirichlet", nodes_top, "Disp", [0, -CRUSH])
 pb_penalty.set_nr_criterion("Displacement", tol=5e-3, max_subiter=5)
 
 # --- Tracking callback ---
@@ -174,8 +180,10 @@ res_ipc = pb_ipc.add_output(
 )
 
 pb_ipc.bc.add("Dirichlet", nodes_bot2, "Disp", 0)
-pb_ipc.bc.add("Dirichlet", nodes_top2, "Disp", [0, -40])
-pb_ipc.set_nr_criterion("Displacement", tol=5e-3, max_subiter=5)
+pb_ipc.bc.add("Dirichlet", nodes_top2, "Disp", [0, -CRUSH])
+# The IPC barrier makes Newton converge more slowly once the walls touch:
+# with max_subiter=5 the run stalled near t = 0.8 (dt below dt_min, fedoo 1.0.1).
+pb_ipc.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
 
 # --- Tracking callback ---
 history_ipc = {
@@ -191,17 +199,13 @@ def track_ipc(pb):
     history_ipc["time"].append(pb.time)
     F = pb.get_ext_forces("Disp")
     history_ipc["reaction_y"].append(np.sum(F[1, nodes_top2]))
+    # Diagnostics read private IPCContact attributes (_collisions, _kappa,
+    # _get_current_vertices, _minimum_distance): not a stable public API.
     history_ipc["n_collisions"].append(len(ipc_contact._collisions))
     history_ipc["kappa"].append(ipc_contact._kappa)
+    # True minimum distance (ipctk returns squared distances)
     verts = ipc_contact._get_current_vertices(pb)
-    if len(ipc_contact._collisions) > 0:
-        min_d = ipc_contact._collisions.compute_minimum_distance(
-            ipc_contact._collision_mesh,
-            verts,
-        )
-    else:
-        min_d = float("inf")
-    history_ipc["min_distance"].append(min_d)
+    history_ipc["min_distance"].append(ipc_contact._minimum_distance(verts))
 
 
 t0_ipc = time()
@@ -276,7 +280,7 @@ print("-" * 62)
 print(f"{'Inc':>4} {'Time':>8} {'Reaction Fy':>14}")
 for i in range(n_inc_pen):
     print(
-        f"{i+1:4d} {history_penalty['time'][i]:8.4f} "
+        f"{i + 1:4d} {history_penalty['time'][i]:8.4f} "
         f"{history_penalty['reaction_y'][i]:14.2f}"
     )
 
@@ -292,7 +296,7 @@ for i in range(n_inc_ipc):
     min_d = history_ipc["min_distance"][i]
     min_d_str = f"{min_d:.2e}" if np.isfinite(min_d) else "inf"
     print(
-        f"{i+1:4d} {history_ipc['time'][i]:8.4f} "
+        f"{i + 1:4d} {history_ipc['time'][i]:8.4f} "
         f"{history_ipc['reaction_y'][i]:14.2f} "
         f"{history_ipc['n_collisions'][i]:11d} "
         f"{min_d_str:>12} "
@@ -312,8 +316,8 @@ try:
     fig.suptitle("Hole Plate Crushing: Penalty vs IPC Comparison", fontsize=14)
 
     # --- Force-displacement ---
-    disp_pen = [t * 40 for t in history_penalty["time"]]
-    disp_ipc = [t * 40 for t in history_ipc["time"]]
+    disp_pen = [t * CRUSH for t in history_penalty["time"]]
+    disp_ipc = [t * CRUSH for t in history_ipc["time"]]
 
     ax = axes[0, 0]
     ax.plot(
