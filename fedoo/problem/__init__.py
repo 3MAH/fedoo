@@ -437,9 +437,11 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
     not supported.
   * ``"fbar"``: F-bar method with the volume change evaluated at the element
     center. For ``quad4`` and ``hex8`` in ``3D`` or
-    ``2Dplane``, its consistent tangent matrix is nonsymmetric. In small
-    strain, it reduces to a center-based B-bar correction. Other elements,
-    ``2Daxi``, and total-Lagrangian analyses retain the F-bar kinematic
+    ``2Dplane``, its consistent tangent matrix is nonsymmetric, with the
+    updated and the total Lagrangian methods alike: the total-Lagrangian
+    residual is the pull-back of the updated-Lagrangian one and both reach the
+    same solution. In small strain, it reduces to a center-based B-bar
+    correction. Other elements and ``2Daxi`` retain the F-bar kinematic
     correction but use the standard tangent, with a warning.
 
   In plane stress (``2Dstress``), these options are ignored and the standard
