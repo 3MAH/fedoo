@@ -2433,46 +2433,55 @@ class MainWindow(QtWidgets.QMainWindow):
                 show_point_coordinates()
 
             submesh_choice.currentIndexChanged.connect(select_submesh)
+
+        def apply_current_options():
+            if reduction.currentData() == "point_index":
+                show_point_coordinates()
+                if point_coordinates_label.text():
+                    QtWidgets.QMessageBox.warning(
+                        self, "Beam section point", point_coordinates_label.text()
+                    )
+                    return
+            updated = dict(
+                source=source_choice.currentData(),
+                position=(y.value(), z.value())
+                if reduction.currentData() in ("point_index", "position")
+                else None,
+                reduction=None
+                if reduction.currentData() in ("point_index", "position")
+                else reduction.currentData(),
+                samples=samples.value(),
+                point_index=None,
+                stored_position="nearest",
+                source_fallback=submesh_choice is not None,
+                reference_submesh=submesh_choice.currentData()
+                if submesh_choice is not None
+                else 0,
+            )
+            if not self.apply_beam_options(updated, frame_choice.currentData(), kind):
+                return
+            if submesh_choice is not None:
+                dock.data.active_submesh = submesh_choice.currentData()
+            blocker = QSignalBlocker(self.field_combo)
+            self.field_combo.setCurrentText(kind)
+            del blocker
+            self.update_coordinate_choices(kind)
+            self.update_components(kind)
+
         buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            QtWidgets.QDialogButtonBox.Ok
+            | QtWidgets.QDialogButtonBox.Apply
+            | QtWidgets.QDialogButtonBox.Cancel
         )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addRow(buttons)
+        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(
+            lambda: apply_current_options()
+        )
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
-        if reduction.currentData() == "point_index":
-            show_point_coordinates()
-            if point_coordinates_label.text():
-                QtWidgets.QMessageBox.warning(
-                    self, "Beam section point", point_coordinates_label.text()
-                )
-                return
-        updated = dict(
-            source=source_choice.currentData(),
-            position=(y.value(), z.value())
-            if reduction.currentData() in ("point_index", "position")
-            else None,
-            reduction=None
-            if reduction.currentData() in ("point_index", "position")
-            else reduction.currentData(),
-            samples=samples.value(),
-            point_index=None,
-            stored_position="nearest",
-            source_fallback=submesh_choice is not None,
-            reference_submesh=submesh_choice.currentData()
-            if submesh_choice is not None
-            else 0,
-        )
-        if not self.apply_beam_options(updated, frame_choice.currentData(), kind):
-            return
-        if submesh_choice is not None:
-            dock.data.active_submesh = submesh_choice.currentData()
-        blocker = QSignalBlocker(self.field_combo)
-        self.field_combo.setCurrentText(kind)
-        del blocker
-        self.update_coordinate_choices(kind)
-        self.update_components(kind)
+        apply_current_options()
 
     def apply_beam_options(self, updated, coordinates, kind):
         """Apply settings to the selected scope after validating every beam pane."""
@@ -2746,43 +2755,52 @@ class MainWindow(QtWidgets.QMainWindow):
                 refresh()
 
             submesh_choice.currentIndexChanged.connect(select_submesh)
+
+        def apply_current_options():
+            updated = dict(
+                source=source.currentData(),
+                reduction=None
+                if reduction.currentData() in ("position", "point_index")
+                else reduction.currentData(),
+                samples=samples.value(),
+                position=position.value()
+                if reduction.currentData() in ("position", "point_index")
+                else None,
+                point_index=None,
+                stored_position="nearest",
+                source_fallback=submesh_choice is not None,
+                reference_submesh=submesh_choice.currentData()
+                if submesh_choice is not None
+                else 0,
+                reference_point_index=index.value()
+                if reduction.currentData() == "point_index"
+                else None,
+            )
+            if not self.apply_shell_options(
+                updated, frame.currentData(), kind, show_thickness.isChecked()
+            ):
+                return
+            if submesh_choice is not None:
+                dock.data.active_submesh = submesh_choice.currentData()
+            with QSignalBlocker(self.field_combo):
+                self.field_combo.setCurrentText(kind)
+            self.update_coordinate_choices(kind)
+            self.update_components(kind)
+
         buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            QtWidgets.QDialogButtonBox.Ok
+            | QtWidgets.QDialogButtonBox.Apply
+            | QtWidgets.QDialogButtonBox.Cancel
         )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addRow(buttons)
+        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(
+            lambda: apply_current_options()
+        )
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
-        updated = dict(
-            source=source.currentData(),
-            reduction=None
-            if reduction.currentData() in ("position", "point_index")
-            else reduction.currentData(),
-            samples=samples.value(),
-            position=position.value()
-            if reduction.currentData() in ("position", "point_index")
-            else None,
-            point_index=None,
-            stored_position="nearest",
-            source_fallback=submesh_choice is not None,
-            reference_submesh=submesh_choice.currentData()
-            if submesh_choice is not None
-            else 0,
-            reference_point_index=index.value()
-            if reduction.currentData() == "point_index"
-            else None,
-        )
-        if not self.apply_shell_options(
-            updated, frame.currentData(), kind, show_thickness.isChecked()
-        ):
-            return
-        if submesh_choice is not None:
-            dock.data.active_submesh = submesh_choice.currentData()
-        with QSignalBlocker(self.field_combo):
-            self.field_combo.setCurrentText(kind)
-        self.update_coordinate_choices(kind)
-        self.update_components(kind)
+        apply_current_options()
 
     def apply_shell_options(self, updated, coordinates, kind, show_thickness=None):
         """Validate all eligible panes before applying thickness settings."""
