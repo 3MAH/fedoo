@@ -24,6 +24,7 @@ from .core import (
     MultiFrameDataSet,
     MultiMeshData,
     Problem,
+    ProblemDataSet,
     WeakForm,
     WeakFormSum,
     read_data,
@@ -137,3 +138,6 @@ class get_config:
 def show_config():
     """Print the state of the optional modules and the version of fedoo"""
     print(get_config())
+
+
+from .util.fdh5 import get_fdh5_options, set_fdh5_options, reset_fdh5_options

@@ -167,8 +167,11 @@ directly from Python:
     results.save("cantilever.fdh5")  # optional: save before launching the GUI
     fd.viewer(results)
 
-The viewer provides field/component selection, deformation scaling and
-image export. In a later Python session, open the saved file directly:
+The viewer provides field/component selection, deformation scaling, node and
+element set tools, computed scalars and image export. File > Save as stores
+results, user-created sets and computed scalar definitions in FDH5, with
+lossless compression options. See :ref:`fedoo_viewer` for the available tools.
+In a later Python session, open the saved file directly:
 
 .. code-block:: python
 
@@ -186,6 +189,11 @@ Then use **File > Open** to select ``cantilever.fdh5``. Calling ``fd.viewer()``
 from Python also opens an empty viewer. In a standalone script, the viewer
 runs until its window is closed; perform saving or other computations before
 launching it.
+
+To inspect a live Problem, call ``fd.viewer(pb)`` or use **Problem > Open
+existing problem** in a viewer launched from the same Python session. Reload
+reads its current state; opening it does not run a solve. Modal and buckling
+Problems with retained modes use the iteration slider to select a mode.
 
 For external tools such as ParaView, export a VTK file with
 ``results.save("cantilever.vtk")``. See
