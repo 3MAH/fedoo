@@ -11,6 +11,9 @@
 # then copy that folder to ``media/examples/`` in 3MAH/fedoo-docs. Run all the
 # examples with the same fedoo version when preparing a release, so that the
 # recorded versions match.
+# The "Regenerate documentation examples" GitHub Actions workflow automates
+# generation and publication, including records.json consumed by docs builds.
+# See tools/README.md for selected-example runs and local use.
 #
 # Entry fields
 # ------------

@@ -11,6 +11,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 
+import json
 import os
 import re
 import sys
@@ -137,6 +138,16 @@ _precomputed_pages = {
     "examples/" + entry["path"][: -len(".py")]: entry
     for entry in _precomputed["example"]
 }
+# CI downloads the published records; local builds can use the same file.
+# An absent registry is expected before the first regeneration workflow run.
+_records_path = os.environ.get("FEDOO_PRECOMPUTED_RECORDS")
+if _records_path:
+    with open(_records_path) as file:
+        _published_records = json.load(file)
+    for entry in _precomputed["example"]:
+        published = _published_records.get(entry["path"])
+        if published and published.get("media") == entry.get("media"):
+            entry["run"] = published["run"]
 _executed_pattern = (
     r"^(?!.*/(?:"
     + "|".join(re.escape(entry["path"]) for entry in _precomputed["example"])

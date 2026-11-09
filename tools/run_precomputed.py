@@ -39,6 +39,8 @@ import subprocess
 import sys
 import time
 
+from precomputed_records import save_record
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -113,7 +115,7 @@ def _versions():
         pass
     try:
         versions["commit"] = subprocess.run(
-            ["git", "describe", "--always", "--dirty"],
+            ["git", "rev-parse", "HEAD"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -193,6 +195,7 @@ def run(entry, media_dir):
         wall_time_s=round(wall_time),
     )
     _write_run(entry["path"], record)
+    save_record(media_dir, entry, record)
     print(f"    {wall_time:.0f} s, media: {media}", flush=True)
 
 
