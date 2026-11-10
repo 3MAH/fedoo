@@ -36,6 +36,20 @@ def _face(mesh, name):
     return mesh.find_nodes(*crd[name])
 
 
+def test_named_vector_boundary_condition_can_be_replaced():
+    pb, mesh = _build_problem()
+    nodes = _face(mesh, "top")
+    for value in ([0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]):
+        pb.bc.remove("prescribed")
+        group = pb.bc.add("Dirichlet", nodes, "Disp", value, name="prescribed")
+        assert group.name == "prescribed"
+        assert len(pb.bc) == 1
+        assert "prescribed" in repr(pb.bc)
+        _apply_without_warning(pb)
+    pb.bc.remove("prescribed")
+    assert len(pb.bc) == 0
+
+
 def _pressure(mesh, face, value):
     return fd.constraint.Pressure.from_nodes(
         mesh, _face(mesh, face), value, nlgeom=False

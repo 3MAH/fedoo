@@ -166,10 +166,9 @@ ipc_contact = fd.constraint.IPCContact(
     dhat=1e-2,
     dhat_is_relative=True,
     use_ccd=True,
-    # Exact barrier hessian: the default PSD projection makes the tangent
-    # inexact and Newton converges only linearly (~0.7 per iteration), which
-    # exhausts max_subiter and drives dt down to dt_min on this stiff punch.
-    psd_projection=False,
+    # Use a projected barrier Hessian so the energy line search remains
+    # effective as the contact set changes during indentation.
+    psd_projection=True,
 )
 
 mat = fd.constitutivelaw.Heterogeneous(
@@ -193,9 +192,8 @@ pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_punch_top, "Disp", [0, 0, -2.0])
 # Displacement criterion (the reference IPC setting): the Force criterion is
 # unreliable when the active contact set changes during the NR iterations.
-# max_subiter=15 leaves room for the extra iterations forced by IPC when
-# surfaces get close.
-pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=15)
+# Allow extra Newton iterations when the projected tangent converges more slowly.
+pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=50)
 
 print("=" * 60)
 print("HEMISPHERICAL PUNCH -- IPC CONTACT")
