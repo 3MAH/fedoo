@@ -35,7 +35,11 @@ jobs:
           EXAMPLE_PATHS: ${{ inputs.paths }}
           PYVISTA_OFF_SCREEN: "true"
           MPLBACKEND: Agg
+          PYTHONFAULTHANDLER: "1"
+          PYTHONUNBUFFERED: "1"
         run: |
+          lscpu
+          conda list '^(python|gmsh|python-gmsh|ipctk|mkl|libblas|pypardiso|simcoon|vtk|pyvista|meshlane|numpy|scipy)$'
           read -r -a paths <<< "$EXAMPLE_PATHS"
           python tools/run_precomputed.py "${paths[@]}" --media-dir precomputed-media
       - name: Preserve generated media and run records
