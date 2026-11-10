@@ -441,8 +441,7 @@ class MechanicalUMAT(Mechanical3D):
     tangent_mode : int, default=1
         Tangent selector forwarded unchanged to the UMAT callback. Its meaning
         is up to the callback; :class:`fedoo.constitutivelaw.Simcoon` uses the
-        simcoon numbering (0 elastic, 1 continuum, 2 algorithmic, 3 closest
-        point projection).
+        simcoon numbering (0 elastic, 1 continuum, 2 algorithmic).
     density : float, optional
         Material mass density.
     name : str, optional

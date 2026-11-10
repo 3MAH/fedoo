@@ -111,8 +111,8 @@ semantic versioning.
   remain active when `check_early_divergence=True`.
 - `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
   used in finite strain without `lnJ`.
-- fedoo now requires `simcoon>=2.2` (closest point projection,
-  `tangent_mode=3`).
+- Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
+  Simcoon and are no longer condensed a second time by fedoo.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
   `DeprecationWarning`, and will raise an `AttributeError` in a future
@@ -121,7 +121,8 @@ semantic versioning.
 - `Simcoon` / `Simcoon.from_modular` docstrings document `tangent_mode` with
   the simcoon >= 2.0 numbering: 0 elastic, 1 continuum (fedoo default),
   2 algorithmic tangent of the convex cutting plane return mapping (simcoon
-  default), 3 closest point projection (simcoon >= 2.2). The numbering of
+  default). Simcoon 2.3 no longer accepts mode 3: the integration algorithm
+  is a separate Simcoon setting. The numbering of
   simcoon < 2.0 differs (0 continuum, 1 algorithmic).
 - The example gallery is organized by topic instead of numbered folders:
   `basic`, `boundary_conditions`, `contact`, `finite_strain`, `plasticity`,

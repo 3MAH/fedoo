@@ -36,10 +36,9 @@ class Simcoon(MechanicalUMAT):
         * ``1``: continuum tangent (fedoo default).
         * ``2``: algorithmic (consistent) tangent of the convex cutting plane
           (CCP) return mapping. This is the simcoon default.
-        * ``3``: closest point projection (CPP): the law is integrated with a
-          closest point projection return mapping and returns its exact
-          consistent tangent. Available from simcoon 2.2 (simcoon 2.1 rejects
-          it). A law without a CPP integrator falls back to mode ``2``.
+
+        Simcoon 2.3 no longer accepts ``tangent_mode=3``: the integration
+        algorithm is a separate Simcoon setting, not a tangent mode.
 
         Modes 0 to 2 integrate the law with the same return mapping and only
         change the tangent. Simcoon versions before 2.0 used another
@@ -148,7 +147,7 @@ class Simcoon(MechanicalUMAT):
         tangent_mode : int, default=1
             Tangent operator requested from the Simcoon ``MODUL`` UMAT: ``0``
             elastic, ``1`` continuum, ``2`` algorithmic (convex cutting
-            plane), ``3`` closest point projection (simcoon >= 2.2). See
+            plane). See
             :class:`Simcoon`.
         name : str, optional
             Fedoo constitutive-law registration name.
@@ -1235,6 +1234,13 @@ class Simcoon(MechanicalUMAT):
             self._Lt_from_F = True
         else:
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
+
+    def get_tangent_matrix(self, assembly, dimension=None):
+        # Simcoon >= 2.3 already condenses ndi=2 tangents. A second
+        # condensation would divide by the zero out-of-plane stiffness.
+        if assembly.space.get_dimension() == "2Dstress":
+            return assembly.sv["TangentMatrix"]
+        return super().get_tangent_matrix(assembly, dimension)
 
     def _umat_options(self, assembly, *, in_material_frame, ndi):
         wf = getattr(assembly, "weakform", None)

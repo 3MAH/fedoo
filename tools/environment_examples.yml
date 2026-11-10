@@ -23,7 +23,7 @@ dependencies:
   - numpy>=2
   - scipy
   - h5py
-  - simcoon>=2.2
+  - simcoon>=2.3
   - gmsh
   - python-gmsh
   - mmg # mmg3d_O3, for util/meshes/make_gyroid_mesh.py
