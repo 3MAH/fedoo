@@ -23,7 +23,7 @@ In addition, the conda package also includes some recommended dependencies:
 
     * `Simcoon <https://simcoon.readthedocs.io/en/latest/>`_
       brings a lot of features (finite strain, non-linear constitutive
-      laws, ...). fedoo requires ``simcoon >= 2.0.1``. Simcoon can be
+      laws, ...). fedoo requires ``simcoon >= 2.2``. Simcoon can be
       installed using conda or pip.
 
     * `PyVista <https://docs.pyvista.org/version/stable/>`_
@@ -74,7 +74,7 @@ You can also install optional groups individually:
 
 .. code-block:: none
 
-    $ pip install fedoo[solver]      # fast sparse solver (pypardiso or python-mumps)
+    $ pip install fedoo[solver]      # fast sparse solver (pypardiso, or python-mumps on macOS/arm64)
     $ pip install fedoo[plot]        # matplotlib + pyvista
     $ pip install fedoo[simcoon]     # simcoon
     $ pip install fedoo[ipc]         # IPC contact (ipctk)
@@ -93,9 +93,9 @@ this priority order: pypardiso → python-mumps → petsc4py:
 
     * `python-mumps <https://pypi.org/project/python-mumps/>`_
       standalone Python bindings for the MUMPS direct solver. Recommended
-      on arm64 (Apple Silicon, ARM Linux) where pypardiso is not available
-      and as a lighter alternative to PETSc when only direct solving is
-      needed.
+      on macOS and arm64 (ARM Linux), where pypardiso is not available
+      (``fedoo[solver]`` installs it there), and as a lighter alternative to
+      PETSc when only direct solving is needed.
 
     * `Petsc4Py <https://pypi.org/project/petsc4py/>`_
       mainly compatible with linux or macos including the MUMPS solver.
@@ -113,7 +113,7 @@ To be able to launch the fedoo viewer, the module
 
 .. note::
 
-    On macOS (Apple Silicon especially), prefer ``conda install -c
+    On macOS, prefer ``conda install -c
     conda-forge python-mumps`` over ``pip install python-mumps``: the
     PyPI sdist requires a system MUMPS lib via pkg-config, while the
     conda-forge package bundles ``mumps-seq`` directly. Pin the BLAS
@@ -122,7 +122,12 @@ To be able to launch the fedoo viewer, the module
 
         $ conda install -c conda-forge "libblas=*=*accelerate" python-mumps
 
-    On Linux / AMD, the OpenBLAS variant is the equivalent::
+    On Linux and Windows x86_64 (Intel or AMD), prefer the MKL variant,
+    with pypardiso, which then shares the same MKL::
+
+        $ conda install -c conda-forge "libblas=*=*mkl" pypardiso
+
+    On arm64 Linux, use the OpenBLAS variant::
 
         $ conda install -c conda-forge "libblas=*=*openblas" python-mumps
 

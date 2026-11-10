@@ -1,4 +1,4 @@
-"""
+r"""
 Terzaghi 1D consolidation (small strain)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -14,13 +14,13 @@ the skeleton. The pore pressure at the sealed bottom face is compared with
 the classical Terzaghi series solution.
 
 The model uses Biot poroelasticity: the total Cauchy stress is
-:math:`\\sigma = \\sigma_{\\mathrm{eff}}(\\varepsilon) - \\alpha p \\mathbf{I}`
+:math:`\sigma = \sigma_{\mathrm{eff}}(\varepsilon) - \alpha p \mathbf{I}`
 and the fluid mass balance is
 
 .. math::
 
-   \\frac{1}{M}\\dot p + \\alpha\\, \\dot\\varepsilon_v
-   - \\nabla \\cdot \\left( \\frac{k}{\\mu_f} \\nabla p \\right) = 0.
+   \frac{1}{M}\dot p + \alpha\, \dot\varepsilon_v
+   - \nabla \cdot \left( \frac{k}{\mu_f} \nabla p \right) = 0.
 
 See :doc:`/poromechanics` for details.
 """
@@ -32,7 +32,7 @@ import fedoo as fd
 
 ###############################################################################
 # Material parameters and analytical solution
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# -------------------------------------------
 # With a single drainage path of length :math:`L`, the closed-form solution
 # uses the oedometric modulus :math:`M_{oed} = K + 4G/3`, the consolidation
 # coefficient :math:`c_v = (k/\mu_f) / (\alpha^2/M_{oed} + 1/M)` and the time
@@ -63,7 +63,7 @@ def terzaghi_bottom_pressure(T, nterms=300):
 
 ###############################################################################
 # Mesh, constitutive laws and weak form
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# -------------------------------------
 # The skeleton law is a standard mechanical law. The fluid properties are
 # grouped in :py:class:`~fedoo.constitutivelaw.PoroFluidProperties`. The
 # :py:class:`~fedoo.weakform.PoroMechanics` weak form couples the momentum
@@ -101,7 +101,7 @@ poro_assembly = fd.Assembly.create(wf, mesh)
 
 ###############################################################################
 # Loading and boundary conditions
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# -------------------------------
 # The surface load is applied as a step: setting ``initial_pressure`` equal
 # to the final pressure removes the default linear ramp over the time step.
 
@@ -126,7 +126,7 @@ pb.bc.add("Dirichlet", top, "PorePressure", 0.0)  # drained top face
 
 ###############################################################################
 # Time integration
-# ~~~~~~~~~~~~~~~~
+# ----------------
 # The time increments are driven by hand to record the bottom pore pressure,
 # the top settlement and a few pressure profiles along the column.
 
@@ -160,7 +160,7 @@ for step in range(nb_steps):
 
 ###############################################################################
 # Comparison with the Terzaghi solution
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# -------------------------------------
 
 t = (np.arange(nb_steps) + 1) * dt
 T = c_v * t / L**2

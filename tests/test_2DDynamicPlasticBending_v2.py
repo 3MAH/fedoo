@@ -34,14 +34,12 @@ def test_2DDynamicPlasticBending_v2():
     if mat == 0:
         props = np.array([E, nu, alpha])
         material = fd.constitutivelaw.Simcoon("ELISO", props, name="ConstitutiveLaw")
-        material.corate = 0
     elif mat == 1:
         Re = 300
         k = 1000
         m = 0.25
         props = np.array([E, nu, alpha, Re, k, m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
-        material.corate = 0
     else:
         material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 

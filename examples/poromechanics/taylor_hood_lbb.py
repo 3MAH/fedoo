@@ -10,7 +10,9 @@ condition. Equal-order pairs (same element for both fields) violate it, and
 the pressure shows spurious node-to-node oscillations ("checkerboard").
 
 A Taylor-Hood pair (quadratic displacement, linear pressure) satisfies it. In
-fedoo it is built with a :py:class:`~fedoo.lib_elements.CombinedElement`::
+fedoo it is built with a :py:class:`~fedoo.lib_elements.CombinedElement`:
+
+.. code-block:: python
 
     elm = fd.lib_elements.CombinedElement("quad8lbb", "quad8")
     elm.set_variable_interpolation("PorePressure", "quad4")
