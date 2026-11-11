@@ -11,6 +11,7 @@ from .dataset import (
     read_data,
 )
 from .multimeshdata import MultiMeshData
+from .problem_dataset import ProblemDataSet
 from .boundary_conditions import BoundaryCondition, MPC, ListBC
 from .problem import Problem
 from .mechanical3d import Mechanical3D, MechanicalUMAT
@@ -28,6 +29,7 @@ __all__ = [
     "DataSet",
     "MultiFrameDataSet",
     "MultiMeshData",
+    "ProblemDataSet",
     "read_data",
     "BoundaryCondition",
     "MPC",

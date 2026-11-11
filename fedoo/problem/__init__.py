@@ -109,6 +109,8 @@ and frequency included as scalar metadata. To defer output, solve before
 calling :meth:`Modal.add_output`, then register the desired fields and call
 :meth:`Modal.save_modes` explicitly.
 
+Example: :ref:`sphx_glr_examples_basic_modal_analysis.py`.
+
 Linear buckling analysis
 ------------------------
 
@@ -133,6 +135,8 @@ matrix already assembled by the preload problem is reused:
 Set ``reuse_assembled_matrix=False`` to rebuild both stiffness matrices. The
 first implementation supports fixed-geometry and total-Lagrangian preload
 states; updated-Lagrangian states are rejected.
+
+Example: :ref:`sphx_glr_examples_basic_linear_buckling.py`.
 
 
 Time integration
@@ -203,6 +207,9 @@ fields must be refreshed at every increment. This option does not rebuild the
 cached linear operators. :class:`LinearNewmark` is an alias of
 :class:`Linear` provided for convenience.
 
+Example: :ref:`sphx_glr_examples_dynamics_broberg_dynamic_crack.py` (linear
+Newmark dynamics).
+
 Nonlinear transient problems
 ----------------------------
 
@@ -232,6 +239,10 @@ one increment. :meth:`NonLinear.nlsolve` manages a complete history, including
 adaptive time-step reduction and retry after failed increments.
 :class:`NonLinearNewmark` is a convenience factory that attaches Newmark and,
 when required, Backward Euler integrators.
+
+Examples: :ref:`sphx_glr_examples_dynamics_rigid_body_bounce.py` (Newmark
+with contact) and :ref:`sphx_glr_examples_thermal_thermal_conduction_2d.py`
+(Backward Euler).
 
 Explicit transient problems
 ---------------------------
@@ -437,9 +448,11 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
     not supported.
   * ``"fbar"``: F-bar method with the volume change evaluated at the element
     center. For ``quad4`` and ``hex8`` in ``3D`` or
-    ``2Dplane``, its consistent tangent matrix is nonsymmetric. In small
-    strain, it reduces to a center-based B-bar correction. Other elements,
-    ``2Daxi``, and total-Lagrangian analyses retain the F-bar kinematic
+    ``2Dplane``, its consistent tangent matrix is nonsymmetric, with the
+    updated and the total Lagrangian methods alike: the total-Lagrangian
+    residual is the pull-back of the updated-Lagrangian one and both reach the
+    same solution. In small strain, it reduces to a center-based B-bar
+    correction. Other elements and ``2Daxi`` retain the F-bar kinematic
     correction but use the standard tangent, with a warning.
 
   In plane stress (``2Dstress``), these options are ignored and the standard
@@ -468,6 +481,9 @@ ratio :math:`\nu \approx 0.5`), standard elements may suffer from
       new_elm.set_variable_interpolation("Pressure", "quad4")
       wf = fd.weakform.StressEquilibriumMixed(material, bulk_modulus=kappa)
       assembly = fd.Assembly.create(wf, my_mesh, elm_type="quad8lbb")
+
+Example: :ref:`sphx_glr_examples_finite_strain_incompressibility_comparison.py`
+compares these formulations on a nearly incompressible plastic problem.
 
 
 2. Numerical Damping (Artificial Viscosity)
@@ -609,6 +625,9 @@ inherently dynamic (e.g., rapid snap-through or post-buckling).
   The legacy :class:`fedoo.weakform.ImplicitDynamic` weak form is kept for
   pedagogical purposes, but new transient models should prefer
   problem-level time integrators.
+
+Example: :ref:`sphx_glr_examples_finite_strain_neohookean_snap_through.py`
+(Newmark integrator on a :class:`NonLinear` problem, passing a limit point).
 """
 
 from .explicit_dynamic import ExplicitDynamic

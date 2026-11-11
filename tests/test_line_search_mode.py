@@ -1,9 +1,9 @@
 """Guard the line-search policy defaults of NonLinear.add_line_search.
 
 The default must both throttle penalty-contact / plastic overshoot (a
-validity-only default broke examples/03-advanced/tube_compression.py) and
+validity-only default broke examples/contact/tube_compression.py) and
 let soft-mode force-control steps through (a residual-only default breaks
-examples/03-advanced/neohookean_cantilever.py): that is the "natural" mode.
+examples/finite_strain/neohookean_cantilever.py): that is the "natural" mode.
 """
 
 import importlib

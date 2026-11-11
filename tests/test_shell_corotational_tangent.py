@@ -505,11 +505,15 @@ def test_drilling_penalty_is_fixed_and_independent_of_tangent_option(drilling):
     np.testing.assert_allclose(forces[0], forces[1], atol=1e-10)
 
 
-def test_consistent_tangent_with_law_defined_at_initialization():
+@pytest.mark.parametrize(
+    "umat,props",
+    [("ELISO", [1200, 0.25, 0]), ("EPICP", [1200, 0.25, 0, 1e6, 100, 0.3])],
+)
+def test_consistent_tangent_with_law_defined_at_initialization(umat, props):
     # A Simcoon law only provides its elastic matrix once initialized, which
     # the assembly does after the weak form: the drilling scale is deferred.
     pytest.importorskip("simcoon")
-    material = fd.constitutivelaw.Simcoon("EPICP", [1200, 0.25, 0, 1e6, 100, 0.3])
+    material = fd.constitutivelaw.Simcoon(umat, props)
     reference = fd.constitutivelaw.ShellHomogeneousNonLinear(
         fd.constitutivelaw.ElasticIsotrop(1200, 0.25), 0.15, n_thickness_points=2
     )

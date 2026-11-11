@@ -92,7 +92,7 @@ def test_static_linear_registered_output_is_automatic_and_can_be_cleared(tmp_pat
     assert saved == [0, 1]
 
 
-@pytest.mark.parametrize("compressed", ["default", True, False, *range(10)])
+@pytest.mark.parametrize("compressed", ["default", "gzip", True, False, *range(10)])
 def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     import h5py
 
@@ -100,11 +100,26 @@ def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     _, stiffness = _dynamic_model()
     problem = fd.problem.Linear(stiffness)
     problem.set_X(np.arange(problem.n_dof, dtype=float))
-    options = {} if compressed == "default" else {"compressed": compressed}
+    options = (
+        {}
+        if compressed == "default"
+        else (
+            {"compressed": compressed}
+            if isinstance(compressed, bool)
+            else {
+                "fdh5_options": {
+                    "compression": "gzip",
+                    "compression_level": 4 if compressed == "gzip" else compressed,
+                }
+            }
+        )
+    )
     problem.add_output(filename, ["Disp"], **options)
     problem.save_results()
     problem.save_results()
-    expected_level = 4 if compressed == "default" or compressed is True else compressed
+    expected_level = (
+        4 if compressed in ("default", "gzip") or compressed is True else compressed
+    )
     with h5py.File(filename, "r") as handle:
         arrays = []
         handle.visititems(
@@ -125,16 +140,16 @@ def test_fdh5_output_compression_and_roundtrip(tmp_path, compressed):
     np.testing.assert_array_equal(loaded.node_data["Disp"], stored)
 
 
-@pytest.mark.parametrize("compressed", [-1, 10, 4.0, None, "gzip"])
+@pytest.mark.parametrize("compressed", [-1, 10, 4.0, "unsupported"])
 def test_invalid_fdh5_compression_preserves_existing_file(tmp_path, compressed):
     filename = tmp_path / "existing.fdh5"
     filename.write_bytes(b"keep existing results")
     _, stiffness = _dynamic_model()
     problem = fd.problem.Linear(stiffness)
-    with pytest.raises(ValueError, match="compressed"):
+    with pytest.raises(TypeError, match="compressed"):
         problem.add_output(filename, ["Disp"], compressed=compressed)
     data = fd.DataSet(stiffness.mesh)
-    with pytest.raises(ValueError, match="compressed"):
+    with pytest.raises(TypeError, match="compressed"):
         data.to_fdh5(filename, overwrite=True, compressed=compressed)
     assert filename.read_bytes() == b"keep existing results"
 
@@ -150,7 +165,9 @@ def test_fdh5_append_compression_only_changes_new_datasets(tmp_path):
     first.save_results()
     continued = fd.problem.Linear(stiffness)
     continued.set_X(np.arange(continued.n_dof, dtype=float))
-    continued.add_output(filename, ["Disp"], compressed=9, write_mode="append")
+    continued.add_output(
+        filename, ["Disp"], fdh5_options={"compression_level": 9}, write_mode="append"
+    )
     continued.save_results()
     with h5py.File(filename, "r") as handle:
         assert handle["mesh/nodes"].compression is None
@@ -164,7 +181,7 @@ def test_fdh5_shared_output_requires_matching_compression(tmp_path):
     problem = fd.problem.Linear(stiffness)
     filename = tmp_path / "shared.fdh5"
     problem.add_output(filename, ["Disp"])
-    problem.add_output(filename, ["Disp"], compressed=4)
+    problem.add_output(filename, ["Disp"], fdh5_options={"compression_level": 4})
     with pytest.raises(ValueError, match="different compression"):
         problem.add_output(filename, ["Disp"], compressed=False)
 

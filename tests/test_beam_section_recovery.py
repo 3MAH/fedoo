@@ -242,7 +242,10 @@ def test_beam_output_and_offline_frame_roundtrip(tmp_path, dimension):
     np.testing.assert_allclose(automatic["Stress_global", "YY", "Node"], 10)
 
 
-def test_nonlinear_current_frame_and_add_output(tmp_path):
+def test_nonlinear_current_frame_and_add_output(tmp_path, monkeypatch):
+    from fedoo.util import fdh5
+
+    monkeypatch.setitem(fdh5._fdh5_options, "float_dtype", None)
     fd.ModelingSpace("2D")
     sec = section()
     mesh = fd.Mesh(np.array([[0.0, 0.0], [10.0, 0.0]]), np.array([[0, 1]]), "lin2")
@@ -263,7 +266,11 @@ def test_nonlinear_current_frame_and_add_output(tmp_path):
         position=(0, 0),
     )
     private_res = pb.add_output(
-        str(tmp_path / "private_displacement"), assembly, ["Disp"], private=True
+        str(tmp_path / "private_displacement"),
+        assembly,
+        ["Disp"],
+        private=True,
+        fdh5_options={"float_dtype": None},
     )
     pb.nlsolve(dt=0.25, update_dt=False, print_info=0)
     private_res.load(-1)

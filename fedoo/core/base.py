@@ -265,6 +265,16 @@ class AssemblyBase:
 # =============================================================
 # Base class for constitutive laws (cf constitutive law lib)
 # =============================================================
+def _corate_on_law_message(law):
+    return (
+        f"{type(law).__name__}.corate is ignored: the objective rate belongs "
+        "to the weak form. Set it with wf.corate = ... on the "
+        "StressEquilibrium weak form (used with nlgeom='UL'). Setting corate "
+        "on a constitutive law is deprecated and will raise an AttributeError "
+        "in a future release."
+    )
+
+
 class ConstitutiveLaw:
     """Base class for constitutive laws (cf constitutive law lib)."""
 
@@ -285,6 +295,31 @@ class ConstitutiveLaw:
         # (for instance "2Dstress" for plane stress)
 
         ConstitutiveLaw.__dic[self.__name] = self
+
+    @property
+    def corate(self):
+        """Deprecated, ignored: the objective rate is ``weakform.corate``.
+
+        The objective rate of the updated-Lagrangian formulation is chosen on
+        the weak form (:attr:`fedoo.weakform.StressEquilibrium.corate`) and
+        passed to the law at each call. A value set on a constitutive law has
+        never been read: setting it emits a :class:`DeprecationWarning`, and
+        will raise an :class:`AttributeError` in a future release.
+
+        :meta private:
+        """
+        if "_ignored_corate" not in self.__dict__:
+            raise AttributeError(
+                f"{type(self).__name__} has no 'corate' attribute: the "
+                "objective rate belongs to the weak form (wf.corate)."
+            )
+        warnings.warn(_corate_on_law_message(self), DeprecationWarning, stacklevel=2)
+        return self._ignored_corate
+
+    @corate.setter
+    def corate(self, value):
+        warnings.warn(_corate_on_law_message(self), DeprecationWarning, stacklevel=2)
+        self._ignored_corate = value
 
     def __class_getitem__(cls, item):
         """Get the constitutive law whose name is item."""
