@@ -28,25 +28,43 @@ class Simcoon(MechanicalUMAT):
         Name of the constitutive law.
     props: numpy.array
         The constitive laws properties
-    tangent_mode : int, default=1
+    tangent_mode : int, optional
         Tangent operator requested from the Simcoon UMAT, forwarded unchanged
         (simcoon >= 2.0 numbering):
 
         * ``0``: elastic operator (no tangent assembly, :math:`L_t = L`).
         * ``1``: continuum tangent (fedoo default).
-        * ``2``: algorithmic (consistent) tangent of the convex cutting plane
-          (CCP) return mapping. This is the simcoon default.
+        * ``2``: algorithmic (consistent) tangent of the integrator that ran.
+          This is the simcoon default.
 
         Simcoon 2.3 no longer accepts ``tangent_mode=3``: the integration
-        algorithm is a separate Simcoon setting, not a tangent mode.
+        algorithm is selected with ``integrator``, not with a tangent mode.
 
         Modes 0 to 2 integrate the law with the same return mapping and only
         change the tangent. Simcoon versions before 2.0 used another
         numbering (``0`` continuum, ``1`` algorithmic): a script written for
         them must be renumbered. The attribute ``tangent_mode`` can also be
-        changed after construction.
+        changed after construction. The default ``None`` selects ``1``, or
+        ``2`` with ``integrator="closest_point"``, which only returns its
+        algorithmic operator.
     name : str
         The name of the constitutive law
+    ncp : {"fischer_burmeister", "min"}, default="fischer_burmeister"
+        Complementarity function of the local cutting-plane return mapping,
+        forwarded to :func:`simcoon.umat`. ``"min"`` is the classic
+        cutting-plane step on a single surface with a Fischer-Burmeister
+        fallback. Simcoon only accepts it for the laws that read it
+        (``EPICP``, ``EPKCP`` and modular materials without an
+        Armstrong-Frederick back stress) and with the cutting-plane
+        integrator; it raises a ``ValueError`` otherwise.
+    integrator : {"cutting_plane", "closest_point"}, default="cutting_plane"
+        Local integrator of the laws with a return mapping, forwarded to
+        :func:`simcoon.umat`. ``"closest_point"`` is a backward-Euler update
+        that requires ``tangent_mode=2``; a law without a closest-point
+        update keeps the cutting plane.
+
+    ``ncp`` and ``integrator`` are keyword-only and are also attributes that
+    can be changed after construction.
 
     Alternative constructor
     -----------------------
@@ -60,7 +78,8 @@ class Simcoon(MechanicalUMAT):
         material = Simcoon.from_modular(configuration, name="steel")
 
     The regular constructor is
-    ``Simcoon(umat_name, props, tangent_mode=1, name="")``. For backward
+    ``Simcoon(umat_name, props, tangent_mode=None, name="", *, ncp=...,
+    integrator=...)``. For backward
     compatibility, a string passed as the third positional argument is still
     interpreted as ``name``.
 
@@ -88,6 +107,12 @@ class Simcoon(MechanicalUMAT):
     * A modular material uses the ``MODUL`` UMAT. Under ``nlgeom="UL"`` it
       requires the ``log_R`` rate, the default. Small-strain analyses are
       unaffected.
+
+    * In plane stress (``2Dstress`` ModelingSpace, shell thickness points)
+      simcoon runs the 3D law and solves the out-of-plane strain that makes
+      the out-of-plane stress vanish. The returned tangent is already
+      condensed, and the solved strain is stored in the out-of-plane
+      components of ``assembly.sv["Strain"]`` (thickness strain).
 
     * Under ``nlgeom="TL"`` the laws run the total formulation: they are fed
       the material logarithmic strain ln U and work on the stress T dual to
@@ -136,7 +161,15 @@ class Simcoon(MechanicalUMAT):
     }
 
     @classmethod
-    def from_modular(cls, modular_material, tangent_mode=1, name=""):
+    def from_modular(
+        cls,
+        modular_material,
+        tangent_mode=None,
+        name="",
+        *,
+        ncp="fischer_burmeister",
+        integrator="cutting_plane",
+    ):
         """Build a Simcoon law from a modular material configuration.
 
         Parameters
@@ -144,13 +177,15 @@ class Simcoon(MechanicalUMAT):
         modular_material : simcoon.modular.ModularMaterial
             Composable Simcoon material containing an elasticity block and
             zero or more inelastic mechanisms.
-        tangent_mode : int, default=1
+        tangent_mode : int, optional
             Tangent operator requested from the Simcoon ``MODUL`` UMAT: ``0``
-            elastic, ``1`` continuum, ``2`` algorithmic (convex cutting
-            plane). See
+            elastic, ``1`` continuum (default), ``2`` algorithmic. See
             :class:`Simcoon`.
         name : str, optional
             Fedoo constitutive-law registration name.
+        ncp, integrator : str, optional
+            Complementarity function and local integrator of the return
+            mapping. See :class:`Simcoon`.
 
         Returns
         -------
@@ -184,9 +219,11 @@ class Simcoon(MechanicalUMAT):
             props_label=props_label,
             statev_label=statev_label,
             is_isotropic=cls._is_modular_isotropic(modular_material, modular),
-            tangent_mode=tangent_mode,
+            tangent_mode=cls._default_tangent_mode(tangent_mode, integrator),
             name=name,
         )
+        material.ncp = ncp
+        material.integrator = integrator
         material.umat_name = "MODUL"
         material.modular_material = modular_material
         material.required_corate = ("log_r", "log_r_inc")
@@ -406,10 +443,35 @@ class Simcoon(MechanicalUMAT):
             )
         return props_label, statev_label
 
-    def __init__(self, umat_name, props, tangent_mode=1, name=""):
+    @staticmethod
+    def _default_tangent_mode(tangent_mode, integrator):
+        """Resolve ``tangent_mode=None``: the closest-point integrator only
+        returns its algorithmic operator, the cutting plane keeps the
+        historical continuum tangent."""
+        if tangent_mode is None:
+            return 2 if integrator == "closest_point" else 1
+        return tangent_mode
+
+    def __init__(
+        self,
+        umat_name,
+        props,
+        tangent_mode=None,
+        name="",
+        *,
+        ncp="fischer_burmeister",
+        integrator="cutting_plane",
+    ):
         # props is a nparray containing all the material variables
         # nstatev is a nparray containing all the material variables
-        MechanicalUMAT.__init__(self, props=props, tangent_mode=tangent_mode, name=name)
+        MechanicalUMAT.__init__(
+            self,
+            props=props,
+            tangent_mode=self._default_tangent_mode(tangent_mode, integrator),
+            name=name,
+        )
+        self.ncp = ncp
+        self.integrator = integrator
         # self._statev_initial = statev #statev may be an int or an array
         # self.__useElasticModulus = True ??
 
@@ -1280,6 +1342,8 @@ class Simcoon(MechanicalUMAT):
                 **kinematic_form,
                 work_correction=work_correction,
                 tangent_output=tangent_output,
+                ncp=self.ncp,
+                integrator=self.integrator,
                 **kwargs,
             )
         except sim.StepCut as exc:

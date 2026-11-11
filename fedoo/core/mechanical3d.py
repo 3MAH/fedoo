@@ -4,7 +4,10 @@
 import numpy as np
 from simcoon import Rotation
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.util.voigt_tensors import StressTensorList
+from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
+
+# Voigt slots of the stress-free components (33, 13, 23) of a plane-stress state
+_PLANE_STRESS_FREE = [2, 4, 5]
 
 
 class Mechanical3D(ConstitutiveLaw):
@@ -836,6 +839,15 @@ class MechanicalUMAT(Mechanical3D):
                     - strain_start
                 )
 
+        if ndi == 2:
+            # Plane stress: the out-of-plane strain is an unknown of the
+            # material point. The callback receives its own writable
+            # increment, starting from the committed out-of-plane strain
+            # (zero increment), and may overwrite these components in place
+            # with the solved ones (sim.umat does), carried below.
+            dstrain_local = np.array(dstrain_local, dtype=float, order="F")
+            dstrain_local[_PLANE_STRESS_FREE] = 0.0
+
         wf = getattr(assembly, "weakform", None)
         corate = _constitutive_corate(assembly)
         options, tangent_converted = self._umat_options(
@@ -869,11 +881,37 @@ class MechanicalUMAT(Mechanical3D):
         )
         if ndi == 2:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
+            self._carry_out_of_plane_strain(
+                assembly,
+                dstrain_local if incremental_strain else strain_start + dstrain_local,
+                trial_frame,
+                "DStrain" if incremental_strain else "Strain",
+            )
         assembly.sv["Stress"] = StressTensorList(
             self._rotate_vector_in(stress_local, trial_frame, "stress", True)
             if in_trial
             else self.local2global_stress(stress_local, assembly, current=False)
         )
+
+    def _carry_out_of_plane_strain(self, assembly, strain_local, trial_frame, key):
+        """Store the out-of-plane strain solved by a plane-stress material point.
+
+        The in-plane components of ``assembly.sv[key]`` come from the
+        kinematics and are left untouched; the stress-free ones (33, 13, 23)
+        are taken from the strain the law converged to, so that they are
+        committed with the increment and handed back as the start state.
+        """
+        if trial_frame is not None:
+            solved = self._rotate_vector_in(strain_local, trial_frame, "strain", True)
+        else:
+            solved = self.local2global_strain(strain_local, assembly, current=False)
+        strain = np.array(
+            self._as_mechanical_array(assembly.sv[key]), dtype=float, order="F"
+        )
+        if strain.ndim != 2:  # strain not initialized yet (scalar 0)
+            strain = np.zeros(np.shape(solved), order="F")
+        strain[_PLANE_STRESS_FREE] = np.asarray(solved)[_PLANE_STRESS_FREE]
+        assembly.sv[key] = StrainTensorList(strain)
 
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:
