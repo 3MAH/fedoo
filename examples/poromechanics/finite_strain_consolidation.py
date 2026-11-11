@@ -20,9 +20,9 @@ at the top and spreads down the column, while the permeability of the
 compacted material drops, which slows down the consolidation.
 
 .. note::
-   This example requires simcoon. With simcoon hyperelastic laws, stay below
-   about 12 % compression: see the Limitations section of
-   :doc:`/poromechanics`.
+   This example requires simcoon. With a deformation-dependent permeability
+   such as Holmes-Mow, keep the local :math:`J` above the pore-closure bound
+   :math:`1 - \\phi_0`: see the Limitations section of :doc:`/poromechanics`.
 """
 
 import numpy as np

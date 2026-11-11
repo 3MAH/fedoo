@@ -838,8 +838,9 @@ class PoroMechanicsSimple(WeakFormSum):
     see the poromechanics documentation).
 
     With simcoon hyperelastic laws use ``nlgeom="UL"`` (log_R corotational,
-    the simcoon-native mode) and keep the compression below roughly 12% —
-    see the Limitations section of the poromechanics documentation.
+    the simcoon-native mode). With a deformation-dependent permeability keep
+    the local ``J`` above the pore-closure bound ``1 - phi_0`` — see the
+    Limitations section of the poromechanics documentation.
 
     Parameters
     ----------
