@@ -63,6 +63,12 @@ semantic versioning.
   select the gzip level. Invalid settings and conflicting settings for
   registrations sharing an output file are rejected. Appending preserves
   existing datasets and applies the selected compression to new datasets.
+- `Simcoon` and `Simcoon.from_modular` accept the keyword-only options `ncp`
+  (`"fischer_burmeister"` default, or `"min"`) and `integrator`
+  (`"cutting_plane"` default, or `"closest_point"`), forwarded to
+  `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
+  to `None`: `1` (continuum) as before, or `2` with
+  `integrator="closest_point"`, which only returns its algorithmic operator.
 
 ### Changed
 
@@ -113,6 +119,10 @@ semantic versioning.
   used in finite strain without `lnJ`.
 - Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
+- Plane-stress UMAT laws (`2Dstress` space, shell thickness points) now store
+  the out-of-plane strain solved by the material point in
+  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
+  law as the start state of the next increment.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
   `DeprecationWarning`, and will raise an `AttributeError` in a future
