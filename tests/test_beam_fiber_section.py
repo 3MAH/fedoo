@@ -99,6 +99,7 @@ def _plastic_material(hardening=0.0):
         [E, SIGMA_Y, hardening],
         n_statev=2,
         is_isotropic=True,
+        reduced_states=("1Dstress",),
     )
 
 
@@ -226,6 +227,46 @@ def test_plastic_section_tangent_matches_finite_differences(shape):
         ) / (2 * step[j])
     scale = np.abs(tangent).max()
     np.testing.assert_allclose(numerical, tangent, rtol=1e-5, atol=1e-6 * scale)
+
+
+def test_invalid_sections_and_materials_are_refused():
+    law = fd.constitutivelaw
+    material = law.ElasticIsotrop(E, NU, name="steel_shared_name")
+    rectangle = SECTIONS["rectangle"](material)
+    for n_fibers in (4, (4,), (4, 4, 4), (4.0, 4), (0, 4)):
+        with pytest.raises(ValueError, match="n_fibers"):
+            law.BeamNonLinear(rectangle, n_fibers=n_fibers)
+    # two sectors leave a bending axis without stiffness
+    with pytest.raises(ValueError, match="n_theta"):
+        law.BeamNonLinear(SECTIONS["circle"](material), n_fibers=(3, 2))
+    # the section is registered under the name of its material
+    with pytest.raises(TypeError, match="not a beam section"):
+        law.BeamNonLinear(rectangle, material="steel_shared_name")
+    generic = law.BeamProperties(material, 0.02, 1e-5, 1e-5, 1e-5, k=0.8)
+    fibers = ([0.0, 0.0], [-0.05, 0.05], [0.01, 0.01])
+    with pytest.raises(NotImplementedError, match="BeamRectangular"):
+        law.BeamNonLinear(generic, fibers=fibers)
+    pointwise = law.ElasticIsotrop(np.linspace(0.9 * E, 1.1 * E, 4), NU)
+    with pytest.raises(ValueError, match="uniform material constants"):
+        law.BeamNonLinear(SECTIONS["rectangle"](pointwise))
+    varying = law.BeamRectangular(material, np.linspace(0.1, 0.2, 4), 0.1)
+    with pytest.raises(ValueError, match="uniform section dimensions"):
+        law.BeamNonLinear(varying, fibers=fibers)
+
+
+def test_section_tangent_follows_the_fiber_tangent_at_increment_start():
+    # use_elastic_lt: the fiber law starts each increment from its elastic
+    # tangent, and so does the section
+    section = fd.constitutivelaw.BeamNonLinear(
+        SECTIONS["rectangle"](_plastic_material(hardening=E / 20))
+    )
+    assert section.fiber_material.use_elastic_lt
+    point = _SectionPoint(section)
+    elastic = point.tangent().copy()
+    point.stress([0, 0, 0, 0, 0, 3 * 2 * SIGMA_Y / (E * 0.2)])
+    assert point.tangent()[5, 5] < 0.9 * elastic[5, 5]
+    point.commit()
+    np.testing.assert_allclose(point.tangent(), elastic, rtol=1e-12)
 
 
 def test_rollback_restores_the_fiber_state():

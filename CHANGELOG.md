@@ -80,8 +80,10 @@ semantic versioning.
 - `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
   `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
   tangent onto any set of Voigt components; native elastic laws and UMAT laws
-  (`ndi=1`) support it. Exact Simcoon stresses under `ndi=1` require a Simcoon
-  version that condenses this state.
+  (`ndi=1`) support it.
+- `MechanicalUMAT(..., reduced_states=(...))`: a UMAT callback declares the
+  reduced stress states (`"2Dstress"`, `"1Dstress"`) it enforces itself,
+  returning a stress whose out-of-state components are zero.
 
 ### Changed
 
@@ -208,6 +210,19 @@ semantic versioning.
   strain of the stress-free components solved by the material point in
   `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
   law as the start state of the next increment.
+- A UMAT law is refused in a reduced stress state (`NotImplementedError`)
+  unless it enforces the state: Simcoon laws that simcoon reports as
+  condensed for the formulation in use (rate or total), or callbacks that
+  declare `reduced_states`. Fedoo used to condense the tangent of any UMAT in
+  `2Dstress` while keeping its 3D stress, which is about 35 % too stiff for
+  an isotropic law and inconsistent with the tangent. See Migration.
+- A UMAT law with a material frame is refused in a reduced stress state when
+  the frame is tilted with respect to it (out of the plane in `2Dstress`, off
+  the axis in `1Dstress`), instead of condensing the state in the material
+  frame. Native elastic laws, which condense after the rotation, are
+  unaffected.
+- `Mechanical3D.get_H_plane_stress` now returns a dense array instead of
+  nested lists.
 
 ### Fixed
 
@@ -306,10 +321,21 @@ semantic versioning.
   are condensed as before. A UMAT law that declares condensing the reduced
   state itself (`Simcoon`, through `condensation_serves`) now hands its
   tangent over as returned: fedoo only condenses the tangents of laws that
-  do not.
+  do not. A condensed component without stiffness (zero row and column) is
+  left out of the condensation instead of raising a singular-matrix error.
+- Plane-stress condensation of native elastic laws
+  (`Mechanical3D.get_H_plane_stress`) releases the two transverse shear
+  stresses as well as the normal one. Only the ZZ component was condensed,
+  which is exact for isotropic laws and for orthotropic laws with an axis
+  normal to the plane, and too stiff for a law tilted out of the plane.
+  Results of the former are unchanged.
 
 ### Migration
 
+- A `MechanicalUMAT` callback used in `2Dstress` must enforce plane stress
+  itself (zero ZZ, XZ and YZ stresses) and declare it with
+  `reduced_states=("2Dstress",)`; without the declaration the law is now
+  refused.
 - Remove `material.corate = ...` from scripts (it now warns and was never
   read). To choose
   the objective rate, set `wf.corate` on the `StressEquilibrium` weak form

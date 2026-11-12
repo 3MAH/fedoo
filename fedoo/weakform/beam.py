@@ -52,9 +52,11 @@ class BeamEquilibrium(WeakFormBase):
 
     Notes
     -----
-    The current beam formulation supports isotropic linear elastic materials
-    only. Material orientations are ignored; the beam cross-section
-    orientation is defined by the assembly element frame.
+    Plain beam sections are isotropic linear elastic. A nonlinear material
+    is integrated over the section with
+    :py:class:`fedoo.constitutivelaw.BeamNonLinear`. Material orientations are
+    ignored; the beam cross-section orientation is defined by the assembly
+    element frame.
     """
 
     def __init__(

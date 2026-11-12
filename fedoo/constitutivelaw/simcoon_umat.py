@@ -2,7 +2,7 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.base import InvalidKinematicStateError
-from fedoo.core.mechanical3d import MechanicalUMAT
+from fedoo.core.mechanical3d import MechanicalUMAT, _constitutive_corate
 from fedoo.constitutivelaw._simcoon_features import serves_condensed, serves_total
 import simcoon as sim
 
@@ -140,9 +140,17 @@ class Simcoon(MechanicalUMAT):
         """
         return serves_total(self.umat_name)
 
-    def _serves_reduced_state(self, ndi, nshr=None):
-        """Whether simcoon condenses the reduced state ``ndi`` for this law."""
-        return serves_condensed(self.umat_name, ndi, nshr)
+    def _serves_reduced_state(self, ndi, assembly=None):
+        """Whether simcoon condenses the reduced state ``ndi`` for this law.
+
+        The question is asked for the formulation the law is run with on
+        ``assembly``: simcoon validates a condensed state per kinematic form,
+        and a law served in rate form may not be under the total formulation.
+        """
+        total = assembly is not None and _constitutive_corate(assembly) is None
+        return serves_condensed(
+            self.umat_name, ndi, kinematic_form="total" if total else None
+        )
 
     @property
     def manages_material_frame(self):

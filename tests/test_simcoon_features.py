@@ -1,5 +1,7 @@
 """simcoon capabilities are queried by feature, with a fallback when absent."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -60,7 +62,7 @@ def test_reduced_state_needs_the_capability(monkeypatch):
     assert not features.serves_condensed("NEOHC", 2)
     assert features.serves_condensed("NEOHC", 3)
     pb = _uniaxial_bar("2Dstress")
-    with pytest.raises(NotImplementedError, match="condensation_serves"):
+    with pytest.raises(NotImplementedError, match="reduced stress state"):
         pb.nlsolve(dt=0.5, update_dt=False, print_info=0)
 
 
@@ -94,3 +96,18 @@ def test_served_plane_stress_hyperelastic_matches_uniaxial_3d(monkeypatch):
         results.append(np.asarray(stress[0]).mean())
         np.testing.assert_allclose(stress[1], 0, atol=1e-9)
     assert results[1] == pytest.approx(results[0], rel=1e-9)
+
+
+def test_reduced_state_is_asked_for_the_formulation_the_law_runs_with():
+    # simcoon validates a condensed state per kinematic form
+    name = "ZENER"
+    if not hasattr(sim, "condensation_serves") or sim.condensation_serves(
+        name, 2, kinematic_form="total"
+    ):
+        pytest.skip("simcoon serves this law under both forms")
+    law = fd.constitutivelaw.Simcoon.__new__(fd.constitutivelaw.Simcoon)
+    law.umat_name = name
+    rate = SimpleNamespace(_nlgeom="UL", _corate="log_r")
+    total = SimpleNamespace(_nlgeom="TL", _corate=None)
+    assert law._serves_reduced_state(2, rate)
+    assert not law._serves_reduced_state(2, total)

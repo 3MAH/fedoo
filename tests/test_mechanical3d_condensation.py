@@ -13,6 +13,7 @@ from fedoo.constitutivelaw._material_points import (
 from fedoo.core.mechanical3d import (
     _FREE_COMPONENTS,
     Mechanical3D,
+    MechanicalUMAT,
     _dense_tangent,
 )
 from fedoo.util.voigt_tensors import StrainTensorList
@@ -146,7 +147,7 @@ def test_tangent_condensed_by_the_law_is_not_condensed_again(dimension, monkeypa
 def test_tangent_of_a_law_that_does_not_condense_is_condensed_by_fedoo():
     law = fd.constitutivelaw.Simcoon("ELISO", [E, NU, 0.0])
     points = _MaterialPointAssembly(1, "1Dstress")
-    law._serves_reduced_state = lambda ndi, nshr=None: False
+    law._serves_reduced_state = lambda ndi, assembly=None: False
     full = _dense_tangent(
         fd.constitutivelaw.ElasticIsotrop(E, NU).get_tangent_matrix(None, "3D")
     )
@@ -224,3 +225,75 @@ def test_simcoon_reduced_state_carries_the_solved_strain(umat, props, dimension)
     if umat == "ELISO":
         ratio = NU if dimension == "1Dstress" else NU / (1 - NU)
         np.testing.assert_allclose(solved[2], -ratio * solved[0], rtol=1e-10)
+
+
+def _linear_3d_umat(strain, dstrain, *args, **kwargs):
+    """Linear isotropic law that ignores ``ndi``: its stress stays 3D."""
+    H = _dense_tangent(
+        fd.constitutivelaw.ElasticIsotrop(E, NU).get_tangent_matrix(None, "3D")
+    )
+    total = np.asarray(strain) + np.asarray(dstrain)
+    n = total.shape[1]
+    return H @ total, np.zeros((0, n)), np.zeros((4, n)), np.repeat(H[..., None], n, 2)
+
+
+@pytest.mark.parametrize("dimension", ["1Dstress", "2Dstress"])
+def test_umat_that_does_not_enforce_a_reduced_state_is_refused(dimension):
+    # condensing only its tangent would leave a 3D stress, 35 % too stiff
+    points = _MaterialPointAssembly(1, dimension)
+    law = MechanicalUMAT(_linear_3d_umat, is_isotropic=True)
+    with pytest.raises(NotImplementedError, match="reduced_states"):
+        law.initialize(points, None)
+    declared = MechanicalUMAT(
+        _linear_3d_umat, is_isotropic=True, reduced_states=(dimension,)
+    )
+    assert declared._get_ndi(points) == (1 if dimension == "1Dstress" else 2)
+    with pytest.raises(ValueError, match="unknown reduced stress state"):
+        MechanicalUMAT(_linear_3d_umat, reduced_states=("3Dstress",))
+
+
+@pytest.mark.parametrize(
+    "dimension,rotvec,accepted",
+    [
+        ("2Dstress", [0, 0, 0.5], True),  # rotation about the normal
+        ("2Dstress", [0, 0.5, 0], False),
+        ("1Dstress", [0.5, 0, 0], True),  # rotation about the fiber axis
+        ("1Dstress", [0, 0, 0.5], False),
+    ],
+)
+def test_material_frame_must_preserve_the_reduced_state(dimension, rotvec, accepted):
+    from scipy.spatial.transform import Rotation
+
+    law = MechanicalUMAT(_linear_3d_umat, reduced_states=(dimension,))
+    law.local_frame = Rotation.from_rotvec(rotvec).as_matrix()[None]
+    law.get_local_frame = lambda assembly=None: law.local_frame
+    if accepted:
+        law._check_reduced_state_frame(None, dimension)
+    else:
+        with pytest.raises(NotImplementedError, match="tilted"):
+            law._check_reduced_state_frame(None, dimension)
+
+
+def test_plane_stress_condensation_frees_the_transverse_shears():
+    # orthotropic law tilted out of the plane: the in-plane components couple
+    # to the transverse shears, and all three out-of-plane stresses vanish
+    from scipy.spatial.transform import Rotation
+
+    law = fd.constitutivelaw.ElasticOrthotropic(
+        1.5e5, 9e3, 8e3, 3e3, 4e3, 5e3, 0.4, 0.3, 0.35
+    )
+    law.set_local_frame(Rotation.from_rotvec([0, np.pi / 6, 0]).as_matrix())
+    H = _dense_tangent(law.get_tangent_matrix(None, "3D"))
+    kept = [0, 1, 3]
+    expected = np.linalg.inv(np.linalg.inv(H)[np.ix_(kept, kept)])
+    assert np.abs(H[np.ix_(kept, [4, 5])]).max() > 1e3
+    condensed = _dense_tangent(law.get_tangent_matrix(None, "2Dstress"))
+    np.testing.assert_allclose(condensed[np.ix_(kept, kept)], expected, rtol=1e-10)
+
+
+def test_condensation_skips_slots_without_stiffness():
+    H = np.zeros((6, 6))
+    H[:3, :3] = _orthotropic_H()[:3, :3]  # no shear stiffness at all
+    expected = 1 / np.linalg.inv(H[:3, :3])[0, 0]
+    condensed = Mechanical3D.get_H_condensed(H, (0,))
+    assert condensed[0, 0] == pytest.approx(expected, rel=1e-12)

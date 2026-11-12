@@ -43,31 +43,46 @@ def _polar_rule(r_int, r_ext, n_r, n_theta):
     return (rho * np.cos(theta)).ravel(), (rho * np.sin(theta)).ravel(), w
 
 
+def _fiber_counts(n_fibers, default, labels, minimum):
+    """Validated pair of fiber counts, e.g. ``(n_y, n_z)``."""
+    if n_fibers is None:
+        return default
+    try:
+        counts = tuple(n_fibers)
+    except TypeError:
+        counts = ()
+    if len(counts) != 2 or not all(
+        isinstance(count, (int, np.integer)) for count in counts
+    ):
+        raise ValueError(
+            f"n_fibers must be a pair of integers ({labels[0]}, {labels[1]}), "
+            f"got {n_fibers!r}"
+        )
+    for count, label, lowest in zip(counts, labels, minimum):
+        if count < lowest:
+            raise ValueError(
+                f"n_fibers: {label} must be at least {lowest}, got {count}"
+            )
+    return counts
+
+
 def _section_fibers(section, n_fibers):
     """Default fiber quadrature (y, z, weight) of a built-in section."""
     kind = section.section_type
-    dimensions = [getattr(section, name) for name in section.section_dimensions]
-    if any(np.ndim(value) for value in dimensions):
-        raise ValueError(
-            "BeamNonLinear requires uniform section dimensions; "
-            "pass explicit fibers for a varying section"
-        )
     if kind == "rectangle":
-        n_y, n_z = (4, 4) if n_fibers is None else n_fibers
+        n_y, n_z = _fiber_counts(n_fibers, (4, 4), ("n_y", "n_z"), (1, 1))
         y, wy = _gauss_layers(-section.a / 2, section.a / 2, n_y)
         z, wz = _gauss_layers(-section.b / 2, section.b / 2, n_z)
         y, z = np.meshgrid(y, z, indexing="ij")
         return y.ravel(), z.ravel(), np.outer(wy, wz).ravel()
     if kind == "circle":
-        n_r, n_theta = (3, 16) if n_fibers is None else n_fibers
+        # fewer than three sectors leave a bending axis without stiffness
+        n_r, n_theta = _fiber_counts(n_fibers, (3, 16), ("n_r", "n_theta"), (1, 3))
         return _polar_rule(0.0, section.r, n_r, n_theta)
     if kind == "pipe":
-        n_r, n_theta = (2, 16) if n_fibers is None else n_fibers
+        n_r, n_theta = _fiber_counts(n_fibers, (2, 16), ("n_r", "n_theta"), (1, 3))
         return _polar_rule(section.r_int, section.r_ext, n_r, n_theta)
-    raise ValueError(
-        f"No default fiber quadrature for section type {kind!r}; "
-        "pass explicit fibers=(y, z, weights)"
-    )
+    raise ValueError(f"No default fiber quadrature for section type {kind!r}")
 
 
 def _elastic_constants(material):
@@ -82,6 +97,11 @@ def _elastic_constants(material):
         H = _tangent_array(points.sv["TangentMatrix"], 1)[:, :, 0]
         E = 1 / np.linalg.inv(H)[0, 0]
         G = 0.5 * (H[3, 3] + H[4, 4])
+    if np.ndim(E) or np.ndim(G):
+        raise ValueError(
+            "BeamNonLinear requires uniform material constants: the fiber "
+            "points do not match the Gauss points of a point-wise E or G"
+        )
     # nu is only used with G through E / (2 (1 + nu)) by the beam element.
     return E, G, E / (2 * G) - 1
 
@@ -111,11 +131,12 @@ class BeamNonLinear(BeamProperties):
         a two-point Gauss rule (default ``(4, 4)``; even counts integrate the
         fully plastic moment exactly); ``(n_r, n_theta)`` radial Gauss points
         and angular sectors of a circle (default ``(3, 16)``) or a pipe
-        (default ``(2, 16)``).
+        (default ``(2, 16)``). At least three sectors are required.
     material : Mechanical3D or str, optional
         Fiber material, for instance ``fedoo.constitutivelaw.Simcoon``. It
-        must support the ``"1Dstress"`` stress state. Defaults to the
-        section material.
+        must support the ``"1Dstress"`` stress state and have uniform
+        constants. Defaults to the section material. A name shared with the
+        section resolves to the section: pass the law object in that case.
     fibers : tuple of array_like, optional
         Explicit fibers ``(y, z, weights)`` in physical centroid-relative
         coordinates, overriding ``n_fibers``.
@@ -159,10 +180,26 @@ class BeamNonLinear(BeamProperties):
             section, BeamNonLinear
         ):
             raise TypeError("section must be a beam section, e.g. BeamRectangular")
+        if section.section_type not in ("rectangle", "circle", "pipe"):
+            raise NotImplementedError(
+                "BeamNonLinear supports BeamRectangular, BeamCircular and BeamPipe "
+                f"sections, not a section of type {section.section_type!r}: its "
+                "stress recovery and output rely on the section geometry"
+            )
+        if any(np.ndim(getattr(section, name)) for name in section.section_dimensions):
+            # the fibers and their weights are the same at every Gauss point
+            raise ValueError("BeamNonLinear requires uniform section dimensions")
         if material is None:
             material = section.material
         elif isinstance(material, str):
             material = ConstitutiveLaw[material]
+        if isinstance(material, BeamProperties):
+            # a section is registered under the name of its material
+            raise TypeError(
+                "material must be a material law, not a beam section: a name "
+                "shared by a material and its section resolves to the section. "
+                "Pass the law object instead."
+            )
 
         self._section = copy.copy(section)
         self.section_type = section.section_type
@@ -268,6 +305,9 @@ class BeamNonLinear(BeamProperties):
     def set_start(self, assembly, pb):
         self.fiber_material.set_start(self._material_assembly, pb)
         self._material_assembly.sv_start = _copy_state(self._material_assembly.sv)
+        # the fiber law may start the increment from another tangent (its
+        # elastic one with use_elastic_lt): the section tangent follows it
+        assembly.sv["_BeamStiffnessMatrix"] = self._integrate_tangent()
 
     def to_start(self, assembly, pb):
         self.fiber_material.to_start(self._material_assembly, pb)
@@ -299,12 +339,10 @@ class BeamNonLinear(BeamProperties):
             values = np.broadcast_to(modulus, (n,))
         return values.reshape(self.n_fibers, self._n_gp)
 
-    def _store(self, assembly, strain):
-        """Integrate the section resultants and tangent from the fibers."""
+    def _integrate_tangent(self):
+        """Section tangent (6, 6, n_gp) integrated from the fiber tangents."""
         b = np.array([np.ones_like(self._y), self._z, -self._y])
         weighted = b * self._weights
-        stress = np.zeros((6, self._n_gp))
-        stress[_AXIAL] = weighted @ self._fiber_axial("Stress")
         tangent = np.zeros((6, 6, self._n_gp))
         axial = np.einsum(
             "af,bf,fg->abg", weighted, b, self._fiber_axial("TangentMatrix")
@@ -317,16 +355,26 @@ class BeamNonLinear(BeamProperties):
         ] = 0
         tangent[np.ix_(_AXIAL, _AXIAL)] = axial
         rigidity = self.get_beam_rigidity()
+        for i in _ELASTIC:
+            # no shear term for a Bernoulli beam (zero rigidity)
+            tangent[i, i] = rigidity[i]
+        return tangent
+
+    def _store(self, assembly, strain):
+        """Integrate the section resultants and tangent from the fibers."""
+        weighted = np.array([np.ones_like(self._y), self._z, -self._y]) * self._weights
+        stress = np.zeros((6, self._n_gp))
+        stress[_AXIAL] = weighted @ self._fiber_axial("Stress")
+        rigidity = self.get_beam_rigidity()
         components = list(stress)
         for i in _ELASTIC:
             if np.isscalar(rigidity[i]) and rigidity[i] == 0:
                 # Bernoulli beam: no shear term, as for a plain section.
                 components[i] = 0
                 continue
-            tangent[i, i] = rigidity[i]
             components[i] = rigidity[i] * strain[i]
         assembly.sv["BeamStress"] = BeamStressList(components)
-        assembly.sv["_BeamStiffnessMatrix"] = tangent
+        assembly.sv["_BeamStiffnessMatrix"] = self._integrate_tangent()
 
     # Outputs
     def integration_stresses(self, assembly):
