@@ -18,7 +18,8 @@ import fedoo as fd
 import numpy as np
 import os
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
+if "__file__" in globals():
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 fd.ModelingSpace("2D")
 
