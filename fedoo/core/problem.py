@@ -177,7 +177,7 @@ class Problem(ProblemBase):
         output_list=None,
         output_type=None,
         file_format="fdh5",
-        compressed=False,
+        compressed=None,
         position=None,
         element_set=None,
         save_mesh=True,
@@ -185,6 +185,8 @@ class Problem(ProblemBase):
         write_mode="overwrite",
         ignore_missing=False,
         private=False,
+        *,
+        fdh5_options=None,
     ):
         """Register an output for automatic saving managed by solve methods.
 
@@ -214,9 +216,17 @@ class Problem(ProblemBase):
             file format used to save the results. The default file format
             and recommanding one is "fdh5".
 
-        compressed : bool, default = False
-            if True, the fdz data are compressed.
-
+        compressed : bool or None, default=None
+            For FDH5, None uses configured defaults; False disables compression;
+            True uses the configured codec, falling back to gzip level 4 when
+            it is None. For other formats, enables supported compression.
+        fdh5_options : dict, optional
+            Per-output overrides of :func:`fedoo.get_fdh5_options`: compression,
+            compression_level, float_dtype, coordinate_dtype, integer_min_bits,
+            and local_frame. Default result fields use float32; coordinates,
+            scalar outputs and metadata preserve precision. Set float_dtype=None
+            to preserve field precision. Cannot specify compression entries
+            together with compressed. Conversions affect saved arrays only.
         position : None, scalar, coordinate pair or array, optional
             For beams, normalized (y, z) coordinates, either one pair or an
             array with shape (n_section_points, 2). None extracts all configured
@@ -273,6 +283,7 @@ class Problem(ProblemBase):
             write_mode,
             ignore_missing,
             private,
+            fdh5_options=fdh5_options,
         )
 
     def clear_outputs(self):
@@ -498,6 +509,95 @@ class Problem(ProblemBase):
         self.set_X(vector)
         return self
 
+    def _get_orphan_dofs(self):
+        """Global indices of DOFs that no element of the problem interpolates.
+
+        A CombinedElement can interpolate a variable on only the first nodes
+        of each element (e.g. linear pressure on a quadratic mesh). The other
+        nodes are orphans unless another assembly of the same dimension
+        interpolates the variable there. Lower-dimensional boundary loads do
+        not count as interpolating it. The result is cached.
+        """
+        from fedoo.lib_elements.element_list import (
+            get_element,
+            get_node_elm_coordinates,
+        )
+
+        assembly = getattr(self, "assembly", None)
+        leaves = (
+            [
+                leaf
+                for leaf in assembly.iter_leaf()
+                if getattr(leaf, "elm_type", None) is not None
+                and getattr(leaf, "mesh", None) is not None
+            ]
+            if assembly is not None
+            else []
+        )
+        n_nodes = self.mesh.n_nodes
+        key = (tuple(id(a) for a in leaves), n_nodes, self.space.nvar)
+        cache = getattr(self, "_orphan_dof_cache", None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+
+        leaf_elements = [(leaf, get_element(leaf.elm_type)) for leaf in leaves]
+        orphans = set()
+        if any(hasattr(element, "get_elm_type") for _, element in leaf_elements):
+            interpolations = []
+            combined_dims = []
+            for leaf, element in leaf_elements:
+                is_combined = hasattr(element, "get_elm_type")
+                geometry = element.base_elm if is_combined else element
+                try:
+                    coordinates = get_node_elm_coordinates(geometry.name)
+                except (AttributeError, KeyError):
+                    coordinates = None
+                dimension = None if coordinates is None else coordinates.shape[1]
+                interpolations.append((leaf.mesh.elements, element, dimension))
+                if is_combined and dimension is not None:
+                    combined_dims.append(dimension)
+            dim = max(combined_dims, default=None)
+
+            for var in self.space.list_variables():
+                candidates = set()
+                used_node_counts = []
+                for elements, element, leaf_dim in interpolations:
+                    n_used = None
+                    if hasattr(element, "get_elm_type"):
+                        n_used = getattr(element.get_elm_type(var), "n_nodes", None)
+                    if n_used is not None and n_used < elements.shape[1]:
+                        candidates.update(elements[:, n_used:].ravel().tolist())
+                    else:
+                        n_used = None
+                    used_node_counts.append(n_used)
+                # Variables interpolated on every element node need no scan
+                # of the connectivity to identify unused DOFs.
+                if not candidates:
+                    continue
+
+                for (elements, element, leaf_dim), n_used in zip(
+                    interpolations, used_node_counts
+                ):
+                    if n_used is not None:
+                        used_nodes = elements[:, :n_used]
+                    elif (
+                        not hasattr(element, "get_elm_type")
+                        and dim is not None
+                        and leaf_dim is not None
+                        and leaf_dim < dim
+                    ):
+                        continue
+                    else:
+                        used_nodes = elements
+                    candidates.difference_update(used_nodes.ravel().tolist())
+                    if not candidates:
+                        break
+                if candidates:
+                    rank = self.space.variable_rank(var)
+                    orphans.update(rank * n_nodes + node for node in candidates)
+        self._orphan_dof_cache = (key, orphans)
+        return orphans
+
     def apply_boundary_conditions(self, t_fact=1, t_fact_old=None):
         n_dof = self.n_dof
         self._Xbc = np.zeros(n_dof)
@@ -547,6 +647,12 @@ class Problem(ProblemBase):
 
         if checked_entries is not None:
             self.bc._check_entries(self, checked_entries)
+
+        # DOFs that no element interpolates (mid-side pressure nodes of a
+        # Taylor-Hood CombinedElement) have empty rows and columns: they are
+        # blocked at 0, unless a boundary condition already eliminates them.
+        orphans = self._get_orphan_dofs().difference(dof_blocked, dof_slave)
+        dof_blocked.update(orphans)
 
         dof_slave.update(dof_blocked)
         dof_slave = np.fromiter(dof_slave, int, len(dof_slave))

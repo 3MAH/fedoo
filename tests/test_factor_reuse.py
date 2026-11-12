@@ -8,6 +8,7 @@ import pytest
 import scipy.sparse as sp
 
 import fedoo as fd
+import fedoo.core.base as base
 from fedoo.core.base import (
     USE_MUMPS,
     USE_PETSC,
@@ -111,6 +112,44 @@ def test_invalidate_factorization_via_set_A():
     # touching A must invalidate
     pb.set_A(pb.get_A())
     assert pb._factor_valid is False
+
+
+def test_discarded_pardiso_contexts_release_native_memory(monkeypatch):
+    pb = _build_plate_problem()
+    released = []
+
+    class FakePardisoSolver:
+        def __init__(self, mtype):
+            self.factored = False
+
+        def factorize(self, A):
+            self.factored = True
+
+        def solve(self, A, B):
+            assert self.factored
+            return B
+
+        def free_memory(self, everything=False):
+            assert everything and self.factored
+            self.factored = False
+            released.append(self)
+
+    monkeypatch.setattr(base, "USE_PYPARDISO", True)
+    monkeypatch.setitem(
+        sys.modules, "pypardiso", SimpleNamespace(PyPardisoSolver=FakePardisoSolver)
+    )
+    A, B = sp.eye(2, format="csr"), np.ones(2)
+    pb.set_reuse_factorization(True)
+    pb.set_reuse_factorization(True)  # An unused context has no native allocation.
+    pb._solve(A, B)
+    pb._solve(A, B)
+    assert released == []
+    pb.set_reuse_factorization(True)
+    assert len(released) == 1
+    pb._solve(A, B)
+    pb.set_reuse_factorization(False)
+    pb.set_reuse_factorization(False)
+    assert len(released) == 2
 
 
 def test_solver_mumps_default_path():

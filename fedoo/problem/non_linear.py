@@ -40,6 +40,7 @@ class NonLinear(Problem):
             "adaptive_stiffness": False,
             "assume_cvg_at_max_subiter": False,
             "check_early_divergence": True,
+            "early_divergence_niter": 4,
         }
         """Parameters to set the Newton-Raphson algorithm.
 
@@ -409,7 +410,11 @@ class NonLinear(Problem):
             self.__assembly.current.assemble_global_mat(compute)
 
         if self.bc._update_during_inc:
+            # Rebuilding nonlinear MPCs must not discard the unapplied part
+            # of a Dirichlet increment shortened by CCD or line search.
+            pending_xbc = self._Xbc.copy() if hasattr(self._Xbc, "copy") else self._Xbc
             self.update_boundary_conditions()
+            self._Xbc = pending_xbc
         if compute in ("all", "vector"):
             self._update_d()
 
@@ -753,8 +758,20 @@ class NonLinear(Problem):
               If True, aborts the time step early if convergence trends are poor.
               A step is considered diverging if:
               1. The error remains "unproductive" (new_error > 0.999 * previous_error)
-                 for 4 consecutive Newton-Raphson iterations.
+                 for early_divergence_niter consecutive Newton-Raphson iterations.
               2. The error spikes to more than 100 times the previous error.
+              With automatic beam/shell tangents (consistent_tangent=None), three
+              iterations without a 1% improvement of a reference error activate
+              the consistent tangent. The current error becomes a fresh reference;
+              four further nonproductive iterations trigger adaptive stiffness
+              if available; early_divergence_niter controls the early abort.
+              Significant improvements reset
+              the counter and update the reference. Immediate failure checks
+              remain active throughout.
+            * 'early_divergence_niter': positive int, default = 4.
+              Number of nonproductive iterations before early rejection. Ignored
+              when check_early_divergence=False. Does not change the automatic
+              tangent or adaptive stiffness triggers, or the immediate spike check.
         """
         if criterion not in ["Displacement", "Force", "Work"]:
             raise NameError(
@@ -771,6 +788,7 @@ class NonLinear(Problem):
             "adaptive_stiffness",
             "assume_cvg_at_max_subiter",
             "check_early_divergence",
+            "early_divergence_niter",
             "force_elastic_stiffness",
             "elastic_initial_guess",
             "ls_mode",
@@ -785,6 +803,12 @@ class NonLinear(Problem):
                     f"Newton Raphson parameters should be in {allowed_keys}"
                 )
 
+            if key == "early_divergence_niter" and (
+                isinstance(kargs[key], (bool, np.bool_))
+                or not isinstance(kargs[key], (int, np.integer))
+                or kargs[key] < 1
+            ):
+                raise ValueError("early_divergence_niter must be a positive integer")
             self.nr_parameters[key] = kargs[key]
 
         if "ls_mode" in kargs and kargs["ls_mode"] != "natural":
@@ -929,6 +953,29 @@ class NonLinear(Problem):
 
         self._dU += self.get_X()
 
+    def _set_automatic_consistent_tangent(self, active):
+        """Visit participating weak forms, including assembly/weak-form sums."""
+        self._automatic_consistent_tangent_changed = False
+
+        def visit(assembly):
+            if hasattr(assembly, "list_assembly"):
+                return sum(visit(child) for child in assembly.list_assembly)
+            weakform = getattr(assembly, "weakform", None)
+            forms = getattr(weakform, "list_weakform", [weakform])
+            count = 0
+            for wf in forms:
+                if not hasattr(wf, "_set_automatic_tangent"):
+                    continue
+                previous = getattr(
+                    assembly.current, "_automatic_consistent_tangent", False
+                )
+                if wf._set_automatic_tangent(assembly, active):
+                    count += 1
+                    self._automatic_consistent_tangent_changed |= previous != active
+            return count
+
+        return visit(self.assembly)
+
     def solve_time_increment(self, max_subiter=None, tol_nr=None):
         if max_subiter is None:
             max_subiter = self.nr_parameters["max_subiter"]
@@ -938,6 +985,7 @@ class NonLinear(Problem):
             "assume_cvg_at_max_subiter", False
         )
         check_early_divergence = self.nr_parameters.get("check_early_divergence", True)
+        early_divergence_niter = self.nr_parameters.get("early_divergence_niter", 4)
         force_elastic_stiffness = self.nr_parameters.get(
             "force_elastic_stiffness", False
         )
@@ -949,6 +997,13 @@ class NonLinear(Problem):
             elastic_initial_guess = self.nr_parameters.get(
                 "elastic_initial_guess", False
             )
+
+        automatic_tangent = self._set_automatic_consistent_tangent(False) > 0
+        consistent_tangent_active = False
+        if self._automatic_consistent_tangent_changed:
+            # The preceding attempt may have left a consistent matrix installed.
+            self.assembly.current.assemble_global_mat("matrix")
+            self._update_a()
 
         subiter = 1
         error = float("inf")
@@ -984,6 +1039,8 @@ class NonLinear(Problem):
 
         consecutive_decreases = 0
         consecutive_increases = 0
+        progress_reference = float("inf")
+        unproductive_iterations = 0
         while subiter < max_subiter:
             # update Stress and initial displacement and Update stiffness matrix
             try:
@@ -1022,11 +1079,39 @@ class NonLinear(Problem):
             ):  # if decrease non significant, considered as increase
                 consecutive_increases += 1
                 consecutive_decreases = 0
-                if consecutive_increases >= 4 and check_early_divergence:
-                    return 0, subiter, error
             else:
                 consecutive_increases = 0
                 consecutive_decreases += 1
+
+            if automatic_tangent:
+                # Temporary decreases during oscillation must not reset progress.
+                # Keep a significant-improvement reference for this strategy only.
+                if error <= 0.99 * progress_reference:
+                    progress_reference = error
+                    unproductive_iterations = 0
+                else:
+                    unproductive_iterations += 1
+                if not consistent_tangent_active and unproductive_iterations >= 3:
+                    self._set_automatic_consistent_tangent(True)
+                    consistent_tangent_active = True
+                    progress_reference = error
+                    unproductive_iterations = 0
+                    consecutive_increases = consecutive_decreases = 0
+                    if self.print_info > 1:
+                        print("     Switching to consistent tangent.")
+
+            stalled = (
+                consistent_tangent_active
+                and unproductive_iterations >= early_divergence_niter
+                if automatic_tangent
+                else consecutive_increases >= early_divergence_niter
+            )
+            if (
+                stalled
+                and check_early_divergence
+                and not (automatic_tangent and adaptive_stiffness and xi < 1.0)
+            ):
+                return 0, subiter, error
 
             if self.print_info > 1:
                 print_str = "     Subiter {} - Time: {:.5f} - Err: {:.5f}".format(
@@ -1039,17 +1124,25 @@ class NonLinear(Problem):
                 print(print_str)
 
             if adaptive_stiffness:
-                if consecutive_increases == 0:
+                if consecutive_decreases > 0:
                     # rolling backup of the last iterate that IMPROVED the
                     # error: saving it once the error has already risen would
                     # store the bad iterate the rollback below is meant to undo
                     self._dU_old = self._dU.copy()
-                if consecutive_increases >= 2 and xi < 1.0:
+                stiffness_stalled = (
+                    unproductive_iterations >= 4
+                    if automatic_tangent
+                    else consecutive_increases >= 2
+                )
+                if stiffness_stalled and xi < 1.0:
                     # Diverging - switch to elastic stiffness
                     if self.print_info > 1:
                         print("     Diverging. Switching to elastic matrix (xi=1.0).")
                     xi = 1.0
                     consecutive_increases = 0
+                    if automatic_tangent:
+                        progress_reference = error
+                        unproductive_iterations = 0
                     xi_increased_this_step = True
                     if subiter == 3:
                         # restart the iteration with the elastic stiffness

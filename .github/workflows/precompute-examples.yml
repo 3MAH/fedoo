@@ -1,0 +1,88 @@
+name: Regenerate documentation examples
+
+on:
+  workflow_dispatch:
+    inputs:
+      paths:
+        description: "Space-separated registry paths (empty runs all; use subsets for long runs)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pyvista/setup-headless-display-action@v3
+      - uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniconda-version: latest
+          activate-environment: fedoo-examples
+          environment-file: tools/environment_examples.yml
+      - name: Install platform solver and source tree
+        run: |
+          conda install -y -c conda-forge 'libblas=*=*mkl' pypardiso
+          python -m pip install -e '.[all]'
+      - name: Regenerate selected examples
+        env:
+          EXAMPLE_PATHS: ${{ inputs.paths }}
+          PYVISTA_OFF_SCREEN: "true"
+          MPLBACKEND: Agg
+          PYTHONFAULTHANDLER: "1"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          lscpu
+          conda list '^(python|gmsh|python-gmsh|ipctk|mkl|libblas|pypardiso|simcoon|vtk|pyvista|meshlane|numpy|scipy)$'
+          read -r -a paths <<< "$EXAMPLE_PATHS"
+          python tools/run_precomputed.py "${paths[@]}" --media-dir precomputed-media
+      - name: Preserve generated media and run records
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: precomputed-examples
+          path: precomputed-media/
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    needs: generate
+    runs-on: ubuntu-latest
+    # Share the documentation deployment lock, but hold it only during publish.
+    concurrency:
+      group: fedoo-documentation-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: precomputed-examples
+          path: precomputed-media
+      - name: Check out documentation repository
+        uses: actions/checkout@v6
+        with:
+          repository: 3MAH/fedoo-docs
+          ref: main
+          token: ${{ secrets.FEDOO_DOC_TOKEN }}
+          path: published-docs
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Merge media and records, preserving other examples
+        run: python tools/precomputed_records.py precomputed-media published-docs/media/examples
+      - name: Publish refreshed results
+        working-directory: published-docs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add media/examples
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh precomputed examples from $GITHUB_SHA"
+            git push origin HEAD:main
+          fi

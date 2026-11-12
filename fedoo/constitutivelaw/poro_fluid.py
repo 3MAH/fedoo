@@ -34,7 +34,8 @@ class PoroFluidProperties(ConstitutiveLaw):
     initial_porosity : float, default 0.8
         Initial Lagrangian fluid volume fraction ``phi_f0`` in ``[0, 1]``.
     fluid_density : float, default 1000.0
-        Reference fluid density (only used when a gravity load is applied).
+        Reference fluid density. Stored but not used yet: reserved for a
+        future fluid gravity/body-force term.
     name : str, default ""
     """
 

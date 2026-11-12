@@ -5,3 +5,8 @@ CLAUDE.md
 
 # Claude Code
 .claude/
+
+# Example outputs
+examples/**/results/
+examples/**/*.gif
+examples/**/*.mp4

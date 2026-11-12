@@ -35,6 +35,11 @@ selected formulation. The convention is detailed on
    Simcoon
    Heterogeneous
 
+Examples: :ref:`sphx_glr_examples_thermal_thermal_loading.py` and
+:ref:`sphx_glr_examples_plasticity_heterogeneous_struct.py`
+(:py:class:`Heterogeneous`), :ref:`sphx_glr_examples_homogenization_fe2_plate_with_hole.py`
+(:py:class:`FE2`).
+
 Interface mechanical constitutive laws
 ======================================
 
@@ -46,6 +51,9 @@ These laws should be associated with :py:class:`fedoo.weakform.StressEquilibrium
 
    CohesiveLaw
    Spring
+
+Example: :ref:`sphx_glr_examples_contact_cohesive_dcb_3d.py`
+(:py:class:`CohesiveLaw`).
 
 .. _beam_constitutive_laws:
 
@@ -78,6 +86,9 @@ These laws should be associated with :py:class:`fedoo.weakform.PlateEquilibrium`
    ShellHomogeneous
    ShellHomogeneousNonLinear
 
+Example: :ref:`sphx_glr_examples_shells_laminate_cantilever.py`
+(:py:class:`ShellLaminate`).
+
 Thermal constitutive law
 ======================================
 
@@ -88,6 +99,21 @@ These laws should be associated with :py:class:`fedoo.weakform.HeatEquation`
    :template: custom-class-template.rst
 
    ThermalProperties
+
+Poromechanics fluid properties
+==============================
+
+These properties should be associated with
+:py:class:`fedoo.weakform.PoroMechanicsSimple` or
+:py:class:`fedoo.weakform.PoroMechanics`. See :doc:`/poromechanics`.
+
+.. autosummary::
+   :toctree: generated/
+   :template: custom-class-template.rst
+
+   PoroFluidProperties
+   HolmesMowPermeability
+   KozenyCarmanPermeability
 
 Manage local frames
 ===================

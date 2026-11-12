@@ -42,12 +42,16 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         tangent options and both drilling modes.
         Increasing this value enforces the constraint more strictly but
         may introduce drilling locking in fully integrated elements.
-    consistent_tangent : bool, default=False
+    consistent_tangent : bool or None, default=False
         For UL, analytically differentiate the complete corotational residual,
         including current geometry, frame, FI/SRI/MITC interpolation and drilling.
         The tangent can be nonsymmetric. False retains the historical material
         plus membrane-force geometric stiffness. Both options use the same
-        fixed initial stiffness scale for the drilling penalty.
+        fixed initial stiffness scale for the drilling penalty. None starts each
+        increment attempt with the historical tangent and switches to the complete
+        tangent after three iterations without at least a 1% improvement of the
+        reference error. Each significant improvement updates that reference and
+        resets the counter; the earliest switch is at iteration four.
     name : str, optional
         Name of the WeakForm.
     nlgeom : bool or str, optional
@@ -100,7 +104,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         self.true_drilling_rotation = true_drilling_rotation
         self.drill_stiffness_coefficient = drill_stiffness_coefficient
         self.consistent_tangent = consistent_tangent
-        if consistent_tangent:
+        if consistent_tangent is not False:
             self.assembly_options["assume_sym"] = False
         self._store_local_pos = False
         if type(self).__name__ in ("PlateEquilibriumFI", "PlateEquilibrium"):
@@ -115,6 +119,8 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         return WeakFormSum([translational_inertia, rotary_inertia])
 
     def initialize(self, assembly, pb):
+        assembly._automatic_consistent_tangent = False
+        assembly.current._automatic_consistent_tangent = False
         assembly.sv["ShellStrain"] = 0
         assembly.sv["ShellStress"] = 0
         assembly.sv["_DrillConstraint"] = 0
@@ -152,7 +158,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
                 )
                 assembly.sv["_NodeLocalPos"] = node_local_pos
 
-        if self.consistent_tangent and self.nlgeom:
+        if self.consistent_tangent is not False and self.nlgeom:
             if self.nlgeom != "UL":
                 raise NotImplementedError(
                     "The consistent shell tangent requires nlgeom='UL'."
@@ -322,7 +328,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         dof_local[v_rot * n_dof : (v_rot + 3) * n_dof] = rot_loc.transpose(
             2, 1, 0
         ).ravel()
-        if self._use_consistent_tangent(assembly):
+        if self.consistent_tangent is not False and assembly._nlgeom == "UL":
             assembly.sv["_ShellTangentDof"] = (
                 dof_local.reshape(self.space.nvar, mesh.n_elm_nodes, mesh.n_elements)
                 .transpose(2, 0, 1)
@@ -341,7 +347,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         if np.array_equal(pb.get_dof_solution(), 0):
             assembly.sv["ShellStrain"] = 0
             assembly.sv["_DrillConstraint"] = 0
-            if self._use_consistent_tangent(assembly):
+            if self.consistent_tangent is not False and assembly._nlgeom == "UL":
                 assembly.sv["_ShellTangentDof"] = np.zeros_like(
                     assembly.sv["_ShellTangentDof"]
                 )
@@ -514,7 +520,25 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
         return diffop
 
     def _use_consistent_tangent(self, assembly):
-        return self.consistent_tangent and assembly._nlgeom == "UL"
+        return assembly._nlgeom == "UL" and (
+            self.consistent_tangent is True
+            or (
+                self.consistent_tangent is None
+                and getattr(assembly, "_automatic_consistent_tangent", False)
+            )
+        )
+
+    def _set_automatic_tangent(self, assembly, active):
+        """Change accuracy without changing the iterate or constitutive history."""
+        if self.consistent_tangent is not None or assembly._nlgeom != "UL":
+            return False
+        if getattr(assembly.current, "_automatic_consistent_tangent", False) != active:
+            # The two equations have different operator/block sparsity.
+            assembly.current._saved_bloc_structure = None
+        assembly._automatic_consistent_tangent = active
+        assembly.current._automatic_consistent_tangent = active
+        assembly.sv.pop("_ShellTangentOperators", None)
+        return True
 
     def _plate_weak_equation_owner(self):
         """Plate class whose ``get_weak_equation`` builds this weak form.
@@ -670,10 +694,13 @@ class PlateEquilibrium(
         solve for both tangent options and both drilling modes. Increasing this value
         enforces the constraint more strictly but may introduce drilling locking
         in fully integrated elements.
-    consistent_tangent : bool, default=False
+    consistent_tangent : bool or None, default=False
         Use the complete analytical UL residual derivative, including MITC,
         drilling and current geometry. False retains the historical tangent.
-        Both options use the same fixed initial drilling stiffness scale.
+        Both options use the same fixed initial drilling stiffness scale. None
+        switches after three iterations without at least a 1% improvement of the
+        reference error (updated on significant improvements), and starts the
+        next increment attempt with the historical tangent again.
     name : str, optional
         Name of the WeakForm instance.
     nlgeom : bool or str, optional

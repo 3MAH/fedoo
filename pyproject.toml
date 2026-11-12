@@ -28,16 +28,21 @@ dependencies = [
     'numpy>=2.0',
     'scipy',
     'h5py',
-    'simcoon>=2.1',
+    'simcoon>=2.3',
 ]
 
 [project.optional-dependencies]
-all = ['fedoo[solver,plot,test,ipc,io]']
+all = ['fedoo[solver,plot,test,ipc,io,zstd]']
+zstd = ['hdf5plugin>=4']
 io = ['meshlane>=5.5.0']
-ipc = ['ipctk>=1.6']
+ipc = [
+    # The 1.6.1 Linux wheel can crash on CPUs without AVX-512.
+    'ipctk>=1.6,!=1.6.1; sys_platform == "linux"',
+    'ipctk>=1.6; sys_platform != "linux"',
+]
 solver = [
-    'pypardiso ; platform_machine!="arm64" and platform_machine!="aarch64"',
-    'python-mumps ; platform_machine=="arm64" or platform_machine=="aarch64"',
+    'pypardiso ; platform_system!="Darwin" and platform_machine!="arm64" and platform_machine!="aarch64"',
+    'python-mumps ; platform_system=="Darwin" or platform_machine=="arm64" or platform_machine=="aarch64"',
 ]
 plot = [
     'matplotlib>=3.5',

@@ -8,6 +8,67 @@ semantic versioning.
 
 ### Added
 
+- Independent local-frame overlays in DataSet.plot via local_frame and
+  one-based local_frame_axis, with size, density, placement and legend controls.
+  The viewer uses the same plotting implementation, including mixed-mesh
+  visibility. Frame matrix components remain available as ordinary scalar plots
+  for matrix, quaternion and rotation-vector inputs.
+- Metadata-driven local-frame fields for arbitrary names (`type: local_frame`),
+  with automatic tagging of shell/beam outputs and explicitly requested
+  MaterialLocalFrame output for supported mechanical constitutive laws.
+- Rotation-vector FDH5 encoding (`local_frame="rotvec"`, radians), plus shape
+  inference for tagged matrix/quaternion/rotvec inputs. Files record encoding
+  explicitly and restore ordinary matrices on reading.
+- Public local frames in the viewer field list with Whole frame / Local 1/2/3
+  components, and a frame-field selector for overlays including private frames.
+- Script-wide FDH5 storage defaults through set/get/reset_fdh5_options and
+  per-file fdh5_options on add_output/save/save_all/to_fdh5. Save As exposes
+  compression, floating-point precision, lossless integer packing and local-frame encoding.
+- Compact quaternion local frames with repeated Gauss-point frames stored once
+  per element, transparent matrix reconstruction, and coloured basis-vector
+  display with axis, placement, size and density controls in Options > Plot.
+- Expandable vector/tensor fields in the Object inspector, with direct component
+  selection using the same labels and invariants as the viewer field controls.
+- Viewer node-set management, conversion between node and element sets, and
+  field-based selection expressions such as `Stress_XX > 100`. Node sets can
+  grow exterior surface patches, 2D boundary lines and 3D feature edges from
+  a picked node, with adjustable angle limits and midside-node support.
+- Computed scalar expressions using fields, named sets and existing scalars.
+  Definitions are evaluated for the current frame and again as frames load;
+  FDH5 export includes the computed values for every exported frame, editable
+  expression definitions and user-created sets.
+- Optional viewer Object inspector for meshes, submeshes, sets, fields,
+  computed scalars and live boundary conditions, with geometry highlighting,
+  links to editing tools, and mesh/set visibility actions.
+- `ProblemDataSet` and the viewer's Problem menu for opening current Python
+  workspace Problems without solving. Live Problems support boundary-condition
+  inspection and editing; stored modal/buckling modes use the iteration controls.
+  FDH5 export is a snapshot of the selected state or mode, not a solver restart.
+- Optional lossless Zstandard compression for FDH5 through `compressed="zstd"`
+  or `CompressionConfig`, and a `fedoo[zstd]` dependency group. The viewer's
+  Save as dialog offers uncompressed, gzip and Zstandard output with level
+  selection; Zstandard readers and writers require `hdf5plugin`.
+- Optional current-time annotation under Options > Plot, disabled by default.
+- Automatic consistent tangents with `consistent_tangent=None` for supported
+  updated Lagrangian beams and shells. Each increment attempt starts with the
+  historical tangent and switches at the current iterate after three iterations
+  without a 1% improvement of the reference Newton error. Activation is stored
+  per assembly, including shared weak forms and assembly sums; explicit `True`
+  and `False` retain their always-consistent and historical behavior.
+- Configurable `early_divergence_niter` in `NonLinear.set_nr_criterion`
+  (positive integer, default 4) to control stagnation-based early rejection
+  independently of the tangent-switch and adaptive-stiffness thresholds.
+- FDH5 compression selection through `add_output` and `DataSet.to_fdh5`:
+  `True` uses gzip level 4, `False` disables compression, and integers 0-9
+  select the gzip level. Invalid settings and conflicting settings for
+  registrations sharing an output file are rejected. Appending preserves
+  existing datasets and applies the selected compression to new datasets.
+- `Simcoon` and `Simcoon.from_modular` accept the keyword-only options `ncp`
+  (`"fischer_burmeister"` default, or `"min"`) and `integrator`
+  (`"cutting_plane"` default, or `"closest_point"`), forwarded to
+  `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
+  to `None`: `1` (continuum) as before, or `2` with
+  `integrator="closest_point"`, which only returns its algorithmic operator.
 - `BeamFiberSection`: nonlinear multifiber beam section. A private copy of a
   3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
   stress at fiber points of a rectangular, circular or pipe section, and the
@@ -24,9 +85,119 @@ semantic versioning.
 
 ### Changed
 
+- Simplify DataSet frame display to set_current_local_frame, show_local_frame
+  (boolean or mesh-size percentage), local_frame_axis and local_frame_options
+  (max_frames, gauss_points, legend). The viewer uses the same API.
+- Automatic geometric frames for shells in 3D and lines in 2D/3D when no saved
+  frame is available; 2D spaces display two axes. DataSet show_normals uses
+  geometric last axes and percentage sizing. Mesh quick-view methods are unchanged.
+- Local-frame display controls move to their own Options > Local frames dialog,
+  keeping the general Plot dialog focused on mesh and result display.
+- Viewer export uses Save As only (Ctrl+S or Ctrl+Shift+S), with overwrite
+  confirmation when replacing an existing file. Export rewrites all frames.
+- Local-frame legends are hidden by default and can be enabled independently
+  in Options > Local frames.
+- Automatically added beam/shell recovery frames use private field names and
+  stay hidden in the default viewer field list. Explicitly requested frames
+  remain public; the local-frame overlay and tensor recovery accept both forms.
+- FDH5 result fields now default to float32 storage; coordinates, scalar outputs
+  and metadata preserve precision. Use float_dtype=None to preserve result precision.
+  Integer packing defaults to a 32-bit minimum and preserves signedness.
+- Released boolean compressed arguments remain supported; unpublished codec/level
+  shortcuts move to fdh5_options. Explicit True falls back to gzip 4 when the
+  configured codec is None. Existing matrix-frame files remain readable.
+- The Object inspector is visible by default and docks only on the left or
+  right of a separate result-view
+  area, so arranging views does not reposition it. It starts at minimum width;
+  widening the divider chooses a proportion retained on resize, while dragging
+  back to minimum restores the fixed minimum width. Whole-mesh
+  visibility actions are labeled Show all and Mask all; submeshes and element
+  sets retain Show only and Mask.
+- Viewer iteration controls use left/right arrows to decrease/increase the
+  frame or mode. Set, scalar and scalar-bar dialogs use more compact layouts;
+  detailed scalar-expression guidance is available from a separate Help button.
+- The Object inspector shows generated submesh selections only as mesh entries,
+  avoiding duplicate element-set entries. Generated submesh sets remain in the
+  set manager and are excluded from FDH5 exports; user-created sets are retained.
+- `add_output` now defaults to `compressed=True`. FDH5 retains its previous
+  default gzip level 4, but honors explicit `False` and integer levels instead
+  of ignoring the option. Other formats supporting the boolean compression
+  option now also default to compressed output.
+- Automatic beam/shell tangent switching tracks significant improvement
+  against a reference error so oscillations do not conceal stagnation. Switching
+  resets the progress counters, and adaptive stiffness gets an opportunity to
+  recover before stagnation-based rejection. Immediate divergence safeguards
+  remain active when `check_early_divergence=True`.
+- `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
+  used in finite strain without `lnJ`.
+- Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
+  Simcoon and are no longer condensed a second time by fedoo.
+- Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
+  all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
+  `DeprecationWarning`, and will raise an `AttributeError` in a future
+  release. The objective rate is only read from the weak form (`wf.corate`);
+  `material.corate = ...` has always been silently ignored.
+- `Simcoon` / `Simcoon.from_modular` docstrings document `tangent_mode` with
+  the simcoon >= 2.0 numbering: 0 elastic, 1 continuum (fedoo default),
+  2 algorithmic tangent of the convex cutting plane return mapping (simcoon
+  default). Simcoon 2.3 no longer accepts mode 3: the integration algorithm
+  is a separate Simcoon setting. The numbering of
+  simcoon < 2.0 differs (0 continuum, 1 algorithmic).
+- The example gallery is organized by topic instead of numbered folders:
+  `basic`, `boundary_conditions`, `contact`, `finite_strain`, `plasticity`,
+  `shells`, `dynamics`, `thermal`, `poromechanics`, `custom_weak_forms`,
+  `homogenization` and `mesh`. All the examples are in the gallery except the
+  interactive sliders (`examples/interactive`) and the contact method
+  comparisons (`examples/contact/comparison`). Gallery page URLs and
+  `sphx_glr_examples_*` labels change accordingly.
+- Examples too heavy for the documentation build are listed in
+  `examples/precomputed_runs.toml`: they are rendered without being executed,
+  and their page shows an animation precomputed with
+  `tools/run_precomputed.py`, with the fedoo version, date and wall time of
+  the run. `tools/run_examples.py` runs the other gallery examples headless
+  and writes a status and timing report. `tools/setup_examples_env.py`
+  creates the conda environment of the examples (`tools/environment_examples.yml`
+  plus `fedoo[all]`) with the BLAS and sparse solver suited to the platform:
+  Accelerate and python-mumps on macOS, MKL and pypardiso on x86_64,
+  OpenBLAS and python-mumps on arm64 Linux. Both run scripts record the BLAS
+  variant and warn when it is not the recommended one.
+- `examples/homogenization/getL.py` is merged into
+  `periodic_homogenization.py` (octet truss and gyroid cells);
+  `examples/PeriodicBoundaryConditions/3D_periodic_BC.py` is merged into
+  `periodic_bc_3d_gyroid_off_axis.py`; `thermo_meca_weak_coupling_3D_post_tt.py`
+  is merged into `thermomechanical_weak_coupling_3d.py`, which now writes its
+  own animation; the unused `examples/homogenization/data/` folder and
+  `examples/thermal/octet_surf.msh` are removed.
+- `examples/finite_strain/neohookean_cantilever_force.py` is merged into
+  `neohookean_cantilever.py`, which now solves the cantilever statically under
+  both force and displacement control and compares the two curves; implicit
+  dynamics is no longer needed there. The new `neohookean_snap_through.py`
+  shows where it is: a compressed blade whose static force-controlled path
+  ends at a limit point, passed with a Newmark integrator.
+- `examples/FE2/test_fe2.py` and
+  `examples/models/axisymmetric/thick_cylinder_inflation_axi.py` are moved to
+  `tests/test_fe2.py` and `tests/test_thick_cylinder_inflation_axi.py`.
+- All the example files use lower snake_case names, e.g. `poison_eq.py` →
+  `poisson_eq.py`, `thermal_condution_2D.py` → `thermal_conduction_2d.py`,
+  `simpleBeamElementExample.py` → `beam_elements_cantilever.py`,
+  `simplePlateElementExample.py` → `plate_elements_cantilever.py`,
+  `LaminateExample.py` → `laminate_cantilever.py`, `2DplasticBending.py` →
+  `plastic_bending_2d.py`, `composite_DCB_test_3D.py` → `cohesive_dcb_3d.py`,
+  `Broberg2D_Dynamic.py` → `broberg_dynamic_crack.py`, `FE2.py` →
+  `fe2_plate_with_hole.py`, the periodic boundary condition examples
+  `periodic_bc_*`. In `examples/contact`, the IPC examples are prefixed
+  `ipc_` (`ipc_disk_rectangle`, `ipc_indentation_2d`, `ipc_self_contact`,
+  `ipc_tube_compression`, `ipc_gyroid_compression*`, ...) and the penalty
+  ones `penalty_`. Gallery titles use sentence case.
+- The gallery pages are linked from the user guide (boundary conditions,
+  problems, time integration, meshes, post-processing, weak forms,
+  constitutive laws).
+- `environment_doc.yml` installs `gmsh` and `python-gmsh`.
+- `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
+  on Intel Macs, where pypardiso does not work); pypardiso is kept for
+  Linux and Windows x86_64.
 - The material-point helpers of the nonlinear shells moved to
   `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
-
 - simcoon capabilities are queried by feature, never by version, in
   `fedoo.constitutivelaw._simcoon_features` (`serves_total`,
   `serves_condensed`). Hyperelastic Simcoon laws built on F are accepted in
@@ -40,6 +211,92 @@ semantic versioning.
 
 ### Fixed
 
+- Coordinate-only mesh expressions no longer assume element connectivity is
+  present, restoring geometry-based element selection in examples such as
+  spherical shell compression. Element expressions retain the original mesh's
+  named sets and global MultiMesh IDs even without an associated dataset.
+- Viewer history quick search synchronizes the selected field and component,
+  including global DOFs and their forces. Global outputs use value indices
+  rather than node/element/Gauss-point conversion.
+- Plane clipping reuses its widget and defers scene updates outside the native
+  callback, avoiding unsafe widget recreation while dragging. Animation retains
+  camera position, zoom and projection while clipping.
+- Viewer FDH5 saves write a temporary file before replacing the destination,
+  preserving source frames when resaving or recompressing the opened file.
+- Restored visible rectangle feedback during on-screen set selection and the
+  Object inspector's compact dock width after closing and reopening result views.
+- History and main-view picking share physical node/global element ID mapping
+  for clipped and mixed meshes; starting another element pick removes the
+  previous click observer.
+- `incompressibility="fbar"` with the total Lagrangian method (`nlgeom="TL"`)
+  now uses the consistent nonsymmetric tangent for `quad4` and `hex8`.
+  Without it, Newton stalled from the first increment on nearly
+  incompressible materials, whatever the time step, since the missing term
+  scales with the bulk modulus. The total-Lagrangian residual is now the
+  pull-back of the updated-Lagrangian one, `S = J F^-1 sigma(F_bar) F^-T`
+  instead of the PK2 stress of `F_bar`, so that both methods reach the same
+  solution.
+- Residual line-search trials now scale the incremental rotation correction
+  together with the trial displacement and restore it afterward. Previously,
+  corotational beams and shells used the full rotation correction for reduced
+  trial steps, producing inconsistent residual evaluations and impairing
+  convergence.
+- The examples were reviewed against the current API. Fixed examples include
+  the Stokes viscosity term of the fluid examples, the cooling phase of the
+  weakly coupled thermomechanical example, the macroscopic modeling space of
+  the FE2 example, the homogenized stiffness of
+  `periodic_homogenization_from_scratch` (missing division by the cell
+  volume), the frozen stresses of the Broberg dynamic crack example, and the
+  rigid-body rotation of the bunny and cow animations. The fluid examples no
+  longer prescribe conflicting velocities at the inlet and lid corners.
+- The OGC examples on solid meshes, which OGC does not support, are replaced
+  by a CCD/OGC comparison on shells. The IPC gyroid examples use a new mesh
+  without degenerate surface edges, generated by
+  `util/meshes/make_gyroid_mesh.py` (microgen `mesh_periodic` and
+  `remesh_keeping_boundaries_for_fem`). It replaces
+  `util/meshes/gyroid_per.vtk` and the broken `regenerate_gyroid_per.py` in
+  all the gyroid examples (periodic boundary conditions, homogenization).
+- `IPCContact` / `IPCSelfContact`: 3D `lin2` contact meshes, such as beam
+  centerlines, are collision curves (edges only). `IPCSelfContact` uses a 3D
+  `lin2` mesh directly instead of extracting its surface. With `dmin` equal
+  to the fiber diameter, this models contact between equal-radius rods.
+- Finite-strain Biot poromechanics. In `nlgeom="UL"` the pore-stress
+  coupling now includes its geometric tangent. `nlgeom="TL"` is now the exact
+  pull-back of UL and gives the same solution. The momentum coupling is
+  -alpha p J C^{-1}:delta E, the storage and coupling terms of the mass
+  balance carry the J of dv = J dV, and the mobility is pulled back to
+  (k/mu) J C^{-1}. `PoroMechanicsSimple` now computes `lnJ`, so
+  deformation-dependent permeabilities (Holmes-Mow, Kozeny-Carman) receive
+  the current J.
+- Poromechanics documentation page (`docs/poromechanics.rst`) and a
+  Poromechanics section in the example gallery: Terzaghi consolidation
+  compared with the analytical series, finite-strain consolidation of a
+  Neo-Hookean skeleton, and the Taylor-Hood example.
+  `PoroMechanics`, `PoroMechanicsSimple`, `PoroFluidProperties` and the
+  permeability models are now listed in the API reference.
+- `2Daxi` support for the poromechanics weak forms, in small strain and UL.
+  The Biot coupling and the storage term include the hoop strain, all terms
+  carry the 2*pi*r measure, and the UL geometric tangent of the pore stress
+  includes the hoop component. New example: axisymmetric indentation of a hyperelastic soft
+  tissue by a rigid spherical indenter (`RigidTie2D` and `IPCContact`),
+  with poroelastic force relaxation.
+- **Taylor-Hood elements built with `CombinedElement`** (quadratic `u`,
+  linear pressure, e.g. `hex20`/`hex8`): the operators of the linear
+  sub-element were allocated with `np.empty` and only their vertex columns
+  were filled, so the mid-side columns held uninitialised memory. The
+  global matrix then coupled the pressure of mid-side nodes to the
+  displacement, giving wrong pressures or "numerically singular" failures
+  that depended on the run (affects `PoroMechanicsSimple`,
+  `PoroMechanics` and `StressEquilibriumMixed` with a linear pressure).
+  The operators are now zero there, and the DOFs that no element
+  interpolates (pressure at mid-side nodes) are blocked at 0
+  automatically. The Taylor-Hood example now compares an undrained strip
+  footing with its analytical solution.
+- `PoroDarcy` in `nlgeom="UL"`: the pore-pressure gradient of the residual
+  was computed on the reference mesh instead of the current one. The
+  residual missed a factor of order J, while the tangent used the current
+  mesh. Transient finite-strain consolidation was wrong by about the strain
+  level (5 % at 5 % compression), but drained states were not affected.
 - `Mechanical3D.get_H_condensed` and `get_H_plane_stress` are idempotent:
   a tangent already condensed by the law (zero rows and columns on the
   condensed slots, as returned by Simcoon >= 2.3 with `ndi < 3`) is kept
@@ -47,6 +304,15 @@ semantic versioning.
   (shells) and uniaxial stress (beam fibers) returned NaN or a singular
   matrix with these Simcoon versions; full 3D tangents of older versions
   are condensed as before.
+
+### Migration
+
+- Remove `material.corate = ...` from scripts (it now warns and was never
+  read). To choose
+  the objective rate, set `wf.corate` on the `StressEquilibrium` weak form
+  (with `nlgeom="UL"`).
+- Update links to gallery pages: example pages moved from numbered folders
+  (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
 
 ## [1.1.0] - 2026-10-14
 

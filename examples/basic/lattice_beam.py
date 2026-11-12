@@ -1,0 +1,55 @@
+"""
+Beam lattice structure using a beam model with geometric nonlinearities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The edges of a structured box mesh are extracted to build a beam lattice.
+The left face is clamped and a large transverse displacement is imposed on the
+right face. The geometrically nonlinear beam problem uses the consistent
+corotational tangent of :py:class:`fedoo.weakform.BeamEquilibrium`.
+"""
+
+import fedoo as fd
+import numpy as np
+
+E = 1e5
+nu = 0.3
+radius = 1
+k = 0.9  # shear shape factor. k=0 to neglect the shear effect (Bernoulli)
+n = 6  # n_nodes
+ndim = 3
+if ndim == 2:
+    fd.ModelingSpace("2D")
+else:
+    fd.ModelingSpace("3D")
+
+material = fd.constitutivelaw.ElasticIsotrop(E, nu)
+beam_props = fd.constitutivelaw.BeamCircular(material, radius, k=k)
+
+# Extract a Lattice Mesh from a 3D mesh
+if ndim == 2:
+    mesh = fd.mesh.extract_edges(
+        fd.mesh.rectangle_mesh(n, n, x_max=100, y_max=100, ndim=ndim)
+    )
+else:
+    mesh = fd.mesh.extract_edges(
+        fd.mesh.box_mesh(n, n, n, x_max=100, y_max=100, z_max=100)
+    )
+
+nodes_left = mesh.find_nodes("X", mesh.bounding_box.xmin)
+nodes_right = mesh.find_nodes("X", mesh.bounding_box.xmax)
+
+wf = fd.weakform.BeamEquilibrium(beam_props, consistent_tangent=True)
+
+assembly = fd.Assembly.create(wf, mesh)
+
+pb = fd.problem.NonLinear(assembly, nlgeom=True)
+pb.bc.add("Dirichlet", nodes_left, ["Disp", "Rot"], 0)
+pb.bc.add("Dirichlet", nodes_right, "DispY", -50)
+
+pb.set_nr_criterion("Displacement", tol=5e-3, max_subiter=10)
+pb.nlsolve(dt=0.02, update_dt=True, print_info=0)
+
+# Post treatment
+results = pb.get_results(assembly, ["Disp", "Rot", "BeamStress"])
+# component 0 of BeamStress is the axial force N
+results.plot("BeamStress", 0)

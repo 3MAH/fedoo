@@ -265,6 +265,16 @@ class AssemblyBase:
 # =============================================================
 # Base class for constitutive laws (cf constitutive law lib)
 # =============================================================
+def _corate_on_law_message(law):
+    return (
+        f"{type(law).__name__}.corate is ignored: the objective rate belongs "
+        "to the weak form. Set it with wf.corate = ... on the "
+        "StressEquilibrium weak form (used with nlgeom='UL'). Setting corate "
+        "on a constitutive law is deprecated and will raise an AttributeError "
+        "in a future release."
+    )
+
+
 class ConstitutiveLaw:
     """Base class for constitutive laws (cf constitutive law lib)."""
 
@@ -285,6 +295,31 @@ class ConstitutiveLaw:
         # (for instance "2Dstress" for plane stress)
 
         ConstitutiveLaw.__dic[self.__name] = self
+
+    @property
+    def corate(self):
+        """Deprecated, ignored: the objective rate is ``weakform.corate``.
+
+        The objective rate of the updated-Lagrangian formulation is chosen on
+        the weak form (:attr:`fedoo.weakform.StressEquilibrium.corate`) and
+        passed to the law at each call. A value set on a constitutive law has
+        never been read: setting it emits a :class:`DeprecationWarning`, and
+        will raise an :class:`AttributeError` in a future release.
+
+        :meta private:
+        """
+        if "_ignored_corate" not in self.__dict__:
+            raise AttributeError(
+                f"{type(self).__name__} has no 'corate' attribute: the "
+                "objective rate belongs to the weak form (wf.corate)."
+            )
+        warnings.warn(_corate_on_law_message(self), DeprecationWarning, stacklevel=2)
+        return self._ignored_corate
+
+    @corate.setter
+    def corate(self, value):
+        warnings.warn(_corate_on_law_message(self), DeprecationWarning, stacklevel=2)
+        self._ignored_corate = value
 
     def __class_getitem__(cls, item):
         """Get the constitutive law whose name is item."""
@@ -721,23 +756,24 @@ class ProblemBase:
         ...     # ... read result
         >>> pb.set_reuse_factorization(False)
         """
+        context = None
         if reuse:
             if USE_PYPARDISO:
-                self._factor_context = _PypardisoFactor(self._solver_symmetric)
+                context = _PypardisoFactor(self._solver_symmetric)
             elif USE_MUMPS:
-                self._factor_context = _MumpsFactor(self._solver_symmetric)
+                context = _MumpsFactor(self._solver_symmetric)
             elif USE_PETSC:
-                self._factor_context = _PetscFactor()
+                context = _PetscFactor()
             else:
                 raise RuntimeError(
                     "Factorization reuse requires pypardiso, python-mumps, "
                     "or petsc4py. Install one of them, e.g. "
                     '"pip install python-mumps".'
                 )
-            self._factor_valid = False
-        else:
-            self._factor_context = None
-            self._factor_valid = False
+        if isinstance(self._factor_context, _PypardisoFactor):
+            self._factor_context.close()
+        self._factor_context = context
+        self._factor_valid = False
 
     def invalidate_factorization(self):
         """Invalidate any cached factorization.
@@ -983,11 +1019,17 @@ class _PypardisoFactor:
     def factor(self, A):
         if self._symmetric:
             A = sparse.triu(A, format="csr")
-        self._A = A
         self._solver.factorize(A)
+        self._A = A
 
     def solve(self, B):
         return self._solver.solve(self._A, B)
+
+    def close(self):
+        if self._A is not None:
+            # Dropping PyPardisoSolver leaves its native factorization allocated.
+            self._solver.free_memory(everything=True)
+            self._A = None
 
 
 class _PetscFactor:

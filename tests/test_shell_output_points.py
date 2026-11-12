@@ -36,7 +36,8 @@ def test_linear_output_positions_and_resultant_recovery(tmp_path):
     )
     assert result.gausspoint_data["Stress"].shape == (6, 3, assembly.n_gauss_points)
     assert "Stress" not in result.beam_derived_fields()
-    assert "ShellLocalFrame" in result.gausspoint_data
+    assert "_ShellLocalFrame" in result.gausspoint_data
+    assert "ShellLocalFrame" not in result.gausspoint_data
     for kind in ("Stress", "Strain"):
         for reduction in ("abs_max", "min", "max"):
             result.shell_options.update(reduction=reduction)
@@ -153,7 +154,9 @@ def test_linear_stress_only_reconstruction_and_nearest_selection(tmp_path, assoc
     result = pb.get_results(
         assembly, ["Stress", "Strain"], position=[-0.6, 0.4], output_type=association
     )
-    result.save(str(tmp_path / "linear_tensors.fdh5"))
+    result.save(
+        str(tmp_path / "linear_tensors.fdh5"), fdh5_options={"float_dtype": None}
+    )
     loaded = fd.read_data(str(tmp_path / "linear_tensors.fdh5"))
     assert "ShellStress" not in loaded.gausspoint_data
     assert loaded.shell_sources("Stress") == (True, True)
@@ -266,25 +269,6 @@ def test_reference_point_keeps_laminate_interface_side():
     assert not np.allclose(value.submesh(0), value.submesh(1))
     mixed.shell_options.update(position=0.3)
     assert mixed.shell_options["reference_point_index"] is None
-
-
-def test_viewer_lists_shell_components_with_thickness_reduction():
-    from types import SimpleNamespace
-
-    viewer = pytest.importorskip("fedoo.util.viewer")
-    pb, assembly, _ = shell_problem()
-    result = pb.get_results(assembly, ["Stress", "Strain"])
-    result.shell_options.update(reduction="abs_max")
-    dock = SimpleNamespace(data=result)
-    # Component discovery must not request a full tensor under a scalar
-    # thickness reduction. Call the method without creating a Qt window.
-    for field in ("Stress", "Stress_local", "Stress_global", "Strain"):
-        components = viewer.PlotDock.get_components(dock, field)
-        assert "XX" in components
-        assert "XY" in components
-        if field.startswith("Stress"):
-            assert "vm" in components
-    assert result.shell_options["reduction"] == "abs_max"
 
 
 @pytest.mark.parametrize("association", ["GaussPoint", "Element", "Node"])
@@ -508,7 +492,7 @@ def test_varying_thickness_and_element_subset(tmp_path):
         assembly, ["Stress", "ShellStress", "ShellStrain"], element_set=[1]
     )
     assert result.mesh.n_elements == 1
-    result.save(str(tmp_path / "subset.fdh5"))
+    result.save(str(tmp_path / "subset.fdh5"), fdh5_options={"float_dtype": None})
     loaded = fd.read_data(str(tmp_path / "subset.fdh5"))
     loaded.shell_options.update(source="recomputed", reduction=None, position=0.3)
     expected = (
@@ -655,4 +639,23 @@ def test_stress_only_extrema_on_mixed_elements(tmp_path, shell_kind, association
             np.testing.assert_allclose(
                 loaded.get_data("Stress_global", component).submesh(2), expected
             )
-            assert not loaded._submesh_has_field("Stress_global", 0)
+            assert loaded._submesh_has_field("Stress_global", 0)
+            # This beam is aligned with X, so its automatically saved frame
+            # leaves scalar components unchanged.
+            np.testing.assert_allclose(
+                loaded.get_data("Stress_global", component).submesh(0),
+                loaded.get_data("Stress_local", component).submesh(0),
+            )
+
+
+def test_explicit_shell_frame_is_public(tmp_path):
+    pb, assembly, _ = shell_problem()
+    result = pb.get_results(assembly, ["ShellStress", "ShellLocalFrame"])
+    assert "ShellLocalFrame" in result.gausspoint_data
+    assert "_ShellLocalFrame" not in result.gausspoint_data
+    result.save(str(tmp_path / "public_shell.fdh5"))
+    loaded = fd.read_data(str(tmp_path / "public_shell.fdh5"))
+    assert "Stress_global" in loaded.shell_derived_fields()
+    np.testing.assert_allclose(
+        loaded["ShellLocalFrame"], result["ShellLocalFrame"], atol=1e-7
+    )

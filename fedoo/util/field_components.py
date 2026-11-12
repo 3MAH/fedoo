@@ -8,6 +8,7 @@ FIELD_COMPONENTS = {
     "BeamStress": ("N", "QY", "QZ", "MX", "MY", "MZ"),
     "BeamStrain": ("epsX", "gammaY", "gammaZ", "kappaX", "kappaY", "kappaZ"),
     "BeamLocalFrame": ("XX", "XY", "XZ", "YX", "YY", "YZ", "ZX", "ZY", "ZZ"),
+    "MaterialLocalFrame": ("XX", "XY", "XZ", "YX", "YY", "YZ", "ZX", "ZY", "ZZ"),
     "ShellLocalFrame": ("XX", "XY", "XZ", "YX", "YY", "YZ", "ZX", "ZY", "ZZ"),
     "ShellStress": ("NXX", "NYY", "NXY", "MXX", "MYY", "MXY", "QXZ", "QYZ"),
     "ShellStrain": (

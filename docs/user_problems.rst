@@ -57,9 +57,14 @@ unknown with :meth:`fedoo.ModelingSpace.new_variable`, group components with
 Mixed formulations may assign different element interpolations to different
 variables.
 
-Complete examples are available in
-:download:`poison_eq.py <../examples/01-simple/poison_eq.py>` and
-:download:`fluid_mechanics.py <../examples/user_equation/fluid_mechanics.py>`.
+Complete examples:
+
+* :ref:`sphx_glr_examples_basic_poisson_eq.py`: a scalar Poisson equation
+  (:download:`poisson_eq.py <../examples/basic/poisson_eq.py>`);
+* :ref:`sphx_glr_examples_custom_weak_forms_fluid_mechanics.py` and
+  :ref:`sphx_glr_examples_custom_weak_forms_recirculating_flow.py`: Stokes
+  systems with a velocity-pressure mixed interpolation
+  (:download:`fluid_mechanics.py <../examples/custom_weak_forms/fluid_mechanics.py>`).
 
 
 State-dependent weak forms
@@ -91,8 +96,9 @@ are:
 The problem may have ``problem.dtime == 0`` during initialization. A custom
 weak form must not divide by ``dtime`` in that state. Time-dependent terms can
 be omitted until a positive increment is supplied. See
-:download:`navier_stokes.py <../examples/user_equation/navier_stokes.py>` for
-a complete nonlinear example.
+:ref:`sphx_glr_examples_custom_weak_forms_navier_stokes.py`
+(:download:`navier_stokes.py <../examples/custom_weak_forms/navier_stokes.py>`)
+for a complete nonlinear example.
 
 
 Define a mechanical constitutive law

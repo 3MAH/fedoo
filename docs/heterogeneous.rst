@@ -138,7 +138,15 @@ Every phase law must follow the finite-strain convention described in
 
 Full example: 
 ==============================
-Here is the full script with the 3rd method and the visualization:
+Here is the full script with the 3rd method and the visualization. The
+gallery contains complete versions of this problem:
+
+* :ref:`sphx_glr_examples_plasticity_heterogeneous_struct.py`: the three
+  methods above, in linear elasticity;
+* :ref:`sphx_glr_examples_plasticity_heterogeneous_struct_nl.py`: an
+  elastoplastic matrix with an elastic inclusion in finite strain;
+* :ref:`sphx_glr_examples_thermal_thermal_loading.py`: the same
+  :py:class:`fedoo.constitutivelaw.Heterogeneous` law under a thermal load.
 
 .. code-block:: python
     
