@@ -756,23 +756,24 @@ class ProblemBase:
         ...     # ... read result
         >>> pb.set_reuse_factorization(False)
         """
+        context = None
         if reuse:
             if USE_PYPARDISO:
-                self._factor_context = _PypardisoFactor(self._solver_symmetric)
+                context = _PypardisoFactor(self._solver_symmetric)
             elif USE_MUMPS:
-                self._factor_context = _MumpsFactor(self._solver_symmetric)
+                context = _MumpsFactor(self._solver_symmetric)
             elif USE_PETSC:
-                self._factor_context = _PetscFactor()
+                context = _PetscFactor()
             else:
                 raise RuntimeError(
                     "Factorization reuse requires pypardiso, python-mumps, "
                     "or petsc4py. Install one of them, e.g. "
                     '"pip install python-mumps".'
                 )
-            self._factor_valid = False
-        else:
-            self._factor_context = None
-            self._factor_valid = False
+        if isinstance(self._factor_context, _PypardisoFactor):
+            self._factor_context.close()
+        self._factor_context = context
+        self._factor_valid = False
 
     def invalidate_factorization(self):
         """Invalidate any cached factorization.
@@ -1018,11 +1019,17 @@ class _PypardisoFactor:
     def factor(self, A):
         if self._symmetric:
             A = sparse.triu(A, format="csr")
-        self._A = A
         self._solver.factorize(A)
+        self._A = A
 
     def solve(self, B):
         return self._solver.solve(self._A, B)
+
+    def close(self):
+        if self._A is not None:
+            # Dropping PyPardisoSolver leaves its native factorization allocated.
+            self._solver.free_memory(everything=True)
+            self._A = None
 
 
 class _PetscFactor:
