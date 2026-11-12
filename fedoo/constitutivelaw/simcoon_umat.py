@@ -46,17 +46,19 @@ class Simcoon(MechanicalUMAT):
         them must be renumbered. The attribute ``tangent_mode`` can also be
         changed after construction. The default ``None`` selects ``1``, or
         ``2`` with ``integrator="closest_point"``, which only returns its
-        algorithmic operator.
+        algorithmic operator. It is resolved once, at construction: when
+        ``integrator`` is changed afterwards, set ``tangent_mode`` as well.
     name : str
         The name of the constitutive law
     ncp : {"fischer_burmeister", "min"}, default="fischer_burmeister"
         Complementarity function of the local cutting-plane return mapping,
         forwarded to :func:`simcoon.umat`. ``"min"`` is the classic
         cutting-plane step on a single surface with a Fischer-Burmeister
-        fallback. Simcoon only accepts it for the laws that read it
-        (``EPICP``, ``EPKCP`` and modular materials without an
-        Armstrong-Frederick back stress) and with the cutting-plane
-        integrator; it raises a ``ValueError`` otherwise.
+        fallback. Simcoon only accepts it for the laws that read it and with
+        the cutting-plane integrator, and raises a ``ValueError`` otherwise.
+        The set of laws depends on the simcoon version: ``EPICP``, ``EPKCP``
+        and modular materials without an Armstrong-Frederick back stress in
+        simcoon 2.3; every law served by the modular engine from simcoon 2.4.
     integrator : {"cutting_plane", "closest_point"}, default="cutting_plane"
         Local integrator of the laws with a return mapping, forwarded to
         :func:`simcoon.umat`. ``"closest_point"`` is a backward-Euler update
@@ -64,7 +66,8 @@ class Simcoon(MechanicalUMAT):
         update keeps the cutting plane.
 
     ``ncp`` and ``integrator`` are keyword-only and are also attributes that
-    can be changed after construction.
+    can be changed after construction (``tangent_mode`` does not follow a
+    change of ``integrator``).
 
     Alternative constructor
     -----------------------
@@ -79,9 +82,9 @@ class Simcoon(MechanicalUMAT):
 
     The regular constructor is
     ``Simcoon(umat_name, props, tangent_mode=None, name="", *, ncp=...,
-    integrator=...)``. For backward
-    compatibility, a string passed as the third positional argument is still
-    interpreted as ``name``.
+    integrator=...)``. ``name`` is the fourth positional argument: scripts
+    written for the historical ``Simcoon(umat_name, props, name)`` order must
+    pass it as ``name=...``.
 
     Notes
     -----

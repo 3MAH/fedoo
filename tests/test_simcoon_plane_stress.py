@@ -31,7 +31,7 @@ def _uniaxial_tension(umat, props, nlgeom=False, **options):
     )
 
 
-@pytest.mark.parametrize("nlgeom", [False, True])
+@pytest.mark.parametrize("nlgeom", [False, True, "TL"])
 @pytest.mark.parametrize("umat,props", [ELASTIC, PLASTIC])
 def test_plane_stress_carries_the_out_of_plane_strain(umat, props, nlgeom):
     stress, strain, _ = _uniaxial_tension(umat, props, nlgeom)
@@ -42,6 +42,39 @@ def test_plane_stress_carries_the_out_of_plane_strain(umat, props, nlgeom):
     assert np.all(strain[2] < -1e-3)
     np.testing.assert_allclose(strain[2], strain[1], rtol=1e-6)
     np.testing.assert_allclose(strain[4:], 0, atol=1e-14)
+
+
+@pytest.mark.parametrize("nlgeom", [False, True])
+@pytest.mark.parametrize("umat,props", [ELASTIC, PLASTIC])
+def test_shell_thickness_points_carry_the_thickness_strain(umat, props, nlgeom):
+    space = fd.ModelingSpace("3D")
+    mesh = fd.mesh.rectangle_mesh(3, 2, 0, 2, 0, 1, "quad4", ndim=3)
+    section = fd.constitutivelaw.ShellHomogeneousNonLinear(
+        fd.constitutivelaw.Simcoon(umat, props), 0.15, n_thickness_points=2
+    )
+    weakform = fd.weakform.PlateEquilibrium(section, nlgeom=nlgeom, space=space)
+    assembly = fd.Assembly.create(weakform, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
+    pb.set_nr_criterion("Displacement", tol=1e-8, max_subiter=20)
+    left, right = mesh.find_nodes("X", 0), mesh.find_nodes("X", 2)
+    pb.bc.add("Dirichlet", left, ["DispX", "DispZ", "Rot"], 0)
+    pb.bc.add("Dirichlet", right, ["DispZ", "Rot"], 0)
+    pb.bc.add("Dirichlet", mesh.find_nodes("Y", 0), "DispY", 0)
+    pb.bc.add("Dirichlet", right, "DispX", 0.04)
+    pb.nlsolve(dt=0.5, update_dt=False, print_info=0)
+
+    # membrane tension: every thickness point is in uniaxial stress
+    points = section._material_assembly
+    stress = np.asarray(points.sv["Stress"])
+    strain = np.asarray(points.sv["Strain"])
+    np.testing.assert_allclose(stress[1:], 0, atol=1e-6)
+    assert np.all(strain[2] < -1e-3)
+    np.testing.assert_allclose(strain[2], strain[1], rtol=1e-6)
+    # committed with the increment, hence handed back as the start state
+    np.testing.assert_allclose(
+        np.asarray(points.sv_start["Strain"])[2], strain[2], rtol=1e-12
+    )
 
 
 def test_plane_stress_elastic_strain_and_stress_match_hooke():
@@ -77,9 +110,12 @@ def test_default_tangent_mode_follows_the_integrator():
 
 
 def test_simcoon_rejects_unsupported_return_mapping_options():
-    # the complementarity function is only read by the cutting-plane laws
+    # simcoon validates the name of the complementarity function. Which laws
+    # read ncp="min" depends on the simcoon version (2.4 serves the legacy
+    # names, elastic ones included, with its modular engine), so only the
+    # name is checked here.
     with pytest.raises(ValueError, match="ncp"):
-        _uniaxial_tension(*ELASTIC, ncp="min")
+        _uniaxial_tension(*PLASTIC, ncp="unknown")
     # the closest-point integrator only returns its algorithmic operator
     with pytest.raises(ValueError, match="closest_point"):
         _uniaxial_tension(*PLASTIC, integrator="closest_point", tangent_mode=1)
