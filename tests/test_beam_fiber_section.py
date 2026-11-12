@@ -1,4 +1,4 @@
-"""Nonlinear multifiber beam sections (BeamFiberSection)."""
+"""Nonlinear multifiber beam sections (BeamNonLinear)."""
 
 from copy import deepcopy
 from types import SimpleNamespace
@@ -137,7 +137,7 @@ class _SectionPoint:
 def test_elastic_section_tangent_matches_the_plain_section(shape):
     material = fd.constitutivelaw.ElasticIsotrop(E, NU)
     plain = SECTIONS[shape](material)
-    section = fd.constitutivelaw.BeamFiberSection(plain)
+    section = fd.constitutivelaw.BeamNonLinear(plain)
     point = _SectionPoint(section)
     expected = np.diag(np.asarray(plain.get_beam_rigidity(), dtype=float))
     scale = np.abs(expected).max()
@@ -155,7 +155,7 @@ def test_elastic_section_tangent_matches_the_plain_section(shape):
 
 
 def test_elastic_constants_are_probed_from_a_umat():
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         SECTIONS["rectangle"](_plastic_material())
     )
     assert section.material.E == pytest.approx(E, rel=1e-12)
@@ -172,7 +172,7 @@ def _moment_curvature(a, b, kappa_ratio):
 
 def test_plastic_moment_curvature_of_a_rectangle():
     a, b = 0.2, 0.1
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         fd.constitutivelaw.BeamRectangular(_plastic_material(), a, b),
         n_fibers=(8, 2),
     )
@@ -191,7 +191,7 @@ def test_plastic_moment_curvature_of_a_rectangle():
     assert point.stress([0, 0, 0, 0, 0, kappa])[5] == pytest.approx(moment, rel=1e-3)
     # Bending about y uses the z coordinate: M_Y = +int z sigma.
     other = _SectionPoint(
-        fd.constitutivelaw.BeamFiberSection(
+        fd.constitutivelaw.BeamNonLinear(
             fd.constitutivelaw.BeamRectangular(_plastic_material(), b, a),
             n_fibers=(2, 8),
         )
@@ -202,7 +202,7 @@ def test_plastic_moment_curvature_of_a_rectangle():
 
 @pytest.mark.parametrize("shape", SECTIONS)
 def test_plastic_section_tangent_matches_finite_differences(shape):
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         SECTIONS[shape](_plastic_material(hardening=E / 20))
     )
     point = _SectionPoint(section)
@@ -229,7 +229,7 @@ def test_plastic_section_tangent_matches_finite_differences(shape):
 
 
 def test_rollback_restores_the_fiber_state():
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         SECTIONS["rectangle"](_plastic_material(hardening=E / 20))
     )
     point = _SectionPoint(section)
@@ -258,7 +258,7 @@ def _cantilever(shape, dim, nlgeom, elm_type, fiber, k=None, consistent=False):
     material = fd.constitutivelaw.ElasticIsotrop(E, NU)
     section = SECTIONS[shape](material) if k is None else SECTIONS[shape](material, k=k)
     if fiber:
-        section = fd.constitutivelaw.BeamFiberSection(section)
+        section = fd.constitutivelaw.BeamNonLinear(section)
     wf = fd.weakform.BeamEquilibrium(
         section, nlgeom=nlgeom, space=space, consistent_tangent=consistent
     )
@@ -335,7 +335,7 @@ def test_saved_stress_is_the_fiber_stress():
 )
 def test_simcoon_plastic_moment_of_a_rectangle():
     a, b = 0.2, 0.1
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         fd.constitutivelaw.BeamRectangular(_simcoon_epicp(), a, b),
         n_fibers=(8, 2),
     )
@@ -350,7 +350,7 @@ def test_simcoon_plastic_moment_of_a_rectangle():
 
 def test_one_section_per_assembly():
     material = fd.constitutivelaw.ElasticIsotrop(E, NU)
-    section = fd.constitutivelaw.BeamFiberSection(SECTIONS["circle"](material))
+    section = fd.constitutivelaw.BeamNonLinear(SECTIONS["circle"](material))
     _SectionPoint(section)
     with pytest.raises(RuntimeError, match="one assembly"):
         _SectionPoint(section)
@@ -361,7 +361,7 @@ def _plastic_beam(dim, shear):
     space = fd.ModelingSpace("2D" if dim == 2 else "3D")
     nodes = np.array([[0.0, 0.0, 0.0], [2.0, 0.3, 0.2], [3.0, 1.0, 0.5]])[:, :dim]
     mesh = fd.Mesh(nodes, np.array([[0, 1], [1, 2]]), "lin2")
-    section = fd.constitutivelaw.BeamFiberSection(
+    section = fd.constitutivelaw.BeamNonLinear(
         fd.constitutivelaw.BeamRectangular(
             _plastic_material(hardening=E / 20), 0.3, 0.2, k=shear
         ),

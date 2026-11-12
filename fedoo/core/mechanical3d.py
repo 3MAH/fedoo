@@ -9,6 +9,8 @@ from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 # Reduced stress states: Voigt slots kept by the static condensation. The
 # stress of every other slot is zero ("1Dstress": beam fibers, sigma_11 only).
 _KEPT_COMPONENTS = {"2Dstress": (0, 1, 3), "1Dstress": (0,)}
+# Number of direct stress components of each reduced state (UMAT ``ndi``).
+_NDI = {"2Dstress": 2, "1Dstress": 1}
 # Stress-free slots of each reduced state, whose strain is an unknown of the
 # material point.
 _FREE_COMPONENTS = {
@@ -202,20 +204,9 @@ class Mechanical3D(ConstitutiveLaw):
         the kept slots.
         """
         h22 = np.asarray(H[2][2], dtype=float)
-        if not np.any(h22):
-            # already condensed at every point: H[i][2] = H[2][j] = 0
-            return [
-                [H[i][j] if j in [0, 1, 3] else 0 for j in range(6)]
-                if i in [0, 1, 3]
-                else [0, 0, 0, 0, 0, 0]
-                for i in range(6)
-            ]
-        if np.all(h22):
-            h22 = H[2][2]
-        else:
-            # mixed: points condensed by the law (zero coupling) keep their
-            # tangent; the unit divisor only avoids 0 / 0 there
-            h22 = np.where(h22 != 0, h22, 1.0)
+        # points already condensed by the law (H[i][2] = H[2][j] = 0) keep
+        # their tangent; the unit divisor only avoids 0 / 0 there
+        h22 = np.where(h22 != 0, h22, 1.0)
         return [
             [
                 H[i][j] - H[i][2] * H[2][j] / h22 if j in [0, 1, 3] else 0
@@ -225,6 +216,18 @@ class Mechanical3D(ConstitutiveLaw):
             else [0, 0, 0, 0, 0, 0]
             for i in range(6)
         ]
+
+    def condense_tangent(self, H, dimension):
+        """Condense a 3D tangent onto the stress state ``dimension``.
+
+        ``H`` is returned unchanged unless ``dimension`` is a reduced stress
+        state (``"2Dstress"`` or ``"1Dstress"``).
+        """
+        if dimension == "2Dstress":
+            return self.get_H_plane_stress(H)
+        if dimension in _KEPT_COMPONENTS:
+            return self.get_H_condensed(H, _KEPT_COMPONENTS[dimension])
+        return H
 
     @staticmethod
     def get_H_condensed(H, kept):
@@ -679,7 +682,7 @@ class MechanicalUMAT(Mechanical3D):
         dimension = assembly.space.get_dimension()
         if dimension not in _KEPT_COMPONENTS:
             return 3
-        ndi = 2 if dimension == "2Dstress" else 1
+        ndi = _NDI[dimension]
         if self._Lt_from_F and not self._serves_reduced_state(ndi):
             raise NotImplementedError(
                 "UMAT laws with a deformation-gradient tangent are only "
@@ -1034,11 +1037,12 @@ class MechanicalUMAT(Mechanical3D):
         return temperature
 
     def get_tangent_matrix(self, assembly, dimension=None):
+        state = assembly.space.get_dimension()
         if dimension is None:
-            dimension = assembly.space.get_dimension()
+            dimension = state
         H = assembly.sv["TangentMatrix"]
-        if dimension == "2Dstress":
-            return self.get_H_plane_stress(H)
-        if dimension == "1Dstress":
-            return self.get_H_condensed(H, _KEPT_COMPONENTS["1Dstress"])
-        return H
+        if dimension == state and self._serves_reduced_state(_NDI.get(dimension, 3)):
+            # The UMAT ran in this reduced state and condensed its tangent
+            # itself: it is used as returned, never condensed a second time.
+            return H
+        return self.condense_tangent(H, dimension)

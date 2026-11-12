@@ -69,7 +69,7 @@ semantic versioning.
   `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
   to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
-- `BeamFiberSection`: nonlinear multifiber beam section. A private copy of a
+- `BeamNonLinear`: nonlinear multifiber beam section. A private copy of a
   3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
   stress at fiber points of a rectangular, circular or pipe section, and the
   normal force, bending moments and their full section tangent are integrated
@@ -303,7 +303,10 @@ semantic versioning.
   instead of being divided by a zero block. Simcoon laws in plane stress
   (shells) and uniaxial stress (beam fibers) returned NaN or a singular
   matrix with these Simcoon versions; full 3D tangents of older versions
-  are condensed as before.
+  are condensed as before. A UMAT law that declares condensing the reduced
+  state itself (`Simcoon`, through `condensation_serves`) now hands its
+  tangent over as returned: fedoo only condenses the tangents of laws that
+  do not.
 
 ### Migration
 

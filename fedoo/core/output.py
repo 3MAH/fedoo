@@ -579,9 +579,7 @@ def _get_results(
                             )
                     saved_law = type(law).from_section_description(recovery_description)
                     saved_law.material = law.material
-                    if method_name == "get_stress" and hasattr(
-                        law, "integration_stresses"
-                    ):
+                    if method_name == "get_stress" and law.is_section_law:
                         # Nonlinear sections only know their stresses at the
                         # material points, which are their output points.
                         value = law.get_stress(assemb, position=position)

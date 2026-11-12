@@ -4,6 +4,7 @@ import copy
 
 import numpy as np
 
+from fedoo.core.mechanical3d import _dense_tangent
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
@@ -58,8 +59,7 @@ def _copy_state(state):
 
 def _tangent_array(tangent, n_points):
     """Normalize scalar/pointwise tangent entries to a dense (6, 6, n) array."""
-    dense = np.empty((6, 6, n_points), dtype=float)
-    for row in range(6):
-        for column in range(6):
-            dense[row, column] = tangent[row][column]
-    return dense
+    dense = _dense_tangent(tangent)
+    if dense.ndim == 2:
+        dense = dense[..., None]
+    return np.array(np.broadcast_to(dense, (6, 6, n_points)))

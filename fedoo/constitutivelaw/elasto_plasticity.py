@@ -175,7 +175,7 @@ class ElastoPlasticity(MechanicalUMAT):
                 raise TypeError("Keyword argument 'hardening_function' is required.")
             if hardening_function_derivative is None:
                 raise TypeError(
-                    "Keyword argument 'hardening_function_derivative' " "is required."
+                    "Keyword argument 'hardening_function_derivative' is required."
                 )
         else:
             raise ValueError("function_type must be either 'power' or 'user'.")

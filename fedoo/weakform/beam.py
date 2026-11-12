@@ -98,8 +98,8 @@ class BeamEquilibrium(WeakFormBase):
             self.properties = BeamProperties(
                 material, A, Jx, Iyy, Izz, k, name + "_properties"
             )
-        if getattr(self.properties, "is_section_law", False):
-            # A nonlinear section (e.g. BeamFiberSection) owns BeamStress and
+        if self.properties.is_section_law:
+            # A nonlinear section (e.g. BeamNonLinear) owns BeamStress and
             # the section tangent: the assembly drives its lifecycle.
             self.constitutivelaw = self.properties
         self.time_evolution = SECOND_ORDER

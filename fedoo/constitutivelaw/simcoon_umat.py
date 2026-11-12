@@ -1308,13 +1308,6 @@ class Simcoon(MechanicalUMAT):
         else:
             raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
 
-    def get_tangent_matrix(self, assembly, dimension=None):
-        # Simcoon >= 2.3 already condenses ndi=2 tangents. A second
-        # condensation would divide by the zero out-of-plane stiffness.
-        if assembly.space.get_dimension() == "2Dstress":
-            return assembly.sv["TangentMatrix"]
-        return super().get_tangent_matrix(assembly, dimension)
-
     def _umat_options(self, assembly, *, in_material_frame, ndi):
         wf = getattr(assembly, "weakform", None)
         # Direct tangent output needs neither frame rotation nor plane-stress

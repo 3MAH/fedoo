@@ -110,12 +110,7 @@ class ElasticAnisotropic(Mechanical3D):
             dimension = assembly.space.get_dimension()
 
         H = self.local2global_H(self._H, assembly)
-        if dimension == "2Dstress":
-            return self.get_H_plane_stress(H)
-        elif dimension == "1Dstress":
-            return self.get_H_condensed(H, (0,))
-        else:
-            return H
+        return self.condense_tangent(H, dimension)
 
     def get_elastic_matrix(self, dimension="3D"):
         return self.get_tangent_matrix(None, dimension)

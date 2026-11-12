@@ -10,7 +10,11 @@ from fedoo.constitutivelaw._material_points import (
     _copy_state,
     _MaterialPointAssembly,
 )
-from fedoo.core.mechanical3d import Mechanical3D, _dense_tangent
+from fedoo.core.mechanical3d import (
+    _FREE_COMPONENTS,
+    Mechanical3D,
+    _dense_tangent,
+)
 from fedoo.util.voigt_tensors import StrainTensorList
 
 E, NU = 2.0e5, 0.3
@@ -113,6 +117,44 @@ def test_simcoon_tangent_is_condensed_for_uniaxial_stress():
     np.testing.assert_allclose(tangent, 0, atol=1e-6)
 
 
+@pytest.mark.parametrize("dimension", ["1Dstress", "2Dstress"])
+def test_tangent_condensed_by_the_law_is_not_condensed_again(dimension, monkeypatch):
+    # A law that declares condensing the reduced state itself (Simcoon, through
+    # condensation_serves) hands its tangent over as returned.
+    def forbidden(*args, **kwargs):
+        raise AssertionError("fedoo condensed a tangent the law had condensed")
+
+    law = fd.constitutivelaw.Simcoon("EPICP", [E, NU, 0.0, 300.0, 1000.0, 0.3])
+    points = _MaterialPointAssembly(2, dimension)
+    assert law._serves_reduced_state(law._get_ndi(points))
+    monkeypatch.setattr(Mechanical3D, "get_H_condensed", forbidden)
+    monkeypatch.setattr(Mechanical3D, "get_H_plane_stress", forbidden)
+    pb = SimpleNamespace(time=0.0, dtime=1.0)
+    law.initialize(points, pb)
+    points.sv_start = _copy_state(points.sv)
+    strain = np.zeros((6, 2))
+    strain[0] = 0.01  # plastic
+    points.sv["Strain"] = StrainTensorList(strain)
+    law.update(points, pb)
+    tangent = _dense_tangent(points.sv["TangentMatrix"])
+    assert 0 < tangent[0, 0, 0] < E
+    free = _FREE_COMPONENTS[dimension]
+    np.testing.assert_array_equal(tangent[free], 0)
+    np.testing.assert_array_equal(tangent[:, free], 0)
+
+
+def test_tangent_of_a_law_that_does_not_condense_is_condensed_by_fedoo():
+    law = fd.constitutivelaw.Simcoon("ELISO", [E, NU, 0.0])
+    points = _MaterialPointAssembly(1, "1Dstress")
+    law._serves_reduced_state = lambda ndi, nshr=None: False
+    full = _dense_tangent(
+        fd.constitutivelaw.ElasticIsotrop(E, NU).get_tangent_matrix(None, "3D")
+    )
+    points.sv["TangentMatrix"] = full
+    condensed = _dense_tangent(law.get_tangent_matrix(points))
+    assert condensed[0, 0] == pytest.approx(E, rel=1e-10)
+
+
 @pytest.mark.parametrize("kept", [(0,), (0, 1, 3)])
 def test_condensation_is_idempotent(kept):
     # Simcoon >= 2.3 returns the tangent already condensed (zero rows and
@@ -158,7 +200,7 @@ def test_simcoon_reduced_state_carries_the_solved_strain(umat, props, dimension)
     law = fd.constitutivelaw.Simcoon(umat, props)
     points = _MaterialPointAssembly(2, dimension)
     law.initialize(points, pb)
-    free = [2, 4, 5] if dimension == "2Dstress" else [1, 2, 3, 4, 5]
+    free = _FREE_COMPONENTS[dimension]
     lateral = None
     for axial in ([1e-3, 4e-3], [2e-3, 8e-3]):
         points.sv_start = _copy_state(points.sv)

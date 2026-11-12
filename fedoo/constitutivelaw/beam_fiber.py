@@ -49,7 +49,7 @@ def _section_fibers(section, n_fibers):
     dimensions = [getattr(section, name) for name in section.section_dimensions]
     if any(np.ndim(value) for value in dimensions):
         raise ValueError(
-            "BeamFiberSection requires uniform section dimensions; "
+            "BeamNonLinear requires uniform section dimensions; "
             "pass explicit fibers for a varying section"
         )
     if kind == "rectangle":
@@ -86,7 +86,7 @@ def _elastic_constants(material):
     return E, G, E / (2 * G) - 1
 
 
-class BeamFiberSection(BeamProperties):
+class BeamNonLinear(BeamProperties):
     """Beam section integrated from nonlinear material points (fibers).
 
     The axial strain of a fiber at :math:`(y, z)` in the local section frame
@@ -145,7 +145,7 @@ class BeamFiberSection(BeamProperties):
         steel = fd.constitutivelaw.Simcoon(
             "EPICP", [210e3, 0.3, 0.0, 355.0, 500.0, 0.3]
         )
-        section = fd.constitutivelaw.BeamFiberSection(
+        section = fd.constitutivelaw.BeamNonLinear(
             fd.constitutivelaw.BeamRectangular(steel, 20.0, 10.0), n_fibers=(8, 4)
         )
         wf = fd.weakform.BeamEquilibrium(section, nlgeom=True)
@@ -156,7 +156,7 @@ class BeamFiberSection(BeamProperties):
 
     def __init__(self, section, n_fibers=None, *, material=None, fibers=None, name=""):
         if not isinstance(section, BeamProperties) or isinstance(
-            section, BeamFiberSection
+            section, BeamNonLinear
         ):
             raise TypeError("section must be a beam section, e.g. BeamRectangular")
         if material is None:
@@ -240,7 +240,7 @@ class BeamFiberSection(BeamProperties):
     def initialize(self, assembly, pb):
         if self._owner is not None and self._owner is not assembly:
             raise RuntimeError(
-                "A BeamFiberSection holds the state of one assembly; "
+                "A BeamNonLinear holds the state of one assembly; "
                 "create one section per assembly"
             )
         self._owner = assembly
@@ -295,7 +295,8 @@ class BeamFiberSection(BeamProperties):
                 return np.zeros((self.n_fibers, self._n_gp))
             values = np.broadcast_to(np.asarray(stress[0], dtype=float), (n,))
         else:
-            values = _tangent_array(points.sv["TangentMatrix"], n)[0, 0]
+            modulus = np.asarray(points.sv["TangentMatrix"][0][0], dtype=float)
+            values = np.broadcast_to(modulus, (n,))
         return values.reshape(self.n_fibers, self._n_gp)
 
     def _store(self, assembly, strain):
