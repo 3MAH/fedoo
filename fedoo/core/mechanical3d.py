@@ -4,11 +4,17 @@
 import numpy as np
 from simcoon import Rotation
 from fedoo.core.base import ConstitutiveLaw
-from fedoo.util.voigt_tensors import StressTensorList
+from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 # Reduced stress states: Voigt slots kept by the static condensation. The
 # stress of every other slot is zero ("1Dstress": beam fibers, sigma_11 only).
 _KEPT_COMPONENTS = {"2Dstress": (0, 1, 3), "1Dstress": (0,)}
+# Stress-free slots of each reduced state, whose strain is an unknown of the
+# material point.
+_FREE_COMPONENTS = {
+    dimension: [slot for slot in range(6) if slot not in kept]
+    for dimension, kept in _KEPT_COMPONENTS.items()
+}
 
 
 def _dense_tangent(H):
@@ -189,10 +195,30 @@ class Mechanical3D(ConstitutiveLaw):
         -------
         H_plane_stress
 
+        Notes
+        -----
+        A tangent already condensed by the law (zero ZZ row and column, as
+        returned by Simcoon >= 2.3 with ``ndi=2``) is returned unchanged on
+        the kept slots.
         """
+        h22 = np.asarray(H[2][2], dtype=float)
+        if not np.any(h22):
+            # already condensed at every point: H[i][2] = H[2][j] = 0
+            return [
+                [H[i][j] if j in [0, 1, 3] else 0 for j in range(6)]
+                if i in [0, 1, 3]
+                else [0, 0, 0, 0, 0, 0]
+                for i in range(6)
+            ]
+        if np.all(h22):
+            h22 = H[2][2]
+        else:
+            # mixed: points condensed by the law (zero coupling) keep their
+            # tangent; the unit divisor only avoids 0 / 0 there
+            h22 = np.where(h22 != 0, h22, 1.0)
         return [
             [
-                H[i][j] - H[i][2] * H[2][j] / H[2][2] if j in [0, 1, 3] else 0
+                H[i][j] - H[i][2] * H[2][j] / h22 if j in [0, 1, 3] else 0
                 for j in range(6)
             ]
             if i in [0, 1, 3]
@@ -221,6 +247,12 @@ class Mechanical3D(ConstitutiveLaw):
         -------
         numpy.ndarray
             Condensed tangent with the shape of the dense input.
+
+        Notes
+        -----
+        The operation is idempotent: at points where the condensed block is
+        zero, the tangent was already condensed by the law (Simcoon >= 2.3
+        with ``ndi < 3``) and its kept block is returned unchanged.
         """
         H = _dense_tangent(H)
         kept = list(kept)
@@ -231,10 +263,12 @@ class Mechanical3D(ConstitutiveLaw):
         H_kc = points[:, kept][:, :, condensed]
         H_cc = points[:, condensed][:, :, condensed]
         H_ck = points[:, condensed][:, :, kept]
+        reduced_kk = H_kk.copy()
+        full = np.any(H_cc != 0, axis=(1, 2))
+        if np.any(full):
+            reduced_kk[full] -= H_kc[full] @ np.linalg.solve(H_cc[full], H_ck[full])
         reduced = np.zeros_like(points)
-        reduced[np.ix_(range(len(points)), kept, kept)] = H_kk - H_kc @ np.linalg.solve(
-            H_cc, H_ck
-        )
+        reduced[np.ix_(range(len(points)), kept, kept)] = reduced_kk
         reduced = reduced.transpose(1, 2, 0)
         return reduced[..., 0] if single else reduced
 
@@ -630,16 +664,28 @@ class MechanicalUMAT(Mechanical3D):
         """Return adapter-specific options and whether its tangent is converted."""
         return {}, False
 
+    def _serves_reduced_state(self, ndi, nshr=None):
+        """Whether the UMAT condenses the reduced state ``ndi`` itself.
+
+        False by default: fedoo then condenses the 3D tangent, which requires
+        a law driven by the strain. Adapters whose UMAT condenses (Simcoon
+        with ``condensation_serves``) override this.
+        """
+        return False
+
     def _get_ndi(self, assembly):
         dimension = assembly.space.get_dimension()
         if dimension not in _KEPT_COMPONENTS:
             return 3
-        if self._Lt_from_F:
+        ndi = 2 if dimension == "2Dstress" else 1
+        if self._Lt_from_F and not self._serves_reduced_state(ndi):
             raise NotImplementedError(
-                "UMAT laws with a deformation-gradient tangent are not "
-                f"compatible with the reduced stress state {dimension!r}"
+                "UMAT laws with a deformation-gradient tangent are only "
+                f"compatible with the reduced stress state {dimension!r} when "
+                "the UMAT condenses it (for Simcoon: a version providing "
+                "condensation_serves for this law)"
             )
-        return 2 if dimension == "2Dstress" else 1
+        return ndi
 
     def _statev_array(self, assembly):
         """Return an assembly Statev array with the required exact shape."""
@@ -891,6 +937,16 @@ class MechanicalUMAT(Mechanical3D):
                     - strain_start
                 )
 
+        if ndi < 3:
+            # Reduced stress state: the strain of the stress-free components
+            # is an unknown of the material point. The callback receives its
+            # own writable increment, starting from the committed value of
+            # these components (zero increment), and may overwrite them in
+            # place with the solved ones (sim.umat does), carried below.
+            free = _FREE_COMPONENTS[assembly.space.get_dimension()]
+            dstrain_local = np.array(dstrain_local, dtype=float, order="F")
+            dstrain_local[free] = 0.0
+
         wf = getattr(assembly, "weakform", None)
         corate = _constitutive_corate(assembly)
         options, tangent_converted = self._umat_options(
@@ -924,11 +980,38 @@ class MechanicalUMAT(Mechanical3D):
         )
         if ndi < 3:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly)
+            self._carry_condensed_strain(
+                assembly,
+                dstrain_local if incremental_strain else strain_start + dstrain_local,
+                trial_frame,
+                "DStrain" if incremental_strain else "Strain",
+                free,
+            )
         assembly.sv["Stress"] = StressTensorList(
             self._rotate_vector_in(stress_local, trial_frame, "stress", True)
             if in_trial
             else self.local2global_stress(stress_local, assembly, current=False)
         )
+
+    def _carry_condensed_strain(self, assembly, strain_local, trial_frame, key, free):
+        """Store the strain solved by a material point in a reduced stress state.
+
+        The kept components of ``assembly.sv[key]`` come from the kinematics
+        and are left untouched; the stress-free ones (``free``) are taken
+        from the strain the law converged to, so that they are committed with
+        the increment and handed back as the start state.
+        """
+        if trial_frame is not None:
+            solved = self._rotate_vector_in(strain_local, trial_frame, "strain", True)
+        else:
+            solved = self.local2global_strain(strain_local, assembly, current=False)
+        strain = np.array(
+            self._as_mechanical_array(assembly.sv[key]), dtype=float, order="F"
+        )
+        if strain.ndim != 2:  # strain not initialized yet (scalar 0)
+            strain = np.zeros(np.shape(solved), order="F")
+        strain[free] = np.asarray(solved)[free]
+        assembly.sv[key] = StrainTensorList(strain)
 
     def set_start(self, assembly, pb):
         if self.use_elastic_lt:

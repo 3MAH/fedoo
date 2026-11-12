@@ -27,6 +27,27 @@ semantic versioning.
 - The material-point helpers of the nonlinear shells moved to
   `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
 
+- simcoon capabilities are queried by feature, never by version, in
+  `fedoo.constitutivelaw._simcoon_features` (`serves_total`,
+  `serves_condensed`). Hyperelastic Simcoon laws built on F are accepted in
+  `2Dstress` and `1Dstress` when simcoon reports, through
+  `condensation_serves`, that it condenses the state; older simcoon versions
+  keep the previous `NotImplementedError`.
+- UMAT laws in a reduced stress state (`2Dstress`, `1Dstress`) now store the
+  strain of the stress-free components solved by the material point in
+  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
+  law as the start state of the next increment.
+
+### Fixed
+
+- `Mechanical3D.get_H_condensed` and `get_H_plane_stress` are idempotent:
+  a tangent already condensed by the law (zero rows and columns on the
+  condensed slots, as returned by Simcoon >= 2.3 with `ndi < 3`) is kept
+  instead of being divided by a zero block. Simcoon laws in plane stress
+  (shells) and uniaxial stress (beam fibers) returned NaN or a singular
+  matrix with these Simcoon versions; full 3D tangents of older versions
+  are condensed as before.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

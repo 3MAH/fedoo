@@ -16,6 +16,7 @@ from fedoo.core.mesh import MultiMesh
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import simcoon as sim
+from fedoo.constitutivelaw._simcoon_features import has_total_formulation
 import os
 from zipfile import ZipFile, Path
 
@@ -718,9 +719,7 @@ def _get_results(
             if (
                 not _has_state_function_strain(assemb)
                 or "F" not in sv
-                or (
-                    res == "LogStressU" and not hasattr(sim, "total_formulation_serves")
-                )
+                or (res == "LogStressU" and not has_total_formulation())
             ):
                 if ignore_missing:
                     continue
