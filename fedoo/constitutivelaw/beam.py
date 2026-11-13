@@ -17,6 +17,9 @@ import numpy as np
 class BeamProperties(ConstitutiveLaw):
     section_type = "generic"
     recovery = "linear"
+    # True for sections that compute BeamStress and the section tangent
+    # themselves (nonlinear sections): the assembly then drives their lifecycle.
+    is_section_law = False
     section_dimensions = ()
     section_registry = {}
 

@@ -100,7 +100,4 @@ class ElasticOrthotropic(ElasticAnisotropic):
         H[5, 5] = GYZ
 
         H = self.local2global_H(H, assembly)
-        if dimension == "2Dstress":
-            return self.get_H_plane_stress(H)
-        else:
-            return H
+        return self.condense_tangent(H, dimension)

@@ -69,6 +69,25 @@ semantic versioning.
   `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
   to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
+- `BeamNonLinear`: nonlinear multifiber beam section. A private copy of a
+  3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
+  stress at fiber points of a rectangular, circular or pipe section, and the
+  normal force, bending moments and their full section tangent are integrated
+  from the fibers. Transverse shear and torsion remain elastic. Works with
+  `BeamEquilibrium` in 2D and 3D, small strain or corotational `nlgeom`,
+  including `consistent_tangent=True`. Saved `Stress` fields are the fiber
+  stresses (`recovery="stored_only"`). A custom section that defines
+  `section_bounds` is accepted with explicit `fibers`; a section given by
+  its properties only (`BeamProperties`) is refused. The single `fibers`
+  argument takes either the counts of the built-in quadrature, e.g.
+  `(n_y, n_z)`, or the fibers themselves as `(y, z, weights)`.
+- `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
+  `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
+  tangent onto any set of Voigt components; native elastic laws and UMAT laws
+  (`ndi=1`) support it.
+- `MechanicalUMAT(..., reduced_states=(...))`: a UMAT callback declares the
+  reduced stress states (`"2Dstress"`, `"1Dstress"`) it enforces itself,
+  returning a stress whose out-of-state components are zero.
 
 ### Changed
 
@@ -119,10 +138,6 @@ semantic versioning.
   used in finite strain without `lnJ`.
 - Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
-- Plane-stress UMAT laws (`2Dstress` space, shell thickness points) now store
-  the out-of-plane strain solved by the material point in
-  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
-  law as the start state of the next increment.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
   `DeprecationWarning`, and will raise an `AttributeError` in a future
@@ -187,7 +202,31 @@ semantic versioning.
 - `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
   on Intel Macs, where pypardiso does not work); pypardiso is kept for
   Linux and Windows x86_64.
-
+- The material-point helpers of the nonlinear shells moved to
+  `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
+- simcoon capabilities are queried by feature, never by version, in
+  `fedoo.constitutivelaw._simcoon_features` (`serves_total`,
+  `serves_condensed`). Hyperelastic Simcoon laws built on F are accepted in
+  `2Dstress` and `1Dstress` when simcoon reports, through
+  `condensation_serves`, that it condenses the state; older simcoon versions
+  keep the previous `NotImplementedError`.
+- UMAT laws in a reduced stress state (`2Dstress`, `1Dstress`) now store the
+  strain of the stress-free components solved by the material point in
+  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
+  law as the start state of the next increment.
+- A UMAT law is refused in a reduced stress state (`NotImplementedError`)
+  unless it enforces the state: Simcoon laws that simcoon reports as
+  condensed for the formulation in use (rate or total), or callbacks that
+  declare `reduced_states`. Fedoo used to condense the tangent of any UMAT in
+  `2Dstress` while keeping its 3D stress, which is about 35 % too stiff for
+  an isotropic law and inconsistent with the tangent. See Migration.
+- A UMAT law with a material frame is refused in a reduced stress state when
+  the frame is tilted with respect to it (out of the plane in `2Dstress`, off
+  the axis in `1Dstress`), instead of condensing the state in the material
+  frame. Native elastic laws, which condense after the rotation, are
+  unaffected.
+- `Mechanical3D.get_H_plane_stress` now returns a dense array instead of
+  nested lists.
 
 ### Fixed
 
@@ -277,9 +316,36 @@ semantic versioning.
   residual missed a factor of order J, while the tangent used the current
   mesh. Transient finite-strain consolidation was wrong by about the strain
   level (5 % at 5 % compression), but drained states were not affected.
+- `Mechanical3D.get_H_condensed` and `get_H_plane_stress` are idempotent:
+  a tangent already condensed by the law (zero rows and columns on the
+  condensed slots, as returned by Simcoon >= 2.3 with `ndi < 3`) is kept
+  instead of being divided by a zero block. Simcoon laws in plane stress
+  (shells) and uniaxial stress (beam fibers) returned NaN or a singular
+  matrix with these Simcoon versions; full 3D tangents of older versions
+  are condensed as before. A UMAT law that declares condensing the reduced
+  state itself (`Simcoon`, through `condensation_serves`) now hands its
+  tangent over as returned: fedoo only condenses the tangents of laws that
+  do not. A condensed component without stiffness (zero row and column) is
+  left out of the condensation instead of raising a singular-matrix error.
+- Plane-stress condensation of native elastic laws
+  (`Mechanical3D.get_H_plane_stress`) releases the two transverse shear
+  stresses as well as the normal one. Only the ZZ component was condensed,
+  which is exact for isotropic laws and for orthotropic laws with an axis
+  normal to the plane, and too stiff for a law tilted out of the plane.
+  Results of the former are unchanged.
+- `ShellHomogeneousNonLinear` and `ShellLaminateNonLinear` integrate the
+  shell tangent again when an increment starts. A material that starts each
+  increment from its elastic tangent (`use_elastic_lt`, the default of
+  `Simcoon`) left the shell with the tangent of the last iteration, so the
+  first iteration of an increment did not use the tangent of the material
+  points. Converged results are unchanged; iteration counts may differ.
 
 ### Migration
 
+- A `MechanicalUMAT` callback used in `2Dstress` must enforce plane stress
+  itself (zero ZZ, XZ and YZ stresses) and declare it with
+  `reduced_states=("2Dstress",)`; without the declaration the law is now
+  refused.
 - Remove `material.corate = ...` from scripts (it now warns and was never
   read). To choose
   the objective rate, set `wf.corate` on the `StressEquilibrium` weak form

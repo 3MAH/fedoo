@@ -1,5 +1,7 @@
 """Plane-stress Simcoon laws: condensed state and return-mapping options."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -119,3 +121,31 @@ def test_simcoon_rejects_unsupported_return_mapping_options():
     # the closest-point integrator only returns its algorithmic operator
     with pytest.raises(ValueError, match="closest_point"):
         _uniaxial_tension(*PLASTIC, integrator="closest_point", tangent_mode=1)
+
+
+@pytest.mark.parametrize("laminate", [False, True])
+def test_shell_tangent_follows_the_material_tangent_at_increment_start(laminate):
+    # use_elastic_lt: the material starts each increment from its elastic
+    # tangent, and so does the shell section
+    material = fd.constitutivelaw.Simcoon(*PLASTIC)
+    assert material.use_elastic_lt
+    if laminate:
+        section = fd.constitutivelaw.ShellLaminateNonLinear(
+            [material, fd.constitutivelaw.Simcoon(*PLASTIC)], [0.05, 0.1]
+        )
+    else:
+        section = fd.constitutivelaw.ShellHomogeneousNonLinear(material, 0.15)
+
+    class ShellPoint:
+        n_gauss_points = 1
+        sv = {"ShellStrain": 0}
+
+    point, pb = ShellPoint(), SimpleNamespace(time=0.0, dtime=1.0)
+    section.initialize(point, pb)
+    elastic = point.sv["_ShellStiffnessMatrix"].copy()
+
+    point.sv["ShellStrain"] = [np.array([value]) for value in [0.02] + 7 * [0.0]]
+    section.update(point, pb)
+    assert point.sv["_ShellStiffnessMatrix"][0, 0, 0] < 0.9 * elastic[0, 0, 0]
+    section.set_start(point, pb)
+    np.testing.assert_allclose(point.sv["_ShellStiffnessMatrix"], elastic, rtol=1e-12)
