@@ -175,7 +175,7 @@ def test_plastic_moment_curvature_of_a_rectangle():
     a, b = 0.2, 0.1
     section = fd.constitutivelaw.BeamNonLinear(
         fd.constitutivelaw.BeamRectangular(_plastic_material(), a, b),
-        n_fibers=(8, 2),
+        fibers=(8, 2),
     )
     point = _SectionPoint(section)
     # With 8 layers the elastic core edge falls on a layer boundary for
@@ -194,7 +194,7 @@ def test_plastic_moment_curvature_of_a_rectangle():
     other = _SectionPoint(
         fd.constitutivelaw.BeamNonLinear(
             fd.constitutivelaw.BeamRectangular(_plastic_material(), b, a),
-            n_fibers=(2, 8),
+            fibers=(2, 8),
         )
     )
     kappa, moment = _moment_curvature(a, b, 2.0)
@@ -233,12 +233,14 @@ def test_invalid_sections_and_materials_are_refused():
     law = fd.constitutivelaw
     material = law.ElasticIsotrop(E, NU, name="steel_shared_name")
     rectangle = SECTIONS["rectangle"](material)
-    for n_fibers in (4, (4,), (4, 4, 4), (4.0, 4), (0, 4)):
-        with pytest.raises(ValueError, match="n_fibers"):
-            law.BeamNonLinear(rectangle, n_fibers=n_fibers)
+    for fibers in (4, (4,), (4, 4, 4), (4.0, 4), (0, 4)):
+        with pytest.raises(ValueError, match="fibers"):
+            law.BeamNonLinear(rectangle, fibers=fibers)
+    with pytest.raises(ValueError, match="equal length"):
+        law.BeamNonLinear(rectangle, fibers=([0.0], [0.0, 0.1], [0.01]))
     # two sectors leave a bending axis without stiffness
     with pytest.raises(ValueError, match="n_theta"):
-        law.BeamNonLinear(SECTIONS["circle"](material), n_fibers=(3, 2))
+        law.BeamNonLinear(SECTIONS["circle"](material), fibers=(3, 2))
     # the section is registered under the name of its material
     with pytest.raises(TypeError, match="not a beam section"):
         law.BeamNonLinear(rectangle, material="steel_shared_name")
@@ -399,7 +401,7 @@ def test_simcoon_plastic_moment_of_a_rectangle():
     a, b = 0.2, 0.1
     section = fd.constitutivelaw.BeamNonLinear(
         fd.constitutivelaw.BeamRectangular(_simcoon_epicp(), a, b),
-        n_fibers=(8, 2),
+        fibers=(8, 2),
     )
     point = _SectionPoint(section)
     for ratio in (2.0, 4.0):
@@ -427,7 +429,7 @@ def _plastic_beam(dim, shear):
         fd.constitutivelaw.BeamRectangular(
             _plastic_material(hardening=E / 20), 0.3, 0.2, k=shear
         ),
-        n_fibers=(4, 2),
+        fibers=(4, 2),
     )
     wf = fd.weakform.BeamEquilibrium(
         section, nlgeom=True, space=space, consistent_tangent=True

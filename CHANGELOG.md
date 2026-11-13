@@ -78,7 +78,9 @@ semantic versioning.
   including `consistent_tangent=True`. Saved `Stress` fields are the fiber
   stresses (`recovery="stored_only"`). A custom section that defines
   `section_bounds` is accepted with explicit `fibers`; a section given by
-  its properties only (`BeamProperties`) is refused.
+  its properties only (`BeamProperties`) is refused. The single `fibers`
+  argument takes either the counts of the built-in quadrature, e.g.
+  `(n_y, n_z)`, or the fibers themselves as `(y, z, weights)`.
 - `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
   `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
   tangent onto any set of Voigt components; native elastic laws and UMAT laws
