@@ -117,6 +117,12 @@ semantic versioning.
   remain active when `check_early_divergence=True`.
 - `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
   used in finite strain without `lnJ`.
+- The poromechanics documentation no longer lists the "12 % compression"
+  Newton limit of UL hyperelastic skeletons, which the updated Lagrangian
+  tangent fixes have removed (the `NEOHC` confined column converges up to
+  50 % with a constant permeability). The limitation entry now describes the
+  pore-closure bound `J > 1 - phi_0` of deformation-dependent permeabilities,
+  and `tests/test_poromech_finite_strain.py` runs at 20 % compression.
 - Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
 - Plane-stress UMAT laws (`2Dstress` space, shell thickness points) now store

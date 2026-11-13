@@ -318,16 +318,21 @@ Validation
 Limitations
 -----------
 
-* **Large compression with simcoon hyperelastic laws (UL)**: beyond roughly
-  12 % compression the Newton loop can develop a slowly-amplifying u-p
-  oscillation. The poro coupling blocks were verified consistent against a
-  finite-difference Jacobian; the amplification originates in the fedoo core
-  UL displacement tangent of hyperelastic (``_Lt_from_F``) laws, which is
-  self-consistent only in the modes excited by pure mechanical loading —
-  the Biot coupling seeds the other modes at every iteration. Workarounds:
-  smaller total strain, an elasto-plastic/corotational law (``ELISO`` etc.,
-  which are unaffected), or finer load steps do *not* help (the threshold is
-  on the strain level, not the step size).
+* **Pore closure with deformation-dependent permeabilities**: the
+  Holmes-Mow and Kozeny-Carman laws are only meaningful while the pores stay
+  open, :math:`J > 1 - \phi_0`; past that point the permeability collapses
+  towards zero and the drained state is never reached. In a confined
+  consolidation with a nearly incompressible fluid (large :math:`M`), the
+  drained boundary layer takes the whole compression during the transient,
+  so the local :math:`J` can hit this bound well before the average one
+  does. Such a run then stalls or fails in Newton for a physical reason, not
+  a numerical one. Keep the total strain below the bound, lower :math:`M`,
+  or use a constant permeability.
+  (An earlier version of this page reported a u-p Newton oscillation of the
+  UL hyperelastic skeleton beyond about 12 % compression. It came from the
+  updated Lagrangian tangent of the core and has been fixed since; the
+  ``NEOHC`` confined column now converges in a few iterations per step up to
+  50 % compression with a constant permeability.)
 * ``2Daxi`` is supported in small strain and in UL, like
   :py:class:`~fedoo.weakform.StressEquilibrium`. It is not available in TL.
 * The permeability tensor is isotropic (:math:`k \mathbf{I}`); anisotropic
