@@ -244,7 +244,7 @@ def test_invalid_sections_and_materials_are_refused():
         law.BeamNonLinear(rectangle, material="steel_shared_name")
     generic = law.BeamProperties(material, 0.02, 1e-5, 1e-5, 1e-5, k=0.8)
     fibers = ([0.0, 0.0], [-0.05, 0.05], [0.01, 0.01])
-    with pytest.raises(NotImplementedError, match="BeamRectangular"):
+    with pytest.raises(NotImplementedError, match="section_bounds"):
         law.BeamNonLinear(generic, fibers=fibers)
     pointwise = law.ElasticIsotrop(np.linspace(0.9 * E, 1.1 * E, 4), NU)
     with pytest.raises(ValueError, match="uniform material constants"):
@@ -252,6 +252,27 @@ def test_invalid_sections_and_materials_are_refused():
     varying = law.BeamRectangular(material, np.linspace(0.1, 0.2, 4), 0.1)
     with pytest.raises(ValueError, match="uniform section dimensions"):
         law.BeamNonLinear(varying, fibers=fibers)
+
+
+def test_custom_section_with_a_geometry_takes_explicit_fibers():
+    class TwoFlanges(fd.constitutivelaw.BeamProperties):
+        section_type = "two_flanges"
+
+        def section_bounds(self):
+            return (-0.05, 0.05, -0.1, 0.1)
+
+    material = fd.constitutivelaw.ElasticIsotrop(E, NU)
+    area, z = 0.002, 0.1
+    plain = TwoFlanges(material, 2 * area, 1e-6, 2 * area * z**2, 1e-6, k=0.8)
+    with pytest.raises(ValueError, match="fibers="):
+        fd.constitutivelaw.BeamNonLinear(plain)
+    section = fd.constitutivelaw.BeamNonLinear(
+        plain, fibers=([0.0, 0.0], [-z, z], [area, area])
+    )
+    tangent = _SectionPoint(section).tangent()
+    assert tangent[0, 0] == pytest.approx(E * 2 * area)
+    assert tangent[4, 4] == pytest.approx(E * 2 * area * z**2)
+    np.testing.assert_allclose(section._output_points, [[0, -1], [0, 1]])
 
 
 def test_section_tangent_follows_the_fiber_tangent_at_increment_start():

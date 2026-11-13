@@ -659,6 +659,9 @@ class ShellHomogeneousNonLinear(ShellBase):
     def set_start(self, assembly, pb):
         self.material.set_start(self._material_assembly, pb)
         self._material_assembly.sv_start = _copy_state(self._material_assembly.sv)
+        # the material may start the increment from another tangent (its
+        # elastic one with use_elastic_lt): the shell tangent follows it
+        assembly.sv["_ShellStiffnessMatrix"] = self._integrate_tangent()
 
     def to_start(self, assembly, pb):
         self.material.to_start(self._material_assembly, pb)
@@ -976,6 +979,9 @@ class ShellLaminateNonLinear(ShellBase):
         ):
             material.set_start(material_assembly, pb)
             material_assembly.sv_start = _copy_state(material_assembly.sv)
+        # the material may start the increment from another tangent (its
+        # elastic one with use_elastic_lt): the shell tangent follows it
+        assembly.sv["_ShellStiffnessMatrix"] = self._integrate_tangent()
 
     def to_start(self, assembly, pb):
         for material, material_assembly in zip(

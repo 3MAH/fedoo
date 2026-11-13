@@ -76,7 +76,9 @@ semantic versioning.
   from the fibers. Transverse shear and torsion remain elastic. Works with
   `BeamEquilibrium` in 2D and 3D, small strain or corotational `nlgeom`,
   including `consistent_tangent=True`. Saved `Stress` fields are the fiber
-  stresses (`recovery="stored_only"`).
+  stresses (`recovery="stored_only"`). A custom section that defines
+  `section_bounds` is accepted with explicit `fibers`; a section given by
+  its properties only (`BeamProperties`) is refused.
 - `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
   `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
   tangent onto any set of Voigt components; native elastic laws and UMAT laws
@@ -329,6 +331,12 @@ semantic versioning.
   which is exact for isotropic laws and for orthotropic laws with an axis
   normal to the plane, and too stiff for a law tilted out of the plane.
   Results of the former are unchanged.
+- `ShellHomogeneousNonLinear` and `ShellLaminateNonLinear` integrate the
+  shell tangent again when an increment starts. A material that starts each
+  increment from its elastic tangent (`use_elastic_lt`, the default of
+  `Simcoon`) left the shell with the tangent of the last iteration, so the
+  first iteration of an increment did not use the tangent of the material
+  points. Converged results are unchanged; iteration counts may differ.
 
 ### Migration
 

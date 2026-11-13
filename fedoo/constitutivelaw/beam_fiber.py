@@ -82,7 +82,10 @@ def _section_fibers(section, n_fibers):
     if kind == "pipe":
         n_r, n_theta = _fiber_counts(n_fibers, (2, 16), ("n_r", "n_theta"), (1, 3))
         return _polar_rule(section.r_int, section.r_ext, n_r, n_theta)
-    raise ValueError(f"No default fiber quadrature for section type {kind!r}")
+    raise ValueError(
+        f"No default fiber quadrature for a section of type {kind!r}: give "
+        "its fibers with fibers=(y, z, weights)"
+    )
 
 
 def _elastic_constants(material):
@@ -123,9 +126,12 @@ class BeamNonLinear(BeamProperties):
 
     Parameters
     ----------
-    section : BeamCircular, BeamPipe or BeamRectangular
-        Section geometry. Its material is the fiber material unless
-        ``material`` is given. Section dimensions must be uniform.
+    section : BeamProperties
+        Section geometry: ``BeamRectangular``, ``BeamCircular``, ``BeamPipe``
+        or a subclass that defines ``section_bounds``, the latter with
+        explicit ``fibers``. A section given by its properties only
+        (``BeamProperties``) is refused. Its material is the fiber material
+        unless ``material`` is given. Section dimensions must be uniform.
     n_fibers : tuple of int, optional
         Section quadrature: ``(n_y, n_z)`` layers of a rectangle, each with
         a two-point Gauss rule (default ``(4, 4)``; even counts integrate the
@@ -180,11 +186,15 @@ class BeamNonLinear(BeamProperties):
             section, BeamNonLinear
         ):
             raise TypeError("section must be a beam section, e.g. BeamRectangular")
-        if section.section_type not in ("rectangle", "circle", "pipe"):
+        if type(section).section_bounds is BeamProperties.section_bounds and not (
+            hasattr(section, "_bounds")
+        ):
+            # the fibers could not be located in the section, and nothing
+            # would tie them to the A, Iyy and Izz entered by hand
             raise NotImplementedError(
-                "BeamNonLinear supports BeamRectangular, BeamCircular and BeamPipe "
-                f"sections, not a section of type {section.section_type!r}: its "
-                "stress recovery and output rely on the section geometry"
+                "BeamNonLinear requires a section with a geometry "
+                "(BeamRectangular, BeamCircular, BeamPipe or a subclass that "
+                "defines section_bounds), not a section given by its properties"
             )
         if any(np.ndim(getattr(section, name)) for name in section.section_dimensions):
             # the fibers and their weights are the same at every Gauss point
