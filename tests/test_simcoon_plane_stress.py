@@ -110,12 +110,12 @@ def test_default_tangent_mode_follows_the_integrator():
 
 
 def test_simcoon_rejects_unsupported_return_mapping_options():
-    # simcoon validates the name of the complementarity function. Which laws
-    # read ncp="min" depends on the simcoon version (2.4 serves the legacy
-    # names, elastic ones included, with its modular engine), so only the
-    # name is checked here.
+    # simcoon validates the names of the complementarity function and of the
+    # integrator. Which laws read ncp="min", and which tangent modes the
+    # closest point takes, depend on the simcoon version (2.4 refuses the
+    # closest point with the continuum tangent, 2.5 accepts it), so only the
+    # names are checked here.
     with pytest.raises(ValueError, match="ncp"):
         _uniaxial_tension(*PLASTIC, ncp="unknown")
-    # the closest-point integrator only returns its algorithmic operator
-    with pytest.raises(ValueError, match="closest_point"):
-        _uniaxial_tension(*PLASTIC, integrator="closest_point", tangent_mode=1)
+    with pytest.raises(ValueError, match="integrator"):
+        _uniaxial_tension(*PLASTIC, integrator="unknown")
