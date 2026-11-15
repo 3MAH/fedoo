@@ -1097,7 +1097,8 @@ def test_a_law_simcoon_does_not_serve_keeps_the_rate_update_in_tl():
     assert fd.constitutivelaw.Simcoon(
         "NEOHC", [1000.0, 5000.0]
     ).supports_total_formulation
-    for name in ("SMADI", "ZENER", "HYPOO"):
+    # ZENER runs the modular engine since simcoon 2.4 and serves it; its dedicated Kelvin kernel does not
+    for name in ("SMADI", "ZENER_closed", "HYPOO"):
         assert not simcoon.total_formulation_serves(name)
 
 

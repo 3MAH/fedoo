@@ -106,7 +106,7 @@ def test_default_tangent_mode_follows_the_integrator():
     explicit = law(*PLASTIC, tangent_mode=0, integrator="closest_point")
     assert explicit.tangent_mode == 0
     assert law(*PLASTIC).ncp == "fischer_burmeister"
-    assert law(*PLASTIC).integrator == "cutting_plane"
+    assert law(*PLASTIC).integrator is None  # simcoon's default
 
 
 def test_simcoon_rejects_unsupported_return_mapping_options():
