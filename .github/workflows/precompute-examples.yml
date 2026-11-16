@@ -42,7 +42,7 @@ jobs:
           conda list '^(python|gmsh|python-gmsh|ipctk|mkl|libblas|pypardiso|simcoon|vtk|pyvista|meshlane|numpy|scipy)$'
           read -r -a paths <<< "$EXAMPLE_PATHS"
           python tools/run_precomputed.py "${paths[@]}" --media-dir precomputed-media
-      - name: Preserve generated media and run records
+      - name: Preserve generated animations, thumbnails, and run records
         if: always()
         uses: actions/upload-artifact@v6
         with:

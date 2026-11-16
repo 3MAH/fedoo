@@ -24,16 +24,21 @@ def test_publish_merges_completed_runs_and_keeps_other_examples(tmp_path):
     records.save_record(hosted, {"path": "old.py"}, {"commit": "old"})
     (hosted / "old.gif").write_bytes(b"old")
     records.save_record(
-        generated, {"path": "new.py", "media": "contact/new.gif"}, {"commit": "new"}
+        generated,
+        {"path": "new.py", "media": "contact/new.gif", "thumbnail": "contact/new.png"},
+        {"commit": "new"},
     )
     (generated / "contact").mkdir()
     (generated / "contact/new.gif").write_bytes(b"new")
+    (generated / "contact/new.png").write_bytes(b"preview")
     records.publish(generated, hosted)
     published = json.loads((hosted / "records.json").read_text())
     assert published["old.py"]["run"]["commit"] == "old"
     assert published["new.py"]["run"]["commit"] == "new"
+    assert published["new.py"]["thumbnail"] == "contact/new.png"
     assert (hosted / "old.gif").read_bytes() == b"old"
     assert (hosted / "contact/new.gif").read_bytes() == b"new"
+    assert (hosted / "contact/new.png").read_bytes() == b"preview"
 
 
 def test_publish_missing_media_keeps_previous_records(tmp_path):

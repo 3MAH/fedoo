@@ -2,7 +2,7 @@
 
 The examples listed in ``examples/precomputed_runs.toml`` are too heavy to be
 executed at each documentation build. This script runs them headless, writes
-their animation in ``--media-dir`` (to be copied to the ``media/examples``
+their animation and thumbnail in ``--media-dir`` (to be copied to the ``media/examples``
 folder of the 3MAH/fedoo-docs repository) and records the software versions,
 date, machine and wall time of the run in the ``run`` field of each entry.
 
@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from precomputed_records import save_record
 
@@ -168,6 +169,31 @@ def _make_media(entry, folder, media_dir):
     return None
 
 
+def make_thumbnail(media):
+    """Save a still preview beside an animation and return its path."""
+    from PIL import Image
+
+    media = Path(media)
+    try:
+        if media.suffix.lower() == ".gif":
+            with Image.open(media) as animation:
+                animation.seek(animation.n_frames // 2)
+                frame = animation.convert("RGB")
+        else:
+            from imageio import v2 as imageio
+
+            with imageio.get_reader(media, format="FFMPEG") as animation:
+                frame = Image.fromarray(animation.get_data(0))
+        frame.thumbnail((400, 280), Image.Resampling.LANCZOS)
+        thumbnail = media.with_suffix(".png")
+        frame.save(thumbnail, optimize=True)
+    except (OSError, ValueError, IndexError) as error:
+        raise RuntimeError(
+            f"Could not make a thumbnail for {media}: {error}"
+        ) from error
+    return thumbnail
+
+
 def run(entry, media_dir):
     script = os.path.join(EXAMPLES, entry["path"])
     folder = os.path.dirname(script)
@@ -188,6 +214,9 @@ def run(entry, media_dir):
             f"entry in {REGISTRY}, or make the example write "
             f"{os.path.basename(entry['media'])!r}; the run record is not updated."
         )
+    if media is not None:
+        thumbnail = make_thumbnail(media)
+        entry = {**entry, "thumbnail": thumbnail.relative_to(media_dir).as_posix()}
     record = _versions()
     record.update(
         date=datetime.date.today().isoformat(),
