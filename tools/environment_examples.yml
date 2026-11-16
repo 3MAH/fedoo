@@ -28,6 +28,8 @@ dependencies:
   - python-gmsh
   - mmg # mmg3d_O3, for util/meshes/make_gyroid_mesh.py
   - imageio-ffmpeg # mp4 and gif movies
+  - imageio # decode video thumbnails
+  - pillow # write PNG thumbnails
   - pip
   - pip:
       - microgen[cad]==2.0.0b1

@@ -17,7 +17,7 @@ def save_record(directory, entry, run):
     records = load_records(directory / "records.json")
     records[entry["path"]] = {
         "run": run,
-        **({"media": entry["media"]} if "media" in entry else {}),
+        **{key: entry[key] for key in ("media", "thumbnail") if key in entry},
     }
     (directory / "records.json").write_text(json.dumps(records, indent=2) + "\n")
 
@@ -28,14 +28,21 @@ def publish(source, destination):
     updates = load_records(source / "records.json")
     if not updates:
         raise ValueError("No completed example runs to publish")
+    files = set()
     for entry in updates.values():
-        if "media" in entry:
-            relative = Path(entry["media"])
+        for key in ("media", "thumbnail"):
+            if key not in entry:
+                continue
+            relative = Path(entry[key])
             if relative.is_absolute() or ".." in relative.parts:
-                raise ValueError(f"Invalid media path: {relative}")
-            target = destination / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source / relative, target)
+                raise ValueError(f"Invalid {key} path: {relative}")
+            if not (source / relative).is_file():
+                raise FileNotFoundError(source / relative)
+            files.add(relative)
+    for relative in files:
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / relative, target)
     destination.mkdir(parents=True, exist_ok=True)
     records.update(updates)
     (destination / "records.json").write_text(json.dumps(records, indent=2) + "\n")

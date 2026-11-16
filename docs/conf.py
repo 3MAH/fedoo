@@ -148,6 +148,8 @@ if _records_path:
         published = _published_records.get(entry["path"])
         if published and published.get("media") == entry.get("media"):
             entry["run"] = published["run"]
+            if "thumbnail" in published:
+                entry["thumbnail"] = published["thumbnail"]
 _executed_pattern = (
     r"^(?!.*/(?:"
     + "|".join(re.escape(entry["path"]) for entry in _precomputed["example"])
@@ -253,5 +255,19 @@ def _insert_precomputed_banner(app, docname, source):
             return
 
 
+def _use_precomputed_thumbnails(app, docname, source):
+    """Use published previews in the generated gallery indexes."""
+    if not (docname.startswith("examples/") and docname.endswith("/index")):
+        return
+    for page, entry in _precomputed_pages.items():
+        if "thumbnail" not in entry:
+            continue
+        folder, name = page.rsplit("/", 1)
+        image = f"/{folder}/images/thumb/sphx_glr_{name}_thumb.png"
+        url = f"{_precomputed['media_root']}/{entry['thumbnail']}"
+        source[0] = source[0].replace(f".. image:: {image}\n", f".. image:: {url}\n")
+
+
 def setup(app):
     app.connect("source-read", _insert_precomputed_banner)
+    app.connect("source-read", _use_precomputed_thumbnails)
