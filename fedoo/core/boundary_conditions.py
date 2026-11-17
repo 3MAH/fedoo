@@ -223,7 +223,7 @@ class ListBC(BCBase):
         if self.name == "":
             return "ListBC -> list of {} bc".format(len(self))
         else:
-            "ListBC (name = {}) -> list of {} bc".format(self.name, len(self))
+            return "ListBC (name = {}) -> list of {} bc".format(self.name, len(self))
 
     # def insert(self, index, bc):
     #     if self._problem is not None:
@@ -745,7 +745,8 @@ class BoundaryCondition(BCBase):
                         name=name,
                     )
                     for i, var in enumerate(variable)
-                ]
+                ],
+                name=name,
             )
         else:
             return BoundaryCondition(

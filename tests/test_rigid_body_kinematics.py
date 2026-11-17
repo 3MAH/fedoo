@@ -156,6 +156,84 @@ def test_static_body_is_not_compiled_by_second_order_integrator(space):
     assert not body.assembly._fedoo_time_integrated
 
 
+def _pending_rigid_problem(rotation=True):
+    body = _make_rigid_body(dynamic=False)
+    pb = fd.problem.NonLinear(fd.Assembly.sum(body.assembly))
+    values = [0.01, -0.02, -0.2, 0.1, -0.2, 0.3]
+    if not rotation:
+        values[3:] = [0.0, 0.0, 0.0]
+    for i, variable in enumerate(body.constraint.var_cd):
+        pb.bc.add("Dirichlet", body.constraint.node_cd[i], variable, values[i])
+    pb.dtime = 0.1
+    pb.initialize()
+    pb._dU = np.zeros(pb.n_dof)
+    pb.apply_boundary_conditions(0.1, 0.0)
+    pb._update_d()
+    pb.set_X(pb._Xbc.copy())
+    return pb, body
+
+
+@pytest.mark.parametrize("alpha", [0.0, 0.25, 1.0])
+@pytest.mark.parametrize("reject", [False, True])
+def test_rigid_line_search_uses_trial_motion_and_restores_pending_bc(
+    space, alpha, reject, monkeypatch
+):
+    from fedoo.core.base import InvalidKinematicStateError
+    from fedoo.problem.line_search import _evaluate_residual_norm
+
+    pb, body = _pending_rigid_problem()
+    pending = pb._Xbc.copy()
+    matrix_bc = pb._MatCB
+    original_du = pb._dU.copy()
+    original_update = pb.update
+    observed = []
+
+    def update(*args, **kwargs):
+        original_update(*args, **kwargs)
+        observed.append(pb.get_disp().T.copy())
+        if reject:
+            raise InvalidKinematicStateError("Rejected trial")
+
+    monkeypatch.setattr(pb, "update", update)
+    norm, _ = _evaluate_residual_norm(pb, pending, alpha)
+    assert np.isinf(norm) if reject else np.isfinite(norm)
+    q = alpha * pending[body.assembly.dof_indices]
+    rotation = Rotation.from_rotvec(q[3:]).as_matrix()
+    expected = (
+        (body.mesh.nodes - body.center_of_mass) @ rotation.T
+        + body.center_of_mass
+        + q[:3]
+        - body.mesh.nodes
+    )
+    np.testing.assert_allclose(observed[-1], expected, atol=1e-12)
+    np.testing.assert_array_equal(pb._Xbc, pending)
+    np.testing.assert_array_equal(pb._dU, original_du)
+    np.testing.assert_array_equal(pb.get_X(), pending)
+    assert pb._MatCB is matrix_bc
+
+
+def test_partial_rigid_step_keeps_pending_bc_until_full_motion_is_applied(space):
+    pb, body = _pending_rigid_problem(rotation=False)
+    # Pure translation makes the remaining correction exactly additive.
+    pending = pb._Xbc.copy()
+    pending[body.assembly.dof_indices[3:]] = 0
+    indices = body.assembly.dof_indices
+    pb._dU = 0.25 * pending
+    pb.set_X(0.25 * pending)
+    pb._Xbc = 0.75 * pending
+    pb._boundary_is_0 = False
+    pb.update(compute="vector")
+    np.testing.assert_allclose(pb.get_disp()[2], 0.25 * pending[indices[2]])
+    np.testing.assert_array_equal(pb._Xbc, 0.75 * pending)
+    assert not pb._xbc_is_applied()
+    pb._update_a()
+    pb.add_line_search(mode="safeguard")
+    pb.solve_nr_increment()
+    pb.update(compute="vector")
+    np.testing.assert_allclose(pb.get_dof_solution()[indices[:3]], pending[indices[:3]])
+    assert pb._xbc_is_applied()
+
+
 def test_rigid_body_integrator_is_recompiled_for_each_problem(space):
     body = _make_rigid_body()
 

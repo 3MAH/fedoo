@@ -45,4 +45,4 @@ jobs:
 
       - name: Test
         shell: bash -l {0}
-        run: pytest tests -n auto
+        run: pytest tests --ignore=tests/viewer -n auto

@@ -72,6 +72,14 @@ and viewer settings are not persisted, and the file is not a solver restart
 checkpoint. The format version stored in the root attributes is independent
 of the Fedoo package version.
 
+Gzip level 4 is the default lossless compression. Optional Zstandard uses the
+HDF5 Zstd filter (id 32015), provided by ``pip install fedoo[zstd]`` or
+``pip install hdf5plugin``. Fedoo registers it automatically when needed;
+external readers need the same filter. Writers mark files containing Zstandard
+with the root attribute ``fedoo_requires_zstd`` so readers can explain a
+missing dependency before accessing compressed arrays. This marker remains
+set when later frames use another codec. The FDH5 layout is unchanged.
+
 Live viewing uses short, sequential read/write access with HDF5 locking
 enabled. Writers retry temporary lock conflicts for up to 10 seconds by
 default; readers retry for up to 0.2 seconds. Eager mesh/frame reads copy all
@@ -94,9 +102,16 @@ from datetime import datetime, timezone
 import contextlib
 import json
 import errno
+import importlib
 import time as _time
 
 import numpy as np
+from fedoo.util.frame_fields import (
+    is_frame_field,
+    frame_matrices,
+    encode_frames,
+    FRAME_ENCODINGS,
+)
 
 
 def _write_metadata_tree(group, values):
@@ -125,6 +140,26 @@ def _read_metadata_tree(group):
 
 PathLike = Union[str, Path]
 NDArray = np.ndarray
+
+ZSTD_FILTER_ID = 32015
+
+
+def zstd_available():
+    """Register the optional HDF5 filters when installed."""
+    if not h5py.h5z.filter_avail(ZSTD_FILTER_ID):
+        try:
+            importlib.import_module("hdf5plugin")
+        except ImportError:
+            return False
+    return h5py.h5z.filter_avail(ZSTD_FILTER_ID)
+
+
+def _require_zstd():
+    if not zstd_available():
+        raise ImportError(
+            "Zstandard-compressed FDH5 files require the HDF5 Zstandard filter. "
+            "Install it with 'pip install fedoo[zstd]' or 'pip install hdf5plugin'."
+        )
 
 
 def _open_hdf5(path, mode, lock_timeout):
@@ -170,19 +205,219 @@ class CompressionConfig:
 
     Parameters
     ----------
-    compression : {"gzip", "lzf"} or None, optional
+    compression : {"gzip", "lzf", "zstd"} or None, optional
         Compression filter applied to non-scalar datasets; ``None`` disables
         compression. Default is ``"gzip"``.
     compression_opts : int or None, optional
-        Compression level for the gzip filter (0-9). Default is 4.
+        Compression level: 0-9 for gzip, 1-22 for Zstandard. Default is 4.
+        Zstandard requires the optional ``fedoo[zstd]`` dependency on readers
+        and writers. The FDH5 options dictionary uses level 3 by default for Zstd.
     chunks : bool or tuple of int or None, optional
         Chunk shape passed to h5py; ``True`` enables auto-chunking and ``None``
         disables chunking. Default is ``True``.
     """
 
-    compression: Optional[Literal["gzip", "lzf"]] = "gzip"
+    compression: Optional[Literal["gzip", "lzf", "zstd"]] = "gzip"
     compression_opts: Optional[int] = 4
     chunks: Optional[Union[bool, tuple[int, ...]]] = True
+
+    def __post_init__(self):
+        if self.compression not in (None, "gzip", "lzf", "zstd"):
+            raise ValueError("compression must be None, 'gzip', 'lzf', or 'zstd'")
+        if self.compression in ("gzip", "zstd"):
+            minimum, maximum = (0, 9) if self.compression == "gzip" else (1, 22)
+            level = self.compression_opts
+            if level is not None and (
+                not isinstance(level, (int, np.integer))
+                or not minimum <= level <= maximum
+            ):
+                raise ValueError(
+                    f"{self.compression} compression level must be {minimum}-{maximum}"
+                )
+
+    def dataset_kwargs(self):
+        """Validate codec availability before opening or replacing a file."""
+        kwargs = {}
+        if self.compression == "zstd":
+            _require_zstd()
+            kwargs.update(
+                compression=ZSTD_FILTER_ID,
+                compression_opts=(
+                    3 if self.compression_opts is None else self.compression_opts,
+                ),
+            )
+        elif self.compression is not None:
+            kwargs["compression"] = self.compression
+            if self.compression == "gzip" and self.compression_opts is not None:
+                kwargs["compression_opts"] = self.compression_opts
+        if self.chunks is not None:
+            kwargs["chunks"] = self.chunks
+        return kwargs
+
+    @classmethod
+    def from_compressed(cls, compressed):
+        """Accept legacy flags/levels, codec names, or explicit settings."""
+        if isinstance(compressed, cls):
+            return compressed
+        if isinstance(compressed, (bool, np.bool_)):
+            return cls() if compressed else cls(compression=None, compression_opts=None)
+        if isinstance(compressed, (int, np.integer)) and 0 <= compressed <= 9:
+            return cls(compression_opts=int(compressed))
+        if isinstance(compressed, str) and compressed in ("gzip", "lzf", "zstd"):
+            return cls(compressed, 3 if compressed == "zstd" else 4)
+        raise ValueError(
+            "compressed must be True, False, a gzip level from 0 to 9, "
+            "a codec name ('gzip', 'lzf', 'zstd'), or CompressionConfig"
+        )
+
+
+_DEFAULT_OPTIONS = {
+    "compression": "gzip",
+    "compression_level": 4,
+    "float_dtype": "float32",
+    "coordinate_dtype": None,
+    "integer_min_bits": 32,
+    "local_frame": "quaternion",
+}
+_fdh5_options = _DEFAULT_OPTIONS.copy()
+
+
+def _validate_options(options):
+    unknown = options.keys() - _DEFAULT_OPTIONS.keys()
+    if unknown:
+        raise ValueError(f"Unknown FDH5 options: {sorted(unknown)}")
+    for key in ("float_dtype", "coordinate_dtype"):
+        value = options[key]
+        if value is not None:
+            try:
+                dtype = np.dtype(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{key} must be None, float32 or float64") from exc
+            if dtype not in (np.dtype("float32"), np.dtype("float64")):
+                raise ValueError(f"{key} must be None, float32 or float64")
+            options[key] = dtype.name
+    bits = options["integer_min_bits"]
+    if bits is not None and (
+        isinstance(bits, (bool, np.bool_))
+        or not isinstance(bits, (int, np.integer))
+        or bits not in (8, 16, 32, 64)
+    ):
+        raise ValueError("integer_min_bits must be None, 8, 16, 32 or 64")
+    if options["local_frame"] not in ("matrix", "quaternion", "rotvec"):
+        raise ValueError("local_frame must be 'matrix', 'quaternion' or 'rotvec'")
+    CompressionConfig(options["compression"], options["compression_level"])
+    return options
+
+
+def get_fdh5_options():
+    """Return a copy of the process-wide FDH5 saving defaults."""
+    return _fdh5_options.copy()
+
+
+def _merge_options(base, overrides):
+    if overrides is None:
+        overrides = {}
+    if not isinstance(overrides, Mapping):
+        raise TypeError("fdh5_options must be a mapping")
+    result = dict(base)
+    result.update(overrides)
+    if "compression" in overrides and "compression_level" not in overrides:
+        result["compression_level"] = {"gzip": 4, "zstd": 3}.get(result["compression"])
+    return _validate_options(result)
+
+
+def set_fdh5_options(**options):
+    """Update process-wide saving defaults; existing registered outputs are unchanged.
+
+    Options are compression (None/gzip/lzf/zstd), compression_level,
+    float_dtype (None/float32/float64), coordinate_dtype (same),
+    integer_min_bits (None/8/16/32/64), and local_frame (matrix/quaternion/rotvec).
+    None preserves floating/integer dtypes; integer packing never enlarges arrays.
+    Floating-point conversion affects result fields only, not scalar outputs or
+    metadata. Coordinates have their own setting. These options never modify
+    arrays in memory or solver precision.
+    """
+    global _fdh5_options
+    _fdh5_options = _merge_options(_fdh5_options, options)
+
+
+def reset_fdh5_options():
+    """Restore library defaults (gzip 4, float32 fields, original coordinates)."""
+    global _fdh5_options
+    _fdh5_options = _DEFAULT_OPTIONS.copy()
+
+
+def resolve_fdh5_options(options=None, compressed=None):
+    """Resolve a saving policy and validate compression before touching a file."""
+    if compressed is not None and not isinstance(compressed, (bool, np.bool_)):
+        raise TypeError(
+            "compressed must be True, False or None; use fdh5_options for codec/level"
+        )
+    if (
+        compressed is not None
+        and options is not None
+        and any(key in options for key in ("compression", "compression_level"))
+    ):
+        raise ValueError(
+            "Specify compression using either compressed or fdh5_options, not both"
+        )
+    result = _merge_options(get_fdh5_options(), options)
+    if compressed is False or isinstance(compressed, np.bool_) and not compressed:
+        result.update(compression=None, compression_level=None)
+    elif compressed and result["compression"] is None:
+        result.update(compression="gzip", compression_level=4)
+    CompressionConfig(
+        result["compression"], result["compression_level"]
+    ).dataset_kwargs()
+    return result
+
+
+def _storage_array(data, options, float_dtype=None):
+    array = np.asarray(data)
+    if array.dtype.kind == "f" and float_dtype is not None:
+        target = np.dtype(float_dtype)
+        if target.itemsize < array.dtype.itemsize:
+            with np.errstate(over="ignore"):
+                converted = array.astype(target)
+            if np.any(np.isfinite(array) & ~np.isfinite(converted)):
+                raise ValueError(
+                    f"Values overflow {target}; preserve precision for this output"
+                )
+            return converted
+    bits = options["integer_min_bits"]
+    if array.dtype.kind in "iu" and bits is not None and array.size:
+        lower, upper = int(array.min()), int(array.max())
+        for size in (8, 16, 32, 64):
+            if size < bits or size >= array.dtype.itemsize * 8:
+                continue
+            dtype = np.dtype(f"{array.dtype.kind}{size // 8}")
+            limits = np.iinfo(dtype)
+            if limits.min <= lower and upper <= limits.max:
+                return array.astype(dtype)
+    return array
+
+
+def _read_field(ds):
+    """Materialize encoded frames as row matrices; other arrays preserve dtype."""
+    encoding = ds.attrs.get("frame_encoding")
+    if encoding is None:
+        return ds[...]
+    if encoding not in FRAME_ENCODINGS.values():
+        raise ValueError(f"Unsupported local-frame encoding: {encoding}")
+    components = {
+        "matrix-rows": 9,
+        "quaternion-xyzw-rows": 4,
+        "rotvec-radians-rows": 3,
+    }[encoding]
+    if ds.ndim != 2 or ds.shape[0] != components:
+        raise ValueError(f"Invalid shape {ds.shape} for frame encoding {encoding}")
+    frames = frame_matrices(ds[...]).reshape(-1, 9).T
+    repeats = int(ds.attrs.get("frame_gp_repeats", 1))
+    return np.tile(frames, (1, repeats)) if repeats > 1 else frames
+
+
+def _lazy_field(ds):
+    return _read_field(ds) if "frame_encoding" in ds.attrs else ds
 
 
 class FDH5Writer:
@@ -199,7 +434,8 @@ class FDH5Writer:
         self,
         file_path: PathLike,
         *,
-        compression: CompressionConfig = CompressionConfig(),
+        compression: CompressionConfig | None = None,
+        fdh5_options=None,
         validate: bool = True,
         create_parents: bool = True,
         lock_timeout: float = 10.0,
@@ -221,6 +457,12 @@ class FDH5Writer:
             Seconds to retry temporary file-lock conflicts with readers before
             raising the original error. Other I/O errors raise immediately.
         """
+        self.options = resolve_fdh5_options(fdh5_options)
+        if compression is None:
+            compression = CompressionConfig(
+                self.options["compression"], self.options["compression_level"]
+            )
+        self._compression_kwargs = compression.dataset_kwargs()
         self.path = Path(file_path)
         if create_parents:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,6 +474,8 @@ class FDH5Writer:
         self.lock_timeout = lock_timeout
 
         with self._open() as f:
+            if compression.compression == "zstd":
+                f.attrs["fedoo_requires_zstd"] = True
             if "format" not in f.attrs:
                 f.attrs["format"] = "FDH5"
                 f.attrs["version"] = self.FILE_VERSION
@@ -247,6 +491,7 @@ class FDH5Writer:
         data: NDArray,
         *,
         overwrite: bool = False,
+        frame_field: bool | None = None,
     ) -> h5py.Dataset:
         if name in parent:
             if overwrite:
@@ -254,16 +499,56 @@ class FDH5Writer:
             else:
                 raise ValueError(f"Dataset '{parent.name}/{name}' already exists")
 
-        kwargs: Dict[str, Any] = {}
+        float_dtype = None
+        if parent.name == "/mesh" and name == "nodes":
+            float_dtype = self.options["coordinate_dtype"]
+        elif any(
+            part in parent.name.split("/")
+            for part in ("node_data", "element_data", "gausspoint_data")
+        ):
+            float_dtype = self.options["float_dtype"]
+        data = _storage_array(data, self.options, float_dtype)
+        attributes = {}
+        if frame_field is None:
+            frame_field = is_frame_field(name)
+        if frame_field:
+            array = np.asarray(data)
+            matrices = np.asarray(frame_matrices(array), dtype=float)
+            proper = np.allclose(
+                matrices @ matrices.transpose(0, 2, 1), np.eye(3), atol=2e-6
+            ) and np.allclose(np.linalg.det(matrices), 1, atol=2e-6)
+            encoding = self.options["local_frame"]
+            if proper:
+                repeats = 1
+                if encoding != "matrix" and "gausspoint_data" in parent.name:
+                    sid = parent.name.rsplit("/", 1)[-1]
+                    count = parent.file[f"mesh/{sid}/elements"].shape[0]
+                    if count and len(matrices) and len(matrices) % count == 0:
+                        blocks = matrices.reshape(-1, count, 3, 3)
+                        if np.array_equal(
+                            blocks, np.broadcast_to(blocks[0], blocks.shape)
+                        ):
+                            repeats = len(blocks)
+                            matrices = blocks[0]
+                data = encode_frames(matrices, encoding).astype(
+                    array.dtype
+                    if array.dtype.kind == "f"
+                    else self.options["float_dtype"] or "float64"
+                )
+                attributes = {
+                    "frame_encoding": FRAME_ENCODINGS[encoding],
+                    "frame_gp_repeats": repeats,
+                }
+            # Preserve legacy non-orthonormal matrix arrays without projection.
         is_scalar = np.asarray(data).shape == ()
-        if self.compression.compression and not is_scalar:
-            kwargs["compression"] = self.compression.compression
-            if self.compression.compression == "gzip":
-                kwargs["compression_opts"] = self.compression.compression_opts
-        if self.compression.chunks is not None and not is_scalar:
-            kwargs["chunks"] = self.compression.chunks
+        kwargs = {} if is_scalar else self._compression_kwargs
 
-        return parent.create_dataset(name, data=data, **kwargs)
+        ds = parent.create_dataset(name, data=data, **kwargs)
+        for key, value in attributes.items():
+            ds.attrs[key] = value
+        if attributes:
+            parent.file.attrs["version"] = "1.1"
+        return ds
 
     def _next_submesh_id(self, f: h5py.File) -> str:
         existing = [k for k in f["mesh"].keys() if k.startswith("submesh_")]
@@ -436,6 +721,14 @@ class FDH5Writer:
         """
         iter_name = iteration_name(iteration)
 
+        def is_frame(name, sid=None):
+            description = (field_metadata or {}).get(name, {})
+            if sid is not None:
+                description = description.get("submeshes", {}).get(
+                    sid.split("_")[-1], description
+                )
+            return is_frame_field(name, {name: description})
+
         with self._open() as f:
             results = f.require_group("results")
 
@@ -458,14 +751,21 @@ class FDH5Writer:
             if node_data:
                 nd = it.create_group("node_data")
                 for name, arr in node_data.items():
-                    self._create_dataset(nd, name, np.asarray(arr))
+                    self._create_dataset(
+                        nd, name, np.asarray(arr), frame_field=is_frame(name)
+                    )
 
             if element_data:
                 ed = it.create_group("element_data")
                 for sid, fields in element_data.items():
                     smg = ed.create_group(sid)
                     for fname, arr in fields.items():
-                        self._create_dataset(smg, fname, np.asarray(arr))
+                        self._create_dataset(
+                            smg,
+                            fname,
+                            np.asarray(arr),
+                            frame_field=is_frame(fname, sid),
+                        )
 
             if gausspoint_data:
                 gd = it.create_group("gausspoint_data")
@@ -474,15 +774,17 @@ class FDH5Writer:
                     n_elements = f[f"mesh/{sid}/elements"].shape[0]
                     for fname, arr in fields.items():
                         arr = np.asarray(arr)
-                        ds = self._create_dataset(smg, fname, arr)
+                        ds = self._create_dataset(
+                            smg, fname, arr, frame_field=is_frame(fname, sid)
+                        )
                         ds.attrs["gp_order"] = "gp-major"
                         ds.attrs["n_elements"] = n_elements
-                        if arr.shape[0] % n_elements == 0:
-                            ds.attrs["n_gauss_points"] = arr.shape[0] // n_elements
+                        if n_elements and arr.shape[-1] % n_elements == 0:
+                            ds.attrs["n_gauss_points"] = arr.shape[-1] // n_elements
                         if arr.ndim == 1:
                             ds.attrs["n_components"] = 1
                         else:
-                            ds.attrs["n_components"] = arr.shape[1]
+                            ds.attrs["n_components"] = ds.shape[0]
                         if arr.ndim == 3 and fname in (
                             "Stress",
                             "Strain",
@@ -592,7 +894,14 @@ class FDH5Reader:
 
     def _open(self) -> h5py.File:
         """Internal helper for eager reads."""
-        return _open_hdf5(self.path, "r", self.lock_timeout)
+        handle = _open_hdf5(self.path, "r", self.lock_timeout)
+        try:
+            if handle.attrs.get("fedoo_requires_zstd", False):
+                _require_zstd()
+        except Exception:
+            handle.close()
+            raise
+        return handle
 
     @staticmethod
     def _decode(value: Any) -> Any:
@@ -665,12 +974,14 @@ class FDH5Reader:
                 if grp is None:
                     return out
                 for name, ds in grp.items():
-                    out[name] = ds[...]
+                    out[name] = _read_field(ds)
             return out
 
         f = self._require_lazy_file(file)
         grp = f.get("mesh/node_sets")
-        return {} if grp is None else {name: ds for name, ds in grp.items()}
+        return (
+            {} if grp is None else {name: _lazy_field(ds) for name, ds in grp.items()}
+        )
 
     def list_submeshes(self, *, file: h5py.File | None = None) -> List[str]:
         """Return the sorted submesh ids stored in the mesh group.
@@ -912,12 +1223,14 @@ class FDH5Reader:
                 if grp is None:
                     return out
                 for name, ds in grp.items():
-                    out[name] = ds[...]
+                    out[name] = _read_field(ds)
             return out
 
         f = self._require_lazy_file(file)
         grp = f.get(f"results/{iteration_name(iteration)}/scalars")
-        return {} if grp is None else {name: ds for name, ds in grp.items()}
+        return (
+            {} if grp is None else {name: _lazy_field(ds) for name, ds in grp.items()}
+        )
 
     def read_node_data(
         self,
@@ -950,12 +1263,14 @@ class FDH5Reader:
                 if grp is None:
                     return out
                 for name, ds in grp.items():
-                    out[name] = ds[...]
+                    out[name] = _read_field(ds)
             return out
 
         f = self._require_lazy_file(file)
         grp = f.get(f"results/{iteration_name(iteration)}/node_data")
-        return {} if grp is None else {name: ds for name, ds in grp.items()}
+        return (
+            {} if grp is None else {name: _lazy_field(ds) for name, ds in grp.items()}
+        )
 
     def read_element_data(
         self,
@@ -989,7 +1304,7 @@ class FDH5Reader:
                 if grp is None:
                     return out
                 for sid, sm_grp in grp.items():
-                    out[sid] = {name: ds[...] for name, ds in sm_grp.items()}
+                    out[sid] = {name: _read_field(ds) for name, ds in sm_grp.items()}
             return out
 
         f = self._require_lazy_file(file)
@@ -997,7 +1312,7 @@ class FDH5Reader:
         if grp is None:
             return {}
         return {
-            sid: {name: ds for name, ds in sm_grp.items()}
+            sid: {name: _lazy_field(ds) for name, ds in sm_grp.items()}
             for sid, sm_grp in grp.items()
         }
 
@@ -1036,7 +1351,7 @@ class FDH5Reader:
                 if grp is None:
                     return out
                 for sid, sm_grp in grp.items():
-                    out[sid] = {name: ds[...] for name, ds in sm_grp.items()}
+                    out[sid] = {name: _read_field(ds) for name, ds in sm_grp.items()}
             return out
 
         f = self._require_lazy_file(file)
@@ -1044,7 +1359,7 @@ class FDH5Reader:
         if grp is None:
             return {}
         return {
-            sid: {name: ds for name, ds in sm_grp.items()}
+            sid: {name: _lazy_field(ds) for name, ds in sm_grp.items()}
             for sid, sm_grp in grp.items()
         }
 
@@ -1164,6 +1479,9 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
         key: scalar_value(value) for key, value in iter_data["scalars"].items()
     }
     dataset.field_metadata = iter_data["field_metadata"]
+    stored_expressions = dataset.field_metadata.pop("_ScalarExpressions", {})
+    if stored_expressions and not dataset.scalar_expressions:
+        dataset.scalar_expressions = stored_expressions
     dataset.field_metadata.update(
         {
             field: description
@@ -1175,11 +1493,20 @@ def load_dataset_iteration(dataset, filename: str, iteration: int = 0) -> None:
     dataset._fdh5_iteration = iteration
 
 
-def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = False):
+def write_dataset(
+    dataset,
+    filename: str,
+    iteration: int = 0,
+    overwrite: bool = False,
+    compressed: bool | None = None,
+    fdh5_options=None,
+):
     """Write a Fedoo DataSet iteration to a FDH5 file."""
 
     if dataset.mesh is None:
         raise TypeError("Mesh should be defined before writing a FDH5 file.")
+
+    options = resolve_fdh5_options(fdh5_options, compressed)
 
     path = Path(filename)
     if path.suffix == "":
@@ -1190,7 +1517,7 @@ def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = 
         path.unlink()
         file_exists = False
 
-    writer = FDH5Writer(path)
+    writer = FDH5Writer(path, fdh5_options=options)
     if not file_exists:
         writer.write_mesh(
             dataset.mesh.nodes,
@@ -1214,13 +1541,16 @@ def write_dataset(dataset, filename: str, iteration: int = 0, overwrite: bool = 
             )
 
     time = dataset.scalar_data.get("Time", None)
+    field_metadata = dict(dataset.field_metadata)
+    if dataset.scalar_expressions:
+        field_metadata["_ScalarExpressions"] = dataset.scalar_expressions
     writer.write_iteration(
         iteration,
         node_data=dataset.node_data,
         element_data=fields_to_submesh_dict(dataset, dataset.element_data),
         gausspoint_data=fields_to_submesh_dict(dataset, dataset.gausspoint_data),
         scalars=dataset.scalar_data,
-        field_metadata=dataset.field_metadata,
+        field_metadata=field_metadata,
         time=time,
         overwrite=True,
     )

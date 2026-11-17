@@ -1,21 +1,40 @@
-import fedoo as fd
-import numpy as np
-from time import time
+r"""
+Elastoplastic simple shear of a cube (finite strain, UL)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A unit cube (hex8 elements) is clamped on its bottom face while its top face
+is moved by one side length in the :math:`x` direction (shear
+:math:`\gamma = 1`), with no vertical motion. The material follows the J2
+elastoplastic law with isotropic power-law hardening of Simcoon (``EPICP``).
+The problem is solved with the updated Lagrangian formulation
+(``nlgeom="UL"``), the F-bar method and the logarithmic objective rate
+(``wf.corate = "log"``).
+
+The von Mises stress at the end of the loading is plotted.
+"""
+
 import os
 
-start = time()
-# --------------- Pre-Treatment --------------------------------------------------------
+import fedoo as fd
+import numpy as np
+
+###############################################################################
+# Geometry, mesh and material
+# ---------------------------
+# Units: N, mm, MPa. ``mat`` selects the law: 0 elastic (Simcoon ``ELISO``),
+# 1 Simcoon ``EPICP``, 2 native
+# :class:`fedoo.constitutivelaw.ElastoPlasticity`, 3 Simcoon Neo-Hookean
+# ``NEOHC``.
 
 fd.ModelingSpace("3D")
 
 NLGEOM = "UL"
-# Units: N, mm, MPa
 h = 1
 w = 1
 L = 1
 E = 200e3
 nu = 0.3
-alpha = 1e-5  # ???
+alpha = 1e-5  # thermal expansion coefficient (required by Simcoon, isothermal here)
 meshname = "Domain"
 uimp = 1
 
@@ -37,17 +56,14 @@ fd.mesh.box_mesh(
 )
 mesh = fd.Mesh[meshname]
 
-crd = mesh.nodes
-
 mat = 1
 if mat == 0:
     props = np.array([E, nu, alpha])
     material = fd.constitutivelaw.Simcoon("ELISO", props, name="ConstitutiveLaw")
-    material.corate = 2
 elif mat == 1 or mat == 2:
     Re = 300
-    k = 1000  # 1500
-    m = 0.3  # 0.25
+    k = 1000
+    m = 0.3
     if mat == 1:
         props = np.array([E, nu, alpha, Re, k, m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
@@ -62,20 +78,21 @@ elif mat == 3:
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
 
+###############################################################################
+# Weak form, assembly and problem
+# -------------------------------
+
 wf = fd.weakform.StressEquilibrium(
     "ConstitutiveLaw", nlgeom=NLGEOM, incompressibility="fbar"
 )
-wf.corate = "log"
+wf.corate = "log"  # objective rate of the UL formulation (default "log_r")
 
-# fd.Assembly.create("ConstitutiveLaw", meshname, 'hex8', name="Assembling", mesh_change = False, n_elm_gp = 27)     #uses mesh_change=True when the mesh change during the time
-fd.Assembly.create(
-    wf, meshname, name="Assembling"
-)  # uses mesh_change=True when the mesh change during the time
+fd.Assembly.create(wf, meshname, name="Assembling")
 
 pb = fd.problem.NonLinear("Assembling")
 pb.set_nr_criterion("Force", err0=None, tol=5e-3, max_subiter=10)
 
-# create a 'result' folder and set the desired ouputs
+# create a 'results' folder and set the desired outputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
 
@@ -83,7 +100,10 @@ results = pb.add_output(
     res_dir + filename, "Assembling", ["Disp", "Stress", "Strain", "P", "EP", "Wm"]
 )
 
-################### step 1 ################################
+###############################################################################
+# Simple shear
+# ------------
+
 # node sets for boundary conditions
 nodes_bottom = mesh.find_nodes("Y", 0)
 nodes_top = mesh.find_nodes("Y", 1)
@@ -92,151 +112,13 @@ pb.bc.add("Dirichlet", nodes_bottom, "Disp", 0)
 pb.bc.add("Dirichlet", nodes_top, ["DispY", "DispZ"], 0)
 pb.bc.add("Dirichlet", nodes_top, "DispX", uimp)
 
-
 pb.nlsolve(dt=0.01, tmax=1, update_dt=True, print_info=1, interval_output=0.05)
 
-# E = np.array(
-#     fd.Assembly.get_all()["Assembling"].get_strain(
-#         pb.get_dof_solution(), "GaussPoint", False
-#     )
-# ).T
+###############################################################################
+# Von Mises stress at the end of the loading
+# ------------------------------------------
+# The history of a component at a given point can also be plotted with
+# :py:meth:`fedoo.MultiFrameDataSet.plot_history`, and an animation written
+# with :py:meth:`fedoo.MultiFrameDataSet.write_movie`.
 
-# ################### step 2 ################################
-# bc.Remove()
-# #We set initial condition to the applied force to relax the load
-# F_app = Problem.get_ext_forces('DispY')[nodes_topCenter]
-# bc = Problem.bc.add('Neumann','DispY', 0, nodes_topCenter, initialValue=F_app)#face_center)
-
-# Problem.nlsolve(dt = 1., update_dt = True, ToleranceNR = 0.01)
-
-print(time() - start)
-
-
-# =============================================================
-# Example of plots with pyvista - uncomment the desired plot
-# =============================================================
-
-# ------------------------------------
-# Simple plot with default options
-# ------------------------------------
 results.plot("Stress", component="vm", show=True, data_type="Node")
-# results.plot("Stress", component=0, data_type='Node', show=True)
-
-# ------------------------------------
-# Simple plot with default options and save to png
-# ------------------------------------
-# pl = results.plot('Cauchy_vm', component = 0, show = False)
-# pl.show(screenshot = "test.png")
-
-# ------------------------------------
-# Write movie with default options
-# ------------------------------------
-# results.write_movie(res_dir+filename, 'Stress', 'vm', framerate = 5, quality = 5)
-
-# ------------------------------------
-# Save pdf plot
-# ------------------------------------
-# pl = results.plot(scalars = 'Cauchy_vm', show = False)
-# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-# ------------------------------------
-# Plot the automatically saved mesh
-# ------------------------------------
-# pv.read(res_dir+filename+'/'+filename+'.vtk').plot()
-
-# ------------------------------------
-# Write movie with moving camera
-# ------------------------------------
-# results.write_movie(res_dir+filename, 'Stress_vm', framerate = 5, quality = 5, rot_azimuth = 2, rot_elevation = 0.5)
-
-# ------------------------------------
-# Plot time history
-# ------------------------------------
-# from matplotlib import pylab
-# t, sigma = results.get_history(('Time','Cauchy'), (0,12), component = 3)
-# pylab.plot(t,sigma)
-# #or results.plot_history('Cauchy', 12)
-
-
-# filename = 'results/sheartest_ref'
-
-# filename_27 = 'results/sheartest'
-
-
-# res = np.load(filename+'_{}.npz'.format(19))
-# res_27 = np.load(filename_27+'_{}.npz'.format(19))
-# meshplot = mesh.to_pyvista()
-
-# # for item in res:
-# #     if item[-4:] == 'Node':
-# #         if len(res[item]) == len(crd):
-# #             meshplot.point_data[item[:-5]] = res[item]
-# #         else:
-# #             meshplot.point_data[item[:-5]] = res[item].T
-# #     else:
-# #         meshplot.cell_data[item] = res[item].T
-
-# meshplot.point_data['Disp'] = res['Disp_Node'].T
-
-# pl = pv.Plotter(shape=(1, 2))
-# # pl = pv.Plotter()
-# pl.set_background('White')
-
-# sargs = dict(
-#     interactive=False,
-#     title_font_size=20,
-#     label_font_size=16,
-#     color='Black',
-#     # n_colors= 10
-# )
-
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-# pl.subplot(0,0)
-# meshplot.point_data['Disp'] = res['Disp_Node'].T
-# pl.add_mesh(meshplot.warp_by_vector('Disp', factor = 1), scalars = res['Cauchy_vm_Node'], component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_axes()
-
-# pl.subplot(0,1)
-# meshplot.point_data['Disp'] = res_27['Disp_Node'].T
-# pl.add_mesh(meshplot.warp_by_vector('Disp', factor = 1), scalars = res_27['Cauchy_vm_Node'], component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# pl.add_axes()
-# pl.link_views()
-# cpos = pl.show(return_cpos = True)
-# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-# meshplot = pv.read('results/bendingPlastic3D_19.vtk')
-# # meshplot.point_data['svm'] = np.c_[meshplot.point_data['Cauchy_Mises']]
-
-# pl = pv.Plotter()
-# pl.set_background('White')
-
-# sargs = dict(
-#     interactive=True,
-#     title_font_size=20,
-#     label_font_size=16,
-#     color='Black',
-#     # n_colors= 10
-# )
-
-# # cpos = [(-2.69293081283409, 0.4520024822911473, 2.322209100082263),
-# #         (0.4698685969042552, 0.46863550630755524, 0.42428354242422084),
-# #         (0.5129241539116808, 0.07216479580221505, 0.8553952621921701)]
-# # pl.camera_position = cpos
-
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 5), scalars = 'Stress', component = 2, clim = [0,10000], show_edges = True, cmap="bwr")
-# pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'Disp', component = 1, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-# # pl.add_mesh(meshplot.warp_by_vector(factor = 1), scalars = 'svm', component = 0, show_edges = True, scalar_bar_args=sargs, cmap="jet")
-
-# cpos = pl.show(return_cpos = True)
-# # pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-
-# a = res_dir+filename
-# test = fd.core.dataset.read_data(a)

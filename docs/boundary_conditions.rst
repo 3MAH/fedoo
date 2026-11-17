@@ -189,6 +189,8 @@ boundary-condition force.
     fedoo.constraint.Pressure
     fedoo.constraint.SurfaceForce
 
+Example: :ref:`sphx_glr_examples_boundary_conditions_pressurized_pipe.py`.
+
 
 Generic Lagrange-multiplier constraints
 ______________________________________
@@ -243,6 +245,8 @@ same stress field as a single-node pin.
 
    fedoo.constraint.MeanValueConstraint
 
+Example: :ref:`sphx_glr_examples_boundary_conditions_periodic_bc_mean_disp_constraint.py`.
+
 Kinematic MPC constraints
 _________________________
 
@@ -267,6 +271,8 @@ suppressed.
 
    fedoo.constraint.RigidTie
    fedoo.constraint.RigidTie2D
+
+Example: :ref:`sphx_glr_examples_boundary_conditions_rigid_tie.py`.
 
 
 Mean motion control
@@ -334,6 +340,8 @@ mean-motion center.
 
    fedoo.constraint.MeanMotion
 
+Example: :ref:`sphx_glr_examples_boundary_conditions_mean_rigid_motion_torsion.py`.
+
 
 Periodic boundary conditions
 ____________________________
@@ -352,6 +360,14 @@ and then be added to ``pb.bc`` like the other MPC-based constraints.
    :template: custom-class-template.rst
 
    fedoo.constraint.PeriodicBC
+
+Examples:
+
+* :ref:`sphx_glr_examples_boundary_conditions_periodic_bc_2d_plate_with_hole.py`
+* :ref:`sphx_glr_examples_boundary_conditions_periodic_bc_composite_ply.py`
+* :ref:`sphx_glr_examples_boundary_conditions_periodic_bc_3d_gyroid_off_axis.py`
+* :ref:`sphx_glr_examples_boundary_conditions_periodic_bc_mean_disp_constraint.py`
+  (rigid-body translation removed with a mean-value constraint)
 
 
 Contact
@@ -379,6 +395,9 @@ The contact class is derived from assembly. To add a contact contraint
 to a problem, we need first to create the contact assembly (using the class
 :py:class:`fedoo.constraint.Contact`) and then to add it to the global
 assembly with :py:meth:`fedoo.Assembly.sum`.
+
+Examples: :ref:`sphx_glr_examples_contact_penalty_disk_rectangle.py` and
+:ref:`sphx_glr_examples_contact_penalty_self_contact.py`.
 
 
 IPC contact
@@ -484,11 +503,26 @@ The ``ipctk`` package is required and can be installed with:
    fedoo.constraint.IPCContact
    fedoo.constraint.IPCSelfContact
 
+Examples:
+
+* contact between solids:
+  :ref:`sphx_glr_examples_contact_ipc_disk_rectangle.py`,
+  :ref:`sphx_glr_examples_contact_ipc_punch_indentation.py`;
+* self-contact: :ref:`sphx_glr_examples_contact_ipc_self_contact.py`,
+  :ref:`sphx_glr_examples_contact_tube_compression.py` (2D axisymmetric),
+  :ref:`sphx_glr_examples_contact_ipc_gyroid_compression.py`;
+* comparison with analytical solutions and with the penalty method:
+  :ref:`sphx_glr_examples_contact_hertz_axisymmetric.py`,
+  :ref:`sphx_glr_examples_contact_westergaard_sinusoidal.py`,
+  :ref:`sphx_glr_examples_contact_ipc_tube_compression.py`.
+
 
 Penalty contact example
 __________________________
 
-Here an example of a contact between a square and a disk using the penalty method.
+Here an example of a contact between a square and a disk using the penalty
+method. The rendered page of this example is
+:ref:`sphx_glr_examples_contact_penalty_disk_rectangle.py`.
 
 .. code-block:: python
 
@@ -595,7 +629,8 @@ __________________________
 The same disk-rectangle contact problem can be solved with the IPC method.
 The IPC method does not require choosing slave/master nodes or tuning a
 penalty parameter. The barrier stiffness is automatically computed and
-adapted.
+adapted. The complete script is
+:ref:`sphx_glr_examples_contact_ipc_disk_rectangle.py`.
 
 .. code-block:: python
 
@@ -642,7 +677,9 @@ IPC self-contact example
 __________________________
 
 For self-contact problems, use :py:class:`~fedoo.constraint.IPCSelfContact`
-which automatically extracts the surface from the volumetric mesh.
+which automatically extracts the surface from the volumetric mesh. Complete
+examples: :ref:`sphx_glr_examples_contact_ipc_self_contact.py` (2D) and
+:ref:`sphx_glr_examples_contact_ipc_gyroid_compression.py` (3D gyroid).
 
 .. code-block:: python
 

@@ -56,8 +56,12 @@ def _beam(dim, shear=0, consistent=True, multiple=False):
 @pytest.mark.parametrize(
     "dim,shear,multiple", [(2, 0, False), (2, 0.8, True), (3, 0, True), (3, 0.8, False)]
 )
-def test_tangent_matches_assembled_internal_force(dim, shear, multiple):
-    wf, assembly, pb = _beam(dim, shear, multiple=multiple)
+@pytest.mark.parametrize("consistent", [True, None])
+def test_tangent_matches_assembled_internal_force(dim, shear, multiple, consistent):
+    wf, assembly, pb = _beam(dim, shear, consistent=consistent, multiple=multiple)
+    if consistent is None:
+        assert pb._set_automatic_consistent_tangent(True) == 1
+        assembly.current.assemble_global_mat("all")
     if dim == 3 and shear == 0:
         # Vary section rigidity without the old batch-size implementation check.
         wf.properties.A = np.tile([0.3, 0.5], assembly.n_elm_gp)
@@ -90,6 +94,75 @@ def test_tangent_matches_assembled_internal_force(dim, shear, multiple):
             rank * assembly.mesh.n_nodes : (rank + 1) * assembly.mesh.n_nodes
         ] = 1
         np.testing.assert_allclose(tangent @ translation, 0, atol=1e-10)
+
+
+@pytest.mark.parametrize("dim,shear", [(2, 0), (2, 0.8), (3, 0), (3, 0.8)])
+def test_automatic_beam_switch_preserves_force_and_matches_tangent(dim, shear):
+    _, expected, _ = _beam(dim, shear, consistent=True, multiple=True)
+    wf, assembly, pb = _beam(dim, shear, consistent=None, multiple=True)
+    cheap = assembly.current.global_matrix.toarray().copy()
+    force = assembly.current.global_vector.copy()
+    assert not wf._use_consistent_tangent(assembly)
+    assert pb._set_automatic_consistent_tangent(True) == 1
+    assembly.current.assemble_global_mat("all")
+    np.testing.assert_allclose(assembly.current.global_vector, force, atol=1e-10)
+    np.testing.assert_allclose(
+        assembly.current.global_matrix.toarray(),
+        expected.current.global_matrix.toarray(),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+    assert pb._set_automatic_consistent_tangent(False) == 1
+    assembly.current.assemble_global_mat("all")
+    np.testing.assert_allclose(
+        assembly.current.global_matrix.toarray(), cheap, atol=1e-10
+    )
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_automatic_beam_stagnation_and_attempt_reset(monkeypatch, dim):
+    wf, assembly, pb = _beam(dim, consistent=None)
+    errors = iter([0.09261, 0.02166, 0.00904, 0.01427, 0.00939, 0.03107, 0.0])
+    matrices = []
+    monkeypatch.setattr(pb, "elastic_prediction", lambda: None)
+    monkeypatch.setattr(pb, "_update_d", lambda: None)
+    monkeypatch.setattr(pb, "compute_nr_error", lambda: next(errors))
+    monkeypatch.setattr(pb, "_xbc_is_applied", lambda: True)
+    monkeypatch.setattr(pb, "solve_nr_increment", lambda: None)
+
+    def update(compute, **kwargs):
+        if compute == "matrix":
+            matrices.append(wf._use_consistent_tangent(assembly))
+
+    monkeypatch.setattr(pb, "update", update)
+    converged, subiter, _ = pb.solve_time_increment(max_subiter=20)
+    assert converged and subiter == 7
+    assert matrices == [False] * 5 + [True]
+    assert wf.consistent_tangent is None
+    errors = iter([0.0])
+    assert pb.solve_time_increment(max_subiter=20)[0]
+    assert not wf._use_consistent_tangent(assembly)
+
+
+def test_automatic_beam_activation_is_per_assembly_and_ignores_unsupported(monkeypatch):
+    wf, assembly, pb = _beam(3, consistent=None)
+    other = fd.Assembly.create(wf, assembly.mesh)
+    other_pb = fd.problem.NonLinear(other)
+    other.initialize(other_pb)
+    assert pb._set_automatic_consistent_tangent(True) == 1
+    assert wf._use_consistent_tangent(assembly)
+    assert not wf._use_consistent_tangent(other)
+    assert wf.consistent_tangent is None
+    with pytest.raises(AttributeError):
+        wf.consistent_tangent = True
+    wf.geometric_stiffness = False
+    assert pb._set_automatic_consistent_tangent(True) == 0
+    wf.geometric_stiffness = None
+    monkeypatch.setattr(other, "elm_type", "alternative_beam")
+    assert other_pb._set_automatic_consistent_tangent(True) == 0
+    monkeypatch.setattr(other, "elm_type", "beam")
+    monkeypatch.setattr(other, "_nlgeom", False)
+    assert other_pb._set_automatic_consistent_tangent(True) == 0
 
 
 def test_rigid_axial_rotation_has_zero_local_deformation():
@@ -252,7 +325,8 @@ def test_matrix_only_does_not_change_residual_and_correction_is_not_accumulated(
 
 
 @pytest.mark.parametrize("dim,shear", [(2, 0.8), (3, 0)])
-def test_large_deflection_cantilever_converges(dim, shear):
+@pytest.mark.parametrize("consistent", [True, None])
+def test_large_deflection_cantilever_converges(dim, shear, consistent):
     space = fd.ModelingSpace("2D" if dim == 2 else "3D")
     nodes = np.zeros((5, dim))
     nodes[:, 0] = np.linspace(0, 4, 5)
@@ -266,7 +340,7 @@ def test_large_deflection_cantilever_converges(dim, shear):
         k=shear,
         nlgeom=True,
         space=space,
-        consistent_tangent=True,
+        consistent_tangent=consistent,
     )
     assembly = fd.Assembly.create(wf, mesh)
     pb = fd.problem.NonLinear(assembly)
@@ -276,7 +350,11 @@ def test_large_deflection_cantilever_converges(dim, shear):
     pb.bc.add("Dirichlet", [4], "DispY", 1.5)
     if dim == 3:
         pb.bc.add("Dirichlet", [4], "DispZ", -0.5)
-    pb.set_nr_criterion("Displacement", tol=1e-9, max_subiter=15)
+    # The approximate tangent can keep making steady progress without switching;
+    # allow its extra iterations while checking the same final equilibrium.
+    pb.set_nr_criterion(
+        "Displacement", tol=1e-9, max_subiter=50 if consistent is None else 15
+    )
     pb.nlsolve(dt=0.25, update_dt=False, print_info=0)
     assert pb.get_disp()[1, -1] == pytest.approx(1.5)
     assert np.isfinite(pb.get_dof_solution()).all()

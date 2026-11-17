@@ -52,7 +52,7 @@ def test_unavailable_beam_tensor_obeys_ignore_missing(torsion):
         ["Stress", "Stress_vm", "Stress_pc", "BeamStress"],
         ignore_missing=True,
     )
-    assert set(result.gausspoint_data) == {"BeamStress"}
+    assert set(result.gausspoint_data) == {"BeamStress", "_BeamLocalFrame"}
     np.testing.assert_array_equal(result["BeamStress"], beam.sv["BeamStress"])
 
 
@@ -68,6 +68,23 @@ def test_mixed_output_keeps_tensor_available_on_one_submesh(torsion, ignore_miss
         result.gausspoint_data["Stress"][1], solid.sv["Stress"].asarray()
     )
     np.testing.assert_allclose(result.gausspoint_data["Stress_vm"][1], 7)
+
+
+def test_mixed_output_keeps_automatic_beam_frames(tmp_path):
+    problem, assembly, beam, _ = beam_output_problem(mixed=True)
+    result = problem.get_results(
+        assembly, ["BeamStress", "Stress"], ignore_missing=True
+    )
+    expected = np.tile(
+        beam.current.get_element_local_frame().reshape(-1, 9).T,
+        (1, beam.n_elm_gp),
+    )
+    np.testing.assert_allclose(result.gausspoint_data["_BeamLocalFrame"][0], expected)
+    assert set(result.gausspoint_data["_BeamLocalFrame"]) == {0}
+    path = str(tmp_path / "mixed.fdh5")
+    result.save(path)
+    loaded = fd.read_data(path)
+    np.testing.assert_allclose(loaded.gausspoint_data["_BeamLocalFrame"][0], expected)
 
 
 def test_field_unavailable_on_every_submesh_obeys_ignore_missing():
@@ -115,3 +132,13 @@ def test_mixed_beam_shell_position_has_explicit_error(position):
     problem.get_results(assembly, ["BeamStress", "ShellStress"], position=position)
     problem.get_results(beam, ["Stress"], position=(1, 1))
     problem.get_results(shell, ["Stress"], position=1)
+
+
+def test_mixed_output_explicit_beam_frame_is_public():
+    problem, assembly, _, _ = beam_output_problem(mixed=True)
+    result = problem.get_results(
+        assembly, ["BeamStress", "BeamLocalFrame"], ignore_missing=True
+    )
+    assert "BeamLocalFrame" in result.gausspoint_data
+    assert "_BeamLocalFrame" not in result.gausspoint_data
+    assert set(result.gausspoint_data["BeamLocalFrame"]) == {0}

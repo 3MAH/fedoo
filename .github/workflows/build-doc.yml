@@ -99,7 +99,25 @@ jobs:
           path: docs/build/
           key: doc-build-${{ hashFiles('fedoo/_version.py') }}
 
+      - name: Load published example run records
+        shell: bash
+        run: |
+          records="$RUNNER_TEMP/precomputed-records.json"
+          status=$(curl --silent --show-error --location --retry 3 --output "$records" \
+            --write-out '%{http_code}' \
+            https://raw.githubusercontent.com/3MAH/fedoo-docs/main/media/examples/records.json)
+          if [[ "$status" == 200 ]]; then
+            echo "FEDOO_PRECOMPUTED_RECORDS=$records" >> "$GITHUB_ENV"
+          elif [[ "$status" == 404 ]]; then
+            echo 'No published example records yet; showing pending-result notes.'
+          else
+            echo "Failed to fetch example records: HTTP $status" >&2
+            exit 1
+          fi
+
       - name: Build Documentation
+        # Precomputed examples are never executed by this workflow. Missing
+        # published results produce the explanatory note in docs/conf.py.
         run: make -C docs clean html
 
       - name: Upload HTML documentation

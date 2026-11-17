@@ -1,20 +1,40 @@
-import fedoo as fd
-import numpy as np
+"""
+Large torsion of a cube (finite strain, UL)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A unit cube (hex8 elements) is clamped on its left face and its right face is
+twisted by 180 degrees about the :math:`x` axis. The right face is driven as a
+rigid surface with :class:`fedoo.constraint.RigidTie`, whose rotation dof
+``RigidRotX`` is prescribed. The problem is solved with the updated Lagrangian
+formulation (``nlgeom="UL"``).
+
+By default (``mat = 0``) the material is linear elastic (Simcoon ``ELISO``);
+``mat = 1`` or ``mat = 2`` switch to J2 elastoplasticity. The von Mises stress
+at the end of the loading is plotted, and an animation of the twist is written
+in ``results/torsion_test.mp4``.
+"""
+
 import os
 
-# --------------- Pre-Treatment --------------------------------------------------------
+import fedoo as fd
+import numpy as np
+
+###############################################################################
+# Geometry, mesh and material
+# ---------------------------
+# Units: N, mm, MPa. ``mat`` selects the law: 0 elastic (Simcoon ``ELISO``),
+# 1 Simcoon ``EPICP``, 2 native
+# :class:`fedoo.constitutivelaw.ElastoPlasticity`.
 
 fd.ModelingSpace("3D")
 
 NLGEOM = "UL"
-# Units: N, mm, MPa
 h = 1
 w = 1
 L = 1
 E = 200e3
 nu = 0.3
-alpha = 1e-5  # ???
-uimp = 1
+alpha = 1e-5  # thermal expansion coefficient (required by Simcoon, isothermal here)
 
 filename = "torsion_test"
 res_dir = "results/"
@@ -32,10 +52,6 @@ mesh = fd.mesh.box_mesh(
     elm_type="hex8",
     name="Domain",
 )
-# mesh = fd.mesh.import_file('../../util/meshes/octet_truss.msh', name = "Domain")['tet4']
-# mesh = fd.mesh.import_file("../../util/meshes/octet_truss_2.msh", name="Domain")["tet4"]
-
-crd = mesh.nodes
 
 mat = 0
 if mat == 0:
@@ -43,8 +59,8 @@ if mat == 0:
     material = fd.constitutivelaw.Simcoon("ELISO", props, name="ConstitutiveLaw")
 elif mat == 1 or mat == 2:
     Re = 300
-    k = 1000  # 1500
-    m = 0.3  # 0.25
+    k = 1000
+    m = 0.3
     if mat == 1:
         props = np.array([E, nu, alpha, Re, k, m])
         material = fd.constitutivelaw.Simcoon("EPICP", props, name="ConstitutiveLaw")
@@ -55,6 +71,10 @@ elif mat == 1 or mat == 2:
         material.set_hardening_function("power", h=k, beta=m)
 else:
     material = fd.constitutivelaw.ElasticIsotrop(E, nu, name="ConstitutiveLaw")
+
+###############################################################################
+# Weak form, assembly and problem
+# -------------------------------
 
 wf = fd.weakform.StressEquilibrium("ConstitutiveLaw", nlgeom=NLGEOM, name="wf")
 wf.incompressibility = "auto"
@@ -67,49 +87,33 @@ right = mesh.find_nodes("X", 1)
 
 pb = fd.problem.NonLinear("Assembling")
 
-# create a 'result' folder and set the desired ouputs
+# create a 'results' folder and set the desired outputs
 if not (os.path.isdir("results")):
     os.mkdir("results")
 
 results = pb.add_output(
     res_dir + filename,
     "Assembling",
-    ["Disp", "Stress", "Strain"],  # "P", "EP", "Wm", "Fext", "RigidDisp", "RigidRot"],
+    ["Disp", "Stress", "Strain"],
 )
+
+###############################################################################
+# Rigid tie on the right face and twist
+# -------------------------------------
 
 pb.bc.add(fd.constraint.RigidTie(right))
 
 pb.bc.add("Dirichlet", left, "Disp", 0)
-pb.bc.add("Dirichlet", "RigidRotX", 2 * np.pi / 2)  # Rigid rotation of the right end
+pb.bc.add("Dirichlet", "RigidRotX", np.pi)  # 180 deg twist of the right end
 
 pb.nlsolve(dt=0.05, tmax=1, update_dt=True, print_info=1, interval_output=0.025)
 
-# =============================================================
-# Example of plots with pyvista - uncomment the desired plot
-# =============================================================
+###############################################################################
+# Von Mises stress and animation
+# ------------------------------
+# ``write_movie`` also accepts camera options, for instance
+# ``rot_azimuth=-1.5`` to turn the camera around the scene.
 
-# ------------------------------------
-# Simple plot with default options
-# ------------------------------------
 results.plot("Stress", component="vm", data_type="Node", show=True)
 
-# ------------------------------------
-# Write movie with default options
-# ------------------------------------
 results.write_movie(res_dir + filename, "Stress", "vm", framerate=12, quality=5)
-
-# ------------------------------------
-# Save pdf plot
-# ------------------------------------
-# pl = results.plot('Stress', 'vm', show = False)
-# pl.save_graphic('test.pdf', title='PyVista Export', raster=True, painter=True)
-
-# ------------------------------------
-# Plot the automatically saved mesh
-# ------------------------------------
-# fd.read_data(res_dir+filename).plot()
-
-# ------------------------------------
-# Write movie with moving camera
-# ------------------------------------
-# results.write_movie(res_dir+filename, 'Stress', component = 'XX', framerate = 12, quality = 5, rot_azimuth = -1.5, rot_elevation = 0)
