@@ -339,6 +339,14 @@ semantic versioning.
   `weakform`), the density of a coupled material as a property read from its
   thermal properties, and shared helpers for the neighbouring
   thermo-mechanical tests.
+- **Axisymmetric UL inertia** is not corrected by the reference volume weight
+  used in the Cartesian case: the mass integrated on the updated mesh still
+  follows the volume change. The radial weight must be the reference radius.
+- **Tensor conductivity in finite strain** is pulled back as
+  `J F^-1 k F^-T` with a constant spatial `k`, which is not objective for an
+  anisotropic tensor under large rotations. A material conductivity `k0`
+  convected by the stretch (`J U^-1 k0 U^-1`) is the candidate; isotropic
+  conductivity is not affected.
 
 ## [1.1.0] - 2026-10-14
 
