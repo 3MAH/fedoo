@@ -1,5 +1,7 @@
+import numpy as np
+
 from fedoo.core.weakform import WeakFormBase
-from fedoo.weakform._axi_utils import axi_volume_weight
+from fedoo.weakform._axi_utils import axi_reference_radius
 from fedoo.weakform._reference import reference_volume_weight
 
 
@@ -38,13 +40,14 @@ class Inertia(WeakFormBase):
         op_dU = self.space.op_disp()  # displacement increment (incremental formulation)
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
 
-        density = self.density
-        if not self.space.is_axisymmetric:
-            density = density * reference_volume_weight(assembly)
+        # reference mass rho0 dV0, also on the updated mesh of a UL assembly
+        density = self.density * reference_volume_weight(assembly)
         diff_op = sum([a * b * density for (a, b) in zip(op_dU_vir, op_dU)])
 
         if self.space.is_axisymmetric:
-            diff_op = diff_op * axi_volume_weight(assembly)
+            # dV0 = 2 pi R dA0 with the reference radius: the current one
+            # would let the mass follow the hoop stretch
+            diff_op = diff_op * (2 * np.pi * axi_reference_radius(assembly))
 
         return diff_op
 

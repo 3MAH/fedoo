@@ -46,6 +46,26 @@ def axi_radius(assembly):
     return rr
 
 
+def axi_reference_radius(assembly):
+    """Return the reference radius ``R`` at each Gauss point.
+
+    Unlike :func:`axi_radius`, the value does not follow the updated mesh of
+    an updated Lagrangian assembly: with the reference area weight it gives
+    the reference volume ``2*pi*R dA0``, as needed to conserve the mass.
+    """
+    rr = assembly.sv.get("_R0_gausspoints")
+    if rr is None:
+        mesh = getattr(assembly, "_reference_assembly", None)
+        mesh = assembly.mesh if mesh is None else mesh.mesh
+        rr = mesh.convert_data(
+            mesh.nodes[:, 0],
+            "Node",
+            "GaussPoint",
+            n_elm_gp=assembly.n_elm_gp,
+        )
+    return rr
+
+
 def axi_hoop_strain_op(space, rr):
     """Hoop strain operator ``u_r / r``, set to 0 on the axis (``r = 0``)."""
     return space.variable("DispX") * np.divide(

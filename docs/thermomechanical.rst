@@ -134,9 +134,13 @@ stress and tangent to the mechanical formulation. The total logarithmic
 mapping also handles anisotropic elasticity and noncoaxial stresses. It is
 independent of corotational history; UL mechanics accepts ``log_r`` or ``log``.
 
-Conductivity is specified as a constant spatial tensor ``k`` in current global
-axes. The thermal equation uses its pullback
-``K0 = J F^-1 k F^-T``, reference density and reference-volume heat sources.
+Conductivity is specified as a constant material tensor ``k`` in the reference
+global axes. It follows the rotation ``R`` of the polar decomposition
+``F = R U``, like the elastic anisotropy of the logarithmic law: the spatial
+conductivity is ``R k R^T`` and the thermal equation uses the objective
+reference tensor ``K0 = J U^-1 k U^-1``, which is ``J k C^-1`` for an isotropic
+conductivity. The equation also uses the reference density and
+reference-volume heat sources.
 Heat capacity is ``rho0*c``; material density need not be updated as the body
 deforms. The deformation derivative of ``K0`` contributes to the thermal versus
 displacement block. The reference thermal gradients and quadrature measure

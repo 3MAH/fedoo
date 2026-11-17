@@ -318,6 +318,16 @@ semantic versioning.
   `SimcoonThermoMechanical`) raises `ValueError` instead of being overwritten.
 - Cartesian UL inertia integrates reference mass, including when the
   constitutive deformation gradient uses an incompressibility projection.
+- **Axisymmetric UL inertia** integrates the reference mass
+  `rho0 * 2*pi*R dA0` with the reference radius. The mass assembled on the
+  updated mesh followed the volume change (factor `J`), which changes the
+  results of 2Daxi finite-strain dynamics.
+- **Anisotropic conductivity in the TL heat equation** is objective: the
+  conductivity is a material tensor in the reference axes that follows the
+  rotation of the body, `K0 = J U^-1 k U^-1`, with its exact deformation
+  tangent. It was a constant spatial tensor (`J F^-1 k F^-T`), so a rigid
+  rotation changed the conduction of an anisotropic solid. Isotropic
+  conductivity is unchanged.
 
 ### Migration
 
@@ -339,14 +349,9 @@ semantic versioning.
   `weakform`), the density of a coupled material as a property read from its
   thermal properties, and shared helpers for the neighbouring
   thermo-mechanical tests.
-- **Axisymmetric UL inertia** is not corrected by the reference volume weight
-  used in the Cartesian case: the mass integrated on the updated mesh still
-  follows the volume change. The radial weight must be the reference radius.
-- **Tensor conductivity in finite strain** is pulled back as
-  `J F^-1 k F^-T` with a constant spatial `k`, which is not objective for an
-  anisotropic tensor under large rotations. A material conductivity `k0`
-  convected by the stretch (`J U^-1 k0 U^-1`) is the candidate; isotropic
-  conductivity is not affected.
+- **Uncoupled heat equation next to UL mechanics** integrates a constant
+  spatial conductivity on the updated mesh: an anisotropic tensor does not
+  follow the rotation of the body there. Use `HeatEquation(nlgeom="TL")`.
 
 ## [1.1.0] - 2026-10-14
 

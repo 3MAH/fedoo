@@ -26,6 +26,63 @@ def _finite_heat(assembly, pb, nlgeom, material):
     return "F" in assembly.sv and "DispX" not in assembly.space.list_variables()
 
 
+def _reference_conductivity(F, inverse, J, k, gradient, tangent):
+    """Reference conductivity, reference flux and its deformation tangent.
+
+    The conductivity ``k`` is a material tensor given in the reference axes
+    and carried by the rotation of the polar decomposition,
+    ``R k R^T`` in the current configuration, so that
+
+    .. math:: \\mathbf{K}_0 = J \\mathbf{U}^{-1} \\mathbf{k} \\mathbf{U}^{-1}
+
+    is objective. An isotropic conductivity gives the usual
+    :math:`J k \\mathbf{C}^{-1}`, evaluated in closed form.
+
+    Returns ``K`` (3, 3, n), ``flux = K.gradient`` (3, n) and, if ``tangent``,
+    the derivative of ``flux`` with respect to ``F[i, C]`` at fixed gradient,
+    of shape (A, i, C, n).
+    """
+    if np.array_equal(k, k[0, 0] * np.eye(3)):
+        K = np.einsum("Ain,Bin,n->ABn", inverse, inverse, k[0, 0] * J)
+        flux = np.einsum("ABn,Bn->An", K, gradient)
+        if not tangent:
+            return K, flux, None
+        spatial_gradient = np.einsum("Bin,Bn->in", inverse, gradient)
+        derivative = (
+            np.einsum("Cin,An->AiCn", inverse, flux)
+            - np.einsum("Ain,Cn->AiCn", inverse, flux)
+            - np.einsum("ACn,in->AiCn", K, spatial_gradient)
+        )
+        return K, flux, derivative
+    # U^-1 = C^-1/2 from the spectral decomposition of C = F^T F
+    stretch2, N = np.linalg.eigh(np.einsum("iAn,iBn->nAB", F, F))
+    stretch = np.sqrt(stretch2)
+    M = np.einsum("nAa,na,nBa->ABn", N, 1 / stretch, N)
+    Mk = np.einsum("ACn,CD->ADn", M, k)
+    K = np.einsum("ADn,DBn,n->ABn", Mk, M, J)
+    flux = np.einsum("ABn,Bn->An", K, gradient)
+    if not tangent:
+        return K, flux, None
+    # d(U^-1)_ab = -dC_ab / (l_a l_b (l_a + l_b)) in the principal axes: no
+    # divided difference, so equal stretches need no special treatment.
+    gamma = -1 / (
+        stretch[:, :, None]
+        * stretch[:, None, :]
+        * (stretch[:, :, None] + stretch[:, None, :])
+    )
+    L = np.einsum("nab,nAa,nBb,nCa,nDb->ABCDn", gamma, N, N, N, N)
+    h = np.einsum("PBn,Bn->Pn", np.einsum("PD,DBn->PBn", k, M), gradient)
+    dflux_dC = np.einsum("APCDn,Pn->ACDn", L, h) + np.einsum(
+        "AQn,QBCDn,Bn->ACDn", Mk, L, gradient
+    )
+    # dC_CD = dF_iC F_iD + F_iC dF_iD
+    dflux_dC = dflux_dC + dflux_dC.transpose(0, 2, 1, 3)
+    derivative = np.einsum("Cin,An->AiCn", inverse, flux) + np.einsum(
+        "ACDn,iDn,n->AiCn", dflux_dC, F, J
+    )
+    return K, flux, derivative
+
+
 def _check_coupling(material, assembly, pb):
     """Check the mechanics found on the mesh of a heat equation.
 
@@ -96,11 +153,16 @@ class HeatEquation(WeakFormBase):
           mechanics in the same assembly, so the two differ by the volume
           change). It uses the reference-configuration form only in a
           heat-only assembly given an ``F`` field.
-        * True or 'TL': reference integration with the pulled-back
-          conductivity :math:`J \\mathbf{F}^{-1} \\mathbf{k}
-          \\mathbf{F}^{-T}`, a consistent capacity and a nonsymmetric
-          assembly. Also works with UL mechanics. The conductivity must be a
-          constant scalar or :math:`3 \\times 3` tensor.
+        * True or 'TL': reference integration with the reference
+          conductivity :math:`J \\mathbf{U}^{-1} \\mathbf{k}
+          \\mathbf{U}^{-1}`, a consistent capacity and a nonsymmetric
+          assembly. The conductivity :math:`\\mathbf{k}` is a material
+          tensor given in the reference axes: it follows the rotation of the
+          body (:math:`\\mathbf{R} \\mathbf{k} \\mathbf{R}^T` in the current
+          configuration), and an isotropic conductivity gives the usual
+          :math:`J k \\mathbf{C}^{-1}`. Also works with UL mechanics. The
+          conductivity must be a constant scalar or :math:`3 \\times 3`
+          tensor.
         * False: undeformed heat equation.
 
     Notes
@@ -147,7 +209,7 @@ class HeatEquation(WeakFormBase):
                 "HeatEquation uses nlgeom='TL' (or True) for finite strain."
             )
         if nlgeom or getattr(thermal_constitutivelaw, "is_thermomechanical", False):
-            # the deformation tangent of the pulled-back conductivity and the
+            # the deformation tangent of the reference conductivity and the
             # coupling blocks are not symmetric
             self.assembly_options["assume_sym"] = False
         self.time_evolution = FIRST_ORDER
@@ -266,14 +328,16 @@ class HeatEquation(WeakFormBase):
     def _get_reference_equation(self, assembly, pb):
         F, inverse, J = deformation_gradient(assembly)
         k = conductivity_tensor(self.constitutivelaw.thermal_conductivity)
-        K = np.einsum("Ain,ij,Bjn,n->ABn", inverse, k, inverse, J)
         gradient = np.array(
             [
                 value + np.zeros(assembly.n_gauss_points)
                 for value in assembly.sv["TempGradient"]
             ]
         )
-        flux = np.einsum("ABn,Bn->An", K, gradient)
+        coupled = "DispX" in self.space.list_variables()
+        K, flux, derivative = _reference_conductivity(
+            F, inverse, J, k, gradient, tangent=coupled
+        )
         op = reference_derivatives(assembly, "Temp", F)
         diff_op = sum(
             op[A].virtual
@@ -281,39 +345,36 @@ class HeatEquation(WeakFormBase):
             for A in range(3)
             if op[A] != 0
         )
-        if "DispX" in self.space.list_variables():
+        if coupled:
             displacement = [
                 reference_derivatives(assembly, "Disp" + axis, F)
                 for axis in "XYZ"[: self.space.ndim]
             ]
-            spatial_gradient = np.einsum("Bin,Bn->in", inverse, gradient)
-            # Exact variation of K0 = J F^-1 k F^-T with respect to F_iC.
+            # Exact variation of the reference flux with respect to F_iC.
             for A in range(3):
                 if op[A] == 0:
                     continue
                 for i in range(self.space.ndim):
                     for C in range(self.space.ndim):
-                        coefficient = (
-                            inverse[C, i] * flux[A]
-                            - inverse[A, i] * flux[C]
-                            - K[A, C] * spatial_gradient[i]
+                        diff_op += (
+                            op[A].virtual * displacement[i][C] * derivative[A, i, C]
                         )
-                        diff_op += op[A].virtual * displacement[i][C] * coefficient
         if "HeatSource" in assembly.sv:
             temp = self.space.variable("Temp")
             diff_op -= temp.virtual * assembly.sv["HeatSource"]
             diff_op -= (
                 temp.virtual * temp * assembly.sv.get("HeatSourceTemperatureTangent", 0)
             )
-            derivative = assembly.sv.get("HeatSourceDeformationTangent")
-            if derivative is not None and "DispX" in self.space.list_variables():
+            source_tangent = assembly.sv.get("HeatSourceDeformationTangent")
+            if source_tangent is not None and coupled:
                 diff_op -= sum(
-                    temp.virtual * displacement[i][A] * derivative[i, A]
+                    temp.virtual * displacement[i][A] * source_tangent[i, A]
                     for i in range(self.space.ndim)
                     for A in range(self.space.ndim)
                 )
         assembly.sv["ReferenceHeatFlux"] = -flux
-        assembly.sv["HeatFlux"] = -np.einsum("ij,Ajn,An->in", k, inverse, gradient)
+        # spatial flux q = F Q / J
+        assembly.sv["HeatFlux"] = -np.einsum("iAn,An->in", F, flux) / J
         return diff_op * reference_volume_weight(assembly)
 
     @property

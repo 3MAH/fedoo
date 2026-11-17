@@ -19,8 +19,10 @@ class ThermalProperties(ConstitutiveLaw):
     are necessarily absolute temperatures in kelvin (never degrees Celsius):
     the thermoelastic heat source is proportional to the absolute temperature.
     ``coupling=False`` retains thermal expansion and disables feedback.
-    Conductivity is the spatial tensor in current global axes; ``heat_source``
-    is supplied per reference volume in finite strain.
+    In finite strain the conductivity is a material tensor given in the
+    reference global axes, which follows the rotation of the body
+    (:py:class:`fedoo.weakform.HeatEquation`); ``heat_source`` is supplied
+    per reference volume.
     """
 
     def __init__(

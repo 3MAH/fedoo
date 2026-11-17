@@ -80,3 +80,33 @@ def test_rotary_inertia_axi_raises():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_inertia_axi_keeps_the_reference_mass_at_finite_strain():
+    """A stretched 2Daxi annulus keeps its reference mass rho0 * 2*pi*R dA0.
+
+    2Daxi finite strain only exists in the updated Lagrangian formulation.
+    """
+    systems = []
+    for dynamic in (False, True):
+        mesh = _build_2daxi_unit_square_mesh(n=4)
+        material = fd.constitutivelaw.ElasticIsotrop(100, 0.2)
+        material.set_density(1.0)
+        assembly = fd.Assembly.create(
+            fd.weakform.StressEquilibrium(material, nlgeom="UL"), mesh
+        )
+        pb = fd.problem.NonLinear(assembly)
+        pb.set_solver("direct_scipy")
+        if dynamic:
+            pb.set_time_integrator(fd.time.SECOND_ORDER, fd.time.Newmark())
+        pb.initialize()
+        pb.dtime = 0.2
+        pb.set_start()
+        # radial and axial stretch: the volume changes by 1.3**2 * 0.9
+        pb._dU = np.hstack((0.3 * mesh.nodes[:, 0], -0.1 * mesh.nodes[:, 1]))
+        pb.update()
+        systems.append(assembly.current.get_global_matrix().toarray())
+    a0 = 1 / (0.25 * 0.2**2)
+    n = mesh.n_nodes
+    mass_x = (systems[1][:n, :n] - systems[0][:n, :n]) / a0
+    np.testing.assert_allclose(mass_x.sum(), 3 * np.pi, rtol=1e-10)

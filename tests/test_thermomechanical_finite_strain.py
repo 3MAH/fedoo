@@ -239,8 +239,10 @@ def test_rigid_rotation_preserves_thermal_history(formulation):
 def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity(nlgeom):
     F = np.array([[1.4, 0.2, 0], [0, 0.8, 0], [0, 0, 1.1]])
     k = np.diag([1.2, 0.8, 0.6])
-    inverse = np.linalg.inv(F)
-    K0 = np.linalg.det(F) * inverse @ k @ inverse.T
+    # material conductivity carried by the rotation: K0 = J U^-1 k U^-1
+    stretch2, N = np.linalg.eigh(F.T @ F)
+    inverse = N @ np.diag(stretch2**-0.5) @ N.T
+    K0 = np.linalg.det(F) * inverse @ k @ inverse
     systems = []
     for conductivity, finite in ((k, True), (K0, False)):
         fd.ModelingSpace("3D")
@@ -265,6 +267,49 @@ def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity(nl
         )
     for transformed, reference in zip(*systems):
         np.testing.assert_allclose(transformed, reference, atol=1e-9, rtol=1e-9)
+
+
+def test_reference_conductivity_is_objective():
+    """A superposed rotation leaves the reference conduction operator unchanged
+    and rotates the spatial heat flux."""
+    U = np.array([[1.3, 0.1, 0], [0.1, 0.9, 0.05], [0, 0.05, 1.1]])
+    angle = np.pi / 2
+    Q = np.array(
+        [
+            [np.cos(angle), -np.sin(angle), 0],
+            [np.sin(angle), np.cos(angle), 0],
+            [0, 0, 1],
+        ]
+    )
+    results = []
+    for F in (U, Q @ U):
+        fd.ModelingSpace("3D")
+        mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+        material = fd.constitutivelaw.ThermalProperties(np.diag([1.2, 0.8, 0.6]), 2, 1)
+        assembly = fd.Assembly.create(
+            fd.weakform.HeatEquation(material, nlgeom="TL"), mesh
+        )
+        assembly.sv["F"] = np.repeat(F[:, :, None], assembly.n_gauss_points, axis=2)
+        pb = fd.problem.NonLinear(assembly)
+        pb.set_solver("direct_scipy")
+        pb.set_dof("Temp", 300)
+        pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+        pb.initialize()
+        pb.dtime = 0.2
+        pb.set_start()
+        pb._dU = 4 + 3 * mesh.nodes[:, 0] - 2 * mesh.nodes[:, 1]
+        pb.update()
+        results.append(
+            (
+                assembly.current.get_global_matrix().toarray(),
+                pb.get_D().copy(),
+                np.asarray(assembly.sv["HeatFlux"]),
+            )
+        )
+    (matrix, residual, flux), (rotated_matrix, rotated_residual, rotated_flux) = results
+    np.testing.assert_allclose(rotated_matrix, matrix, atol=1e-10)
+    np.testing.assert_allclose(rotated_residual, residual, atol=1e-10)
+    np.testing.assert_allclose(rotated_flux, Q @ flux, atol=1e-10)
 
 
 def test_simcoon_umat_t_still_rejects_finite_strain():
