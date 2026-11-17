@@ -21,6 +21,7 @@ Welcome to FEDOO's documentation!
    weak_form
    assembly
    time
+   thermomechanical
    problem
    boundary_conditions
    poromechanics

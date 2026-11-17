@@ -98,6 +98,7 @@ These laws should be associated with :py:class:`fedoo.weakform.HeatEquation`
    :template: custom-class-template.rst
 
    ThermalProperties
+   SimcoonThermoMechanical
 
 Poromechanics fluid properties
 ==============================
@@ -199,6 +200,7 @@ from .poro_fluid import PoroFluidProperties
 from .simcoon_umat import Simcoon
 from .spring import Spring
 from .thermal_prop import ThermalProperties
+from .thermomechanical import SimcoonThermoMechanical
 
 __all__ = [
     "BeamCircular",
@@ -224,4 +226,5 @@ __all__ = [
     "Simcoon",
     "Spring",
     "ThermalProperties",
+    "SimcoonThermoMechanical",
 ]

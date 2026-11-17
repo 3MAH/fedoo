@@ -315,6 +315,13 @@ class GeneralizedAlpha(TimeIntegratorBase):
         return self._wrap_static_weakform(weakform, storage, dissipation)
 
     def _wrap_static_weakform(self, weakform, storage, dissipation):
+        if (
+            getattr(weakform.constitutivelaw, "is_thermomechanical", False)
+            and dissipation is not None
+        ):
+            raise NotImplementedError(
+                "Coupled Newmark currently supports undamped mechanics only."
+            )
         # Decorate a *copy* of the user's weakform with the generalized-alpha
         # stiffness behavior so the original object is never mutated (it stays
         # usable in other, e.g. static, problems) and its WeakForm registry

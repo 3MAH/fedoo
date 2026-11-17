@@ -8,6 +8,21 @@ semantic versioning.
 
 ### Added
 
+- Initial small-strain thermo-mechanical coupling by summing StressEquilibrium
+  and HeatEquation with a shared material. Native elastic solids accept optional
+  ThermalProperties through ``thermal=`` or ``set_thermal_properties``. Includes
+  an isotropic Simcoon umat_T adapter, both coupling blocks, consistent
+  thermal storage and undamped endpoint Newmark compatibility.
+- A Fields Newton criterion with independent absolute/relative residual
+  tolerances and optional reference scales per field, including MPC reduction.
+- A monolithic thermal expansion example with analytic and Simcoon variants,
+  and documentation of supported modes and remaining finite-strain work.
+- Finite-strain native thermoelasticity in 3D and plane strain, using the
+  reference logarithmic energy with either TL or UL mechanical assembly.
+  Heat conduction uses TL geometry, pulled-back conductivity and its consistent
+  deformation tangent; capacity and sources use reference volume. Includes
+  both coupling blocks and implicit endpoint Newmark mechanics. The Simcoon
+  umat_T adapter remains small strain. Requires Simcoon >=2.3.
 - Independent local-frame overlays in DataSet.plot via local_frame and
   one-based local_frame_axis, with size, density, placement and legend controls.
   The viewer uses the same plotting implementation, including mixed-mesh
@@ -277,6 +292,8 @@ semantic versioning.
   residual missed a factor of order J, while the tangent used the current
   mesh. Transient finite-strain consolidation was wrong by about the strain
   level (5 % at 5 % compression), but drained states were not affected.
+- Cartesian UL inertia integrates reference mass, including when the
+  constitutive deformation gradient uses an incompressibility projection.
 
 ### Migration
 
